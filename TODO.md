@@ -14,6 +14,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | A6 | W1 | Build | Build system (`Makefile`): regras `clang -ffreestanding -nostdlib` + `nasm -f elf64` + `ld -nostdlib -static -no-pie -e _start`; alvos build/test/clean/run | Alta | A5 | Média | ⏳ Pendente | — |
 | B1 | W1 | Bootstrap | `types.h` próprio (sem stdint/stddef): `size_t`, `ssize_t`, `uintptr_t`, `NULL`, `bool` | Alta | — | Baixa | ⏳ Pendente | — |
 | B2 | W1 | Bootstrap | Constantes de syscall (números) e flags (open/mmap/etc.) para x86-64 | Alta | — | Baixa | ⏳ Pendente | — |
+| STD-SPDX | W1 | Convenções | Header SPDX `SPDX-License-Identifier: AGPL-3.0-or-later` + copyright no topo de TODO arquivo de código (C `//`, NASM `;`, Makefile `#`), aplicado desde a criação (DoD herdado). Definir snippet padrão no `CLAUDE.md` | Média | — | Baixa | ⏳ Pendente | — |
 | B3 | W2 | Bootstrap | Camada de syscall: wrappers `syscall0..6` em ASM/inline (rax + rdi/rsi/rdx/r10/r8/r9) | Alta | A1, A3, B2 | Média | ⏳ Pendente | — |
 | B4 | W3 | Bootstrap | `_start` em ASM: alinhar stack, ler argc/argv/envp do stack inicial, chamar `main`, capturar retorno. **Fundação** | Alta | B3, A3, A5 | Alta | ⏳ Pendente | — |
 | B5 | W4 | Bootstrap | `sys_exit` + binário mínimo `exit(42)`. **GATE: valida pipeline build→link→run** | Alta | B4, A6 | Baixa | ⏳ Pendente | — |
@@ -26,7 +27,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | E1 | W10 | Libc-Avançada | Alocador próprio `malloc/free/realloc` via `mmap`/`brk` (bump → free-list). **OWD** | Alta | A4, D1 | Alta | ⏳ Pendente | — |
 | E2 | W10 | Libc-Avançada | `mini-printf` sobre `sys_write`: `%d %u %x %s %c %%` | Alta | D3 | Média | ⏳ Pendente | — |
 | TST-INT | W11 | Testes | Testes de integração/E2E: builda e roda cada binário/demo, valida exit code e stdout. Ver `TESTES.md` | Alta | E1, E2 | Média | ⏳ Pendente | — |
-| TST-STATIC | W11 | Testes | Análise estática (clang static analyzer / `scan-build` / cppcheck freestanding). Ver `TESTES.md` | Média | D3, E2 | Baixa | ⏳ Pendente | — |
+| TST-STATIC | W11 | Testes | Análise estática (clang static analyzer / `scan-build` / cppcheck freestanding) + verificar presença do header SPDX (STD-SPDX) em todo arquivo. Ver `TESTES.md` | Média | D3, E2, STD-SPDX | Baixa | ⏳ Pendente | — |
 | TST-MEM | W11 | Testes | Validação de memória do alocador: leak, double-free, alinhamento (testes dedicados + valgrind no estático se viável). Ver `TESTES.md` | Alta | E1 | Média | ⏳ Pendente | — |
 | F1 | W12 | Infra | CI freestanding (Woodpecker LOCAL preferido, ou Forgejo Actions): build + roda toda a suíte de testes | Alta | TST-INT, TST-STATIC, TST-MEM | Média | ⏳ Pendente | — |
 | AUD-ABI | W12 | Auditoria | Auditoria de conformidade ABI/ASM: convenção de chamada, preservação de registradores callee-saved, alinhamento de stack 16B. Ver `AUDITORIAS.md` | Alta | B3, B4, D1, TST-INT | Média | ⏳ Pendente | — |

@@ -92,6 +92,10 @@ Outras:
 - Decisões de arquitetura/stack são do líder (petrus): apresentar 2–3 opções com prós/contras antes de decidir (ver memória do projeto).
 - Calibre de comunicação ao explicar: C/ASM com mais contexto; arquitetura, hardware e lógica direto ao ponto (ver memória `feedback-nivel-comunicacao`).
 
+## Licença
+
+**AGPL-3.0-or-later** (GNU Affero General Public License v3). Texto em `LICENSE`. © 2026 Petrus Silva Costa. SPDX: `AGPL-3.0-or-later`. Copyleft forte com cláusula de rede (uso via rede dispara a obrigação de disponibilizar o fonte). Ao reimplementar/RE de libs externas, **não copiar código** de fontes incompatíveis — reimplementar a partir do entendimento (clean-room) para não contaminar a base.
+
 ## Pendências
 
 A tabela de pendências e planejamento está em `TODO.md` na raiz (ordenada por execução; coluna Onda marca passos paralelizáveis). Decisões de arquitetura em `docs/adr/`. Manuais de teste e auditoria em `TESTES.md` e `AUDITORIAS.md`. Governança/porte em `.bigtech-porte`.

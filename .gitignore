@@ -1,0 +1,26 @@
+# Artefatos de build
+/build/
+*.o
+*.obj
+*.elf
+*.bin
+*.out
+
+# Listagens e mapas (NASM / ld)
+*.lst
+*.map
+
+# Debug / core dumps
+*.dSYM/
+core
+core.*
+vgcore.*
+
+# Editores / IDE
+*~
+*.swp
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store

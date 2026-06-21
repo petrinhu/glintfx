@@ -1,0 +1,7 @@
+porte=early
+variante=Pipeline-Sprint técnico-reforçado (eixo técnico elevado)
+sdlc=S2
+data=2026-06-21
+decidido_por=petrus (líder); cenário B do Cósimo (Chief of Staff)
+nota=Constelação bigtech COMPLETA disponível, mas maioria dormente. Eixo técnico (Caetano/CTO + software-architect + baixo-nível/embedded + qa-engineer/performance) ativo e pesado. C-levels de negócio (Camilo/CMO, Confúcio/CFO, Cícero/CRO, Cândido/CDO, Caio/CAIO) dormentes por falta de mercado/receita/dado-ativo/IA. Capitolino/CPO, Cosmo/COO, Narciso/CISO, Cláudio/CLO acionáveis sob demanda.
+re_roteamento=re-avaliar porte se: (a) virar multi-módulo grande, (b) ganhar usuários reais, (c) abrir superfície de ataque não-confiável, (d) IA virar capability, (e) decidir comercializar.

@@ -1,0 +1,16 @@
+# Normaliza fim de linha como LF em todo o repo
+* text=auto eol=lf
+
+# Fontes
+*.c    text eol=lf
+*.h    text eol=lf
+*.asm  text eol=lf
+*.inc  text eol=lf
+*.md   text eol=lf
+Makefile text eol=lf
+
+# Binarios (nunca normalizar)
+*.o    binary
+*.bin  binary
+*.elf  binary
+*.out  binary

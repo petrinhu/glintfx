@@ -14,7 +14,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Consequência prática: a única ponte com o mundo é a **interface de syscalls do kernel Linux**. Toda I/O, alocação de memória e tempo passam por `syscall` direto.
 
+## Arquitetura em camadas (escopo expandido 2026-06-28 — ver ADR-0006)
+
+O projeto agora tem **duas camadas**. A filosofia "zero libs / sem libc" abaixo descreve a **Camada 0**, não o repo inteiro.
+
+- **Camada 0 — núcleo soberano (C + ASM, intacto):** o runtime freestanding zero-libc descrito neste documento. ADR 0001–0005 valem aqui. É o **alvo de internalização** de longo prazo.
+- **Camada 1 — biblioteca C++23 (a entrega):** lib compatível **C++17→C++23** que **une RmlUi** (UI HTML/CSS + layout) ao **renderer GL3** com todos os efeitos (glow, degradê, blur, drop-shadow, mask, backdrop-filter). Começa **linkando** RmlUi + gl3w + libGL + janela (GLFW primário; depois SDL, X11). Build via **CMake**. ASM só em hot paths.
+- **Trajetória ("loucura"):** internalizar peças da Camada 1 com reimplementações **clean-room** sobre a Camada 0, com o tempo.
+- **Estudo/RE:** upstreams clonados em `examples/` (gitignored): `examples/RmlUi` (MIT), `examples/gl3w` (domínio público). Não copiar código — reimplementar clean-room (base é AGPL).
+
 ## Stack e alvo (decidido, não negociável sem o líder)
+
+> Esta tabela descreve a **Camada 0**. A Camada 1 (C++23) usa CMake + RmlUi/gl3w/libGL + GLFW/SDL/X11 — ver ADR-0006.
 
 | Item | Escolha |
 |---|---|

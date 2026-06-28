@@ -46,6 +46,20 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 
 `A1/A3 → B3 → B4 → B5 → B6 → C1 → D1 → D2 → D3 → E2` (E1 pendurado em A4 + D1). Tudo a jusante depende de fechar o **W0 (as 5 decisões de arquitetura)**.
 
+## Camada 1 — C++23 (RmlUi + GL3) — ver ADR-0006
+
+Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3 (efeitos). Independente da Camada 0 (W0–W14 acima). O detalhamento de **features** depende do brainstorm bigtech (`L1-BRAINSTORM`). Ondas `LW*` são internas a esta trilha.
+
+| ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| L1-CLONE | LW1 | C++23/Setup | Clonar RmlUi + gl3w em `examples/` (gitignored) para estudo/RE | Alta | — | Baixa | ✅ Concluído | — |
+| L1-BRAINSTORM | LW1 | C++23/Produto | Brainstorm com a bigtech: escopo, features e efeitos-alvo da lib unificada (gate de produto) | Alta | — | Média | 🎨 Pendente design | — |
+| L1-BUILD | LW2 | C++23/Build | Esqueleto CMake integrando RmlUi + gl3w + libGL (linkando os reais) | Alta | L1-CLONE | Média | ⏳ Pendente | — |
+| L1-BACKEND | LW3 | C++23/Plataforma | Abstração de janela/contexto multi-backend: GLFW (1º), depois SDL e X11 | Alta | L1-BUILD | Alta | ⏳ Pendente | — |
+| L1-DEMO | LW4 | C++23/Demo | **1º marco:** demo glow + degradê via `RmlUi_Renderer_GL3` | Alta | L1-BACKEND, L1-BRAINSTORM | Média | ⏳ Pendente | — |
+| L1-API | LW4 | C++23/API | Fachada C++23 unificada UI(RmlUi)+render(GL3), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | ⏳ Pendente | — |
+| L1-INTERNALIZE | LW5 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
+
 ## INBOX (descobertas não priorizadas)
 
 _(vazia)_

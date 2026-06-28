@@ -24,3 +24,7 @@ vgcore.*
 
 # Sistema operacional
 .DS_Store
+
+# Repos upstream clonados para estudo/RE (licenças próprias: RmlUi=MIT, gl3w=public domain)
+# Não versionar no nosso repo (AGPL) para evitar mistura de licença e inchaço.
+/examples/

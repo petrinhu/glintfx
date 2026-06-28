@@ -11,3 +11,4 @@
 | [0003](0003-internal-abi.md) | Internal ABI / ABI interna | Accepted |
 | [0004](0004-allocator-strategy.md) | Allocator strategy / Estratégia do alocador | Accepted |
 | [0005](0005-elf-layout.md) | ELF layout & link model / Layout ELF e modelo de link | Accepted |
+| [0006](0006-layered-hybrid-architecture.md) | Layered hybrid architecture / Arquitetura híbrida em camadas | Accepted |

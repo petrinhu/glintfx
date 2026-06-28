@@ -19,6 +19,12 @@ attributions we are required to preserve:
 - OpenGL (libGL / Mesa) — MIT/SGI-style licenses; copyright their respective
   authors.
 
+Bundled assets (files included in this repository):
+
+- Open Sans — Apache License 2.0. Copyright The Open Sans Project Authors
+  (https://github.com/googlefonts/opensans).
+  File: glintfx/demos/showcase/assets/OpenSans-Regular.ttf
+
 Full license texts of these dependencies are available in their respective
 upstream repositories. Any future in-project reimplementation of their
 functionality is done clean-room (from understanding, without copying source).

@@ -32,8 +32,13 @@ FetchContent_MakeAvailable(RmlUi gl3w)
 # PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
 set(_rml_backends ${rmlui_SOURCE_DIR}/Backends)
 
-add_library(glintfx STATIC src/version.cpp src/window_glfw.cpp src/render_gl3.cpp
-  ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
+add_library(glintfx STATIC
+  src/version.cpp
+  src/window_glfw.cpp
+  src/render_gl3.cpp
+  src/bootstrap.cpp
+  ${_rml_backends}/RmlUi_Renderer_GL3.cpp
+  ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
 target_include_directories(glintfx
   PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   PRIVATE ${_rml_backends} ${gl3w_BINARY_DIR}/include)

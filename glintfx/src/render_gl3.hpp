@@ -19,9 +19,11 @@ public:
   RenderGl3& operator=(const RenderGl3&) = delete;
 
   // EN: Initialize GL3 renderer state. Must be called with a current GL context.
-  //     Returns true on success. Safe to call only once.
+  //     Idempotent: subsequent calls return the existing status without re-initializing.
+  //     Returns true on success (first call) or if already successfully initialized.
   // PT: Inicia o estado do renderer GL3. Requer contexto GL ativo.
-  //     Retorna true em caso de sucesso. Chamar apenas uma vez.
+  //     Idempotente: chamadas subsequentes retornam o status existente sem re-inicializar.
+  //     Retorna true em caso de sucesso (primeira chamada) ou se já inicializado com sucesso.
   bool init();
 
   // EN: Returns the RmlUi render interface (valid after successful init()).

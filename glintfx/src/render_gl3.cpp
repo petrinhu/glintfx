@@ -61,6 +61,10 @@ Rml::RenderInterface* RenderGl3::iface() {
 }
 
 void RenderGl3::begin_frame(int w, int h) {
+  // EN: Guard: no-op if init() was not called or failed (mirrors iface() behaviour).
+  // PT: Guard: sem efeito se init() não foi chamado ou falhou (espelha iface()).
+  if (!impl_) return;
+
   // EN: Set viewport and clear the colour buffer before handing control to RmlUi.
   // PT: Define viewport e limpa o buffer de cor antes de entregar controle ao RmlUi.
   glViewport(0, 0, w, h);
@@ -71,6 +75,10 @@ void RenderGl3::begin_frame(int w, int h) {
 }
 
 void RenderGl3::end_frame() {
+  // EN: Guard: no-op if init() was not called or failed (mirrors iface() behaviour).
+  // PT: Guard: sem efeito se init() não foi chamado ou falhou (espelha iface()).
+  if (!impl_) return;
+
   impl_->renderer.EndFrame();
 }
 

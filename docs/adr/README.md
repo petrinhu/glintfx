@@ -12,3 +12,4 @@
 | [0004](0004-allocator-strategy.md) | Allocator strategy / Estratégia do alocador | Accepted |
 | [0005](0005-elf-layout.md) | ELF layout & link model / Layout ELF e modelo de link | Accepted |
 | [0006](0006-layered-hybrid-architecture.md) | Layered hybrid architecture / Arquitetura híbrida em camadas | Accepted |
+| [0007](0007-license-mpl-2.0.md) | License: MPL-2.0 (relicensed from AGPL) / Licença: MPL-2.0 | Accepted |

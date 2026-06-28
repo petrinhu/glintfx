@@ -27,9 +27,9 @@
 
 ## Consequences / Consequências
 
-**EN:** The project as a whole is **no longer "zero libs"** — only Layer 0 is. Two build systems coexist (Makefile + CMake). **Licensing:** RmlUi is MIT, gl3w is public domain; both live in `examples/` (gitignored) and any internalization must be **clean-room** to keep our AGPL base uncontaminated. The original purity is preserved as a direction (Layer 1 → Layer 0), not a present-day constraint on the whole repo.
+**EN:** The project as a whole is **no longer "zero libs"** — only Layer 0 is. Two build systems coexist (Makefile + CMake). **Licensing:** RmlUi is MIT, gl3w is public domain; both live in `examples/` (gitignored) and any internalization must be **clean-room** to keep our MPL-2.0 base uncontaminated. The original purity is preserved as a direction (Layer 1 → Layer 0), not a present-day constraint on the whole repo.
 
-**PT:** O projeto como um todo **deixa de ser "zero libs"** — só a Camada 0 é. Dois build systems coexistem (Makefile + CMake). **Licenças:** RmlUi é MIT, gl3w é domínio público; ambos vivem em `examples/` (gitignored) e qualquer internalização deve ser **clean-room** para não contaminar nossa base AGPL. A pureza original é preservada como direção (Camada 1 → Camada 0), não como restrição presente no repo inteiro.
+**PT:** O projeto como um todo **deixa de ser "zero libs"** — só a Camada 0 é. Dois build systems coexistem (Makefile + CMake). **Licenças:** RmlUi é MIT, gl3w é domínio público; ambos vivem em `examples/` (gitignored) e qualquer internalização deve ser **clean-room** para não contaminar nossa base MPL-2.0. A pureza original é preservada como direção (Camada 1 → Camada 0), não como restrição presente no repo inteiro.
 
 ## Options considered / Opções consideradas
 

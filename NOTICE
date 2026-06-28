@@ -1,0 +1,24 @@
+NOTICE — loucura_c_asm
+Copyright (c) 2026 Petrus Silva Costa
+Licensed under the Mozilla Public License 2.0 (MPL-2.0). See LICENSE.
+
+This project links, at build and/or runtime, third-party libraries. They are
+NOT included in this repository (they are cloned under examples/ only for
+study/reverse-engineering and are gitignored). Their licenses and the
+attributions we are required to preserve:
+
+- RmlUi — MIT License.
+  Copyright (c) 2008-2014 CodePoint Ltd, Shift Technology Ltd, and contributors.
+
+- gl3w — Public domain (Unlicense). No attribution required.
+
+- FreeType — used under the FreeType License (FTL).
+  Portions of this software are copyright (c) The FreeType Project
+  (www.freetype.org). All rights reserved.
+
+- OpenGL (libGL / Mesa) — MIT/SGI-style licenses; copyright their respective
+  authors.
+
+Full license texts of these dependencies are available in their respective
+upstream repositories. Any future in-project reimplementation of their
+functionality is done clean-room (from understanding, without copying source).

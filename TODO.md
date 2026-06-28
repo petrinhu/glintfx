@@ -14,7 +14,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | A6 | W1 | Build | Build system (`Makefile`): regras `clang -ffreestanding -nostdlib` + `nasm -f elf64` + `ld -nostdlib -static -no-pie -e _start`; alvos build/test/clean/run | Alta | A5 | Média | ⏳ Pendente | — |
 | B1 | W1 | Bootstrap | `types.h` próprio (sem stdint/stddef): `size_t`, `ssize_t`, `uintptr_t`, `NULL`, `bool` | Alta | — | Baixa | ⏳ Pendente | — |
 | B2 | W1 | Bootstrap | Constantes de syscall (números) e flags (open/mmap/etc.) para x86-64 | Alta | — | Baixa | ⏳ Pendente | — |
-| STD-SPDX | W1 | Convenções | Header SPDX `SPDX-License-Identifier: AGPL-3.0-or-later` + copyright no topo de TODO arquivo de código (C `//`, NASM `;`, Makefile `#`), aplicado desde a criação (DoD herdado). Definir snippet padrão no `CLAUDE.md` | Média | — | Baixa | ⏳ Pendente | — |
+| STD-SPDX | W1 | Convenções | Header SPDX `SPDX-License-Identifier: MPL-2.0` + copyright no topo de TODO arquivo de código (C `//`, NASM `;`, Makefile `#`), aplicado desde a criação (DoD herdado). Definir snippet padrão no `CLAUDE.md` | Média | — | Baixa | ⏳ Pendente | — |
 | B3 | W2 | Bootstrap | Camada de syscall: wrappers `syscall0..6` em ASM/inline (rax + rdi/rsi/rdx/r10/r8/r9) | Alta | A1, A3, B2 | Média | ⏳ Pendente | — |
 | B4 | W3 | Bootstrap | `_start` em ASM: alinhar stack, ler argc/argv/envp do stack inicial, chamar `main`, capturar retorno. **Fundação** | Alta | B3, A3, A5 | Alta | ⏳ Pendente | — |
 | B5 | W4 | Bootstrap | `sys_exit` + binário mínimo `exit(42)`. **GATE: valida pipeline build→link→run** | Alta | B4, A6 | Baixa | ⏳ Pendente | — |

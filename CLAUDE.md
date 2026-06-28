@@ -21,7 +21,7 @@ O projeto agora tem **duas camadas**. A filosofia "zero libs / sem libc" abaixo 
 - **Camada 0 — núcleo soberano (C + ASM, intacto):** o runtime freestanding zero-libc descrito neste documento. ADR 0001–0005 valem aqui. É o **alvo de internalização** de longo prazo.
 - **Camada 1 — biblioteca C++23 (a entrega):** lib compatível **C++17→C++23** que **une RmlUi** (UI HTML/CSS + layout) ao **renderer GL3** com todos os efeitos (glow, degradê, blur, drop-shadow, mask, backdrop-filter). Começa **linkando** RmlUi + gl3w + libGL + janela (GLFW primário; depois SDL, X11). Build via **CMake**. ASM só em hot paths.
 - **Trajetória ("loucura"):** internalizar peças da Camada 1 com reimplementações **clean-room** sobre a Camada 0, com o tempo.
-- **Estudo/RE:** upstreams clonados em `examples/` (gitignored): `examples/RmlUi` (MIT), `examples/gl3w` (domínio público). Não copiar código — reimplementar clean-room (base é AGPL).
+- **Estudo/RE:** upstreams clonados em `examples/` (gitignored): `examples/RmlUi` (MIT), `examples/gl3w` (domínio público). Não copiar código — reimplementar clean-room (base é MPL-2.0).
 
 ## Stack e alvo (decidido, não negociável sem o líder)
 
@@ -105,7 +105,7 @@ Outras:
 
 ## Licença
 
-**AGPL-3.0-or-later** (GNU Affero General Public License v3). Texto em `LICENSE`. © 2026 Petrus Silva Costa. SPDX: `AGPL-3.0-or-later`. Copyleft forte com cláusula de rede (uso via rede dispara a obrigação de disponibilizar o fonte). Ao reimplementar/RE de libs externas, **não copiar código** de fontes incompatíveis — reimplementar a partir do entendimento (clean-room) para não contaminar a base.
+**MPL-2.0** (Mozilla Public License 2.0). Texto em `LICENSE`; atribuições das deps linkadas em `NOTICE`. © 2026 Petrus Silva Costa. SPDX: `MPL-2.0`. Copyleft **fraco por-arquivo** (modificações nos NOSSOS arquivos voltam abertas; apps de terceiros — inclusive proprietários — podem linkar a lib livremente) + grant de patente. Aplicada ao projeto inteiro; **relicenciada de AGPL-3.0 em 2026-06-28** (cliente da Camada 1 é adoção externa — ver ADR-0007). Ao reimplementar/RE de libs externas, **não copiar código** — reimplementar clean-room (a partir do entendimento).
 
 ## Pendências
 

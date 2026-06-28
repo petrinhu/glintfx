@@ -28,9 +28,16 @@ FetchContent_Declare(gl3w
 
 FetchContent_MakeAvailable(RmlUi gl3w)
 
-add_library(glintfx STATIC src/version.cpp)
-target_include_directories(glintfx PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+# EN: RmlUi backends are not installed — compile directly from fetched source.
+# PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
+set(_rml_backends ${rmlui_SOURCE_DIR}/Backends)
+
+add_library(glintfx STATIC src/version.cpp src/window_glfw.cpp src/render_gl3.cpp
+  ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
+target_include_directories(glintfx
+  PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  PRIVATE ${_rml_backends} ${gl3w_BINARY_DIR}/include)
+target_compile_definitions(glintfx PRIVATE RMLUI_GL3_CUSTOM_LOADER=<GL/gl3w.h>)
 target_link_libraries(glintfx PRIVATE RmlUi::Core glfw OpenGL::GL Freetype::Freetype gl3w)
 target_compile_features(glintfx PUBLIC cxx_std_17)
 

@@ -1,5 +1,5 @@
 # Artefatos de build
-/build/
+build/
 *.o
 *.obj
 *.elf
@@ -28,3 +28,6 @@ vgcore.*
 # Repos upstream clonados para estudo/RE (licenças próprias: RmlUi=MIT, gl3w=public domain)
 # Não versionar no nosso repo (MPL-2.0) para evitar mistura de licença e inchaço.
 /examples/
+
+# scratch do subagent-driven-development
+/.superpowers/

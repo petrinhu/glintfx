@@ -1,0 +1,12 @@
+<rml>
+<head>
+  <link type="text/rcss" href="showcase.rcss"/>
+  <title>glintfx showcase</title>
+</head>
+<body>
+  <div class="card glow">Glow + sombra</div>
+  <div class="card grad">Degradê</div>
+  <div class="card blur">Backdrop blur</div>
+  <div class="card mask">Mask</div>
+</body>
+</rml>

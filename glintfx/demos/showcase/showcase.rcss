@@ -1,0 +1,67 @@
+/* EN: glintfx showcase styles — exercises filters, gradients, box-shadow, backdrop-filter, mask.
+   PT: Estilos do showcase glintfx — exercita filtros, degradês, sombras, backdrop e máscara.
+   NOTE: RmlUi 6.3 syntax differs from standard CSS in several places:
+     - box-shadow: COLOR x y blur spread  (color is first, not last)
+     - filter: drop-shadow(COLOR x y blur)  (color first)
+     - gradients via `decorator:`, not `background:`
+     - mask-image uses the same decorator syntax as `decorator:` */
+
+@font-face
+{
+    font-family: "Sans";
+    src: "assets/OpenSans-Regular.ttf";
+}
+
+body
+{
+    font-family: Sans;
+    font-size: 16px;
+    color: #fff;
+    background-color: #14171f;
+    padding: 24px;
+}
+
+.card
+{
+    width: 260px;
+    height: 80px;
+    margin: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 20px;
+    box-sizing: border-box;
+}
+
+/* EN: Glow card: solid background + box-shadow glow + drop-shadow filter.
+   PT: Cartão glow: fundo sólido + brilho via box-shadow + filtro drop-shadow.
+   RmlUi box-shadow order: color x y blur spread */
+.glow
+{
+    background-color: #2b3a67;
+    box-shadow: #5fd0ff 0 0 24px 0;
+    filter: drop-shadow(#0008 0 4px 8px);
+}
+
+/* EN: Gradient card: linear gradient via `decorator:` (not `background:`).
+   PT: Cartão degradê: gradiente linear via `decorator:` (não `background:`). */
+.grad
+{
+    decorator: linear-gradient(45deg, #ff6a00, #ee0979);
+}
+
+/* EN: Backdrop-blur card: semi-transparent background + backdrop-filter blur.
+   PT: Cartão backdrop-blur: fundo semi-transparente + backdrop-filter blur. */
+.blur
+{
+    background-color: #ffffff20;
+    backdrop-filter: blur(8px);
+}
+
+/* EN: Mask card: solid background masked by a horizontal gradient (opaque center → transparent).
+   PT: Cartão mask: fundo sólido mascarado por gradiente horizontal (centro opaco → transparente).
+   `mask-image` uses decorator instancer syntax identical to `decorator:`. */
+.mask
+{
+    background-color: #00d18f;
+    mask-image: horizontal-gradient(#000f #0000);
+}

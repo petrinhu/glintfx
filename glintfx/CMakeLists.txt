@@ -33,7 +33,7 @@ FetchContent_MakeAvailable(RmlUi gl3w)
 set(_rml_backends ${rmlui_SOURCE_DIR}/Backends)
 
 add_library(glintfx STATIC
-  src/version.cpp
+  src/app.cpp
   src/window_glfw.cpp
   src/render_gl3.cpp
   src/bootstrap.cpp

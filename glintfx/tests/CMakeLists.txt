@@ -32,3 +32,13 @@ add_test(NAME bootstrap_smoke
     -DEXE=$<TARGET_FILE:bootstrap_smoke>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: app_smoke — verify the public App facade: open, load, 1 frame headless.
+# PT: app_smoke — verifica a fachada pública App: abre, carrega, 1 frame headless.
+add_executable(app_smoke app_smoke.cpp)
+target_link_libraries(app_smoke PRIVATE glintfx)
+add_test(NAME app_smoke
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:app_smoke>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

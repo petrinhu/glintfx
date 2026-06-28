@@ -11,6 +11,8 @@
 
 Biblioteca **C++23** (compat C++17→23), **Linux-only**, para **adoção por devs externos**, que unifica numa fachada coesa: **UI** (RmlUi, layout HTML/CSS) + **renderer GL3** (efeitos GPU). A v1 é um **showcase de efeitos**.
 
+**Proposta de valor (north-star): eliminar a dor de integração.** Hoje, para ter um efeito simples (ex.: glow) numa UI, o dev precisa wirar à mão RmlUi + renderer GL3 + loader (gl3w) + janela/contexto — no projeto GusWorld isso levou ~30 min só para linkar GL+RmlUi. Esta lib é **drop-in / batteries-included**: o dev adiciona **um único alvo**, escreve RML/CSS e tem o efeito, **sem montar o pipeline gráfico**. É a "mesma característica das outras libs" (consumo trivial e familiar). É o que o autor precisa e o que devs externos com a mesma dor precisam.
+
 Não-objetivos da v1: Windows/macOS; SDL/X11; internalização clean-room; API imperativa de efeitos; editor/hot-reload; empacotamento/distribuição; otimização do renderer.
 
 ## 2. Decisões travadas (do brainstorm)
@@ -82,6 +84,11 @@ Todos os efeitos já existem no `RenderInterface_GL3` (2171 linhas de GLSL) e s�
 - Deps de sistema (Fedora 44): `glfw-devel`, `freetype-devel`, `mesa-libGL-devel`.
 - A Camada 0 (Makefile artesanal) **não** se linka à Camada 1 (C++/libGL/libc vs freestanding). O CMake só a invoca via `add_custom_target` (fronteira de **processo**) para haver um "build tudo".
 
+### Consumo pelo dev externo (DX de integração — o north-star)
+
+- Distribuída como **um único alvo CMake**, consumível via `FetchContent` (e/ou `find_package`/`add_subdirectory`), trazendo RmlUi + gl3w + renderer GL3 + GLFW **empacotados** (batteries-included). O consumidor faz só `target_link_libraries(app PRIVATE <lib>)` — **nada de wirar GL/janela/loader à mão**.
+- Exemplo mínimo "primeiro efeito" em **poucas linhas**, sem nenhuma chamada explícita a GL/GLFW/RmlUi — só a fachada + um `.rml`/`.rcss` com o efeito.
+
 ## 8. Fronteira de soberania e internalização
 
 - **Candidatos clean-room (valem, meses):** gl3w (loader), cola de janela/loop, parsers `.rml`/`.rcss` simples, math, engine de fonte própria.
@@ -120,6 +127,7 @@ Projeto inteiro sob **MPL-2.0** (ADR-0007). Header SPDX `SPDX-License-Identifier
 5. Fachada C++23 RAII num header; nada de GL/GLFW/RmlUi vaza na API pública.
 6. Smoke + golden-image passam.
 7. SPDX MPL-2.0 em todos os arquivos novos; `NOTICE` presente.
+8. **Prova de drop-in:** um projeto consumidor adiciona a lib via `FetchContent`/`add_subdirectory` e renderiza um documento com glow **sem escrever nenhum código de GL/janela/loader** — só a API da fachada + RML/CSS. (Valida o north-star de integração.)
 
 ## 13. Riscos
 

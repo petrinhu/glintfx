@@ -67,4 +67,5 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 - **Guards null**: `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`) e `App` (`poll_events`/`render` sem `impl_->ok`).
 - **`body { width: 100% }`**: fundo do demo não cobre a janela inteira.
 - **Backends SDL/X11**: adiados da v1 (só GLFW entregue).
+- **`find_package(glintfx)` completo** (pós-v1): `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` — removido na Task 8 por atrito com export-set do CMake 4.x (RmlUi/gl3w não são installed targets). Hoje o consumo é via FetchContent/`add_subdirectory` (drop-in provado).
 - **Merge `feat/glintfx-v1` → `main`**: review final da branch + PR, ao fechar a v1.

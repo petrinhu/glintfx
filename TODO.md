@@ -55,8 +55,8 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1-CLONE | LW1 | C++23/Setup | Clonar RmlUi + gl3w em `examples/` (gitignored) para estudo/RE | Alta | — | Baixa | ✅ Concluído | — |
 | L1-BRAINSTORM | LW1 | C++23/Produto | Brainstorm com a bigtech: escopo, features e efeitos-alvo da lib unificada (gate de produto) | Alta | — | Média | 🎨 Pendente design | — |
 | L1-BUILD | LW2 | C++23/Build | Esqueleto CMake integrando RmlUi + gl3w + libGL (linkando os reais) | Alta | L1-CLONE | Média | ⏳ Pendente | — |
-| L1-BACKEND | LW3 | C++23/Plataforma | Abstração de janela/contexto multi-backend: GLFW (1º), depois SDL e X11 | Alta | L1-BUILD | Alta | ⏳ Pendente | — |
-| L1-DEMO | LW4 | C++23/Demo | **1º marco:** demo glow + degradê via `RmlUi_Renderer_GL3` | Alta | L1-BACKEND, L1-BRAINSTORM | Média | ⏳ Pendente | — |
+| L1-BACKEND | LW3 | C++23/Plataforma | Abstração de janela/contexto multi-backend: GLFW (1º), depois SDL e X11 | Alta | L1-BUILD | Alta | 🔍 Pendente verificação | — |
+| L1-DEMO | LW4 | C++23/Demo | **1º marco:** demo glow + degradê via `RmlUi_Renderer_GL3` | Alta | L1-BACKEND, L1-BRAINSTORM | Média | 🔍 Pendente verificação | — |
 | L1-API | LW4 | C++23/API | Fachada C++23 unificada UI(RmlUi)+render(GL3), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | ⏳ Pendente | — |
 | L1-INTERNALIZE | LW5 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 

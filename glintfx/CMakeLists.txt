@@ -21,12 +21,14 @@ FetchContent_Declare(RmlUi
   GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
   GIT_TAG 2cd28864ae25ed345b70598751703a5433b12356)
 
-# gl3w (pinado) — gera o loader
-FetchContent_Declare(gl3w
-  GIT_REPOSITORY https://github.com/skaslev/gl3w.git
-  GIT_TAG d5ba9340cdeb9154323817f5c87e5a5c377fdef7)
+FetchContent_MakeAvailable(RmlUi)
 
-FetchContent_MakeAvailable(RmlUi gl3w)
+# EN: gl3w — vendored (pre-generated) to avoid network dependency at configure time.
+#     Files generated from gl3w_gen.py + GL 4.6 spec are committed under third_party/gl3w/.
+# PT: gl3w — vendorizado (pré-gerado) para evitar dependência de rede em configure.
+#     Arquivos gerados com gl3w_gen.py + spec GL 4.6 estão em third_party/gl3w/.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/gl3w
+                 ${CMAKE_CURRENT_BINARY_DIR}/gl3w-build)
 
 # EN: RmlUi backends are not installed — compile directly from fetched source.
 # PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
@@ -41,7 +43,9 @@ add_library(glintfx STATIC
   ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
 target_include_directories(glintfx
   PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  PRIVATE ${_rml_backends} ${gl3w_BINARY_DIR}/include)
+  PRIVATE ${_rml_backends})
+  # EN: gl3w include path comes transitively from linking PRIVATE gl3w (INTERFACE target).
+  # PT: Include path do gl3w vem transitivamente do link PRIVATE gl3w (alvo INTERFACE).
 target_compile_definitions(glintfx PRIVATE
   RMLUI_GL3_CUSTOM_LOADER=<GL/gl3w.h>
   # EN: Disable MSAA for the render layer — required under Mesa/llvmpipe (Xvfb) where
@@ -65,4 +69,26 @@ endif()
 if(GLINTFX_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# EN: Alias so FetchContent consumers can write target_link_libraries(... glintfx::glintfx).
+# PT: Alias para que consumidores via FetchContent escrevam target_link_libraries(... glintfx::glintfx).
+add_library(glintfx::glintfx ALIAS glintfx)
+
+# EN: Install rules + CMake export package — only when glintfx is the top-level project
+#     (i.e. not when consumed via FetchContent/add_subdirectory). When glintfx is a
+#     subdirectory, its PRIVATE deps (RmlUi, gl3w) are not in any export set, which would
+#     cause CMake to error out during generate. Guard avoids that.
+# PT: Regras de install + export CMake — apenas quando glintfx é o projeto top-level
+#     (não quando consumido via FetchContent/add_subdirectory). Quando glintfx é
+#     subdiretório, suas deps PRIVATE (RmlUi, gl3w) não estão em nenhum export set,
+#     o que causaria erro do CMake no generate. Guard evita isso.
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(GNUInstallDirs)
+  install(TARGETS glintfx EXPORT glintfxTargets
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(EXPORT glintfxTargets
+          NAMESPACE glintfx::
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glintfx)
 endif()

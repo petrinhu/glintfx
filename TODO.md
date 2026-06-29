@@ -54,7 +54,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | L1-CLONE | LW1 | C++23/Setup | Clonar RmlUi + gl3w em `examples/` (gitignored) para estudo/RE | Alta | — | Baixa | ✅ Concluído | — |
 | L1-BRAINSTORM | LW1 | C++23/Produto | Brainstorm bigtech: escopo/efeitos/nome. Gerou spec + plano + ADR-0006/0007; nome **glintfx**, licença MPL-2.0 | Alta | — | Média | ✅ Concluído | ✓ |
-| L1-BUILD | LW2 | C++23/Build | Esqueleto CMake + FetchContent (RmlUi 6.3 + gl3w) **pronto**; empacotamento drop-in (install/export + consumer FetchContent) em curso (Task 8) | Alta | L1-CLONE | Média | 🔄 Em andamento | — |
+| L1-BUILD | LW2 | C++23/Build | Esqueleto CMake + FetchContent (RmlUi 6.3 + gl3w vendorizado) **pronto**; install/export + alias + consumer drop-in via FetchContent entregues (Task 8) | Alta | L1-CLONE | Média | 🔍 Pendente verificação | — |
 | L1-BACKEND | LW3 | C++23/Plataforma | Janela/contexto **GLFW** + wrap `RenderInterface_GL3` + bootstrap RmlUi/FreeType; fix backbuffer opaco (alpha×compositor). SDL/X11 adiados | Alta | L1-BUILD | Alta | 🔍 Pendente verificação | — |
 | L1-DEMO | LW4 | C++23/Demo | Showcase com os **4 efeitos** (glow, degradê, backdrop-blur, mask) — validado em GPU real (Intel+NVIDIA/Wayland) pelo líder 2026-06-29 | Alta | L1-BACKEND, L1-BRAINSTORM | Média | ✅ Concluído | ✓ |
 | L1-API | LW4 | C++23/API | Fachada `glintfx::App` RAII (pImpl, headers limpos), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | 🔍 Pendente verificação | — |

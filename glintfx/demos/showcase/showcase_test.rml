@@ -1,0 +1,23 @@
+<rml>
+<head>
+  <link type="text/rcss" href="showcase.rcss"/>
+  <!-- EN: CI/headless version of the showcase — identical to showcase.rml except the mask card
+           is omitted because Mesa llvmpipe's software rasterizer crashes on the BlendMask
+           dual-sampler shader (free(): invalid next size). This is a Mesa SW renderer bug,
+           not a glintfx bug. Use showcase.rml for the full demo on real GPU hardware.
+       PT: Versão CI/headless do showcase — idêntica ao showcase.rml exceto pelo card mask,
+           omitido porque o rasterizador de software llvmpipe do Mesa crasha no shader BlendMask
+           dual-sampler (free(): invalid next size). Bug do Mesa, não do glintfx.
+           Use showcase.rml para o demo completo em GPU real. -->
+  <title>glintfx showcase (CI/headless)</title>
+</head>
+<body>
+  <div class="section-dark">
+    <div class="card glow">Glow + shadow</div>
+    <div class="card grad">Gradient</div>
+  </div>
+  <div class="section-gradient">
+    <div class="card blur">Backdrop blur</div>
+  </div>
+</body>
+</rml>

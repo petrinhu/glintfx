@@ -18,7 +18,13 @@ static bool read_ppm(const char* p, std::vector<unsigned char>& d,int& w,int& h)
 }
 int main(){
   glintfx::App app({ .title="golden", .width=900, .height=600 });
-  app.load("showcase.rml");
+  // EN: Load the CI/headless RML variant: same layout as showcase.rml but without the mask card,
+  //     which crashes Mesa's llvmpipe software rasterizer (BlendMask dual-sampler bug in Mesa).
+  //     For the full demo with mask, run showcase.rml on real GPU hardware.
+  // PT: Carrega a variante RML para CI/headless: mesmo layout que showcase.rml mas sem o card mask,
+  //     que crasha o rasterizador de software Mesa llvmpipe (bug BlendMask dual-sampler no Mesa).
+  //     Para o demo completo com mask, rode showcase.rml em GPU real.
+  app.load("showcase_test.rml");
 
   // EN: Warm-up frames: let RmlUi layout stabilize before capture.
   // PT: Frames de aquecimento: deixa o layout do RmlUi estabilizar antes da captura.

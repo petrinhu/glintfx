@@ -80,6 +80,24 @@ void RenderGl3::end_frame() {
   // PT: Guard: sem efeito se init() não foi chamado ou falhou (espelha iface()).
   if (!impl_) return;
   impl_->renderer.EndFrame();
+
+  // EN: Force backbuffer alpha to 1 so compositors (Wayland/Mutter) do not treat translucent
+  //     effect regions (glow/shadow/mask/backdrop) as window transparency. RmlUi composites in
+  //     premultiplied alpha assuming an opaque background; the postprocess-to-FBO0 fullscreen
+  //     quad can leave alpha < 1 in shadow/glow regions depending on the GPU blend path.
+  //     Binding FBO0 explicitly is safe: EndFrame() restores the pre-BeginFrame binding (= 0).
+  //     This masks RGB writes so only the alpha channel is touched.
+  // PT: Força alpha do backbuffer = 1 para o compositor (Wayland/Mutter) não tratar regiões de
+  //     efeito translúcidas (glow/sombra/mask/backdrop) como transparência de janela. RmlUi compõe
+  //     em premultiplied alpha assumindo fundo opaco; o quad fullscreen postprocess→FBO0 pode deixar
+  //     alpha < 1 nas regiões de sombra/brilho dependendo do caminho de blend da GPU.
+  //     Bind FBO0 explícito é seguro: EndFrame() restaura o binding pré-BeginFrame (= 0).
+  //     Mascara escrita RGB para tocar apenas o canal alpha.
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+  glClearColor(0.f, 0.f, 0.f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 } // namespace glintfx

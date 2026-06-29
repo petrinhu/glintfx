@@ -4,6 +4,11 @@
 add_executable(glintfx_showcase main.cpp)
 target_link_libraries(glintfx_showcase PRIVATE glintfx)
 
+# EN: Headless/real-GPU frame-capture tool (renders showcase once, saves PPM via App::snapshot).
+# PT: Ferramenta de captura de frame headless/GPU-real (renderiza o showcase e salva PPM).
+add_executable(glintfx_capture capture.cpp)
+target_link_libraries(glintfx_capture PRIVATE glintfx)
+
 # EN: Copy assets (RML, RCSS, font, license) to the binary directory so the demo
 #     can run from there without an install step.
 # PT: Copia assets (RML, RCSS, fonte, licença) para o diretório do binário para

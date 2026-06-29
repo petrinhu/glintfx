@@ -174,9 +174,46 @@ O arquivo `glintfx/build/_deps/rmlui-src/Backends/RmlUi_Renderer_GL3.cpp` foi mo
 
 ---
 
-## 7. Pendências / observações para GPU real
+## 7. Iteração v3 (L1-BACKEND) — backbuffer opaco para compositor Wayland
 
-- Reativar o card `.mask` e verificar que `BlendMask` funciona sem crash.
-- Verificar visualmente a intensidade do glow (box-shadow `#5fd0ff 0 0 24px 0`): em llvmpipe a sombra cyan é sobreposta pelo gradiente do body; em GPU real a composição de camadas pode diferir.
-- `drop-shadow(#0008 0 4px 8px)`: alfa de 8/255 ≈ 3%, essencialmente invisível por design — intencional?
-- Body não expande para largura total do viewport (900px) em RmlUi com `display: block` e sem `width: 100%` explícito. A largura atual ≈ 340px (card 260px + margens + padding). Adicionar `width: 100%` ao body se o gradiente de fundo deve cobrir tela cheia.
+**Data:** 2026-06-29  
+**Problema (alta confiança):** RmlUi 6 usa premultiplied alpha. O pipeline `CompositeLayers → RenderFilters → RenderBlur/DropShadow/MaskImage` escreve no FBO0 assumindo fundo opaco; nas regiões de efeito translúcidas (glow halo / box-shadow / drop-shadow / mask / backdrop) o canal ALPHA do FBO0 pode ficar < 1 dependendo do caminho de blend do driver GPU. O compositor Wayland/Mutter do Fedora respeita o alpha da janela e trata essas regiões como transparentes → efeitos "somem" na tela real.  
+**Nota:** `glReadPixels(GL_RGB)` das iterações anteriores ignorava o canal alpha — por isso o readback "parecia ok" e o bug não foi detectado em headless.  
+**Ref:** `examples/RmlUi/Backends/RmlUi_Renderer_GL3.cpp:912-913` ("Assuming we have an opaque background…"); o backend oficial limpa FBO0 com alpha=1 via `Clear()` em `:974-978`.
+
+**Fix aplicado** (`glintfx/src/render_gl3.cpp`, `RenderGl3::end_frame()`, após `EndFrame()`):
+
+```cpp
+// EN: Force backbuffer alpha to 1 so compositors (Wayland/Mutter) do not treat translucent
+//     effect regions (glow/shadow/mask/backdrop) as window transparency. RmlUi composites in
+//     premultiplied alpha assuming an opaque background; the postprocess-to-FBO0 fullscreen
+//     quad can leave alpha < 1 in shadow/glow regions depending on the GPU blend path.
+//     Binding FBO0 explicitly is safe: EndFrame() restores the pre-BeginFrame binding (= 0).
+//     This masks RGB writes so only the alpha channel is touched.
+// PT: (ver comentário bilíngue completo em render_gl3.cpp)
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+glClearColor(0.f, 0.f, 0.f, 1.f);
+glClear(GL_COLOR_BUFFER_BIT);
+glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+```
+
+**Probe RGBA (smoke-test, llvmpipe/Xvfb 900×600):**
+
+| Probe GL | Região | RGBA BEFORE | RGBA AFTER | Esperado |
+|----------|--------|-------------|------------|---------|
+| (301,520) | halo glow (fora do card, fundo escuro) | (46,97,127,A=255) | (46,97,127,A=255) | A=255 ✓ |
+| (100,520) | card sólido interior | (30,42,80,A=255) | (30,42,80,A=255) | A=255 ✓ |
+
+**Observação:** Em llvmpipe/Xvfb o alpha já era 255 antes do fix (Xvfb não tem compositor separado que leia o alpha channel da janela). O bug só se manifesta em GPU real com Wayland/EGL, onde o Mutter compositor expõe o alpha do FBO0 via surface EGL para composição. O fix garante alpha=1 independentemente do caminho de blend do driver.
+
+**RGB preservado:** ambas as regiões mantiveram valores RGB idênticos antes/depois (colorMask protege RGB).
+
+**Golden test:** MSE=0.00 após fix. Nenhuma alteração visual — apenas canal alpha garantido.
+
+---
+
+## 8. Pendências / observações para GPU real
+
+- Verificar visualmente na tela com Wayland se os efeitos (glow halo, drop-shadow, backdrop-blur, mask) agora aparecem corretamente com o fix de alpha do backbuffer.
+- Body não expande para largura total do viewport (900px) em RmlUi com `display: block` e sem `width: 100%` explícito. A largura atual ≈ 340px. Adicionar `width: 100%` ao body se o gradiente de fundo deve cobrir tela cheia.

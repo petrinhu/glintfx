@@ -61,6 +61,14 @@ target_compile_definitions(glintfx PRIVATE
 target_link_libraries(glintfx PRIVATE RmlUi::Core glfw OpenGL::GL Freetype::Freetype gl3w)
 target_compile_features(glintfx PUBLIC cxx_std_17)
 
+# EN: Alias so FetchContent consumers can write target_link_libraries(... glintfx::glintfx).
+#     Placed here (before DEMOS/TESTS subdirs) so the alias is always available regardless
+#     of whether demos or tests are enabled.
+# PT: Alias para que consumidores via FetchContent escrevam target_link_libraries(... glintfx::glintfx).
+#     Posicionado aqui (antes dos subdirs de DEMOS/TESTS) para que o alias esteja sempre
+#     disponível independentemente de demos ou testes estarem habilitados.
+add_library(glintfx::glintfx ALIAS glintfx)
+
 option(GLINTFX_BUILD_DEMOS "Build demos" ON)
 option(GLINTFX_BUILD_TESTS "Build tests" ON)
 if(GLINTFX_BUILD_DEMOS)
@@ -71,24 +79,26 @@ if(GLINTFX_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-# EN: Alias so FetchContent consumers can write target_link_libraries(... glintfx::glintfx).
-# PT: Alias para que consumidores via FetchContent escrevam target_link_libraries(... glintfx::glintfx).
-add_library(glintfx::glintfx ALIAS glintfx)
-
-# EN: Install rules + CMake export package — only when glintfx is the top-level project
-#     (i.e. not when consumed via FetchContent/add_subdirectory). When glintfx is a
-#     subdirectory, its PRIVATE deps (RmlUi, gl3w) are not in any export set, which would
-#     cause CMake to error out during generate. Guard avoids that.
-# PT: Regras de install + export CMake — apenas quando glintfx é o projeto top-level
-#     (não quando consumido via FetchContent/add_subdirectory). Quando glintfx é
-#     subdiretório, suas deps PRIVATE (RmlUi, gl3w) não estão em nenhum export set,
-#     o que causaria erro do CMake no generate. Guard evita isso.
+# EN: Install rules — archive + public headers. Only active when glintfx is the
+#     top-level project (not when consumed via FetchContent/add_subdirectory).
+#
+#     NOTE: install(EXPORT) / glintfxConfig.cmake is a post-v1 item. CMake 4.x
+#     requires all PRIVATE transitive deps of exported targets to be in an export
+#     set too; since RmlUi and gl3w are not installed targets, the export would
+#     fail at generate time. Consumers should use FetchContent (alias above) until
+#     a proper Config.cmake with find_dependency() calls is written.
+#
+# PT: Regras de install — arquivo + headers públicos. Ativas apenas quando glintfx
+#     é o projeto top-level (não quando consumido via FetchContent/add_subdirectory).
+#
+#     NOTA: install(EXPORT) / glintfxConfig.cmake é item pós-v1. O CMake 4.x
+#     exige que todas as deps PRIVATE transitivas de targets exportados também
+#     estejam em export sets; como RmlUi e gl3w não são targets instalados, o
+#     export falharia em generate. Consumidores devem usar FetchContent (alias
+#     acima) até que um Config.cmake adequado com find_dependency() seja escrito.
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(GNUInstallDirs)
-  install(TARGETS glintfx EXPORT glintfxTargets
+  install(TARGETS glintfx
           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
   install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-  install(EXPORT glintfxTargets
-          NAMESPACE glintfx::
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glintfx)
 endif()

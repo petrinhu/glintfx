@@ -48,10 +48,11 @@ add_test(NAME app_smoke
 # PT: golden_test — renderiza o showcase e compara pixels com referência PPM armazenada.
 #     1ª execução cria a referência (sai 0 com aviso); execuções seguintes comparam via MSE.
 add_executable(golden_test golden_test.cpp)
-target_link_libraries(golden_test PRIVATE glintfx)
-# EN: capture.hpp calls glReadPixels → needs gl3w headers (private to glintfx; expose here explicitly).
-# PT: capture.hpp chama glReadPixels → precisa dos headers do gl3w (privados no glintfx; expõe aqui).
-target_include_directories(golden_test PRIVATE ${gl3w_BINARY_DIR}/include)
+# EN: capture.hpp includes GL/gl3w.h directly — link gl3w (INTERFACE target) so its include path
+#     is available here. gl3w is a PRIVATE dep of glintfx and therefore not propagated to callers.
+# PT: capture.hpp inclui GL/gl3w.h diretamente — linka gl3w (target INTERFACE) para que o include
+#     path esteja disponível aqui. gl3w é dep PRIVATE da glintfx e portanto não é propagado.
+target_link_libraries(golden_test PRIVATE glintfx gl3w)
 
 # EN: Copy showcase assets (RML + RCSS + font dir) to the test binary dir so the binary
 #     can find them at runtime when WORKING_DIRECTORY is CMAKE_CURRENT_BINARY_DIR.

@@ -53,13 +53,18 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | L1-CLONE | LW1 | C++23/Setup | Clonar RmlUi + gl3w em `examples/` (gitignored) para estudo/RE | Alta | — | Baixa | ✅ Concluído | — |
-| L1-BRAINSTORM | LW1 | C++23/Produto | Brainstorm com a bigtech: escopo, features e efeitos-alvo da lib unificada (gate de produto) | Alta | — | Média | 🎨 Pendente design | — |
-| L1-BUILD | LW2 | C++23/Build | Esqueleto CMake integrando RmlUi + gl3w + libGL (linkando os reais) | Alta | L1-CLONE | Média | ⏳ Pendente | — |
-| L1-BACKEND | LW3 | C++23/Plataforma | Abstração de janela/contexto multi-backend: GLFW (1º), depois SDL e X11 | Alta | L1-BUILD | Alta | 🔍 Pendente verificação | — |
-| L1-DEMO | LW4 | C++23/Demo | **1º marco:** demo glow + degradê via `RmlUi_Renderer_GL3` | Alta | L1-BACKEND, L1-BRAINSTORM | Média | 🔍 Pendente verificação | — |
-| L1-API | LW4 | C++23/API | Fachada C++23 unificada UI(RmlUi)+render(GL3), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | ⏳ Pendente | — |
+| L1-BRAINSTORM | LW1 | C++23/Produto | Brainstorm bigtech: escopo/efeitos/nome. Gerou spec + plano + ADR-0006/0007; nome **glintfx**, licença MPL-2.0 | Alta | — | Média | ✅ Concluído | ✓ |
+| L1-BUILD | LW2 | C++23/Build | Esqueleto CMake + FetchContent (RmlUi 6.3 + gl3w) **pronto**; empacotamento drop-in (install/export + consumer FetchContent) em curso (Task 8) | Alta | L1-CLONE | Média | 🔄 Em andamento | — |
+| L1-BACKEND | LW3 | C++23/Plataforma | Janela/contexto **GLFW** + wrap `RenderInterface_GL3` + bootstrap RmlUi/FreeType; fix backbuffer opaco (alpha×compositor). SDL/X11 adiados | Alta | L1-BUILD | Alta | 🔍 Pendente verificação | — |
+| L1-DEMO | LW4 | C++23/Demo | Showcase com os **4 efeitos** (glow, degradê, backdrop-blur, mask) — validado em GPU real (Intel+NVIDIA/Wayland) pelo líder 2026-06-29 | Alta | L1-BACKEND, L1-BRAINSTORM | Média | ✅ Concluído | ✓ |
+| L1-API | LW4 | C++23/API | Fachada `glintfx::App` RAII (pImpl, headers limpos), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | 🔍 Pendente verificação | — |
 | L1-INTERNALIZE | LW5 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
 ## INBOX (descobertas não priorizadas)
 
-_(vazia)_
+- **Golden-image determinístico** (Task 7): `golden_test` flaky no llvmpipe (MSE ~3261 entre runs, tol 50); usar tolerância maior / HW consistente / comparação estrutural; reativar `.mask` no golden (crasha só no Mesa SW). Hoje vermelho na branch.
+- **`snapshot()` flip vertical**: captura sai de cabeça pra baixo (origem do `glReadPixels`); endireitar as linhas.
+- **Guards null**: `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`) e `App` (`poll_events`/`render` sem `impl_->ok`).
+- **`body { width: 100% }`**: fundo do demo não cobre a janela inteira.
+- **Backends SDL/X11**: adiados da v1 (só GLFW entregue).
+- **Merge `feat/glintfx-v1` → `main`**: review final da branch + PR, ao fechar a v1.

@@ -32,5 +32,5 @@ vgcore.*
 # Não versionar no nosso repo (MPL-2.0) para evitar mistura de licença e inchaço.
 /examples/
 
-# scratch do subagent-driven-development
-/.superpowers/
+# scratch do subagent-driven-development (em qualquer profundidade)
+.superpowers/

@@ -3,7 +3,38 @@
 **Data:** 2026-06-28  
 **Branch:** `feat/glintfx-v1`  
 **Plataforma de teste:** Linux x86-64, Mesa/llvmpipe (software rasterizer, Xvfb 900×600)  
-**GPU real:** não disponível no ambiente de CI; validação llvmpipe confirma o pipeline; efeitos visuais plenos aguardam hardware real.
+**GPU real:** validado pelo líder — glow/sombra aparecia como COR SÓLIDA (gradiente body mascarava o halo ciano). Fix em v2 (commit `6217016`): seções separadas + box-shadow reforçado.
+
+---
+
+## Iteração v2 (commit `6217016`) — glow visível + mask reativada
+
+**Problema identificado em GPU real:** apesar do pipeline blur ativo, o glow cyan era mascarado pelo gradiente colorido do body (o gradiente sobrepunha a sombra de forma que ambos mesclavam numa cor sólida sem halo visível).
+
+**Fix v2 aplicado:**
+
+1. **Layout em seções**: separar cards por contexto visual.
+   - `.section-dark` (fundo `#0d1020` quase-preto): cards `.glow` e `.grad`
+   - `.section-gradient` (gradiente diagonal `#6a0ddc→#e02828→#0f8a4a`): cards `.blur` e `.mask`
+   - O halo ciano agora contrasta diretamente contra o fundo escuro.
+
+2. **box-shadow reforçado**: `#5fd0ff 0 0 24px 0` → `#5fd0ff 0 0 32px 8px` (spread 0→8px, blur 24→32px).
+
+3. **drop-shadow reparado**: `#0008` (alpha 3%/255 = invisível em RmlUi's 8-digit `#rrggbbaa`) → `#5fd0ff80 0 0 20px` (ciano 50% alpha, blur 20px, sem offset). Demonstra o efeito de drop-shadow por forma alpha (segue o arredondamento do card).
+
+4. **Card `.mask` reativado** em `showcase.rml` (GPU real confirma BlendMask funciona). CI/headless usa `showcase_test.rml` (sem mask).
+
+**Validação pixel (llvmpipe, CSS-space):**
+
+| Probe CSS | Valor | Interpretação |
+|-----------|-------|---------------|
+| Halo ciano (301,80) | (46,97,127) | B+95 G+81 vs bg=(13,16,32) — CIANO inequívoco ✓ |
+| Halo acima (150,38) | (47,97,127) | Halo se extende acima do card ✓ |
+| Card interior (100,80) | (30,42,80) | Exatamente #1e2a50 ✓ |
+| Grad interior (150,190) | (249,72,43) | Laranja-rosa do gradient decorator ✓ |
+| Blur card interior (100,300) | (162,52,167) | G+26 B+35 vs bg → backdrop-filter ativo ✓ |
+
+**Artefato v2:** `/tmp/glintfx_showcase_v2.ppm`
 
 ---
 

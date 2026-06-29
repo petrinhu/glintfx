@@ -42,3 +42,40 @@ add_test(NAME app_smoke
     -DEXE=$<TARGET_FILE:app_smoke>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: golden_test — render the showcase scene and compare pixels against a stored PPM reference.
+#     First run creates the reference (exits 0 with a notice); subsequent runs compare via MSE.
+# PT: golden_test — renderiza o showcase e compara pixels com referência PPM armazenada.
+#     1ª execução cria a referência (sai 0 com aviso); execuções seguintes comparam via MSE.
+add_executable(golden_test golden_test.cpp)
+target_link_libraries(golden_test PRIVATE glintfx)
+# EN: capture.hpp calls glReadPixels → needs gl3w headers (private to glintfx; expose here explicitly).
+# PT: capture.hpp chama glReadPixels → precisa dos headers do gl3w (privados no glintfx; expõe aqui).
+target_include_directories(golden_test PRIVATE ${gl3w_BINARY_DIR}/include)
+
+# EN: Copy showcase assets (RML + RCSS + font dir) to the test binary dir so the binary
+#     can find them at runtime when WORKING_DIRECTORY is CMAKE_CURRENT_BINARY_DIR.
+# PT: Copia assets do showcase (RML + RCSS + dir da fonte) para o dir do binário de teste
+#     para que o binário os encontre em runtime com WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR.
+file(COPY
+  ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rml
+  ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rcss
+  ${CMAKE_SOURCE_DIR}/demos/showcase/assets
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+# EN: Ensure the golden/ subdir exists so the first run can write the reference there.
+# PT: Garante que golden/ exista para que a 1ª execução possa escrever a referência.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/golden)
+
+# EN: If a committed reference exists in the source tree, copy it to the build dir.
+# PT: Se houver referência comitada no source tree, copia para o build dir.
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm)
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden)
+endif()
+
+add_test(NAME golden_test
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:golden_test>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

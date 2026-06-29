@@ -55,6 +55,18 @@ public:
   // PT: Laço de conveniência: poll + update + render até !running().
   void run();
 
+  // EN: Render one frame and save the result to a PPM file before swapping buffers.
+  //     This captures the composited image from the window framebuffer (FBO 0) immediately
+  //     after EndFrame composites the render layer, ensuring correct pixel data even on
+  //     platforms where the back buffer content is undefined after glfwSwapBuffers.
+  //     Returns true on success.
+  // PT: Renderiza um frame e salva o resultado em arquivo PPM antes de trocar buffers.
+  //     Captura a imagem composta do framebuffer da janela (FBO 0) imediatamente após
+  //     o EndFrame compositar o render layer, garantindo dados corretos mesmo em plataformas
+  //     onde o back buffer fica indefinido após glfwSwapBuffers.
+  //     Retorna true em caso de sucesso.
+  bool snapshot(const char* ppm_path);
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

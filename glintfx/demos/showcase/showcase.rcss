@@ -14,15 +14,34 @@
 
 body
 {
+    /* EN: RmlUi default display is 'inline' for ALL elements (differs from HTML where div=block).
+           Must set 'display: block' explicitly on body to make it a proper block container so
+           cards stack vertically and padding/margin work as expected.
+       PT: O display padrão do RmlUi é 'inline' para TODOS os elementos (difere do HTML onde div=block).
+           Deve-se definir 'display: block' explicitamente no body para torná-lo um container de bloco
+           para que os cards empilhem verticalmente e padding/margin funcionem como esperado. */
+    display: block;
     font-family: Sans;
     font-size: 16px;
     color: #fff;
+    /* EN: Colourful gradient body gives backdrop-filter: blur() visible content to blur through
+           the semi-transparent blur card (background-color: #ffffff20).
+           RmlUi: `decorator:` is used for gradients; `background-color:` is a separate property.
+       PT: Body com gradiente colorido dá ao backdrop-filter: blur() conteúdo visível para desfocar
+           através do card blur semi-transparente (background-color: #ffffff20).
+           RmlUi: `decorator:` é usado para gradientes; `background-color:` é propriedade separada. */
     background-color: #14171f;
+    decorator: linear-gradient(135deg, #6a0ddc, #e02828, #0f8a4a);
     padding: 24px;
 }
 
 .card
 {
+    /* EN: display: block is required in RmlUi (default is inline) so cards stack vertically
+           instead of flowing inline. Without this, padding and width behave like inline elements.
+       PT: display: block é obrigatório no RmlUi (padrão é inline) para que os cards empilhem
+           verticalmente em vez de fluir inline. Sem isso, padding e width se comportam como inline. */
+    display: block;
     width: 260px;
     height: 80px;
     margin: 16px;

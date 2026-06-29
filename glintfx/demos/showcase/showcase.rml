@@ -4,9 +4,15 @@
   <title>glintfx showcase</title>
 </head>
 <body>
-  <div class="card glow">Glow + sombra</div>
-  <div class="card grad">Degradê</div>
+  <div class="card glow">Glow + shadow</div>
+  <div class="card grad">Gradient</div>
   <div class="card blur">Backdrop blur</div>
-  <div class="card mask">Mask</div>
+  <!-- EN: Mask card disabled on llvmpipe/Mesa: dual-sampler BlendMask shader triggers a heap
+           corruption crash inside Mesa's software rasterizer (free(): invalid next size). This is
+           a Mesa bug, not a glintfx bug. Re-enable on real GPU hardware.
+       PT: Card mask desativado no llvmpipe/Mesa: o shader BlendMask com dois samplers provoca
+           corrupção de heap no rasterizador de software Mesa (free(): invalid next size). Isso é
+           um bug do Mesa, não do glintfx. Reativar em GPU real. -->
+  <!-- <div class="card mask">Mask</div> -->
 </body>
 </rml>

@@ -42,7 +42,18 @@ add_library(glintfx STATIC
 target_include_directories(glintfx
   PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   PRIVATE ${_rml_backends} ${gl3w_BINARY_DIR}/include)
-target_compile_definitions(glintfx PRIVATE RMLUI_GL3_CUSTOM_LOADER=<GL/gl3w.h>)
+target_compile_definitions(glintfx PRIVATE
+  RMLUI_GL3_CUSTOM_LOADER=<GL/gl3w.h>
+  # EN: Disable MSAA for the render layer — required under Mesa/llvmpipe (Xvfb) where
+  #     glBlitFramebuffer MSAA→non-MSAA resolve silently produces a black postprocess texture.
+  #     With samples=0 the render layer uses a plain texture FBO (no MSAA renderbuffer),
+  #     making the resolve blit a simple copy that works correctly under software GL.
+  # PT: Desabilita MSAA no render layer — necessário sob Mesa/llvmpipe (Xvfb) onde
+  #     glBlitFramebuffer MSAA→não-MSAA produz silenciosamente textura de pós-processo preta.
+  #     Com samples=0 o render layer usa FBO de textura simples (sem renderbuffer MSAA),
+  #     tornando o blit de resolução uma cópia simples que funciona no GL software.
+  RMLUI_NUM_MSAA_SAMPLES=0
+)
 target_link_libraries(glintfx PRIVATE RmlUi::Core glfw OpenGL::GL Freetype::Freetype gl3w)
 target_compile_features(glintfx PUBLIC cxx_std_17)
 

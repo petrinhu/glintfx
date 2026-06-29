@@ -48,7 +48,8 @@ bool RenderGl3::init() {
   // EN: Construct Impl; the RenderInterface_GL3 constructor compiles GL shaders.
   // PT: Constrói Impl; o construtor do RenderInterface_GL3 compila os shaders GL.
   impl_ = new Impl;
-  if (!static_cast<bool>(impl_->renderer)) {
+  bool renderer_ok = static_cast<bool>(impl_->renderer);
+  if (!renderer_ok) {
     delete impl_;
     impl_ = nullptr;
     return false;
@@ -78,7 +79,6 @@ void RenderGl3::end_frame() {
   // EN: Guard: no-op if init() was not called or failed (mirrors iface() behaviour).
   // PT: Guard: sem efeito se init() não foi chamado ou falhou (espelha iface()).
   if (!impl_) return;
-
   impl_->renderer.EndFrame();
 }
 

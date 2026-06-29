@@ -1,7 +1,8 @@
 porte=early
-variante=Pipeline-Sprint técnico-reforçado (eixo técnico elevado)
+variante=Pipeline-Sprint técnico-reforçado, DUAL-TRACK (Trilha A: Camada 0 C/ASM | Trilha B: Camada 1 C++23 RmlUi+GL3)
 sdlc=S2
 data=2026-06-21
+reroteamento=2026-06-28 — escopo dobrou (Camada 1 C++23 RmlUi+GL3); porte SEGUE early (teto da faixa). Novos agents técnicos ativos: engine-graphics-programmer (core), backend-engineer C++. Sobem sob demanda: Cláudio/CLO (licença AGPL×MIT×PD + clean-room), technical-writer (API reference), qa-engineer (+teste visual). Designers visuais (ux-ui-designer/visual-design-director) SEGUEM dormentes (entregável é lib p/ devs via API, não app com end-users).
 decidido_por=petrus (líder); cenário B do Cósimo (Chief of Staff)
 nota=Constelação bigtech COMPLETA disponível, mas maioria dormente. Eixo técnico (Caetano/CTO + software-architect + baixo-nível/embedded + qa-engineer/performance) ativo e pesado. C-levels de negócio (Camilo/CMO, Confúcio/CFO, Cícero/CRO, Cândido/CDO, Caio/CAIO) dormentes por falta de mercado/receita/dado-ativo/IA. Capitolino/CPO, Cosmo/COO, Narciso/CISO, Cláudio/CLO acionáveis sob demanda.
 re_roteamento=re-avaliar porte se: (a) virar multi-módulo grande, (b) ganhar usuários reais, (c) abrir superfície de ataque não-confiável, (d) IA virar capability, (e) decidir comercializar.

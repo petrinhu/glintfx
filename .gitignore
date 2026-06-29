@@ -10,6 +10,9 @@ build/
 *.lst
 *.map
 
+# Scratch de captura PPM dos testes/demos (a referência golden é versionada à parte)
+out.ppm
+
 # Debug / core dumps
 *.dSYM/
 core

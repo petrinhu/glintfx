@@ -38,6 +38,16 @@ public:
   // PT: Finaliza o frame e restaura o estado GL salvo.
   void end_frame();
 
+  // EN: Compose-only begin: set viewport + notify RmlUi — NO glClear, NO alpha-fix.
+  //     The host owns the framebuffer; do not touch its contents before or after.
+  // PT: Begin compose-only: define viewport + notifica RmlUi — SEM glClear, SEM alpha-fix.
+  //     O host é dono do framebuffer; não tocar no conteúdo antes ou depois.
+  void begin_frame_compose(int w, int h);
+
+  // EN: Compose-only end: call RmlUi EndFrame — NO FBO0 alpha-fix.
+  // PT: End compose-only: chama EndFrame do RmlUi — SEM alpha-fix do FBO0.
+  void end_frame_compose();
+
 private:
   struct Impl;   // EN: defined in render_gl3.cpp; holds RenderInterface_GL3.
                  // PT: definido em render_gl3.cpp; contém RenderInterface_GL3.

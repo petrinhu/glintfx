@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: Engine implementation — owns RenderGl3 + Bootstrap; provides standalone frame path.
-//     render_compose() is a documented no-op stub in T1; real implementation arrives in T3.
-// PT: Implementação do Engine — possui RenderGl3 + Bootstrap; provê caminho de frame standalone.
-//     render_compose() é stub no-op documentado na T1; implementação real chega na T3.
+// EN: Engine implementation — owns RenderGl3 + Bootstrap; provides standalone + compose frame paths.
+// PT: Implementação do Engine — possui RenderGl3 + Bootstrap; provê caminhos standalone e compose.
 // Copyright (c) 2026 Petrus Silva Costa
+
+// EN: gl_state.hpp includes GL/gl3w.h — must precede any other GL/RmlUi includes.
+// PT: gl_state.hpp inclui GL/gl3w.h — deve preceder quaisquer outros includes GL/RmlUi.
+#include "gl_state.hpp"
 #include "engine.hpp"
 #include "render_gl3.hpp"
 #include "bootstrap.hpp"
@@ -63,12 +65,22 @@ void Engine::render_standalone(int w, int h) {
 }
 
 void Engine::render_compose(int w, int h) {
-  // EN: Compose-only path — implemented in T3 (GlStateGuard + begin/end_frame_compose).
-  //     In T1 this is intentionally a no-op so no test accidentally relies on it.
-  // PT: Caminho compose-only — implementado na T3 (GlStateGuard + begin/end_frame_compose).
-  //     Na T1 este é intencionalmente um no-op para que nenhum teste dependa dele acidentalmente.
-  (void)w; (void)h;
-}
+  // EN: Compose-only frame path. The host already has its scene on the bound FBO; we layer
+  //     the UI on top without clearing and without touching FBO0. A GlStateGuard snapshot is
+  //     taken before begin_frame_compose and restored after end_frame_compose, so the host's
+  //     renderer sees an unchanged GL context when we return.
+  // PT: Caminho de frame compose-only. O host já tem a cena no FBO corrente; sobrepomos
+  //     a UI sem limpar e sem tocar no FBO0. Um snapshot do GlStateGuard é feito antes de
+  //     begin_frame_compose e restaurado após end_frame_compose, para que o renderer do host
+  //     veja o contexto GL inalterado ao retornar.
+  if (!impl_->ok) return;
+  GlStateGuard guard;                                         // EN: saves host GL state.
+                                                              // PT: salva estado GL do host.
+  impl_->render.begin_frame_compose(w, h);
+  if (auto* c = impl_->boot.context()) c->Render();
+  impl_->render.end_frame_compose();
+}                                                             // EN: ~guard restores here.
+                                                              // PT: ~guard restaura aqui.
 
 Rml::Context* Engine::context() {
   return impl_->ok ? impl_->boot.context() : nullptr;

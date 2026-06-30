@@ -70,11 +70,11 @@ void UiLayer::update() {
 }
 
 void UiLayer::render() {
-  // EN: Compose-only path — fully implemented in T3 (GlStateGuard + begin/end_frame_compose).
-  //     In T2 this is an intentional no-op stub so no test accidentally relies on it.
-  // PT: Caminho compose-only — implementado completamente na T3 (GlStateGuard + begin/end_frame_compose).
-  //     Na T2 este é stub no-op intencional para que nenhum teste dependa acidentalmente dele.
-  (void)impl_;
+  // EN: Delegate to Engine::render_compose — compose UI over the host's current FBO
+  //     without clearing and without swapping buffers. GL state is saved/restored internally.
+  // PT: Delega a Engine::render_compose — compõe a UI sobre o FBO corrente do host
+  //     sem limpar e sem trocar buffers. Estado GL é salvo/restaurado internamente.
+  if (impl_->ok) impl_->engine.render_compose(impl_->w, impl_->h);
 }
 
 void UiLayer::process_event(const UiEvent& /*ev*/) {

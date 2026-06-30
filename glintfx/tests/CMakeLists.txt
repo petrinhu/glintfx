@@ -112,6 +112,34 @@ add_test(NAME ui_layer_attach
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly and gl3w is
+#     a PRIVATE dep of glintfx (not propagated to callers).
+# PT: ui_layer_compose — render compose-only preserva a cor âncora do FBO do host.
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente e gl3w é
+#     dep PRIVATE da glintfx (não propagada aos callers).
+add_executable(ui_layer_compose ui_layer_compose.cpp)
+target_link_libraries(ui_layer_compose PRIVATE glintfx gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min_partial.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/min_partial.rml COPYONLY)
+add_test(NAME ui_layer_compose
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_compose>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: gl_state_guard — GL state captured before and after UiLayer::render() must be identical.
+#     Links gl3w explicitly: the test creates dummy GL objects (program, VAO) directly.
+# PT: gl_state_guard — estado GL capturado antes e depois de UiLayer::render() deve ser idêntico.
+#     Linka gl3w explicitamente: o teste cria objetos GL dummy (programa, VAO) diretamente.
+add_executable(gl_state_guard gl_state_guard.cpp)
+target_link_libraries(gl_state_guard PRIVATE glintfx gl3w)
+add_test(NAME gl_state_guard
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_state_guard>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 option(GLINTFX_GOLDEN_TEST
   "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
   OFF)

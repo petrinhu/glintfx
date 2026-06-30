@@ -107,6 +107,9 @@ void DataBinder::set_bool(const char* key, bool v) {
 
 void DataBinder::set_list(const char* key, const char* const* items, std::size_t n) {
   if (!key) return;
+  // EN: Guard against null items pointer when count is non-zero — would be UB in the loop.
+  // PT: Guard contra ponteiro items nulo quando o count é não-zero — seria UB no loop.
+  if (n > 0 && !items) return;
   auto it = impl_->lists.find(key);
   if (it == impl_->lists.end()) return;
   auto& vec = *it->second;

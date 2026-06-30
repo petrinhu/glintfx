@@ -77,6 +77,17 @@ static bool read_ppm(const char* path,
         fclose(f);
         return false;
     }
+    // EN: Reject non-8-bit PPM: maxval != 255 means 16-bit or non-standard encoding;
+    //     the pixel analysis assumes 1-byte-per-channel (3 bytes per pixel).
+    // PT: Rejeita PPM não-8-bit: maxval != 255 indica codificação 16-bit ou não-padrão;
+    //     a análise de pixels assume 1 byte por canal (3 bytes por pixel).
+    if (maxval != 255) {
+        fprintf(stderr,
+            "data_model_list: unsupported PPM maxval %d in '%s' (expected 255)\n",
+            maxval, path);
+        fclose(f);
+        return false;
+    }
     // EN: Consume the single whitespace byte that follows the header.
     // PT: Consome o único byte de espaço que segue o header.
     fgetc(f);

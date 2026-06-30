@@ -56,10 +56,10 @@ public:
   // PT: Avança o contexto de UI um passo (chamar uma vez por frame antes de render()).
   void update();
 
-  // EN: Compose-only render — overlays the UI onto the window backbuffer (FBO 0) via
-  //     premultiplied-alpha blend. No glClear. No buffer swap. Graphics state fully restored on
-  //     return via GlStateGuard (viewport, blend func+equation, scissor, program, VAO, texture,
-  //     draw-FBO binding, colour mask).
+  // EN: Compose-only render -- overlays the UI onto the window backbuffer (FBO 0) via
+  //     premultiplied-alpha blend. No glClear. No buffer swap. GL state is automatically
+  //     saved and restored on return (viewport, blend func+equation, scissor, program, VAO,
+  //     texture, draw-FBO binding, colour mask).
   //
   //     F1 contract limitation: the internal graphics backend unconditionally targets the
   //     window backbuffer (FBO 0) during EndFrame; a custom host FBO bound before this call
@@ -67,9 +67,9 @@ public:
   //     into the window backbuffer and call this method after drawing its scene, before swap.
   //     The viewport origin is hardcoded at (0,0); sub-region compositing is not supported.
   //
-  // PT: Render compose-only — sobrepõe a UI ao backbuffer da janela (FBO 0) via blend
-  //     premultiplied-alpha. Sem glClear. Sem swap. Estado gráfico restaurado por completo ao
-  //     retornar via GlStateGuard (viewport, blend func+equation, scissor, programa, VAO,
+  // PT: Render compose-only -- sobrepõe a UI ao backbuffer da janela (FBO 0) via blend
+  //     premultiplied-alpha. Sem glClear. Sem swap. O estado GL é salvo e restaurado
+  //     automaticamente ao retornar (viewport, blend func+equation, scissor, programa, VAO,
   //     textura, draw-FBO binding, colour mask).
   //
   //     Limitação de contrato F1: o backend gráfico interno mira incondicionalmente o backbuffer

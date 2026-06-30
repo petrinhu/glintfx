@@ -91,6 +91,22 @@ private:
 
 **PT:** Habilita o **modelo B** do GusWorld (glintfx como overlay de UI no contexto que o jogo possui): o GusWorld mantém SDL3 + `Render2dGl3` + sua ordem de composição, e **aposenta** seu `rmlui_hud` + `RmlUi_Renderer_GL3` + `gl3_loader` vendorizados à mão, trocando-os por `glintfx::UiLayer`. O core/domain POCO deles (~1013 testes) ficam intactos. **Alarga o mandato do glintfx** de "drop-in para apps só-de-UI" para "UI de jogo embutível" — crescimento de escopo deliberado e aceito (o primeiro consumidor o justifica). **Risco novo:** estado GL compartilhado entre dois donos num contexto — mitigado pelo contrato de save/restore do item (d) e por um doc explícito de invariantes. O `App` standalone não é afetado (pode ser reexpresso como um host fino que possui uma janela GLFW e dirige uma `UiLayer`, mantendo um único caminho de engine). **A v2 (a component library de Atomic Design) deve tratar o embed mode como consumidor de 1ª classe:** seus componentes data-driven RML/RCSS têm de funcionar idênticos quer dirigidos pelo `App`, quer pela `UiLayer` de um host, senão os componentes são inúteis para jogos (justamente o público da v2). É uma **porta de mão dupla**: o embed mode é superfície aditiva; se se provar errado, pode ser depreciado sem tocar no caminho standalone.
 
+## Optional GLFW build / Build GLFW opcional
+
+**EN:** Starting with patch v0.2.1, the GLFW window backend is controlled by the CMake option `GLINTFX_BACKEND_GLFW` (default `ON`).
+
+- **`ON` (default):** behaviour unchanged — `glintfx::App`, `window_glfw.cpp`, and `RmlUi_Platform_GLFW.cpp` are compiled; `find_package(glfw3)` is called; `glfw` is linked into the library. `glintfxConfig.cmake` propagates `find_dependency(glfw3)` to consumers.
+- **`OFF` (embed-only):** the library is compiled *without* `window_glfw.cpp`, `app.cpp`, or `RmlUi_Platform_GLFW.cpp`; `glfw` is **not** linked. Consumers (e.g. SDL3 hosts) receive only `Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock`. `glintfxConfig.cmake` does **not** call `find_dependency(glfw3)` and does **not** include `glfw` in `INTERFACE_LINK_LIBRARIES`. The generated `<glintfx/config.hpp>` exposes `GLINTFX_BACKEND_GLFW` (0/1) so callers can guard `glintfx::App` usage at compile time.
+
+Test strategy in `OFF` builds: embed tests (`ui_layer_attach`, `ui_layer_compose`, `gl_state_guard`, `ui_layer_events`, `ui_layer_sanity`) still create a GL context fixture via GLFW, but through a **test-only helper target** (`_glintfx_test_ctx`) that compiles `window_glfw.cpp` and links `glfw` exclusively for the test executables — the installed library does not carry the GLFW dependency.
+
+**PT:** A partir do patch v0.2.1, o backend de janela GLFW é controlado pela opção CMake `GLINTFX_BACKEND_GLFW` (padrão `ON`).
+
+- **`ON` (padrão):** comportamento inalterado — `glintfx::App`, `window_glfw.cpp` e `RmlUi_Platform_GLFW.cpp` são compilados; `find_package(glfw3)` é chamado; `glfw` é linkado na biblioteca. `glintfxConfig.cmake` propaga `find_dependency(glfw3)` para consumidores.
+- **`OFF` (embed-only):** a biblioteca é compilada *sem* `window_glfw.cpp`, `app.cpp` ou `RmlUi_Platform_GLFW.cpp`; `glfw` **não** é linkado. Consumidores (ex.: hosts SDL3) recebem apenas `Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock`. `glintfxConfig.cmake` **não** chama `find_dependency(glfw3)` e **não** inclui `glfw` em `INTERFACE_LINK_LIBRARIES`. O `<glintfx/config.hpp>` gerado expõe `GLINTFX_BACKEND_GLFW` (0/1) para que chamadores protejam o uso de `glintfx::App` em tempo de compilação.
+
+Estratégia de testes em builds `OFF`: os testes embed (`ui_layer_attach`, `ui_layer_compose`, `gl_state_guard`, `ui_layer_events`, `ui_layer_sanity`) ainda criam um fixture de contexto GL via GLFW, mas por meio de um **target helper só-de-teste** (`_glintfx_test_ctx`) que compila `window_glfw.cpp` e linka `glfw` exclusivamente para os executáveis de teste — a biblioteca instalada não carrega a dep GLFW.
+
 ## F1 implementation constraints / Limitações da implementação F1
 
 **EN:** Discovered during the F1 build (confirmed by reading the pinned RmlUi GL3 backend source):

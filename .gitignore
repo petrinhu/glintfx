@@ -34,3 +34,5 @@ vgcore.*
 
 # scratch do subagent-driven-development (em qualquer profundidade)
 .superpowers/
+**/.superpowers/
+glintfx/build-noglfw/

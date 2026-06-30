@@ -9,6 +9,11 @@
 #     gl3w is an INTERFACE library whose single source (gl3w.c) is compiled directly
 #     into libglintfx.a — no separate archive needed.
 #
+#     GLFW backend propagation: @GLINTFX_BACKEND_GLFW@ is substituted at configure time
+#     with ON or OFF. When OFF, find_dependency(glfw3) is NOT called and glfw is NOT
+#     included in INTERFACE_LINK_LIBRARIES — embed-only consumers are not forced to have
+#     GLFW installed.
+#
 # PT: Config de pacote CMake para find_package(glintfx).
 #     Gerado de cmake/glintfxConfig.cmake.in — não edite a cópia instalada.
 #
@@ -18,18 +23,31 @@
 #     não pode ser instalado como target CMake exportado junto com glintfx.
 #     gl3w é uma biblioteca INTERFACE cujo único fonte (gl3w.c) é compilado diretamente
 #     em libglintfx.a — nenhum arquivo separado é necessário.
+#
+#     Propagação do backend GLFW: @GLINTFX_BACKEND_GLFW@ é substituído em configure time
+#     com ON ou OFF. Quando OFF, find_dependency(glfw3) NÃO é chamado e glfw NÃO é
+#     incluído em INTERFACE_LINK_LIBRARIES — consumidores embed-only não são forçados a
+#     ter GLFW instalado.
 
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
 
-# EN: System-level dependencies. These must be available on the consumer's machine.
-#     They are found via the standard CMake mechanisms (system paths, pkg-config, etc.).
-# PT: Dependências de sistema. Devem estar disponíveis na máquina do consumidor.
-#     São encontradas via mecanismos padrão do CMake (paths do sistema, pkg-config, etc.).
+# EN: Embed the GLFW-backend flag baked at build time.
+#     This variable is ON or OFF depending on how glintfx was built.
+# PT: Embarca a flag do backend GLFW fixada em build time.
+#     Esta variável é ON ou OFF dependendo de como o glintfx foi compilado.
+set(_glintfx_glfw_backend @GLINTFX_BACKEND_GLFW@)
+
+# EN: System-level dependencies. OpenGL and FreeType are always required.
+#     glfw3 is only required when the library was built with the GLFW window backend.
+# PT: Dependências de sistema. OpenGL e FreeType são sempre exigidos.
+#     glfw3 só é exigido quando a lib foi compilada com o backend de janela GLFW.
 find_dependency(OpenGL REQUIRED)
-find_dependency(glfw3  REQUIRED)
 find_dependency(Freetype REQUIRED)
+if(_glintfx_glfw_backend)
+  find_dependency(glfw3 REQUIRED)
+endif()
 
 if(NOT TARGET glintfx::glintfx)
   # EN: Resolve install-tree paths (set_and_check verifies the path exists).
@@ -59,22 +77,39 @@ if(NOT TARGET glintfx::glintfx)
     PATHS "${_glintfx_lib_dir}/glintfx"
     NO_DEFAULT_PATH REQUIRED)
 
+  # EN: Build the INTERFACE_LINK_LIBRARIES list: rmlui (co-installed) + OpenGL + FreeType
+  #     + glfw only when the GLFW backend is enabled. This ensures embed-only consumers
+  #     do not pull in glfw as a transitive dependency when it was not compiled in.
+  # PT: Monta a lista INTERFACE_LINK_LIBRARIES: rmlui (co-instalado) + OpenGL + FreeType
+  #     + glfw só quando o backend GLFW está habilitado. Isso garante que consumidores
+  #     embed-only não puxem glfw como dep transitiva quando não foi compilado na lib.
+  if(_glintfx_glfw_backend)
+    set(_glintfx_iface_libs
+      "${_glintfx_rmlui_archive};OpenGL::GL;glfw;Freetype::Freetype")
+  else()
+    set(_glintfx_iface_libs
+      "${_glintfx_rmlui_archive};OpenGL::GL;Freetype::Freetype")
+  endif()
+
   add_library(glintfx::glintfx STATIC IMPORTED)
   set_target_properties(glintfx::glintfx PROPERTIES
     IMPORTED_LOCATION             "${_glintfx_archive}"
     INTERFACE_COMPILE_FEATURES    "cxx_std_17"
     INTERFACE_INCLUDE_DIRECTORIES "${_glintfx_inc_dir}"
     # EN: INTERFACE_LINK_LIBRARIES: rmlui archive (private, co-installed) +
-    #     system libs (OpenGL, GLFW, FreeType). No rmlui headers exposed.
+    #     system libs (OpenGL, FreeType, and optionally GLFW).
     # PT: INTERFACE_LINK_LIBRARIES: arquivo rmlui (privado, co-instalado) +
-    #     libs de sistema (OpenGL, GLFW, FreeType). Sem headers do rmlui expostos.
-    INTERFACE_LINK_LIBRARIES      "${_glintfx_rmlui_archive};OpenGL::GL;glfw;Freetype::Freetype"
+    #     libs de sistema (OpenGL, FreeType, e opcionalmente GLFW).
+    INTERFACE_LINK_LIBRARIES      "${_glintfx_iface_libs}"
   )
 
   unset(_glintfx_lib_dir)
   unset(_glintfx_inc_dir)
   unset(_glintfx_archive)
   unset(_glintfx_rmlui_archive)
+  unset(_glintfx_iface_libs)
 endif()
+
+unset(_glintfx_glfw_backend)
 
 check_required_components(glintfx)

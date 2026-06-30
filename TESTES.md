@@ -31,6 +31,12 @@ Um item de implementação só vira `✅ Concluído` depois que os `TST-*` da su
 
 A glintfx é um sub-projeto C++/OpenGL (pasta `glintfx/`) com stack completamente diferente: usa RmlUi, OpenGL 3, GLFW e FreeType. O harness dela é **ctest** (CMake CTest), e os testes rodam sob **Xvfb** (display virtual) via `xvfb-run -a`.
 
+**Pipeline de CI automatizado (item L1.2-CI):**
+- **GitHub Actions:** `.github/workflows/ci.yml` — runners gratuitos `ubuntu-latest`; gate principal.
+- **Codeberg (Forgejo Actions):** `.forgejo/workflows/ci.yml` — soberania; mesma sintaxe, requer runners habilitados em Settings → Actions.
+
+Ambos disparam em todo push/PR que toca `glintfx/**`. A validação real ocorre no primeiro push ao remote correspondente.
+
 ### Suíte de CI automatizada (default — `ctest` sem flags extras)
 
 Acionada com:

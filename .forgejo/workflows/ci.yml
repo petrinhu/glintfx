@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: CI pipeline for glintfx on Codeberg (Forgejo Actions) — mirrors .github/workflows/ci.yml.
+#     Builds the library and runs the 5-test suite under Xvfb / Mesa llvmpipe (software GL).
+#     Triggers on every push or PR that modifies glintfx/ or this workflow file.
+#     Requires Forgejo Actions runners enabled on this Codeberg repository (check repo Settings
+#     → Actions). If no runners are available, the workflow is queued but never dispatched.
+# PT: Pipeline de CI para glintfx no Codeberg (Forgejo Actions) — espelha .github/workflows/ci.yml.
+#     Builda a biblioteca e roda a suíte de 5 testes sob Xvfb / Mesa llvmpipe (GL software).
+#     Disparado em todo push ou PR que modifica glintfx/ ou este arquivo de workflow.
+#     Requer runners do Forgejo Actions habilitados neste repositório Codeberg (verificar repo
+#     Settings → Actions). Se não houver runners, o workflow fica enfileirado mas nunca dispara.
+name: ci
+
+on:
+  push:
+    paths:
+      - "glintfx/**"
+      - ".forgejo/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "glintfx/**"
+      - ".forgejo/workflows/ci.yml"
+
+jobs:
+  build-and-test:
+    # EN: Codeberg shared runners are labeled ubuntu-latest. If your self-hosted runner
+    #     uses a different label, change runs-on accordingly.
+    # PT: Os runners compartilhados do Codeberg usam o label ubuntu-latest. Se o seu
+    #     runner self-hosted usar label diferente, altere runs-on conforme necessário.
+    name: build & test (ubuntu-latest / llvmpipe)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # EN: Cache the FetchContent clone of RmlUi, keyed on CMakeLists.txt so the cache
+      #     invalidates automatically whenever the pinned GIT_TAG changes.
+      # PT: Cache do clone FetchContent do RmlUi, chaveado no CMakeLists.txt para
+      #     invalidar automaticamente quando o GIT_TAG pinado mudar.
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build/_deps
+          key: rmlui-${{ runner.os }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Install system build and runtime dependencies.
+      #     libgl1-mesa-dri: provides llvmpipe (Mesa software GL renderer for Xvfb headless).
+      # PT: Instala dependências de build e runtime do sistema.
+      #     libgl1-mesa-dri: provê llvmpipe (renderer software GL do Mesa para Xvfb headless).
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libgl1-mesa-dri \
+            xvfb
+
+      # EN: Configure: tests ON, demos OFF. The test CMakeLists.txt copies the showcase
+      #     assets (RML/RCSS/fonts) from the source tree at configure time, so the demo
+      #     executables do not need to be built for the test suite to work.
+      # PT: Configura: testes ON, demos OFF. O CMakeLists.txt dos testes copia os assets
+      #     do showcase (RML/RCSS/fontes) do source tree em configure, então os executáveis
+      #     de demo não precisam ser buildados para a suíte de testes funcionar.
+      - name: configure
+        run: |
+          cmake -S glintfx -B glintfx/build \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF
+
+      - name: build
+        run: cmake --build glintfx/build -j$(nproc)
+
+      # EN: Run the 5-test suite: window_smoke, render_smoke, bootstrap_smoke, app_smoke,
+      #     render_sanity. Each test is driven by tests/run_xvfb.cmake which calls
+      #     xvfb-run -a <exe>; the outer xvfb-run -a ensures DISPLAY is set for ctest
+      #     itself on a headless runner. Nested -a auto-selects a free display number,
+      #     so there is no conflict.
+      # PT: Roda a suíte de 5 testes: window_smoke, render_smoke, bootstrap_smoke,
+      #     app_smoke, render_sanity. Cada teste é dirigido por tests/run_xvfb.cmake que
+      #     chama xvfb-run -a <exe>; o xvfb-run -a externo garante que DISPLAY seja
+      #     definido para o ctest em si no runner headless. O -a aninhado escolhe display
+      #     livre automaticamente, sem conflito.
+      - name: test
+        run: xvfb-run -a ctest --test-dir glintfx/build --output-on-failure

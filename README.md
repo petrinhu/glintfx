@@ -7,6 +7,8 @@
 [![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-blue.svg)](CHANGELOG.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
+[![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
+[![CI (Codeberg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
 
 > **EN:** A drop-in C++ library that fuses an HTML/CSS UI engine ([RmlUi 6.3](https://github.com/mikke89/RmlUi)) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask). Link one CMake target and write CSS, with no OpenGL/GLFW/RmlUi wiring by hand.
 >
@@ -190,7 +192,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **One `App` per process.** GLFW and RmlUi global state make a second instance undefined behaviour.
 - **The `mask` effect needs a real GPU.** Under Mesa/llvmpipe (software, e.g. headless CI) the dual-sampler mask shader crashes, a Mesa bug rather than a glintfx bug. The CI variant runs without the mask card.
 - **GLFW only.** SDL and X11 backends are planned but not implemented.
-- **No versioned CI yet.** Tests exist (`ctest`) but no pipeline gates them automatically.
+- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 5-test suite runs automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
 - **FetchContent / `add_subdirectory` only.** A full `find_package(glintfx)` (`glintfxConfig.cmake`) is a post-v1 item.
 
 ### Roadmap and vision
@@ -389,7 +391,7 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Um `App` por processo.** O estado global de GLFW e RmlUi torna uma segunda instância comportamento indefinido.
 - **O efeito `mask` exige GPU real.** Sob Mesa/llvmpipe (software, ex.: CI headless) o shader de mask dual-sampler crasha, bug do Mesa e não do glintfx. A variante de CI roda sem o card mask.
 - **Apenas GLFW.** Backends SDL e X11 estão planejados mas não implementados.
-- **Sem CI versionado ainda.** Os testes existem (`ctest`) mas nenhum pipeline os gateia automaticamente.
+- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 5 testes roda automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
 - **Só FetchContent / `add_subdirectory`.** Um `find_package(glintfx)` completo (`glintfxConfig.cmake`) é item pós-v1.
 
 ### Roadmap e visão

@@ -13,23 +13,29 @@ target_link_libraries(render_smoke PRIVATE glintfx)
 add_test(NAME render_smoke COMMAND ${CMAKE_COMMAND}
   -DEXE=$<TARGET_FILE:render_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
 
-# EN: bootstrap_smoke — verify RmlUi init, Rml::Context creation, and document load.
-# PT: bootstrap_smoke — verifica init do RmlUi, criação de Rml::Context e carregamento de documento.
-add_executable(bootstrap_smoke bootstrap_smoke.cpp)
-target_link_libraries(bootstrap_smoke PRIVATE glintfx)
-# EN: Copy the min.rml fixture to the test working directory (build/tests/min.rml).
-#     The test binary looks for "tests/min.rml" relative to the ctest CWD (build/).
-# PT: Copia a fixture min.rml para o dir de trabalho do teste (build/tests/min.rml).
-#     O binário procura "tests/min.rml" relativo ao CWD do ctest (build/).
+# EN: engine_smoke — verify Engine (RmlUi+GL3) init via SystemClock + document load.
+#     Replaces bootstrap_smoke: Bootstrap::init no longer accepts WindowGlfw (T1 refactor).
+# PT: engine_smoke — verifica init do Engine (RmlUi+GL3) via SystemClock + carregamento de documento.
+#     Substitui bootstrap_smoke: Bootstrap::init não aceita mais WindowGlfw (refator T1).
+add_executable(engine_smoke engine_smoke.cpp)
+# EN: system_clock.hpp inherits from Rml::SystemInterface — needs RmlUi include path.
+#     RmlUi::Core is a PRIVATE dep of glintfx and not propagated; link explicitly here.
+# PT: system_clock.hpp herda de Rml::SystemInterface — precisa do include path do RmlUi.
+#     RmlUi::Core é dep PRIVATE da glintfx e não propagada; linka explicitamente aqui.
+target_link_libraries(engine_smoke PRIVATE glintfx RmlUi::Core)
+# EN: Copy the min.rml fixture to build/tests/ so the binary finds "tests/min.rml"
+#     relative to the ctest CWD (build/).
+# PT: Copia a fixture min.rml para build/tests/ para que o binário encontre "tests/min.rml"
+#     relativo ao CWD do ctest (build/).
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min.rml COPYONLY)
 # EN: WORKING_DIRECTORY ensures "tests/min.rml" resolves to build/tests/min.rml regardless
 #     of where ctest is invoked from (ctest --test-dir does not set subprocess CWD).
 # PT: WORKING_DIRECTORY garante que "tests/min.rml" resolva para build/tests/min.rml
 #     independente de onde ctest é invocado (--test-dir não define CWD do subprocesso).
-add_test(NAME bootstrap_smoke
+add_test(NAME engine_smoke
   COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:bootstrap_smoke>
+    -DEXE=$<TARGET_FILE:engine_smoke>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

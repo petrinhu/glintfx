@@ -31,6 +31,12 @@ Um item de implementação só vira `✅ Concluído` depois que os `TST-*` da su
 
 A glintfx é um sub-projeto C++/OpenGL (pasta `glintfx/`) com stack completamente diferente: usa RmlUi, OpenGL 3, GLFW e FreeType. O harness dela é **ctest** (CMake CTest), e os testes rodam sob **Xvfb** (display virtual) via `xvfb-run -a`.
 
+**Pipeline de CI automatizado (item L1.2-CI):**
+- **GitHub Actions:** `.github/workflows/ci.yml` — runners gratuitos `ubuntu-latest`; gate principal.
+- **Codeberg (Forgejo Actions):** `.forgejo/workflows/ci.yml` — soberania; mesma sintaxe, requer runners habilitados em Settings → Actions.
+
+Ambos disparam em todo push/PR que toca `glintfx/**`. A validação real ocorre no primeiro push ao remote correspondente.
+
 ### Suíte de CI automatizada (default — `ctest` sem flags extras)
 
 Acionada com:
@@ -57,15 +63,19 @@ Os limites são propositalmente largos (tolerância ~10× o nível mínimo esper
 
 ### Validação visual manual / GPU real
 
-Para validar os efeitos pixel-a-pixel em hardware real (o que o CI headless não faz), use as ferramentas de demo:
+Para validar os efeitos pixel-a-pixel em hardware real (o que o CI headless não faz), rode os demos **diretamente no desktop** com `DISPLAY` ativo -- sem `xvfb-run`, que usa **llvmpipe (software render)** e não equivale à GPU real:
 
 ```sh
-# Full showcase com todos os efeitos (incluindo mask — exige GPU real)
-xvfb-run -a ./glintfx/build/demos/showcase/glintfx_showcase
+# Run on desktop with real GPU (DISPLAY active, no xvfb-run)
+# Rodar no desktop com GPU real (DISPLAY ativo, sem xvfb-run)
+./glintfx/build/demos/showcase/glintfx_showcase
 
-# Captura headless: gera screenshot PPM do showcase em GPU real
+# GPU real screenshot capture: generates PPM of the showcase
+# Captura em GPU real: gera screenshot PPM do showcase
 ./glintfx/build/demos/showcase/glintfx_capture showcase_gpu.ppm
 ```
+
+> **Nota (headless/CI vs GPU real):** `xvfb-run` cria um display virtual e usa **llvmpipe**, o software renderer do Mesa -- adequado para a suíte `ctest` (seção acima), mas não valida efeitos visuais em hardware real. Para validação autentica, rodar sem `xvfb-run` com o desktop ativo.
 
 Os efeitos visuais (glow/drop-shadow ciano, degradê laranja→pink, backdrop-blur, mask) foram **validados visualmente pelo líder em GPU real** na release v1. Esse estado é o "golden" humano; o `render_sanity` automatizado detecta regressões grosseiras (output preto, efeitos sumindo completamente, fundo não renderizando).
 
@@ -75,13 +85,27 @@ O teste `golden_test` faz comparação pixel-exata (MSE < 50) de um screenshot c
 
 **Causa raiz do flakiness**: o llvmpipe processa tiles do framebuffer em threads paralelas. As passagens de blur (`backdrop-filter: blur`) e glow (`box-shadow` + `filter: drop-shadow`) envolvem convolução multi-passo com acumulação de ponto flutuante — não-associativa em threads. O agendamento de threads varia entre execuções, produzindo MSE ~3 000 entre duas renders da **mesma cena** (tolerância era 50).
 
-Para usar o `golden_test` em GPU real:
+Para usar o `golden_test`, compile com a flag antes:
+
 ```sh
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON -DGLINTFX_GOLDEN_TEST=ON
 cmake --build glintfx/build -j$(nproc)
+```
+
+**Em GPU real (estável -- desktop com `DISPLAY` ativo, sem `xvfb-run`):**
+```sh
+# First run: generates reference golden/showcase_reference.ppm and exits 0
 # 1ª execução: gera referência golden/showcase_reference.ppm e sai 0
-xvfb-run -a ctest --test-dir glintfx/build -R golden_test --output-on-failure
-# Execuções seguintes: compara via MSE (tolerância 50)
+ctest --test-dir glintfx/build -R golden_test --output-on-failure
+# Subsequent runs: compare via MSE (tolerance 50) -- stable on real GPU
+# Execuções seguintes: compara via MSE (tolerância 50) -- estável em GPU real
+ctest --test-dir glintfx/build -R golden_test --output-on-failure
+```
+
+**Em headless/llvmpipe (flaky -- só para verificar que o teste executa, não para validação pixel):**
+```sh
+# MSE ~3 000 between runs on llvmpipe (tolerance 50) -- pixel comparison is unreliable
+# MSE ~3 000 entre corridas no llvmpipe (tolerância 50) -- comparação pixel não é confiável
 xvfb-run -a ctest --test-dir glintfx/build -R golden_test --output-on-failure
 ```
 

@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: CMake package config for find_package(glintfx).
+#     Generated from cmake/glintfxConfig.cmake.in — do not edit the installed copy.
+#
+#     Strategy: rmlui_core is co-installed under <libdir>/glintfx/ (private subdir)
+#     because CMake 4.x forbids install(EXPORT) when PRIVATE transitive deps are not
+#     in an export set, and rmlui_core is a FetchContent/vendored target that cannot
+#     be installed as a proper exported CMake target alongside glintfx.
+#     gl3w is an INTERFACE library whose single source (gl3w.c) is compiled directly
+#     into libglintfx.a — no separate archive needed.
+#
+# PT: Config de pacote CMake para find_package(glintfx).
+#     Gerado de cmake/glintfxConfig.cmake.in — não edite a cópia instalada.
+#
+#     Estratégia: rmlui_core é co-instalado em <libdir>/glintfx/ (subdiretório privado)
+#     porque o CMake 4.x proíbe install(EXPORT) quando deps transitivas PRIVATE não
+#     estão em um export set, e rmlui_core é um target FetchContent/vendorizado que
+#     não pode ser instalado como target CMake exportado junto com glintfx.
+#     gl3w é uma biblioteca INTERFACE cujo único fonte (gl3w.c) é compilado diretamente
+#     em libglintfx.a — nenhum arquivo separado é necessário.
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# EN: System-level dependencies. These must be available on the consumer's machine.
+#     They are found via the standard CMake mechanisms (system paths, pkg-config, etc.).
+# PT: Dependências de sistema. Devem estar disponíveis na máquina do consumidor.
+#     São encontradas via mecanismos padrão do CMake (paths do sistema, pkg-config, etc.).
+find_dependency(OpenGL REQUIRED)
+find_dependency(glfw3  REQUIRED)
+find_dependency(Freetype REQUIRED)
+
+if(NOT TARGET glintfx::glintfx)
+  # EN: Resolve install-tree paths (set_and_check verifies the path exists).
+  #     @PACKAGE_CMAKE_INSTALL_LIBDIR@ / @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@ are
+  #     computed by configure_package_config_file relative to the prefix.
+  # PT: Resolve os paths da árvore de install (set_and_check verifica que o path existe).
+  #     @PACKAGE_CMAKE_INSTALL_LIBDIR@ / @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@ são
+  #     calculados por configure_package_config_file relativos ao prefixo.
+  set_and_check(_glintfx_lib_dir  "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
+  set_and_check(_glintfx_inc_dir  "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+
+  # EN: Main static archive (glintfx proper + gl3w.c objects compiled in).
+  # PT: Arquivo estático principal (glintfx + objetos de gl3w.c compilados dentro).
+  find_library(_glintfx_archive
+    NAMES glintfx
+    PATHS "${_glintfx_lib_dir}"
+    NO_DEFAULT_PATH REQUIRED)
+
+  # EN: Co-installed RmlUi core archive. Lives under <libdir>/glintfx/ so it does
+  #     not conflict with a system- or consumer-installed RmlUi. The consumer does
+  #     not need RmlUi headers — glintfx's public API is opaque.
+  # PT: Arquivo rmlui_core co-instalado. Fica em <libdir>/glintfx/ para não conflitar
+  #     com um RmlUi instalado no sistema ou pelo consumidor. O consumidor não precisa
+  #     dos headers do RmlUi — a API pública do glintfx é opaca.
+  find_library(_glintfx_rmlui_archive
+    NAMES rmlui
+    PATHS "${_glintfx_lib_dir}/glintfx"
+    NO_DEFAULT_PATH REQUIRED)
+
+  add_library(glintfx::glintfx STATIC IMPORTED)
+  set_target_properties(glintfx::glintfx PROPERTIES
+    IMPORTED_LOCATION             "${_glintfx_archive}"
+    INTERFACE_COMPILE_FEATURES    "cxx_std_17"
+    INTERFACE_INCLUDE_DIRECTORIES "${_glintfx_inc_dir}"
+    # EN: INTERFACE_LINK_LIBRARIES: rmlui archive (private, co-installed) +
+    #     system libs (OpenGL, GLFW, FreeType). No rmlui headers exposed.
+    # PT: INTERFACE_LINK_LIBRARIES: arquivo rmlui (privado, co-instalado) +
+    #     libs de sistema (OpenGL, GLFW, FreeType). Sem headers do rmlui expostos.
+    INTERFACE_LINK_LIBRARIES      "${_glintfx_rmlui_archive};OpenGL::GL;glfw;Freetype::Freetype"
+  )
+
+  unset(_glintfx_lib_dir)
+  unset(_glintfx_inc_dir)
+  unset(_glintfx_archive)
+  unset(_glintfx_rmlui_archive)
+endif()
+
+check_required_components(glintfx)

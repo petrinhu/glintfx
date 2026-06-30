@@ -47,11 +47,18 @@ void App::load(const char* rml_path) {
   if (impl_->ok) impl_->boot.load(rml_path);
 }
 
+bool App::ok() const noexcept {
+  return impl_ && impl_->ok;
+}
+
 bool App::running() const {
   return impl_->ok && !impl_->window.should_close();
 }
 
 void App::poll_events() {
+  // EN: Guard: consistent with load()/running() — no-op if subsystem init failed.
+  // PT: Guard: consistente com load()/running() — no-op se a inicialização falhou.
+  if (!impl_->ok) return;
   impl_->window.poll();
 }
 
@@ -60,6 +67,9 @@ void App::update() {
 }
 
 void App::render() {
+  // EN: Guard: no-op if subsystem init failed (consistent with load()/running()).
+  // PT: Guard: no-op se a inicialização falhou (consistente com load()/running()).
+  if (!impl_->ok) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
   impl_->render.begin_frame(w, h);
@@ -99,7 +109,14 @@ bool App::snapshot(const char* ppm_path) {
   FILE* f = fopen(ppm_path, "wb");
   if (!f) return false;
   fprintf(f, "P6\n%d %d\n255\n", w, h);
-  fwrite(px.data(), 1, px.size(), f);
+  // EN: glReadPixels origin is bottom-left; PPM origin is top-left.
+  //     Write rows in reverse order (last row first) so the image is upright.
+  // PT: A origem do glReadPixels é bottom-left; a do PPM é top-left.
+  //     Grava as linhas em ordem inversa (última linha primeiro) para a imagem ficar na vertical correta.
+  const size_t row_bytes = (size_t)w * 3;
+  for (int row = h - 1; row >= 0; --row) {
+    fwrite(px.data() + (size_t)row * row_bytes, 1, row_bytes, f);
+  }
   fclose(f);
   return true;
 }

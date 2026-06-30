@@ -17,6 +17,7 @@ public:
   void size(int& w, int& h) const;
   GLFWwindow* handle() const { return win_; }
 private:
-  GLFWwindow* win_ = nullptr;
+  GLFWwindow* win_        = nullptr;
+  bool        glfw_inited_ = false; // EN: true only after glfwInit() succeeds. PT: true somente após glfwInit() com sucesso.
 };
 }

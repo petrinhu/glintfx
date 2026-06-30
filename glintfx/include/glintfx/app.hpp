@@ -37,7 +37,7 @@ public:
   //     Construction can fail silently (e.g. no display, no GL context available).
   //     On failure (N2): ok() returns false; running() also returns false; load() is a no-op;
   //     render() and run() do nothing. Check ok() once after construction to distinguish an
-  //     initialisation failure from a window that was closed after a successful start.
+  //     initialization failure from a window that was closed after a successful start.
   //     run() is safe to call regardless — it returns immediately when !running().
   // PT: Constrói o App: abre a janela e inicializa o contexto GL e o motor de UI.
   //     A construção pode falhar silenciosamente (ex.: sem display, sem contexto GL disponível).
@@ -53,7 +53,7 @@ public:
   App& operator=(const App&) = delete;
 
   // EN: Returns true if construction succeeded: window, GL context, and UI engine are all live.
-  //     Use ok() to distinguish "initialisation failed" from "window closed":
+  //     Use ok() to distinguish "initialization failed" from "window closed":
   //     running() returns false in both cases, conflating them. Check ok() once right after
   //     construction; it never changes after that point.
   // PT: Retorna true se a construção teve sucesso: janela, contexto GL e motor de UI estão todos vivos.

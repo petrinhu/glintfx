@@ -38,7 +38,7 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 
 ### Features
 
-- **Drop-in integration:** one target (`glintfx::glintfx`) via CMake FetchContent; no manual graphics setup.
+- **Drop-in integration:** one target (`glintfx::glintfx`) via CMake `FetchContent` or `find_package(glintfx)`; no manual graphics setup.
 - **Data-driven effects:** glow, gradient, backdrop-blur, drop-shadow, and mask, all expressed in `.rcss` (no imperative effect API to learn).
 - **Clean public API:** a single RAII facade (`glintfx::App`); no third-party types leak into your headers.
 - **Self-contained build:** RmlUi fetched automatically; gl3w vendored (works offline); GLFW/FreeType/OpenGL from the system.
@@ -70,6 +70,13 @@ FetchContent_MakeAvailable(glintfx)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE glintfx::glintfx)   # one line, no GL/GLFW/RmlUi
 ```
+
+> **Alternative: installed tree (`find_package`).** If glintfx has been installed via `cmake --install`, use `find_package` instead of `FetchContent`; `glintfxConfig.cmake` and RmlUi are co-installed under the same prefix:
+> ```cmake
+> find_package(glintfx REQUIRED)
+> add_executable(app main.cpp)
+> target_link_libraries(app PRIVATE glintfx::glintfx)
+> ```
 
 **2. Write the minimal app** (`main.cpp`):
 
@@ -193,7 +200,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **The `mask` effect needs a real GPU.** Under Mesa/llvmpipe (software, e.g. headless CI) the dual-sampler mask shader crashes, a Mesa bug rather than a glintfx bug. The CI variant runs without the mask card.
 - **GLFW only.** SDL and X11 backends are planned but not implemented.
 - **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 5-test suite runs automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
-- **FetchContent / `add_subdirectory` only.** A full `find_package(glintfx)` (`glintfxConfig.cmake`) is a post-v1 item.
+- **Two CMake integration paths:** `FetchContent` / `add_subdirectory` (recommended when building from source) and `find_package(glintfx)` for an installed tree via `cmake --install`, linking `glintfx::glintfx`; `glintfxConfig.cmake` and RmlUi are co-installed under the same prefix.
 
 ### Roadmap and vision
 
@@ -237,7 +244,7 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 
 ### Features
 
-- **Integração drop-in:** um alvo (`glintfx::glintfx`) via CMake FetchContent; sem setup gráfico manual.
+- **Integração drop-in:** um alvo (`glintfx::glintfx`) via CMake `FetchContent` ou `find_package(glintfx)`; sem setup gráfico manual.
 - **Efeitos data-driven:** glow, degradê, backdrop-blur, drop-shadow e mask, todos expressos em `.rcss` (sem API imperativa de efeito para aprender).
 - **API pública limpa:** uma única fachada RAII (`glintfx::App`); nenhum tipo de terceiro vaza para seus headers.
 - **Build autocontido:** RmlUi baixado automaticamente; gl3w vendorizado (funciona offline); GLFW/FreeType/OpenGL do sistema.
@@ -269,6 +276,13 @@ FetchContent_MakeAvailable(glintfx)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE glintfx::glintfx)   # uma linha, sem GL/GLFW/RmlUi
 ```
+
+> **Alternativa: árvore instalada (`find_package`).** Se o glintfx foi instalado via `cmake --install`, use `find_package` em vez de `FetchContent`; `glintfxConfig.cmake` e o RmlUi são co-instalados sob o mesmo prefixo:
+> ```cmake
+> find_package(glintfx REQUIRED)
+> add_executable(app main.cpp)
+> target_link_libraries(app PRIVATE glintfx::glintfx)
+> ```
 
 **2. Escreva o app mínimo** (`main.cpp`):
 
@@ -392,7 +406,7 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **O efeito `mask` exige GPU real.** Sob Mesa/llvmpipe (software, ex.: CI headless) o shader de mask dual-sampler crasha, bug do Mesa e não do glintfx. A variante de CI roda sem o card mask.
 - **Apenas GLFW.** Backends SDL e X11 estão planejados mas não implementados.
 - **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 5 testes roda automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
-- **Só FetchContent / `add_subdirectory`.** Um `find_package(glintfx)` completo (`glintfxConfig.cmake`) é item pós-v1.
+- **Dois caminhos de integração CMake:** `FetchContent` / `add_subdirectory` (recomendado ao buildar do fonte) e `find_package(glintfx)` para uma árvore instalada via `cmake --install`, linkando `glintfx::glintfx`; `glintfxConfig.cmake` e o RmlUi são co-instalados sob o mesmo prefixo.
 
 ### Roadmap e visão
 

@@ -12,7 +12,7 @@
 int main()
 {
     glintfx::App app;
-    // EN: ok() distinguishes initialisation failure from a window closed later.
+    // EN: ok() distinguishes initialization failure from a window closed later.
     // PT: ok() distingue falha de inicialização de janela fechada depois.
     if (!app.ok()) return 1;
     app.load("showcase.rml");

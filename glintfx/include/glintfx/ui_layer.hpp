@@ -20,6 +20,15 @@ struct UiLayerConfig {
   int logical_width  = 1280;
   int logical_height = 720;
   bool load_gl       = true;
+  // EN: Initial density-independent pixel ratio (dp_ratio).
+  //     1 dp = dp_ratio physical pixels. Set > 1.0 when the host renders at a higher
+  //     physical resolution than the logical RCSS canvas (e.g. dp_ratio=2.0 means 1dp=2px).
+  //     Can be updated at runtime via set_dp_ratio(). Default 1.0 = no scaling.
+  // PT: Density-independent pixel ratio inicial (dp_ratio).
+  //     1 dp = dp_ratio pixels físicos. Defina > 1.0 quando o host renderiza numa resolução
+  //     física maior que o canvas lógico RCSS (ex.: dp_ratio=2.0 significa 1dp=2px).
+  //     Pode ser atualizado em runtime via set_dp_ratio(). Padrão 1.0 = sem escala.
+  float dp_ratio = 1.0f;
 };
 
 class UiLayer {
@@ -51,6 +60,26 @@ public:
   // EN: Notify of a viewport resize (real target pixels).
   // PT: Notifica redimensionamento de viewport (pixels reais do alvo).
   void set_viewport(int w, int h);
+
+  // EN: Update the density-independent pixel ratio at runtime.
+  //     1 dp (in RCSS) = ratio physical pixels. Triggers a layout re-pass when changed.
+  //     Example: host renders 1920×1080 with RCSS authored at 960×540 → set_dp_ratio(2.0f).
+  //     Pairs with set_viewport(real_w, real_h) which stays in physical pixels.
+  // PT: Atualiza o density-independent pixel ratio em runtime.
+  //     1 dp (no RCSS) = ratio pixels físicos. Dispara re-layout quando alterado.
+  //     Exemplo: host renderiza 1920×1080 com RCSS no canvas lógico 960×540 → set_dp_ratio(2.0f).
+  //     Usa com set_viewport(real_w, real_h) que permanece em pixels físicos.
+  void set_dp_ratio(float ratio);
+
+  // EN: Override the base URL for asset resolution (fonts, images, RCSS).
+  //     When set, relative paths passed to Open() are resolved as base_url/path.
+  //     Absolute paths are unaffected. Call before load() for the URL to take effect.
+  //     Pass nullptr or "" to clear.
+  // PT: Sobrepõe o base URL para resolução de assets (fontes, imagens, RCSS).
+  //     Quando definido, caminhos relativos passados a Open() são resolvidos como base_url/path.
+  //     Caminhos absolutos não são afetados. Chame antes de load() para o URL ter efeito.
+  //     Passe nullptr ou "" para limpar.
+  void set_asset_base_url(const char* url);
 
   // EN: Advance the UI context by one step (call once per frame before render()).
   // PT: Avança o contexto de UI um passo (chamar uma vez por frame antes de render()).

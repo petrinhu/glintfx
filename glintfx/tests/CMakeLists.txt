@@ -311,3 +311,56 @@ add_test(NAME ui_layer_sanity
     -DEXE=$<TARGET_FILE:ui_layer_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: dp_ratio_sanity — verifies UiLayerConfig::dp_ratio (Config path) and
+#     set_dp_ratio() (runtime setter path). Renders a 100dp×100dp white box on
+#     a black background; at dp_ratio=2 the box covers ~4× more pixels than at
+#     dp_ratio=1. Assert bright_count(ratio=2) >= 3 * bright_count(ratio=1).
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+# PT: dp_ratio_sanity — verifica UiLayerConfig::dp_ratio (caminho Config) e
+#     set_dp_ratio() (caminho setter runtime). Renderiza box branco 100dp×100dp em
+#     fundo preto; em dp_ratio=2 o box cobre ~4× mais pixels que em dp_ratio=1.
+#     Verifica bright_count(ratio=2) >= 3 * bright_count(ratio=1).
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+# ---------------------------------------------------------------------------
+add_executable(dp_ratio_sanity dp_ratio_sanity.cpp)
+target_link_libraries(dp_ratio_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/dp_ratio_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/dp_ratio_scene.rcss COPYONLY)
+add_test(NAME dp_ratio_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dp_ratio_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: base_url_sanity — verifies set_asset_base_url() on UiLayer.
+#     embed_scene.rml/.rcss are placed ONLY in base_url_assets/ (not in the
+#     test CWD). load("embed_scene.rml") succeeds only when the base URL is set.
+#     Runs the same three aggregate pixel checks as ui_layer_sanity.
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+# PT: base_url_sanity — verifica set_asset_base_url() no UiLayer.
+#     embed_scene.rml/.rcss são colocados SOMENTE em base_url_assets/ (não no
+#     CWD do teste). load("embed_scene.rml") só tem sucesso quando base URL está definido.
+#     Executa os mesmos três checks de pixel do ui_layer_sanity.
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+# ---------------------------------------------------------------------------
+add_executable(base_url_sanity base_url_sanity.cpp)
+target_link_libraries(base_url_sanity PRIVATE ${_embed_dep} gl3w)
+# EN: Copy scene assets ONLY to base_url_assets/ subdir — NOT to the test CWD root.
+#     This ensures the files cannot be found without the base URL.
+# PT: Copia assets de cena SOMENTE para subdir base_url_assets/ — NÃO para a raiz do CWD do teste.
+#     Garante que os arquivos não podem ser encontrados sem o base URL.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets/embed_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets/embed_scene.rcss COPYONLY)
+add_test(NAME base_url_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:base_url_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

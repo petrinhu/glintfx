@@ -45,6 +45,22 @@ public:
   // PT: Notifica o RmlUi de um redimensionamento de viewport (dimensões lógicas).
   void set_viewport(int w, int h);
 
+  // EN: Set the density-independent pixel ratio on the active context.
+  //     1 dp = ratio physical pixels. Call after a successful attach().
+  //     No-op when not ok(). Triggers a full layout re-pass if ratio changes.
+  // PT: Define o density-independent pixel ratio no contexto ativo.
+  //     1 dp = ratio pixels físicos. Chamar após attach() com sucesso.
+  //     No-op quando não ok(). Dispara re-layout completo se ratio mudar.
+  void set_dp_ratio(float ratio);
+
+  // EN: Override the base URL used to resolve relative asset paths (fonts, images, RCSS).
+  //     Delegates to Bootstrap's FileInterface; safe to call at any time after attach().
+  //     Pass nullptr or "" to clear. No-op when not ok().
+  // PT: Sobrepõe o base URL usado para resolver caminhos relativos de assets (fontes, imagens, RCSS).
+  //     Delega ao FileInterface do Bootstrap; seguro chamar a qualquer momento após attach().
+  //     Passe nullptr ou "" para limpar. No-op quando não ok().
+  void set_asset_base_url(const char* url);
+
   // EN: Advance the RmlUi context by one step (call once per frame before render_*).
   // PT: Avança o contexto RmlUi um passo (chamar uma vez por frame antes de render_*).
   void update();

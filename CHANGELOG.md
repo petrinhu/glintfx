@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** `UiLayerConfig::dp_ratio` (field, default `1.0f`) and `UiLayer::set_dp_ratio(float)` (runtime setter): expose `Rml::Context::SetDensityIndependentPixelRatio` to host consumers. When set, the RCSS `dp` unit scales to `dp_ratio` physical pixels (the `px` unit is unaffected). Recommended pattern: author RCSS at a fixed logical size using `dp` units, call `set_viewport(real_w, real_h)` and `set_dp_ratio(real_w / logical_w)`. `App` parity: `AppConfig::dp_ratio` and `App::set_dp_ratio(float)`. Verified by `dp_ratio_sanity` (100dp×100dp white box; scale factor 4.00x at ratio=2.0 vs 1.0). Resolves GAP-1 from `docs/embed-integration.md`.
+  **PT:** `UiLayerConfig::dp_ratio` (campo, padrão `1.0f`) e `UiLayer::set_dp_ratio(float)` (setter runtime): expõe `Rml::Context::SetDensityIndependentPixelRatio` para consumidores host. Quando definido, a unidade RCSS `dp` escala para `dp_ratio` pixels físicos (a unidade `px` não é afetada). Padrão recomendado: autore RCSS num tamanho lógico fixo usando unidades `dp`, chame `set_viewport(real_w, real_h)` e `set_dp_ratio(real_w / logical_w)`. Paridade `App`: `AppConfig::dp_ratio` e `App::set_dp_ratio(float)`. Verificado por `dp_ratio_sanity` (box branco 100dp×100dp; fator de escala 4.00x em ratio=2.0 vs 1.0). Resolve o GAP-1 de `docs/embed-integration.md`.
+- **EN:** `UiLayer::set_asset_base_url(const char*)` and `App::set_asset_base_url(const char*)`: install a custom `Rml::FileInterface` (`src/base_url_file_interface.hpp`) that prepends a configurable base URL to relative asset paths. Enables documents to be loaded by relative name when their files live in a subdirectory or absolute root that differs from the process CWD. Absolute paths and paths already resolved by RmlUi are not affected. Call before `load()`. Pass `nullptr` or `""` to clear. Verified by `base_url_sanity` (renders `embed_scene.rml` exclusively from `base_url_assets/`; mean=58.5, dark=50%, bright=35%). Resolves GAP-3 from `docs/embed-integration.md`.
+  **PT:** `UiLayer::set_asset_base_url(const char*)` e `App::set_asset_base_url(const char*)`: instalam um `Rml::FileInterface` customizado (`src/base_url_file_interface.hpp`) que prefixa um base URL configuravel a caminhos relativos de assets. Permite que documentos sejam carregados por nome relativo quando seus arquivos estao num subdiretorio ou raiz absoluta diferente do CWD do processo. Caminhos absolutos e paths ja resolvidos pelo RmlUi nao sao afetados. Chame antes de `load()`. Passe `nullptr` ou `""` para limpar. Verificado por `base_url_sanity` (renderiza `embed_scene.rml` exclusivamente de `base_url_assets/`; mean=58.5, dark=50%, bright=35%). Resolve o GAP-3 de `docs/embed-integration.md`.
+
 ---
 
 ## [0.2.1] - 2026-06-30

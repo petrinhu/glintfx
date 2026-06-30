@@ -48,6 +48,22 @@ void Engine::set_viewport(int w, int h) {
   }
 }
 
+void Engine::set_dp_ratio(float ratio) {
+  if (!impl_->ok) return;
+  if (auto* c = impl_->boot.context()) {
+    // EN: SetDensityIndependentPixelRatio is idempotent when ratio hasn't changed;
+    //     it re-triggers layout when it has, so no need to guard here.
+    // PT: SetDensityIndependentPixelRatio é idempotente quando ratio não mudou;
+    //     re-dispara layout quando mudou, portanto sem guard necessário aqui.
+    c->SetDensityIndependentPixelRatio(ratio);
+  }
+}
+
+void Engine::set_asset_base_url(const char* url) {
+  if (!impl_->ok) return;
+  impl_->boot.set_asset_base_url(url);
+}
+
 void Engine::update() {
   if (!impl_->ok) return;
   if (auto* c = impl_->boot.context()) c->Update();

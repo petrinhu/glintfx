@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: MPL-2.0
    EN: Embed sanity styles. Designed to produce three measurable statistics on a 900x600 frame:
          mean_brightness > 5   : body background (#0d1020, near-black) is NOT all-zero
-         dark_count  >= 10%    : body background visible in the upper half (R+G+B=61 < 120)
+         dark_count  >= 10%    : body background visible in the lower half (R+G+B=61 < 120)
          bright_count >= 1%    : gradient + glow produce pixels with max channel > 150
        No @font-face / no text content → zero dependency on font files → safe under llvmpipe / Xvfb.
    PT: Estilos da cena de sanidade do embed. Projetados para produzir três estatísticas mensuráveis
        num frame 900x600:
          mean_brightness > 5   : body background (#0d1020, quase preto) NÃO é todo zero
-         dark_count  >= 10%    : body background visível na metade superior (R+G+B=61 < 120)
+         dark_count  >= 10%    : body background visível na metade inferior (R+G+B=61 < 120)
          bright_count >= 1%    : gradiente + glow produzem pixels com canal máx > 150
        Sem @font-face / sem conteúdo textual → zero dep de arquivos de fonte → seguro sob llvmpipe/Xvfb. */
 
@@ -23,12 +23,16 @@ body
     background-color: #0d1020;
 }
 
-/* EN: Occupies the bottom 300 px (height:300px) of the 900x600 viewport.
+/* EN: Occupies the top 300 px (height:300px) of the 900x600 viewport — normal flow,
+       first child of body. The body background (#0d1020) is visible in the lower 300 px
+       (not covered by any child element).
        linear-gradient with vivid colours produces pixels whose max channel > 150:
          stop 1: #6a0ddc (R=106, G=13,  B=220) → B=220 > 150 ✓
          stop 2: #e02828 (R=224, G=40,  B=40)  → R=224 > 150 ✓
          stop 3: #0f8a4a (R=15,  G=138, B=74)  → (local minimum; blended neighbours still > 150)
-   PT: Ocupa os 300 px inferiores (height:300px) da viewport 900x600.
+   PT: Ocupa os 300 px superiores (height:300px) da viewport 900x600 — fluxo normal,
+       primeiro filho do body. O body background (#0d1020) fica visível nos 300 px inferiores
+       (não cobertos por nenhum filho).
        linear-gradient com cores vívidas produz pixels com canal máximo > 150:
          stop 1: #6a0ddc → B=220 > 150 ✓
          stop 2: #e02828 → R=224 > 150 ✓

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) 2026 Petrus Silva Costa
 // EN: Embed-mode render sanity gate — the F1 analogue of render_sanity for the UiLayer path.
 //
 //     Architecture: RmlUi's EndFrame() always blends the final postprocessed UI result directly
@@ -11,7 +12,7 @@
 //     Test procedure:
 //       1. Host creates hidden 900×600 window (provides the current GL context).
 //       2. UiLayer attaches (loads gl3w, initialises RmlUi Engine in compose mode).
-//       3. Host clears FBO 0 to black — UiLayer must NOT clear it during render().
+//       3. Host clears FBO 0 to black (known initial state for statistics).
 //       4. Load embed_scene.rml (dark body + linear-gradient section + glow card).
 //       5. Two warm-up frames (update + render each).
 //       6. Read back FBO 0 (GL_BACK, before any swap) via glReadPixels.
@@ -34,7 +35,7 @@
 //     Procedimento:
 //       1. Host cria janela oculta 900×600 (provê o contexto GL corrente).
 //       2. UiLayer anexa (carrega gl3w, inicializa Engine do RmlUi em modo compose).
-//       3. Host limpa FBO 0 a preto — UiLayer NÃO deve limpar durante render().
+//       3. Host limpa FBO 0 a preto (estado inicial conhecido para as estatísticas).
 //       4. Carrega embed_scene.rml (body escuro + seção linear-gradient + card glow).
 //       5. Dois frames de aquecimento (update + render em cada).
 //       6. Lê FBO 0 (GL_BACK, antes de qualquer swap) via glReadPixels.
@@ -44,7 +45,6 @@
 //            bright_count  >= 1 %   (gradiente #6a0ddc B=220, #e02828 R=224, glow B=255)
 //
 //     Gate: os três checks passam → imprime "ui_layer_sanity: PASS", sai com 0.
-// Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
 #include "offscreen.hpp"   // EN: includes GL/gl3w.h (gl3w already loaded by UiLayer ctor).
@@ -79,13 +79,21 @@ int main() {
 
   // ---------------------------------------------------------------------------
   // EN: Step 3 — host clears FBO 0 (window back buffer) to black.
-  //     UiLayer::render() is compose-only: it must NOT call glClear on FBO 0.
-  //     After the compose, body background (#0d1020) overwrites the clear, but
-  //     starting from black proves the compose path did not clear itself.
+  //     Purpose: provides a deterministic, known-zero baseline so the pixel
+  //     statistics below are reproducible across runs.
+  //     NOTE: this gate proves that UiLayer produces NON-DEGENERATE output
+  //     (mean_brightness > 5, dark background present, bright effects present).
+  //     The separate invariant that render() does NOT clear the host's FBO 0
+  //     is proved in ui_layer_compose (T3) via a distinctive non-black anchor
+  //     colour — it is NOT duplicated here.
   // PT: Passo 3 — host limpa FBO 0 (back buffer da janela) a preto.
-  //     UiLayer::render() é compose-only: NÃO deve chamar glClear no FBO 0.
-  //     Após o compose, o background do body (#0d1020) sobrescreve o clear, mas
-  //     partir de preto prova que o caminho compose não fez o clear por conta própria.
+  //     Propósito: fornece linha de base determinística (zero) para que as
+  //     estatísticas de pixel abaixo sejam reproduzíveis entre execuções.
+  //     NOTA: este gate prova que UiLayer produz saída NÃO-DEGENERADA
+  //     (mean_brightness > 5, fundo escuro presente, efeitos brilhantes presentes).
+  //     O invariante separado de que render() NÃO limpa o FBO 0 do host
+  //     é provado em ui_layer_compose (T3) via cor âncora distinta não-preta
+  //     — não é duplicado aqui.
   // ---------------------------------------------------------------------------
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glClearColor(0.f, 0.f, 0.f, 0.f);

@@ -132,6 +132,56 @@ void UiLayer::render() {
   if (impl_->ok) impl_->engine.render_compose(impl_->w, impl_->h);
 }
 
+// ---------------------------------------------------------------------------
+// EN: Data-model API — forward to Engine; Engine guards the ordering constraint.
+// PT: API de data-model — encaminha ao Engine; Engine enforça a restrição de ordem.
+// ---------------------------------------------------------------------------
+
+bool UiLayer::create_data_model(const char* name) {
+  if (!impl_->ok) return false;
+  return impl_->engine.create_data_model(name);
+}
+
+bool UiLayer::bind_number(const char* key, double initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_number(key, initial);
+}
+
+bool UiLayer::bind_string(const char* key, const char* initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_string(key, initial);
+}
+
+bool UiLayer::bind_bool(const char* key, bool initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_bool(key, initial);
+}
+
+bool UiLayer::bind_list(const char* key) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_list(key);
+}
+
+void UiLayer::set_number(const char* key, double value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_number(key, value);
+}
+
+void UiLayer::set_string(const char* key, const char* value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_string(key, value);
+}
+
+void UiLayer::set_bool(const char* key, bool value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_bool(key, value);
+}
+
+void UiLayer::set_list(const char* key, const char* const* items, std::size_t count) {
+  if (!impl_->ok) return;
+  impl_->engine.set_list(key, items, count);
+}
+
 void UiLayer::process_event(const UiEvent& ev) {
   // EN: Guard: drop events when the layer is not ready or context is gone.
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.

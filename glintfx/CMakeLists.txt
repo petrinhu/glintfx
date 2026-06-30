@@ -73,6 +73,7 @@ configure_file(
 set(_glintfx_sources
   src/render_gl3.cpp
   src/bootstrap.cpp
+  src/data_binder.cpp
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp

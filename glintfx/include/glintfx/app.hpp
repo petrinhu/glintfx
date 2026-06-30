@@ -4,6 +4,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 #include <memory>
+#include <cstddef>
 namespace glintfx {
 
 // EN: Returns the library version string.
@@ -104,6 +105,55 @@ public:
   // EN: Convenience loop: poll + update + render until !running().
   // PT: Laço de conveniência: poll + update + render até !running().
   void run();
+
+  // -------------------------------------------------------------------------
+  // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model
+  //     -> bind_* -> load() -> set_*(). Engine enforces the ordering constraint
+  //     (bind_* after load() returns false). No engine-specific types in this header.
+  // PT: API de data-model (T1) — paridade com UiLayer. Ordem de chamada:
+  //     create_data_model -> bind_* -> load() -> set_*(). Engine enforça a
+  //     restrição de ordem (bind_* após load() retorna false). API usa tipos C simples.
+  // -------------------------------------------------------------------------
+
+  // EN: Create a data model. Call before bind_* and before load().
+  // PT: Cria um data model. Chamar antes de bind_* e antes de load().
+  bool create_data_model(const char* name);
+
+  // EN: Bind a numeric (double) cell with an optional initial value.
+  // PT: Liga uma célula numérica (double) com valor inicial opcional.
+  bool bind_number(const char* key, double initial = 0.0);
+
+  // EN: Bind a string cell.
+  // PT: Liga uma célula de string.
+  bool bind_string(const char* key, const char* initial = "");
+
+  // EN: Bind a boolean cell.
+  // PT: Liga uma célula booleana.
+  bool bind_bool  (const char* key, bool initial = false);
+
+  // EN: Bind a string-list cell (for data-for iteration in RML).
+  // PT: Liga uma célula de lista de strings (para iteração data-for no RML).
+  bool bind_list  (const char* key);
+
+  // EN: Update a numeric cell after load. No-op when key is unknown.
+  //     The change is reflected on the next update() call.
+  // PT: Atualiza uma célula numérica após load. No-op quando a chave é desconhecida.
+  //     A mudança é refletida na próxima chamada a update().
+  void set_number(const char* key, double value);
+
+  // EN: Update a string cell after load.
+  // PT: Atualiza uma célula de string após load.
+  void set_string(const char* key, const char* value);
+
+  // EN: Update a boolean cell after load.
+  // PT: Atualiza uma célula booleana após load.
+  void set_bool  (const char* key, bool value);
+
+  // EN: Replace the entire string list and dirty the variable.
+  //     items[0..count-1] are copied; caller retains ownership.
+  // PT: Substitui a lista de strings inteira e marca a variável suja.
+  //     items[0..count-1] são copiados; o chamador retém a propriedade.
+  void set_list  (const char* key, const char* const* items, std::size_t count);
 
   // EN: Render one frame and save the result to a PPM file before swapping buffers.
   //     This captures the composited image from the window framebuffer (FBO 0) immediately

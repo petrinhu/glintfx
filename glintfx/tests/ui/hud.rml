@@ -1,0 +1,20 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- EN: HUD data-model test document. Binds to the "hud" data model.
+         Uses {{name}} (string) and {{hp}} (number) variables.
+         Dark background ensures pixel statistics can detect rendered content.
+     PT: Documento de teste do data-model HUD. Liga ao data model "hud".
+         Usa variáveis {{name}} (string) e {{hp}} (número).
+         Fundo escuro garante que estatísticas de pixel detectem conteúdo renderizado. -->
+<rml>
+<head>
+  <style>
+    body { background: #111111; color: #eeeeee; font-family: sans; font-size: 22px; margin: 8px; }
+    h1   { color: #ffffff; font-size: 28px; }
+  </style>
+  <title>glintfx hud data-model</title>
+</head>
+<body data-model="hud">
+  <h1 id="name">{{name}}</h1>
+  <p  id="hp">HP {{hp}}</p>
+</body>
+</rml>

@@ -15,6 +15,7 @@
 // EN: Forward-declare only — no RmlUi/GL types visible to callers.
 // PT: Só forward-declaration — nenhum tipo RmlUi/GL visível aos chamadores.
 namespace Rml { class Context; class SystemInterface; }
+#include <cstddef>
 
 namespace glintfx {
 
@@ -80,6 +81,42 @@ public:
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().
   Rml::Context* context();
+
+  // -------------------------------------------------------------------------
+  // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.
+  //     Binds are registered against the RmlUi context BEFORE LoadDocument so that
+  //     data-views are compiled with the correct variable map.
+  //     Guards: create_data_model / bind_* return false after load() is called (too late).
+  //             set_* are no-ops when the key was never bound (safe any time after load).
+  // PT: API de data-model (T1). Ordem: create_data_model -> bind_* -> load -> set_*.
+  //     Binds são registrados no contexto RmlUi ANTES do LoadDocument para que
+  //     as data-views sejam compiladas com o mapa de variáveis correto.
+  //     Guards: create_data_model / bind_* retornam false após load() (tarde demais).
+  //             set_* são no-op quando a chave nunca foi ligada (seguro após load).
+  // -------------------------------------------------------------------------
+
+  // EN: Create a data model; must be called before bind_* and before load().
+  // PT: Cria um data model; deve ser chamado antes de bind_* e antes de load().
+  bool create_data_model(const char* name);
+  // EN: Bind a numeric (double) cell with an optional initial value.
+  // PT: Liga uma célula numérica (double) com valor inicial opcional.
+  bool bind_number(const char* key, double initial = 0.0);
+  // EN: Bind a string cell.
+  // PT: Liga uma célula de string.
+  bool bind_string(const char* key, const char* initial = "");
+  // EN: Bind a boolean cell.
+  // PT: Liga uma célula booleana.
+  bool bind_bool  (const char* key, bool initial = false);
+  // EN: Bind a string-list cell (for data-for iteration).
+  // PT: Liga uma célula de lista de strings (para iteração data-for).
+  bool bind_list  (const char* key);
+
+  // EN: Mutate a bound cell and dirty the variable (reflected on next update()).
+  // PT: Muta uma célula ligada e marca a variável suja (refletido no próximo update()).
+  void set_number(const char* key, double v);
+  void set_string(const char* key, const char* v);
+  void set_bool  (const char* key, bool v);
+  void set_list  (const char* key, const char* const* items, std::size_t n);
 
 private:
   struct Impl;

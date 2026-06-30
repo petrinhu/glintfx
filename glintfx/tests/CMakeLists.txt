@@ -179,6 +179,30 @@ if(GLINTFX_BACKEND_GLFW)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   endif()
 
+  # ---------------------------------------------------------------------------
+  # EN: data_model_smoke — lifecycle test for the data-model API (T1, v0.2.3).
+  #     Exercises create_data_model -> bind_string/bind_number -> load ->
+  #     update + render without crash; asserts bind_* after load() returns false.
+  #     Requires App (GLFW backend). WORKING_DIRECTORY = CMAKE_BINARY_DIR so
+  #     "tests/ui/hud.rml" resolves to build/tests/ui/hud.rml.
+  # PT: data_model_smoke — teste de ciclo de vida para a API de data-model (T1, v0.2.3).
+  #     Exercita create_data_model -> bind_string/bind_number -> load ->
+  #     update + render sem crash; verifica que bind_* após load() retorna false.
+  #     Requer App (backend GLFW). WORKING_DIRECTORY = CMAKE_BINARY_DIR para que
+  #     "tests/ui/hud.rml" resolva para build/tests/ui/hud.rml.
+  # ---------------------------------------------------------------------------
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/ui)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/hud.rml COPYONLY)
+
+  add_executable(data_model_smoke data_model_smoke.cpp)
+  target_link_libraries(data_model_smoke PRIVATE glintfx)
+  add_test(NAME data_model_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

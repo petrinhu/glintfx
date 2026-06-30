@@ -9,14 +9,18 @@
 #include "engine.hpp"
 #include "render_gl3.hpp"
 #include "bootstrap.hpp"
+#include "data_binder.hpp"
 #include <RmlUi/Core.h>
 
 namespace glintfx {
 
 struct Engine::Impl {
-  RenderGl3 render;
-  Bootstrap boot;
-  bool ok = false;
+  RenderGl3  render;
+  Bootstrap  boot;
+  DataBinder data_binder;  // EN: declared after boot; destroyed before boot (reverse order).
+                           // PT: declarado após boot; destruído antes de boot (ordem reversa).
+  bool ok     = false;
+  bool loaded = false;
 };
 
 Engine::Engine()  : impl_(new Impl()) {}
@@ -38,6 +42,11 @@ bool Engine::ok() const noexcept { return impl_ && impl_->ok; }
 
 bool Engine::load(const char* rml_path) {
   if (!impl_->ok) return false;
+  // EN: Set loaded flag unconditionally so that bind_* calls after load() return false.
+  //     The constraint is enforced regardless of whether load succeeds or not.
+  // PT: Seta o flag loaded incondicionalmente para que bind_* após load() retorne false.
+  //     A restrição é enforçada independente de o load ter sucesso ou não.
+  impl_->loaded = true;
   return impl_->boot.load(rml_path);
 }
 
@@ -100,6 +109,56 @@ void Engine::render_compose(int w, int h) {
 
 Rml::Context* Engine::context() {
   return impl_->ok ? impl_->boot.context() : nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// EN: Data-model API — delegates to DataBinder with lifecycle guards.
+//     create_data_model / bind_*: blocked after load() (views compile on load).
+//     set_*: always delegated; DataBinder is a no-op when the key is unknown.
+// PT: API de data-model — delega ao DataBinder com guards de ciclo de vida.
+//     create_data_model / bind_*: bloqueados após load() (views compilam no load).
+//     set_*: sempre delegado; DataBinder é no-op quando a chave é desconhecida.
+// ---------------------------------------------------------------------------
+
+bool Engine::create_data_model(const char* name) {
+  if (!impl_->ok || impl_->loaded) return false;
+  return impl_->data_binder.create(impl_->boot.context(), name);
+}
+
+bool Engine::bind_number(const char* key, double initial) {
+  if (impl_->loaded) return false;
+  return impl_->data_binder.bind_number(key, initial);
+}
+
+bool Engine::bind_string(const char* key, const char* initial) {
+  if (impl_->loaded) return false;
+  return impl_->data_binder.bind_string(key, initial);
+}
+
+bool Engine::bind_bool(const char* key, bool initial) {
+  if (impl_->loaded) return false;
+  return impl_->data_binder.bind_bool(key, initial);
+}
+
+bool Engine::bind_list(const char* key) {
+  if (impl_->loaded) return false;
+  return impl_->data_binder.bind_list(key);
+}
+
+void Engine::set_number(const char* key, double v) {
+  impl_->data_binder.set_number(key, v);
+}
+
+void Engine::set_string(const char* key, const char* v) {
+  impl_->data_binder.set_string(key, v);
+}
+
+void Engine::set_bool(const char* key, bool v) {
+  impl_->data_binder.set_bool(key, v);
+}
+
+void Engine::set_list(const char* key, const char* const* items, std::size_t n) {
+  impl_->data_binder.set_list(key, items, n);
 }
 
 } // namespace glintfx

@@ -7,10 +7,14 @@
 
 ## [Unreleased]
 
-Changes on `main` since v0.1.0, not yet tagged. / Mudanças na `main` desde a v0.1.0, ainda sem tag.
+---
+
+## [0.2.0] - 2026-06-30
 
 ### Added / Adicionado
 
+- **EN:** `glintfx::UiLayer` -- embed / guest mode: attaches the UI+effects engine to a host-owned GL context (no window created); compose-only render (no clear, no swap); GL state automatically saved and restored on return; neutral `UiEvent` input + gamepad navigation ([ADR-0008](docs/adr/0008-embed-guest-mode.md)). First target consumer: GusWorld.
+  **PT:** `glintfx::UiLayer` -- embed / guest mode: anexa o motor de UI+efeitos ao contexto GL de um host (sem criar janela); render compose-only (sem clear, sem swap); estado GL salvo e restaurado automaticamente ao retornar; eventos neutros `UiEvent` + navegação por gamepad ([ADR-0008](docs/adr/0008-embed-guest-mode.md)). 1º consumidor-alvo: GusWorld.
 - **EN:** `App::ok()`: distinguishes initialization failure from a window closed later; `running()` no longer conflates the two (L1.1-ERRSTRAT).
   **PT:** `App::ok()`: distingue falha de inicialização de janela fechada depois; `running()` não mistura mais os dois (L1.1-ERRSTRAT).
 - **EN:** `find_package(glintfx)` support: `glintfxConfig.cmake` is installed alongside the library and headers; RmlUi is co-installed under the same prefix. Enables consumption from an installed tree without FetchContent (L1.8-FINDPKG).

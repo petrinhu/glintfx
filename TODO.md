@@ -68,10 +68,12 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 ## INBOX (descobertas não priorizadas)
 
-- **Golden-image determinístico** (Task 7): `golden_test` flaky no llvmpipe (MSE ~3261 entre runs, tol 50); usar tolerância maior / HW consistente / comparação estrutural; reativar `.mask` no golden (crasha só no Mesa SW). Hoje vermelho na branch.
+- **`App` estratégia de erro de construção** (hardening DX p/ distribuição): hoje a construção falha silenciosamente (v1 só documenta — N2). Considerar `bool ok()` e/ou exceptions opcionais.
+- **CI versionado** (N5): Forgejo Actions / Woodpecker para gate automático da suíte glintfx (4 smokes + `render_sanity`) sob Xvfb. Hoje os testes existem mas nada automatiza o gate.
 - **`snapshot()` flip vertical**: captura sai de cabeça pra baixo (origem do `glReadPixels`); endireitar as linhas.
-- **Guards null**: `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`) e `App` (`poll_events`/`render` sem `impl_->ok`).
+- **Guards null** (T2/T5): `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`; `glfwTerminate` sem flag `glfw_inited_`) e `App` (`poll_events`/`render` sem `impl_->ok`). Não crasham (no-op downstream), só assimetria.
 - **`body { width: 100% }`**: fundo do demo não cobre a janela inteira.
+- **`TESTES.md`** (T7): corrigir `xvfb-run` citado na seção "GPU real" (Xvfb usa llvmpipe, não GPU real).
 - **Backends SDL/X11**: adiados da v1 (só GLFW entregue).
-- **`find_package(glintfx)` completo** (pós-v1): `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` — removido na Task 8 por atrito com export-set do CMake 4.x (RmlUi/gl3w não são installed targets). Hoje o consumo é via FetchContent/`add_subdirectory` (drop-in provado).
-- **Merge `feat/glintfx-v1` → `main`**: review final da branch + PR, ao fechar a v1.
+- **`find_package(glintfx)` completo** (pós-v1): `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` — removido na Task 8 por atrito com export-set do CMake 4.x. Consumo hoje via FetchContent/`add_subdirectory` (drop-in provado).
+- **Tag da Camada 0**: o `REL-TAG` do runtime C/ASM precisa de tag DISTINTA (ex.: `core-v0.1.0`) — o glintfx usa `v0.1.0`.

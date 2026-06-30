@@ -152,4 +152,4 @@ janela inteira antes do swap do SDL3.
 - Game re-pivots to GLFW so `App` can own it / Jogo re-pivota pra GLFW — regressa o ADR-008 do GusWorld (gamepad/áudio/console). Rejected.
 - Partial adoption: glintfx only on full-screen non-scene UI / Adoção parcial — leaves the battle cockpit (the actual pain) out. Rejected.
 
-Cross-ref: [[0006-layered-hybrid-architecture]]. Integration verdict gaps **G1–G3**.
+Cross-ref: [[0006-layered-hybrid-architecture]]. Integration verdict gaps **G1–G3**. Host integration contract: [`docs/embed-integration.md`](../embed-integration.md).

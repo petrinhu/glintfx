@@ -154,6 +154,36 @@ add_test(NAME ui_layer_events
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# EN: ui_layer_sanity — embed-mode render gate: UiLayer attaches to a hidden 900×600 window,
+#     renders embed_scene.rml (dark body + linear-gradient + glow card) compose-only via FBO 0,
+#     and verifies three aggregate pixel statistics tolerant of llvmpipe threaded-tile rendering:
+#       mean_brightness > 5  (rendered something), dark_count >= 10% (body background present),
+#       bright_count >= 1%   (gradient / glow present).
+#     Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h directly and gl3w is a
+#     PRIVATE dep of glintfx (not propagated to callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) so embed_scene.rml and
+#     embed_scene.rcss resolve relative to the binary dir where they are copied.
+# PT: ui_layer_sanity — gate de renderização do embed mode: UiLayer anexa a janela oculta 900×600,
+#     renderiza embed_scene.rml (body escuro + linear-gradient + card glow) compose-only via FBO 0,
+#     e verifica três estatísticas de pixel agregadas tolerantes ao rendering de tiles do llvmpipe:
+#       mean_brightness > 5  (renderizou algo), dark_count >= 10% (background do body presente),
+#       bright_count >= 1%   (gradiente / glow presente).
+#     Linka gl3w explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é
+#     dep PRIVATE da glintfx (não propagado aos callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para que embed_scene.rml e
+#     embed_scene.rcss resolvam relativos ao dir binário onde são copiados.
+add_executable(ui_layer_sanity ui_layer_sanity.cpp)
+target_link_libraries(ui_layer_sanity PRIVATE glintfx gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rcss COPYONLY)
+add_test(NAME ui_layer_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 option(GLINTFX_GOLDEN_TEST
   "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
   OFF)

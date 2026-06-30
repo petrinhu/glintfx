@@ -1,0 +1,17 @@
+<rml>
+<head>
+  <link type="text/rcss" href="embed_scene.rcss"/>
+  <!-- EN: Embed sanity scene: dark body + linear-gradient section + glow card.
+           No text/font dependency: safe under Mesa llvmpipe / Xvfb.
+           Used by ui_layer_sanity to prove the full embed pipeline (UiLayer + FBO).
+       PT: Cena de sanidade do embed: body escuro + seção linear-gradient + card glow.
+           Sem dependência de texto/fonte: seguro sob Mesa llvmpipe / Xvfb.
+           Usado pelo ui_layer_sanity para provar o pipeline embed completo (UiLayer + FBO). -->
+  <title>glintfx embed sanity</title>
+</head>
+<body>
+  <div class="grad-section">
+    <div class="glow-card"></div>
+  </div>
+</body>
+</rml>

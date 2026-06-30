@@ -166,9 +166,19 @@ void UiLayer::process_event(const UiEvent& ev) {
       //     The next render_compose() uses the updated impl_->w/h via set_viewport().
       // PT: Redimensionamento lógico do viewport — atualiza dimensões cacheadas e notifica RmlUi.
       //     O próximo render_compose() usa o impl_->w/h atualizado via set_viewport().
+
+      // EN: Guard: zero/negative dimensions are invalid for the layout engine — skip silently.
+      // PT: Guard: dimensões zero/negativas são inválidas para o motor de layout — ignorar silenciosamente.
+      if (ev.width <= 0 || ev.height <= 0) break;
+
       impl_->w = ev.width;
       impl_->h = ev.height;
       c->SetDimensions(Rml::Vector2i(ev.width, ev.height));
+      break;
+
+    default:
+      // EN: Unknown/future event types are intentionally ignored — forward compatibility.
+      // PT: Tipos de evento desconhecidos/futuros são ignorados intencionalmente — compatibilidade futura.
       break;
   }
 }

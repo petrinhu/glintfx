@@ -84,8 +84,19 @@ int main() {
                      .pressed = false,
                      .key     = glintfx::Key::Escape });
 
-  // EN: Viewport resize — common when host window resizes (e.g. SDL2_WINDOWEVENT_RESIZED).
-  // PT: Redimensionamento de viewport — comum quando janela do host redimensiona.
+  // EN: Resize with zero dimensions — must be silently ignored (guard inside process_event).
+  //     Sending zero before a valid resize exercises the guard path without crashing.
+  // PT: Resize com dimensões zero — deve ser ignorado silenciosamente (guard interno em process_event).
+  //     Enviar zero antes de um resize válido exercita o caminho de guard sem crashar.
+  ui.process_event({ .type   = glintfx::UiEvent::Type::Resize,
+                     .width  = 0,
+                     .height = 0 });
+  ui.process_event({ .type   = glintfx::UiEvent::Type::Resize,
+                     .width  = -1,
+                     .height = 600 });
+
+  // EN: Viewport resize — valid dimensions after the degenerate cases above.
+  // PT: Redimensionamento de viewport — dimensões válidas após os casos degenerados acima.
   ui.process_event({ .type   = glintfx::UiEvent::Type::Resize,
                      .width  = 800,
                      .height = 600 });

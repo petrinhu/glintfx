@@ -203,6 +203,43 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: data_model_scalar — live-scalar propagation test (T2, v0.2.3).
+  #     Verifies that set_string() / set_number() followed by update() reflects
+  #     the new values in the rendered frame via two snapshot pairs:
+  #       (1) String path:  bright_B (after set_string "HELLO HP 99") > bright_A (baseline).
+  #       (2) Number path:  bright_C (after set_number 99.0) > bright_B.
+  #     Pixel statistic: count of pixels with max(R,G,B) > 100 (bright threshold).
+  #     Window: 320×160. Document: tests/ui/scalar.rml (data-model "hud"; OpenSans font).
+  #     Font is resolved from WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — available because the showcase CMake block
+  #     copies demos/showcase/assets/ to build/tests/assets/ (same GLFW block).
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/scalar.rml" resolves to
+  #     build/tests/ui/scalar.rml (copied by configure_file below).
+  # PT: data_model_scalar — teste de propagação de escalares vivos (T2, v0.2.3).
+  #     Verifica que set_string() / set_number() seguido de update() reflete os novos
+  #     valores no frame renderizado via dois pares de snapshots:
+  #       (1) Caminho string:  bright_B (após set_string "HELLO HP 99") > bright_A (baseline).
+  #       (2) Caminho numérico: bright_C (após set_number 99.0) > bright_B.
+  #     Estatística de pixel: contagem de pixels com max(R,G,B) > 100 (limiar de brilho).
+  #     Janela: 320×160. Documento: tests/ui/scalar.rml (data-model "hud"; fonte OpenSans).
+  #     A fonte é resolvida do WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — disponível pois o bloco CMake do showcase
+  #     copia demos/showcase/assets/ para build/tests/assets/ (mesmo bloco GLFW).
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/scalar.rml" resolva para
+  #     build/tests/ui/scalar.rml (copiado pelo configure_file abaixo).
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/scalar.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/scalar.rml COPYONLY)
+
+  add_executable(data_model_scalar data_model_scalar.cpp)
+  target_link_libraries(data_model_scalar PRIVATE glintfx)
+  add_test(NAME data_model_scalar
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_scalar>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

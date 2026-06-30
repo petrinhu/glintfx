@@ -193,6 +193,14 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **No versioned CI yet.** Tests exist (`ctest`) but no pipeline gates them automatically.
 - **FetchContent / `add_subdirectory` only.** A full `find_package(glintfx)` (`glintfxConfig.cmake`) is a post-v1 item.
 
+### Roadmap and vision
+
+> This section describes **direction, not the current state**. As of v0.1.0, glintfx **depends on** the third-party libraries below (linked or vendored); the independence goal is a multi-year project trajectory, not something already done.
+
+- **v2 (next):** a **component library / design system** (Atomic Design) on top of the engine: design tokens plus reusable components with GPU effect variants. Scope to be defined in its own product brainstorm.
+- **Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, gl3w, FreeType, and GLFW** (the whole userspace stack) over the course of years. This connects to **Layer 0** (the pure C/ASM runtime) as the base for internalization.
+- **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
+
 ### About this repository (two layers)
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
@@ -383,6 +391,14 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Apenas GLFW.** Backends SDL e X11 estão planejados mas não implementados.
 - **Sem CI versionado ainda.** Os testes existem (`ctest`) mas nenhum pipeline os gateia automaticamente.
 - **Só FetchContent / `add_subdirectory`.** Um `find_package(glintfx)` completo (`glintfxConfig.cmake`) é item pós-v1.
+
+### Roadmap e visão
+
+> Esta seção descreve **direção, não o estado atual**. Na v0.1.0, o glintfx **depende** das bibliotecas de terceiros abaixo (linkadas ou vendorizadas); a meta de independência é uma trajetória de projeto de anos, não algo já feito.
+
+- **v2 (próximo):** uma **component library / design system** (Atomic Design) sobre o engine: design tokens mais componentes reutilizáveis com variantes de efeito GPU. Escopo a definir em brainstorm de produto próprio.
+- **Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, gl3w, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Isso se conecta à **Camada 0** (o runtime C/ASM puro) como base de internalização.
+- **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
 
 ### Sobre este repositório (duas camadas)
 

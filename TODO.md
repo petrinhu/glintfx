@@ -94,6 +94,6 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 - **Includes relativos `"../src/..."`** na suíte de testes (F1 review): extrair um `test_host.hpp` compartilhado na F2.
 - **Em-dashes pré-existentes** em doc-comments de `ui_layer.hpp` (fora do escopo do fix F1-M3): trocar por `--` numa varredura.
 - **`consumer-example-embed/`** (Follow-up L2-EMBED, post-F1): mini-consumidor standalone (FetchContent) que cria contexto GLFW oculto, instancia `glintfx::UiLayer`, dá `load`+`render()` num FBO e lê 1 pixel — sem código GL/RmlUi além do contexto do host. Registrado em F1 T6 (coberto pelo `ui_layer_sanity`); entregar antes ou junto da F2.
-- **GAP-1 `dp_ratio` (feature p/ F2, pedido GusWorld):** expor escala lógico→físico (`SetDensityIndependentPixelRatio`) — hoje render é 1:1 puro; consumidor com UI lógica (ex.: 960×540) não escala pra preencher a janela (1080p) nem nitidez DPI. Provável requisito do cockpit do GusWorld.
-- **GAP-2 FBO custom + origem de viewport (feature p/ F2/F3, pedido GusWorld):** permitir compor num FBO do host (≠ FBO 0) e viewport com origem ≠ (0,0). Hoje o backend RmlUi hardcoda FBO 0 + origem (0,0).
-- **GAP-3 base-url override de assets (feature p/ F2/F3, pedido GusWorld):** expor um `set_asset_base_url` (o `rmlui_hud` antigo do GusWorld tinha) — hoje assets resolvem só relativo ao `.rml`/`.rcss`; paths absolutos perdem a barra inicial (quirk RmlUi).
+- ~~GAP-1 `dp_ratio`~~ ✅ **entregue na v0.2.2** (`set_dp_ratio` + `dp_ratio` no config, UiLayer+App).
+- ~~GAP-3 base-url override~~ ✅ **entregue na v0.2.2** (`set_asset_base_url` via `BaseUrlFileInterface`, UiLayer+App).
+- **GAP-2 FBO custom + origem de viewport (feature p/ F2/F3, pedido GusWorld — ADIADO):** permitir compor num FBO do host (≠ FBO 0) e viewport com origem ≠ (0,0). Hoje o backend RmlUi hardcoda FBO 0 + origem (0,0). Sem necessidade confirmada (GusWorld compõe no FBO 0).

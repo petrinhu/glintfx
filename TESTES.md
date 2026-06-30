@@ -79,13 +79,27 @@ O teste `golden_test` faz comparação pixel-exata (MSE < 50) de um screenshot c
 
 **Causa raiz do flakiness**: o llvmpipe processa tiles do framebuffer em threads paralelas. As passagens de blur (`backdrop-filter: blur`) e glow (`box-shadow` + `filter: drop-shadow`) envolvem convolução multi-passo com acumulação de ponto flutuante — não-associativa em threads. O agendamento de threads varia entre execuções, produzindo MSE ~3 000 entre duas renders da **mesma cena** (tolerância era 50).
 
-Para usar o `golden_test` em GPU real:
+Para usar o `golden_test`, compile com a flag antes:
+
 ```sh
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON -DGLINTFX_GOLDEN_TEST=ON
 cmake --build glintfx/build -j$(nproc)
+```
+
+**Em GPU real (estável -- desktop com `DISPLAY` ativo, sem `xvfb-run`):**
+```sh
+# First run: generates reference golden/showcase_reference.ppm and exits 0
 # 1ª execução: gera referência golden/showcase_reference.ppm e sai 0
-xvfb-run -a ctest --test-dir glintfx/build -R golden_test --output-on-failure
-# Execuções seguintes: compara via MSE (tolerância 50)
+ctest --test-dir glintfx/build -R golden_test --output-on-failure
+# Subsequent runs: compare via MSE (tolerance 50) -- stable on real GPU
+# Execuções seguintes: compara via MSE (tolerância 50) -- estável em GPU real
+ctest --test-dir glintfx/build -R golden_test --output-on-failure
+```
+
+**Em headless/llvmpipe (flaky -- só para verificar que o teste executa, não para validação pixel):**
+```sh
+# MSE ~3 000 between runs on llvmpipe (tolerance 50) -- pixel comparison is unreliable
+# MSE ~3 000 entre corridas no llvmpipe (tolerância 50) -- comparação pixel não é confiável
 xvfb-run -a ctest --test-dir glintfx/build -R golden_test --output-on-failure
 ```
 

@@ -1,111 +1,222 @@
 # SPDX-License-Identifier: MPL-2.0
-# EN: Link glintfx (already contains window_glfw.cpp) — eliminates duplicate compilation.
-# PT: Linka glintfx (já contém window_glfw.cpp) — elimina compilação duplicada.
-add_executable(window_smoke window_smoke.cpp)
-target_link_libraries(window_smoke PRIVATE glintfx)
-add_test(NAME window_smoke COMMAND ${CMAKE_COMMAND}
-  -DEXE=$<TARGET_FILE:window_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
 
-# EN: render_smoke — verify RenderGl3 init + single frame under a live GL context.
-# PT: render_smoke — verifica init do RenderGl3 + um frame sob contexto GL ativo.
-add_executable(render_smoke render_smoke.cpp)
-target_link_libraries(render_smoke PRIVATE glintfx)
-add_test(NAME render_smoke COMMAND ${CMAKE_COMMAND}
-  -DEXE=$<TARGET_FILE:render_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
-
-# EN: engine_smoke — verify Engine (RmlUi+GL3) init via SystemClock + document load.
-#     Replaces bootstrap_smoke: Bootstrap::init no longer accepts WindowGlfw (T1 refactor).
-# PT: engine_smoke — verifica init do Engine (RmlUi+GL3) via SystemClock + carregamento de documento.
-#     Substitui bootstrap_smoke: Bootstrap::init não aceita mais WindowGlfw (refator T1).
-add_executable(engine_smoke engine_smoke.cpp)
-# EN: system_clock.hpp inherits from Rml::SystemInterface — needs RmlUi include path.
-#     RmlUi::Core is a PRIVATE dep of glintfx and not propagated; link explicitly here.
-# PT: system_clock.hpp herda de Rml::SystemInterface — precisa do include path do RmlUi.
-#     RmlUi::Core é dep PRIVATE da glintfx e não propagada; linka explicitamente aqui.
-target_link_libraries(engine_smoke PRIVATE glintfx RmlUi::Core)
-# EN: Copy the min.rml fixture to build/tests/ so the binary finds "tests/min.rml"
-#     relative to the ctest CWD (build/).
-# PT: Copia a fixture min.rml para build/tests/ para que o binário encontre "tests/min.rml"
-#     relativo ao CWD do ctest (build/).
+# EN: min.rml is required by engine_smoke (GLFW-backend only) AND by the embed tests
+#     (ui_layer_attach, ui_layer_events) which run in both build configs. Copy it
+#     unconditionally so it is always present in the build/tests/ directory.
+# PT: min.rml é necessário pelo engine_smoke (só backend GLFW) E pelos testes embed
+#     (ui_layer_attach, ui_layer_events) que rodam em ambas as configs. Copiar
+#     incondicionalmente para que esteja sempre em build/tests/.
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min.rml COPYONLY)
-# EN: WORKING_DIRECTORY ensures "tests/min.rml" resolves to build/tests/min.rml regardless
-#     of where ctest is invoked from (ctest --test-dir does not set subprocess CWD).
-# PT: WORKING_DIRECTORY garante que "tests/min.rml" resolva para build/tests/min.rml
-#     independente de onde ctest é invocado (--test-dir não define CWD do subprocesso).
-add_test(NAME engine_smoke
-  COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:engine_smoke>
-    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# EN: app_smoke — verify the public App facade: open, load, 1 frame headless.
-# PT: app_smoke — verifica a fachada pública App: abre, carrega, 1 frame headless.
-add_executable(app_smoke app_smoke.cpp)
-target_link_libraries(app_smoke PRIVATE glintfx)
-add_test(NAME app_smoke
-  COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:app_smoke>
-    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+# ---------------------------------------------------------------------------
+# EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
+#     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
+#     only compiled when GLINTFX_BACKEND_GLFW=ON.
+# PT: Testes exclusivos do backend GLFW: window_smoke, render_smoke, engine_smoke,
+#     app_smoke, render_sanity. Dependem de glintfx::App / glintfx::WindowGlfw que
+#     só são compilados com GLINTFX_BACKEND_GLFW=ON.
+# ---------------------------------------------------------------------------
+if(GLINTFX_BACKEND_GLFW)
 
-# EN: Shared assets for visual tests (render_sanity and golden_test).
-#     Copy showcase RML variants, RCSS, font, and test RML variant so both tests find
-#     them at runtime from WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
-#     showcase_test.rml is the CI/headless variant: same layout as showcase.rml but
-#     without the mask card (Mesa llvmpipe BlendMask dual-sampler crash, Mesa SW bug).
-# PT: Assets compartilhados para testes visuais (render_sanity e golden_test).
-#     Copia variantes RML do showcase, RCSS, fonte e variante RML de teste para que ambos
-#     os testes as encontrem em runtime com WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
-#     showcase_test.rml é a variante CI/headless: mesmo layout que showcase.rml mas sem o
-#     card mask (crash do Mesa llvmpipe BlendMask dual-sampler, bug do Mesa SW).
-file(COPY
-  ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rml
-  ${CMAKE_SOURCE_DIR}/demos/showcase/showcase_test.rml
-  ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rcss
-  ${CMAKE_SOURCE_DIR}/demos/showcase/assets
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+  # EN: Link glintfx (already contains window_glfw.cpp) — eliminates duplicate compilation.
+  # PT: Linka glintfx (já contém window_glfw.cpp) — elimina compilação duplicada.
+  add_executable(window_smoke window_smoke.cpp)
+  target_link_libraries(window_smoke PRIVATE glintfx)
+  add_test(NAME window_smoke COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:window_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
 
-# EN: render_sanity — structural pixel-statistics check: not black, has dark background,
-#     has colourful/bright content. Tolerant of per-pixel variation from llvmpipe's threaded
-#     tile rendering (blur/glow convolution order non-determinism). Always active in CI.
-# PT: render_sanity — verificação estrutural de estatísticas de pixels: não preto, tem fundo
-#     escuro, tem conteúdo colorido/brilhante. Tolerante a variação per-pixel do rendering de
-#     tiles em threads do llvmpipe (não-determinismo na ordem de convolução de blur/glow).
-#     Sempre ativo no CI.
-add_executable(render_sanity render_sanity.cpp)
-target_link_libraries(render_sanity PRIVATE glintfx)
-add_test(NAME render_sanity
-  COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:render_sanity>
-    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  # EN: render_smoke — verify RenderGl3 init + single frame under a live GL context.
+  # PT: render_smoke — verifica init do RenderGl3 + um frame sob contexto GL ativo.
+  add_executable(render_smoke render_smoke.cpp)
+  target_link_libraries(render_smoke PRIVATE glintfx)
+  add_test(NAME render_smoke COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:render_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
 
-# EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
-#     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
-#     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000
-#     between runs of the same scene (tolerance was 50). Root causes: threaded tile rendering
-#     and floating-point accumulation order in blur/drop-shadow shader passes.
-#     Gated behind GLINTFX_GOLDEN_TEST (default OFF) so it does not pollute the default CI
-#     gate. Enable with -DGLINTFX_GOLDEN_TEST=ON when running on real GPU hardware alongside
-#     glintfx_capture for reference generation.
-# PT: golden_test — comparação MSE pixel-exata com referência PPM armazenada.
-#     FLAKY sob Mesa llvmpipe / Xvfb: o llvmpipe renderiza convolução de blur/glow em tiles
-#     paralelos; não-associatividade de ponto flutuante entre agendamentos de threads gera
-#     MSE ~3 000 entre execuções da mesma cena (tolerância era 50). Causas raiz: rendering de
-#     tiles em threads e ordem de acumulação de ponto flutuante nas passagens de shader de
-#     blur/drop-shadow.
-#     Bloqueado por GLINTFX_GOLDEN_TEST (default OFF) para não poluir o gate padrão de CI.
-#     Ativar com -DGLINTFX_GOLDEN_TEST=ON ao rodar em GPU real com glintfx_capture para
-#     geração de referência.
+  # EN: engine_smoke — verify Engine (RmlUi+GL3) init via SystemClock + document load.
+  #     Replaces bootstrap_smoke: Bootstrap::init no longer accepts WindowGlfw (T1 refactor).
+  # PT: engine_smoke — verifica init do Engine (RmlUi+GL3) via SystemClock + carregamento de documento.
+  #     Substitui bootstrap_smoke: Bootstrap::init não aceita mais WindowGlfw (refator T1).
+  add_executable(engine_smoke engine_smoke.cpp)
+  # EN: system_clock.hpp inherits from Rml::SystemInterface — needs RmlUi include path.
+  #     RmlUi::Core is a PRIVATE dep of glintfx and not propagated; link explicitly here.
+  # PT: system_clock.hpp herda de Rml::SystemInterface — precisa do include path do RmlUi.
+  #     RmlUi::Core é dep PRIVATE da glintfx e não propagada; linka explicitamente aqui.
+  target_link_libraries(engine_smoke PRIVATE glintfx RmlUi::Core)
+  # EN: WORKING_DIRECTORY ensures "tests/min.rml" resolves to build/tests/min.rml regardless
+  #     of where ctest is invoked from (ctest --test-dir does not set subprocess CWD).
+  # PT: WORKING_DIRECTORY garante que "tests/min.rml" resolva para build/tests/min.rml
+  #     independente de onde ctest é invocado (--test-dir não define CWD do subprocesso).
+  add_test(NAME engine_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:engine_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # EN: app_smoke — verify the public App facade: open, load, 1 frame headless.
+  # PT: app_smoke — verifica a fachada pública App: abre, carrega, 1 frame headless.
+  add_executable(app_smoke app_smoke.cpp)
+  target_link_libraries(app_smoke PRIVATE glintfx)
+  add_test(NAME app_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # EN: Shared assets for visual tests (render_sanity and golden_test).
+  #     Copy showcase RML variants, RCSS, font, and test RML variant so both tests find
+  #     them at runtime from WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
+  #     showcase_test.rml is the CI/headless variant: same layout as showcase.rml but
+  #     without the mask card (Mesa llvmpipe BlendMask dual-sampler crash, Mesa SW bug).
+  # PT: Assets compartilhados para testes visuais (render_sanity e golden_test).
+  #     Copia variantes RML do showcase, RCSS, fonte e variante RML de teste para que ambos
+  #     os testes as encontrem em runtime com WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
+  #     showcase_test.rml é a variante CI/headless: mesmo layout que showcase.rml mas sem o
+  #     card mask (crash do Mesa llvmpipe BlendMask dual-sampler, bug do Mesa SW).
+  file(COPY
+    ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rml
+    ${CMAKE_SOURCE_DIR}/demos/showcase/showcase_test.rml
+    ${CMAKE_SOURCE_DIR}/demos/showcase/showcase.rcss
+    ${CMAKE_SOURCE_DIR}/demos/showcase/assets
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+  # EN: render_sanity — structural pixel-statistics check: not black, has dark background,
+  #     has colourful/bright content. Tolerant of per-pixel variation from llvmpipe's threaded
+  #     tile rendering (blur/glow convolution order non-determinism). Always active in CI.
+  # PT: render_sanity — verificação estrutural de estatísticas de pixels: não preto, tem fundo
+  #     escuro, tem conteúdo colorido/brilhante. Tolerante a variação per-pixel do rendering de
+  #     tiles em threads do llvmpipe (não-determinismo na ordem de convolução de blur/glow).
+  #     Sempre ativo no CI.
+  add_executable(render_sanity render_sanity.cpp)
+  target_link_libraries(render_sanity PRIVATE glintfx)
+  add_test(NAME render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:render_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
+  #     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
+  #     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000
+  #     between runs of the same scene (tolerance was 50). Root causes: threaded tile rendering
+  #     and floating-point accumulation order in blur/drop-shadow shader passes.
+  #     Gated behind GLINTFX_GOLDEN_TEST (default OFF) so it does not pollute the default CI
+  #     gate. Enable with -DGLINTFX_GOLDEN_TEST=ON when running on real GPU hardware alongside
+  #     glintfx_capture for reference generation.
+  # PT: golden_test — comparação MSE pixel-exata com referência PPM armazenada.
+  #     FLAKY sob Mesa llvmpipe / Xvfb: o llvmpipe renderiza convolução de blur/glow em tiles
+  #     paralelos; não-associatividade de ponto flutuante entre agendamentos de threads gera
+  #     MSE ~3 000 entre execuções da mesma cena (tolerância era 50). Causas raiz: rendering de
+  #     tiles em threads e ordem de acumulação de ponto flutuante nas passagens de shader de
+  #     blur/drop-shadow.
+  #     Bloqueado por GLINTFX_GOLDEN_TEST (default OFF) para não poluir o gate padrão de CI.
+  #     Ativar com -DGLINTFX_GOLDEN_TEST=ON ao rodar em GPU real com glintfx_capture para
+  #     geração de referência.
+  option(GLINTFX_GOLDEN_TEST
+    "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
+    OFF)
+
+  add_executable(golden_test golden_test.cpp)
+  # EN: capture.hpp includes GL/gl3w.h directly — link gl3w (INTERFACE target) so its include path
+  #     is available here. gl3w is a PRIVATE dep of glintfx and therefore not propagated to callers.
+  # PT: capture.hpp inclui GL/gl3w.h diretamente — linka gl3w (target INTERFACE) para que o include
+  #     path esteja disponível aqui. gl3w é dep PRIVATE da glintfx e portanto não é propagado.
+  target_link_libraries(golden_test PRIVATE glintfx gl3w)
+
+  # EN: Ensure the golden/ subdir exists so the first run can write the reference there.
+  # PT: Garante que golden/ exista para que a 1ª execução possa escrever a referência.
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/golden)
+
+  # EN: If a committed reference exists in the source tree, copy it to the build dir.
+  # PT: Se houver referência comitada no source tree, copia para o build dir.
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm)
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm
+         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden)
+  endif()
+
+  if(GLINTFX_GOLDEN_TEST)
+    add_test(NAME golden_test
+      COMMAND ${CMAKE_COMMAND}
+        -DEXE=$<TARGET_FILE:golden_test>
+        -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  endif()
+
+endif() # GLINTFX_BACKEND_GLFW
+
+# ---------------------------------------------------------------------------
+# EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
+#     ui_layer_events, ui_layer_sanity.
+#
+#     These tests run in BOTH build configurations (GLFW backend ON and OFF).
+#     They validate glintfx::UiLayer, which is always compiled.
+#
+#     GL context fixture: the tests create a hidden GLFW window as a test fixture
+#     to provide a current GL context for UiLayer (standing in for an SDL3 window
+#     in production). This is a TEST-ONLY GLFW dependency.
+#
+#     When GLINTFX_BACKEND_GLFW=ON:  window_glfw.cpp is already compiled into the
+#     glintfx static library, so the tests pick up WindowGlfw transitively.
+#
+#     When GLINTFX_BACKEND_GLFW=OFF: the library does NOT contain window_glfw.cpp
+#     and does NOT link glfw. A test-only helper target (_glintfx_test_ctx) is
+#     created here that compiles window_glfw.cpp and links glfw — the lib itself
+#     remains free of the GLFW dependency.
+#
+# PT: Testes do embed mode — ui_layer_attach, ui_layer_compose, gl_state_guard,
+#     ui_layer_events, ui_layer_sanity.
+#
+#     Estes testes rodam em AMBAS as configurações (backend GLFW ON e OFF).
+#     Validam glintfx::UiLayer, que é sempre compilado.
+#
+#     Fixture de contexto GL: os testes criam uma janela GLFW oculta como fixture
+#     para fornecer um contexto GL corrente ao UiLayer (representando a janela SDL3
+#     em produção). Isso é uma dependência GLFW SÓ-DE-TESTE.
+#
+#     Com GLINTFX_BACKEND_GLFW=ON:  window_glfw.cpp já está compilado na lib estática
+#     glintfx, então os testes obtêm WindowGlfw transitivamente.
+#
+#     Com GLINTFX_BACKEND_GLFW=OFF: a lib NÃO contém window_glfw.cpp e NÃO linka
+#     glfw. Um target helper só-de-teste (_glintfx_test_ctx) é criado aqui compilando
+#     window_glfw.cpp e linkando glfw — a lib permanece livre da dep GLFW.
+# ---------------------------------------------------------------------------
+
+if(NOT GLINTFX_BACKEND_GLFW)
+  # EN: Test-only GLFW context helper for embed tests (embed-only build).
+  #     Compiles window_glfw.cpp and links glfw so the embed tests can create a GL
+  #     context fixture without requiring glfw to be a dependency of the lib itself.
+  # PT: Helper de contexto GLFW só-de-teste para os testes embed (build embed-only).
+  #     Compila window_glfw.cpp e linka glfw para que os testes embed possam criar um
+  #     fixture de contexto GL sem exigir que glfw seja dep da lib.
+  find_package(glfw3 REQUIRED)
+  add_library(_glintfx_test_ctx STATIC
+    ${CMAKE_SOURCE_DIR}/src/window_glfw.cpp)
+  target_include_directories(_glintfx_test_ctx PUBLIC
+    ${CMAKE_SOURCE_DIR}/src)
+  # EN: gl3w provides <GL/gl3w.h> needed by window_glfw.cpp. glfw provides <GLFW/glfw3.h>.
+  #     Both are PUBLIC so the link propagates to consuming test executables.
+  # PT: gl3w fornece <GL/gl3w.h> necessário por window_glfw.cpp. glfw fornece <GLFW/glfw3.h>.
+  #     Ambos são PUBLIC para propagar ao link dos executáveis de teste que consomem.
+  target_link_libraries(_glintfx_test_ctx PUBLIC glintfx glfw gl3w)
+  # EN: _embed_dep: used below as the single link target for all embed tests.
+  #     In OFF builds it is the test helper (which pulls glintfx + glfw + gl3w);
+  #     in ON builds it is glintfx directly (window_glfw already compiled in).
+  # PT: _embed_dep: usado abaixo como alvo único de link para todos os testes embed.
+  #     Em builds OFF é o helper de teste (que puxa glintfx + glfw + gl3w);
+  #     em builds ON é o glintfx diretamente (window_glfw já compilado nele).
+  set(_embed_dep _glintfx_test_ctx)
+else()
+  set(_embed_dep glintfx)
+endif()
+
 # EN: ui_layer_attach — verify UiLayer embed attach: host creates GL context (hidden GLFW window),
 #     UiLayer attaches to it, load() + set_viewport() must not crash and ok() must be true.
 # PT: ui_layer_attach — verifica attach do UiLayer embed: host cria contexto GL (janela GLFW oculta),
 #     UiLayer anexa a ele, load() + set_viewport() não devem crashar e ok() deve ser true.
 add_executable(ui_layer_attach ui_layer_attach.cpp)
-target_link_libraries(ui_layer_attach PRIVATE glintfx)
-# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
-# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+target_link_libraries(ui_layer_attach PRIVATE ${_embed_dep})
+# EN: min.rml already copied to build/tests/ unconditionally at the top of this file.
+# PT: min.rml já copiado para build/tests/ incondicionalmente no topo deste arquivo.
 add_test(NAME ui_layer_attach
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_attach>
@@ -119,7 +230,7 @@ add_test(NAME ui_layer_attach
 #     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente e gl3w é
 #     dep PRIVATE da glintfx (não propagada aos callers).
 add_executable(ui_layer_compose ui_layer_compose.cpp)
-target_link_libraries(ui_layer_compose PRIVATE glintfx gl3w)
+target_link_libraries(ui_layer_compose PRIVATE ${_embed_dep} gl3w)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min_partial.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min_partial.rml COPYONLY)
 add_test(NAME ui_layer_compose
@@ -133,7 +244,7 @@ add_test(NAME ui_layer_compose
 # PT: gl_state_guard — estado GL capturado antes e depois de UiLayer::render() deve ser idêntico.
 #     Linka gl3w explicitamente: o teste cria objetos GL dummy (programa, VAO) diretamente.
 add_executable(gl_state_guard gl_state_guard.cpp)
-target_link_libraries(gl_state_guard PRIVATE glintfx gl3w)
+target_link_libraries(gl_state_guard PRIVATE ${_embed_dep} gl3w)
 add_test(NAME gl_state_guard
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:gl_state_guard>
@@ -145,9 +256,9 @@ add_test(NAME gl_state_guard
 # PT: ui_layer_events — injeta sequência representativa de UiEvent (mouse, nav por tecla, resize)
 #     e verifica sem crash + ok() permanece true após a sequência (T4 — input embed mode).
 add_executable(ui_layer_events ui_layer_events.cpp)
-target_link_libraries(ui_layer_events PRIVATE glintfx)
-# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
-# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+target_link_libraries(ui_layer_events PRIVATE ${_embed_dep})
+# EN: min.rml already copied to build/tests/ unconditionally at the top of this file.
+# PT: min.rml já copiado para build/tests/ incondicionalmente no topo deste arquivo.
 add_test(NAME ui_layer_events
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_events>
@@ -173,7 +284,7 @@ add_test(NAME ui_layer_events
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para que embed_scene.rml e
 #     embed_scene.rcss resolvam relativos ao dir binário onde são copiados.
 add_executable(ui_layer_sanity ui_layer_sanity.cpp)
-target_link_libraries(ui_layer_sanity PRIVATE glintfx gl3w)
+target_link_libraries(ui_layer_sanity PRIVATE ${_embed_dep} gl3w)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
@@ -183,33 +294,3 @@ add_test(NAME ui_layer_sanity
     -DEXE=$<TARGET_FILE:ui_layer_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-
-option(GLINTFX_GOLDEN_TEST
-  "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
-  OFF)
-
-add_executable(golden_test golden_test.cpp)
-# EN: capture.hpp includes GL/gl3w.h directly — link gl3w (INTERFACE target) so its include path
-#     is available here. gl3w is a PRIVATE dep of glintfx and therefore not propagated to callers.
-# PT: capture.hpp inclui GL/gl3w.h diretamente — linka gl3w (target INTERFACE) para que o include
-#     path esteja disponível aqui. gl3w é dep PRIVATE da glintfx e portanto não é propagado.
-target_link_libraries(golden_test PRIVATE glintfx gl3w)
-
-# EN: Ensure the golden/ subdir exists so the first run can write the reference there.
-# PT: Garante que golden/ exista para que a 1ª execução possa escrever a referência.
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/golden)
-
-# EN: If a committed reference exists in the source tree, copy it to the build dir.
-# PT: Se houver referência comitada no source tree, copia para o build dir.
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm)
-  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/golden/showcase_reference.ppm
-       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden)
-endif()
-
-if(GLINTFX_GOLDEN_TEST)
-  add_test(NAME golden_test
-    COMMAND ${CMAKE_COMMAND}
-      -DEXE=$<TARGET_FILE:golden_test>
-      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-endif()

@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** `GLINTFX_BACKEND_GLFW` CMake option (default `ON`): when set to `OFF`, the library is built in embed-only mode -- `glintfx::App`, `window_glfw.cpp`, and `RmlUi_Platform_GLFW.cpp` are excluded and `glfw` is not linked. Enables SDL3 / X11 host consumers (e.g. GusWorld) to link `glintfx::UiLayer` without dragging GLFW as a transitive dependency. `glintfxConfig.cmake` propagates the setting so `find_package(glintfx)` consumers are not forced to have GLFW installed in embed-only builds. The generated `<glintfx/config.hpp>` exposes `GLINTFX_BACKEND_GLFW` (0/1) for compile-time guards.
+  **PT:** Opção CMake `GLINTFX_BACKEND_GLFW` (padrão `ON`): quando `OFF`, a biblioteca é compilada em modo embed-only -- `glintfx::App`, `window_glfw.cpp` e `RmlUi_Platform_GLFW.cpp` são excluídos e `glfw` não é linkado. Permite que consumidores host SDL3/X11 (ex.: GusWorld) linkem `glintfx::UiLayer` sem arrastar GLFW como dep transitiva. `glintfxConfig.cmake` propaga a opção para que consumidores `find_package(glintfx)` não sejam forçados a ter GLFW instalado em builds embed-only. O `<glintfx/config.hpp>` gerado expõe `GLINTFX_BACKEND_GLFW` (0/1) para guards em tempo de compilação.
+
+### Fixed / Corrigido
+
+- **EN:** Embed-only build no longer forces GLFW as a transitive dependency of `glintfx::UiLayer` consumers. Prior to v0.2.1, `find_package(glfw3 REQUIRED)` was always called unconditionally, making any consumer of the library implicitly require GLFW even when only `UiLayer` was used.
+  **PT:** Build embed-only não força mais GLFW como dep transitiva de consumidores de `glintfx::UiLayer`. Antes da v0.2.1, `find_package(glfw3 REQUIRED)` era sempre chamado incondicionalmente, fazendo qualquer consumidor da lib exigir implicitamente GLFW mesmo quando só `UiLayer` era usado.
+
 ---
 
 ## [0.2.0] - 2026-06-30

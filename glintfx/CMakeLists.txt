@@ -8,10 +8,31 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
-# Deps de sistema
+# EN: GLFW window backend option.
+#     ON  (default) — compile the standalone glintfx::App facade, window_glfw.cpp and
+#         the RmlUi GLFW platform adapter. find_package(glfw3) is called and glfw is
+#         linked into the library.
+#     OFF — embed-only build: only Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock
+#         are compiled. find_package(glfw3) is NOT called; glfw is NOT linked into the
+#         library. Consumers (e.g. SDL3 hosts) must not drag GLFW as a transitive dep.
+# PT: Opção de backend de janela GLFW.
+#     ON  (padrão) — compila a fachada standalone glintfx::App, window_glfw.cpp e o
+#         adapter de plataforma GLFW do RmlUi. find_package(glfw3) é chamado e glfw é
+#         linkado na biblioteca.
+#     OFF — build embed-only: só Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock
+#         são compilados. find_package(glfw3) NÃO é chamado; glfw NÃO é linkado na lib.
+#         Consumidores (ex.: hosts SDL3) não puxam GLFW como dep transitiva.
+option(GLINTFX_BACKEND_GLFW
+  "GLFW window backend + standalone glintfx::App (OFF = embed-only, no GLFW in lib)"
+  ON)
+
+# Deps de sistema — OpenGL e FreeType sempre presentes; GLFW só no backend ON.
+# System deps — OpenGL and FreeType are always present; GLFW only when the backend is ON.
 find_package(OpenGL REQUIRED)
-find_package(glfw3 REQUIRED)
 find_package(Freetype REQUIRED)
+if(GLINTFX_BACKEND_GLFW)
+  find_package(glfw3 REQUIRED)
+endif()
 
 # RmlUi (pinado) — sem samples, estático, FreeType
 set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -34,18 +55,45 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/gl3w
 # PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
 set(_rml_backends ${rmlui_SOURCE_DIR}/Backends)
 
-add_library(glintfx STATIC
-  src/app.cpp
-  src/window_glfw.cpp
+# EN: Generate config.hpp into the build tree so consumers detect build options at
+#     compile time (e.g. #if GLINTFX_BACKEND_GLFW). The build-interface include dir
+#     is propagated transitively via INTERFACE_INCLUDE_DIRECTORIES.
+# PT: Gera config.hpp na árvore de build para que consumidores detectem opções em
+#     tempo de compilação (ex.: #if GLINTFX_BACKEND_GLFW). O include dir da interface
+#     de build é propagado transitivamente via INTERFACE_INCLUDE_DIRECTORIES.
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/glintfx/config.hpp.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/glintfx/config.hpp
+  @ONLY)
+
+# EN: Core sources — always compiled regardless of GLFW backend option.
+#     Engine + UiLayer + RenderGl3 (plus its GL3 backend) + Bootstrap + SystemClock.
+# PT: Sources principais — sempre compilados independente da opção do backend GLFW.
+#     Engine + UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap + SystemClock.
+set(_glintfx_sources
   src/render_gl3.cpp
   src/bootstrap.cpp
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp
-  ${_rml_backends}/RmlUi_Renderer_GL3.cpp
-  ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
+  ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
+
+if(GLINTFX_BACKEND_GLFW)
+  # EN: GLFW-backend sources — standalone App + GLFW window + RmlUi GLFW platform adapter.
+  #     Only compiled when GLINTFX_BACKEND_GLFW=ON.
+  # PT: Sources do backend GLFW — App standalone + janela GLFW + adapter de plataforma GLFW do RmlUi.
+  #     Só compilados com GLINTFX_BACKEND_GLFW=ON.
+  list(APPEND _glintfx_sources
+    src/app.cpp
+    src/window_glfw.cpp
+    ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
+endif()
+
+add_library(glintfx STATIC ${_glintfx_sources})
 target_include_directories(glintfx
-  PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   PRIVATE ${_rml_backends})
   # EN: gl3w include path comes transitively from linking PRIVATE gl3w (INTERFACE target).
   # PT: Include path do gl3w vem transitivamente do link PRIVATE gl3w (alvo INTERFACE).
@@ -61,7 +109,15 @@ target_compile_definitions(glintfx PRIVATE
   #     tornando o blit de resolução uma cópia simples que funciona no GL software.
   RMLUI_NUM_MSAA_SAMPLES=0
 )
-target_link_libraries(glintfx PRIVATE RmlUi::Core glfw OpenGL::GL Freetype::Freetype gl3w)
+
+# EN: Core link deps (always): RmlUi, OpenGL, FreeType, gl3w.
+#     glfw is only linked when the GLFW window backend is enabled.
+# PT: Deps de link principais (sempre): RmlUi, OpenGL, FreeType, gl3w.
+#     glfw só é linkado quando o backend de janela GLFW está habilitado.
+target_link_libraries(glintfx PRIVATE RmlUi::Core OpenGL::GL Freetype::Freetype gl3w)
+if(GLINTFX_BACKEND_GLFW)
+  target_link_libraries(glintfx PRIVATE glfw)
+endif()
 target_compile_features(glintfx PUBLIC cxx_std_17)
 
 # EN: Alias so FetchContent consumers can write target_link_libraries(... glintfx::glintfx).
@@ -85,8 +141,15 @@ else()
 endif()
 option(GLINTFX_BUILD_DEMOS "Build demos" ${_glintfx_top})
 option(GLINTFX_BUILD_TESTS "Build tests" ${_glintfx_top})
+
+# EN: Demos require the GLFW window backend (the showcase uses glintfx::App).
+# PT: Demos exigem o backend de janela GLFW (o showcase usa glintfx::App).
 if(GLINTFX_BUILD_DEMOS)
-  add_subdirectory(demos/showcase)
+  if(GLINTFX_BACKEND_GLFW)
+    add_subdirectory(demos/showcase)
+  else()
+    message(STATUS "glintfx: GLINTFX_BUILD_DEMOS=ON but GLINTFX_BACKEND_GLFW=OFF — demos skipped (require App/GLFW).")
+  endif()
 endif()
 if(GLINTFX_BUILD_TESTS)
   enable_testing()
@@ -148,16 +211,25 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   install(FILES $<TARGET_FILE:rmlui_core>
           DESTINATION ${CMAKE_INSTALL_LIBDIR}/glintfx)
 
-  # EN: Public headers.
-  # PT: Headers públicos.
-  install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  # EN: Public headers — install the source-tree include/ directory and the
+  #     generated config.hpp (which lives in the build tree, not the source tree).
+  # PT: Headers públicos — instala o diretório include/ da árvore de fonte e o
+  #     config.hpp gerado (que fica na árvore de build, não na de fonte).
+  install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+          PATTERN "*.in" EXCLUDE)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/glintfx/config.hpp
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/glintfx)
 
   # EN: CMake package config — enables find_package(glintfx REQUIRED).
   #     PATH_VARS exposes PACKAGE_CMAKE_INSTALL_LIBDIR / PACKAGE_CMAKE_INSTALL_INCLUDEDIR
   #     as relocated absolute paths inside the installed Config.cmake.
+  #     GLINTFX_BACKEND_GLFW is embedded in the generated config via @GLINTFX_BACKEND_GLFW@
+  #     so the installed config conditionally pulls in find_dependency(glfw3).
   # PT: Config do pacote CMake — habilita find_package(glintfx REQUIRED).
   #     PATH_VARS expõe PACKAGE_CMAKE_INSTALL_LIBDIR / PACKAGE_CMAKE_INSTALL_INCLUDEDIR
   #     como paths absolutos relocados dentro do Config.cmake instalado.
+  #     GLINTFX_BACKEND_GLFW é embarcado no config gerado via @GLINTFX_BACKEND_GLFW@
+  #     para que o config instalado chame find_dependency(glfw3) condicionalmente.
   configure_package_config_file(
     cmake/glintfxConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfig.cmake

@@ -198,8 +198,9 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Linux x86-64 only.** No Windows/macOS.
 - **One `App` per process.** GLFW and RmlUi global state make a second instance undefined behaviour.
 - **The `mask` effect needs a real GPU.** Under Mesa/llvmpipe (software, e.g. headless CI) the dual-sampler mask shader crashes, a Mesa bug rather than a glintfx bug. The CI variant runs without the mask card.
-- **GLFW only.** SDL and X11 backends are planned but not implemented.
-- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 5-test suite runs automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
+- **GLFW window backend is optional.** By default (`-DGLINTFX_BACKEND_GLFW=ON`) the standalone `glintfx::App` is compiled and GLFW is linked. With `-DGLINTFX_BACKEND_GLFW=OFF` (embed-only build) only `glintfx::UiLayer` is available and the library does not drag GLFW as a transitive dependency. Designed for SDL3/X11 hosts (e.g. GusWorld) that own the window and GL context themselves. See [ADR-0008](docs/adr/0008-embed-guest-mode.md).
+- **SDL and X11 standalone backends are planned but not yet implemented.** The embed path (host provides the GL context) is the integration point for non-GLFW hosts today.
+- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 10-test suite (GLFW=ON) and 5-test embed suite (GLFW=OFF) run automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
 - **Two CMake integration paths:** `FetchContent` / `add_subdirectory` (recommended when building from source) and `find_package(glintfx)` for an installed tree via `cmake --install`, linking `glintfx::glintfx`; `glintfxConfig.cmake` and RmlUi are co-installed under the same prefix.
 
 ### Roadmap and vision
@@ -405,8 +406,9 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Apenas Linux x86-64.** Sem Windows/macOS.
 - **Um `App` por processo.** O estado global de GLFW e RmlUi torna uma segunda instância comportamento indefinido.
 - **O efeito `mask` exige GPU real.** Sob Mesa/llvmpipe (software, ex.: CI headless) o shader de mask dual-sampler crasha, bug do Mesa e não do glintfx. A variante de CI roda sem o card mask.
-- **Apenas GLFW.** Backends SDL e X11 estão planejados mas não implementados.
-- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 5 testes roda automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
+- **Backend de janela GLFW é opcional.** Por padrão (`-DGLINTFX_BACKEND_GLFW=ON`) o `glintfx::App` standalone é compilado e o GLFW é linkado. Com `-DGLINTFX_BACKEND_GLFW=OFF` (build embed-only) só o `glintfx::UiLayer` está disponível e a biblioteca não arrasta GLFW como dep transitiva. Projetado para hosts SDL3/X11 (ex.: GusWorld) que possuem a janela e o contexto GL por conta própria. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md).
+- **Backends standalone SDL e X11 estão planejados mas não implementados.** O caminho embed (host fornece o contexto GL) é o ponto de integração para hosts não-GLFW hoje.
+- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 10 testes (GLFW=ON) e a suíte embed de 5 testes (GLFW=OFF) rodam automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
 - **Dois caminhos de integração CMake:** `FetchContent` / `add_subdirectory` (recomendado ao buildar do fonte) e `find_package(glintfx)` para uma árvore instalada via `cmake --install`, linkando `glintfx::glintfx`; `glintfxConfig.cmake` e o RmlUi são co-instalados sob o mesmo prefixo.
 
 ### Roadmap e visão

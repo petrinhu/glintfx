@@ -7,10 +7,16 @@
 
 ## [Unreleased]
 
+---
+
+## [0.2.1] - 2026-06-30
+
 ### Added / Adicionado
 
 - **EN:** `GLINTFX_BACKEND_GLFW` CMake option (default `ON`): when set to `OFF`, the library is built in embed-only mode -- `glintfx::App`, `window_glfw.cpp`, and `RmlUi_Platform_GLFW.cpp` are excluded and `glfw` is not linked. Enables SDL3 / X11 host consumers (e.g. GusWorld) to link `glintfx::UiLayer` without dragging GLFW as a transitive dependency. `glintfxConfig.cmake` propagates the setting so `find_package(glintfx)` consumers are not forced to have GLFW installed in embed-only builds. The generated `<glintfx/config.hpp>` exposes `GLINTFX_BACKEND_GLFW` (0/1) for compile-time guards.
   **PT:** Opção CMake `GLINTFX_BACKEND_GLFW` (padrão `ON`): quando `OFF`, a biblioteca é compilada em modo embed-only -- `glintfx::App`, `window_glfw.cpp` e `RmlUi_Platform_GLFW.cpp` são excluídos e `glfw` não é linkado. Permite que consumidores host SDL3/X11 (ex.: GusWorld) linkem `glintfx::UiLayer` sem arrastar GLFW como dep transitiva. `glintfxConfig.cmake` propaga a opção para que consumidores `find_package(glintfx)` não sejam forçados a ter GLFW instalado em builds embed-only. O `<glintfx/config.hpp>` gerado expõe `GLINTFX_BACKEND_GLFW` (0/1) para guards em tempo de compilação.
+- **EN:** CI -- embed-only build gate (`GLINTFX_BACKEND_GLFW=OFF`) added to the CI matrix: validates that the GLFW-free build path stays compilable and `UiLayer` tests pass on every push/PR.
+  **PT:** CI -- gate de build embed-only (`GLINTFX_BACKEND_GLFW=OFF`) adicionado à matriz de CI: valida que o caminho de build sem GLFW permanece compilável e os testes do `UiLayer` passam em todo push/PR.
 
 ### Fixed / Corrigido
 

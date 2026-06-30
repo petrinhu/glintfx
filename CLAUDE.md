@@ -109,7 +109,7 @@ Outras:
 
 ## Pendências
 
-A tabela de pendências e planejamento está em `TODO.md` na raiz (ordenada por execução; coluna Onda marca passos paralelizáveis). Decisões de arquitetura em `docs/adr/`. Manuais de teste e auditoria em `TESTES.md` e `AUDITORIAS.md`. Governança/porte em `.bigtech-porte`.
+A tabela de pendências e planejamento está em `TODO.md` na raiz (ordenada por execução; coluna Onda marca passos paralelizáveis). Decisões de arquitetura em `docs/adr/`. Manuais de teste e auditoria em `TESTES.md` e `AUDITORIAS.md`. Governança/porte em `.bigtech-porte`; a definição completa da constelação (agents, RACI, pipelines) está no plugin `bigtech_plugin` ([Codeberg](https://codeberg.org/petrinhu/bigtech_plugin) · [GitHub](https://github.com/petrinhu/bigtech_plugin)).
 
 ## Ambiente (Fedora 44)
 

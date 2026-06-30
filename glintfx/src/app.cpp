@@ -1,42 +1,55 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: App facade implementation — RAII wrapper over WindowGlfw + RenderGl3 + Bootstrap.
-// PT: Implementação da fachada App — wrapper RAII sobre WindowGlfw + RenderGl3 + Bootstrap.
+// EN: App facade implementation — RAII wrapper over WindowGlfw + SystemInterface_GLFW + Engine.
+//     Engine owns RenderGl3 + Bootstrap. SystemInterface_GLFW lives here because it requires a
+//     GLFWwindow* at construction time (available only after WindowGlfw::create()).
+// PT: Implementação da fachada App — wrapper RAII sobre WindowGlfw + SystemInterface_GLFW + Engine.
+//     Engine possui RenderGl3 + Bootstrap. SystemInterface_GLFW vive aqui pois exige
+//     GLFWwindow* na construção (disponível apenas após WindowGlfw::create()).
 // Copyright (c) 2026 Petrus Silva Costa
 // EN: gl3w for GL function pointers used in snapshot() (glReadPixels, glBindFramebuffer, etc.).
 // PT: gl3w para ponteiros de função GL usados em snapshot() (glReadPixels, glBindFramebuffer, etc.).
 #include <GL/gl3w.h>
 #include <cstdio>
+#include <memory>
+#include <vector>
 
 #include <glintfx/glintfx.hpp>
 #include "window_glfw.hpp"
-#include "render_gl3.hpp"
-#include "bootstrap.hpp"
-#include <RmlUi/Core.h>
-#include <vector>
+#include "engine.hpp"
+// EN: RmlUi_Platform_GLFW.h migrated from bootstrap.cpp — SystemInterface_GLFW now lives here.
+// PT: RmlUi_Platform_GLFW.h migrou de bootstrap.cpp — SystemInterface_GLFW agora vive aqui.
+#include "RmlUi_Platform_GLFW.h"
 
 namespace glintfx {
 
 const char* version() { return "0.1.0"; }
 
-// EN: Impl owns all subsystems. Destruction order (reverse declaration) is intentional:
-//     boot → render → window ensures RmlUi shuts down before GL context is destroyed.
-// PT: Impl possui todos os subsistemas. Ordem de destruição (declaração reversa) é intencional:
-//     boot → render → window garante que RmlUi encerra antes do contexto GL ser destruído.
+// EN: Impl owns all subsystems. Declaration order is intentional: C++ destructs members in
+//     REVERSE order, so engine destructs first (calls Rml::Shutdown via Bootstrap::~Bootstrap),
+//     then system is deleted (no longer needed by RmlUi), then window dtor destroys GL context.
+//     window → system → engine = construction order; engine → system → window = destruction order.
+// PT: Impl possui todos os subsistemas. Ordem de declaração é intencional: C++ destrói membros
+//     na ORDEM REVERSA, então engine destrói primeiro (chama Rml::Shutdown via Bootstrap::~Bootstrap),
+//     depois system é deletado (não mais necessário ao RmlUi), depois dtor de window destrói contexto GL.
+//     window → system → engine = ordem de construção; engine → system → window = ordem de destruição.
 struct App::Impl {
-  WindowGlfw window;
-  RenderGl3  render;
-  Bootstrap  boot;
-  int  w   = 0;
-  int  h   = 0;
-  bool ok  = false;
+  WindowGlfw                            window;
+  std::unique_ptr<SystemInterface_GLFW> system;  // EN: heap; deleted after engine (RmlUi shutdown).
+                                                  // PT: heap; deletado após engine (shutdown RmlUi).
+  Engine                                engine;
+  int  w  = 0;
+  int  h  = 0;
+  bool ok = false;
 };
 
 App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   impl_->w = cfg.width;
   impl_->h = cfg.height;
   if (!impl_->window.create(cfg.title, cfg.width, cfg.height)) return;
-  if (!impl_->render.init()) return;
-  impl_->ok = impl_->boot.init(impl_->window, impl_->render, cfg.width, cfg.height);
+  // EN: Window::create() makes the GL context current — required by Engine::attach().
+  // PT: Window::create() torna o contexto GL corrente — exigido por Engine::attach().
+  impl_->system = std::make_unique<SystemInterface_GLFW>(impl_->window.handle());
+  impl_->ok = impl_->engine.attach(impl_->system.get(), cfg.width, cfg.height);
 }
 
 App::~App() = default;
@@ -44,7 +57,7 @@ App::App(App&&) noexcept = default;
 App& App::operator=(App&&) noexcept = default;
 
 void App::load(const char* rml_path) {
-  if (impl_->ok) impl_->boot.load(rml_path);
+  if (impl_->ok) impl_->engine.load(rml_path);
 }
 
 bool App::ok() const noexcept {
@@ -63,7 +76,7 @@ void App::poll_events() {
 }
 
 void App::update() {
-  if (auto* c = impl_->boot.context()) c->Update();
+  if (impl_->ok) impl_->engine.update();
 }
 
 void App::render() {
@@ -72,11 +85,7 @@ void App::render() {
   if (!impl_->ok) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
-  impl_->render.begin_frame(w, h);
-  if (auto* c = impl_->boot.context()) {
-    c->Render();
-  }
-  impl_->render.end_frame();
+  impl_->engine.render_standalone(w, h);
   impl_->window.swap();
 }
 
@@ -92,9 +101,7 @@ bool App::snapshot(const char* ppm_path) {
   if (!impl_->ok) return false;
   int w = 0, h = 0;
   impl_->window.size(w, h);
-  impl_->render.begin_frame(w, h);
-  if (auto* c = impl_->boot.context()) c->Render();
-  impl_->render.end_frame();  // composites to FBO 0
+  impl_->engine.render_standalone(w, h);
   // EN: FBO 0 now contains the complete composited frame. Read before swap.
   // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap.
   glBindFramebuffer(0x8D40, 0); // GL_FRAMEBUFFER, 0 = window

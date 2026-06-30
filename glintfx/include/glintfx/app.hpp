@@ -21,14 +21,14 @@ struct AppConfig {
 // EN: RAII application facade. Owns the window, renderer, and UI bootstrap.
 //     Move-only. No third-party engine or graphics types appear in this header.
 //
-//     GLOBAL STATE (N3): glintfx initialises process-global libraries (GLFW, RmlUi).
+//     GLOBAL STATE (N3): glintfx initialises process-global state (window backend + UI library).
 //     Only ONE App instance per process is supported. Creating a second instance while
 //     the first is alive, or after it has been destroyed, results in undefined behaviour.
 //
 // PT: Fachada RAII da aplicação. Possui janela, renderer e bootstrap de UI.
 //     Move-only. Nenhum tipo de engine ou gráficos de terceiros aparece neste header.
 //
-//     ESTADO GLOBAL (N3): glintfx inicializa bibliotecas globais de processo (GLFW, RmlUi).
+//     ESTADO GLOBAL (N3): glintfx inicializa estado global de processo (backend de janela + lib de UI).
 //     Apenas UMA instância de App por processo é suportada. Criar uma segunda instância
 //     enquanto a primeira está viva, ou após ser destruída, resulta em comportamento indefinido.
 class App {

@@ -1,0 +1,12 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<rml>
+<head>
+<style>
+body { margin: 0; padding: 0; }
+#box { position: absolute; left: 10px; top: 10px; width: 80px; height: 40px; background-color: white; }
+</style>
+</head>
+<body>
+<div id="box"></div>
+</body>
+</rml>

@@ -13,23 +13,29 @@ target_link_libraries(render_smoke PRIVATE glintfx)
 add_test(NAME render_smoke COMMAND ${CMAKE_COMMAND}
   -DEXE=$<TARGET_FILE:render_smoke> -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake)
 
-# EN: bootstrap_smoke — verify RmlUi init, Rml::Context creation, and document load.
-# PT: bootstrap_smoke — verifica init do RmlUi, criação de Rml::Context e carregamento de documento.
-add_executable(bootstrap_smoke bootstrap_smoke.cpp)
-target_link_libraries(bootstrap_smoke PRIVATE glintfx)
-# EN: Copy the min.rml fixture to the test working directory (build/tests/min.rml).
-#     The test binary looks for "tests/min.rml" relative to the ctest CWD (build/).
-# PT: Copia a fixture min.rml para o dir de trabalho do teste (build/tests/min.rml).
-#     O binário procura "tests/min.rml" relativo ao CWD do ctest (build/).
+# EN: engine_smoke — verify Engine (RmlUi+GL3) init via SystemClock + document load.
+#     Replaces bootstrap_smoke: Bootstrap::init no longer accepts WindowGlfw (T1 refactor).
+# PT: engine_smoke — verifica init do Engine (RmlUi+GL3) via SystemClock + carregamento de documento.
+#     Substitui bootstrap_smoke: Bootstrap::init não aceita mais WindowGlfw (refator T1).
+add_executable(engine_smoke engine_smoke.cpp)
+# EN: system_clock.hpp inherits from Rml::SystemInterface — needs RmlUi include path.
+#     RmlUi::Core is a PRIVATE dep of glintfx and not propagated; link explicitly here.
+# PT: system_clock.hpp herda de Rml::SystemInterface — precisa do include path do RmlUi.
+#     RmlUi::Core é dep PRIVATE da glintfx e não propagada; linka explicitamente aqui.
+target_link_libraries(engine_smoke PRIVATE glintfx RmlUi::Core)
+# EN: Copy the min.rml fixture to build/tests/ so the binary finds "tests/min.rml"
+#     relative to the ctest CWD (build/).
+# PT: Copia a fixture min.rml para build/tests/ para que o binário encontre "tests/min.rml"
+#     relativo ao CWD do ctest (build/).
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min.rml COPYONLY)
 # EN: WORKING_DIRECTORY ensures "tests/min.rml" resolves to build/tests/min.rml regardless
 #     of where ctest is invoked from (ctest --test-dir does not set subprocess CWD).
 # PT: WORKING_DIRECTORY garante que "tests/min.rml" resolva para build/tests/min.rml
 #     independente de onde ctest é invocado (--test-dir não define CWD do subprocesso).
-add_test(NAME bootstrap_smoke
+add_test(NAME engine_smoke
   COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:bootstrap_smoke>
+    -DEXE=$<TARGET_FILE:engine_smoke>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -92,6 +98,92 @@ add_test(NAME render_sanity
 #     Bloqueado por GLINTFX_GOLDEN_TEST (default OFF) para não poluir o gate padrão de CI.
 #     Ativar com -DGLINTFX_GOLDEN_TEST=ON ao rodar em GPU real com glintfx_capture para
 #     geração de referência.
+# EN: ui_layer_attach — verify UiLayer embed attach: host creates GL context (hidden GLFW window),
+#     UiLayer attaches to it, load() + set_viewport() must not crash and ok() must be true.
+# PT: ui_layer_attach — verifica attach do UiLayer embed: host cria contexto GL (janela GLFW oculta),
+#     UiLayer anexa a ele, load() + set_viewport() não devem crashar e ok() deve ser true.
+add_executable(ui_layer_attach ui_layer_attach.cpp)
+target_link_libraries(ui_layer_attach PRIVATE glintfx)
+# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
+# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+add_test(NAME ui_layer_attach
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_attach>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly and gl3w is
+#     a PRIVATE dep of glintfx (not propagated to callers).
+# PT: ui_layer_compose — render compose-only preserva a cor âncora do FBO do host.
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente e gl3w é
+#     dep PRIVATE da glintfx (não propagada aos callers).
+add_executable(ui_layer_compose ui_layer_compose.cpp)
+target_link_libraries(ui_layer_compose PRIVATE glintfx gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min_partial.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/min_partial.rml COPYONLY)
+add_test(NAME ui_layer_compose
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_compose>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: gl_state_guard — GL state captured before and after UiLayer::render() must be identical.
+#     Links gl3w explicitly: the test creates dummy GL objects (program, VAO) directly.
+# PT: gl_state_guard — estado GL capturado antes e depois de UiLayer::render() deve ser idêntico.
+#     Linka gl3w explicitamente: o teste cria objetos GL dummy (programa, VAO) diretamente.
+add_executable(gl_state_guard gl_state_guard.cpp)
+target_link_libraries(gl_state_guard PRIVATE glintfx gl3w)
+add_test(NAME gl_state_guard
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_state_guard>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: ui_layer_events — inject representative UiEvent sequence (mouse, key nav, resize) and
+#     verify no crash + ok() stays true after the sequence (T4 — embed mode input).
+# PT: ui_layer_events — injeta sequência representativa de UiEvent (mouse, nav por tecla, resize)
+#     e verifica sem crash + ok() permanece true após a sequência (T4 — input embed mode).
+add_executable(ui_layer_events ui_layer_events.cpp)
+target_link_libraries(ui_layer_events PRIVATE glintfx)
+# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
+# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+add_test(NAME ui_layer_events
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_events>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: ui_layer_sanity — embed-mode render gate: UiLayer attaches to a hidden 900×600 window,
+#     renders embed_scene.rml (dark body + linear-gradient + glow card) compose-only via FBO 0,
+#     and verifies three aggregate pixel statistics tolerant of llvmpipe threaded-tile rendering:
+#       mean_brightness > 5  (rendered something), dark_count >= 10% (body background present),
+#       bright_count >= 1%   (gradient / glow present).
+#     Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h directly and gl3w is a
+#     PRIVATE dep of glintfx (not propagated to callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) so embed_scene.rml and
+#     embed_scene.rcss resolve relative to the binary dir where they are copied.
+# PT: ui_layer_sanity — gate de renderização do embed mode: UiLayer anexa a janela oculta 900×600,
+#     renderiza embed_scene.rml (body escuro + linear-gradient + card glow) compose-only via FBO 0,
+#     e verifica três estatísticas de pixel agregadas tolerantes ao rendering de tiles do llvmpipe:
+#       mean_brightness > 5  (renderizou algo), dark_count >= 10% (background do body presente),
+#       bright_count >= 1%   (gradiente / glow presente).
+#     Linka gl3w explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é
+#     dep PRIVATE da glintfx (não propagado aos callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para que embed_scene.rml e
+#     embed_scene.rcss resolvam relativos ao dir binário onde são copiados.
+add_executable(ui_layer_sanity ui_layer_sanity.cpp)
+target_link_libraries(ui_layer_sanity PRIVATE glintfx gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rcss COPYONLY)
+add_test(NAME ui_layer_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 option(GLINTFX_GOLDEN_TEST
   "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
   OFF)

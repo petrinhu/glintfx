@@ -67,7 +67,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1.6-TESTDOC | LW5 | C++23/Docs | `TESTES.md`: corrigir `xvfb-run` na seção "GPU real" (Xvfb usa llvmpipe, não GPU real) | Média | — | Baixa | ⏳ Pendente | — |
 | L1.2-CI | LW6 | C++23/Infra | CI versionado: **GitHub Actions** (`.github/workflows/ci.yml`, gate principal) + **Codeberg Forgejo Actions** (`.forgejo/workflows/ci.yml`, soberania) — gate automático da suíte glintfx (5 testes: 4 smokes + `render_sanity`) sob Xvfb/llvmpipe | Alta | L1-DEMO | Média | 🔍 Pendente verificação | — |
 | L1.1-ERRSTRAT | LW6 | C++23/API | `App` estratégia de erro de construção (hardening DX p/ distribuição): hoje falha silenciosamente; considerar `bool ok()` e/ou exceptions opcionais. **Decisão de design → líder/CPO** | Alta | L1-API | Média | 🔍 Pendente verificação | — |
-| L1.8-FINDPKG | LW6 | C++23/Build | `find_package(glintfx)` completo: `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` (removido na Task 8 por atrito com export-set do CMake 4.x). Hoje consumo via FetchContent/`add_subdirectory` (drop-in provado) | Média | L1-BUILD | Média | ⏳ Pendente | — |
+| L1.8-FINDPKG | LW6 | C++23/Build | `find_package(glintfx)` habilitado via `glintfxConfig.cmake.in` + target `glintfx::glintfx IMPORTED` (sem `install(EXPORT)`, contornando o export-set do CMake 4.x); RmlUi co-instalado. Ambos os caminhos verdes (FetchContent + find_package) | Média | L1-BUILD | Média | 🔍 Pendente verificação | — |
 | L1.7-BACKENDS | LW7 | C++23/Plataforma | Backends SDL/X11 (adiados da v1; só GLFW entregue) | Baixa | L1-BACKEND | Alta | ⏳ Pendente | — |
 | L1-INTERNALIZE | LW8 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP. **Épico de fim-de-projeto:** independência clean-room das libs userspace (RmlUi/gl3w/FreeType/GLFW); fronteira irredutível = libGL/driver/kernel | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
@@ -83,4 +83,5 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 ## INBOX (descobertas não priorizadas)
 
-_Vazia — todas as descobertas foram drenadas e integradas nas ondas da Camada 1 (LW5–LW8) e na tag da Camada 0 (`REL-TAG` → `core-v0.1.0`)._
+- **`glintfxConfig.cmake.in`** (Minor, review LW6): `unset()` sem `CACHE` não limpa entradas de cache de `find_library` (funcional pelo guard `if(NOT TARGET)`, mas semanticamente incorreto).
+- **`.github/workflows/ci.yml`** (Minor, review LW6): `libxkbcommon-dev` ausente (presente no Forgejo; implícito por transitividade no `ubuntu-latest`) — adicionar p/ consistência/robustez.

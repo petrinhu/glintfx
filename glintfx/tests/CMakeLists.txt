@@ -1,5 +1,22 @@
 # SPDX-License-Identifier: MPL-2.0
 
+# EN: Warn on incompatible flag combination: GLINTFX_GOLDEN_TEST=ON requires App::snapshot()
+#     which is compiled only with the GLFW backend (GLINTFX_BACKEND_GLFW=ON). When the
+#     user sets both GLINTFX_GOLDEN_TEST=ON and GLINTFX_BACKEND_GLFW=OFF the golden test
+#     is silently skipped because it lives inside if(GLINTFX_BACKEND_GLFW). Emit a warning
+#     so the combination is never accepted without feedback.
+# PT: Avisa sobre combinacao de flags incompativel: GLINTFX_GOLDEN_TEST=ON requer App::snapshot()
+#     que so e compilado com o backend GLFW (GLINTFX_BACKEND_GLFW=ON). Quando o usuario
+#     define GLINTFX_GOLDEN_TEST=ON com GLINTFX_BACKEND_GLFW=OFF o golden test e ignorado
+#     silenciosamente por estar dentro de if(GLINTFX_BACKEND_GLFW). Emite aviso para que a
+#     combinacao nunca seja aceita sem feedback.
+if(GLINTFX_GOLDEN_TEST AND NOT GLINTFX_BACKEND_GLFW)
+  message(WARNING
+    "glintfx: GLINTFX_GOLDEN_TEST=ON has no effect when GLINTFX_BACKEND_GLFW=OFF -- "
+    "the golden test depends on App::snapshot() which requires the GLFW backend. "
+    "The golden_test target will not be registered in this build.")
+endif()
+
 # EN: min.rml is required by engine_smoke (GLFW-backend only) AND by the embed tests
 #     (ui_layer_attach, ui_layer_events) which run in both build configs. Copy it
 #     unconditionally so it is always present in the build/tests/ directory.

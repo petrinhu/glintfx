@@ -1,10 +1,18 @@
 # SPDX-License-Identifier: MPL-2.0
-# EN: CI pipeline for glintfx — build the library and run the 5-test suite under
-#     Xvfb / Mesa llvmpipe (software GL). Triggers on every push or PR that modifies
-#     glintfx/ or this workflow file. Runs on GitHub Actions free Ubuntu runners.
-# PT: Pipeline de CI para glintfx — builda a biblioteca e roda a suíte de 5 testes
-#     sob Xvfb / Mesa llvmpipe (GL software). Disparado em todo push ou PR que modifica
-#     glintfx/ ou este arquivo de workflow. Roda em runners Ubuntu gratuitos do GitHub Actions.
+# EN: CI pipeline for glintfx -- builds the library and runs both test suites under
+#     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix:
+#       GLFW=ON  -- 10 tests: window_smoke render_smoke engine_smoke app_smoke
+#                   render_sanity + ui_layer_attach compose gl_state_guard events sanity
+#       GLFW=OFF --  5 embed tests: ui_layer_attach compose gl_state_guard events sanity
+#     Triggers on every push or PR that modifies glintfx/ or this workflow file.
+#     Runs on GitHub Actions free Ubuntu runners (no container needed).
+# PT: Pipeline de CI para glintfx -- builda a biblioteca e roda ambas as suites sob
+#     Xvfb / Mesa llvmpipe (GL software) via matrix de 2 configs:
+#       GLFW=ON  -- 10 testes: window_smoke render_smoke engine_smoke app_smoke
+#                   render_sanity + ui_layer_attach compose gl_state_guard events sanity
+#       GLFW=OFF --  5 testes embed: ui_layer_attach compose gl_state_guard events sanity
+#     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
+#     Roda em runners Ubuntu gratuitos do GitHub Actions (sem container necessario).
 name: ci
 
 on:
@@ -19,27 +27,47 @@ on:
 
 jobs:
   build-and-test:
-    name: build & test (ubuntu-latest / llvmpipe)
+    name: build & test (ubuntu-latest / GLFW=${{ matrix.backend }})
     runs-on: ubuntu-latest
+    strategy:
+      # EN: Run both configs even if one fails -- independent build configurations.
+      # PT: Rodar ambas as configs mesmo se uma falhar -- configuracoes de build independentes.
+      fail-fast: false
+      matrix:
+        # EN: ON  = full build (App + UiLayer + GLFW backend); runs 10 tests.
+        #     OFF = embed-only (UiLayer only, no GLFW in lib); runs 5 embed tests.
+        #           GLFW is still needed as a test-only dep (GL context fixture).
+        # PT: ON  = build completo (App + UiLayer + backend GLFW); roda 10 testes.
+        #     OFF = embed-only (so UiLayer, sem GLFW na lib); roda 5 testes embed.
+        #           GLFW ainda e necessario como dep so-de-teste (fixture de contexto GL).
+        backend: [ON, OFF]
 
     steps:
       - name: checkout
         uses: actions/checkout@v4
 
-      # EN: Cache the FetchContent clone of RmlUi, keyed on CMakeLists.txt so the cache
-      #     invalidates automatically whenever the pinned GIT_TAG changes.
-      # PT: Cache do clone FetchContent do RmlUi, chaveado no CMakeLists.txt para
-      #     invalidar automaticamente quando o GIT_TAG pinado mudar.
+      # EN: Cache the FetchContent clone of RmlUi. Each config uses its own build dir
+      #     (build-ON / build-OFF) so cache paths and keys are separate per backend.
+      #     Key includes 'glfw<backend>' to avoid cross-contamination between runs.
+      # PT: Cache do clone FetchContent do RmlUi. Cada config usa seu proprio build dir
+      #     (build-ON / build-OFF) por isso paths e chaves de cache sao separados.
+      #     Chave inclui 'glfw<backend>' para evitar contaminacao cruzada entre runs.
       - name: cache rmlui (fetchcontent)
         uses: actions/cache@v4
         with:
-          path: glintfx/build/_deps
-          key: rmlui-${{ runner.os }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+          path: glintfx/build-${{ matrix.backend }}/_deps
+          key: rmlui-${{ runner.os }}-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
 
       # EN: Install system build and runtime dependencies.
-      #     libgl1-mesa-dri: provides llvmpipe (Mesa software GL renderer for Xvfb headless).
-      # PT: Instala dependências de build e runtime do sistema.
-      #     libgl1-mesa-dri: provê llvmpipe (renderer software GL do Mesa para Xvfb headless).
+      #     libglfw3-dev: installed for BOTH configs -- in GLFW=OFF mode the embed tests
+      #     create a hidden GLFW window as a test-only GL context fixture; the library
+      #     itself does not link GLFW in that config.
+      #     libgl1-mesa-dri: llvmpipe (Mesa software GL renderer required by Xvfb).
+      # PT: Instala dependencias de build e runtime do sistema.
+      #     libglfw3-dev: instalado em AMBAS as configs -- no modo GLFW=OFF os testes embed
+      #     criam uma janela GLFW oculta como fixture de contexto GL so-de-teste; a biblioteca
+      #     em si nao linka GLFW nessa config.
+      #     libgl1-mesa-dri: llvmpipe (renderer software GL do Mesa necessario pelo Xvfb).
       - name: install deps
         run: |
           sudo apt-get update -q
@@ -49,30 +77,27 @@ jobs:
             libgl1-mesa-dev libgl1-mesa-dri \
             xvfb
 
-      # EN: Configure: tests ON, demos OFF. The test CMakeLists.txt copies the showcase
-      #     assets (RML/RCSS/fonts) from the source tree at configure time, so the demo
-      #     executables do not need to be built for the test suite to work.
-      # PT: Configura: testes ON, demos OFF. O CMakeLists.txt dos testes copia os assets
-      #     do showcase (RML/RCSS/fontes) do source tree em configure, então os executáveis
-      #     de demo não precisam ser buildados para a suíte de testes funcionar.
+      # EN: Configure with the matrix backend flag. Demos OFF -- the showcase requires the
+      #     GLFW App and is skipped automatically when GLINTFX_BACKEND_GLFW=OFF anyway.
+      # PT: Configura com a flag de backend da matrix. Demos OFF -- o showcase requer o
+      #     App GLFW e e pulado automaticamente com GLINTFX_BACKEND_GLFW=OFF de qualquer forma.
       - name: configure
         run: |
-          cmake -S glintfx -B glintfx/build \
+          cmake -S glintfx -B glintfx/build-${{ matrix.backend }} \
             -DGLINTFX_BUILD_TESTS=ON \
-            -DGLINTFX_BUILD_DEMOS=OFF
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }}
 
       - name: build
-        run: cmake --build glintfx/build -j$(nproc)
+        run: cmake --build glintfx/build-${{ matrix.backend }} -j$(nproc)
 
-      # EN: Run the 5-test suite: window_smoke, render_smoke, bootstrap_smoke, app_smoke,
-      #     render_sanity. Each test is driven by tests/run_xvfb.cmake which calls
-      #     xvfb-run -a <exe>; the outer xvfb-run -a ensures DISPLAY is set for ctest
-      #     itself on a headless runner. Nested -a auto-selects a free display number,
-      #     so there is no conflict.
-      # PT: Roda a suíte de 5 testes: window_smoke, render_smoke, bootstrap_smoke,
-      #     app_smoke, render_sanity. Cada teste é dirigido por tests/run_xvfb.cmake que
-      #     chama xvfb-run -a <exe>; o xvfb-run -a externo garante que DISPLAY seja
-      #     definido para o ctest em si no runner headless. O -a aninhado escolhe display
-      #     livre automaticamente, sem conflito.
+      # EN: Run the test suite for this config under Xvfb (Mesa llvmpipe).
+      #     GLFW=ON  runs 10 tests (5 GLFW-backend + 5 embed).
+      #     GLFW=OFF runs  5 tests (5 embed only; GLFW/App tests excluded by CMake).
+      #     run_xvfb.cmake calls xvfb-run -a per test; outer -a sets DISPLAY for ctest.
+      # PT: Roda a suite de testes para esta config sob Xvfb (Mesa llvmpipe).
+      #     GLFW=ON  roda 10 testes (5 backend GLFW + 5 embed).
+      #     GLFW=OFF roda  5 testes (5 embed apenas; testes GLFW/App excluidos pelo CMake).
+      #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
-        run: xvfb-run -a ctest --test-dir glintfx/build --output-on-failure
+        run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure

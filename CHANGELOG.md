@@ -9,6 +9,25 @@
 
 ---
 
+## [0.2.3] - 2026-06-30
+
+### Added / Adicionado
+
+- **EN:** Data-model binding via `create_data_model(name)` + `bind_number / bind_string / bind_bool / bind_list(key)` + `set_*(key, value)` on both `UiLayer` and `App`. Mandatory call order: `create_data_model` → `bind_*` → `load()` → `set_*` (calling `bind_*` after `load()` returns `false` -- RmlUi compiles views at load time). `bind_list` supports string-list variables iterable in RML via `data-for="item : list"` and `{{item}}` interpolation -- enables scrolling log panels, menus, and inventory lists. Memory is owned by the engine (`DataBinder` uses one `std::unique_ptr` per key in `std::map` for stable addresses); the consumer passes values by copy only. Verified by `data_model_smoke`, `data_model_scalar`, and `data_model_list` tests.
+  **PT:** Ligacao de data-model via `create_data_model(name)` + `bind_number / bind_string / bind_bool / bind_list(key)` + `set_*(key, value)` em `UiLayer` e `App`. Ordem obrigatoria: `create_data_model` → `bind_*` → `load()` → `set_*` (chamar `bind_*` apos `load()` retorna `false` -- o RmlUi compila views no momento do load). `bind_list` suporta variaveis de lista de strings iteraveis no RML via `data-for="item : list"` e interpolacao `{{item}}` -- permite paineis de log rolante, menus e listas de inventario. A memoria e de posse do engine (`DataBinder` usa um `std::unique_ptr` por chave em `std::map` para enderecos estaveis); o consumidor passa valores apenas por copia. Verificado pelos testes `data_model_smoke`, `data_model_scalar` e `data_model_list`.
+
+### Changed / Alterado
+
+- **EN:** `App::load()` and `UiLayer::load()` now return `bool` (true on success, false on failure) -- previously `void`. Source-compatible: callers that discard the return value continue to compile without change. This is a signature and ABI change; callers that store the return type or use the methods in a `decltype` context must be updated.
+  **PT:** `App::load()` e `UiLayer::load()` agora retornam `bool` (true em sucesso, false em falha) -- anteriormente `void`. Compativel com source: callers que descartam o retorno continuam compilando sem alteracao. Esta e uma mudanca de assinatura e ABI; callers que armazenam o tipo de retorno ou usam os metodos em contexto `decltype` precisam ser atualizados.
+
+### Fixed / Corrigido
+
+- **EN:** Texture loading now supports **PNG and JPG** (previously only TGA decoded reliably). Decoding is handled by **stb_image** (`glintfx/third_party/stb/stb_image.h`) via an override of `Rml::RenderInterface::LoadTexture`. After decoding, the alpha channel is **premultiplied in-place** (`out.rgb = in.rgb * in.a / 255`) before GPU upload -- required for correct compositing with the GL3 premultiplied-alpha blend (`GL_ONE, GL_ONE_MINUS_SRC_ALPHA`) used by the renderer. Without premultiplication a PNG with straight alpha produces a bright halo around transparent regions. On decode failure the backend falls back to the upstream RmlUi TGA loader so existing TGA assets do not regress. Verified by `texture_png_alpha` test. Documented in `docs/embed-integration.md` section 7.
+  **PT:** O carregamento de texturas agora suporta **PNG e JPG** (anteriormente apenas o TGA decodificava de forma confiavel). A decodificacao e feita pelo **stb_image** (`glintfx/third_party/stb/stb_image.h`) via override de `Rml::RenderInterface::LoadTexture`. Apos decodificar, o canal alpha e **premultiplicado in-place** (`out.rgb = in.rgb * in.a / 255`) antes do upload para a GPU -- necessario para composicao correta com o blend premultiplied-alpha GL3 (`GL_ONE, GL_ONE_MINUS_SRC_ALPHA`) usado pelo renderer. Sem premultiplicacao, um PNG com alpha straight produz um halo claro ao redor das regioes transparentes. Em caso de falha de decode, o backend cai no loader TGA do upstream RmlUi para que assets TGA existentes nao regridam. Verificado pelo teste `texture_png_alpha`. Documentado em `docs/embed-integration.md` secao 7.
+
+---
+
 ## [0.2.2] - 2026-06-30
 
 ### Added / Adicionado

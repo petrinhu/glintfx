@@ -31,6 +31,13 @@ These files are committed directly into the repository source tree.
   Files: glintfx/third_party/gl3w/src/gl3w.c
          glintfx/third_party/gl3w/include/GL/gl3w.h
 
+- stb_image v2.30 — Public domain / MIT (dual-licensed; used here as public domain).
+  No copyright notice required; included here for disclosure.
+  Original author: Sean Barrett (nothings.org).
+  File: glintfx/third_party/stb/stb_image.h
+  Used for: PNG, JPG, and TGA texture decode in the GL3 render backend
+            (glintfx/src/render_gl3.cpp + glintfx/src/stb_image_impl.cpp).
+
 - glcorearb.h — MIT License.
   Copyright 2013-2026 The Khronos Group Inc.
   SPDX-License-Identifier: MIT

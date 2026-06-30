@@ -13,14 +13,142 @@
 // PT: Header do backend do RmlUi a partir de rmlui_SOURCE_DIR/Backends (via CMake).
 #include "RmlUi_Renderer_GL3.h"
 
+// EN: RmlUi FileInterface (GetFileInterface) for asset-path-aware file reading.
+// PT: FileInterface do RmlUi (GetFileInterface) para leitura de arquivo com resolução de asset.
+#include <RmlUi/Core/FileInterface.h>
+#include <RmlUi/Core/Core.h>
+
+// EN: stb_image — header-only declarations; implementation compiled in stb_image_impl.cpp.
+// PT: stb_image — declarações do header; implementação compilada em stb_image_impl.cpp.
+#include "stb_image.h"
+
+#include <memory>
+#include <vector>
+
+// ---------------------------------------------------------------------------
+// EN: Gl3RenderInterface — subclass of RenderInterface_GL3 that overrides LoadTexture
+//     to support PNG, JPG, and TGA files with correct premultiplied alpha. The override:
+//       1. Reads raw bytes via RmlUi's FileInterface (respects the asset base-URL).
+//       2. Decodes via stbi_load_from_memory (forces 4-channel RGBA output).
+//       3. Premultiplies alpha: R = R*A/255, G = G*A/255, B = B*A/255.
+//          The GL3 backend composites in premultiplied-alpha space (GL_ONE,
+//          GL_ONE_MINUS_SRC_ALPHA); uploading straight-alpha would cause a bright
+//          halo around semi-transparent or hard-edged PNG/TGA regions.
+//       4. Delegates the GL upload to the base-class GenerateTexture (reuses
+//          GL_RGBA8 + mipmaps + filter — no GL reimplementation here).
+//       5. Falls back to RenderInterface_GL3::LoadTexture only on file read error
+//          or stb decode failure.
+//
+//     TGA bypass note: this override also intercepts TGA files (stb decodes TGA).
+//     This is intentional: the upstream RenderInterface_GL3::LoadTexture does NOT
+//     premultiply TGA pixels, but the GL3 backend composites in premultiplied space.
+//     By routing all decodable formats through stb + premultiply we get consistent
+//     alpha compositing for every image format.  The upstream TGA path is only
+//     reachable if stb fails to open or decode the file (error/unsupported case).
+//
+// PT: Gl3RenderInterface — subclasse de RenderInterface_GL3 que sobrescreve LoadTexture
+//     para suportar PNG, JPG e TGA com alpha premultiplicado correto. O override:
+//       1. Lê bytes brutos via FileInterface do RmlUi (respeita a base-URL de assets).
+//       2. Decodifica via stbi_load_from_memory (força saída RGBA de 4 canais).
+//       3. Premultiplica o alpha: R = R*A/255, G = G*A/255, B = B*A/255.
+//          O backend GL3 compõe em espaço premultiplied-alpha (GL_ONE,
+//          GL_ONE_MINUS_SRC_ALPHA); fazer upload de alpha straight causaria halo
+//          claro ao redor de regiões PNG/TGA semi-transparentes ou de bordas duras.
+//       4. Delega o upload GL ao GenerateTexture da base (reusa GL_RGBA8 + mipmaps
+//          + filtro — sem reimplementação de GL aqui).
+//       5. Faz fallback para RenderInterface_GL3::LoadTexture apenas em erro de
+//          leitura de arquivo ou falha de decode do stb.
+//
+//     Nota de bypass do TGA: este override também intercepta TGA (stb decodifica TGA).
+//     Isso é intencional: o RenderInterface_GL3::LoadTexture do upstream NÃO premultiplica
+//     pixels TGA, mas o backend GL3 compõe em espaço premultiplied. Ao rotear todos os
+//     formatos decodificáveis pelo stb + premultiply obtemos composição de alpha consistente
+//     para todo formato de imagem. O caminho TGA do upstream só é alcançado se o stb
+//     falhar ao abrir ou decodificar o arquivo (caso de erro / formato não suportado).
+// ---------------------------------------------------------------------------
+class Gl3RenderInterface : public RenderInterface_GL3 {
+public:
+  Rml::TextureHandle LoadTexture(Rml::Vector2i& dims,
+                                 const Rml::String& source) override
+  {
+    // EN: Read file bytes via RmlUi's FileInterface so the asset base-URL
+    //     set by set_asset_base_url() is honoured for image paths in documents.
+    // PT: Lê bytes do arquivo via FileInterface do RmlUi para que a base-URL de
+    //     asset definida por set_asset_base_url() seja respeitada em imagens.
+    Rml::FileInterface* fi = Rml::GetFileInterface();
+    Rml::FileHandle fh = fi ? fi->Open(source) : static_cast<Rml::FileHandle>(0);
+    if (!fh) {
+      // EN: File not found or no FileInterface — fallback to base (TGA / upstream).
+      // PT: Arquivo não encontrado ou sem FileInterface — fallback para base (TGA / upstream).
+      return RenderInterface_GL3::LoadTexture(dims, source);
+    }
+
+    // EN: Read entire file into a buffer.
+    // PT: Lê o arquivo inteiro em um buffer.
+    fi->Seek(fh, 0, SEEK_END);
+    size_t len = fi->Tell(fh);
+    fi->Seek(fh, 0, SEEK_SET);
+    std::vector<unsigned char> buf(len);
+    size_t nread = fi->Read(buf.data(), len, fh);
+    fi->Close(fh);
+    if (nread != len) {
+      // EN: Short read — file truncated or I/O error; fallback to base.
+      // PT: Leitura incompleta — arquivo truncado ou erro de I/O; fallback para base.
+      return RenderInterface_GL3::LoadTexture(dims, source);
+    }
+
+    // EN: Decode via stb_image (forces 4-channel RGBA output regardless of source format).
+    //     RAII via unique_ptr: stbi_image_free is called on any exit path, including
+    //     exceptions thrown by GenerateTexture, without a manual stbi_image_free call.
+    // PT: Decodifica via stb_image (força saída RGBA de 4 canais independente do formato).
+    //     RAII via unique_ptr: stbi_image_free é chamado em qualquer saída, incluindo
+    //     exceções de GenerateTexture, sem chamada manual a stbi_image_free.
+    int w = 0, h = 0, n = 0;
+    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
+        stbi_load_from_memory(buf.data(), static_cast<int>(len), &w, &h, &n, 4),
+        &stbi_image_free);
+    if (!px) {
+      // EN: Unknown format or decode error — fallback to base.
+      // PT: Formato desconhecido ou erro de decode — fallback para base.
+      return RenderInterface_GL3::LoadTexture(dims, source);
+    }
+
+    // EN: Premultiply alpha — the GL3 backend blends with GL_ONE, GL_ONE_MINUS_SRC_ALPHA
+    //     which assumes premultiplied RGB. Without this step, transparent pixels whose
+    //     source image stores a non-zero RGB (common in anti-aliased edges and hard-edge
+    //     transparent regions) produce a bright colour halo around the rendered shape.
+    // PT: Premultiplica o alpha — o backend GL3 faz blend com GL_ONE, GL_ONE_MINUS_SRC_ALPHA
+    //     que assume RGB premultiplicado. Sem esta etapa, pixels transparentes cuja imagem
+    //     de origem armazena RGB não-zero (comum em bordas anti-aliased e regiões
+    //     transparentes de borda dura) produzem um halo colorido claro ao redor da forma.
+    unsigned char* p = px.get();
+    for (int i = 0; i < w * h; ++i) {
+      unsigned int a = p[i * 4 + 3];
+      p[i * 4 + 0] = static_cast<unsigned char>(p[i * 4 + 0] * a / 255u);
+      p[i * 4 + 1] = static_cast<unsigned char>(p[i * 4 + 1] * a / 255u);
+      p[i * 4 + 2] = static_cast<unsigned char>(p[i * 4 + 2] * a / 255u);
+    }
+
+    dims = Rml::Vector2i(w, h);
+    Rml::TextureHandle handle = RenderInterface_GL3::GenerateTexture(
+        Rml::Span<const Rml::byte>(
+            reinterpret_cast<const Rml::byte*>(p),
+            static_cast<size_t>(w) * static_cast<size_t>(h) * 4u),
+        dims);
+    // EN: px freed automatically by unique_ptr destructor on scope exit.
+    // PT: px liberado automaticamente pelo destrutor do unique_ptr ao sair do escopo.
+    return handle;
+  }
+};
+
 namespace glintfx {
 
-// EN: Impl holds the concrete RenderInterface_GL3 instance.
+// EN: Impl holds the concrete Gl3RenderInterface instance (subclass of RenderInterface_GL3).
 //     It is constructed lazily inside init() to guarantee a live GL context.
-// PT: Impl contém a instância concreta do RenderInterface_GL3.
+// PT: Impl contém a instância concreta de Gl3RenderInterface (subclasse de RenderInterface_GL3).
 //     É construído de forma lazy dentro de init() para garantir contexto GL ativo.
 struct RenderGl3::Impl {
-  RenderInterface_GL3 renderer;
+  Gl3RenderInterface renderer;
 };
 
 RenderGl3::RenderGl3() : impl_(nullptr) {}

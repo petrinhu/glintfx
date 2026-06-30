@@ -179,6 +179,133 @@ if(GLINTFX_BACKEND_GLFW)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   endif()
 
+  # ---------------------------------------------------------------------------
+  # EN: data_model_smoke — lifecycle test for the data-model API (T1, v0.2.3).
+  #     Exercises create_data_model -> bind_string/bind_number -> load ->
+  #     update + render without crash; asserts bind_* after load() returns false.
+  #     Requires App (GLFW backend). WORKING_DIRECTORY = CMAKE_BINARY_DIR so
+  #     "tests/ui/hud.rml" resolves to build/tests/ui/hud.rml.
+  # PT: data_model_smoke — teste de ciclo de vida para a API de data-model (T1, v0.2.3).
+  #     Exercita create_data_model -> bind_string/bind_number -> load ->
+  #     update + render sem crash; verifica que bind_* após load() retorna false.
+  #     Requer App (backend GLFW). WORKING_DIRECTORY = CMAKE_BINARY_DIR para que
+  #     "tests/ui/hud.rml" resolva para build/tests/ui/hud.rml.
+  # ---------------------------------------------------------------------------
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/ui)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/hud.rml COPYONLY)
+
+  add_executable(data_model_smoke data_model_smoke.cpp)
+  target_link_libraries(data_model_smoke PRIVATE glintfx)
+  add_test(NAME data_model_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: data_model_scalar — live-scalar propagation test (T2, v0.2.3).
+  #     Verifies that set_string() / set_number() followed by update() reflects
+  #     the new values in the rendered frame via two snapshot pairs:
+  #       (1) String path:  bright_B (after set_string "HELLO HP 99") > bright_A (baseline).
+  #       (2) Number path:  bright_C (after set_number 99.0) > bright_B.
+  #     Pixel statistic: count of pixels with max(R,G,B) > 100 (bright threshold).
+  #     Window: 320×160. Document: tests/ui/scalar.rml (data-model "hud"; OpenSans font).
+  #     Font is resolved from WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — available because the showcase CMake block
+  #     copies demos/showcase/assets/ to build/tests/assets/ (same GLFW block).
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/scalar.rml" resolves to
+  #     build/tests/ui/scalar.rml (copied by configure_file below).
+  # PT: data_model_scalar — teste de propagação de escalares vivos (T2, v0.2.3).
+  #     Verifica que set_string() / set_number() seguido de update() reflete os novos
+  #     valores no frame renderizado via dois pares de snapshots:
+  #       (1) Caminho string:  bright_B (após set_string "HELLO HP 99") > bright_A (baseline).
+  #       (2) Caminho numérico: bright_C (após set_number 99.0) > bright_B.
+  #     Estatística de pixel: contagem de pixels com max(R,G,B) > 100 (limiar de brilho).
+  #     Janela: 320×160. Documento: tests/ui/scalar.rml (data-model "hud"; fonte OpenSans).
+  #     A fonte é resolvida do WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — disponível pois o bloco CMake do showcase
+  #     copia demos/showcase/assets/ para build/tests/assets/ (mesmo bloco GLFW).
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/scalar.rml" resolva para
+  #     build/tests/ui/scalar.rml (copiado pelo configure_file abaixo).
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/scalar.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/scalar.rml COPYONLY)
+
+  add_executable(data_model_scalar data_model_scalar.cpp)
+  target_link_libraries(data_model_scalar PRIVATE glintfx)
+  add_test(NAME data_model_scalar
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_scalar>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: data_model_list — live-list propagation test (T3, v0.2.3).
+  #     Verifies that bind_list() + set_list() wires a string-list variable to a
+  #     data-for loop and that mutations propagate to the render:
+  #       Snapshot A: log list empty  → near-zero bright pixels.
+  #       Snapshot B: 3 items pushed  → bright_B > bright_A (text lines appeared).
+  #     Pixel statistic: count of pixels with max(R,G,B) > 100 (bright threshold).
+  #     Window: 400x300. Document: tests/ui/log.rml (data-model "hud"; iterates "log").
+  #     Font resolved from WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — available via the showcase CMake block.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/log.rml" resolves to
+  #     build/tests/ui/log.rml (copied by configure_file below).
+  # PT: data_model_list — teste de propagação de lista viva (T3, v0.2.3).
+  #     Verifica que bind_list() + set_list() liga uma variável de lista de strings a
+  #     um laço data-for e que mutações propagam para o render:
+  #       Snapshot A: lista log vazia  → pixels claros quase nulos.
+  #       Snapshot B: 3 itens pushados → bright_B > bright_A (linhas aparecem).
+  #     Estatística de pixel: contagem de pixels com max(R,G,B) > 100 (limiar de brilho).
+  #     Janela: 400x300. Documento: tests/ui/log.rml (data-model "hud"; itera "log").
+  #     Fonte resolvida do WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — disponível via bloco CMake do showcase.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/log.rml" resolva para
+  #     build/tests/ui/log.rml (copiado pelo configure_file abaixo).
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/log.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/log.rml COPYONLY)
+
+  add_executable(data_model_list data_model_list.cpp)
+  target_link_libraries(data_model_list PRIVATE glintfx)
+  add_test(NAME data_model_list
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_list>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: texture_png_alpha — PNG/alpha decode test (T4, v0.2.3).
+  #     Verifies three properties of the Gl3RenderInterface LoadTexture override:
+  #       (A) PNG decoded (not white fallback): red_count > 500
+  #       (B) Not fallback white: white_count < 2 000
+  #       (C) No halo (premultiplied alpha): reddish_count < 3 500
+  #     Assets (tex.rml + circle_rgba.png) are copied to build/tests/ui/ below.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/tex.rml" and the PNG
+  #     referenced therein resolve correctly via RmlUi's FileInterface.
+  # PT: texture_png_alpha — teste de decode PNG/alpha (T4, v0.2.3).
+  #     Verifica três propriedades do override de LoadTexture em Gl3RenderInterface:
+  #       (A) PNG decodificado (não fallback branco): red_count > 500
+  #       (B) Não é fallback branco: white_count < 2 000
+  #       (C) Sem halo (alpha premultiplicado): reddish_count < 3 500
+  #     Assets (tex.rml + circle_rgba.png) são copiados para build/tests/ui/ abaixo.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/tex.rml" e o PNG
+  #     referenciado nele resolvam corretamente via FileInterface do RmlUi.
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/tex.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/tex.rml COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/circle_rgba.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/circle_rgba.png COPYONLY)
+
+  add_executable(texture_png_alpha texture_png_alpha.cpp)
+  target_link_libraries(texture_png_alpha PRIVATE glintfx)
+  add_test(NAME texture_png_alpha
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:texture_png_alpha>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

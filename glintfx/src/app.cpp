@@ -59,8 +59,59 @@ App::~App() = default;
 App::App(App&&) noexcept = default;
 App& App::operator=(App&&) noexcept = default;
 
-void App::load(const char* rml_path) {
-  if (impl_->ok) impl_->engine.load(rml_path);
+bool App::load(const char* rml_path) {
+  if (!impl_->ok) return false;
+  return impl_->engine.load(rml_path);
+}
+
+// ---------------------------------------------------------------------------
+// EN: Data-model API — forward to Engine; Engine guards the ordering constraint.
+// PT: API de data-model — encaminha ao Engine; Engine enforça a restrição de ordem.
+// ---------------------------------------------------------------------------
+
+bool App::create_data_model(const char* name) {
+  if (!impl_->ok) return false;
+  return impl_->engine.create_data_model(name);
+}
+
+bool App::bind_number(const char* key, double initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_number(key, initial);
+}
+
+bool App::bind_string(const char* key, const char* initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_string(key, initial);
+}
+
+bool App::bind_bool(const char* key, bool initial) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_bool(key, initial);
+}
+
+bool App::bind_list(const char* key) {
+  if (!impl_->ok) return false;
+  return impl_->engine.bind_list(key);
+}
+
+void App::set_number(const char* key, double value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_number(key, value);
+}
+
+void App::set_string(const char* key, const char* value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_string(key, value);
+}
+
+void App::set_bool(const char* key, bool value) {
+  if (!impl_->ok) return;
+  impl_->engine.set_bool(key, value);
+}
+
+void App::set_list(const char* key, const char* const* items, std::size_t count) {
+  if (!impl_->ok) return;
+  impl_->engine.set_list(key, items, count);
 }
 
 void App::set_dp_ratio(float ratio) {

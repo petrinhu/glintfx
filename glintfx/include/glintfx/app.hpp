@@ -16,6 +16,11 @@ struct AppConfig {
   const char* title = "glintfx";
   int width  = 1280;
   int height = 720;
+  // EN: Initial density-independent pixel ratio. 1 dp = dp_ratio physical pixels.
+  //     Matches UiLayerConfig::dp_ratio; see set_dp_ratio() for runtime update.
+  // PT: Density-independent pixel ratio inicial. 1 dp = dp_ratio pixels físicos.
+  //     Corresponde a UiLayerConfig::dp_ratio; ver set_dp_ratio() para update em runtime.
+  float dp_ratio = 1.0f;
 };
 
 // EN: RAII application facade. Owns the window, renderer, and UI bootstrap.
@@ -65,6 +70,18 @@ public:
   // EN: Load an .rml document and show it.
   // PT: Carrega um documento .rml e exibe.
   void load(const char* rml_path);
+
+  // EN: Update the density-independent pixel ratio at runtime (parity with UiLayer).
+  //     Triggers a layout re-pass when changed.
+  // PT: Atualiza o density-independent pixel ratio em runtime (paridade com UiLayer).
+  //     Dispara re-layout quando alterado.
+  void set_dp_ratio(float ratio);
+
+  // EN: Override the base URL for asset resolution (parity with UiLayer).
+  //     Relative asset paths are prefixed with base_url/. Call before load().
+  // PT: Sobrepõe o base URL para resolução de assets (paridade com UiLayer).
+  //     Caminhos relativos de assets são prefixados com base_url/. Chame antes de load().
+  void set_asset_base_url(const char* url);
 
   // EN: Returns false if the window was closed or initialization failed.
   //     To distinguish the two cases check ok() once after construction.

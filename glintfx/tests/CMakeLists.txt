@@ -80,6 +80,26 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: app_dp_ratio_smoke — smoke test for App::set_dp_ratio(), App::set_asset_base_url(),
+  #     and AppConfig::dp_ratio (v0.2.2 additions). No pixel comparison; proves the App
+  #     API surface is wired and ok() stays true after the setter calls.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml" resolves to build/tests/min.rml
+  #     (min.rml is copied unconditionally at the top of this file).
+  # PT: app_dp_ratio_smoke — teste de fumaça para App::set_dp_ratio(), App::set_asset_base_url(),
+  #     e AppConfig::dp_ratio (adicoes da v0.2.2). Sem comparação de pixels; prova que a
+  #     superficie de API do App está conectada e ok() permanece true após as chamadas de setter.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml" resolva para build/tests/min.rml
+  #     (min.rml é copiado incondicionalmente no topo deste arquivo).
+  # ---------------------------------------------------------------------------
+  add_executable(app_dp_ratio_smoke app_dp_ratio_smoke.cpp)
+  target_link_libraries(app_dp_ratio_smoke PRIVATE glintfx)
+  add_test(NAME app_dp_ratio_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_dp_ratio_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: Shared assets for visual tests (render_sanity and golden_test).
   #     Copy showcase RML variants, RCSS, font, and test RML variant so both tests find
   #     them at runtime from WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
@@ -309,5 +329,72 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
 add_test(NAME ui_layer_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: dp_ratio_sanity — verifies UiLayerConfig::dp_ratio (Config path) and
+#     set_dp_ratio() (runtime setter path). Renders a 100dp×100dp white box on
+#     a black background; at dp_ratio=2 the box covers ~4× more pixels than at
+#     dp_ratio=1. Assert bright_count(ratio=2) >= 3 * bright_count(ratio=1).
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+# PT: dp_ratio_sanity — verifica UiLayerConfig::dp_ratio (caminho Config) e
+#     set_dp_ratio() (caminho setter runtime). Renderiza box branco 100dp×100dp em
+#     fundo preto; em dp_ratio=2 o box cobre ~4× mais pixels que em dp_ratio=1.
+#     Verifica bright_count(ratio=2) >= 3 * bright_count(ratio=1).
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+# ---------------------------------------------------------------------------
+add_executable(dp_ratio_sanity dp_ratio_sanity.cpp)
+target_link_libraries(dp_ratio_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/dp_ratio_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/dp_ratio_scene.rcss COPYONLY)
+add_test(NAME dp_ratio_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dp_ratio_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: base_url_sanity — verifies set_asset_base_url() on UiLayer.
+#     Proves two things:
+#       [Negative] load("bu_scene.rml") WITHOUT base URL silently fails because
+#       bu_scene.rml/.rcss are placed ONLY in base_url_assets/, never in the test
+#       CWD (= build/tests/). A render after the failed load is all-black.
+#       [Positive] After set_asset_base_url("base_url_assets") the same path resolves
+#       and the scene renders; three aggregate pixel statistics are checked.
+#     Using distinct filenames (bu_scene vs embed_scene) guarantees the negative assert
+#     stays valid: embed_scene.rml lives in CWD (for ui_layer_sanity) but bu_scene.rml
+#     does not — there is no accidental resolution path.
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+# PT: base_url_sanity — verifica set_asset_base_url() no UiLayer.
+#     Prova duas coisas:
+#       [Negativo] load("bu_scene.rml") SEM base URL falha silenciosamente porque
+#       bu_scene.rml/.rcss são colocados SOMENTE em base_url_assets/, nunca no CWD
+#       do teste (= build/tests/). Um render após a carga falha é todo-preto.
+#       [Positivo] Após set_asset_base_url("base_url_assets") o mesmo path resolve
+#       e a cena renderiza; três estatísticas de pixel agregadas são verificadas.
+#     Usar nomes distintos (bu_scene vs embed_scene) garante que o assert negativo
+#     seja válido: embed_scene.rml está no CWD (para ui_layer_sanity) mas bu_scene.rml
+#     não está — não há caminho de resolução acidental.
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+# ---------------------------------------------------------------------------
+add_executable(base_url_sanity base_url_sanity.cpp)
+target_link_libraries(base_url_sanity PRIVATE ${_embed_dep} gl3w)
+# EN: Create base_url_assets/ and copy bu_scene files ONLY there — NOT to the CWD root.
+#     The test CWD is CMAKE_CURRENT_BINARY_DIR (= build/tests/). bu_scene.rml MUST NOT
+#     exist there so the negative assert (mean_brightness < 5 without base URL) holds.
+# PT: Cria base_url_assets/ e copia arquivos bu_scene SOMENTE lá — NÃO para a raiz do CWD.
+#     O CWD do teste é CMAKE_CURRENT_BINARY_DIR (= build/tests/). bu_scene.rml NAO DEVE
+#     existir lá para que o assert negativo (mean_brightness < 5 sem base URL) seja válido.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bu_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets/bu_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bu_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/base_url_assets/bu_scene.rcss COPYONLY)
+add_test(NAME base_url_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:base_url_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

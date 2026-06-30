@@ -79,6 +79,13 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   }
 
   impl_->ok = impl_->engine.attach(&impl_->clock, impl_->w, impl_->h);
+  // EN: Apply the initial dp_ratio to the newly created context.
+  //     SetDensityIndependentPixelRatio is idempotent when value equals the context default
+  //     (1.0f), so always calling it here is safe and makes the intent explicit.
+  // PT: Aplica o dp_ratio inicial ao contexto recém-criado.
+  //     SetDensityIndependentPixelRatio é idempotente quando o valor iguala o padrão do
+  //     contexto (1.0f), então chamá-lo sempre aqui é seguro e deixa a intenção explícita.
+  if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
 }
 
 UiLayer::~UiLayer() = default;
@@ -100,6 +107,16 @@ void UiLayer::set_viewport(int w, int h) {
   impl_->w = w;
   impl_->h = h;
   impl_->engine.set_viewport(w, h);
+}
+
+void UiLayer::set_dp_ratio(float ratio) {
+  if (!impl_->ok) return;
+  impl_->engine.set_dp_ratio(ratio);
+}
+
+void UiLayer::set_asset_base_url(const char* url) {
+  if (!impl_->ok) return;
+  impl_->engine.set_asset_base_url(url);
 }
 
 void UiLayer::update() {

@@ -50,6 +50,9 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   // PT: Window::create() torna o contexto GL corrente — exigido por Engine::attach().
   impl_->system = std::make_unique<SystemInterface_GLFW>(impl_->window.handle());
   impl_->ok = impl_->engine.attach(impl_->system.get(), cfg.width, cfg.height);
+  // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
+  // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
+  if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
 }
 
 App::~App() = default;
@@ -58,6 +61,16 @@ App& App::operator=(App&&) noexcept = default;
 
 void App::load(const char* rml_path) {
   if (impl_->ok) impl_->engine.load(rml_path);
+}
+
+void App::set_dp_ratio(float ratio) {
+  if (!impl_->ok) return;
+  impl_->engine.set_dp_ratio(ratio);
+}
+
+void App::set_asset_base_url(const char* url) {
+  if (!impl_->ok) return;
+  impl_->engine.set_asset_base_url(url);
 }
 
 bool App::ok() const noexcept {

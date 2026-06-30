@@ -1,0 +1,20 @@
+<rml>
+<head>
+  <!--
+    EN: dp_ratio sanity scene — black background with a single white 100dp×100dp box.
+        Uses 'dp' (density-independent pixel) so the box scales with dp_ratio:
+          dp_ratio=1.0 → box is 100×100 physical px (= 10 000 bright pixels on a 900×600 frame)
+          dp_ratio=2.0 → box is 200×200 physical px (= 40 000 bright pixels; ~4× ratio)
+        No font dependency: zero @font-face, no text content → safe under llvmpipe/Xvfb.
+    PT: Cena de sanidade do dp_ratio — fundo preto com um único box branco 100dp×100dp.
+        Usa 'dp' (density-independent pixel) para que o box escale com dp_ratio:
+          dp_ratio=1.0 → box é 100×100 px físicos (= 10 000 pixels brilhantes em frame 900×600)
+          dp_ratio=2.0 → box é 200×200 px físicos (= 40 000 pixels brilhantes; razão ~4×)
+        Sem dep de fonte: zero @font-face, sem texto → seguro sob llvmpipe/Xvfb.
+  -->
+  <link type="text/rcss" href="dp_ratio_scene.rcss"/>
+</head>
+<body>
+  <div id="box"></div>
+</body>
+</rml>

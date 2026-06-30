@@ -43,6 +43,18 @@ public:
   // PT: Carrega documento de rml_path e chama Show(). Retorna true em caso de sucesso.
   bool load(const char* rml_path);
 
+  // EN: Override the base URL for asset resolution. When set, relative paths (fonts, images,
+  //     RCSS) are resolved as base_url + '/' + path instead of relative to CWD.
+  //     Pass nullptr or "" to clear.
+  //     Safe to call after init(). Calling before init() is a no-op — the configuration
+  //     is silently lost because impl_ does not yet exist.
+  // PT: Sobrepõe o base URL para resolução de assets. Quando definido, caminhos relativos
+  //     (fontes, imagens, RCSS) são resolvidos como base_url + '/' + path em vez de relativo ao CWD.
+  //     Passe nullptr ou "" para limpar.
+  //     Seguro chamar após init(). Chamar antes de init() é no-op — a configuração é
+  //     silenciosamente perdida pois impl_ ainda não existe.
+  void set_asset_base_url(const char* url);
+
   // EN: Returns the active Rml::Context (valid after successful init()), or nullptr.
   // PT: Retorna o Rml::Context ativo (válido após init() com sucesso), ou nullptr.
   Rml::Context* context();

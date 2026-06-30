@@ -29,17 +29,21 @@
 
 **EN:**
 - `set_viewport(w, h)` expects the **real backbuffer pixels**. The same `(w, h)` drives two coupled things, 1:1: the RmlUi context dimensions (the layout coordinate space) via `Engine::set_viewport` -> `context->SetDimensions` (`glintfx/src/engine.cpp:44-49`, cached in `ui_layer.cpp:98-103`), and the GL viewport via `render_compose` -> `begin_frame_compose` -> `glViewport(0,0,w,h)` + `renderer.SetViewport(w,h)` (`glintfx/src/render_gl3.cpp:114-115`).
-- Rendering is **1:1**: one RCSS pixel equals one GL pixel. There is **no dp to px scaling** in this release. Confirmed: no `SetDensityIndependentPixelRatio` / dp_ratio anywhere in `glintfx/src`.
-- `UiLayerConfig{logical_width = 1280, logical_height = 720}` (`glintfx/include/glintfx/ui_layer.hpp:19-23`) is only the **initial** context size passed at attach (`ui_layer.cpp:67-81`). `set_viewport` overrides it. The field name "logical" is a slight misnomer in this release: there is no logical space distinct from the physical one.
-- Composition always targets the **window backbuffer (FBO 0)** with viewport origin hardcoded at `(0,0)` (`render_gl3.cpp:114`, and the note in `ui_layer.hpp:64-79`). A custom host FBO bound before `render()` is **not** used as the composition target. Sub region compositing is not supported.
-- **Authoring at a fixed logical size (for example 960x540):** there is no built in upscaling. Either author the RML/RCSS at the real backbuffer size and pass real pixels to `set_viewport`, or pass `960x540` and accept that both the context and the GL viewport become `960x540` anchored at `(0,0)` (not scaled to fill the screen). Crisp integer upscaling of a fixed logical canvas is a known gap (see section 6).
+- `UiLayerConfig{logical_width = 1280, logical_height = 720}` (`glintfx/include/glintfx/ui_layer.hpp`) is only the **initial** context size passed at attach. `set_viewport` overrides it.
+- Composition always targets the **window backbuffer (FBO 0)** with viewport origin hardcoded at `(0,0)`. A custom host FBO bound before `render()` is **not** used as the composition target. Sub region compositing is not supported.
+- **dp_ratio (density-independent pixel ratio).** `UiLayerConfig::dp_ratio` (default `1.0f`) and `UiLayer::set_dp_ratio(float)` expose `Rml::Context::SetDensityIndependentPixelRatio`. When set, the RCSS `dp` unit scales: `1dp = dp_ratio physical px`. The `px` RCSS unit is always one physical pixel and is NOT affected by dp_ratio.
+  - **Recommended pattern:** author RCSS in `dp` units at a fixed logical canvas (e.g. 960×540), call `set_viewport(1920, 1080)` (physical backbuffer), and `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. RmlUi scales the layout to fill the physical backbuffer without any manual RCSS edits.
+  - `App` has parity: `AppConfig::dp_ratio` and `App::set_dp_ratio(float)`.
+  - Verified: `dp_ratio_sanity` test renders a 100dp×100dp white box; scale factor at ratio=2.0 vs ratio=1.0 is exactly **4.0×** (200×200 px vs 100×100 px).
 
 **PT:**
-- `set_viewport(w, h)` espera os **pixels reais do backbuffer**. Os mesmos `(w, h)` alimentam duas coisas acopladas, 1:1: a dimensão do contexto RmlUi (o espaço de layout) via `Engine::set_viewport` -> `context->SetDimensions` (`glintfx/src/engine.cpp:44-49`, cacheado em `ui_layer.cpp:98-103`), e o viewport GL via `render_compose` -> `begin_frame_compose` -> `glViewport(0,0,w,h)` + `renderer.SetViewport(w,h)` (`glintfx/src/render_gl3.cpp:114-115`).
-- O render é **1:1**: um pixel de RCSS equivale a um pixel de GL. **Não há scaling dp para px** nesta versão. Confirmado: não existe `SetDensityIndependentPixelRatio` / dp_ratio em `glintfx/src`.
-- `UiLayerConfig{logical_width = 1280, logical_height = 720}` (`glintfx/include/glintfx/ui_layer.hpp:19-23`) é só a dimensão **inicial** do contexto, passada no attach (`ui_layer.cpp:67-81`). `set_viewport` a sobrescreve. O nome "logical" do campo é um leve misnomer nesta versão: não há espaço lógico distinto do físico.
-- A composição mira sempre o **backbuffer da janela (FBO 0)** com origem do viewport fixa em `(0,0)` (`render_gl3.cpp:114`, e a nota em `ui_layer.hpp:64-79`). Um FBO custom do host ligado antes de `render()` **não** é usado como alvo. Composição em sub região não é suportada.
-- **Autoria num tamanho lógico fixo (por exemplo 960x540):** não há upscaling embutido. Ou autore a RML/RCSS no tamanho real do backbuffer e passe pixels reais a `set_viewport`, ou passe `960x540` e aceite que o contexto e o viewport GL viram `960x540` ancorados em `(0,0)` (não escalado para preencher a tela). O upscaling inteiro nítido de um canvas lógico fixo é um gap conhecido (ver seção 6).
+- `set_viewport(w, h)` espera os **pixels reais do backbuffer**. Os mesmos `(w, h)` alimentam duas coisas acopladas, 1:1: a dimensão do contexto RmlUi via `Engine::set_viewport` -> `context->SetDimensions` e o viewport GL via `render_compose` -> `begin_frame_compose`.
+- `UiLayerConfig{logical_width = 1280, logical_height = 720}` é só a dimensão **inicial** do contexto. `set_viewport` a sobrescreve.
+- A composição mira sempre o **backbuffer da janela (FBO 0)** com origem do viewport fixa em `(0,0)`. Composição em sub região não é suportada.
+- **dp_ratio (density-independent pixel ratio).** `UiLayerConfig::dp_ratio` (padrão `1.0f`) e `UiLayer::set_dp_ratio(float)` expõem `Rml::Context::SetDensityIndependentPixelRatio`. Quando definido, a unidade RCSS `dp` escala: `1dp = dp_ratio px físicos`. A unidade `px` do RCSS é sempre um pixel físico e NÃO é afetada pelo dp_ratio.
+  - **Padrão recomendado:** autore o RCSS em unidades `dp` num canvas lógico fixo (ex.: 960×540), chame `set_viewport(1920, 1080)` (backbuffer físico) e `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. O RmlUi escala o layout para preencher o backbuffer físico sem nenhuma edição de RCSS.
+  - `App` tem paridade: `AppConfig::dp_ratio` e `App::set_dp_ratio(float)`.
+  - Verificado: teste `dp_ratio_sanity` renderiza box branco 100dp×100dp; fator de escala em ratio=2.0 vs ratio=1.0 é exatamente **4.0×** (200×200 px vs 100×100 px).
 
 ## 2. GL state contract / Contrato de estado GL
 
@@ -97,16 +101,24 @@
 ## 4. Asset resolution / Resolução de assets
 
 **EN:**
-- `load(rml_path)` forwards to `LoadDocument(rml_path)` (`glintfx/src/bootstrap.cpp:63`). RmlUi resolves relative URLs (the `<link href>` in the RML, and `@font-face src` / `image()` / decorator paths in the RCSS) **relative to the file that references them** (the `.rml` for `<link>`, the `.rcss` for fonts and images), **not** relative to the process working directory.
-- glintfx provides **no base URL override** in this release. (The `set_asset_base_url` that some hosts had elsewhere does not exist here.)
-- **How to point at fonts and sprites:** call `load("<dir>/cockpit.rml")` and place `cockpit.rcss`, the font file, and sprites at paths the RML/RCSS reference relative to their own location. For example `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolves to `<dir>/fonts/...`. The bundled showcase confirms the pattern.
-- **Cautions:** use a stable working directory or consistent relative paths; absolute paths in RmlUi URLs may lose the leading slash during canonicalisation, so prefer relative paths anchored at the document. An absolute asset root would need a base URL override (see section 6).
+- `load(rml_path)` forwards to `LoadDocument(rml_path)` (`glintfx/src/bootstrap.cpp`). RmlUi resolves relative URLs (the `<link href>` in the RML, and `@font-face src` / `image()` / decorator paths in the RCSS) **relative to the document URL** (which is the path passed to `load()`), **not** relative to the process working directory.
+- **`set_asset_base_url(const char*)`.** glintfx installs a custom `Rml::FileInterface` (`glintfx/src/base_url_file_interface.hpp`) before `Rml::Initialise()`. When `set_asset_base_url(url)` is called, all subsequent relative paths passed to `Open()` are resolved as `url/path` instead of being looked up from the process CWD. Absolute paths (starting with `/`) bypass the prefix. A fallback to the raw path is attempted if the prefixed open fails.
+  - **Call before `load()`** so the document itself also resolves via the base URL.
+  - Pass `nullptr` or `""` to clear.
+  - `App::set_asset_base_url(const char*)` provides parity with `UiLayer`.
+  - Verified: `base_url_sanity` test loads `embed_scene.rml` (not present in the CWD) successfully after `set_asset_base_url("base_url_assets")`. The rendered frame passes all three pixel statistics.
+- **How to point at fonts and sprites (traditional pattern):** call `load("<dir>/cockpit.rml")` and place `cockpit.rcss`, the font file, and sprites at paths the RML/RCSS reference relative to their own location. For example `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolves to `<dir>/fonts/...`. This pattern works without any base URL.
+- **Cautions:** absolute paths in RmlUi URLs may lose the leading slash during canonicalisation, so prefer relative paths. The base URL override is most useful for absolute asset roots or when the process CWD cannot be controlled.
 
 **PT:**
-- `load(rml_path)` encaminha para `LoadDocument(rml_path)` (`glintfx/src/bootstrap.cpp:63`). O RmlUi resolve URLs relativas (o `<link href>` no RML, e `@font-face src` / `image()` / decorator no RCSS) **relativo ao arquivo que as referencia** (o `.rml` para o `<link>`, o `.rcss` para fontes e imagens), **não** relativo ao diretório de trabalho do processo.
-- O glintfx **não oferece override de base URL** nesta versão. (O `set_asset_base_url` que alguns hosts tinham em outro lugar não existe aqui.)
-- **Como apontar fontes e sprites:** chame `load("<dir>/cockpit.rml")` e coloque `cockpit.rcss`, o arquivo de fonte e os sprites em caminhos que a RML/RCSS referencia relativo à própria localização. Por exemplo `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolve para `<dir>/fonts/...`. O showcase embarcado confirma o padrão.
-- **Cautelas:** use um diretório de trabalho estável ou caminhos relativos consistentes; caminhos absolutos em URLs do RmlUi podem perder a barra inicial na canonicalização, então prefira caminhos relativos ancorados no documento. Uma raiz de asset absoluta exigiria um override de base URL (ver seção 6).
+- `load(rml_path)` encaminha para `LoadDocument(rml_path)` (`glintfx/src/bootstrap.cpp`). O RmlUi resolve URLs relativas **relativo à URL do documento** (o path passado a `load()`), **não** relativo ao diretório de trabalho do processo.
+- **`set_asset_base_url(const char*)`.** O glintfx instala um `Rml::FileInterface` customizado (`glintfx/src/base_url_file_interface.hpp`) antes de `Rml::Initialise()`. Quando `set_asset_base_url(url)` é chamado, todos os caminhos relativos subsequentes passados a `Open()` são resolvidos como `url/path` em vez de serem buscados no CWD do processo. Caminhos absolutos (começando com `/`) ignoram o prefixo. Um fallback para o path bruto é tentado se o open prefixado falhar.
+  - **Chame antes de `load()`** para que o documento em si também resolva via o base URL.
+  - Passe `nullptr` ou `""` para limpar.
+  - `App::set_asset_base_url(const char*)` tem paridade com `UiLayer`.
+  - Verificado: teste `base_url_sanity` carrega `embed_scene.rml` (ausente no CWD) com sucesso após `set_asset_base_url("base_url_assets")`. O frame renderizado passa as três estatísticas de pixel.
+- **Como apontar fontes e sprites (padrão tradicional):** chame `load("<dir>/cockpit.rml")` e coloque `cockpit.rcss`, o arquivo de fonte e os sprites em caminhos que a RML/RCSS referencia relativo à própria localização. Por exemplo `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolve para `<dir>/fonts/...`. Este padrão funciona sem nenhum base URL.
+- **Cautelas:** caminhos absolutos em URLs do RmlUi podem perder a barra inicial na canonicalização; prefira caminhos relativos. O override de base URL é mais útil para raízes de asset absolutas ou quando o CWD do processo não pode ser controlado.
 
 ## 5. Focus navigation / Navegação por foco
 
@@ -125,14 +137,14 @@
 ## 6. Known limitations and gaps / Limitações conhecidas e gaps
 
 **EN:** Candidate features for a later release:
-1. **Logical to physical scaling (dp_ratio).** Expose RmlUi's density independent pixel ratio so a fixed logical canvas (for example 960x540) can scale crisply to a larger backbuffer (for example 1080p). Today rendering is strictly 1:1.
+1. ~~**Logical to physical scaling (dp_ratio).**~~ **Resolved in v0.2.2.** `UiLayerConfig::dp_ratio`, `UiLayer::set_dp_ratio(float)`, `AppConfig::dp_ratio`, and `App::set_dp_ratio(float)` are now available. See section 1 for the full contract.
 2. **Custom host FBO target plus configurable viewport origin.** Today `render()` always composes onto FBO 0 at origin `(0,0)`. Compositing into a host owned offscreen FBO, or into a sub region, is not supported.
-3. **Asset base URL override.** Allow an absolute asset root to be set so documents can reference assets independently of their own path.
+3. ~~**Asset base URL override.**~~ **Resolved in v0.2.2.** `UiLayer::set_asset_base_url(const char*)` and `App::set_asset_base_url(const char*)` are now available. See section 4 for the full contract.
 
 **PT:** Features candidatas para uma versão futura:
-1. **Escala lógico para físico (dp_ratio).** Expor o density independent pixel ratio do RmlUi para que um canvas lógico fixo (por exemplo 960x540) escale com nitidez para um backbuffer maior (por exemplo 1080p). Hoje o render é estritamente 1:1.
+1. ~~**Escala lógico para físico (dp_ratio).**~~ **Resolvido na v0.2.2.** `UiLayerConfig::dp_ratio`, `UiLayer::set_dp_ratio(float)`, `AppConfig::dp_ratio` e `App::set_dp_ratio(float)` estão disponíveis. Ver seção 1 para o contrato completo.
 2. **Alvo de FBO custom do host mais origem de viewport configurável.** Hoje o `render()` sempre compõe no FBO 0 na origem `(0,0)`. Compor num FBO offscreen do host, ou numa sub região, não é suportado.
-3. **Override de base URL de assets.** Permitir definir uma raiz de asset absoluta para que documentos referenciem assets independente do próprio caminho.
+3. ~~**Override de base URL de assets.**~~ **Resolvido na v0.2.2.** `UiLayer::set_asset_base_url(const char*)` e `App::set_asset_base_url(const char*)` estão disponíveis. Ver seção 4 para o contrato completo.
 
 ## See also / Veja também
 

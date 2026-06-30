@@ -35,13 +35,15 @@ class App {
 public:
   // EN: Constructs the App: opens a window and initialises the GL context and UI engine.
   //     Construction can fail silently (e.g. no display, no GL context available).
-  //     On failure: running() returns false, load() is a no-op, render() and run() do
-  //     nothing. Always check running() before driving the event loop manually.
+  //     On failure (N2): ok() returns false; running() also returns false; load() is a no-op;
+  //     render() and run() do nothing. Check ok() once after construction to distinguish an
+  //     initialisation failure from a window that was closed after a successful start.
   //     run() is safe to call regardless — it returns immediately when !running().
   // PT: Constrói o App: abre a janela e inicializa o contexto GL e o motor de UI.
   //     A construção pode falhar silenciosamente (ex.: sem display, sem contexto GL disponível).
-  //     Em falha: running() retorna false, load() é no-op, render() e run() não fazem nada.
-  //     Sempre verifique running() antes de dirigir o laço de eventos manualmente.
+  //     Em falha (N2): ok() retorna false; running() também retorna false; load() é no-op;
+  //     render() e run() não fazem nada. Verifique ok() uma vez após a construção para distinguir
+  //     falha de inicialização de uma janela fechada após início bem-sucedido.
   //     run() é seguro de chamar independentemente — retorna imediatamente quando !running().
   explicit App(AppConfig cfg = {});
   ~App();
@@ -50,12 +52,24 @@ public:
   App(const App&) = delete;
   App& operator=(const App&) = delete;
 
+  // EN: Returns true if construction succeeded: window, GL context, and UI engine are all live.
+  //     Use ok() to distinguish "initialisation failed" from "window closed":
+  //     running() returns false in both cases, conflating them. Check ok() once right after
+  //     construction; it never changes after that point.
+  // PT: Retorna true se a construção teve sucesso: janela, contexto GL e motor de UI estão todos vivos.
+  //     Use ok() para distinguir "falha de inicialização" de "janela fechada":
+  //     running() retorna false nos dois casos, misturando-os. Verifique ok() uma vez logo após
+  //     a construção; ele nunca muda depois desse ponto.
+  bool ok() const noexcept;
+
   // EN: Load an .rml document and show it.
   // PT: Carrega um documento .rml e exibe.
   void load(const char* rml_path);
 
   // EN: Returns false if the window was closed or initialization failed.
+  //     To distinguish the two cases check ok() once after construction.
   // PT: Retorna false se a janela foi fechada ou se a inicialização falhou.
+  //     Para distinguir os dois casos, verifique ok() uma vez após a construção.
   bool running() const;
 
   // EN: Process pending window/input events (non-blocking).

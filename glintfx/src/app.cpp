@@ -47,6 +47,10 @@ void App::load(const char* rml_path) {
   if (impl_->ok) impl_->boot.load(rml_path);
 }
 
+bool App::ok() const noexcept {
+  return impl_ && impl_->ok;
+}
+
 bool App::running() const {
   return impl_->ok && !impl_->window.should_close();
 }

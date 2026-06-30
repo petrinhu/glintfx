@@ -1,0 +1,111 @@
+/* EN: glintfx showcase styles — exercises filters, gradients, box-shadow, backdrop-filter, mask.
+   PT: Estilos do showcase glintfx — exercita filtros, degradês, sombras, backdrop e máscara.
+   NOTE: RmlUi 6.3 syntax differs from standard CSS in several places:
+     - box-shadow: COLOR x y blur spread  (color is first, not last)
+     - filter: drop-shadow(COLOR x y blur)  (color first)
+     - gradients via `decorator:`, not `background:`
+     - mask-image uses the same decorator syntax as `decorator:`
+     - color hex: 8-digit #rrggbbaa (alpha=last 2 digits); 4-digit not supported as shorthand */
+
+@font-face
+{
+    font-family: "Sans";
+    src: "assets/OpenSans-Regular.ttf";
+}
+
+body
+{
+    /* EN: RmlUi default display is 'inline' for ALL elements (differs from HTML where div=block).
+           Must set 'display: block' explicitly so child sections stack vertically.
+       PT: Display padrão do RmlUi é 'inline' para TODOS os elementos (difere do HTML).
+           'display: block' explícito é necessário para seções empilharem verticalmente. */
+    display: block;
+    font-family: Sans;
+    font-size: 16px;
+    color: #fff;
+    background-color: #0d1020;
+}
+
+/* EN: Dark section: near-black solid background so the cyan box-shadow halo is unmistakable.
+       Glow card and gradient card live here — gradient card is self-decorated so dark bg is fine.
+   PT: Seção escura: fundo sólido quase-preto para que o halo ciano do box-shadow seja inconfundível.
+       Card glow e card gradiente vivem aqui — card gradiente é auto-decorado, fundo escuro está ok. */
+.section-dark
+{
+    display: block;
+    width: 500px;
+    padding: 24px;
+    background-color: #0d1020;
+}
+
+/* EN: Gradient section: colourful diagonal gradient gives backdrop-filter: blur() rich content
+       to smear through the semi-transparent blur card and the mask card.
+   PT: Seção com gradiente: gradiente diagonal colorido dá ao backdrop-filter: blur() conteúdo
+       rico para desfocar através do card blur semi-transparente e do card mask. */
+.section-gradient
+{
+    display: block;
+    width: 500px;
+    padding: 24px;
+    background-color: #14171f;
+    decorator: linear-gradient(135deg, #6a0ddc, #e02828, #0f8a4a);
+}
+
+.card
+{
+    /* EN: display: block required in RmlUi (default is inline) so cards stack vertically.
+       PT: display: block obrigatório no RmlUi (padrão inline) para cards empilharem verticalmente. */
+    display: block;
+    width: 260px;
+    height: 80px;
+    margin: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 20px;
+    box-sizing: border-box;
+}
+
+/* EN: Glow card: dark background maximises contrast against the cyan halo.
+       box-shadow: prominent cyan outer glow — large blur + spread so it extends visibly.
+       filter: drop-shadow adds a shape-accurate cyan glow following the rounded corners.
+       Both effects are independent: box-shadow is raster-box; drop-shadow follows alpha shape.
+   PT: Cartão glow: fundo escuro maximiza contraste contra o halo ciano.
+       box-shadow: brilho ciano externo proeminente — blur e spread grandes para extensão visível.
+       filter: drop-shadow adiciona brilho ciano preciso por forma, seguindo os cantos arredondados.
+       Ambos os efeitos são independentes: box-shadow é box-raster; drop-shadow segue o alpha.
+   RmlUi: box-shadow order = color x y blur spread
+          filter: drop-shadow order = color x y blur
+          Color: 8-digit hex #rrggbbaa */
+.glow
+{
+    background-color: #1e2a50;
+    box-shadow: #5fd0ff 0 0 32px 8px;
+    filter: drop-shadow(#5fd0ff80 0 0 20px);
+}
+
+/* EN: Gradient card: linear gradient via `decorator:` (not `background:`).
+   PT: Cartão degradê: gradiente linear via `decorator:` (não `background:`). */
+.grad
+{
+    decorator: linear-gradient(45deg, #ff6a00, #ee0979);
+}
+
+/* EN: Backdrop-blur card: semi-transparent background + backdrop-filter blur.
+       Sits in .section-gradient so it blurs the colourful diagonal gradient behind it.
+   PT: Cartão backdrop-blur: fundo semi-transparente + backdrop-filter blur.
+       Fica em .section-gradient, portanto desfoca o gradiente diagonal colorido atrás dele. */
+.blur
+{
+    background-color: #ffffff20;
+    backdrop-filter: blur(8px);
+}
+
+/* EN: Mask card: solid teal background masked by a horizontal gradient (opaque→transparent).
+       `mask-image` uses the same decorator instancer syntax as `decorator:`.
+   PT: Cartão mask: fundo teal sólido mascarado por gradiente horizontal (opaco→transparente).
+       `mask-image` usa a mesma sintaxe de instancer de decorator que `decorator:`. */
+.mask
+{
+    background-color: #00d18f;
+    mask-image: horizontal-gradient(#000f #0000);
+}

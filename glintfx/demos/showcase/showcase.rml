@@ -1,0 +1,32 @@
+<rml>
+<head>
+  <link type="text/rcss" href="showcase.rcss"/>
+  <title>glintfx showcase</title>
+</head>
+<body>
+  <!-- EN: Dark section: glow and gradient cards on near-black background.
+           Dark bg is essential so the cyan box-shadow + drop-shadow halo is unmistakable.
+       PT: Seção escura: cards glow e gradiente em fundo quase-preto.
+           Fundo escuro é essencial para que o halo ciano do box-shadow + drop-shadow seja inconfundível. -->
+  <div class="section-dark">
+    <div class="card glow">Glow + shadow</div>
+    <div class="card grad">Gradient</div>
+  </div>
+  <!-- EN: Gradient section: blur and mask cards on a colourful diagonal gradient background.
+           backdrop-filter: blur() needs rich content behind the card to show the smearing effect.
+           mask-image: horizontal-gradient fades the teal card over the colourful gradient.
+       PT: Seção com gradiente: cards blur e mask em fundo de gradiente diagonal colorido.
+           backdrop-filter: blur() precisa de conteúdo rico atrás do card para mostrar o desfoque.
+           mask-image: horizontal-gradient desfade o card teal sobre o gradiente colorido. -->
+  <div class="section-gradient">
+    <div class="card blur">Backdrop blur</div>
+    <!-- EN: Mask card: active on real GPU. On Mesa/llvmpipe the BlendMask dual-sampler shader
+             triggers a heap corruption crash (free(): invalid next size) — Mesa SW renderer bug,
+             not a glintfx bug. Headless CI uses showcase_test.rml (without mask) to avoid crash.
+         PT: Card mask: ativo em GPU real. No Mesa/llvmpipe o shader BlendMask dual-sampler
+             provoca corrupção de heap (free(): invalid next size) — bug do Mesa SW renderer,
+             não do glintfx. CI headless usa showcase_test.rml (sem mask) para evitar o crash. -->
+    <div class="card mask">Mask</div>
+  </div>
+</body>
+</rml>

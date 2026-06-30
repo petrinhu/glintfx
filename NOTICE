@@ -2,15 +2,17 @@ NOTICE — loucura_c_asm
 Copyright (c) 2026 Petrus Silva Costa
 Licensed under the Mozilla Public License 2.0 (MPL-2.0). See LICENSE.
 
-This project links, at build and/or runtime, third-party libraries. They are
-NOT included in this repository (they are cloned under examples/ only for
-study/reverse-engineering and are gitignored). Their licenses and the
-attributions we are required to preserve:
+────────────────────────────────────────────────────────────────────────
+Linked / fetched third-party libraries (NOT included in this repository)
+────────────────────────────────────────────────────────────────────────
+
+These libraries are downloaded at build time (via FetchContent) or
+provided by the system. They are NOT part of this repository's source
+tree (the clones under examples/ are gitignored and exist only for
+study / reverse-engineering).
 
 - RmlUi — MIT License.
   Copyright (c) 2008-2014 CodePoint Ltd, Shift Technology Ltd, and contributors.
-
-- gl3w — Public domain (Unlicense). No attribution required.
 
 - FreeType — used under the FreeType License (FTL).
   Portions of this software are copyright (c) The FreeType Project
@@ -18,6 +20,35 @@ attributions we are required to preserve:
 
 - OpenGL (libGL / Mesa) — MIT/SGI-style licenses; copyright their respective
   authors.
+
+────────────────────────────────────────────────────────────────────────
+Bundled (vendored) third-party source files (included in this repository)
+────────────────────────────────────────────────────────────────────────
+
+These files are committed directly into the repository source tree.
+
+- gl3w (generated loader) — Public domain (Unlicense). No attribution required.
+  Files: glintfx/third_party/gl3w/src/gl3w.c
+         glintfx/third_party/gl3w/include/GL/gl3w.h
+
+- glcorearb.h — MIT License.
+  Copyright 2013-2026 The Khronos Group Inc.
+  SPDX-License-Identifier: MIT
+  File: glintfx/third_party/gl3w/include/GL/glcorearb.h
+
+- khrplatform.h — MIT License.
+  Copyright (c) 2008-2018 The Khronos Group Inc.
+  File: glintfx/third_party/gl3w/include/KHR/khrplatform.h
+
+────────────────────────────────────────────────────────────────────────
+Bundled assets
+────────────────────────────────────────────────────────────────────────
+
+- Open Sans — Apache License 2.0. Copyright The Open Sans Project Authors
+  (https://github.com/googlefonts/opensans).
+  File: glintfx/demos/showcase/assets/OpenSans-Regular.ttf
+
+────────────────────────────────────────────────────────────────────────
 
 Full license texts of these dependencies are available in their respective
 upstream repositories. Any future in-project reimplementation of their

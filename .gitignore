@@ -1,5 +1,5 @@
 # Artefatos de build
-/build/
+build/
 *.o
 *.obj
 *.elf
@@ -9,6 +9,9 @@
 # Listagens e mapas (NASM / ld)
 *.lst
 *.map
+
+# Scratch de captura PPM dos testes/demos (a referência golden é versionada à parte)
+out.ppm
 
 # Debug / core dumps
 *.dSYM/
@@ -28,3 +31,6 @@ vgcore.*
 # Repos upstream clonados para estudo/RE (licenças próprias: RmlUi=MIT, gl3w=public domain)
 # Não versionar no nosso repo (MPL-2.0) para evitar mistura de licença e inchaço.
 /examples/
+
+# scratch do subagent-driven-development (em qualquer profundidade)
+.superpowers/

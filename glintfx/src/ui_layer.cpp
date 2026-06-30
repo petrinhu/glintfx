@@ -97,9 +97,9 @@ bool UiLayer::ok() const noexcept {
   return impl_ && impl_->ok;
 }
 
-void UiLayer::load(const char* rml_path) {
-  if (!impl_->ok) return;
-  impl_->engine.load(rml_path);
+bool UiLayer::load(const char* rml_path) {
+  if (!impl_->ok) return false;
+  return impl_->engine.load(rml_path);
 }
 
 void UiLayer::set_viewport(int w, int h) {

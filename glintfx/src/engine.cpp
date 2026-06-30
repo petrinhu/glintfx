@@ -113,11 +113,11 @@ Rml::Context* Engine::context() {
 
 // ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
-//     create_data_model / bind_*: blocked after load() (views compile on load).
-//     set_*: always delegated; DataBinder is a no-op when the key is unknown.
+//     create_data_model / bind_*: blocked when !ok or after load().
+//     set_*: blocked when !ok; DataBinder is a no-op when the key is unknown.
 // PT: API de data-model — delega ao DataBinder com guards de ciclo de vida.
-//     create_data_model / bind_*: bloqueados após load() (views compilam no load).
-//     set_*: sempre delegado; DataBinder é no-op quando a chave é desconhecida.
+//     create_data_model / bind_*: bloqueados quando !ok ou após load().
+//     set_*: bloqueados quando !ok; DataBinder é no-op para chave desconhecida.
 // ---------------------------------------------------------------------------
 
 bool Engine::create_data_model(const char* name) {
@@ -126,38 +126,42 @@ bool Engine::create_data_model(const char* name) {
 }
 
 bool Engine::bind_number(const char* key, double initial) {
-  if (impl_->loaded) return false;
+  if (!impl_->ok || impl_->loaded) return false;
   return impl_->data_binder.bind_number(key, initial);
 }
 
 bool Engine::bind_string(const char* key, const char* initial) {
-  if (impl_->loaded) return false;
+  if (!impl_->ok || impl_->loaded) return false;
   return impl_->data_binder.bind_string(key, initial);
 }
 
 bool Engine::bind_bool(const char* key, bool initial) {
-  if (impl_->loaded) return false;
+  if (!impl_->ok || impl_->loaded) return false;
   return impl_->data_binder.bind_bool(key, initial);
 }
 
 bool Engine::bind_list(const char* key) {
-  if (impl_->loaded) return false;
+  if (!impl_->ok || impl_->loaded) return false;
   return impl_->data_binder.bind_list(key);
 }
 
 void Engine::set_number(const char* key, double v) {
+  if (!impl_->ok) return;
   impl_->data_binder.set_number(key, v);
 }
 
 void Engine::set_string(const char* key, const char* v) {
+  if (!impl_->ok) return;
   impl_->data_binder.set_string(key, v);
 }
 
 void Engine::set_bool(const char* key, bool v) {
+  if (!impl_->ok) return;
   impl_->data_binder.set_bool(key, v);
 }
 
 void Engine::set_list(const char* key, const char* const* items, std::size_t n) {
+  if (!impl_->ok) return;
   impl_->data_binder.set_list(key, items, n);
 }
 

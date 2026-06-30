@@ -59,8 +59,9 @@ App::~App() = default;
 App::App(App&&) noexcept = default;
 App& App::operator=(App&&) noexcept = default;
 
-void App::load(const char* rml_path) {
-  if (impl_->ok) impl_->engine.load(rml_path);
+bool App::load(const char* rml_path) {
+  if (!impl_->ok) return false;
+  return impl_->engine.load(rml_path);
 }
 
 // ---------------------------------------------------------------------------

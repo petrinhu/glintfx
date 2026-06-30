@@ -68,9 +68,9 @@ public:
   //     a construção; ele nunca muda depois desse ponto.
   bool ok() const noexcept;
 
-  // EN: Load an .rml document and show it.
-  // PT: Carrega um documento .rml e exibe.
-  void load(const char* rml_path);
+  // EN: Load an .rml document and show it. Returns true on success.
+  // PT: Carrega um documento .rml e exibe. Retorna true em caso de sucesso.
+  bool load(const char* rml_path);
 
   // EN: Update the density-independent pixel ratio at runtime (parity with UiLayer).
   //     Triggers a layout re-pass when changed.

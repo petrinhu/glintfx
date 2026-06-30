@@ -37,8 +37,11 @@ int main() {
   bool ok_create = app.create_data_model("hud");
   bool ok_name   = app.bind_string("name", "Gus");
   bool ok_hp     = app.bind_number("hp", 10.0);
-
-  app.load("tests/ui/hud.rml");
+  // EN: Verify load() succeeds — without this check the test would pass even if
+  //     hud.rml was not found and no document was ever loaded or rendered.
+  // PT: Verifica que load() tem sucesso — sem esta checagem o teste passaria mesmo
+  //     se hud.rml não fosse encontrado e nenhum documento fosse carregado ou renderizado.
+  bool ok_load   = app.load("tests/ui/hud.rml");
 
   app.update();
   app.render();
@@ -52,10 +55,11 @@ int main() {
   std::printf("create_data_model: %s\n", ok_create ? "OK" : "FAIL");
   std::printf("bind_string(name): %s\n", ok_name   ? "OK" : "FAIL");
   std::printf("bind_number(hp):   %s\n", ok_hp     ? "OK" : "FAIL");
+  std::printf("load(hud.rml):     %s\n", ok_load   ? "OK" : "FAIL");
   std::printf("late bind:         %s\n", !late_bind ? "OK (returned false as expected)"
                                                      : "FAIL (should have returned false)");
 
-  bool all_ok = ok_create && ok_name && ok_hp && !late_bind;
+  bool all_ok = ok_create && ok_name && ok_hp && ok_load && !late_bind;
   if (!all_ok) {
     std::puts("data_model_smoke FAIL");
     return 1;

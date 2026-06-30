@@ -55,8 +55,10 @@ public:
   bool ok() const noexcept;
 
   // EN: Load a document from rml_path and call Show(). Requires ok().
+  //     Returns true on success.
   // PT: Carrega documento de rml_path e chama Show(). Requer ok().
-  void load(const char* rml_path);
+  //     Retorna true em caso de sucesso.
+  bool load(const char* rml_path);
 
   // EN: Notify of a viewport resize (real target pixels).
   // PT: Notifica redimensionamento de viewport (pixels reais do alvo).

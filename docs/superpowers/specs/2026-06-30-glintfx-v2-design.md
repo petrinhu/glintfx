@@ -16,7 +16,25 @@ A v1 entregou o **engine** (fachada `App` + RmlUi + renderer GL3 + efeitos data-
 
 **Proposta de valor (north-star da v2):** "v2 = não redesenha UI a cada projeto". 1º consumidor = **GusWorld** (jogo). Depois, distribuição para o portfólio do líder (apps densos + showcase) — tirar apps do visual "anos 90 chapado" sem custo de redesenho por projeto. A v2 é **aditiva**: o engine v1 (`App` standalone) permanece intacto; os componentes entram por um alvo CMake **opt-in** `glintfx::ui`.
 
+**v1 vs v2 (diferenciação).** A **v1** é o *engine*: "linke e escreva CSS" — o consumidor desenha **cada tela do zero**. A **v2** é o *sistema de UI*: telas de jogo já chegam **desenhadas** (componentes + tokens + efeitos), e o mesmo pacote serve **tanto** `App` (v1) **quanto** jogos via `UiLayer`. Em uma linha: a v1 responde *"como eu desenho?"*; a v2 responde *"o que já está desenhado?"*.
+
 Não-objetivos: ver §13.
+
+### 1.1 Critérios de sucesso e métricas (v2)
+
+Projeto de porte pequeno: as métricas são **checagens binárias / proxies verificáveis** (golden tests, gate verde, contagem de componentes) — **não** dashboards de telemetria. A v2 é um sucesso quando:
+
+| # | Critério | Como se verifica | Fase |
+|---|---|---|---|
+| C1 — keystone | GusWorld compõe o HUD sobre a arena via `UiLayer` anexada ao seu contexto SDL3 — **sem 2ª janela, sem apagar a cena** | smoke headless do embed (§11) verde + bring-up no GusWorld | F1 |
+| C2 — produto | GusWorld monta **cockpit/HUD + diálogo narrativo + menu** usando **só** componentes da onda 1 + tokens — **sem reimplementar plumbing** (sem renderer próprio, sem CSS de layout por tela do zero) | as 3 telas rodando no GusWorld apenas com `glintfx::ui` | F3 |
+| C3 — esforço | "tela nova" passa a ser **markup RML + classes/tokens existentes**, sem C++ de UI novo no caso comum | proxy: nº de telas da onda 1 entregues **sem** novo helper C++ | F3 |
+| C4 — débito | GusWorld **aposenta** o backend de UI vendorizado (`RmlUi_Renderer_GL3` + `gl3_loader` + miolo do `rmlui_hud`) e os ~1013 testes core/domain seguem verdes | gate das 4 camadas verde pós-migração | F3 |
+| C5 — anti-OE | a onda 1 entrega **só** os componentes que telas reais do GusWorld exigem (button, panel, dialog, menu, label/badge); `field` **só** se settings/rename pedir | revisão de escopo da onda 1 contra as telas | F2 |
+| C6 — qualidade/a11y | **100%** dos tokens semânticos passam contraste **AA**; navegação por teclado **e gamepad** cobre menu/dialog/modal **sem mouse** | teste de contraste + teste de foco (§11) | F2 |
+| C7 — portfólio | **≥1** app de portfólio + o showcase v2 montados sobre `glintfx::ui`, saindo do visual "anos 90" **sem redesenho por projeto** | apps de portfólio consumindo o alvo `glintfx::ui` | F4 |
+
+**North-star operacional:** o custo de "tela nova" cai — de *"desenhar do zero + plumbing"* (v1) para *"markup + tokens"* (v2). C2+C3 são a prova viva disso no 1º consumidor.
 
 ## 2. Decisões travadas (do brainstorm)
 
@@ -213,10 +231,10 @@ Detalhe no rascunho do **ADR-010 do GusWorld** (repo do GusWorld). Resumo:
 
 ## 12. Faseamento
 
-1. **F1 — Embed mode (`UiLayer`)** [keystone, ADR-0008]: attach a contexto host, compose-only, eventos injetados, save/restore de estado GL, smoke headless via FBO. **Bloqueia tudo abaixo.**
-2. **F2 — Tokens + componentes onda 1**: `tokens.rcss` (2 níveis) + `glintfx.rcss` (componentes + modificadores `.glow/.glass/.gradient`) + templates RML; button/panel/dialog/menu/label; theming default + high-contrast + reduced-motion; golden + contraste. `.masked` documentado (GPU-only).
-3. **F3 — Adoção no GusWorld**: GusWorld migra para `UiLayer` + `glintfx::ui` (cockpit/HUD, dialog, menu); aposenta o backend vendorizado; valida paridade visual + pacing/motor verdes (ADR-010 deles).
-4. **F4 — Portfólio**: empacotar `glintfx::ui` para apps densos do líder + showcase v2; novos componentes/temas **só** com caso de uso real.
+1. **F1 — Embed mode (`UiLayer`)** [keystone, ADR-0008]: attach a contexto host, compose-only, eventos injetados, save/restore de estado GL, smoke headless via FBO. **Bloqueia tudo abaixo.** → **Valor ao fim:** o glintfx passa a compor UI dentro de **qualquer** host com contexto GL próprio (jogos incluídos); é o que torna a v2 ≠ v1. Ainda sem componentes — **valor de plataforma**, não de tela.
+2. **F2 — Tokens + componentes onda 1**: `tokens.rcss` (2 níveis) + `glintfx.rcss` (componentes + modificadores `.glow/.glass/.gradient`) + templates RML; button/panel/dialog/menu/label; theming default + high-contrast + reduced-motion; golden + contraste. `.masked` documentado (GPU-only). → **Valor ao fim:** existe uma **biblioteca de UI temável e composável**; qualquer consumidor (`App` ou `UiLayer`) monta telas com markup + tokens, sem renderer próprio.
+3. **F3 — Adoção no GusWorld**: GusWorld migra para `UiLayer` + `glintfx::ui` (cockpit/HUD, dialog, menu); aposenta o backend vendorizado; valida paridade visual + pacing/motor verdes (ADR-010 deles). → **Valor ao fim:** o **1º consumidor real** roda cockpit/diálogo/menu sobre o glintfx e larga seu backend de UI mantido à mão — prova de que "não redesenha UI" se sustenta num produto de verdade (fecha C2/C3/C4).
+4. **F4 — Portfólio**: empacotar `glintfx::ui` para apps densos do líder + showcase v2; novos componentes/temas **só** com caso de uso real. → **Valor ao fim:** o **portfólio herda UI moderna sem custo de redesenho por projeto** — o north-star da v2 em escala (fecha C7).
 
 ## 13. Não-objetivos (YAGNI / anti-OE)
 

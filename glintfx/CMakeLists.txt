@@ -69,8 +69,19 @@ target_compile_features(glintfx PUBLIC cxx_std_17)
 #     disponível independentemente de demos ou testes estarem habilitados.
 add_library(glintfx::glintfx ALIAS glintfx)
 
-option(GLINTFX_BUILD_DEMOS "Build demos" ON)
-option(GLINTFX_BUILD_TESTS "Build tests" ON)
+# EN: Default demos and tests ON only when glintfx is the top-level project.
+#     When consumed via FetchContent/add_subdirectory the default is OFF so that
+#     a consumer's build is not polluted with glintfx's own demos and tests.
+# PT: Demos e testes ativados por padrão apenas quando glintfx é o projeto top-level.
+#     Quando consumido via FetchContent/add_subdirectory o padrão é OFF para que
+#     o build do consumidor não seja poluído com os demos/testes do glintfx.
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(_glintfx_top ON)
+else()
+  set(_glintfx_top OFF)
+endif()
+option(GLINTFX_BUILD_DEMOS "Build demos" ${_glintfx_top})
+option(GLINTFX_BUILD_TESTS "Build tests" ${_glintfx_top})
 if(GLINTFX_BUILD_DEMOS)
   add_subdirectory(demos/showcase)
 endif()

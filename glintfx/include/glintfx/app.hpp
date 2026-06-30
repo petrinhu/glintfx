@@ -20,10 +20,29 @@ struct AppConfig {
 
 // EN: RAII application facade. Owns the window, renderer, and UI bootstrap.
 //     Move-only. No third-party engine or graphics types appear in this header.
+//
+//     GLOBAL STATE (N3): glintfx initialises process-global libraries (GLFW, RmlUi).
+//     Only ONE App instance per process is supported. Creating a second instance while
+//     the first is alive, or after it has been destroyed, results in undefined behaviour.
+//
 // PT: Fachada RAII da aplicação. Possui janela, renderer e bootstrap de UI.
 //     Move-only. Nenhum tipo de engine ou gráficos de terceiros aparece neste header.
+//
+//     ESTADO GLOBAL (N3): glintfx inicializa bibliotecas globais de processo (GLFW, RmlUi).
+//     Apenas UMA instância de App por processo é suportada. Criar uma segunda instância
+//     enquanto a primeira está viva, ou após ser destruída, resulta em comportamento indefinido.
 class App {
 public:
+  // EN: Constructs the App: opens a window and initialises the GL context and UI engine.
+  //     Construction can fail silently (e.g. no display, no GL context available).
+  //     On failure: running() returns false, load() is a no-op, render() and run() do
+  //     nothing. Always check running() before driving the event loop manually.
+  //     run() is safe to call regardless — it returns immediately when !running().
+  // PT: Constrói o App: abre a janela e inicializa o contexto GL e o motor de UI.
+  //     A construção pode falhar silenciosamente (ex.: sem display, sem contexto GL disponível).
+  //     Em falha: running() retorna false, load() é no-op, render() e run() não fazem nada.
+  //     Sempre verifique running() antes de dirigir o laço de eventos manualmente.
+  //     run() é seguro de chamar independentemente — retorna imediatamente quando !running().
   explicit App(AppConfig cfg = {});
   ~App();
   App(App&&) noexcept;

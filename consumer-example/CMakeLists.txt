@@ -18,4 +18,4 @@ FetchContent_Declare(glintfx
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(consumer main.cpp)
-target_link_libraries(consumer PRIVATE glintfx)   # 1 linha — sem GL/GLFW/RmlUi
+target_link_libraries(consumer PRIVATE glintfx::glintfx)   # 1 linha — sem GL/GLFW/RmlUi

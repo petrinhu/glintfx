@@ -204,9 +204,10 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> This section describes **direction, not the current state**. As of v0.1.0, glintfx **depends on** the third-party libraries below (linked or vendored); the independence goal is a multi-year project trajectory, not something already done.
+> **Current release: v0.1.0** (stable, tagged). Items below are **in active implementation** -- not yet released.
 
-- **v2 (next):** a **component library / design system** (Atomic Design) on top of the engine: design tokens plus reusable components with GPU effect variants. Scope to be defined in its own product brainstorm.
+- **v2 (in implementation) -- game UI component library:** menus, dialogue boxes, windows, font styles, and GPU effect components (Atomic Design, tokens-first), all declared in RCSS. Approved spec: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md).
+- **v2 keystone -- embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)):** a `UiLayer` facade that **attaches to a host-owned GL context** (game / engine) instead of creating its own window -- compose-only, injected events, full GL state save/restore. Enables using glintfx **inside** a game without owning the window. First consumer: GusWorld / GusEngine (SDL3). The standalone `App` (v1) stays intact for UI-only apps.
 - **Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, gl3w, FreeType, and GLFW** (the whole userspace stack) over the course of years. This connects to **Layer 0** (the pure C/ASM runtime) as the base for internalization.
 - **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
 
@@ -410,9 +411,10 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> Esta seção descreve **direção, não o estado atual**. Na v0.1.0, o glintfx **depende** das bibliotecas de terceiros abaixo (linkadas ou vendorizadas); a meta de independência é uma trajetória de projeto de anos, não algo já feito.
+> **Lançamento atual: v0.1.0** (estável, taggeada). Os itens abaixo estão **em implementação ativa** -- ainda não lançados.
 
-- **v2 (próximo):** uma **component library / design system** (Atomic Design) sobre o engine: design tokens mais componentes reutilizáveis com variantes de efeito GPU. Escopo a definir em brainstorm de produto próprio.
+- **v2 (em implementação) -- component library de UI de jogo:** menus, caixas de diálogo, janelas, estilos de fonte e componentes de efeito GPU (Atomic Design, tokens-first), todos declarados em RCSS. Spec aprovada: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md).
+- **Keystone da v2 -- embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)):** uma fachada `UiLayer` que **anexa ao contexto GL de um host** (jogo / engine) em vez de criar a própria janela -- compose-only, eventos injetados, save/restore completo do estado GL. Permite usar o glintfx **dentro** de um jogo sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). O `App` standalone (v1) permanece intacto para apps só-de-UI.
 - **Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, gl3w, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Isso se conecta à **Camada 0** (o runtime C/ASM puro) como base de internalização.
 - **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
 

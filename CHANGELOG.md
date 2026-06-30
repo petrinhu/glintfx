@@ -5,6 +5,39 @@
 
 ---
 
+## [Unreleased]
+
+Changes on `main` since v0.1.0, not yet tagged. / Mudanças na `main` desde a v0.1.0, ainda sem tag.
+
+### Added / Adicionado
+
+- **EN:** `App::ok()`: distinguishes initialization failure from a window closed later; `running()` no longer conflates the two (L1.1-ERRSTRAT).
+  **PT:** `App::ok()`: distingue falha de inicialização de janela fechada depois; `running()` não mistura mais os dois (L1.1-ERRSTRAT).
+- **EN:** `find_package(glintfx)` support: `glintfxConfig.cmake` is installed alongside the library and headers; RmlUi is co-installed under the same prefix. Enables consumption from an installed tree without FetchContent (L1.8-FINDPKG).
+  **PT:** Suporte a `find_package(glintfx)`: `glintfxConfig.cmake` instalado junto da lib e dos headers; RmlUi co-instalado sob o mesmo prefixo. Habilita consumo via árvore instalada sem FetchContent (L1.8-FINDPKG).
+- **EN:** Versioned CI -- GitHub Actions (`.github/workflows/ci.yml`) and Codeberg Forgejo Actions (`.forgejo/workflows/ci.yml`) -- runs the full 5-test Xvfb suite on every push/PR (L1.2-CI).
+  **PT:** CI versionado -- GitHub Actions (`.github/workflows/ci.yml`) e Codeberg Forgejo Actions (`.forgejo/workflows/ci.yml`) -- executa a suíte completa de 5 testes Xvfb em todo push/PR (L1.2-CI).
+
+### Fixed / Corrigido
+
+- **EN:** `App::snapshot()` PPM orientation: image was vertically flipped (OpenGL reads bottom-up); rows are now reversed before writing (L1.3-SNAPFLIP).
+  **PT:** Orientação do PPM em `App::snapshot()`: imagem estava invertida verticalmente (OpenGL lê de baixo pra cima); linhas agora são revertidas antes de escrever (L1.3-SNAPFLIP).
+- **EN:** Null / state guards in `window_glfw` and `App`: early returns on uninitialized state prevent silent UB when methods are called out of order or after a failed init (L1.4-GUARDS).
+  **PT:** Guards de null/estado em `window_glfw` e `App`: retornos antecipados em estado não-inicializado evitam UB silencioso quando métodos são chamados fora de ordem ou após init falho (L1.4-GUARDS).
+- **EN:** `body` fills the viewport in `showcase.rcss`: added `width: 100%; height: 100%;` so the dark background covers the full window (L1.5-DEMOBG).
+  **PT:** `body` preenche o viewport em `showcase.rcss`: adicionado `width: 100%; height: 100%;` para o fundo escuro cobrir toda a janela (L1.5-DEMOBG).
+- **EN:** `TESTES.md` -- corrected `xvfb-run` vs real GPU in visual validation and pixel-golden sections: headless/CI uses llvmpipe; real GPU validation runs without `xvfb-run` on the desktop DISPLAY (L1.6-TESTDOC).
+  **PT:** `TESTES.md` -- corrigido `xvfb-run` vs GPU real nas seções de validação visual e pixel-golden: headless/CI usa llvmpipe; validação em GPU real roda sem `xvfb-run` no DISPLAY do desktop (L1.6-TESTDOC).
+
+### Docs / Documentação
+
+- **EN:** ADR-0008 -- embed / guest mode: documents the `UiLayer` architecture for attaching to a host-owned GL context (game / engine) without owning the window. First consumer: GusWorld / GusEngine (SDL3). See [`docs/adr/0008-embed-guest-mode.md`](docs/adr/0008-embed-guest-mode.md).
+  **PT:** ADR-0008 -- embed / guest mode: documenta a arquitetura do `UiLayer` para anexar a um contexto GL de host (jogo / engine) sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). Ver [`docs/adr/0008-embed-guest-mode.md`](docs/adr/0008-embed-guest-mode.md).
+- **EN:** v2 design spec: approved spec for the game UI component library (Atomic Design, tokens-first -- menus, dialogs, windows, fonts, effects). See [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md).
+  **PT:** Spec de design da v2: spec aprovada da component library de UI de jogo (Atomic Design, tokens-first -- menus, diálogos, janelas, fontes, efeitos). Ver [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md).
+
+---
+
 ## [0.1.0] - 2026-06-29
 
 First release of **glintfx**: a drop-in C++ library for Linux x86-64 that fuses RmlUi 6.3 (HTML/CSS UI) with a GL3 effects renderer. / Primeiro lançamento do **glintfx**: biblioteca C++ drop-in para Linux x86-64 que funde RmlUi 6.3 (UI HTML/CSS) com um renderer de efeitos GL3.

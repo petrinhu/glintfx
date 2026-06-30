@@ -60,16 +60,11 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1-API | LW4 | C++23/API | Fachada `glintfx::App` RAII (pImpl, headers limpos), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | 🔍 Pendente verificação | — |
 | L1-INTERNALIZE | LW5 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
-## v2 — Component Library (Atomic Design) — PRÓXIMO, não iniciado
+## v2 — Component Library (Atomic Design) — PRÓXIMO (não iniciado)
 
-> **Novo entendimento (2026-06-29):** o glintfx será **distribuído e reusado em vários projetos** do líder, com "todas as features". Isso justifica uma **biblioteca de componentes / design system** (Atomic Design) sobre o engine da v1 — deixa de ser dogfood de 1 demo e vira **produto distribuível**. Planejada como **fase própria (v2)** com brainstorm → spec → plano próprios (Capitolino/CPO + ux-ui-designer + frontend + qa-engineer). **Inicia só após fechar a v1.** Avaliação em `AtomicEval` (ux-ui-designer): tokens-first → componentes com variantes de efeito GPU → organisms/templates conforme demanda.
-
-| ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| L2-BRAINSTORM | — | v2/Produto | Brainstorm da component library: inventário de componentes, tokens, variantes de efeito, modelo de distribuição/versionamento | Alta | v1 fechada | Média | 🎨 Pendente design | — |
-| L2-TOKENS | — | v2/Design | Tokens RCSS (paleta, espaçamento, radius, parâmetros de efeito glow/blur/shadow) — tematização | Alta | L2-BRAINSTORM | Média | 💡 Decisão tomada | — |
-| L2-COMPONENTS | — | v2/Design | Atoms→molecules→organisms (button/card/input/modal/toolbar…) com **variantes de efeito GPU** (`button--glow`, `card--glass`); templates + data-binding RmlUi | Alta | L2-TOKENS | Alta | 💡 Decisão tomada | — |
-| L2-DIST | — | v2/Release | Empacotamento + distribuição da component library + docs (Diátaxis) para adoção multi-projeto | Média | L2-COMPONENTS | Média | 💡 Decisão tomada | — |
+> **Decisão do líder (2026-06-29):** o glintfx será **distribuído e reusado em vários projetos** ("todas as features") → vira **produto distribuível**, o que justifica uma **component library / design system** (Atomic Design) sobre o engine da v1. Sequência decidida: **fechar a v1 primeiro**; a v2 é a próxima fase.
+>
+> **Escopo/breakdown a definir pela bigtech (não autorar inline):** inventário de componentes, tokens, variantes de efeito, faseamento e modelo de distribuição da v2 serão definidos em **brainstorm próprio** por **Capitolino/CPO** (produto) + **ux-ui-designer** (design system) + frontend/qa, com spec e plano próprios — **só quando a v2 iniciar**. Avaliação inicial em `AtomicEval` (ux-ui-designer): tokens-first, faseado por demanda, anti-OE.
 
 ## INBOX (descobertas não priorizadas)
 

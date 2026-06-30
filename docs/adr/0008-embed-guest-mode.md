@@ -91,6 +91,44 @@ private:
 
 **PT:** Habilita o **modelo B** do GusWorld (glintfx como overlay de UI no contexto que o jogo possui): o GusWorld mantém SDL3 + `Render2dGl3` + sua ordem de composição, e **aposenta** seu `rmlui_hud` + `RmlUi_Renderer_GL3` + `gl3_loader` vendorizados à mão, trocando-os por `glintfx::UiLayer`. O core/domain POCO deles (~1013 testes) ficam intactos. **Alarga o mandato do glintfx** de "drop-in para apps só-de-UI" para "UI de jogo embutível" — crescimento de escopo deliberado e aceito (o primeiro consumidor o justifica). **Risco novo:** estado GL compartilhado entre dois donos num contexto — mitigado pelo contrato de save/restore do item (d) e por um doc explícito de invariantes. O `App` standalone não é afetado (pode ser reexpresso como um host fino que possui uma janela GLFW e dirige uma `UiLayer`, mantendo um único caminho de engine). **A v2 (a component library de Atomic Design) deve tratar o embed mode como consumidor de 1ª classe:** seus componentes data-driven RML/RCSS têm de funcionar idênticos quer dirigidos pelo `App`, quer pela `UiLayer` de um host, senão os componentes são inúteis para jogos (justamente o público da v2). É uma **porta de mão dupla**: o embed mode é superfície aditiva; se se provar errado, pode ser depreciado sem tocar no caminho standalone.
 
+## F1 implementation constraints / Limitações da implementação F1
+
+**EN:** Discovered during the F1 build (confirmed by reading the pinned RmlUi GL3 backend source):
+
+- **FBO target is always FBO 0.** `RenderInterface_GL3::EndFrame()` unconditionally calls
+  `glBindFramebuffer(GL_FRAMEBUFFER, 0)` and blits the postprocessed UI onto FBO 0 (the window
+  backbuffer). There is no API to redirect output to a caller-supplied FBO. Consequence: the host
+  **must use FBO 0** as its scene render target; `UiLayer::render()` composites the UI on top of
+  whatever is already in FBO 0 via premultiplied-alpha blend, without clearing it. A custom FBO
+  bound by the host before `render()` is **not** used as the composition target (the
+  `GlStateGuard` will restore its binding, but rendering output still goes to FBO 0).
+
+- **Viewport origin is hardcoded to (0, 0).** `begin_frame_compose()` calls
+  `glViewport(0, 0, w, h)`. Sub-region compositing (a UI panel at a pixel offset within the window)
+  is not supported in F1. The host must present a full-window render target.
+
+Both constraints are consistent with the primary consumer (GusWorld / SDL3): the host renders
+its game scene to the window (FBO 0), calls `UiLayer::render()`, and the UI is overlaid on the
+full window before the SDL3 swap.
+
+**PT:** Descobertas durante o build da F1 (confirmadas pela leitura do source do backend GL3 do RmlUi pinado):
+
+- **Alvo de FBO é sempre FBO 0.** `RenderInterface_GL3::EndFrame()` chama incondicionalmente
+  `glBindFramebuffer(GL_FRAMEBUFFER, 0)` e blitta a UI pós-processada no FBO 0 (backbuffer da
+  janela). Não existe API para redirecionar output para um FBO fornecido pelo chamador.
+  Consequência: o host **deve usar FBO 0** como alvo de render da cena; `UiLayer::render()`
+  compõe a UI por cima do que já está no FBO 0 via blend premultiplied-alpha, sem limpar.
+  Um FBO customizado do host ligado antes de `render()` **não** é usado como alvo de composição
+  (o `GlStateGuard` restaura o binding, mas o output do render vai para FBO 0).
+
+- **Origem do viewport é hardcoded em (0, 0).** `begin_frame_compose()` chama
+  `glViewport(0, 0, w, h)`. Composição em sub-região (painel UI em offset de pixel dentro da
+  janela) não é suportada na F1. O host deve apresentar um render target de janela inteira.
+
+Ambas as restrições são consistentes com o consumidor primário (GusWorld / SDL3): o host
+renderiza a cena na janela (FBO 0), chama `UiLayer::render()`, e a UI é sobreposta sobre a
+janela inteira antes do swap do SDL3.
+
 ## Options considered / Opções consideradas
 
 - **Additive embed mode (`UiLayer`) (chosen / escolhida)** — keeps the UI-only `App` intact; serves games over their own context; two-way door.

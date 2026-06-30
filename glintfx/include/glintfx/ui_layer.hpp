@@ -56,8 +56,27 @@ public:
   // PT: Avança o contexto de UI um passo (chamar uma vez por frame antes de render()).
   void update();
 
-  // EN: Compose-only over the current FBO — no glClear, no swap, GL state guarded (T3).
-  // PT: Compose-only sobre o FBO corrente — sem glClear, sem swap, estado GL protegido (T3).
+  // EN: Compose-only render — overlays the UI onto the window backbuffer (FBO 0) via
+  //     premultiplied-alpha blend. No glClear. No buffer swap. Graphics state fully restored on
+  //     return via GlStateGuard (viewport, blend func+equation, scissor, program, VAO, texture,
+  //     draw-FBO binding, colour mask).
+  //
+  //     F1 contract limitation: the internal graphics backend unconditionally targets the
+  //     window backbuffer (FBO 0) during EndFrame; a custom host FBO bound before this call
+  //     is NOT used as the composition target (see ADR-0008). The host must render its scene
+  //     into the window backbuffer and call this method after drawing its scene, before swap.
+  //     The viewport origin is hardcoded at (0,0); sub-region compositing is not supported.
+  //
+  // PT: Render compose-only — sobrepõe a UI ao backbuffer da janela (FBO 0) via blend
+  //     premultiplied-alpha. Sem glClear. Sem swap. Estado gráfico restaurado por completo ao
+  //     retornar via GlStateGuard (viewport, blend func+equation, scissor, programa, VAO,
+  //     textura, draw-FBO binding, colour mask).
+  //
+  //     Limitação de contrato F1: o backend gráfico interno mira incondicionalmente o backbuffer
+  //     da janela (FBO 0) durante EndFrame; um FBO customizado do host ligado antes desta chamada
+  //     NÃO é usado como alvo de composição (ver ADR-0008). O host deve renderizar sua cena no
+  //     backbuffer da janela e chamar este método após desenhar a cena, antes do swap.
+  //     A origem do viewport é hardcoded em (0,0); composição em sub-região não é suportada.
   void render();
 
   // EN: Inject a host input event — translated to engine input calls internally (T4).

@@ -39,9 +39,13 @@ public:
   void end_frame();
 
   // EN: Compose-only begin: set viewport + notify RmlUi — NO glClear, NO alpha-fix.
-  //     The host owns the framebuffer; do not touch its contents before or after.
+  //     Calls glViewport(0, 0, w, h) — the UI is always composited from the origin (0,0).
+  //     For embed mode this means the host's scene and the UI must share the same pixel origin;
+  //     sub-region compositing (non-zero offset) is not supported in the F1 contract.
   // PT: Begin compose-only: define viewport + notifica RmlUi — SEM glClear, SEM alpha-fix.
-  //     O host é dono do framebuffer; não tocar no conteúdo antes ou depois.
+  //     Chama glViewport(0, 0, w, h) — a UI é sempre composta a partir da origem (0,0).
+  //     No embed mode isso significa que a cena do host e a UI devem compartilhar a mesma
+  //     origem de pixel; composição em sub-região (offset não-zero) não é suportada no contrato F1.
   void begin_frame_compose(int w, int h);
 
   // EN: Compose-only end: call RmlUi EndFrame — NO FBO0 alpha-fix.

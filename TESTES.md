@@ -57,15 +57,19 @@ Os limites são propositalmente largos (tolerância ~10× o nível mínimo esper
 
 ### Validação visual manual / GPU real
 
-Para validar os efeitos pixel-a-pixel em hardware real (o que o CI headless não faz), use as ferramentas de demo:
+Para validar os efeitos pixel-a-pixel em hardware real (o que o CI headless não faz), rode os demos **diretamente no desktop** com `DISPLAY` ativo -- sem `xvfb-run`, que usa **llvmpipe (software render)** e não equivale à GPU real:
 
 ```sh
-# Full showcase com todos os efeitos (incluindo mask — exige GPU real)
-xvfb-run -a ./glintfx/build/demos/showcase/glintfx_showcase
+# Run on desktop with real GPU (DISPLAY active, no xvfb-run)
+# Rodar no desktop com GPU real (DISPLAY ativo, sem xvfb-run)
+./glintfx/build/demos/showcase/glintfx_showcase
 
-# Captura headless: gera screenshot PPM do showcase em GPU real
+# GPU real screenshot capture: generates PPM of the showcase
+# Captura em GPU real: gera screenshot PPM do showcase
 ./glintfx/build/demos/showcase/glintfx_capture showcase_gpu.ppm
 ```
+
+> **Nota (headless/CI vs GPU real):** `xvfb-run` cria um display virtual e usa **llvmpipe**, o software renderer do Mesa -- adequado para a suíte `ctest` (seção acima), mas não valida efeitos visuais em hardware real. Para validação autentica, rodar sem `xvfb-run` com o desktop ativo.
 
 Os efeitos visuais (glow/drop-shadow ciano, degradê laranja→pink, backdrop-blur, mask) foram **validados visualmente pelo líder em GPU real** na release v1. Esse estado é o "golden" humano; o `render_sanity` automatizado detecta regressões grosseiras (output preto, efeitos sumindo completamente, fundo não renderizando).
 

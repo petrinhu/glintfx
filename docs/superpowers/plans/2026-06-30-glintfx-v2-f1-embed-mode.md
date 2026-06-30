@@ -1,6 +1,6 @@
 # glintfx v2 · F1 — embed/guest mode (`UiLayer`) — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Entregar o **keystone da v2** ([ADR-0008](../adr/0008-embed-guest-mode.md)): extrair de `App` um **núcleo de motor reusável** (RmlUi `Bootstrap` + `RenderGl3`) desacoplado do `WindowGlfw`, e expor `glintfx::UiLayer` — uma fachada pública que **anexa a um contexto GL já corrente do host** (NÃO cria janela), compõe a UI **por cima** sem limpar nem dar swap, com **save/restore de estado GL** e **injeção de eventos** neutra (sem depender de GLFW/SDL). 1º consumidor: GusWorld (SDL3 + `Render2dGl3` próprios) — ver [ADR-010 do GusWorld](../../../gusworld/docs/tech/adr/ADR-010-adopt-glintfx-embed-mode.md).
 
@@ -73,7 +73,7 @@ Mapeamento com o spec v2: F1 = §4 (embed mode). `glintfx::ui` (§9) e component
 - `glintfx::Engine` (interno): possui `RenderGl3` + `Bootstrap`; `bool attach(Rml::SystemInterface*, int w, int h)`, `bool ok()`, `bool load(const char*)`, `void set_viewport(int,int)`, `void update()`, `void render_standalone(int,int)`, `void render_compose(int,int)` (T3), `Rml::Context* context()`.
 - `glintfx::SystemClock : Rml::SystemInterface` — só `GetElapsedTime()` via `std::chrono`.
 
-- [ ] **Step 1: `system_clock.hpp/.cpp` — SystemInterface mínimo (sem GLFW)**
+- [x] **Step 1: `system_clock.hpp/.cpp` — SystemInterface mínimo (sem GLFW)**
 
 `glintfx/src/system_clock.hpp`:
 ```cpp
@@ -99,7 +99,7 @@ private:
 ```
 (`system_clock.cpp` pode ser vazio com só o SPDX, ou inline-only; manter `.cpp` na lib para um TU dono do tipo se preferir — opcional.)
 
-- [ ] **Step 2: Desacoplar `Bootstrap` do `WindowGlfw`**
+- [x] **Step 2: Desacoplar `Bootstrap` do `WindowGlfw`**
 
 Em `bootstrap.hpp`: trocar o forward-decl e a assinatura.
 ```cpp
@@ -123,7 +123,7 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
 ```
 `shutdown()` deixa de dar `delete impl_->system` (não é mais dono).
 
-- [ ] **Step 3: `engine.hpp/.cpp` — núcleo reusável**
+- [x] **Step 3: `engine.hpp/.cpp` — núcleo reusável**
 
 `engine.hpp` (forward-decls só; sem tipos concretos de terceiros):
 ```cpp
@@ -150,12 +150,12 @@ private:
 ```
 `engine.cpp`: `Impl { RenderGl3 render; Bootstrap boot; bool ok=false; }`. `attach` = `render.init()` então `boot.init(system, render, w, h)`; `ok = render.iface() && boot.context()`. `render_standalone(w,h)` = `render.begin_frame(w,h); if(auto*c=boot.context())c->Render(); render.end_frame();` (idêntico ao frame atual do `App`, menos o swap). `render_compose` fica como stub em T1 (corpo real em T3) — pode chamar `render_standalone` temporariamente? **Não**: para não enganar, deixar `render_compose` como `// implementado em T3` lançando/no-op documentado; nenhum teste o exercita até T3.
 
-- [ ] **Step 4: Refatorar `App` para usar `Engine`**
+- [x] **Step 4: Refatorar `App` para usar `Engine`**
 
 `app.cpp`: `Impl { WindowGlfw window; SystemInterface_GLFW* system=nullptr; Engine engine; int w,h; bool ok; }`. No ctor: `window.create(...)`; `engine`/render exigem contexto corrente (a janela GLFW já o torna corrente em `create`); criar `system = new SystemInterface_GLFW(window.handle())`; `ok = engine.attach(system, w, h)`. `render()` = `int w,h; window.size(w,h); engine.render_standalone(w,h); window.swap();`. `update()` = `engine.update()`. `load()` = `engine.load()`. `snapshot()` = `engine.render_standalone(w,h);` então o mesmo bloco de `glReadPixels` do FBO0 **antes** de `window.swap()` (inalterado). Dtor: ordem `engine` (RmlUi) → `delete system` → `window`. Manter os guards `ok()` existentes.
 > O include de `RmlUi_Platform_GLFW.h` migra de `bootstrap.cpp` para `app.cpp` (é onde o `SystemInterface_GLFW` agora vive).
 
-- [ ] **Step 5: Atualizar testes que tocavam `Bootstrap` direto**
+- [x] **Step 5: Atualizar testes que tocavam `Bootstrap` direto**
 
 `bootstrap_smoke.cpp` chamava `Bootstrap::init(win, render, w, h)`. Reescrever como `engine_smoke.cpp` (mantendo a cobertura: init RmlUi + contexto + load):
 ```cpp
@@ -177,13 +177,13 @@ int main() {
 ```
 No `tests/CMakeLists.txt`: remover o alvo `bootstrap_smoke` e registrar `engine_smoke` (mesmo padrão `run_xvfb.cmake` + `WORKING_DIRECTORY ${CMAKE_BINARY_DIR}` + `configure_file` do `min.rml`). `render_smoke` (usa só `RenderGl3::begin_frame/end_frame`) **não muda**.
 
-- [ ] **Step 6: Buildar e rodar TODOS os testes — v1 verde + engine_smoke**
+- [x] **Step 6: Buildar e rodar TODOS os testes — v1 verde + engine_smoke**
 
 Run: `cd glintfx && cmake -S . -B build -DGLINTFX_BUILD_DEMOS=OFF && cmake --build build -j 2>&1 | tail -5`
 Run: `ctest --test-dir build --output-on-failure`
 Expected: `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`, `render_sanity` **passam**. `render_sanity` segue imprimindo `render_sanity: PASS` (prova que o comportamento do `App` não regrediu).
 
-- [ ] **Step 7: Gate de encapsulamento + commit**
+- [x] **Step 7: Gate de encapsulamento + commit**
 
 Run: `! grep -rqE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/ && echo "headers limpos"`
 ```bash
@@ -202,7 +202,7 @@ git add glintfx/ docs/ && git commit -m "refactor(glintfx): extrai Engine reusá
 **Interfaces:**
 - `glintfx::UiLayer` público (pImpl): `Config{int logical_width=1280, logical_height=720; bool load_gl=true;}`, ctor `explicit UiLayer(Config={})`, move-only, `bool ok()`, `void load(const char*)`, `void set_viewport(int,int)`, `void update()`, `void render()` (T3), `void process_event(const UiEvent&)` (T4).
 
-- [ ] **Step 1: Header público `ui_layer.hpp` (sem tipos de terceiros)**
+- [x] **Step 1: Header público `ui_layer.hpp` (sem tipos de terceiros)**
 ```cpp
 // SPDX-License-Identifier: MPL-2.0
 // EN: Embed/guest facade — attaches the UI+effects engine to a GL context the HOST owns.
@@ -234,7 +234,7 @@ private:
 (O `ui_event.hpp` completo entra na Task 4; nesta task criar um stub mínimo só com `struct UiEvent;` forward, ou já criar o header neutro vazio — preferir criar o header neutro agora com a struct definida em T4. Para T2 compilar, declarar `struct UiEvent;` no header e não usar.)
 > Ajuste anti-dependência circular: em T2, `ui_layer.hpp` faz `struct UiEvent;` (forward) e `process_event` recebe `const UiEvent&`; o `ui_event.hpp` com a definição chega na T4 e o umbrella passa a incluí-lo.
 
-- [ ] **Step 2: Teste de attach (falha primeiro — `ui_layer.cpp` ausente)**
+- [x] **Step 2: Teste de attach (falha primeiro — `ui_layer.cpp` ausente)**
 
 `tests/ui_layer_attach.cpp`:
 ```cpp
@@ -257,11 +257,11 @@ int main() {
 ```
 Registrar no `tests/CMakeLists.txt` (link `glintfx`, `run_xvfb.cmake`, `WORKING_DIRECTORY ${CMAKE_BINARY_DIR}`, `min.rml` já é copiado pela Task 1).
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 Run: `cd glintfx && cmake -S . -B build -DGLINTFX_BUILD_DEMOS=OFF && cmake --build build -j 2>&1 | tail -5`
 Expected: erro de link (`UiLayer::...` indefinido).
 
-- [ ] **Step 4: Implementar `ui_layer.cpp` (attach/load/viewport)**
+- [x] **Step 4: Implementar `ui_layer.cpp` (attach/load/viewport)**
 ```cpp
 // SPDX-License-Identifier: MPL-2.0
 #include <GL/gl3w.h>            // EN: gl3w first. PT: gl3w primeiro.
@@ -289,11 +289,11 @@ void UiLayer::update() { if (impl_->ok) impl_->engine.update(); }
 ```
 `Engine::set_viewport(w,h)` chama `context()->SetDimensions({w,h})` e guarda dims para o próximo `render_compose`.
 
-- [ ] **Step 5: Buildar e rodar (passa)**
+- [x] **Step 5: Buildar e rodar (passa)**
 Run: `cd glintfx && cmake --build build -j && ctest --test-dir build -R ui_layer_attach --output-on-failure`
 Expected: `ui_layer_attach OK`.
 
-- [ ] **Step 6: Gate de header + commit**
+- [x] **Step 6: Gate de header + commit**
 Run: `! grep -rqE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/ && echo OK`
 ```bash
 git add glintfx/ && git commit -m "feat(glintfx): UiLayer attach/load/viewport sobre contexto do host (F1 T2)"
@@ -311,7 +311,7 @@ git add glintfx/ && git commit -m "feat(glintfx): UiLayer attach/load/viewport s
 - `RenderGl3::begin_frame_compose(int w,int h)` (= `glViewport` + `SetViewport` + `BeginFrame`, **sem** `glClear`); `RenderGl3::end_frame_compose()` (= `renderer.EndFrame()`, **sem** o bloco de alpha-fix do FBO0).
 - `glintfx::GlStateGuard` (RAII) — snapshot no ctor, restore no dtor.
 
-- [ ] **Step 1: Caminho compose no `RenderGl3` (não destrutivo)**
+- [x] **Step 1: Caminho compose no `RenderGl3` (não destrutivo)**
 
 `render_gl3.hpp`: declarar `void begin_frame_compose(int w,int h);` e `void end_frame_compose();`.
 `render_gl3.cpp`:
@@ -332,7 +332,7 @@ void RenderGl3::end_frame_compose() {
 }
 ```
 
-- [ ] **Step 2: `GlStateGuard` (RAII)**
+- [x] **Step 2: `GlStateGuard` (RAII)**
 
 `gl_state.hpp`:
 ```cpp
@@ -387,7 +387,7 @@ private:
 }
 ```
 
-- [ ] **Step 3: `Engine::render_compose` + `UiLayer::render`**
+- [x] **Step 3: `Engine::render_compose` + `UiLayer::render`**
 
 `engine.cpp`:
 ```cpp
@@ -401,7 +401,7 @@ void Engine::render_compose(int w, int h) {
 ```
 `ui_layer.cpp`: `void UiLayer::render(){ if(impl_->ok) impl_->engine.render_compose(impl_->w, impl_->h); }`
 
-- [ ] **Step 4: Harness offscreen (`tests/offscreen.hpp`)**
+- [x] **Step 4: Harness offscreen (`tests/offscreen.hpp`)**
 
 Helper de teste: cria janela GLFW oculta (contexto) + FBO offscreen com textura RGBA, bind, clear a uma cor-âncora; readback do FBO para RGB. Esboço:
 ```cpp
@@ -426,18 +426,18 @@ inline void read_rgb(const Fbo& f, std::vector<unsigned char>& px){
 }
 ```
 
-- [ ] **Step 5: Teste compose preserva o fundo do host (`ui_layer_compose.cpp`)**
+- [x] **Step 5: Teste compose preserva o fundo do host (`ui_layer_compose.cpp`)**
 
 Roteiro: host cria contexto (janela oculta), `UiLayer` attach, FBO offscreen, **bind FBO + clear a uma cor-âncora não-preta** (ex.: R=10,G=20,B=40), `ui.load("tests/min.rml")` (doc com fundo transparente/pequeno), `ui.update(); ui.render();` (compose **sobre** o FBO corrente), `read_rgb`. Asserções:
 1. **fundo preservado:** existe uma quantidade significativa de pixels ainda na cor-âncora (prova que `render()` **não** limpou o FBO do host);
 2. **UI compôs algo:** existe ao menos 1 pixel que mudou em relação à cor-âncora (a UI desenhou por cima).
 > `min.rml` deve ser pequeno/parcial (não cobrir a tela toda) para os dois sinais coexistirem; se necessário criar `tests/min_partial.rml` com um elemento pequeno.
 
-- [ ] **Step 6: Teste de save/restore de estado GL (`gl_state_guard.cpp`)**
+- [x] **Step 6: Teste de save/restore de estado GL (`gl_state_guard.cpp`)**
 
 Host cria contexto + FBO; define um estado GL **conhecido e não-default** (ex.: `glEnable(GL_SCISSOR_TEST); glScissor(5,6,7,8); glViewport(1,2,300,200); glDisable(GL_BLEND);` e um programa/VAO dummy bound). Snapshot via `glGetIntegerv`. `ui.render()`. Re-leitura do estado. Asserção: **estado pós-render == estado pré-render** (viewport, scissor box, GL_BLEND/SCISSOR_TEST/DEPTH_TEST enables, draw FBO binding, color writemask). Falha se qualquer um divergir.
 
-- [ ] **Step 7: Build + rodar (passa) + commit**
+- [x] **Step 7: Build + rodar (passa) + commit**
 Run: `cd glintfx && cmake --build build -j && ctest --test-dir build -R 'ui_layer_compose|gl_state_guard' --output-on-failure`
 Expected: ambos `PASS`; e `ctest --test-dir build` inteiro segue verde (v1 intacto).
 ```bash
@@ -456,7 +456,7 @@ git add glintfx/ && git commit -m "feat(glintfx): render compose-only + GlStateG
 **Interfaces:**
 - `glintfx::UiEvent` (POD neutro) + `enum class Key` / `enum Mod` — **sem** tipos de GLFW/SDL/RmlUi. O host (SDL3 no GusWorld) traduz seus eventos nativos para `UiEvent`; o gamepad mapeia d-pad/botões → `Key::Up/Down/Left/Right/Enter/Escape/Tab` (navegação de foco do RmlUi).
 
-- [ ] **Step 1: `ui_event.hpp` (tipos neutros)**
+- [x] **Step 1: `ui_event.hpp` (tipos neutros)**
 ```cpp
 // SPDX-License-Identifier: MPL-2.0
 // EN: Neutral, host-agnostic input event. The host (GLFW, SDL3, …) fills this; glintfx
@@ -482,7 +482,7 @@ struct UiEvent {
 ```
 Substituir o forward `struct UiEvent;` do `ui_layer.hpp` pelo `#include <glintfx/ui_event.hpp>` (já previsto no header) e o umbrella `glintfx.hpp` passa a incluir ambos.
 
-- [ ] **Step 2: Teste de injeção (falha primeiro — `process_event` indefinido)**
+- [x] **Step 2: Teste de injeção (falha primeiro — `process_event` indefinido)**
 
 `tests/ui_layer_events.cpp`: host cria contexto, `UiLayer` attach + `load("tests/min.rml")`, injeta uma sequência:
 ```cpp
@@ -496,7 +496,7 @@ std::puts("ui_layer_events OK");
 ```
 Asserção F1 (modesta, anti-flaky): **não crasha** e `ui.ok()` segue true após a sequência. (Asserção de movimento de foco fica para F2, quando houver componentes focáveis reais.)
 
-- [ ] **Step 3: Implementar `process_event` (tradução UiEvent→Rml)**
+- [x] **Step 3: Implementar `process_event` (tradução UiEvent→Rml)**
 
 Em `ui_layer.cpp`, tabela de tradução `Key`→`Rml::Input::KeyIdentifier` (Up=KI_UP, Down=KI_DOWN, Left=KI_LEFT, Right=KI_RIGHT, Enter=KI_RETURN, Escape=KI_ESCAPE, Tab=KI_TAB, Space=KI_SPACE, Backspace=KI_BACK) e despacho ao contexto:
 ```cpp
@@ -516,7 +516,7 @@ void UiLayer::process_event(const UiEvent& e){
 ```
 > `to_rml_key`/`to_rml_mods` são helpers internos no `ui_layer.cpp` (não vazam ao header). Nomes exatos dos métodos do `Rml::Context` (6.3 pinada) a confirmar no source fetchado; ajustar se divergirem.
 
-- [ ] **Step 4: Build + rodar (passa) + gate de header + commit**
+- [x] **Step 4: Build + rodar (passa) + gate de header + commit**
 Run: `cd glintfx && cmake --build build -j && ctest --test-dir build -R ui_layer_events --output-on-failure`
 Expected: `ui_layer_events OK`.
 Run: `! grep -rqE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/ && echo OK` (o `ui_event.hpp` só tem tipos próprios)
@@ -534,21 +534,21 @@ git add glintfx/ && git commit -m "feat(glintfx): injeção de eventos neutra Ui
 
 **Interfaces:** nenhuma nova — consolida o harness `offscreen.hpp` (T3) num gate determinístico análogo ao `render_sanity` do `App`, mas pela via `UiLayer` + FBO (sem janela visível, sem swap).
 
-- [ ] **Step 1: Documento de teste com fundo + 1 efeito barato**
+- [x] **Step 1: Documento de teste com fundo + 1 efeito barato**
 
 Reusar `showcase_test.rml`/`.rcss` (já sem o card `mask`, conforme nota do `tests/CMakeLists.txt` — `mask` crasha no llvmpipe) ou criar `tests/embed_scene.rml`/`.rcss` com um fundo escuro + um elemento com `box-shadow`/`linear-gradient` (efeitos 1ª classe do spec §7; **nunca** `.masked` no CI por software). Copiar via `file(COPY ...)` para `${CMAKE_CURRENT_BINARY_DIR}` como os demais assets.
 
-- [ ] **Step 2: Teste `ui_layer_sanity.cpp`**
+- [x] **Step 2: Teste `ui_layer_sanity.cpp`**
 
 Roteiro: host cria contexto (janela oculta) 900×600, FBO offscreen 900×600, **clear a preto**, `UiLayer` attach 900×600, `load` o documento, 2 frames de aquecimento (`update`+`render`), `read_rgb` do FBO. Estatística agregada (estilo `render_sanity`, tolerante ao llvmpipe): `mean_brightness > 5` (renderizou algo), `dark_count ≥ 10%` (fundo escuro presente), `bright_count ≥ 1%` (gradiente/glow presente). Imprime `ui_layer_sanity: PASS`.
 > Importante: como é compose-only, o **host** faz o clear do FBO (a UI não limpa) — o teste prova a cadeia embed ponta-a-ponta no FBO offscreen, sem janela/swap.
 
-- [ ] **Step 3: Registrar no `tests/CMakeLists.txt` + rodar (passa)**
+- [x] **Step 3: Registrar no `tests/CMakeLists.txt` + rodar (passa)**
 Padrão `run_xvfb.cmake`, `WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}`.
 Run: `cd glintfx && cmake -S . -B build -DGLINTFX_BUILD_DEMOS=OFF && cmake --build build -j && ctest --test-dir build -R ui_layer_sanity --output-on-failure`
 Expected: `ui_layer_sanity: PASS`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 ```bash
 git add glintfx/ && git commit -m "test(glintfx): gate de sanidade do embed via FBO offscreen (F1 T5)"
 ```
@@ -560,25 +560,30 @@ git add glintfx/ && git commit -m "test(glintfx): gate de sanidade do embed via 
 **Files:**
 - Modify: `glintfx/CMakeLists.txt` (confirmar que `engine.cpp`, `system_clock.cpp`, `ui_layer.cpp` estão na lib `glintfx`; **não** criar alvo `glintfx::ui` — é F2), `docs/superpowers/plans/2026-06-30-glintfx-v2-f1-embed-mode.md` (marcar checkboxes)
 
-- [ ] **Step 1: Confirmar fontes da lib e ausência de alvo `glintfx::ui`**
+- [x] **Step 1: Confirmar fontes da lib e ausência de alvo `glintfx::ui`**
 
 `glintfx/CMakeLists.txt` — o `add_library(glintfx STATIC ...)` deve listar `src/engine.cpp src/system_clock.cpp src/ui_layer.cpp` além dos existentes. **Anti-OE:** nenhum alvo/pasta de componentes nesta F1 (registrar como F2 no spec §9, não aqui).
+> **VERIFICADO 2026-06-30:** `engine.cpp`, `system_clock.cpp`, `ui_layer.cpp` na lib; zero alvo `glintfx::ui`. PASS.
 
-- [ ] **Step 2: Build do zero + suíte inteira verde**
+- [x] **Step 2: Build do zero + suíte inteira verde**
 Run: `cd glintfx && rm -rf build && cmake -S . -B build -DGLINTFX_BUILD_DEMOS=ON && cmake --build build -j 2>&1 | tail -8`
 Run: `ctest --test-dir build --output-on-failure`
 Expected: passam — `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`, `render_sanity` (v1 intacto) + `ui_layer_attach`, `ui_layer_compose`, `gl_state_guard`, `ui_layer_events`, `ui_layer_sanity` (embed F1). Total: 10 testes.
+> **RESULTADO 2026-06-30:** 100% tests passed, 0 tests failed out of 10. Total Test time: 32.76 sec. Build sem warnings fora de `_deps`.
 
-- [ ] **Step 3: Gates finais (encapsulamento + SPDX)**
+- [x] **Step 3: Gates finais (encapsulamento + SPDX)**
 Run: `! grep -rqE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/ && echo "headers públicos limpos"`
 Run: `for f in $(git ls-files 'glintfx/**/*.hpp' 'glintfx/**/*.cpp' | grep -vE '_deps|build/'); do head -1 "$f" | grep -q 'SPDX-License-Identifier: MPL-2.0' || echo "SEM SPDX: $f"; done` (esperado: sem saída)
+> **RESULTADO 2026-06-30:** PASS (encapsulamento) + PASS (SPDX — 32 arquivos verificados, nenhum sem header).
 
-- [ ] **Step 4: Prova de drop-in do embed (opcional, recomendado)**
+- [x] **Step 4: Prova de drop-in do embed (opcional, recomendado)**
 
 Mini-consumidor `consumer-example-embed/` que cria um contexto GL (GLFW oculto fazendo o papel do host), instancia `glintfx::UiLayer`, dá `load`+`render()` num FBO e lê 1 pixel — **sem** escrever código GL/RmlUi além do contexto do host. Valida o north-star do embed: o host só traz a janela/contexto; a UI+efeitos vêm da `UiLayer`. (Se o tempo apertar, cobrir isto pelo `ui_layer_sanity` da T5 e registrar o consumidor como follow-up.)
+> **DECISÃO 2026-06-30:** coberto pelo `ui_layer_sanity` (T5), que valida a cadeia embed ponta-a-ponta no FBO offscreen. `consumer-example-embed/` registrado como follow-up na INBOX do TODO.md.
 
-- [ ] **Step 5: Fechar o plano**
+- [x] **Step 5: Fechar o plano**
 Marcar todos os checkboxes; conferir que o spec §12 (F1) está satisfeito: embed attach + compose-only + eventos injetados + save/restore de estado GL, com `App` standalone intacto. Próximo: F2 (tokens + componentes onda 1).
+> **FECHADO 2026-06-30:** F1 satisfeita. Spec §12 (F1): attach ✓ compose-only ✓ eventos ✓ GlStateGuard ✓ App standalone intacto ✓. Próximo: F2.
 
 ---
 

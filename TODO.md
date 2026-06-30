@@ -80,7 +80,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | L2-BRAINSTORM | V2W1 | v2/Produto | **Porta de entrada da v2 — CONCLUÍDA.** Brainstorm bigtech (CPO+ux-ui-designer) + verdito de integração GusWorld (software-architect) + [ADR-0008](docs/adr/0008-embed-guest-mode.md) (embed mode) + [spec da v2](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (aprovado pelo líder) | Alta | v1 fechada | Média | ✅ Concluído | ✓ |
-| L2-EMBED | V2W2 | v2/Arquitetura | **Keystone (F1):** embed/guest mode `UiLayer` (anexa ao contexto GL do host, compose-only, eventos injetados, save/restore de estado GL). Detalhe no plano (writing-plans). **OWD** | Alta | L2-BRAINSTORM | Alta | 🔄 Em andamento (T1+T2+T3+T4 ✓; T5+T6 pendentes) | — |
+| L2-EMBED | V2W2 | v2/Arquitetura | **Keystone (F1):** embed/guest mode `UiLayer` (anexa ao contexto GL do host, compose-only, eventos injetados, save/restore de estado GL). Detalhe no plano (writing-plans). **OWD** | Alta | L2-BRAINSTORM | Alta | 🔍 Pendente verificação (F1 T1–T6 ✓; 10/10 green 2026-06-30) | — |
 | L2-COMPONENTS | V2W3 | v2/UI | **F2:** tokens-first + component library de UI de jogo (button/panel/dialog/menu/label, efeitos como modificadores) + `glintfx::ui` opt-in. Detalhe no plano | Alta | L2-EMBED | Alta | ⏳ Pendente | — |
 | L2-GUSWORLD | V2W4 | v2/Integração | **F3:** GusWorld adota o glintfx via embed (ADR-010), aposenta o HUD vendorizado. Esforço no repo GusWorld | Média | L2-EMBED, L2-COMPONENTS | Alta | ⏳ Pendente | — |
 
@@ -88,3 +88,4 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 - **`glintfxConfig.cmake.in`** (Minor, review LW6): `unset()` sem `CACHE` não limpa entradas de cache de `find_library` (funcional pelo guard `if(NOT TARGET)`, mas semanticamente incorreto).
 - **`.github/workflows/ci.yml`** (Minor, review LW6): `libxkbcommon-dev` ausente (presente no Forgejo; implícito por transitividade no `ubuntu-latest`) — adicionar p/ consistência/robustez.
+- **`consumer-example-embed/`** (Follow-up L2-EMBED, post-F1): mini-consumidor standalone (FetchContent) que cria contexto GLFW oculto, instancia `glintfx::UiLayer`, dá `load`+`render()` num FBO e lê 1 pixel — sem código GL/RmlUi além do contexto do host. Registrado em F1 T6 (coberto pelo `ui_layer_sanity`); entregar antes ou junto da F2.

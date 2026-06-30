@@ -188,6 +188,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 - **Tutorial:** [`docs/getting-started.md`](docs/getting-started.md), from zero to your first effect.
 - **How-to / reference:** [`docs/effects.md`](docs/effects.md), the RCSS effect syntax.
+- **Embed integration:** [`docs/embed-integration.md`](docs/embed-integration.md), the contract for hosts that own their window and GL context (`glintfx::UiLayer`).
 - **Architecture / rationale:** the [ADRs](docs/adr/README.md) and the [design spec](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md). **AI agents:** [`AGENTS.md`](AGENTS.md). **Security:** [`SECURITY.md`](SECURITY.md).
 

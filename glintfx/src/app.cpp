@@ -2,13 +2,9 @@
 // EN: App facade implementation — RAII wrapper over WindowGlfw + SystemInterface_GLFW + Engine.
 //     Engine owns RenderGl3 + Bootstrap. SystemInterface_GLFW lives here because it requires a
 //     GLFWwindow* at construction time (available only after WindowGlfw::create()).
-//     Destruction order (reverse declaration): engine (Rml::Shutdown) → system (delete GLFW
-//     interface) → window (destroy GL context). Order is intentional and must be preserved.
 // PT: Implementação da fachada App — wrapper RAII sobre WindowGlfw + SystemInterface_GLFW + Engine.
 //     Engine possui RenderGl3 + Bootstrap. SystemInterface_GLFW vive aqui pois exige
 //     GLFWwindow* na construção (disponível apenas após WindowGlfw::create()).
-//     Ordem de destruição (declaração reversa): engine (Rml::Shutdown) → system (delete interface
-//     GLFW) → window (destroi contexto GL). Ordem é intencional e deve ser preservada.
 // Copyright (c) 2026 Petrus Silva Costa
 // EN: gl3w for GL function pointers used in snapshot() (glReadPixels, glBindFramebuffer, etc.).
 // PT: gl3w para ponteiros de função GL usados em snapshot() (glReadPixels, glBindFramebuffer, etc.).

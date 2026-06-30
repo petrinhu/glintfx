@@ -24,6 +24,10 @@ bool Engine::attach(Rml::SystemInterface* system, int w, int h) {
   if (impl_->ok) return false; // EN: guard: already attached. PT: guard: já anexado.
   if (!impl_->render.init()) return false;
   if (!impl_->boot.init(system, impl_->render, w, h)) return false;
+  // EN: Belt-and-suspenders: init() above already guards these, but we cache ok_ here
+  //     so that all callers use a single flag rather than re-querying iface()/context().
+  // PT: Dupla segurança: o init() acima já guarda esses casos, mas cacheamos ok_ aqui
+  //     para que todos os callers usem um único flag em vez de re-consultar iface()/context().
   impl_->ok = (impl_->render.iface() != nullptr) && (impl_->boot.context() != nullptr);
   return impl_->ok;
 }

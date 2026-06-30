@@ -134,7 +134,121 @@
 - **Ainda não o movimento:** o movimento de foco real entre elementos exige o **documento** declarar elementos focáveis (`tabindex`) e, para a navegação direcional por setas, a propriedade RCSS `nav`. O caminho embed por si só não traz componentes focáveis, então os eventos chegam mas não há o que navegar.
 - **Para um menu do host (por exemplo um menu de verbos por WASD, setas ou gamepad):** mapeie o input para `glintfx::Key` e injete (pronto hoje), e autore o RML do menu com `tabindex` mais `nav`, ou use um componente de menu focus first. O ciclo por `Tab` funciona de imediato para elementos com `tabindex`; a navegação por setas exige a propriedade `nav`.
 
-## 6. Known limitations and gaps / Limitações conhecidas e gaps
+## 6. Data model / Modelo de dados
+
+**EN:** glintfx exposes RmlUi's data-binding system through a thin, type-safe C surface (9 methods total) with no engine-specific types in the public header. The same API is available on both `UiLayer` and `App`.
+
+**PT:** O glintfx expõe o sistema de data-binding do RmlUi por uma superfície C fina e type-safe (9 métodos no total) sem tipos internos do engine no header público. A mesma API está disponível em `UiLayer` e `App`.
+
+### Mandatory call order / Ordem obrigatória de chamada
+
+**EN:** The order is fixed and enforced by the engine (out-of-order calls return `false`):
+
+**PT:** A ordem é fixa e enforçada pelo engine (chamadas fora de ordem retornam `false`):
+
+```
+create_data_model(name)                    // 1. declare the model
+bind_number / bind_string / bind_bool / bind_list(key, ...)  // 2. register variables
+load(rml_path)                             // 3. compile document (views bind here)
+set_number / set_string / set_bool / set_list(key, ...)      // 4. update each frame
+```
+
+**EN:** `bind_*` called **after** `load()` returns `false`: RmlUi compiles the data-binding views at document load time and variable addresses must already be registered. The engine enforces the constraint and logs the violation.
+
+**PT:** `bind_*` chamado **apos** `load()` retorna `false`: o RmlUi compila as views de data-binding no momento do carregamento do documento e os endereços de variável precisam estar registrados antes desse ponto. O engine enforça a restrição e registra a violação.
+
+### API surface / Superfície da API
+
+**EN:** All 9 methods are on `UiLayer` ([`glintfx/include/glintfx/ui_layer.hpp`](../glintfx/include/glintfx/ui_layer.hpp)) and `App` ([`glintfx/include/glintfx/app.hpp`](../glintfx/include/glintfx/app.hpp)):
+
+**PT:** Todos os 9 métodos estão em `UiLayer` ([`glintfx/include/glintfx/ui_layer.hpp`](../glintfx/include/glintfx/ui_layer.hpp)) e `App` ([`glintfx/include/glintfx/app.hpp`](../glintfx/include/glintfx/app.hpp)):
+
+| Method / Método | Returns | Description / Descrição |
+| :--- | :--- | :--- |
+| `create_data_model(name)` | `bool` | Declare model; call before `bind_*` and before `load()`. / Declara model; chamar antes de `bind_*` e de `load()`. |
+| `bind_number(key, initial=0.0)` | `bool` | Register a `double` variable. / Registra variável `double`. |
+| `bind_string(key, initial="")` | `bool` | Register a string variable. / Registra variável string. |
+| `bind_bool(key, initial=false)` | `bool` | Register a `bool` variable. / Registra variável `bool`. |
+| `bind_list(key)` | `bool` | Register a string-list; iterable in RML via `data-for`. / Registra lista de strings; iterável no RML via `data-for`. |
+| `set_number(key, value)` | `void` | Update a bound number. / Atualiza número ligado. |
+| `set_string(key, value)` | `void` | Update a bound string. / Atualiza string ligada. |
+| `set_bool(key, value)` | `void` | Update a bound bool. / Atualiza bool ligado. |
+| `set_list(key, items, count)` | `void` | Replace list contents atomically. / Substitui conteúdo da lista atomicamente. |
+
+**EN:** Memory ownership: the bound variable slots are owned by the glintfx engine (`DataBinder` holds one `std::unique_ptr` per key in a `std::map` for stable addresses). The consumer passes values by copy and must not manage or hold raw pointers into cell memory.
+
+**PT:** Posse de memória: os slots de variável ligados são de posse do engine (`DataBinder` guarda um `std::unique_ptr` por chave em `std::map` para endereços estáveis). O consumidor passa valores por cópia e não deve gerenciar nem guardar ponteiros brutos para a memória das células.
+
+### Cockpit example / Exemplo do cockpit
+
+**EN:** A game HUD with a numeric HP bar, verb and target strings, and a scrolling action log. The `data-for` attribute iterates the list; `{{line}}` is the per-item alias.
+
+**PT:** Um HUD de jogo com barra de HP numérica, strings de verbo e alvo e um log de ações rolante. O atributo `data-for` itera a lista; `{{line}}` é o alias por item.
+
+```cpp
+// C++ -- create and bind before load()
+ui.create_data_model("hud");
+ui.bind_number("hp",     100.0);
+ui.bind_string("verb",   "");
+ui.bind_string("target", "");
+ui.bind_list  ("log");
+
+ui.load("cockpit.rml");   // views compile here
+
+// per-frame update
+ui.set_number("hp",     player.hp);
+ui.set_string("verb",   action.verb);
+ui.set_string("target", action.target);
+const char* lines[] = { log[0].c_str(), log[1].c_str(), log[2].c_str() };
+ui.set_list("log", lines, 3);
+```
+
+```html
+<!-- cockpit.rml excerpt -->
+<body data-model="hud">
+  <p>HP {{hp}}</p>
+  <p>{{verb}} -- {{target}}</p>
+  <p data-for="line : log">{{line}}</p>
+</body>
+```
+
+**EN:** The same pattern works with `App` (standalone mode). See the `data_model_smoke`, `data_model_scalar`, and `data_model_list` tests in `glintfx/tests/` for runnable examples.
+
+**PT:** O mesmo padrão funciona com `App` (modo standalone). Ver os testes `data_model_smoke`, `data_model_scalar` e `data_model_list` em `glintfx/tests/` para exemplos executáveis.
+
+---
+
+## 7. Texture formats / Formatos de textura
+
+**EN:** glintfx supports **PNG, JPEG (JPG), and TGA** for images referenced in RCSS (`image()`, `decorator:`, `@sprite-sheet`). Decoding is handled by **stb_image** (vendored at `glintfx/third_party/stb/stb_image.h`) via an override of `Rml::RenderInterface::LoadTexture`. The same backend serves both `App` and `UiLayer`.
+
+**PT:** O glintfx suporta **PNG, JPEG (JPG) e TGA** para imagens referenciadas em RCSS (`image()`, `decorator:`, `@sprite-sheet`). A decodificação e feita pelo **stb_image** (vendorizado em `glintfx/third_party/stb/stb_image.h`) via override de `Rml::RenderInterface::LoadTexture`. O mesmo backend serve `App` e `UiLayer`.
+
+### Alpha premultiplication / Premultiplicacao de alpha
+
+**EN:** After decoding, glintfx **premultiplies the alpha channel in-place** before uploading to the GPU: `out.rgb = in.rgb * in.a / 255; out.a = in.a`. This is required for correct compositing: the GL3 renderer blends with `GL_ONE, GL_ONE_MINUS_SRC_ALPHA` (premultiplied-alpha blend), consistent with the opaque-backbuffer contract in section 0. Without premultiplication, a PNG with straight alpha produces a bright halo around transparent regions.
+
+**PT:** Apos decodificar, o glintfx **premultiplica o canal alpha in-place** antes do upload para a GPU: `out.rgb = in.rgb * in.a / 255; out.a = in.a`. Isso e obrigatorio para composicao correta: o renderer GL3 mistura com `GL_ONE, GL_ONE_MINUS_SRC_ALPHA` (blend premultiplied-alpha), consistente com o contrato de backbuffer opaco da secao 0. Sem premultiplicacao, um PNG com alpha straight produz um halo claro ao redor das regioes transparentes.
+
+### Format recommendations / Recomendacoes de formato
+
+**EN:**
+- **PNG 32-bit (RGBA):** recommended for UI frames, portraits, icons, and any asset with transparency. The premultiplication step handles the alpha correctly.
+- **JPEG (JPG):** suitable for opaque background images (no alpha channel; premultiplication is a no-op). Lossy -- avoid for crisp UI line art.
+- **TGA:** legacy fallback; still supported. glintfx falls back to the upstream RmlUi TGA loader if stb_image decoding fails, so existing TGA assets do not regress.
+
+**PT:**
+- **PNG 32-bit (RGBA):** recomendado para molduras de UI, retratos, icones e qualquer asset com transparencia. A etapa de premultiplicacao trata o alpha corretamente.
+- **JPEG (JPG):** adequado para imagens de fundo opacas (sem canal alpha; premultiplicacao e no-op). Com perda -- evitar para arte com linhas nítidas de UI.
+- **TGA:** fallback legado; ainda suportado. O glintfx cai no loader TGA do upstream RmlUi se a decodificacao do stb_image falhar, entao assets TGA existentes nao regridem.
+
+**EN:** Place image files alongside the RML/RCSS that references them. RmlUi resolves texture paths relative to the referencing document (section 4). The `set_asset_base_url` override also applies to texture paths.
+
+**PT:** Coloque os arquivos de imagem ao lado do RML/RCSS que os referencia. O RmlUi resolve os caminhos de textura relativos ao documento que os referencia (secao 4). O override de `set_asset_base_url` tambem se aplica aos caminhos de textura.
+
+---
+
+## 8. Known limitations and gaps / Limitações conhecidas e gaps
 
 **EN:** Candidate features for a later release:
 1. ~~**Logical to physical scaling (dp_ratio).**~~ **Resolved in v0.2.2.** `UiLayerConfig::dp_ratio`, `UiLayer::set_dp_ratio(float)`, `AppConfig::dp_ratio`, and `App::set_dp_ratio(float)` are now available. See section 1 for the full contract.

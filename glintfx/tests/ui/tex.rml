@@ -1,0 +1,34 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- EN: Texture alpha test document — renders a 64x64 RGBA PNG circle on a dark background.
+         Used by the texture_png_alpha test to verify:
+           (a) PNG is decoded (not white fallback),
+           (b) transparency is respected (transparent corners show dark background),
+           (c) premultiplied alpha is correct (no bright halo outside the circle).
+         The path "circle_rgba.png" is resolved relative to this document's directory
+         (tests/ui/), so it resolves to tests/ui/circle_rgba.png via RmlUi's FileInterface.
+     PT: Documento de teste de textura alpha — renderiza círculo PNG RGBA 64x64 em fundo escuro.
+         Usado pelo teste texture_png_alpha para verificar:
+           (a) PNG é decodificado (não fallback branco),
+           (b) transparência é respeitada (cantos transparentes mostram fundo escuro),
+           (c) alpha premultiplicado está correto (sem halo claro fora do círculo).
+         O path "circle_rgba.png" é resolvido relativo ao diretório deste documento
+         (tests/ui/), resolvendo para tests/ui/circle_rgba.png via FileInterface do RmlUi. -->
+<rml>
+<head>
+  <style>
+    body {
+      background: #111111;
+      margin: 0;
+      padding: 0;
+    }
+    img {
+      width: 64dp;
+      height: 64dp;
+    }
+  </style>
+  <title>glintfx texture alpha test</title>
+</head>
+<body>
+  <img src="circle_rgba.png" />
+</body>
+</rml>

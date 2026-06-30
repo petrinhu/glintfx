@@ -275,6 +275,37 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: texture_png_alpha — PNG/alpha decode test (T4, v0.2.3).
+  #     Verifies three properties of the Gl3RenderInterface LoadTexture override:
+  #       (A) PNG decoded (not white fallback): red_count > 500
+  #       (B) Not fallback white: white_count < 2 000
+  #       (C) No halo (premultiplied alpha): reddish_count < 3 500
+  #     Assets (tex.rml + circle_rgba.png) are copied to build/tests/ui/ below.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/tex.rml" and the PNG
+  #     referenced therein resolve correctly via RmlUi's FileInterface.
+  # PT: texture_png_alpha — teste de decode PNG/alpha (T4, v0.2.3).
+  #     Verifica três propriedades do override de LoadTexture em Gl3RenderInterface:
+  #       (A) PNG decodificado (não fallback branco): red_count > 500
+  #       (B) Não é fallback branco: white_count < 2 000
+  #       (C) Sem halo (alpha premultiplicado): reddish_count < 3 500
+  #     Assets (tex.rml + circle_rgba.png) são copiados para build/tests/ui/ abaixo.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/tex.rml" e o PNG
+  #     referenciado nele resolvam corretamente via FileInterface do RmlUi.
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/tex.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/tex.rml COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/circle_rgba.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/circle_rgba.png COPYONLY)
+
+  add_executable(texture_png_alpha texture_png_alpha.cpp)
+  target_link_libraries(texture_png_alpha PRIVATE glintfx)
+  add_test(NAME texture_png_alpha
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:texture_png_alpha>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

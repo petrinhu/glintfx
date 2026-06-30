@@ -72,6 +72,7 @@ configure_file(
 #     Engine + UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap + SystemClock.
 set(_glintfx_sources
   src/render_gl3.cpp
+  src/stb_image_impl.cpp
   src/bootstrap.cpp
   src/data_binder.cpp
   src/engine.cpp
@@ -95,7 +96,11 @@ target_include_directories(glintfx
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  PRIVATE ${_rml_backends})
+  PRIVATE
+    ${_rml_backends}
+    # EN: stb_image header-only library (PNG/JPG/TGA decode) — vendored under third_party/stb/.
+    # PT: Biblioteca header-only stb_image (decode PNG/JPG/TGA) — vendorizada em third_party/stb/.
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
   # EN: gl3w include path comes transitively from linking PRIVATE gl3w (INTERFACE target).
   # PT: Include path do gl3w vem transitivamente do link PRIVATE gl3w (alvo INTERFACE).
 target_compile_definitions(glintfx PRIVATE

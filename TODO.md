@@ -32,7 +32,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | F1 | W12 | Infra | CI freestanding (Woodpecker LOCAL preferido, ou Forgejo Actions): build + roda toda a suíte de testes | Alta | TST-INT, TST-STATIC, TST-MEM | Média | ⏳ Pendente | — |
 | AUD-ABI | W12 | Auditoria | Auditoria de conformidade ABI/ASM: convenção de chamada, preservação de registradores callee-saved, alinhamento de stack 16B. Ver `AUDITORIAS.md` | Alta | B3, B4, D1, TST-INT | Média | ⏳ Pendente | — |
 | AUD-SEC | W12 | Auditoria | Auditoria de segurança: validação de args de syscall, bounds em mem/string, overflow inteiro em conv/alloc, ausência de UB. Ver `AUDITORIAS.md` | Alta | D3, E1, TST-INT | Média | ⏳ Pendente | — |
-| REL-TAG | W13 | Release | Tag de versão `v0.1.0` (primeiro runtime funcional + libc própria mínima) | Média | F1, AUD-ABI, AUD-SEC | Baixa | ⏳ Pendente | — |
+| REL-TAG | W13 | Release | Tag de versão **`core-v0.1.0`** (DISTINTA do glintfx `v0.1.0`): primeiro runtime funcional + libc própria mínima | Média | F1, AUD-ABI, AUD-SEC | Baixa | ⏳ Pendente | — |
 | DOC-WIKI | W14 | Docs | Wiki do repo + doc `.md` extensa para INICIANTE (bilíngue en→pt), via `technical-writer`. Pré-req: tag de versão | Média | REL-TAG | Média | ⏳ Pendente | — |
 
 ## Legenda
@@ -50,6 +50,8 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 
 Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3 (efeitos). Independente da Camada 0 (W0–W14 acima). O detalhamento de **features** depende do brainstorm bigtech (`L1-BRAINSTORM`). Ondas `LW*` são internas a esta trilha.
 
+> **Estado:** v1 ENTREGUE e mergeada (tag glintfx `v0.1.0`) — ondas LW1–LW4 ✅. Pendências pós-v1 (drenadas da INBOX): LW5 = bugfix/hardening rápido paralelizável; LW6 = CI + DX de distribuição; LW7 = backends adiados; LW8 = internalização clean-room (endgame). Caminho recomendado: fechar LW5 (barato) → LW6 (gate de CI verde) antes de abrir a v2.
+
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | L1-CLONE | LW1 | C++23/Setup | Clonar RmlUi + gl3w em `examples/` (gitignored) para estudo/RE | Alta | — | Baixa | ✅ Concluído | — |
@@ -58,7 +60,16 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1-BACKEND | LW3 | C++23/Plataforma | Janela/contexto **GLFW** + wrap `RenderInterface_GL3` + bootstrap RmlUi/FreeType; fix backbuffer opaco (alpha×compositor). SDL/X11 adiados | Alta | L1-BUILD | Alta | ✅ Concluído | ✓ |
 | L1-DEMO | LW4 | C++23/Demo | Showcase com os **4 efeitos** (glow, degradê, backdrop-blur, mask) — validado em GPU real (Intel+NVIDIA/Wayland) pelo líder 2026-06-29 | Alta | L1-BACKEND, L1-BRAINSTORM | Média | ✅ Concluído | ✓ |
 | L1-API | LW4 | C++23/API | Fachada `glintfx::App` RAII (pImpl, headers limpos), compat C++17→23 | Alta | L1-BRAINSTORM | Alta | ✅ Concluído | ✓ |
-| L1-INTERNALIZE | LW5 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
+| L1-DOCS | LW4 | C++23/Docs | Docs glintfx v0.1 mergeados: README, AGENTS.md, CHANGELOG, CONTRIBUTING, SECURITY, getting-started, effects | Alta | L1-API, L1-DEMO | Média | ✅ Concluído | ✓ |
+| L1.3-SNAPFLIP | LW5 | C++23/Bugfix | `snapshot()` sai de cabeça pra baixo (origem do `glReadPixels`); flip vertical das linhas | Média | L1-API | Baixa | ⏳ Pendente | — |
+| L1.4-GUARDS | LW5 | C++23/Hardening | Guards null: `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`; `glfwTerminate` sem flag `glfw_inited_`) e `App` (`poll_events`/`render` sem `impl_->ok`). Não crasham, só assimetria | Baixa | L1-BACKEND, L1-API | Baixa | ⏳ Pendente | — |
+| L1.5-DEMOBG | LW5 | C++23/Demo | `body { width: 100% }`: fundo do demo não cobre a janela inteira | Baixa | L1-DEMO | Baixa | ⏳ Pendente | — |
+| L1.6-TESTDOC | LW5 | C++23/Docs | `TESTES.md`: corrigir `xvfb-run` na seção "GPU real" (Xvfb usa llvmpipe, não GPU real) | Média | — | Baixa | ⏳ Pendente | — |
+| L1.2-CI | LW6 | C++23/Infra | CI versionado (Woodpecker **LOCAL** preferido, ou Forgejo Actions) p/ gate automático da suíte glintfx (4 smokes + `render_sanity`) sob Xvfb | Alta | L1-DEMO | Média | ⏳ Pendente | — |
+| L1.1-ERRSTRAT | LW6 | C++23/API | `App` estratégia de erro de construção (hardening DX p/ distribuição): hoje falha silenciosamente; considerar `bool ok()` e/ou exceptions opcionais. **Decisão de design → líder/CPO** | Alta | L1-API | Média | ⏳ Pendente | — |
+| L1.8-FINDPKG | LW6 | C++23/Build | `find_package(glintfx)` completo: `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` (removido na Task 8 por atrito com export-set do CMake 4.x). Hoje consumo via FetchContent/`add_subdirectory` (drop-in provado) | Média | L1-BUILD | Média | ⏳ Pendente | — |
+| L1.7-BACKENDS | LW7 | C++23/Plataforma | Backends SDL/X11 (adiados da v1; só GLFW entregue) | Baixa | L1-BACKEND | Alta | ⏳ Pendente | — |
+| L1-INTERNALIZE | LW8 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP. **Épico de fim-de-projeto:** independência clean-room das libs userspace (RmlUi/gl3w/FreeType/GLFW); fronteira irredutível = libGL/driver/kernel | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
 ## v2 — Component Library (Atomic Design) — PRÓXIMO (não iniciado)
 
@@ -66,14 +77,10 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 >
 > **Escopo/breakdown a definir pela bigtech (não autorar inline):** inventário de componentes, tokens, variantes de efeito, faseamento e modelo de distribuição da v2 serão definidos em **brainstorm próprio** por **Capitolino/CPO** (produto) + **ux-ui-designer** (design system) + frontend/qa, com spec e plano próprios — **só quando a v2 iniciar**. Avaliação inicial em `AtomicEval` (ux-ui-designer): tokens-first, faseado por demanda, anti-OE.
 
+| ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| L2-BRAINSTORM | V2W1 | v2/Produto | **Porta de entrada da v2.** Brainstorm bigtech da Component Library (Atomic Design): inventário, tokens, variantes, faseamento e modelo de distribuição. **Breakdown NÃO autorado aqui** — Capitolino/CPO + ux-ui-designer | Alta | v1 fechada (LW1–LW4; idealmente LW6) | Média | 🎨 Pendente design | — |
+
 ## INBOX (descobertas não priorizadas)
 
-- **`App` estratégia de erro de construção** (hardening DX p/ distribuição): hoje a construção falha silenciosamente (v1 só documenta — N2). Considerar `bool ok()` e/ou exceptions opcionais.
-- **CI versionado** (N5): Forgejo Actions / Woodpecker para gate automático da suíte glintfx (4 smokes + `render_sanity`) sob Xvfb. Hoje os testes existem mas nada automatiza o gate.
-- **`snapshot()` flip vertical**: captura sai de cabeça pra baixo (origem do `glReadPixels`); endireitar as linhas.
-- **Guards null** (T2/T5): `window_glfw` (`make_current`/`swap`/`poll` sem checar `win_`; `glfwTerminate` sem flag `glfw_inited_`) e `App` (`poll_events`/`render` sem `impl_->ok`). Não crasham (no-op downstream), só assimetria.
-- **`body { width: 100% }`**: fundo do demo não cobre a janela inteira.
-- **`TESTES.md`** (T7): corrigir `xvfb-run` citado na seção "GPU real" (Xvfb usa llvmpipe, não GPU real).
-- **Backends SDL/X11**: adiados da v1 (só GLFW entregue).
-- **`find_package(glintfx)` completo** (pós-v1): `glintfxConfig.cmake` + `find_dependency()` + `install(EXPORT)` — removido na Task 8 por atrito com export-set do CMake 4.x. Consumo hoje via FetchContent/`add_subdirectory` (drop-in provado).
-- **Tag da Camada 0**: o `REL-TAG` do runtime C/ASM precisa de tag DISTINTA (ex.: `core-v0.1.0`) — o glintfx usa `v0.1.0`.
+_Vazia — todas as descobertas foram drenadas e integradas nas ondas da Camada 1 (LW5–LW8) e na tag da Camada 0 (`REL-TAG` → `core-v0.1.0`)._

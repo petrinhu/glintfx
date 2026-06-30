@@ -20,6 +20,12 @@ body
        PT: Display padrão do RmlUi é 'inline' para TODOS os elementos (difere do HTML).
            'display: block' explícito é necessário para seções empilharem verticalmente. */
     display: block;
+    /* EN: Fill the full viewport so background-color covers the entire window.
+           Without explicit dimensions RmlUi sizes body to its content only.
+       PT: Preenche a viewport inteira para que background-color cubra toda a janela.
+           Sem dimensões explícitas o RmlUi dimensiona o body pelo conteúdo apenas. */
+    width: 100%;
+    height: 100%;
     font-family: Sans;
     font-size: 16px;
     color: #fff;

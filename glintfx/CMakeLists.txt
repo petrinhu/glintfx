@@ -90,26 +90,84 @@ if(GLINTFX_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-# EN: Install rules — archive + public headers. Only active when glintfx is the
-#     top-level project (not when consumed via FetchContent/add_subdirectory).
+# EN: Install rules — active only when glintfx is the top-level project (not when
+#     consumed via FetchContent/add_subdirectory).
 #
-#     NOTE: install(EXPORT) / glintfxConfig.cmake is a post-v1 item. CMake 4.x
-#     requires all PRIVATE transitive deps of exported targets to be in an export
-#     set too; since RmlUi and gl3w are not installed targets, the export would
-#     fail at generate time. Consumers should use FetchContent (alias above) until
-#     a proper Config.cmake with find_dependency() calls is written.
+#     find_package(glintfx) strategy (L1.8-FINDPKG):
+#       - install(EXPORT) is intentionally NOT used. CMake 4.x requires all PRIVATE
+#         transitive deps of exported targets to be in the same export set; rmlui_core
+#         and gl3w are FetchContent/vendored targets that cannot be installed as proper
+#         CMake exported targets.
+#       - gl3w is an INTERFACE library: its single source (gl3w.c) is compiled directly
+#         into libglintfx.a, so no separate archive is needed.
+#       - rmlui_core IS a real archive (librmlui.a, 33 MB). It is co-installed under
+#         <libdir>/glintfx/ (private subdir) so it does not pollute the root lib dir
+#         and does not conflict with a consumer-side RmlUi installation.
+#       - glintfxConfig.cmake.in creates the glintfx::glintfx IMPORTED target
+#         manually, referencing the co-installed rmlui archive + system deps via
+#         find_dependency(OpenGL / glfw3 / Freetype).
+#       - FetchContent drop-in (add_library alias above) remains the recommended path
+#         for consumers that build from source. find_package is the pre-built path.
 #
-# PT: Regras de install — arquivo + headers públicos. Ativas apenas quando glintfx
-#     é o projeto top-level (não quando consumido via FetchContent/add_subdirectory).
+# PT: Regras de install — ativas apenas quando glintfx é o projeto top-level.
 #
-#     NOTA: install(EXPORT) / glintfxConfig.cmake é item pós-v1. O CMake 4.x
-#     exige que todas as deps PRIVATE transitivas de targets exportados também
-#     estejam em export sets; como RmlUi e gl3w não são targets instalados, o
-#     export falharia em generate. Consumidores devem usar FetchContent (alias
-#     acima) até que um Config.cmake adequado com find_dependency() seja escrito.
+#     Estratégia find_package(glintfx) (L1.8-FINDPKG):
+#       - install(EXPORT) é intencionalmente OMITIDO. O CMake 4.x exige que todas
+#         as deps PRIVATE transitivas de targets exportados estejam no mesmo export
+#         set; rmlui_core e gl3w são targets FetchContent/vendorizados que não podem
+#         ser instalados como targets CMake exportados.
+#       - gl3w é uma biblioteca INTERFACE: seu único fonte (gl3w.c) é compilado
+#         diretamente em libglintfx.a, então nenhum arquivo separado é necessário.
+#       - rmlui_core É um arquivo real (librmlui.a, 33 MB). É co-instalado em
+#         <libdir>/glintfx/ (subdiretório privado) para não poluir o diretório raiz
+#         de libs e não conflitar com uma instalação de RmlUi pelo consumidor.
+#       - glintfxConfig.cmake.in cria o target IMPORTED glintfx::glintfx
+#         manualmente, referenciando o arquivo rmlui co-instalado + deps de sistema
+#         via find_dependency(OpenGL / glfw3 / Freetype).
+#       - O drop-in FetchContent (alias add_library acima) permanece o caminho
+#         recomendado para consumidores que buildam do fonte. find_package é o
+#         caminho para binários pré-compilados.
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+
+  # EN: Main static archive.
+  # PT: Arquivo estático principal.
   install(TARGETS glintfx
           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+  # EN: Co-install rmlui_core archive under <libdir>/glintfx/ (private subdir).
+  #     $<TARGET_FILE:rmlui_core> evaluates at generate time to the build-tree path
+  #     of librmlui.a.
+  # PT: Co-instala o arquivo rmlui_core em <libdir>/glintfx/ (subdiretório privado).
+  #     $<TARGET_FILE:rmlui_core> avalia em tempo de geração para o path de build
+  #     de librmlui.a.
+  install(FILES $<TARGET_FILE:rmlui_core>
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/glintfx)
+
+  # EN: Public headers.
+  # PT: Headers públicos.
   install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+  # EN: CMake package config — enables find_package(glintfx REQUIRED).
+  #     PATH_VARS exposes PACKAGE_CMAKE_INSTALL_LIBDIR / PACKAGE_CMAKE_INSTALL_INCLUDEDIR
+  #     as relocated absolute paths inside the installed Config.cmake.
+  # PT: Config do pacote CMake — habilita find_package(glintfx REQUIRED).
+  #     PATH_VARS expõe PACKAGE_CMAKE_INSTALL_LIBDIR / PACKAGE_CMAKE_INSTALL_INCLUDEDIR
+  #     como paths absolutos relocados dentro do Config.cmake instalado.
+  configure_package_config_file(
+    cmake/glintfxConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glintfx
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR)
+
+  write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+  install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glintfx)
 endif()

@@ -98,6 +98,20 @@ add_test(NAME render_sanity
 #     Bloqueado por GLINTFX_GOLDEN_TEST (default OFF) para não poluir o gate padrão de CI.
 #     Ativar com -DGLINTFX_GOLDEN_TEST=ON ao rodar em GPU real com glintfx_capture para
 #     geração de referência.
+# EN: ui_layer_attach — verify UiLayer embed attach: host creates GL context (hidden GLFW window),
+#     UiLayer attaches to it, load() + set_viewport() must not crash and ok() must be true.
+# PT: ui_layer_attach — verifica attach do UiLayer embed: host cria contexto GL (janela GLFW oculta),
+#     UiLayer anexa a ele, load() + set_viewport() não devem crashar e ok() deve ser true.
+add_executable(ui_layer_attach ui_layer_attach.cpp)
+target_link_libraries(ui_layer_attach PRIVATE glintfx)
+# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
+# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+add_test(NAME ui_layer_attach
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_attach>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 option(GLINTFX_GOLDEN_TEST
   "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
   OFF)

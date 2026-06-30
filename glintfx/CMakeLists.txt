@@ -41,6 +41,7 @@ add_library(glintfx STATIC
   src/bootstrap.cpp
   src/engine.cpp
   src/system_clock.cpp
+  src/ui_layer.cpp
   ${_rml_backends}/RmlUi_Renderer_GL3.cpp
   ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
 target_include_directories(glintfx

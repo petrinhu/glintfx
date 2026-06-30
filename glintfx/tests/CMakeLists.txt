@@ -140,6 +140,20 @@ add_test(NAME gl_state_guard
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# EN: ui_layer_events — inject representative UiEvent sequence (mouse, key nav, resize) and
+#     verify no crash + ok() stays true after the sequence (T4 — embed mode input).
+# PT: ui_layer_events — injeta sequência representativa de UiEvent (mouse, nav por tecla, resize)
+#     e verifica sem crash + ok() permanece true após a sequência (T4 — input embed mode).
+add_executable(ui_layer_events ui_layer_events.cpp)
+target_link_libraries(ui_layer_events PRIVATE glintfx)
+# EN: min.rml already copied to build/tests/ by engine_smoke configure_file above.
+# PT: min.rml já copiado para build/tests/ pelo configure_file do engine_smoke acima.
+add_test(NAME ui_layer_events
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_events>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 option(GLINTFX_GOLDEN_TEST
   "Enable pixel-exact golden-image test (requires real GPU or stable software renderer)"
   OFF)

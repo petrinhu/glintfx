@@ -240,6 +240,41 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: data_model_list — live-list propagation test (T3, v0.2.3).
+  #     Verifies that bind_list() + set_list() wires a string-list variable to a
+  #     data-for loop and that mutations propagate to the render:
+  #       Snapshot A: log list empty  → near-zero bright pixels.
+  #       Snapshot B: 3 items pushed  → bright_B > bright_A (text lines appeared).
+  #     Pixel statistic: count of pixels with max(R,G,B) > 100 (bright threshold).
+  #     Window: 400x300. Document: tests/ui/log.rml (data-model "hud"; iterates "log").
+  #     Font resolved from WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — available via the showcase CMake block.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/ui/log.rml" resolves to
+  #     build/tests/ui/log.rml (copied by configure_file below).
+  # PT: data_model_list — teste de propagação de lista viva (T3, v0.2.3).
+  #     Verifica que bind_list() + set_list() liga uma variável de lista de strings a
+  #     um laço data-for e que mutações propagam para o render:
+  #       Snapshot A: lista log vazia  → pixels claros quase nulos.
+  #       Snapshot B: 3 itens pushados → bright_B > bright_A (linhas aparecem).
+  #     Estatística de pixel: contagem de pixels com max(R,G,B) > 100 (limiar de brilho).
+  #     Janela: 400x300. Documento: tests/ui/log.rml (data-model "hud"; itera "log").
+  #     Fonte resolvida do WORKING_DIRECTORY (CMAKE_BINARY_DIR = build/) via path
+  #     "tests/assets/OpenSans-Regular.ttf" — disponível via bloco CMake do showcase.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/ui/log.rml" resolva para
+  #     build/tests/ui/log.rml (copiado pelo configure_file abaixo).
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/log.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/ui/log.rml COPYONLY)
+
+  add_executable(data_model_list data_model_list.cpp)
+  target_link_libraries(data_model_list PRIVATE glintfx)
+  add_test(NAME data_model_list
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_list>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

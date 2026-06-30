@@ -1,0 +1,63 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: Log data-model test document (T3, v0.2.3).
+      Binds to the "hud" data model; iterates the "log" string-list variable
+      with a data-for loop:
+        <p data-for="line : log">{{line}}</p>
+      Each item in the list becomes one <p> block with bright text on a dark body.
+      Snapshot A (empty list) should show near-zero bright pixels.
+      Snapshot B (3 items) should show significantly more bright pixels (3 lines of text).
+      Font path "tests/assets/OpenSans-Regular.ttf" is relative to the test process CWD
+      (CMAKE_BINARY_DIR = build/); WORKING_DIRECTORY in CMakeLists is set accordingly.
+      The showcase CMake block copies demos/showcase/assets/ to build/tests/assets/, so the
+      font is available when GLINTFX_BACKEND_GLFW=ON (same block as this test).
+      Large font + dark background maximises the pixel-statistics signal for the assertion
+      in data_model_list.cpp: bright_B > bright_A.
+
+  PT: Documento de teste do data-model de log (T3, v0.2.3).
+      Liga ao data model "hud"; itera a variável de lista de strings "log"
+      com um laço data-for:
+        <p data-for="line : log">{{line}}</p>
+      Cada item da lista vira um bloco <p> com texto claro em body escuro.
+      Snapshot A (lista vazia) deve mostrar pixels claros quase nulos.
+      Snapshot B (3 itens) deve mostrar significativamente mais pixels claros (3 linhas).
+      O caminho da fonte "tests/assets/OpenSans-Regular.ttf" é relativo ao CWD do processo
+      de teste (CMAKE_BINARY_DIR = build/); WORKING_DIRECTORY no CMakeLists é definido assim.
+      O bloco CMake do showcase copia demos/showcase/assets/ para build/tests/assets/, então
+      a fonte está disponível com GLINTFX_BACKEND_GLFW=ON (mesmo bloco deste teste).
+      Fonte grande + fundo escuro maximiza o sinal para as estatísticas de pixel usadas
+      em data_model_list.cpp: bright_B > bright_A.
+-->
+<rml>
+<head>
+  <style>
+    /* EN: Load OpenSans from the test asset dir (resolved from process CWD = build/).
+       PT: Carrega OpenSans do diretório de asset de teste (resolvido do CWD = build/). */
+    @font-face { font-family: "Sans"; src: "tests/assets/OpenSans-Regular.ttf"; }
+
+    /* EN: Full-viewport dark body; large bright text ensures pixel count is detectable.
+       PT: Body escuro full-viewport; texto claro grande garante que a contagem de pixels
+           seja detectável. */
+    body {
+      background: #111111;
+      color: #eeeeee;
+      font-family: "Sans";
+      font-size: 36px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* EN: Block display so each log line stacks vertically.
+       PT: Display block para que cada linha do log empilhe verticalmente. */
+    p { display: block; }
+  </style>
+  <title>glintfx log data-model test</title>
+</head>
+<body data-model="hud">
+  <!-- EN: data-for iterates the "log" list; alias "line" holds each string item.
+       PT: data-for itera a lista "log"; alias "line" contém cada item de string. -->
+  <p data-for="line : log">{{line}}</p>
+</body>
+</rml>

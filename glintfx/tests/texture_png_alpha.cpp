@@ -124,8 +124,12 @@ int main()
     app.poll_events(); app.update(); app.render();
     app.poll_events(); app.update(); app.render();
 
-    // EN: Render one more frame, capture PPM.
-    // PT: Renderiza mais um frame, captura PPM.
+    // EN: update() propagates any pending model changes to the DOM; snapshot() renders
+    //     one frame internally (begin_frame + RmlUi render + end_frame), reads the
+    //     back-buffer before the swap, and writes the PPM. No explicit render() needed.
+    // PT: update() propaga mudanças pendentes de model ao DOM; snapshot() renderiza
+    //     um frame internamente (begin_frame + render RmlUi + end_frame), lê o
+    //     back-buffer antes do swap e grava o PPM. Sem chamada explícita a render().
     app.update();
     if (!app.snapshot("tex_out.ppm")) {
         fputs("texture_png_alpha FAIL: snapshot() returned false\n", stderr);

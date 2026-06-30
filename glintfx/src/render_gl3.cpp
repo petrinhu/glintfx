@@ -22,33 +22,49 @@
 // PT: stb_image — declarações do header; implementação compilada em stb_image_impl.cpp.
 #include "stb_image.h"
 
+#include <memory>
 #include <vector>
 
 // ---------------------------------------------------------------------------
 // EN: Gl3RenderInterface — subclass of RenderInterface_GL3 that overrides LoadTexture
-//     to support PNG and JPG files (upstream handles TGA only). The override:
+//     to support PNG, JPG, and TGA files with correct premultiplied alpha. The override:
 //       1. Reads raw bytes via RmlUi's FileInterface (respects the asset base-URL).
 //       2. Decodes via stbi_load_from_memory (forces 4-channel RGBA output).
 //       3. Premultiplies alpha: R = R*A/255, G = G*A/255, B = B*A/255.
 //          The GL3 backend composites in premultiplied-alpha space (GL_ONE,
 //          GL_ONE_MINUS_SRC_ALPHA); uploading straight-alpha would cause a bright
-//          halo around semi-transparent or hard-edged PNG regions.
+//          halo around semi-transparent or hard-edged PNG/TGA regions.
 //       4. Delegates the GL upload to the base-class GenerateTexture (reuses
 //          GL_RGBA8 + mipmaps + filter — no GL reimplementation here).
-//       5. Falls back to RenderInterface_GL3::LoadTexture on any read/decode error
-//          so TGA files and any other format handled upstream still work.
+//       5. Falls back to RenderInterface_GL3::LoadTexture only on file read error
+//          or stb decode failure.
+//
+//     TGA bypass note: this override also intercepts TGA files (stb decodes TGA).
+//     This is intentional: the upstream RenderInterface_GL3::LoadTexture does NOT
+//     premultiply TGA pixels, but the GL3 backend composites in premultiplied space.
+//     By routing all decodable formats through stb + premultiply we get consistent
+//     alpha compositing for every image format.  The upstream TGA path is only
+//     reachable if stb fails to open or decode the file (error/unsupported case).
+//
 // PT: Gl3RenderInterface — subclasse de RenderInterface_GL3 que sobrescreve LoadTexture
-//     para suportar arquivos PNG e JPG (upstream trata apenas TGA). O override:
+//     para suportar PNG, JPG e TGA com alpha premultiplicado correto. O override:
 //       1. Lê bytes brutos via FileInterface do RmlUi (respeita a base-URL de assets).
 //       2. Decodifica via stbi_load_from_memory (força saída RGBA de 4 canais).
 //       3. Premultiplica o alpha: R = R*A/255, G = G*A/255, B = B*A/255.
 //          O backend GL3 compõe em espaço premultiplied-alpha (GL_ONE,
 //          GL_ONE_MINUS_SRC_ALPHA); fazer upload de alpha straight causaria halo
-//          claro ao redor de regiões PNG semi-transparentes ou de bordas duras.
+//          claro ao redor de regiões PNG/TGA semi-transparentes ou de bordas duras.
 //       4. Delega o upload GL ao GenerateTexture da base (reusa GL_RGBA8 + mipmaps
 //          + filtro — sem reimplementação de GL aqui).
-//       5. Faz fallback para RenderInterface_GL3::LoadTexture em qualquer erro de
-//          leitura/decode, preservando TGA e outros formatos tratados pelo upstream.
+//       5. Faz fallback para RenderInterface_GL3::LoadTexture apenas em erro de
+//          leitura de arquivo ou falha de decode do stb.
+//
+//     Nota de bypass do TGA: este override também intercepta TGA (stb decodifica TGA).
+//     Isso é intencional: o RenderInterface_GL3::LoadTexture do upstream NÃO premultiplica
+//     pixels TGA, mas o backend GL3 compõe em espaço premultiplied. Ao rotear todos os
+//     formatos decodificáveis pelo stb + premultiply obtemos composição de alpha consistente
+//     para todo formato de imagem. O caminho TGA do upstream só é alcançado se o stb
+//     falhar ao abrir ou decodificar o arquivo (caso de erro / formato não suportado).
 // ---------------------------------------------------------------------------
 class Gl3RenderInterface : public RenderInterface_GL3 {
 public:
@@ -73,42 +89,54 @@ public:
     size_t len = fi->Tell(fh);
     fi->Seek(fh, 0, SEEK_SET);
     std::vector<unsigned char> buf(len);
-    fi->Read(buf.data(), len, fh);
+    size_t nread = fi->Read(buf.data(), len, fh);
     fi->Close(fh);
+    if (nread != len) {
+      // EN: Short read — file truncated or I/O error; fallback to base.
+      // PT: Leitura incompleta — arquivo truncado ou erro de I/O; fallback para base.
+      return RenderInterface_GL3::LoadTexture(dims, source);
+    }
 
     // EN: Decode via stb_image (forces 4-channel RGBA output regardless of source format).
-    // PT: Decodifica via stb_image (força saída RGBA de 4 canais independente do formato de entrada).
+    //     RAII via unique_ptr: stbi_image_free is called on any exit path, including
+    //     exceptions thrown by GenerateTexture, without a manual stbi_image_free call.
+    // PT: Decodifica via stb_image (força saída RGBA de 4 canais independente do formato).
+    //     RAII via unique_ptr: stbi_image_free é chamado em qualquer saída, incluindo
+    //     exceções de GenerateTexture, sem chamada manual a stbi_image_free.
     int w = 0, h = 0, n = 0;
-    unsigned char* px = stbi_load_from_memory(
-        buf.data(), static_cast<int>(len), &w, &h, &n, 4);
+    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
+        stbi_load_from_memory(buf.data(), static_cast<int>(len), &w, &h, &n, 4),
+        &stbi_image_free);
     if (!px) {
-      // EN: Unknown format or decode error — fallback to base (preserves TGA support).
-      // PT: Formato desconhecido ou erro de decode — fallback para base (preserva suporte a TGA).
+      // EN: Unknown format or decode error — fallback to base.
+      // PT: Formato desconhecido ou erro de decode — fallback para base.
       return RenderInterface_GL3::LoadTexture(dims, source);
     }
 
     // EN: Premultiply alpha — the GL3 backend blends with GL_ONE, GL_ONE_MINUS_SRC_ALPHA
     //     which assumes premultiplied RGB. Without this step, transparent pixels whose
-    //     source PNG stores a non-zero RGB (common in anti-aliased edges and hard-edge
+    //     source image stores a non-zero RGB (common in anti-aliased edges and hard-edge
     //     transparent regions) produce a bright colour halo around the rendered shape.
     // PT: Premultiplica o alpha — o backend GL3 faz blend com GL_ONE, GL_ONE_MINUS_SRC_ALPHA
-    //     que assume RGB premultiplicado. Sem esta etapa, pixels transparentes cujo PNG
+    //     que assume RGB premultiplicado. Sem esta etapa, pixels transparentes cuja imagem
     //     de origem armazena RGB não-zero (comum em bordas anti-aliased e regiões
     //     transparentes de borda dura) produzem um halo colorido claro ao redor da forma.
+    unsigned char* p = px.get();
     for (int i = 0; i < w * h; ++i) {
-      unsigned int a      = px[i * 4 + 3];
-      px[i * 4 + 0] = static_cast<unsigned char>(px[i * 4 + 0] * a / 255u);
-      px[i * 4 + 1] = static_cast<unsigned char>(px[i * 4 + 1] * a / 255u);
-      px[i * 4 + 2] = static_cast<unsigned char>(px[i * 4 + 2] * a / 255u);
+      unsigned int a = p[i * 4 + 3];
+      p[i * 4 + 0] = static_cast<unsigned char>(p[i * 4 + 0] * a / 255u);
+      p[i * 4 + 1] = static_cast<unsigned char>(p[i * 4 + 1] * a / 255u);
+      p[i * 4 + 2] = static_cast<unsigned char>(p[i * 4 + 2] * a / 255u);
     }
 
     dims = Rml::Vector2i(w, h);
     Rml::TextureHandle handle = RenderInterface_GL3::GenerateTexture(
         Rml::Span<const Rml::byte>(
-            reinterpret_cast<const Rml::byte*>(px),
+            reinterpret_cast<const Rml::byte*>(p),
             static_cast<size_t>(w) * static_cast<size_t>(h) * 4u),
         dims);
-    stbi_image_free(px);
+    // EN: px freed automatically by unique_ptr destructor on scope exit.
+    // PT: px liberado automaticamente pelo destrutor do unique_ptr ao sair do escopo.
     return handle;
   }
 };

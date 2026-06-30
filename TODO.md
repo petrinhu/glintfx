@@ -71,7 +71,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1.7-BACKENDS | LW7 | C++23/Plataforma | Backends SDL/X11 (adiados da v1; só GLFW entregue) | Baixa | L1-BACKEND | Alta | ⏳ Pendente | — |
 | L1-INTERNALIZE | LW8 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP. **Épico de fim-de-projeto:** independência clean-room das libs userspace (RmlUi/gl3w/FreeType/GLFW); fronteira irredutível = libGL/driver/kernel | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
-## v2 — Component Library (Atomic Design) — PRÓXIMO (não iniciado)
+## v2 — Component Library (Atomic Design) — SPEC APROVADO (em implementação)
 
 > **Decisão do líder (2026-06-29):** o glintfx será **distribuído e reusado em vários projetos** ("todas as features") → vira **produto distribuível**, o que justifica uma **component library / design system** (Atomic Design) sobre o engine da v1. Sequência decidida: **fechar a v1 primeiro**; a v2 é a próxima fase.
 >
@@ -79,7 +79,10 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| L2-BRAINSTORM | V2W1 | v2/Produto | **Porta de entrada da v2.** Brainstorm bigtech da Component Library (Atomic Design): inventário, tokens, variantes, faseamento e modelo de distribuição. **Breakdown NÃO autorado aqui** — Capitolino/CPO + ux-ui-designer | Alta | v1 fechada (LW1–LW4; idealmente LW6) | Média | 🎨 Pendente design | — |
+| L2-BRAINSTORM | V2W1 | v2/Produto | **Porta de entrada da v2 — CONCLUÍDA.** Brainstorm bigtech (CPO+ux-ui-designer) + verdito de integração GusWorld (software-architect) + [ADR-0008](docs/adr/0008-embed-guest-mode.md) (embed mode) + [spec da v2](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (aprovado pelo líder) | Alta | v1 fechada | Média | ✅ Concluído | ✓ |
+| L2-EMBED | V2W2 | v2/Arquitetura | **Keystone (F1):** embed/guest mode `UiLayer` (anexa ao contexto GL do host, compose-only, eventos injetados, save/restore de estado GL). Detalhe no plano (writing-plans). **OWD** | Alta | L2-BRAINSTORM | Alta | ⏳ Pendente | — |
+| L2-COMPONENTS | V2W3 | v2/UI | **F2:** tokens-first + component library de UI de jogo (button/panel/dialog/menu/label, efeitos como modificadores) + `glintfx::ui` opt-in. Detalhe no plano | Alta | L2-EMBED | Alta | ⏳ Pendente | — |
+| L2-GUSWORLD | V2W4 | v2/Integração | **F3:** GusWorld adota o glintfx via embed (ADR-010), aposenta o HUD vendorizado. Esforço no repo GusWorld | Média | L2-EMBED, L2-COMPONENTS | Alta | ⏳ Pendente | — |
 
 ## INBOX (descobertas não priorizadas)
 

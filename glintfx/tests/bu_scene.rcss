@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the base_url sanity scene (bu_scene.rml).
+       Same visual as embed_scene.rcss: dark body + vivid gradient + glow card.
+       No @font-face / no text → zero font file dependency → safe under llvmpipe/Xvfb.
+   PT: Estilos para a cena de sanidade do base_url (bu_scene.rml).
+       Mesmo visual do embed_scene.rcss: body escuro + gradiente vívido + card glow.
+       Sem @font-face / sem texto → zero dep de arquivo de fonte → seguro sob llvmpipe/Xvfb. */
+
+body
+{
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: #0d1020;
+}
+
+.grad-section
+{
+    display: block;
+    width: 100%;
+    height: 300px;
+    decorator: linear-gradient(135deg, #6a0ddc, #e02828, #0f8a4a);
+}
+
+.glow-card
+{
+    display: block;
+    width: 200px;
+    height: 80px;
+    margin: 30px auto;
+    background-color: #1e2a50;
+    box-shadow: #5fd0ff 0 0 32px 8px;
+}

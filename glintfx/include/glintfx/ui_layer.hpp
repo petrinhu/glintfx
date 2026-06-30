@@ -74,11 +74,11 @@ public:
   // EN: Override the base URL for asset resolution (fonts, images, RCSS).
   //     When set, relative paths passed to Open() are resolved as base_url/path.
   //     Absolute paths are unaffected. Call before load() for the URL to take effect.
-  //     Pass nullptr or "" to clear.
+  //     Pass nullptr or "" to clear. Safe to call after ok() is true.
   // PT: Sobrepõe o base URL para resolução de assets (fontes, imagens, RCSS).
   //     Quando definido, caminhos relativos passados a Open() são resolvidos como base_url/path.
   //     Caminhos absolutos não são afetados. Chame antes de load() para o URL ter efeito.
-  //     Passe nullptr ou "" para limpar.
+  //     Passe nullptr ou "" para limpar. Seguro chamar após ok() ser true.
   void set_asset_base_url(const char* url);
 
   // EN: Advance the UI context by one step (call once per frame before render()).

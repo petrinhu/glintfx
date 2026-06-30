@@ -41,8 +41,27 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   Rml::SetFileInterface(&impl_->file_iface);
 
   if (!Rml::Initialise()) {
-    // EN: Initialise() failed — clean up and leave object safe for shutdown()/dtor.
-    // PT: Initialise() falhou — limpa e deixa objeto seguro para shutdown()/dtor.
+    // EN: Initialise() failed — clear the global FileInterface pointer BEFORE deleting
+    //     impl_, which owns file_iface. Without this, the RmlUi-global `file_interface`
+    //     pointer would dangle after the delete (use-after-free on the next Open() call,
+    //     which can happen in error-log paths inside RmlUi itself).
+    //     SetFileInterface(nullptr) is safe here: the implementation is a single global
+    //     assignment (Rml::Core.cpp), and RmlUi is not initialised, so no code path
+    //     will dereference the pointer between this call and the delete.
+    //     Note: CreateContext() failure is handled differently — that path calls
+    //     Rml::Shutdown(), which internally sets file_interface=nullptr before returning,
+    //     so no extra reset is needed there.
+    // PT: Initialise() falhou — limpa o ponteiro global do FileInterface ANTES de deletar
+    //     impl_, que é dono do file_iface. Sem isso, o ponteiro `file_interface` global do
+    //     RmlUi ficaria pendente após o delete (use-after-free na próxima chamada a Open(),
+    //     que pode ocorrer em caminhos de log de erro dentro do próprio RmlUi).
+    //     SetFileInterface(nullptr) é seguro aqui: a implementação é uma única atribuição
+    //     global (Rml::Core.cpp), e o RmlUi não está inicializado, então nenhum caminho de
+    //     código desreferenciará o ponteiro entre esta chamada e o delete.
+    //     Nota: a falha de CreateContext() é tratada de forma diferente — aquele caminho
+    //     chama Rml::Shutdown(), que internamente define file_interface=nullptr antes de
+    //     retornar, então nenhum reset extra é necessário lá.
+    Rml::SetFileInterface(nullptr);
     delete impl_;
     impl_ = nullptr;
     return false;

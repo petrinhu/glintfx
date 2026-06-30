@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.2.2] - 2026-06-30
+
 ### Added / Adicionado
 
 - **EN:** `UiLayerConfig::dp_ratio` (field, default `1.0f`) and `UiLayer::set_dp_ratio(float)` (runtime setter): expose `Rml::Context::SetDensityIndependentPixelRatio` to host consumers. When set, the RCSS `dp` unit scales to `dp_ratio` physical pixels (the `px` unit is unaffected). Recommended pattern: author RCSS at a fixed logical size using `dp` units, call `set_viewport(real_w, real_h)` and `set_dp_ratio(real_w / logical_w)`. `App` parity: `AppConfig::dp_ratio` and `App::set_dp_ratio(float)`. Verified by `dp_ratio_sanity` (100dp×100dp white box; scale factor 4.00x at ratio=2.0 vs 1.0). Resolves GAP-1 from `docs/embed-integration.md`.

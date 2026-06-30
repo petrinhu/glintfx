@@ -134,6 +134,10 @@
 - **Ainda não o movimento:** o movimento de foco real entre elementos exige o **documento** declarar elementos focáveis (`tabindex`) e, para a navegação direcional por setas, a propriedade RCSS `nav`. O caminho embed por si só não traz componentes focáveis, então os eventos chegam mas não há o que navegar.
 - **Para um menu do host (por exemplo um menu de verbos por WASD, setas ou gamepad):** mapeie o input para `glintfx::Key` e injete (pronto hoje), e autore o RML do menu com `tabindex` mais `nav`, ou use um componente de menu focus first. O ciclo por `Tab` funciona de imediato para elementos com `tabindex`; a navegação por setas exige a propriedade `nav`.
 
+**EN:** glintfx does not expose a `set_focus(id)` method today: focus is glintfx-owned, and `Tab`/arrow keys move it on their own through `tabindex`/`nav` as described above. Hosts whose MODEL is the owner of selection (rather than the RmlUi focus ring) should drive the highlight through **data-binding** (a bound class or attribute via the data model, section 6), not through `:focus`. This is the pattern used by GusWorld. `set_focus(id)` is a roadmap item, tracked as `GAP-4` in the INBOX of `TODO.md`.
+
+**PT:** O glintfx não expõe um método `set_focus(id)` hoje: o foco é de posse do glintfx, e `Tab`/setas o movem sozinhos pelo `tabindex`/`nav` descritos acima. Hosts cujo MODELO é o dono da seleção (em vez do anel de foco do RmlUi) devem dirigir o destaque por **data-binding** (classe ou atributo ligado via o data model, seção 6), não por `:focus`. Este é o padrão usado pelo GusWorld. `set_focus(id)` é item de roadmap, rastreado como `GAP-4` na INBOX do `TODO.md`.
+
 ## 6. Data model / Modelo de dados
 
 **EN:** glintfx exposes RmlUi's data-binding system through a thin, type-safe C surface (9 methods total) with no engine-specific types in the public header. The same API is available on both `UiLayer` and `App`.

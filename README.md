@@ -4,7 +4,7 @@
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-00599C.svg)](#)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.2.3](https://img.shields.io/badge/Version-0.2.3-blue.svg)](CHANGELOG.md)
+[![Version: 0.2.4](https://img.shields.io/badge/Version-0.2.4-blue.svg)](CHANGELOG.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
 [![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
@@ -68,7 +68,7 @@ RmlUi 6.3 is fetched at configure time; gl3w is vendored in the repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.2.3)
+  GIT_TAG        v0.2.4)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -210,7 +210,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.2.3** (stable, tagged), 2026-06-30. Full history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Current release: v0.2.4** (stable, tagged), 2026-06-30. Full history in [`CHANGELOG.md`](CHANGELOG.md).
 
 **Delivered (v0.2.x):**
 
@@ -230,7 +230,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
-- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.2.3`).
+- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.2.4`).
 - **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. It is **dormant** (only ADRs 0001-0005 and scaffolding exist, implementation not started) and is a long-term internalization target, independent of glintfx.
 
 Treat glintfx as the product; Layer 0 is a separate, dormant long-term track.
@@ -290,7 +290,7 @@ RmlUi 6.3 é baixado em tempo de configure; gl3w é vendorizado no repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.2.3)
+  GIT_TAG        v0.2.4)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -432,7 +432,7 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.2.3** (estável, taggeada), 2026-06-30. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+> **Lançamento atual: v0.2.4** (estável, taggeada), 2026-06-30. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 
 **Entregue (v0.2.x):**
 
@@ -452,7 +452,7 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
-- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.2.3`).
+- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.2.4`).
 - **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. Está **dormente** (só os ADRs 0001-0005 e scaffold existem, implementação ainda não iniciada) e é um alvo de internalização de longo prazo, independente do glintfx.
 
 Trate o glintfx como o produto; a Camada 0 é uma trilha dormente de longo prazo, separada.

@@ -7,7 +7,7 @@ This repository hosts two independent tracks. Know which one you are in before e
 
 | Layer / Camada | Path | Status | Build |
 | :--- | :--- | :--- | :--- |
-| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.2.3**, released, two consumption modes (`App` + `UiLayer`) | CMake |
+| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.2.4**, released, two consumption modes (`App` + `UiLayer`) | CMake |
 | **Layer 0: `loucura_c_asm`** (sovereign runtime, **dormant track**) | `src/`, `include/` | not implemented (ADRs only) | Makefile (future) |
 
 Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; it is a **dormant, long-term internalization target** (decisions only, no implementation yet). They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).

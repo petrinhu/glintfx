@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-06-30: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.3`** (Codeberg + GitHub, CI verde, suíte de 17 testes). A Camada 0 (C+ASM puro, zero libc) descrita mais abaixo segue como decisões tomadas (ADR 0001–0005) mas é uma **trilha soberana dormente**: ainda não há implementação (W1+ do `TODO.md` pendente). Leia primeiro a seção "glintfx" abaixo.
+> Estado em 2026-07-01: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.4`** (Codeberg + GitHub, CI verde, suíte de 18 testes). A Camada 0 (C+ASM puro, zero libc) descrita mais abaixo segue como decisões tomadas (ADR 0001–0005) mas é uma **trilha soberana dormente**: ainda não há implementação (W1+ do `TODO.md` pendente). Leia primeiro a seção "glintfx" abaixo.
 
 ## Duas camadas neste repo
 
@@ -15,11 +15,12 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 `glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
-- **Lançada:** v0.1.0 → **v0.2.3** (2026-06-30). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+- **Lançada:** v0.1.0 → **v0.2.4** (2026-07-01). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
   - **`glintfx::App`** ([`glintfx/include/glintfx/app.hpp`](glintfx/include/glintfx/app.hpp)) -- standalone, dono da janela GLFW e do loop de frame (`poll → update → render → swap`).
   - **`glintfx::UiLayer`** ([`glintfx/include/glintfx/ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp)) -- embed/guest mode: anexa ao contexto GL de um host (não cria janela), render **compose-only** (sem `glClear`, sem swap -- o host é dono dos dois), eventos injetados (`UiEvent` + `Key`), `GlStateGuard` salva e restaura o estado GL tocado. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md) (decisão) e [`docs/embed-integration.md`](docs/embed-integration.md) (contrato de integração, fonte de verdade para hosts).
-- **Capacidades entregues até v0.2.3:**
+- **Capacidades entregues até v0.2.4:**
+  - **UA-stylesheet embutida** (v0.2.4): defaults de `display: block` para elementos estruturais (`div`, `p`, `h1..h6`, `ul`, `ol`, `li`, `section`, `article`, `header`, `footer`, `nav`, `main`), mescladas em todo documento via `StyleSheetContainer::CombineStyleSheetContainer()` no `Bootstrap::load()` (base de baixa especificidade -- regra do autor sobrepõe). Em `App` e `UiLayer`. Verificada por `ua_stylesheet_sanity`.
   - Efeitos GL3 data-driven via RCSS (glow/box-shadow, drop-shadow, degradê, backdrop-blur, blur, mask) -- sintaxe em [`docs/effects.md`](docs/effects.md).
   - **Data-model binding** (v0.2.3): `create_data_model(name)` → `bind_number/string/bool/list(key)` → `load()` → `set_number/string/bool/list(key, ...)`. Ordem obrigatória, enforçada pelo engine (`bind_*` após `load()` retorna `false`). Listas iteram no RML via `data-for`. Disponível em `App` e `UiLayer`. Ver `docs/embed-integration.md` seção 6.
   - **Texturas PNG/JPG/TGA** (v0.2.3): decode via stb_image (vendorizado), com **premultiply de alpha in-place** antes do upload (necessário pro blend `GL_ONE, GL_ONE_MINUS_SRC_ALPHA` do renderer). TGA cai no loader upstream do RmlUi se o stb_image falhar. Ver `docs/embed-integration.md` seção 7.

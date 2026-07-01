@@ -71,18 +71,20 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 | L1.7-BACKENDS | LW7 | C++23/Plataforma | Backends SDL/X11 (adiados da v1; só GLFW entregue) | Baixa | L1-BACKEND | Alta | ⏳ Pendente | — |
 | L1-INTERNALIZE | LW8 | C++23/Loucura | Trilha de internalização clean-room (peças da Camada 1 → reescritas sobre a Camada 0). Pós-MVP. **Épico de fim-de-projeto:** independência clean-room das libs userspace (RmlUi/gl3w/FreeType/GLFW); fronteira irredutível = libGL/driver/kernel | Média | L1-DEMO | Alta | 💡 Decisão tomada | — |
 
-## v2 — Component Library (Atomic Design) — SPEC APROVADO (em implementação)
+## v2 — Component Library (Atomic Design) — SPEC APROVADO — modo PULL INCREMENTAL (não agendada)
 
 > **Decisão do líder (2026-06-29):** o glintfx será **distribuído e reusado em vários projetos** ("todas as features") → vira **produto distribuível**, o que justifica uma **component library / design system** (Atomic Design) sobre o engine da v1. Sequência decidida: **fechar a v1 primeiro**; a v2 é a próxima fase.
 >
 > **Escopo/breakdown a definir pela bigtech (não autorar inline):** inventário de componentes, tokens, variantes de efeito, faseamento e modelo de distribuição da v2 serão definidos em **brainstorm próprio** por **Capitolino/CPO** (produto) + **ux-ui-designer** (design system) + frontend/qa, com spec e plano próprios — **só quando a v2 iniciar**. Avaliação inicial em `AtomicEval` (ux-ui-designer): tokens-first, faseado por demanda, anti-OE.
+>
+> **Reroteamento do líder (2026-07-01, via `/bigtech`):** modo **pull incremental** — a F2 NÃO é disparada agora como projeto de 7 tarefas. As 4 releases mais úteis da F1 (v0.2.1–v0.2.4) nasceram de pull real do GusWorld sobre o *engine*; nenhuma exigiu component library, e o cockpit já funciona ponta-a-ponta sem ela. F2 vira **backlog puxado por demanda**: só inicia com um achado real (2º consumidor, ou pedido concreto do GusWorld) que a exija. Branch `feat/v2-f2-components` **parada, não abandonada** — plano pronto pra retomar quando o pull aparecer. Detalhe: evento do vault `Journal/eventos/2026-07-01-glintfx-reroteamento-lean.md` e `.bigtech-porte`.
 
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | L2-BRAINSTORM | V2W1 | v2/Produto | **Porta de entrada da v2 — CONCLUÍDA.** Brainstorm bigtech (CPO+ux-ui-designer) + verdito de integração GusWorld (software-architect) + [ADR-0008](docs/adr/0008-embed-guest-mode.md) (embed mode) + [spec da v2](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (aprovado pelo líder) | Alta | v1 fechada | Média | ✅ Concluído | ✓ |
 | L2-EMBED | V2W2 | v2/Arquitetura | **Keystone (F1) — ENTREGUE:** embed/guest mode `UiLayer` (anexa ao contexto GL do host, compose-only, eventos injetados+gamepad, `GlStateGuard`). SDD T1–T6, suíte 10/10, review final internal-auditor PRONTO; mergeada na main, **tag `v0.2.0`**. **OWD** | Alta | L2-BRAINSTORM | Alta | ✅ Concluído | ✓ |
-| L2-COMPONENTS | V2W3 | v2/UI | **F2:** tokens-first + component library de UI de jogo (button/panel/dialog/menu/label, efeitos como modificadores) + `glintfx::ui` opt-in. Detalhe no plano | Alta | L2-EMBED | Alta | ⏳ Pendente | — |
-| L2-GUSWORLD | V2W4 | v2/Integração | **F3:** GusWorld adota o glintfx via embed (ADR-010), aposenta o HUD vendorizado. Esforço no repo GusWorld | Média | L2-EMBED, L2-COMPONENTS | Alta | ⏳ Pendente | — |
+| L2-COMPONENTS | V2W3 | v2/UI | **F2 (pull incremental, 2026-07-01):** tokens-first + component library de UI de jogo (button/panel/dialog/menu/label, efeitos como modificadores) + `glintfx::ui` opt-in. Plano pronto em `docs/superpowers/plans/2026-06-30-glintfx-v2-f2-components.md`, branch `feat/v2-f2-components` parada — só inicia com demanda real confirmada (não agendada) | Média | L2-EMBED | Alta | ⏳ Pendente | — |
+| L2-GUSWORLD | V2W4 | v2/Integração | **F3:** GusWorld adota o glintfx via embed (ADR-010) no cockpit — **substancialmente feito na prática** (4 releases consumer-driven fecharam o arco ponta-a-ponta, cockpit funcional sem depender de L2-COMPONENTS). Retirada formal do HUD RmlUi 6.2 vendorizado (branch `wip/rmlui-gl3-cockpit` no repo GusWorld) ainda não confirmada desta sessão — checar no próximo relay. Esforço no repo GusWorld | Média | L2-EMBED | Alta | 🔍 Pendente verificação | — |
 
 ## INBOX (descobertas não priorizadas)
 

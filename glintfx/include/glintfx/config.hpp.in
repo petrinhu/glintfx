@@ -17,3 +17,9 @@
 //     0  em builds embed-only: apenas glintfx::UiLayer disponível; sem glintfx::App.
 //     Use esta macro para guardar código que depende da fachada App standalone.
 #cmakedefine01 GLINTFX_BACKEND_GLFW
+
+// EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
+//     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
+// PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()
+//     do CMake em tempo de configure. Fonte única -- ver CMakeLists.txt.
+#define GLINTFX_VERSION "@PROJECT_VERSION@"

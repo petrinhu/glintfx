@@ -525,3 +525,33 @@ add_test(NAME base_url_sanity
     -DEXE=$<TARGET_FILE:base_url_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: ua_stylesheet_sanity — verifies the embedded UA-stylesheet (v0.2.4 T1):
+#     'display: block' defaults for structural elements (div, p, h1..h6, ul, ol, li,
+#     section, article, header, footer, nav, main), applied by Bootstrap::load() to
+#     every document via StyleSheetContainer::CombineStyleSheetContainer.
+#     Scene has two <div>s WITHOUT an explicit 'display: block' rule; if they stack
+#     (block, correct) their pixel row ranges are disjoint, if they share a line box
+#     (inline, bug) the ranges overlap.
+#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+# PT: ua_stylesheet_sanity — verifica a UA-stylesheet embutida (v0.2.4 T1): defaults de
+#     'display: block' para elementos estruturais (div, p, h1..h6, ul, ol, li, section,
+#     article, header, footer, nav, main), aplicada por Bootstrap::load() a todo
+#     documento via StyleSheetContainer::CombineStyleSheetContainer.
+#     A cena tem dois <div>s SEM regra explícita 'display: block'; se empilham (block,
+#     correto) as faixas de linha de pixel são disjuntas, se compartilham line box
+#     (inline, bug) as faixas se sobrepõem.
+#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+# ---------------------------------------------------------------------------
+add_executable(ua_stylesheet_sanity ua_stylesheet_sanity.cpp)
+target_link_libraries(ua_stylesheet_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/ua_stylesheet_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/ua_stylesheet_scene.rcss COPYONLY)
+add_test(NAME ua_stylesheet_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ua_stylesheet_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

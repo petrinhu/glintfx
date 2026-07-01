@@ -264,6 +264,37 @@ ui.set_list("log", lines, 3);
 2. **Alvo de FBO custom do host mais origem de viewport configurável.** Hoje o `render()` sempre compõe no FBO 0 na origem `(0,0)`. Compor num FBO offscreen do host, ou numa sub região, não é suportado.
 3. ~~**Override de base URL de assets.**~~ **Resolvido na v0.2.2.** `UiLayer::set_asset_base_url(const char*)` e `App::set_asset_base_url(const char*)` estão disponíveis. Ver seção 4 para o contrato completo.
 
+## 9. UA stylesheet (display: block defaults) / Stylesheet UA (defaults de display: block)
+
+**EN:** RmlUi's built-in `display` default is `inline` for every element (unlike HTML,
+where `div`/`p`/`h1`.../`section`/... are block by default). glintfx merges a small
+embedded User-Agent stylesheet into every document loaded by `load()` (both `App` and
+`UiLayer` -- shared code path in `Bootstrap::load()`):
+```
+div, p, h1, h2, h3, h4, h5, h6, ul, ol, li,
+section, article, header, footer, nav, main { display: block; }
+```
+It is applied as a **low-specificity base**: any author rule of equal or higher
+specificity in your own RCSS overrides it (this is standard CSS cascade behaviour, not
+a special case). You do not need to `@import` anything or opt in -- it is always on.
+Elements outside this list (e.g. `span`, custom tags) still default to `inline`, matching
+RmlUi's own behaviour; add your own `display` rule for those if needed.
+
+**PT:** O padrão embutido do RmlUi para `display` é `inline` para todo elemento
+(diferente do HTML, onde `div`/`p`/`h1`.../`section`/... são block por padrão). O
+glintfx mescla uma pequena stylesheet User-Agent embutida em todo documento carregado
+por `load()` (tanto `App` quanto `UiLayer` -- caminho de código compartilhado em
+`Bootstrap::load()`):
+```
+div, p, h1, h2, h3, h4, h5, h6, ul, ol, li,
+section, article, header, footer, nav, main { display: block; }
+```
+É aplicada como **base de baixa especificidade**: qualquer regra do autor com
+especificidade igual ou maior no seu próprio RCSS a sobrepõe (comportamento padrão de
+cascata CSS, não um caso especial). Não é necessário `@import` nem opt-in -- está sempre
+ativa. Elementos fora desta lista (ex.: `span`, tags customizadas) continuam com default
+`inline`, igual ao próprio RmlUi; adicione sua própria regra `display` se precisar.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

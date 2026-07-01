@@ -1,16 +1,24 @@
 # SPDX-License-Identifier: MPL-2.0
 # EN: CI pipeline for glintfx -- builds the library and runs both test suites under
 #     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix:
-#       GLFW=ON  -- 10 tests: window_smoke render_smoke engine_smoke app_smoke
-#                   render_sanity + ui_layer_attach compose gl_state_guard events sanity
-#       GLFW=OFF --  5 embed tests: ui_layer_attach compose gl_state_guard events sanity
+#       GLFW=ON  -- 18 tests: window_smoke render_smoke engine_smoke app_smoke
+#                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
+#                   data_model_list texture_png_alpha (10 GLFW-only) + ui_layer_attach
+#                   compose gl_state_guard events sanity dp_ratio_sanity base_url_sanity
+#                   ua_stylesheet_sanity (8 embed)
+#       GLFW=OFF --  8 embed tests: ui_layer_attach compose gl_state_guard events sanity
+#                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
 #     Triggers on every push or PR that modifies glintfx/ or this workflow file.
 #     Runs on GitHub Actions free Ubuntu runners (no container needed).
 # PT: Pipeline de CI para glintfx -- builda a biblioteca e roda ambas as suites sob
 #     Xvfb / Mesa llvmpipe (GL software) via matrix de 2 configs:
-#       GLFW=ON  -- 10 testes: window_smoke render_smoke engine_smoke app_smoke
-#                   render_sanity + ui_layer_attach compose gl_state_guard events sanity
-#       GLFW=OFF --  5 testes embed: ui_layer_attach compose gl_state_guard events sanity
+#       GLFW=ON  -- 18 testes: window_smoke render_smoke engine_smoke app_smoke
+#                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
+#                   data_model_list texture_png_alpha (10 so-GLFW) + ui_layer_attach
+#                   compose gl_state_guard events sanity dp_ratio_sanity base_url_sanity
+#                   ua_stylesheet_sanity (8 embed)
+#       GLFW=OFF --  8 testes embed: ui_layer_attach compose gl_state_guard events sanity
+#                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
 #     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
 #     Roda em runners Ubuntu gratuitos do GitHub Actions (sem container necessario).
 name: ci
@@ -34,11 +42,11 @@ jobs:
       # PT: Rodar ambas as configs mesmo se uma falhar -- configuracoes de build independentes.
       fail-fast: false
       matrix:
-        # EN: ON  = full build (App + UiLayer + GLFW backend); runs 10 tests.
-        #     OFF = embed-only (UiLayer only, no GLFW in lib); runs 5 embed tests.
+        # EN: ON  = full build (App + UiLayer + GLFW backend); runs 18 tests.
+        #     OFF = embed-only (UiLayer only, no GLFW in lib); runs 8 embed tests.
         #           GLFW is still needed as a test-only dep (GL context fixture).
-        # PT: ON  = build completo (App + UiLayer + backend GLFW); roda 10 testes.
-        #     OFF = embed-only (so UiLayer, sem GLFW na lib); roda 5 testes embed.
+        # PT: ON  = build completo (App + UiLayer + backend GLFW); roda 18 testes.
+        #     OFF = embed-only (so UiLayer, sem GLFW na lib); roda 8 testes embed.
         #           GLFW ainda e necessario como dep so-de-teste (fixture de contexto GL).
         backend: [ON, OFF]
 
@@ -92,12 +100,12 @@ jobs:
         run: cmake --build glintfx/build-${{ matrix.backend }} -j$(nproc)
 
       # EN: Run the test suite for this config under Xvfb (Mesa llvmpipe).
-      #     GLFW=ON  runs 10 tests (5 GLFW-backend + 5 embed).
-      #     GLFW=OFF runs  5 tests (5 embed only; GLFW/App tests excluded by CMake).
+      #     GLFW=ON  runs 18 tests (10 GLFW-backend + 8 embed).
+      #     GLFW=OFF runs  8 tests (8 embed only; GLFW/App tests excluded by CMake).
       #     run_xvfb.cmake calls xvfb-run -a per test; outer -a sets DISPLAY for ctest.
       # PT: Roda a suite de testes para esta config sob Xvfb (Mesa llvmpipe).
-      #     GLFW=ON  roda 10 testes (5 backend GLFW + 5 embed).
-      #     GLFW=OFF roda  5 testes (5 embed apenas; testes GLFW/App excluidos pelo CMake).
+      #     GLFW=ON  roda 18 testes (10 backend GLFW + 8 embed).
+      #     GLFW=OFF roda  8 testes (8 embed apenas; testes GLFW/App excluidos pelo CMake).
       #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
         run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure

@@ -210,7 +210,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.2.4** (stable, tagged), 2026-06-30. Full history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Current release: v0.2.4** (stable, tagged), 2026-07-01. Full history in [`CHANGELOG.md`](CHANGELOG.md).
 
 **Delivered (v0.2.x):**
 
@@ -432,7 +432,7 @@ A v0.1.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.2.4** (estável, taggeada), 2026-06-30. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+> **Lançamento atual: v0.2.4** (estável, taggeada), 2026-07-01. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 
 **Entregue (v0.2.x):**
 

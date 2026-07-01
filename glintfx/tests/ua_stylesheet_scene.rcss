@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Deliberately NO 'display: block' rule here -- this scene exists specifically to
+       prove the UA-stylesheet works; it must rely SOLELY on glintfx's embedded default.
+   PT: Deliberadamente SEM regra 'display: block' aqui -- esta cena existe para provar
+       a UA-stylesheet; deve depender SOMENTE do default embutido do glintfx. */
+body { background-color: #101010; }
+.red  { width: 100px; height: 40px; background-color: #ff0000; }
+.blue { width: 100px; height: 40px; background-color: #0000ff; }

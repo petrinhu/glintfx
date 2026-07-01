@@ -1,0 +1,9 @@
+<rml>
+<head>
+  <link type="text/rcss" href="ua_stylesheet_scene.rcss"/>
+</head>
+<body>
+  <div class="red">&nbsp;</div>
+  <div class="blue">&nbsp;</div>
+</body>
+</rml>

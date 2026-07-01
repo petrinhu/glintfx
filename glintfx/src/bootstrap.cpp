@@ -7,7 +7,10 @@
 #include "bootstrap.hpp"
 #include "render_gl3.hpp"
 #include "base_url_file_interface.hpp"
+#include "ua_stylesheet.hpp"
 #include <RmlUi/Core.h>
+#include <RmlUi/Core/StreamMemory.h>
+#include <cstring>
 
 namespace glintfx {
 
@@ -22,6 +25,9 @@ struct Bootstrap::Impl {
                                     // PT: instalado antes de Rml::Initialise(); base_url mutável.
   Rml::Context* ctx = nullptr;
   bool initialised  = false;
+  // EN: Parsed once in init(), reused as a merge base by every load() -- see there.
+  // PT: Parseada uma vez em init(), reutilizada como base de merge por todo load() -- ver lá.
+  Rml::SharedPtr<Rml::StyleSheetContainer> ua_style_sheet;
 };
 
 Bootstrap::~Bootstrap() { shutdown(); }
@@ -68,6 +74,23 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   }
   impl_->initialised = true;
 
+  // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
+  //     alone to a document) so it stays reusable as a merge base for every load().
+  // PT: Parseia a UA stylesheet uma vez. Nunca é compilada diretamente (nunca anexada
+  //     sozinha a um documento), então permanece reutilizável como base de merge a cada load().
+  {
+    auto ua = Rml::MakeShared<Rml::StyleSheetContainer>();
+    auto stream = Rml::MakeUnique<Rml::StreamMemory>(
+        reinterpret_cast<const Rml::byte*>(kUaStylesheetRcss), std::strlen(kUaStylesheetRcss));
+    stream->SetSourceURL("glintfx://ua.rcss");
+    if (ua->LoadStyleSheetContainer(stream.get()))
+      impl_->ua_style_sheet = std::move(ua);
+    // EN: On parse failure ua_style_sheet stays null; load() then no-ops the UA merge
+    //     (fail open -- a malformed embedded sheet must never block document loading).
+    // PT: Em falha de parse ua_style_sheet fica nulo; load() então no-opa o merge da UA
+    //     (fail open -- uma sheet embutida malformada nunca deve bloquear o carregamento).
+  }
+
   impl_->ctx = Rml::CreateContext("main", Rml::Vector2i(w, h));
   if (!impl_->ctx) {
     Rml::Shutdown();
@@ -83,6 +106,31 @@ bool Bootstrap::load(const char* rml_path) {
   if (!impl_ || !impl_->ctx) return false;
   Rml::ElementDocument* doc = impl_->ctx->LoadDocument(rml_path);
   if (!doc) return false;
+  if (impl_->ua_style_sheet) {
+    // EN: Merge UA base (low specificity) under the document's own sheet (merged ON TOP
+    //     -- StyleSheet::MergeStyleSheet's specificity_offset accumulation resolves ties
+    //     in favour of whoever is merged LAST). Works with or without the document's own
+    //     <link>/<style>.
+    //     NOTE: split into if/else (instead of a ternary) because StyleSheetContainer is
+    //     NonCopyMoveable -- a ternary's common-type rule would require materialising a
+    //     copy of the temporary default-constructed container, which does not compile.
+    // PT: Mescla a base UA (baixa especificidade) sob a sheet própria do documento
+    //     (mesclada POR CIMA -- o acúmulo de specificity_offset em
+    //     StyleSheet::MergeStyleSheet resolve empates a favor de quem é mesclado POR
+    //     ÚLTIMO). Funciona com ou sem <link>/<style> próprio do documento.
+    //     NOTA: dividido em if/else (em vez de ternário) porque StyleSheetContainer é
+    //     NonCopyMoveable -- a regra de tipo-comum do ternário exigiria materializar uma
+    //     cópia do container default-construído temporário, o que não compila.
+    const Rml::StyleSheetContainer* existing = doc->GetStyleSheetContainer();
+    Rml::SharedPtr<Rml::StyleSheetContainer> combined;
+    if (existing) {
+      combined = impl_->ua_style_sheet->CombineStyleSheetContainer(*existing);
+    } else {
+      const Rml::StyleSheetContainer empty;
+      combined = impl_->ua_style_sheet->CombineStyleSheetContainer(empty);
+    }
+    doc->SetStyleSheetContainer(std::move(combined));
+  }
   doc->Show();
   return true;
 }

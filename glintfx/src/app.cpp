@@ -22,7 +22,7 @@
 
 namespace glintfx {
 
-const char* version() { return "0.1.0"; }
+const char* version() { return GLINTFX_VERSION; }
 
 // EN: Impl owns all subsystems. Declaration order is intentional: C++ destructs members in
 //     REVERSE order, so engine destructs first (calls Rml::Shutdown via Bootstrap::~Bootstrap),

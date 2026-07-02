@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: clang-tidy config for TST-L1-STATIC (see TESTES.md "Camada 1"). Two tiers:
+#     1) clang-analyzer-* (real bug/UB detection) -- HARD gate, WarningsAsErrors below.
+#     2) modernize-*/cppcoreguidelines-* (style/best-practice) -- reported, NOT gated.
+#        As of 2026-07 these surface ~87 pre-existing findings (trailing-return-type,
+#        union access in GL/math code, pointer arithmetic in the renderer, magic
+#        numbers) across the shipped v0.2.4 code. Hard-failing on them today would
+#        break the "sempre-verde" contract for this CI-now gate without any code fix
+#        in scope (see TODO.md TST-L1-STATIC). They stay visible in the CI log for
+#        drive-by cleanup; escalate to WarningsAsErrors once the backlog is cleared.
+#     HeaderFilterRegex empty -- restricts diagnostics to the primary .cpp file being
+#     analyzed (glintfx/src/*.cpp), excluding RmlUi/gl3w/stb third-party headers pulled
+#     in transitively (they are out of our authorship and out of scope for this gate).
+# PT: Config do clang-tidy para o TST-L1-STATIC (ver TESTES.md "Camada 1"). Dois níveis:
+#     1) clang-analyzer-* (detecção real de bug/UB) -- gate DURO, WarningsAsErrors abaixo.
+#     2) modernize-*/cppcoreguidelines-* (estilo/boa-prática) -- reportado, NÃO gateado.
+#        Em 2026-07 isso gera ~87 achados pré-existentes (trailing-return-type, acesso a
+#        union em código GL/matemático, aritmética de ponteiro no renderer, números
+#        mágicos) no código já shipado da v0.2.4. Fazer gate duro nisso hoje quebraria o
+#        contrato "sempre-verde" deste gate CI-now sem nenhuma correção de código no
+#        escopo (ver TODO.md TST-L1-STATIC). Ficam visíveis no log do CI para limpeza
+#        oportunista; escalar para WarningsAsErrors quando o backlog for zerado.
+#     HeaderFilterRegex vazio -- restringe diagnósticos ao .cpp principal sendo
+#     analisado (glintfx/src/*.cpp), excluindo headers de terceiro (RmlUi/gl3w/stb)
+#     incluídos transitivamente (fora da nossa autoria e fora do escopo deste gate).
+Checks: >
+  -*,
+  modernize-*,
+  cppcoreguidelines-*,
+  clang-analyzer-*
+WarningsAsErrors: 'clang-analyzer-*'
+HeaderFilterRegex: ''
+FormatStyle: none

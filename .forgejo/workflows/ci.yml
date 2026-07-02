@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: MPL-2.0
 # EN: CI pipeline for glintfx on Codeberg (Forgejo Actions) -- builds the library and
-#     runs both test suites under Xvfb / Mesa llvmpipe via a 2-config matrix:
+#     runs both test suites under Xvfb / Mesa llvmpipe via a 2-config matrix, PLUS a
+#     parallel `lint-and-scan` job with 3 CI-now, sempre-verde gates (TESTES.md
+#     "Camada 1", TODO.md LW-TST): TST-L1-STATIC (clang-tidy + cppcheck + the
+#     tools/check_encapsulation.sh third-party-leak gate), TST-L1-SECRETS (gitleaks,
+#     history + working tree), TST-L1-DEPS (grype dir scan). See job comments below
+#     for tool choice rationale and the exact severity thresholds.
 #       GLFW=ON  -- 18 tests: window_smoke render_smoke engine_smoke app_smoke
 #                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
 #                   data_model_list texture_png_alpha (10 GLFW-only) + ui_layer_attach
@@ -150,3 +155,133 @@ jobs:
       #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
         run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure
+
+  # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
+  #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.
+  #     Mirrors .github/workflows/ci.yml lint-and-scan job step-for-step so both
+  #     remotes have equivalent coverage -- see that file for the full tool-choice
+  #     rationale (clang-tidy+cppcheck / gitleaks / grype, pinned-tarball installs,
+  #     --fail-on high, the grype coverage caveat for vendored C++ headers).
+  # PT: lint-and-scan -- 3 gates CI-now, sempre-verde (TESTES.md "Camada 1", TODO.md
+  #     LW-TST). Independente do build-and-test (sem matrix, sem ctest); roda em
+  #     paralelo. Espelha o job lint-and-scan de .github/workflows/ci.yml passo a
+  #     passo para os 2 remotos terem cobertura equivalente -- ver aquele arquivo para
+  #     a justificativa completa de escolha de ferramenta (clang-tidy+cppcheck /
+  #     gitleaks / grype, instalacao via tarball fixado, --fail-on high, a ressalva de
+  #     cobertura do grype para headers C++ vendorizados).
+  lint-and-scan:
+    name: lint & scan (codeberg-medium)
+    runs-on: codeberg-medium
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest
+    env:
+      GITLEAKS_VERSION: "8.30.0"
+      GRYPE_VERSION: "0.112.0"
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # EN: full history for gitleaks. PT: historico completo para o gitleaks.
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-lint/_deps
+          key: rmlui-${{ runner.os }}-lint-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      - name: install deps
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            cmake g++ git clang-tidy cppcheck curl \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libgl1-mesa-dri
+
+      # EN: Configure-only (no `cmake --build`) -- see the equivalent step in
+      #     .github/workflows/ci.yml for why this is enough for clang-tidy/cppcheck.
+      # PT: So configure (sem `cmake --build`) -- ver o passo equivalente em
+      #     .github/workflows/ci.yml para o motivo disso ser suficiente pro
+      #     clang-tidy/cppcheck.
+      - name: configure (compile_commands.json only)
+        run: |
+          cmake -S glintfx -B glintfx/build-lint \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      # EN: TST-L1-STATIC (1/3) -- encapsulation gate.
+      # PT: TST-L1-STATIC (1/3) -- gate de encapsulamento.
+      - name: TST-L1-STATIC -- encapsulation gate
+        run: ./tools/check_encapsulation.sh glintfx/include/glintfx
+
+      # EN: TST-L1-STATIC (2/3) -- clang-tidy (checks + WarningsAsErrors policy in
+      #     glintfx/.clang-tidy).
+      # PT: TST-L1-STATIC (2/3) -- clang-tidy (checks + politica de WarningsAsErrors em
+      #     glintfx/.clang-tidy).
+      - name: TST-L1-STATIC -- clang-tidy
+        run: clang-tidy -p glintfx/build-lint glintfx/src/*.cpp
+
+      # EN: TST-L1-STATIC (3/3) -- cppcheck, restricted to our own src/, vendored/
+      #     fetched code suppressed. --file-filter is '*glintfx/src/*' (leading bare
+      #     '*', NOT '*/glintfx/src/*'): with a RELATIVE --project path (as used here),
+      #     cppcheck 2.13 (this container's apt version) matches file entries as plain
+      #     relative paths with no leading '/' (e.g. "glintfx/src/foo.cpp"), so a filter
+      #     requiring a literal '/' right before "glintfx" never matches and cppcheck
+      #     exits with "could not find any files matching the filter" -- reproduced and
+      #     confirmed locally against both cppcheck 2.13 (container) and 2.21 (host).
+      # PT: TST-L1-STATIC (3/3) -- cppcheck, restrito ao nosso proprio src/, codigo
+      #     vendorizado/fetchado suprimido. --file-filter e '*glintfx/src/*' (asterisco
+      #     nu no inicio, NAO '*/glintfx/src/*'): com --project RELATIVO (como aqui), o
+      #     cppcheck 2.13 (versao apt deste container) casa as entradas de arquivo como
+      #     caminho relativo puro sem '/' no inicio (ex.: "glintfx/src/foo.cpp"), entao
+      #     um filtro que exige um '/' literal antes de "glintfx" nunca casa e o
+      #     cppcheck sai com "could not find any files matching the filter" --
+      #     reproduzido e confirmado localmente contra cppcheck 2.13 (container) e 2.21
+      #     (host).
+      - name: TST-L1-STATIC -- cppcheck
+        run: |
+          cppcheck --enable=warning,style,performance,portability \
+            --std=c++20 --language=c++ --platform=unix64 \
+            --project=glintfx/build-lint/compile_commands.json \
+            --file-filter='*glintfx/src/*' \
+            --suppress=missingIncludeSystem \
+            --suppress='*:*/third_party/*' \
+            --suppress='*:*/_deps/*' \
+            --error-exitcode=1
+
+      # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) -- same
+      #     approach as the GitHub workflow, works unmodified whether the container
+      #     runs as root (Forgejo/act-latest) or as a regular user.
+      # PT: Instalado em $HOME/.local/bin (adicionado ao PATH via GITHUB_PATH) -- mesma
+      #     abordagem do workflow GitHub, funciona sem alteracao rodando como root
+      #     (Forgejo/act-latest) ou como usuario comum.
+      - name: install gitleaks
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C "$HOME/.local/bin" gitleaks
+          "$HOME/.local/bin/gitleaks" version
+
+      # EN: TST-L1-SECRETS -- history + working tree.
+      # PT: TST-L1-SECRETS -- historico + working tree.
+      - name: TST-L1-SECRETS -- gitleaks
+        run: gitleaks detect --source . --redact -v
+
+      - name: install grype
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSfL -o /tmp/grype.tar.gz \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/grype.tar.gz -C "$HOME/.local/bin" grype
+          "$HOME/.local/bin/grype" version
+
+      # EN: TST-L1-DEPS -- repo-tree scan, --fail-on high (actionable-alert threshold).
+      # PT: TST-L1-DEPS -- scan da arvore do repo, --fail-on high (limiar de alerta
+      #     acionavel).
+      - name: TST-L1-DEPS -- grype
+        run: grype dir:. --fail-on high

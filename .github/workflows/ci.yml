@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: MPL-2.0
 # EN: CI pipeline for glintfx -- builds the library and runs both test suites under
-#     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix:
+#     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix, PLUS a parallel
+#     `lint-and-scan` job with 3 CI-now, sempre-verde gates (TESTES.md "Camada 1",
+#     TODO.md LW-TST): TST-L1-STATIC (clang-tidy + cppcheck + the
+#     tools/check_encapsulation.sh third-party-leak gate), TST-L1-SECRETS (gitleaks,
+#     history + working tree), TST-L1-DEPS (grype dir scan). See job comments below
+#     for tool choice rationale and the exact severity thresholds.
 #       GLFW=ON  -- 18 tests: window_smoke render_smoke engine_smoke app_smoke
 #                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
 #                   data_model_list texture_png_alpha (10 GLFW-only) + ui_layer_attach
@@ -109,3 +114,180 @@ jobs:
       #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
         run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure
+
+  # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
+  #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.
+  #     Tool choice:
+  #       - clang-tidy + cppcheck (TST-L1-STATIC, part 1/2): both ship in ubuntu-latest's
+  #         default toolchain, zero extra install.
+  #       - tools/check_encapsulation.sh (TST-L1-STATIC, part 2/2): the encapsulation
+  #         gate -- grep on `#include` DIRECTIVES in glintfx/include/glintfx/*.hpp,
+  #         not on raw substrings, so the GLINTFX_BACKEND_GLFW macro does not false-
+  #         positive (see script header + CLAUDE.md/AGENTS.md "Gotchas críticos").
+  #       - gitleaks (TST-L1-SECRETS): scans the full git history (--source .), not
+  #         just the working tree -- catches a secret that was committed then removed.
+  #         Installed from the pinned upstream release tarball (not curl|sh) so the
+  #         binary is reproducible and doesn't depend on running arbitrary shell code
+  #         fetched at CI time.
+  #       - grype (TST-L1-DEPS): scans the repo tree (`grype dir:.`) for known CVEs in
+  #         anything syft's catalogers recognize. Also from a pinned release tarball.
+  #         Coverage caveat: syft/grype have NO cataloger for vendorized, header-only
+  #         C++ libraries dropped in-tree (glintfx/third_party/{stb,gl3w}) or for
+  #         FetchContent-fetched sources (RmlUi) -- there is no manifest/lockfile for
+  #         them to key off. This gate is real but narrow; the wider "is our pinned
+  #         RmlUi/stb_image/gl3w version behind a known advisory" question is a
+  #         **manual** audit (TODO.md AUD-L1-SUPPLY consumes this gate's output), not
+  #         something automatable with today's SCA tooling for vendored C headers.
+  # PT: lint-and-scan -- 3 gates CI-now, sempre-verde (TESTES.md "Camada 1", TODO.md
+  #     LW-TST). Independente do build-and-test (sem matrix, sem ctest); roda em
+  #     paralelo. Escolha de ferramenta:
+  #       - clang-tidy + cppcheck (TST-L1-STATIC, parte 1/2): já vêm no toolchain
+  #         default do ubuntu-latest, zero instalação extra.
+  #       - tools/check_encapsulation.sh (TST-L1-STATIC, parte 2/2): o gate de
+  #         encapsulamento -- grep em DIRETIVAS `#include` nos headers públicos
+  #         (glintfx/include/glintfx/*.hpp), não em substring crua, para a macro
+  #         GLINTFX_BACKEND_GLFW não dar falso positivo (ver cabeçalho do script +
+  #         CLAUDE.md/AGENTS.md "Gotchas críticos").
+  #       - gitleaks (TST-L1-SECRETS): escaneia o histórico git inteiro (--source .),
+  #         não só a working tree -- pega segredo que foi commitado e depois removido.
+  #         Instalado a partir do tarball de release fixado (não curl|sh), para o
+  #         binário ser reprodutível e não depender de rodar shell arbitrário buscado
+  #         em tempo de CI.
+  #       - grype (TST-L1-DEPS): escaneia a árvore do repo (`grype dir:.`) por CVE
+  #         conhecido em tudo que os catalogers do syft reconhecem. Também via tarball
+  #         de release fixado. Ressalva de cobertura: syft/grype NÃO têm cataloger para
+  #         libs C++ header-only vendorizadas em árvore (glintfx/third_party/{stb,gl3w})
+  #         nem para fontes fetchadas via FetchContent (RmlUi) -- não há manifesto/
+  #         lockfile pra eles se guiarem. Este gate é real mas estreito; a pergunta mais
+  #         ampla "nossa versão pinada de RmlUi/stb_image/gl3w está atrás de algum
+  #         advisory conhecido" é auditoria **manual** (TODO.md AUD-L1-SUPPLY consome a
+  #         saída deste gate), não algo automatizável com o tooling de SCA de hoje para
+  #         headers C++ vendorizados.
+  lint-and-scan:
+    name: lint & scan (ubuntu-latest)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.30.0"
+      GRYPE_VERSION: "0.112.0"
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # EN: full history for gitleaks. PT: historico completo para o gitleaks.
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-lint/_deps
+          key: rmlui-${{ runner.os }}-lint-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ clang-tidy cppcheck \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libgl1-mesa-dri
+
+      # EN: Configure-only (no `cmake --build`): compile_commands.json and the
+      #     generated config.hpp are both produced at configure time; clang-tidy and
+      #     cppcheck compile each translation unit themselves and don't need the
+      #     built .o/.a artifacts. Saves the full RmlUi build time on this job.
+      # PT: So configure (sem `cmake --build`): compile_commands.json e o config.hpp
+      #     gerado saem no configure; clang-tidy e cppcheck compilam cada unidade de
+      #     traducao por conta propria e nao precisam dos artefatos .o/.a buildados.
+      #     Economiza o tempo do build completo do RmlUi neste job.
+      - name: configure (compile_commands.json only)
+        run: |
+          cmake -S glintfx -B glintfx/build-lint \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      # EN: TST-L1-STATIC (1/3) -- encapsulation gate. Fails hard on any third-party
+      #     #include in the public headers.
+      # PT: TST-L1-STATIC (1/3) -- gate de encapsulamento. Falha duro em qualquer
+      #     #include de terceiro nos headers publicos.
+      - name: TST-L1-STATIC -- encapsulation gate
+        run: ./tools/check_encapsulation.sh glintfx/include/glintfx
+
+      # EN: TST-L1-STATIC (2/3) -- clang-tidy. Checks and the WarningsAsErrors policy
+      #     live in glintfx/.clang-tidy (only clang-analyzer-* fails the build today;
+      #     modernize-*/cppcoreguidelines-* are reported, not gated -- see that file's
+      #     header comment for the sempre-verde rationale).
+      # PT: TST-L1-STATIC (2/3) -- clang-tidy. Checks e a politica de WarningsAsErrors
+      #     vivem em glintfx/.clang-tidy (so clang-analyzer-* falha o build hoje;
+      #     modernize-*/cppcoreguidelines-* sao reportados, nao gateados -- ver o
+      #     comentario de cabecalho daquele arquivo para o motivo do sempre-verde).
+      - name: TST-L1-STATIC -- clang-tidy
+        run: clang-tidy -p glintfx/build-lint glintfx/src/*.cpp
+
+      # EN: TST-L1-STATIC (3/3) -- cppcheck, restricted to our own src/ (--file-filter)
+      #     with vendored/fetched code suppressed (third_party/, _deps/) -- those are
+      #     not our authorship and out of scope for this gate. --file-filter is
+      #     '*glintfx/src/*' (leading bare '*', NOT '*/glintfx/src/*'): with a RELATIVE
+      #     --project path (as used here), cppcheck matches file entries as plain
+      #     relative paths with no leading '/' (e.g. "glintfx/src/foo.cpp"), so a filter
+      #     requiring a literal '/' right before "glintfx" never matches -- reproduced
+      #     and confirmed locally.
+      # PT: TST-L1-STATIC (3/3) -- cppcheck, restrito ao nosso proprio src/
+      #     (--file-filter) com codigo vendorizado/fetchado suprimido (third_party/,
+      #     _deps/) -- fora da nossa autoria e fora do escopo deste gate. --file-filter
+      #     e '*glintfx/src/*' (asterisco nu no inicio, NAO '*/glintfx/src/*'): com
+      #     --project RELATIVO (como aqui), o cppcheck casa as entradas de arquivo como
+      #     caminho relativo puro sem '/' no inicio (ex.: "glintfx/src/foo.cpp"), entao
+      #     um filtro que exige um '/' literal antes de "glintfx" nunca casa --
+      #     reproduzido e confirmado localmente.
+      - name: TST-L1-STATIC -- cppcheck
+        run: |
+          cppcheck --enable=warning,style,performance,portability \
+            --std=c++20 --language=c++ --platform=unix64 \
+            --project=glintfx/build-lint/compile_commands.json \
+            --file-filter='*glintfx/src/*' \
+            --suppress=missingIncludeSystem \
+            --suppress='*:*/third_party/*' \
+            --suppress='*:*/_deps/*' \
+            --error-exitcode=1
+
+      # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) instead of
+      #     /usr/local/bin -- avoids a sudo dependency on the non-root GH Actions
+      #     runner user, and the exact same steps work unmodified on the Forgejo
+      #     workflow's root-inside-container runner.
+      # PT: Instalado em $HOME/.local/bin (adicionado ao PATH via GITHUB_PATH) em vez
+      #     de /usr/local/bin -- evita depender de sudo no usuario nao-root do runner
+      #     do GH Actions, e os mesmos passos funcionam sem alteracao no runner
+      #     root-dentro-do-container do workflow Forgejo.
+      - name: install gitleaks
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C "$HOME/.local/bin" gitleaks
+          "$HOME/.local/bin/gitleaks" version
+
+      # EN: TST-L1-SECRETS -- history + working tree (gitleaks detect's default scope
+      #     with a git source is the full history).
+      # PT: TST-L1-SECRETS -- historico + working tree (o escopo default do gitleaks
+      #     detect com uma fonte git e o historico inteiro).
+      - name: TST-L1-SECRETS -- gitleaks
+        run: gitleaks detect --source . --redact -v
+
+      - name: install grype
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSfL -o /tmp/grype.tar.gz \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/grype.tar.gz -C "$HOME/.local/bin" grype
+          "$HOME/.local/bin/grype" version
+
+      # EN: TST-L1-DEPS -- repo-tree scan. --fail-on high: block on high/critical CVEs,
+      #     not on low/medium noise (an alert must be actionable -- see coverage
+      #     caveat in the job header comment).
+      # PT: TST-L1-DEPS -- scan da arvore do repo. --fail-on high: bloqueia em CVE
+      #     high/critical, nao em ruido low/medium (um alerta precisa ser acionavel --
+      #     ver a ressalva de cobertura no comentario de cabecalho do job).
+      - name: TST-L1-DEPS -- grype
+        run: grype dir:. --fail-on high

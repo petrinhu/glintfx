@@ -78,9 +78,38 @@ public:
   //     Retorna true em caso de sucesso.
   bool load(const char* rml_path);
 
-  // EN: Notify of a viewport resize (real target pixels).
-  // PT: Notifica redimensionamento de viewport (pixels reais do alvo).
+  // EN: Notify a viewport resize (2-arg, unchanged): real target pixels, no sub-region
+  //     offset -- equivalent to set_viewport(0, 0, w, h, /*target_h=*/h).
+  // PT: Notifica redimensionamento de viewport (2 args, inalterado): pixels reais do alvo,
+  //     sem offset de sub-região -- equivalente a set_viewport(0, 0, w, h, /*target_h=*/h).
   void set_viewport(int w, int h);
+
+  // EN: Notify a viewport resize AND placement within a larger host render target (letterbox,
+  //     F3, v0.2.5). (x, y): top-down, window-space pixel offset of the sub-viewport's
+  //     top-left corner -- the SAME convention as UiEvent's mouse coordinates (see
+  //     process_event below) and as get_element_box()'s return value. (w, h): the
+  //     sub-viewport's own logical/content dimensions (RmlUi context size), unaffected by
+  //     the offset. target_h: the FULL height of the host's render target (its window), in
+  //     physical pixels -- used ONLY to convert (x, y) into the OpenGL-native bottom-up
+  //     offset the final composite needs (glViewport is bottom-left-origin; see the
+  //     ADR-0008 "F3 implementation update" section for the exact formula and rationale).
+  //     No target_w parameter: the X axis needs no conversion between the two conventions.
+  //     Precondition: target_h >= y + h (not enforced -- an inconsistent value composites at
+  //     an unexpected but harmless on-screen position, never a crash).
+  // PT: Notifica redimensionamento de viewport E posicionamento dentro de um render target
+  //     maior do host (letterbox, F3, v0.2.5). (x, y): offset em pixels, espaço-janela
+  //     topo-esquerda, do canto superior esquerdo da sub-viewport -- a MESMA convenção das
+  //     coordenadas de mouse do UiEvent (ver process_event abaixo) e do retorno de
+  //     get_element_box(). (w, h): as dimensões lógicas/de conteúdo da própria sub-viewport
+  //     (tamanho do contexto RmlUi), não afetadas pelo offset. target_h: a altura TOTAL do
+  //     render target do host (a janela dele), em pixels físicos -- usada SÓ pra converter
+  //     (x, y) no offset nativo bottom-up que o OpenGL exige na composição final (glViewport
+  //     tem origem inferior-esquerda; ver a seção "F3 implementation update" do ADR-0008 pra
+  //     fórmula exata e justificativa). Sem parâmetro target_w: o eixo X não precisa de
+  //     conversão entre as duas convenções. Pré-condição: target_h >= y + h (não enforçada --
+  //     um valor inconsistente compõe numa posição de tela inesperada mas inofensiva, nunca
+  //     crash).
+  void set_viewport(int x, int y, int w, int h, int target_h);
 
   // EN: Update the density-independent pixel ratio at runtime.
   //     1 dp (in RCSS) = ratio physical pixels. Triggers a layout re-pass when changed.
@@ -115,7 +144,11 @@ public:
   //     window backbuffer (FBO 0) during EndFrame; a custom host FBO bound before this call
   //     is NOT used as the composition target (see ADR-0008). The host must render its scene
   //     into the window backbuffer and call this method after drawing its scene, before swap.
-  //     The viewport origin is hardcoded at (0,0); sub-region compositing is not supported.
+  //     The viewport ORIGIN within FBO 0 is configurable since v0.2.5 via the 5-arg
+  //     set_viewport(x, y, w, h, target_h) overload (letterbox) -- see its doc comment and
+  //     the ADR-0008 "F3 implementation update" section. When letterboxing, the host must
+  //     clear/redraw its scene across the FULL window (not just the sub-region) before
+  //     calling render() -- render() itself never clears.
   //
   // PT: Render compose-only -- sobrepõe a UI ao backbuffer da janela (FBO 0) via blend
   //     premultiplied-alpha. Sem glClear. Sem swap. O estado GL é salvo e restaurado
@@ -126,7 +159,11 @@ public:
   //     da janela (FBO 0) durante EndFrame; um FBO customizado do host ligado antes desta chamada
   //     NÃO é usado como alvo de composição (ver ADR-0008). O host deve renderizar sua cena no
   //     backbuffer da janela e chamar este método após desenhar a cena, antes do swap.
-  //     A origem do viewport é hardcoded em (0,0); composição em sub-região não é suportada.
+  //     A ORIGEM do viewport dentro do FBO 0 é configurável desde a v0.2.5 via a sobrecarga de
+  //     5 args set_viewport(x, y, w, h, target_h) (letterbox) -- ver o doc-comment dela e a
+  //     seção "F3 implementation update" do ADR-0008. Ao letterboxar, o host deve limpar/
+  //     redesenhar sua cena na janela INTEIRA (não só a sub-região) antes de chamar render() --
+  //     o render() em si nunca limpa.
   void render();
 
   // EN: Inject a host input event — translated to engine input calls internally (T4).

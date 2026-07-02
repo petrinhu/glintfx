@@ -53,6 +53,19 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/element_box_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/element_box_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/element_box_scene.rcss COPYONLY)
 
+# EN: viewport_origin_scene.rml/.rcss (F3, v0.2.5) -- used only by viewport_origin_sanity
+#     (embed, both configs). Copied once here, next to element_box_scene.*, so the test finds
+#     it regardless of WORKING_DIRECTORY (CMAKE_CURRENT_BINARY_DIR, same pattern as
+#     click_callback_sanity/element_box_sanity below).
+# PT: viewport_origin_scene.rml/.rcss (F3, v0.2.5) -- usado só por viewport_origin_sanity
+#     (embed, 2 configs). Copiado uma vez aqui, junto de element_box_scene.*, para que o
+#     teste o encontre independente do WORKING_DIRECTORY (CMAKE_CURRENT_BINARY_DIR, mesmo
+#     padrão de click_callback_sanity/element_box_sanity abaixo).
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -673,6 +686,41 @@ target_link_libraries(element_box_sanity PRIVATE ${_embed_dep})
 add_test(NAME element_box_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:element_box_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: viewport_origin_sanity -- integration proof for UiLayer::set_viewport(x,y,w,h,target_h)
+#     (F3, v0.2.5): backward-compat of the legacy 2-arg overload, letterbox offset applied to
+#     get_element_box()'s window-space return value, click-through-offset (mouse translation),
+#     the actual GL offset_x wiring (pixel column-range shift, glReadPixels-based), and a
+#     Resize while in letterbox mode. Exercises F1 (set_click_callback) + F2
+#     (get_element_box) as deterministic oracles -- see the file header for the full
+#     assertion list. Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like
+#     the other embed tests above). Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h
+#     directly and gl3w is a PRIVATE dep of glintfx (not propagated to callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied next to
+#     min.rml at the top of this file, addressed here by bare filename).
+# PT: viewport_origin_sanity -- prova de integração de UiLayer::set_viewport(x,y,w,h,target_h)
+#     (F3, v0.2.5): compat retroativa da sobrecarga legada de 2 args, offset de letterbox
+#     aplicado ao retorno espaço-janela de get_element_box(), clique-através-do-offset
+#     (tradução de mouse), a fiação REAL do offset_x do GL (deslocamento de faixa de coluna
+#     de pixel, via glReadPixels), e um Resize em modo letterbox. Exercita F1
+#     (set_click_callback) + F2 (get_element_box) como oráculos determinísticos -- ver o
+#     cabeçalho do arquivo pra lista completa de asserções. Roda em AMBAS as configs (teste de
+#     embed mode, linka ${_embed_dep} como os outros testes embed acima). Linka gl3w
+#     explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é dep PRIVATE da
+#     glintfx (não propagado aos callers). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (=
+#     build/tests/) -- mesmo padrão de click_callback_sanity/element_box_sanity (par rml/rcss
+#     específico da cena, copiado junto do min.rml no topo deste arquivo, endereçado aqui por
+#     nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(viewport_origin_sanity viewport_origin_sanity.cpp)
+target_link_libraries(viewport_origin_sanity PRIVATE ${_embed_dep} gl3w)
+add_test(NAME viewport_origin_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:viewport_origin_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

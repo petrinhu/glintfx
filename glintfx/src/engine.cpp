@@ -89,7 +89,7 @@ void Engine::render_standalone(int w, int h) {
   impl_->render.end_frame();
 }
 
-void Engine::render_compose(int w, int h) {
+void Engine::render_compose(int offset_x, int offset_y, int w, int h) {
   // EN: Compose-only frame path. The host already has its scene on the bound FBO; we layer
   //     the UI on top without clearing and without touching FBO0. A GlStateGuard snapshot is
   //     taken before begin_frame_compose and restored after end_frame_compose, so the host's
@@ -101,7 +101,7 @@ void Engine::render_compose(int w, int h) {
   if (!impl_->ok) return;
   GlStateGuard guard;                                         // EN: saves host GL state.
                                                               // PT: salva estado GL do host.
-  impl_->render.begin_frame_compose(w, h);
+  impl_->render.begin_frame_compose(offset_x, offset_y, w, h);
   if (auto* c = impl_->boot.context()) c->Render();
   impl_->render.end_frame_compose();
 }                                                             // EN: ~guard restores here.

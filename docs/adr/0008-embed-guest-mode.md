@@ -145,6 +145,54 @@ Ambas as restrições são consistentes com o consumidor primário (GusWorld / S
 renderiza a cena na janela (FBO 0), chama `UiLayer::render()`, e a UI é sobreposta sobre a
 janela inteira antes do swap do SDL3.
 
+## F3 implementation update -- configurable viewport origin (v0.2.5) / Origem de viewport configurável (v0.2.5)
+
+**EN:** Resolves the "Viewport origin is hardcoded to (0, 0)" constraint noted in "F1
+implementation constraints" above. `UiLayer::set_viewport(int x, int y, int w, int h, int
+target_h)` (v0.2.5) forwards `(x, y)` -- converted to OpenGL's native bottom-left-origin
+convention internally -- to `RenderInterface_GL3::SetViewport`'s already-existing offset
+parameters (`RmlUi_Renderer_GL3.h:24`, unused by glintfx until this release), applied by
+RmlUi only at `EndFrame()`'s final composite blit onto FBO 0
+(`RmlUi_Renderer_GL3.cpp:909-910`). Content rasterisation (layout, hit-test, the internal
+render-layer passes) is UNAFFECTED -- it always starts at (0,0); only the on-screen placement
+of the composited result moves. **The FBO-0-only constraint from F1 is unchanged** -- this
+update is scoped to origin only, not to a custom host FBO target.
+
+Coordinate contract (the delicate part -- see `docs/embed-integration.md` section 10 for the
+full host-facing contract): `set_viewport`'s `(x, y)` are top-down, window-space (the SAME
+convention as `UiEvent`'s mouse coordinates and `get_element_box()`'s return value) -- NOT
+OpenGL's bottom-up convention. `target_h` (the host's full render-target height) exists
+SOLELY so glintfx can perform the top-down-to-bottom-up conversion internally
+(`gl_offset_y = target_h - y - h`); the host never has to reason in OpenGL viewport terms for
+input or geometry queries, only supply one number it already owns (its own window height).
+`UiLayer` is the only layer aware of this offset; `Engine`/`Bootstrap`/`RenderGl3` remain
+either content-space (offset-free) or purely OpenGL-native. `App` does not gain
+`set_viewport` -- it always owns its whole window (offset is meaningless there); adding it
+later is additive/two-way-door if a future consumer needs it.
+
+**PT:** Resolve a restrição "Origem do viewport é hardcoded em (0, 0)" anotada em "F1
+implementation constraints" acima. `UiLayer::set_viewport(int x, int y, int w, int h, int
+target_h)` (v0.2.5) repassa `(x, y)` -- convertido pra convenção nativa do OpenGL, origem
+inferior-esquerda, internamente -- aos parâmetros de offset já existentes de
+`RenderInterface_GL3::SetViewport` (`RmlUi_Renderer_GL3.h:24`, não usados pelo glintfx até
+esta release), aplicados pelo RmlUi só no blit final de composição de `EndFrame()` no FBO 0
+(`RmlUi_Renderer_GL3.cpp:909-910`). A rasterização de conteúdo (layout, hit-test, os passes
+internos do render-layer) NÃO é afetada -- sempre começa em (0,0); só o posicionamento na
+tela do resultado composto se move. **A restrição de FBO-0-só da F1 continua inalterada** --
+esta atualização tem escopo só na origem, não num alvo de FBO customizado do host.
+
+Contrato de coordenadas (a parte delicada -- ver `docs/embed-integration.md` seção 10 pro
+contrato completo voltado ao host): `(x, y)` de `set_viewport` são espaço-janela, top-down (a
+MESMA convenção das coordenadas de mouse do `UiEvent` e do retorno de `get_element_box()`) --
+NÃO a convenção bottom-up do OpenGL. `target_h` (a altura total do render-target do host)
+existe SÓ pra que o glintfx faça a conversão top-down-para-bottom-up internamente
+(`gl_offset_y = target_h - y - h`); o host nunca precisa raciocinar em termos de viewport
+OpenGL pra input ou queries de geometria, só fornecer um número que já possui (a própria
+altura da janela). `UiLayer` é a única camada ciente desse offset; `Engine`/`Bootstrap`/
+`RenderGl3` permanecem ou espaço-de-conteúdo (offset-free) ou puramente nativos do OpenGL.
+`App` não ganha `set_viewport` -- sempre possui a janela inteira (offset não faz sentido lá);
+adicionar depois é aditivo/porta-de-mão-dupla se um consumidor futuro precisar.
+
 ## Options considered / Opções consideradas
 
 - **Additive embed mode (`UiLayer`) (chosen / escolhida)** — keeps the UI-only `App` intact; serves games over their own context; two-way door.

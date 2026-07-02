@@ -1,0 +1,18 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the set_viewport(x,y,w,h,target_h) sanity scene (viewport_origin_scene.rml).
+       #target is positioned absolutely with no margin/border/padding, so its border-box
+       geometry is exactly (left, top, width, height) as authored, in the sub-viewport's own
+       content-local space -- the deterministic local oracle that UiLayer::get_element_box()
+       then translates to window-space by adding the active set_viewport offset (F3, v0.2.5).
+   PT: Estilos para a cena de sanidade do set_viewport(x,y,w,h,target_h) (viewport_origin_scene.rml).
+       #target é posicionado absolutamente sem margem/borda/padding, então sua geometria
+       border-box é exatamente (left, top, width, height) como autorada, no espaço local de
+       conteúdo da própria sub-viewport -- o oráculo local determinístico que
+       UiLayer::get_element_box() então traduz para espaço-janela somando o offset ativo de
+       set_viewport (F3, v0.2.5). */
+body { background-color: #101010; }
+#target {
+  display: block; position: absolute;
+  left: 20px; top: 15px; width: 60px; height: 40px;
+  background-color: #ffffff;
+}

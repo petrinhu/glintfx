@@ -61,6 +61,29 @@ struct UiLayer::Impl {
   Engine      engine;
   int  w   = 0;
   int  h   = 0;
+  // EN: F3 (v0.2.5) -- see set_viewport() doc comments in ui_layer.hpp for the full contract.
+  //     x, y: public, top-down window-space offset (mirrors UiEvent's convention).
+  //     target_h: last target_h given to the 5-arg overload; re-used by the Resize event
+  //           handler below to keep gl_offset_y consistent when content h changes via
+  //           process_event() instead of via an explicit set_viewport() call.
+  //     gl_offset_x/y: OpenGL-native (bottom-left) offset, PRE-COMPUTED here and passed
+  //           through unchanged every frame in render() -- render() itself does zero math.
+  //     letterbox_mode: false = legacy 2-arg path (offset always (0,0), Resize never touches
+  //           it). true = 5-arg path -- Resize recomputes gl_offset_y (not gl_offset_x, x
+  //           does not depend on h).
+  // PT: F3 (v0.2.5) -- ver doc-comments de set_viewport() em ui_layer.hpp pro contrato
+  //     completo. x, y: offset público, espaço-janela top-down (espelha a convenção do
+  //     UiEvent). target_h: último target_h passado à sobrecarga de 5 args; reusado pelo
+  //     handler de evento Resize abaixo pra manter gl_offset_y consistente quando o h de
+  //     conteúdo muda via process_event() em vez de via set_viewport() explícito.
+  //     gl_offset_x/y: offset nativo do OpenGL (inferior-esquerda), PRÉ-CALCULADO aqui e
+  //     repassado sem mudança a cada frame em render() -- o render() em si não faz conta
+  //     nenhuma. letterbox_mode: false = caminho legado de 2 args (offset sempre (0,0),
+  //     Resize nunca o toca). true = caminho de 5 args -- Resize recalcula gl_offset_y (não
+  //     gl_offset_x, x não depende de h).
+  int  x = 0, y = 0, target_h = 0;
+  int  gl_offset_x = 0, gl_offset_y = 0;
+  bool letterbox_mode = false;
   bool ok  = false;
 };
 
@@ -106,6 +129,22 @@ void UiLayer::set_viewport(int w, int h) {
   if (!impl_->ok) return;
   impl_->w = w;
   impl_->h = h;
+  impl_->x = impl_->y = impl_->gl_offset_x = impl_->gl_offset_y = 0;
+  impl_->target_h = h;
+  impl_->letterbox_mode = false;
+  impl_->engine.set_viewport(w, h);
+}
+
+void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
+  if (!impl_->ok) return;
+  impl_->x = x;
+  impl_->y = y;
+  impl_->w = w;
+  impl_->h = h;
+  impl_->target_h = target_h;
+  impl_->letterbox_mode = true;
+  impl_->gl_offset_x = x;
+  impl_->gl_offset_y = target_h - y - h;
   impl_->engine.set_viewport(w, h);
 }
 
@@ -129,7 +168,8 @@ void UiLayer::render() {
   //     without clearing and without swapping buffers. GL state is saved/restored internally.
   // PT: Delega a Engine::render_compose — compõe a UI sobre o FBO corrente do host
   //     sem limpar e sem trocar buffers. Estado GL é salvo/restaurado internamente.
-  if (impl_->ok) impl_->engine.render_compose(impl_->w, impl_->h);
+  if (impl_->ok)
+    impl_->engine.render_compose(impl_->gl_offset_x, impl_->gl_offset_y, impl_->w, impl_->h);
 }
 
 // ---------------------------------------------------------------------------
@@ -193,15 +233,15 @@ ElementBox UiLayer::get_element_box(const char* id) const {
   float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
   if (!impl_->engine.get_element_box(id, x, y, w, h)) return box;
   box.found = true;
-  // EN: content-space -> window-space: add the sub-viewport offset (0,0 until Task 3 wires
-  //     set_viewport(x,y,w,h,target_h) -- impl_->x/y do not exist yet at this point in the
-  //     plan; Task 3 introduces them and this line becomes "box.x = x + impl_->x", etc.
-  //     Written here as the FINAL form so Task 3 does not need to touch this function again.
-  // PT: espaço-conteúdo -> espaço-janela: soma o offset da sub-viewport (0,0 até a Task 3
-  //     conectar set_viewport(x,y,w,h,target_h) -- impl_->x/y ainda não existem neste ponto do
-  //     plano; a Task 3 os introduz e esta linha vira a forma final abaixo). Escrita aqui já na
-  //     forma FINAL pra que a Task 3 não precise tocar esta função de novo.
-  box.x = x; box.y = y; box.w = w; box.h = h;
+  // EN: content-space -> window-space: add the sub-viewport offset (F3, v0.2.5 --
+  //     impl_->x/y are (0,0) in legacy mode, so this is a no-op unless
+  //     set_viewport(x,y,w,h,target_h) placed the sub-viewport elsewhere).
+  // PT: espaço-conteúdo -> espaço-janela: soma o offset da sub-viewport (F3, v0.2.5 --
+  //     impl_->x/y são (0,0) em modo legado, então é no-op a menos que
+  //     set_viewport(x,y,w,h,target_h) tenha posicionado a sub-viewport em outro lugar).
+  box.x = x + static_cast<float>(impl_->x);
+  box.y = y + static_cast<float>(impl_->y);
+  box.w = w; box.h = h;
   return box;
 }
 
@@ -225,8 +265,14 @@ void UiLayer::process_event(const UiEvent& ev) {
 
     case T::MouseMove:
       // EN: Pointer position in integer pixels; modifiers rarely set on move but forwarded.
-      // PT: Posição do ponteiro em pixels inteiros; modificadores raramente ativados no move mas repassados.
-      c->ProcessMouseMove(static_cast<int>(ev.x), static_cast<int>(ev.y),
+      //     window-space -> content-space (F3, v0.2.5): subtract the sub-viewport offset
+      //     (0,0 in legacy mode) before forwarding to RmlUi, which only knows its own
+      //     offset-free content space -- see set_viewport()'s doc comment.
+      // PT: Posição do ponteiro em pixels inteiros; modificadores raramente ativados no move
+      //     mas repassados. espaço-janela -> espaço-conteúdo (F3, v0.2.5): subtrai o offset da
+      //     sub-viewport (0,0 em modo legado) antes de repassar ao RmlUi, que só conhece o
+      //     próprio espaço de conteúdo offset-free -- ver o doc-comment de set_viewport().
+      c->ProcessMouseMove(static_cast<int>(ev.x) - impl_->x, static_cast<int>(ev.y) - impl_->y,
                           to_rml_mods(ev.modifiers));
       break;
 
@@ -273,6 +319,16 @@ void UiLayer::process_event(const UiEvent& ev) {
       impl_->w = ev.width;
       impl_->h = ev.height;
       c->SetDimensions(Rml::Vector2i(ev.width, ev.height));
+      // EN: F3 (v0.2.5) -- keep gl_offset_y consistent with the new h when in letterbox mode
+      //     (x/target_h stay whatever the last explicit set_viewport(x,y,w,h,target_h) set).
+      //     Legacy mode stays at offset 0 -- unchanged behaviour, gl_offset_x untouched (does
+      //     not depend on h).
+      // PT: F3 (v0.2.5) -- mantém gl_offset_y consistente com o novo h em modo letterbox
+      //     (x/target_h continuam o que o último set_viewport(x,y,w,h,target_h) explícito
+      //     setou). Modo legado permanece em offset 0 -- comportamento inalterado,
+      //     gl_offset_x intocado (não depende de h).
+      if (impl_->letterbox_mode)
+        impl_->gl_offset_y = impl_->target_h - impl_->y - impl_->h;
       break;
 
     default:

@@ -73,11 +73,13 @@ public:
   //     Usado pelo App (dono da janela). NÃO faz swap de buffers.
   void render_standalone(int w, int h);
 
-  // EN: Compose-only frame path — no glClear, no swap, GL state guarded (T3).
-  //     Implemented in T3. In T1 this is a documented no-op stub.
-  // PT: Caminho compose-only — sem glClear, sem swap, estado GL protegido (T3).
-  //     Implementado na T3. Na T1 este é um stub no-op documentado.
-  void render_compose(int w, int h);
+  // EN: Compose-only frame path. (offset_x, offset_y) are OpenGL-native (bottom-left-origin)
+  //     viewport offset -- ALREADY CONVERTED by the caller (UiLayer). Engine stays offset-space
+  //     agnostic: it never interprets these values, only forwards them.
+  // PT: Caminho compose-only. (offset_x, offset_y) são offset de viewport NATIVO do OpenGL
+  //     (origem inferior-esquerda) -- JÁ CONVERTIDO pelo chamador (UiLayer). O Engine
+  //     permanece agnóstico ao espaço do offset: nunca interpreta esses valores, só repassa.
+  void render_compose(int offset_x, int offset_y, int w, int h);
 
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().

@@ -103,10 +103,29 @@ if(NOT TARGET glintfx::glintfx)
     INTERFACE_LINK_LIBRARIES      "${_glintfx_iface_libs}"
   )
 
+  # EN: find_library() writes _glintfx_archive / _glintfx_rmlui_archive into CACHE
+  #     (it always caches its result variable). unset() without CACHE only clears the
+  #     local/normal-variable shadow, leaving the cache entry behind — harmless here
+  #     because the whole block is guarded by if(NOT TARGET glintfx::glintfx), but
+  #     semantically wrong: a stale cache entry could resolve to a wrong path if the
+  #     install tree moves between two find_package() calls in the same build tree.
+  #     unset(... CACHE) removes the cache entry too, matching the non-caching temp
+  #     variables above (_glintfx_lib_dir / _glintfx_inc_dir / _glintfx_iface_libs,
+  #     which were never cached, so plain unset() remains correct for those).
+  # PT: find_library() grava _glintfx_archive / _glintfx_rmlui_archive no CACHE (ele
+  #     sempre cacheia sua variável de resultado). unset() sem CACHE só limpa a sombra
+  #     local/normal, deixando a entrada de cache para trás — inofensivo aqui porque
+  #     o bloco inteiro é protegido por if(NOT TARGET glintfx::glintfx), mas
+  #     semanticamente errado: uma entrada de cache obsoleta poderia resolver para um
+  #     path errado se a árvore de instalação mudar entre duas chamadas de
+  #     find_package() na mesma árvore de build. unset(... CACHE) remove a entrada de
+  #     cache também, alinhando com as variáveis temporárias não cacheadas acima
+  #     (_glintfx_lib_dir / _glintfx_inc_dir / _glintfx_iface_libs, que nunca foram
+  #     cacheadas, então o unset() simples permanece correto para elas).
   unset(_glintfx_lib_dir)
   unset(_glintfx_inc_dir)
-  unset(_glintfx_archive)
-  unset(_glintfx_rmlui_archive)
+  unset(_glintfx_archive CACHE)
+  unset(_glintfx_rmlui_archive CACHE)
   unset(_glintfx_iface_libs)
 endif()
 

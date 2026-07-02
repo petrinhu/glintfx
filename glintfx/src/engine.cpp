@@ -111,6 +111,11 @@ Rml::Context* Engine::context() {
   return impl_->ok ? impl_->boot.context() : nullptr;
 }
 
+void Engine::set_click_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_click_callback(std::move(cb));
+}
+
 // ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
 //     create_data_model / bind_*: blocked when !ok or after load().

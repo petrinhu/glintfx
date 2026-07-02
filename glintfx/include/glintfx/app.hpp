@@ -5,6 +5,7 @@
 #pragma once
 #include <memory>
 #include <cstddef>
+#include <functional>
 // EN: version() moved to its own header (L1.9-VERSEMBED) so embed-only consumers that
 //     never include app.hpp still get glintfx::version(). Re-included here (transitively)
 //     so existing code that only includes app.hpp keeps compiling unchanged.
@@ -125,6 +126,16 @@ public:
   // EN: Convenience loop: poll + update + render until !running().
   // PT: Laço de conveniência: poll + update + render até !running().
   void run();
+
+  // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
+  //     clicked element that has a non-empty id ("" if none reached before the document root).
+  //     No ordering constraint versus load(): safe to call before or after it. Parity with
+  //     UiLayer::set_click_callback (same signature).
+  // PT: Registra um callback de clique -- reporta o id do ancestral-ou-o-próprio mais próximo
+  //     do elemento clicado que tenha id não-vazio ("" se nenhum for encontrado até a raiz do
+  //     documento). Sem restrição de ordem vs. load(): seguro chamar antes ou depois. Paridade
+  //     com UiLayer::set_click_callback (mesma assinatura).
+  void set_click_callback(std::function<void(const char* element_id)> cb);
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model

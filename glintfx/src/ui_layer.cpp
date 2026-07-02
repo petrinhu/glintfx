@@ -182,6 +182,11 @@ void UiLayer::set_list(const char* key, const char* const* items, std::size_t co
   impl_->engine.set_list(key, items, count);
 }
 
+void UiLayer::set_click_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_click_callback(std::move(cb));
+}
+
 void UiLayer::process_event(const UiEvent& ev) {
   // EN: Guard: drop events when the layer is not ready or context is gone.
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.

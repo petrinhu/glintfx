@@ -195,6 +195,11 @@ bool App::snapshot(const char* ppm_path) {
   return true;
 }
 
+void App::set_click_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_click_callback(std::move(cb));
+}
+
 void App::run() {
   while (running()) {
     poll_events();

@@ -24,10 +24,63 @@ struct Bootstrap::Impl {
   BaseUrlFileInterface file_iface;  // EN: installed before Rml::Initialise(); mutable base_url.
                                     // PT: instalado antes de Rml::Initialise(); base_url mutável.
   Rml::Context* ctx = nullptr;
+  Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
   // EN: Parsed once in init(), reused as a merge base by every load() -- see there.
   // PT: Parseada uma vez em init(), reutilizada como base de merge por todo load() -- ver lá.
   Rml::SharedPtr<Rml::StyleSheetContainer> ua_style_sheet;
+  std::function<void(const char*)> click_cb;  // NEW (F1): empty by default.
+};
+
+// EN: Bubble-phase "click" listener attached to each loaded document's root (F1, v0.2.5).
+//     Self-deletes on OnDetach -- RmlUi's own idiom, confirmed in the pinned samples
+//     (Samples/basic/{benchmark,animation,harfbuzz,demo}/src/*.cpp).
+// PT: Listener de "click" em fase bubble anexado à raiz de cada documento carregado (F1,
+//     v0.2.5). Autodeleta em OnDetach -- idioma do próprio RmlUi, confirmado nos samples
+//     pinados.
+class ClickEventListener : public Rml::EventListener {
+public:
+  ClickEventListener(std::function<void(const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    // EN: Bug found in Step 3 (v0.2.5): a plain "walk to the first non-empty id" loop with no
+    //     stop condition overshoots the document -- Context.cpp:65 does `root->SetId(name)` on
+    //     the CONTEXT's internal root element (the one above every ElementDocument, named after
+    //     the context -- "main" here), so an author-authored subtree with NO id anywhere would
+    //     silently report that internal "main" id instead of "". Stop the walk AT doc_ (never
+    //     ask GetParentNode() past it) so only ids the RML AUTHOR could have written are ever
+    //     reported; the document's own id (usually unset) is still checked once, inclusively.
+    // PT: Bug encontrado no Step 3 (v0.2.5): um loop simples "sobe até o 1º id não-vazio" sem
+    //     condição de parada ultrapassa o documento -- Context.cpp:65 faz `root->SetId(name)`
+    //     no elemento root INTERNO do contexto (o que fica acima de todo ElementDocument,
+    //     nomeado com o nome do contexto -- "main" aqui), então uma subárvore autorada SEM id
+    //     em lugar nenhum reportaria silenciosamente esse id interno "main" em vez de "". Para
+    //     a subida EM doc_ (nunca chama GetParentNode() além dele) para que só ids que o AUTOR
+    //     do RML poderia ter escrito sejam reportados; o id do próprio documento (normalmente
+    //     não definido) ainda é checado uma vez, de forma inclusiva.
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    (*cb_)((el && !el->GetId().empty()) ? el->GetId().c_str() : "");
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  // EN: Points into Bootstrap::Impl::click_cb -- outlives this listener (Impl is destroyed
+  //     only AFTER Rml::Shutdown(), which triggers OnDetach on every live listener first).
+  // PT: Aponta pra dentro de Bootstrap::Impl::click_cb -- sobrevive a este listener (Impl só é
+  //     destruído APÓS Rml::Shutdown(), que dispara OnDetach em todo listener vivo antes).
+  std::function<void(const char*)>* cb_;
+  // EN: Document boundary for the ancestor walk above -- never a dangling pointer while this
+  //     listener is alive: OnDetach() (which self-deletes) fires when the SAME document is
+  //     unloaded/destroyed, so doc_ and `this` share an equal-or-shorter lifetime by construction.
+  // PT: Fronteira de documento para a subida de ancestral acima -- nunca é ponteiro pendente
+  //     enquanto este listener está vivo: OnDetach() (que autodeleta) dispara quando o MESMO
+  //     documento é descarregado/destruído, então doc_ e `this` compartilham lifetime
+  //     igual-ou-menor por construção.
+  Rml::ElementDocument* doc_;
 };
 
 Bootstrap::~Bootstrap() { shutdown(); }
@@ -132,10 +185,27 @@ bool Bootstrap::load(const char* rml_path) {
     doc->SetStyleSheetContainer(std::move(combined));
   }
   doc->Show();
+  doc->AddEventListener(Rml::EventId::Click,
+                         new ClickEventListener(&impl_->click_cb, doc), false);
+  impl_->doc = doc;
   return true;
 }
 
 Rml::Context* Bootstrap::context() { return impl_ ? impl_->ctx : nullptr; }
+
+void Bootstrap::set_click_callback(std::function<void(const char*)> cb) {
+  if (impl_) impl_->click_cb = std::move(cb);
+}
+
+bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  const Rml::Vector2f offset = el->GetAbsoluteOffset(Rml::BoxArea::Border);
+  const Rml::Vector2f size   = el->GetBox().GetSize(Rml::BoxArea::Border);
+  x = offset.x; y = offset.y; w = size.x; h = size.y;
+  return true;
+}
 
 void Bootstrap::set_asset_base_url(const char* url) {
   // EN: Safe before init() — file_iface is a value member of Impl, but Impl is allocated

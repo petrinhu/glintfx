@@ -7,6 +7,7 @@
 #pragma once
 #include <memory>
 #include <cstddef>
+#include <functional>
 #include <glintfx/ui_event.hpp>
 
 namespace glintfx {
@@ -130,6 +131,18 @@ public:
   // EN: Inject a host input event — translated to engine input calls internally (T4).
   // PT: Injeta evento de entrada do host — traduzido para chamadas de input do motor internamente (T4).
   void process_event(const UiEvent& ev);
+
+  // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
+  //     clicked element that has a non-empty id ("" if none reached before the document root).
+  //     No ordering constraint versus load(): safe to call before or after it -- the listener
+  //     always reads the CURRENT callback at click time, not the value at attach time. Parity
+  //     with App::set_click_callback (same signature).
+  // PT: Registra um callback de clique -- reporta o id do ancestral-ou-o-próprio mais próximo
+  //     do elemento clicado que tenha id não-vazio ("" se nenhum for encontrado até a raiz do
+  //     documento). Sem restrição de ordem vs. load(): seguro chamar antes ou depois -- o
+  //     listener sempre lê o callback CORRENTE no momento do clique, não o valor no attach.
+  //     Paridade com App::set_click_callback (mesma assinatura).
+  void set_click_callback(std::function<void(const char* element_id)> cb);
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with App. Call order: create_data_model

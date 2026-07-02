@@ -26,6 +26,19 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min.rml COPYONLY)
 
+# EN: click_scene.rml/.rcss (F1, v0.2.5) -- shared by click_callback_sanity (embed, both
+#     configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_click_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
+#     Copied once here, next to min.rml, so both consumers find the same single copy.
+# PT: click_scene.rml/.rcss (F1, v0.2.5) -- compartilhado por click_callback_sanity (embed,
+#     2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_click_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
+#     Copiado uma vez aqui, junto do min.rml, para que os dois consumidores achem a mesma cópia.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/click_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/click_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/click_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/click_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -97,6 +110,27 @@ if(GLINTFX_BACKEND_GLFW)
   add_test(NAME app_dp_ratio_smoke
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:app_dp_ratio_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_click_callback_smoke -- App parity smoke for set_click_callback() (F1, v0.2.5).
+  #     No pixel/hit assertion (that is click_callback_sanity's job via UiLayer, same Engine
+  #     path); this only proves the surface is wired on App and ok() stays true after render.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention); click_scene.rml
+  #     is copied once to CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/click_scene.rml".
+  # PT: app_click_callback_smoke -- smoke de paridade do App para set_click_callback() (F1, v0.2.5).
+  #     Sem asserção de pixel/hit (isso é papel de click_callback_sanity via UiLayer, mesmo
+  #     caminho de Engine); só prova que a superfície está conectada no App e ok() permanece
+  #     true após o render. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do bloco GLFW em
+  #     todo o repo); click_scene.rml é copiado uma vez para CMAKE_CURRENT_BINARY_DIR acima,
+  #     endereçado aqui como "tests/click_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_click_callback_smoke app_click_callback_smoke.cpp)
+  target_link_libraries(app_click_callback_smoke PRIVATE glintfx)
+  add_test(NAME app_click_callback_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_click_callback_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -553,6 +587,31 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rcss
 add_test(NAME ua_stylesheet_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ua_stylesheet_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: click_callback_sanity -- verifies UiLayer::set_click_callback() (F1, v0.2.5): direct id,
+#     ancestor-walk fallback for a child without id, "" fallback for a subtree with no id
+#     anywhere, and no callback invocation for a click outside any element. Runs in BOTH
+#     build configs (embed-mode test, links ${_embed_dep} like the other embed tests above).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     ua_stylesheet_sanity/dp_ratio_sanity/ui_layer_sanity (scene-specific rml/rcss pair
+#     copied next to min.rml at the top of this file, addressed here by bare filename).
+# PT: click_callback_sanity -- verifica UiLayer::set_click_callback() (F1, v0.2.5): id direto,
+#     fallback de subida de ancestral para filho sem id, fallback "" para subárvore sem id em
+#     lugar nenhum, e nenhuma invocação do callback para clique fora de qualquer elemento.
+#     Roda em AMBAS as configs (teste de embed mode, linka ${_embed_dep} como os outros
+#     testes embed acima). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) --
+#     mesmo padrão de ua_stylesheet_sanity/dp_ratio_sanity/ui_layer_sanity (par rml/rcss
+#     específico da cena, copiado junto do min.rml no topo deste arquivo, endereçado aqui
+#     por nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(click_callback_sanity click_callback_sanity.cpp)
+target_link_libraries(click_callback_sanity PRIVATE ${_embed_dep})
+add_test(NAME click_callback_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:click_callback_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

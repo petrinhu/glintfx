@@ -16,6 +16,7 @@
 // PT: Só forward-declaration — nenhum tipo RmlUi/GL visível aos chamadores.
 namespace Rml { class Context; class SystemInterface; }
 #include <cstddef>
+#include <functional>
 
 namespace glintfx {
 
@@ -81,6 +82,12 @@ public:
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().
   Rml::Context* context();
+
+  // EN: Register a click callback -- forwards to Bootstrap::set_click_callback (F1, v0.2.5).
+  //     See Bootstrap::set_click_callback for the full ordering/lifetime contract.
+  // PT: Registra um callback de clique -- encaminha a Bootstrap::set_click_callback (F1,
+  //     v0.2.5). Ver Bootstrap::set_click_callback para o contrato completo de ordem/lifetime.
+  void set_click_callback(std::function<void(const char*)> cb);
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.

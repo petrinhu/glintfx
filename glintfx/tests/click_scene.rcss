@@ -1,0 +1,12 @@
+/* EN: "btn_a" is a directly-id'd, clickable target. "panel" wraps a plain <span> with NO id --
+       proves the ancestor-walk (click lands on the span, callback must report "panel"). "empty"
+       has no id anywhere in its subtree -- proves the "" fallback.
+   PT: "btn_a" é alvo clicável com id direto. "panel" envolve um <span> SEM id -- prova a subida
+       de ancestral (o clique cai no span, o callback deve reportar "panel"). "empty" não tem id
+       em nenhum lugar da subárvore -- prova o fallback "". */
+body { background-color: #101010; }
+div  { display: block; position: absolute; }
+#btn_a { left: 10px;  top: 10px;  width: 80px; height: 40px; background-color: #ff0000; }
+#panel { left: 10px;  top: 60px;  width: 80px; height: 40px; background-color: #00ff00; }
+#panel span { display: block; width: 100%; height: 100%; }
+.empty { left: 10px;  top: 110px; width: 80px; height: 40px; background-color: #0000ff; }

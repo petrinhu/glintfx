@@ -22,7 +22,10 @@
 
 namespace glintfx {
 
-const char* version() { return GLINTFX_VERSION; }
+// EN: version() lives in src/version.cpp now (L1.9-VERSEMBED) — that TU is always
+//     compiled, unlike this one (app.cpp is GLFW-backend-only).
+// PT: version() agora vive em src/version.cpp (L1.9-VERSEMBED) — essa TU é sempre
+//     compilada, diferente desta (app.cpp é exclusiva do backend GLFW).
 
 // EN: Impl owns all subsystems. Declaration order is intentional: C++ destructs members in
 //     REVERSE order, so engine destructs first (calls Rml::Shutdown via Bootstrap::~Bootstrap),

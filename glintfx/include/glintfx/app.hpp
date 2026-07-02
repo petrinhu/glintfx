@@ -5,11 +5,15 @@
 #pragma once
 #include <memory>
 #include <cstddef>
+// EN: version() moved to its own header (L1.9-VERSEMBED) so embed-only consumers that
+//     never include app.hpp still get glintfx::version(). Re-included here (transitively)
+//     so existing code that only includes app.hpp keeps compiling unchanged.
+// PT: version() foi movida para header próprio (L1.9-VERSEMBED) para que consumidores
+//     embed-only, que nunca incluem app.hpp, ainda tenham glintfx::version(). Reincluída
+//     aqui (transitivamente) para que código existente que só inclui app.hpp continue
+//     compilando sem mudanças.
+#include <glintfx/version.hpp>
 namespace glintfx {
-
-// EN: Returns the library version string.
-// PT: Retorna a string de versão da lib.
-const char* version();
 
 // EN: Configuration for App construction. Zero-initialize safe; defaults are sane.
 // PT: Configuração para construção do App. Zero-init seguro; defaults razoáveis.

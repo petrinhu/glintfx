@@ -67,9 +67,13 @@ configure_file(
   @ONLY)
 
 # EN: Core sources — always compiled regardless of GLFW backend option.
-#     Engine + UiLayer + RenderGl3 (plus its GL3 backend) + Bootstrap + SystemClock.
+#     Engine + UiLayer + RenderGl3 (plus its GL3 backend) + Bootstrap + SystemClock + version().
+#     version.cpp (L1.9-VERSEMBED) must stay here (not in the GLFW-only block below) so
+#     glintfx::version() is available in embed-only builds (GLINTFX_BACKEND_GLFW=OFF).
 # PT: Sources principais — sempre compilados independente da opção do backend GLFW.
-#     Engine + UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap + SystemClock.
+#     Engine + UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap + SystemClock + version().
+#     version.cpp (L1.9-VERSEMBED) deve ficar aqui (não no bloco GLFW-only abaixo) para que
+#     glintfx::version() esteja disponível em builds embed-only (GLINTFX_BACKEND_GLFW=OFF).
 set(_glintfx_sources
   src/render_gl3.cpp
   src/stb_image_impl.cpp
@@ -78,6 +82,7 @@ set(_glintfx_sources
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp
+  src/version.cpp
   ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
 
 if(GLINTFX_BACKEND_GLFW)

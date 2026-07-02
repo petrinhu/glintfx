@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: Nightly memory-safety gate for glintfx (TST-L1-MEM, TODO.md LW-TST). Rebuilds
+#     the library and the whole test suite with -DGLINTFX_SANITIZE=ON
+#     (AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer, see
+#     glintfx/CMakeLists.txt top-level comment) and runs ctest under Xvfb / Mesa
+#     llvmpipe, in the same 2-config matrix (GLFW=ON: 18 tests, GLFW=OFF: 8 embed
+#     tests) as .github/workflows/ci.yml. Kept SEPARATE from ci.yml (not a PR-hot
+#     gate): the instrumented build is noticeably slower (~35 s vs a few s per TU)
+#     and per-test runtime overhead is real (~4-6 s per test here vs <1 s plain),
+#     so it runs on a schedule instead of on every push/PR.
+#     Anchors the historical stb_image buffer-leak bug in LoadTexture
+#     (render_gl3.cpp) that was only caught by manual review before this gate
+#     existed (fixed via RAII/unique_ptr, see the code comment there) -- an
+#     automated memory gate would have caught that class of bug for free.
+#     Known, documented noise is filtered via
+#     glintfx/tests/lsan_suppressions.txt (LeakSanitizer) and
+#     glintfx/tests/ubsan_suppressions.txt (UndefinedBehaviorSanitizer) --
+#     wired into every ctest test's ENVIRONMENT property in
+#     glintfx/tests/CMakeLists.txt when GLINTFX_SANITIZE=ON. Every entry in
+#     those files targets a prebuilt system library or a documented,
+#     tracked third-party (pinned RmlUi) finding -- NEVER glintfx's own code.
+#     If this job goes red, that is either a NEW real leak/UB in glintfx or the
+#     pinned RmlUi, or noise from a NEW system library that needs a new,
+#     equally-documented suppression entry -- never a blanket loosen of the
+#     sanitizer flags themselves.
+# PT: Gate noturno de memory-safety para glintfx (TST-L1-MEM, TODO.md LW-TST).
+#     Rebuilda a biblioteca e a suite inteira de testes com
+#     -DGLINTFX_SANITIZE=ON (AddressSanitizer + LeakSanitizer +
+#     UndefinedBehaviorSanitizer, ver comentário no topo de
+#     glintfx/CMakeLists.txt) e roda o ctest sob Xvfb / Mesa llvmpipe, na mesma
+#     matrix de 2 configs (GLFW=ON: 18 testes, GLFW=OFF: 8 testes embed) do
+#     .github/workflows/ci.yml. Mantido SEPARADO do ci.yml (não é gate quente de
+#     PR): o build instrumentado é visivelmente mais lento (~35 s vs poucos s por
+#     unidade de tradução) e o overhead de runtime por teste é real (~4-6 s por
+#     teste aqui vs <1 s puro), então roda em agendamento em vez de a cada
+#     push/PR.
+#     Ancora o bug histórico do buffer vazado do stb_image em LoadTexture
+#     (render_gl3.cpp), que só era pego em review manual antes deste gate
+#     existir (corrigido via RAII/unique_ptr, ver comentário no código lá) --
+#     um gate de memória automatizado teria pego essa classe de bug de graça.
+#     Ruído conhecido e documentado é filtrado via
+#     glintfx/tests/lsan_suppressions.txt (LeakSanitizer) e
+#     glintfx/tests/ubsan_suppressions.txt (UndefinedBehaviorSanitizer) --
+#     conectados na propriedade ENVIRONMENT de todo teste do ctest em
+#     glintfx/tests/CMakeLists.txt quando GLINTFX_SANITIZE=ON. Toda entrada
+#     nesses arquivos mira uma biblioteca de sistema pré-compilada ou um
+#     achado documentado e rastreado de terceiro (RmlUi pinado) -- NUNCA o
+#     código próprio da glintfx.
+#     Se este job ficar vermelho, é ou um leak/UB real NOVO na glintfx ou no
+#     RmlUi pinado, ou ruído de uma biblioteca de sistema NOVA que precisa de
+#     uma entrada de suppression nova e igualmente documentada -- nunca um
+#     afrouxamento genérico das flags do sanitizer em si.
+name: nightly-sanitize
+
+on:
+  # EN: 03:17 UTC daily -- off-peak, avoids the thundering-herd of jobs
+  #     scheduled at exact round hours (00:00, 01:00, ...) on shared GitHub
+  #     Actions infrastructure.
+  # PT: 03:17 UTC diariamente -- fora de pico, evita a debandada de jobs
+  #     agendados em horas redondas exatas (00:00, 01:00, ...) na infra
+  #     compartilhada do GitHub Actions.
+  schedule:
+    - cron: "17 3 * * *"
+  # EN: Manual trigger -- run on demand without waiting for the schedule.
+  # PT: Disparo manual -- roda sob demanda sem esperar o agendamento.
+  workflow_dispatch:
+
+jobs:
+  sanitize:
+    name: sanitize (ubuntu-latest / GLFW=${{ matrix.backend }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # EN: Separate cache key ('sanitize-glfw<backend>') from the ci.yml
+      #     build-ON/build-OFF caches -- the sanitizer build dir (build-asan-*)
+      #     compiles RmlUi with different flags (-fsanitize=...) and must not
+      #     share, or collide with, the plain CI build's FetchContent cache.
+      # PT: Chave de cache separada ('sanitize-glfw<backend>') dos caches
+      #     build-ON/build-OFF do ci.yml -- o dir de build do sanitizer
+      #     (build-asan-*) compila o RmlUi com flags diferentes
+      #     (-fsanitize=...) e não deve compartilhar, nem colidir com, o cache
+      #     FetchContent do build normal do CI.
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-asan-${{ matrix.backend }}/_deps
+          key: rmlui-${{ runner.os }}-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Same deps as ci.yml's build-and-test job -- see that file for the
+      #     per-package rationale.
+      # PT: Mesmas deps do job build-and-test do ci.yml -- ver aquele arquivo
+      #     para a justificativa por pacote.
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libgl1-mesa-dri \
+            xvfb
+
+      - name: configure (GLINTFX_SANITIZE=ON)
+        run: |
+          cmake -S glintfx -B glintfx/build-asan-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_SANITIZE=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: build
+        run: cmake --build glintfx/build-asan-${{ matrix.backend }} -j$(nproc)
+
+      # EN: LSAN_OPTIONS / ASAN_OPTIONS / UBSAN_OPTIONS (suppressions files,
+      #     detect_leaks=1, halt_on_error=1) are already wired per-test via
+      #     ENVIRONMENT in glintfx/tests/CMakeLists.txt when
+      #     GLINTFX_SANITIZE=ON -- nothing extra to set here.
+      # PT: LSAN_OPTIONS / ASAN_OPTIONS / UBSAN_OPTIONS (arquivos de
+      #     suppression, detect_leaks=1, halt_on_error=1) já são conectados
+      #     por teste via ENVIRONMENT em glintfx/tests/CMakeLists.txt quando
+      #     GLINTFX_SANITIZE=ON -- nada extra a definir aqui.
+      - name: test (ASan + LSan + UBSan)
+        run: xvfb-run -a ctest --test-dir glintfx/build-asan-${{ matrix.backend }} --output-on-failure

@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: Nightly memory-safety gate for glintfx on Codeberg (Forgejo Actions)
+#     (TST-L1-MEM, TODO.md LW-TST). Mirrors .github/workflows/nightly.yml
+#     step-for-step -- see that file for the full rationale (why a separate
+#     nightly job, the sanitizer flags, the suppression-file discipline, what
+#     a red job means). Runner/container conventions match
+#     .forgejo/workflows/ci.yml (codeberg-medium + catthehacker container --
+#     see reference_glintfx_ci memory / that file's header comment for why).
+#
+#     Forgejo `schedule` support: Forgejo Actions DOES support the `schedule`
+#     trigger (POSIX cron syntax, UTC by default) -- confirmed against the
+#     upstream docs (forgejo.org/docs/latest/user/actions/reference, "Events
+#     that trigger workflows" -- schedule section) as of 2026-07-02. The
+#     workflow must be present on the repository's DEFAULT branch (main) for
+#     Forgejo to register the scheduled task; this file has no effect on
+#     schedule until it lands there (this task does not push -- the líder
+#     merges/pushes separately). `workflow_dispatch` is kept alongside
+#     `schedule` as a manual fallback / on-demand trigger, consistent with the
+#     GitHub side, NOT as a replacement -- unlike the CAVEAT this task's
+#     instructions anticipated ("se não suportar, deixe só
+#     workflow_dispatch"), Codeberg's Forgejo instance is expected to run the
+#     schedule scanner (services/actions/schedule_tasks.go is a core, enabled
+#     Actions feature, not an opt-in). If the schedule is ever observed NOT to
+#     fire after this lands on main (checkable at
+#     codeberg.org/petrinhu/loucura_c_asm/actions -- a "schedule" run should
+#     appear daily), that is an operational finding to report, not a reason to
+#     silently drop the trigger from this file.
+#
+# PT: Gate noturno de memory-safety para glintfx no Codeberg (Forgejo Actions)
+#     (TST-L1-MEM, TODO.md LW-TST). Espelha .forgejo/workflows/nightly.yml --
+#     ver .github/workflows/nightly.yml para a justificativa completa (por
+#     que um job noturno separado, as flags do sanitizer, a disciplina de
+#     arquivo de suppression, o que um job vermelho significa). Convenções de
+#     runner/container batem com .forgejo/workflows/ci.yml (codeberg-medium +
+#     container catthehacker -- ver memória reference_glintfx_ci / comentário
+#     de cabeçalho daquele arquivo para o porquê).
+#
+#     Suporte a `schedule` no Forgejo: o Forgejo Actions SUPORTA o gatilho
+#     `schedule` (sintaxe cron POSIX, UTC por padrão) -- confirmado contra a
+#     doc upstream (forgejo.org/docs/latest/user/actions/reference, seção
+#     "Events that trigger workflows" -- schedule) em 2026-07-02. O workflow
+#     precisa estar presente no branch DEFAULT do repositório (main) para o
+#     Forgejo registrar a tarefa agendada; este arquivo não tem efeito no
+#     agendamento até chegar lá (esta task não dá push -- o líder
+#     mergeia/pusha separadamente). `workflow_dispatch` fica junto com
+#     `schedule` como fallback manual / disparo sob demanda, consistente com
+#     o lado GitHub, NÃO como substituto -- diferente da RESSALVA que as
+#     instruções desta task anteciparam ("se não suportar, deixe só
+#     workflow_dispatch"), a instância Forgejo do Codeberg é esperada rodar o
+#     scanner de agendamento (services/actions/schedule_tasks.go é uma
+#     feature core do Actions, habilitada por padrão, não opt-in). Se o
+#     agendamento for observado NÃO disparar depois disso chegar na main
+#     (verificável em codeberg.org/petrinhu/loucura_c_asm/actions -- uma
+#     execução "schedule" deveria aparecer diariamente), isso é um achado
+#     operacional para reportar, não motivo para remover o gatilho deste
+#     arquivo silenciosamente.
+name: nightly-sanitize
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  sanitize:
+    name: sanitize (codeberg-medium / GLFW=${{ matrix.backend }})
+    runs-on: codeberg-medium
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-asan-${{ matrix.backend }}/_deps
+          key: rmlui-${{ runner.os }}-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Same deps as .forgejo/workflows/ci.yml's build-and-test job.
+      # PT: Mesmas deps do job build-and-test de .forgejo/workflows/ci.yml.
+      - name: install deps
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            cmake g++ git \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libgl1-mesa-dri \
+            xvfb
+
+      - name: configure (GLINTFX_SANITIZE=ON)
+        run: |
+          cmake -S glintfx -B glintfx/build-asan-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_SANITIZE=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: build
+        run: cmake --build glintfx/build-asan-${{ matrix.backend }} -j$(nproc)
+
+      - name: test (ASan + LSan + UBSan)
+        run: xvfb-run -a ctest --test-dir glintfx/build-asan-${{ matrix.backend }} --output-on-failure

@@ -32,6 +32,18 @@ struct UiLayerConfig {
   float dp_ratio = 1.0f;
 };
 
+// EN: MOVED-FROM STATE (L1.10-APIDOC): after `UiLayer b = std::move(a);` (or
+//     `b = std::move(a);`), `a` is left in a moved-from state. Calling ANY method on `a`
+//     other than ok() or the destructor is undefined behaviour — same convention as
+//     std::unique_ptr. ok() on a moved-from UiLayer returns false (impl_ is null), which is
+//     the only state query that is safe to make; destruction of a moved-from UiLayer is
+//     always safe (no-op, impl_ is null).
+// PT: ESTADO MOVIDO-DE (L1.10-APIDOC): após `UiLayer b = std::move(a);` (ou
+//     `b = std::move(a);`), `a` fica em estado movido-de. Chamar QUALQUER método em `a`
+//     além de ok() ou o destrutor é comportamento indefinido — mesma convenção do
+//     std::unique_ptr. ok() num UiLayer movido-de retorna false (impl_ é nulo), sendo a
+//     única consulta de estado segura; destruir um UiLayer movido-de é sempre seguro
+//     (no-op, impl_ é nulo).
 class UiLayer {
 public:
   // EN: Inner alias so callers can write UiLayer::Config{...} — matches the spec interface.
@@ -45,6 +57,10 @@ public:
   explicit UiLayer(Config cfg = Config{});
   ~UiLayer();
 
+  // EN: Move leaves the source in a moved-from state — see the class-level comment above
+  //     for the exact contract (only ok() and ~UiLayer() remain valid on the source afterwards).
+  // PT: O move deixa a origem em estado movido-de — ver o comentário de nível de classe
+  //     acima para o contrato exato (só ok() e ~UiLayer() permanecem válidos na origem depois).
   UiLayer(UiLayer&&) noexcept;
   UiLayer& operator=(UiLayer&&) noexcept;
   UiLayer(const UiLayer&)            = delete;

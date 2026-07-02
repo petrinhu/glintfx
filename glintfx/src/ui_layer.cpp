@@ -191,6 +191,15 @@ void UiLayer::process_event(const UiEvent& ev) {
 
   using T = UiEvent::Type;
   switch (ev.type) {
+    case T::None:
+      // EN: Inert event (L1.10-APIDOC) — the default-constructed UiEvent{} value.
+      //     Intentional no-op: a host that forgets to set .type gets silently dropped
+      //     instead of being misinterpreted as a mouse-move to (0, 0).
+      // PT: Evento inerte (L1.10-APIDOC) — valor default-construído UiEvent{}.
+      //     No-op intencional: um host que esquece de definir .type é descartado
+      //     silenciosamente em vez de ser interpretado como mouse-move para (0, 0).
+      break;
+
     case T::MouseMove:
       // EN: Pointer position in integer pixels; modifiers rarely set on move but forwarded.
       // PT: Posição do ponteiro em pixels inteiros; modificadores raramente ativados no move mas repassados.

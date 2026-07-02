@@ -45,6 +45,16 @@ enum Mod {
 // PT: Evento de entrada agnóstico de host. Use inicializadores designados (C++20) para clareza.
 struct UiEvent {
   enum class Type {
+    // EN: No event (L1.10-APIDOC). The default-constructed value: `UiEvent{}` (no designated
+    //     initializer for `.type`) is inert and process_event() drops it as a no-op. Chosen as
+    //     the default instead of MouseMove so a caller that forgets to set `.type` gets an
+    //     obviously-inert event rather than a silent phantom pointer move to (0, 0).
+    // PT: Nenhum evento (L1.10-APIDOC). Valor default-construído: `UiEvent{}` (sem
+    //     inicializador designado para `.type`) é inerte e process_event() descarta como
+    //     no-op. Escolhido como default em vez de MouseMove para que um chamador que esqueça
+    //     de definir `.type` receba um evento obviamente inerte, não um movimento fantasma
+    //     silencioso do ponteiro para (0, 0).
+    None,
     MouseMove,    // EN: pointer position update (x, y in pixels).
                   // PT: atualização de posição do ponteiro (x, y em pixels).
     MouseButton,  // EN: button press/release (button, pressed).
@@ -57,7 +67,20 @@ struct UiEvent {
                   // PT: redimensionamento lógico do viewport (width, height em pixels).
   };
 
-  Type        type      = Type::MouseMove;
+  // EN: L1.10-APIDOC: default changed from MouseMove to None (breaking change to an already
+  //     shipped API — v0.2.4 and earlier default to MouseMove). Rationale: `UiEvent{}` looked
+  //     harmless but was silently a mouse-move-to-origin event; None makes an unset .type
+  //     inert instead. Hosts that build events via designated initializers with an explicit
+  //     `.type = ...` (the documented usage pattern; see the struct comment above and every
+  //     call site in tests/ui_layer_events.cpp) are unaffected.
+  // PT: L1.10-APIDOC: default trocado de MouseMove para None (mudança de comportamento numa
+  //     API já shipada — v0.2.4 e anteriores usavam MouseMove como default). Motivo:
+  //     `UiEvent{}` parecia inofensivo mas era silenciosamente um evento de mouse-move para a
+  //     origem; None torna um .type não definido inerte. Hosts que constroem eventos via
+  //     inicializadores designados com `.type = ...` explícito (padrão de uso documentado; ver
+  //     o comentário da struct acima e todos os call sites em tests/ui_layer_events.cpp) não
+  //     são afetados.
+  Type        type      = Type::None;
   float       x         = 0.f;          // EN: pointer X  (MouseMove). PT: X do ponteiro.
   float       y         = 0.f;          // EN: pointer Y  (MouseMove). PT: Y do ponteiro.
   int         button    = 0;            // EN: 0=left,1=right,2=middle (MouseButton).

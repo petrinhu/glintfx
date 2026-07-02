@@ -35,12 +35,24 @@ struct AppConfig {
 //     Only ONE App instance per process is supported. Creating a second instance while
 //     the first is alive, or after it has been destroyed, results in undefined behaviour.
 //
+//     MOVED-FROM STATE (L1.10-APIDOC): after `App b = std::move(a);` (or `b = std::move(a);`),
+//     `a` is left in a moved-from state. Calling ANY method on `a` other than ok() or the
+//     destructor is undefined behaviour — same convention as std::unique_ptr. ok() on a
+//     moved-from App returns false (impl_ is null), which is the only state query that is
+//     safe to make; destruction of a moved-from App is always safe (no-op, impl_ is null).
+//
 // PT: Fachada RAII da aplicação. Possui janela, renderer e bootstrap de UI.
 //     Move-only. Nenhum tipo de engine ou gráficos de terceiros aparece neste header.
 //
 //     ESTADO GLOBAL (N3): glintfx inicializa estado global de processo (backend de janela + lib de UI).
 //     Apenas UMA instância de App por processo é suportada. Criar uma segunda instância
 //     enquanto a primeira está viva, ou após ser destruída, resulta em comportamento indefinido.
+//
+//     ESTADO MOVIDO-DE (L1.10-APIDOC): após `App b = std::move(a);` (ou `b = std::move(a);`),
+//     `a` fica em estado movido-de. Chamar QUALQUER método em `a` além de ok() ou o destrutor
+//     é comportamento indefinido — mesma convenção do std::unique_ptr. ok() num App movido-de
+//     retorna false (impl_ é nulo), sendo a única consulta de estado segura; destruir um App
+//     movido-de é sempre seguro (no-op, impl_ é nulo).
 class App {
 public:
   // EN: Constructs the App: opens a window and initialises the GL context and UI engine.
@@ -57,6 +69,10 @@ public:
   //     run() é seguro de chamar independentemente — retorna imediatamente quando !running().
   explicit App(AppConfig cfg = {});
   ~App();
+  // EN: Move leaves the source in a moved-from state — see the class-level comment above
+  //     for the exact contract (only ok() and ~App() remain valid on the source afterwards).
+  // PT: O move deixa a origem em estado movido-de — ver o comentário de nível de classe
+  //     acima para o contrato exato (só ok() e ~App() permanecem válidos na origem depois).
   App(App&&) noexcept;
   App& operator=(App&&) noexcept;
   App(const App&) = delete;

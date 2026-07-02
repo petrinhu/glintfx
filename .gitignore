@@ -35,4 +35,9 @@ vgcore.*
 # scratch do subagent-driven-development (em qualquer profundidade)
 .superpowers/
 **/.superpowers/
-glintfx/build-noglfw/
+
+# Build dirs locais que espelham nomes usados pelos workflows de CI/local
+# validation (ci.yml: build-ON/build-OFF/build-lint; nightly.yml, TST-L1-MEM:
+# build-asan/build-asan-off/build-asan-ON/build-asan-OFF) -- "build/" acima só
+# casa o nome exato "build", não esses sufixados.
+glintfx/build-*/

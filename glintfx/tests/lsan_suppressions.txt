@@ -1,0 +1,144 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# EN: LeakSanitizer suppression file for the TST-L1-MEM nightly gate
+#     (GLINTFX_SANITIZE=ON). Consumed via LSAN_OPTIONS=suppressions=<this file>,
+#     injected for every test in glintfx/tests/CMakeLists.txt (bottom of file).
+#
+#     Scope rule (non-negotiable): every entry here MUST target a prebuilt
+#     SYSTEM library that GLINTFX_SANITIZE does NOT recompile (GLFW, Mesa/
+#     llvmpipe, FreeType, fontconfig, X11/Xvfb, libstdc++ static init, ...).
+#     These leak "by design" or have known false-positives at process exit
+#     (driver-global caches, one-time font/config parsing, X11 connection
+#     state) that this project cannot fix — they belong to the vendor.
+#
+#     NEVER suppress by a glintfx:: symbol, or by a file under glintfx/src/ or
+#     glintfx/include/. If ASan/LSan/UBSan point at OUR code, that is a real
+#     finding: report it (or fix it, see TESTES.md TST-L1-MEM) — do not paper
+#     over it here. A suppression entry that matches our own code defeats the
+#     entire point of this gate.
+#
+#     Format: https://github.com/google/sanitizers/wiki/AddressSanitizerLeakSanitizer
+#       leak:<substring matched against the symbolized frame (function name),
+#             or against module+offset when no symbol is available>
+#
+#     Populated from the actual first sanitized run on this machine (Fedora 44,
+#     Mesa llvmpipe, Xvfb) — see the TST-L1-MEM QA report for the raw LSan
+#     output each entry below was derived from. Re-verify entries whenever the
+#     system GLFW/Mesa/FreeType/fontconfig package versions change materially.
+#
+# PT: Arquivo de suppression do LeakSanitizer para o gate noturno TST-L1-MEM
+#     (GLINTFX_SANITIZE=ON). Consumido via LSAN_OPTIONS=suppressions=<este
+#     arquivo>, injetado para todo teste em glintfx/tests/CMakeLists.txt (fim
+#     do arquivo).
+#
+#     Regra de escopo (não-negociável): toda entrada aqui DEVE mirar uma
+#     biblioteca de SISTEMA pré-compilada que o GLINTFX_SANITIZE NÃO recompila
+#     (GLFW, Mesa/llvmpipe, FreeType, fontconfig, X11/Xvfb, init estático da
+#     libstdc++, ...). Essas vazam "por design" ou têm falso-positivo conhecido
+#     na saída do processo (cache global de driver, parsing one-time de fonte/
+#     config, estado de conexão X11) que este projeto não pode corrigir —
+#     pertencem ao fornecedor.
+#
+#     NUNCA suprimir por símbolo glintfx::, ou por arquivo sob glintfx/src/ ou
+#     glintfx/include/. Se ASan/LSan/UBSan apontarem para o NOSSO código, é um
+#     achado real: reportar (ou corrigir, ver TESTES.md TST-L1-MEM) — nunca
+#     mascarar aqui. Uma entrada de suppression que casa com nosso próprio
+#     código anula o propósito inteiro deste gate.
+#
+#     Populado a partir da 1ª execução sanitizada real nesta máquina (Fedora 44,
+#     Mesa llvmpipe, Xvfb) — ver o relatório de QA do TST-L1-MEM para o output
+#     bruto do LSan de onde cada entrada abaixo veio. Reverificar entradas
+#     quando as versões de pacote de sistema GLFW/Mesa/FreeType/fontconfig
+#     mudarem materialmente.
+#
+# EN: Root cause of this specific noise cluster (Fedora 44 desktop machine):
+#     GLFW's window creation path (glfwCreateWindow / _glfwCreateWindowWayland)
+#     triggers client-side decoration rendering via libdecor's GTK3 plugin
+#     (libdecor-gtk.so), which pulls in the full GTK3 -> Pango -> Cairo ->
+#     fontconfig -> glib chain just to measure a title-bar label — even for a
+#     hidden/headless test window under Xvfb. Every one of these libraries
+#     leaks internally at process exit (global font caches, one-time pattern
+#     objects, thread-pool state) — none of it is reachable from, or fixable
+#     in, glintfx or the pinned RmlUi source.
+# PT: Causa raiz deste cluster de ruído específico (máquina desktop Fedora 44):
+#     o caminho de criação de janela do GLFW (glfwCreateWindow /
+#     _glfwCreateWindowWayland) dispara a renderização de decoração
+#     client-side via plugin GTK3 do libdecor (libdecor-gtk.so), que traz a
+#     cadeia inteira GTK3 -> Pango -> Cairo -> fontconfig -> glib só para medir
+#     um label de title-bar — mesmo para uma janela de teste oculta/headless
+#     sob Xvfb. Cada uma dessas bibliotecas vaza internamente na saída do
+#     processo (cache global de fonte, objetos de pattern one-time, estado de
+#     thread-pool) — nada disso é alcançável a partir de, ou corrigível em,
+#     glintfx ou no fonte pinado do RmlUi.
+
+# fontconfig (Fc* / IA__Fc* symbol prefix) + its background thread
+leak:Fc
+leak:fc_thread_func
+
+# Pango (font shaping/metrics) — pulled in by the GTK title-bar label measure
+leak:pango_
+
+# GTK3 — title-bar/header-bar widget size measurement (libdecor-gtk.so plugin)
+leak:gtk_
+
+# libdecor — client-side decoration frame creation/commit, and its GTK plugin
+leak:libdecor
+leak:createLibdecorFrame
+leak:draw_decoration
+leak:draw_title_bar
+
+# glib — thread-pool proxy used by fontconfig's background matching thread
+leak:g_thread_proxy
+
+# Wayland client protocol marshalling (wl_proxy_*) — GLFW's Wayland backend
+leak:wl_proxy_
+
+# GLFW itself — window/surface creation entry points that fan out into the
+# libdecor/GTK chain above
+leak:glfwCreateWindow
+leak:_glfwCreateWindowWayland
+leak:proxy_create
+
+# Cairo (font-options substitution, invoked from the Pango/fontconfig path)
+leak:_cairo_ft_font_options_substitute
+leak:ensure_families
+
+# EN: Residual allocations from the SAME GTK3/libdecor CSD chain above whose
+#     allocation site is an anonymous, unsymbolizable executable mapping (no
+#     backing ELF module at all — ASan/LSan print the frame as literal
+#     "<unknown module>", not a missing symbol on a known module). Classic
+#     signature of a libffi-generated closure trampoline, which GObject's
+#     type/signal-marshalling machinery (used throughout GTK3/Pango/GLib)
+#     creates via a raw executable mmap with no ELF header to resolve against
+#     — the unwinder cannot walk past it (no frame-pointer/CFI in a JIT
+#     stub), so this is genuinely a 2-frame-max leak report, not a
+#     stack-depth truncation. Confirmed via an isolated single-test probe
+#     (window_smoke, LSAN_OPTIONS with only the "Fc"/"proxy_create"
+#     suppressions above already applied): count (135) and byte total (6509)
+#     match exactly what remained after suppressing every OTHER identified
+#     frame of the GTK3/libdecor/Pango/fontconfig chain — i.e. this is that
+#     same chain's tail, not an independent, unrelated leak.
+#     Pattern is the LITERAL frame text LSan prints for an unresolvable
+#     address, not a symbol/module name — verified empirically to match via
+#     the LSan TemplateMatch substring rule (2026-07-02).
+# PT: Alocações residuais da MESMA cadeia GTK3/libdecor CSD acima cujo local
+#     de alocação é um mapeamento executável anônimo e não-simbolizável (sem
+#     módulo ELF de apoio algum — ASan/LSan imprimem o frame como o literal
+#     "<unknown module>", não um símbolo faltante num módulo conhecido).
+#     Assinatura clássica de um trampolim de closure gerado por libffi, que a
+#     maquinaria de marshalling de tipo/signal do GObject (usada por todo
+#     GTK3/Pango/GLib) cria via mmap executável cru sem cabeçalho ELF para
+#     resolver — o unwinder não consegue caminhar além dele (sem
+#     frame-pointer/CFI num stub JIT), então este é genuinamente um relatório
+#     de leak de no máximo 2 frames, não um truncamento de profundidade de
+#     stack. Confirmado via probe isolado de um único teste (window_smoke,
+#     LSAN_OPTIONS com só as suppressions "Fc"/"proxy_create" acima já
+#     aplicadas): contagem (135) e total de bytes (6509) batem exatamente com
+#     o que sobrou após suprimir todo OUTRO frame identificado da cadeia
+#     GTK3/libdecor/Pango/fontconfig — ou seja, é a cauda dessa mesma cadeia,
+#     não um leak independente e não-relacionado.
+#     O padrão é o texto LITERAL do frame que o LSan imprime para um endereço
+#     não-resolvível, não um nome de símbolo/módulo — verificado
+#     empiricamente que casa via a regra de substring do TemplateMatch do
+#     LSan (2026-07-02).
+leak:<unknown module>

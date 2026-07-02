@@ -6,6 +6,54 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# EN: GLINTFX_SANITIZE (TST-L1-MEM, TODO.md LW-TST) — AddressSanitizer + LeakSanitizer +
+#     UndefinedBehaviorSanitizer for a nightly memory-safety gate. OFF by default: never
+#     pollutes the normal build (dev, PR-hot CI) — the instrumented build is significantly
+#     slower and is meant to run as a separate/nightly job (see .github/workflows/nightly.yml
+#     and .forgejo/workflows/nightly.yml).
+#     Applied via add_compile_options/add_link_options (directory-scope, set BEFORE
+#     FetchContent_MakeAvailable(RmlUi) and add_subdirectory(third_party/gl3w) below) so the
+#     flags reach every target compiled in this build: glintfx itself, vendored gl3w/stb_image
+#     sources, the fetched RmlUi sources, and the whole tests/ suite. Prebuilt system libraries
+#     linked in (GLFW, Mesa/libGL, FreeType, libstdc++) are NOT recompiled here and therefore
+#     stay uninstrumented — any noise ASan/LSan/UBSan raise against them (false leaks reported
+#     against driver-internal allocations, etc.) is filtered at runtime via
+#     tests/lsan_suppressions.txt (LSAN_OPTIONS), not by trying to instrument those libraries.
+#     -fno-sanitize-recover=all: UBSan aborts immediately on the first UB hit instead of
+#     printing and continuing — this is meant to be a hard gate, not a report-only run.
+#     -fno-omit-frame-pointer + -g: readable stack traces (unwind quality matters more than
+#     binary size in this build).
+# PT: GLINTFX_SANITIZE (TST-L1-MEM, TODO.md LW-TST) — AddressSanitizer + LeakSanitizer +
+#     UndefinedBehaviorSanitizer para um gate noturno de memory-safety. OFF por padrão: nunca
+#     polui o build normal (dev, CI quente de PR) — o build instrumentado é significativamente
+#     mais lento e é feito para rodar como job separado/noturno (ver .github/workflows/nightly.yml
+#     e .forgejo/workflows/nightly.yml).
+#     Aplicado via add_compile_options/add_link_options (escopo de diretório, definido ANTES
+#     de FetchContent_MakeAvailable(RmlUi) e add_subdirectory(third_party/gl3w) abaixo) para que
+#     as flags alcancem todo target compilado neste build: a própria glintfx, os fontes
+#     vendorizados gl3w/stb_image, os fontes fetchados do RmlUi, e toda a suíte tests/.
+#     Bibliotecas de sistema pré-compiladas linkadas (GLFW, Mesa/libGL, FreeType, libstdc++)
+#     NÃO são recompiladas aqui e portanto ficam não-instrumentadas — qualquer ruído que
+#     ASan/LSan/UBSan levantem contra elas (falsos leaks reportados contra alocações internas
+#     de driver, etc.) é filtrado em runtime via tests/lsan_suppressions.txt (LSAN_OPTIONS), e
+#     não por tentar instrumentar essas bibliotecas.
+#     -fno-sanitize-recover=all: UBSan aborta imediatamente no primeiro UB em vez de imprimir
+#     e continuar — a intenção é um gate duro, não uma execução apenas-relatório.
+#     -fno-omit-frame-pointer + -g: stacks legíveis (qualidade do unwind importa mais que
+#     tamanho do binário neste build).
+option(GLINTFX_SANITIZE
+  "Build glintfx + tests with ASan/LSan/UBSan (nightly memory-safety gate, TST-L1-MEM)"
+  OFF)
+if(GLINTFX_SANITIZE)
+  set(_glintfx_sanitize_flags
+    -fsanitize=address,undefined
+    -fno-sanitize-recover=all
+    -fno-omit-frame-pointer
+    -g)
+  add_compile_options(${_glintfx_sanitize_flags})
+  add_link_options(${_glintfx_sanitize_flags})
+endif()
+
 include(FetchContent)
 
 # EN: GLFW window backend option.

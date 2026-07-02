@@ -555,3 +555,50 @@ add_test(NAME ua_stylesheet_sanity
     -DEXE=$<TARGET_FILE:ua_stylesheet_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
+#     options into every test registered so far in this directory. Applied here
+#     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF
+#     branches included) via DIRECTORY PROPERTY TESTS rather than per-add_test,
+#     so no individual test block above needs touching.
+#       LSAN_OPTIONS  — suppressions=lsan_suppressions.txt: silence known-leaky
+#         prebuilt system libraries (GLFW/Mesa-llvmpipe/FreeType/fontconfig/X11)
+#         that are NOT recompiled under GLINTFX_SANITIZE (see CMakeLists.txt
+#         top-level comment) so they cannot be fixed by us — never suppress by
+#         glintfx function/file.
+#       ASAN_OPTIONS  — detect_leaks=1 pinned explicitly (already the Linux
+#         default, stated here so the gate does not silently regress if that
+#         default ever changes upstream).
+#       UBSAN_OPTIONS — print_stacktrace=1 for symbolized aborts; halt_on_error=1
+#         belt-and-suspenders with -fno-sanitize-recover=all (compile-time flag,
+#         set at the top of CMakeLists.txt) so a UB hit is always a hard test
+#         failure, never a printed-and-ignored diagnostic.
+# PT: GLINTFX_SANITIZE (TST-L1-MEM, gate noturno) — injeta opções de runtime do
+#     sanitizer em todo teste já registrado neste diretório. Aplicado aqui (fim
+#     do arquivo, após todas as chamadas add_test() acima, ramos GLFW=ON e OFF
+#     inclusos) via DIRECTORY PROPERTY TESTS em vez de por add_test, então
+#     nenhum bloco de teste acima precisa ser tocado.
+#       LSAN_OPTIONS  — suppressions=lsan_suppressions.txt: silencia bibliotecas
+#         de sistema pré-compiladas conhecidas por vazar (GLFW/Mesa-llvmpipe/
+#         FreeType/fontconfig/X11) que NÃO são recompiladas sob GLINTFX_SANITIZE
+#         (ver comentário no topo do CMakeLists.txt) e portanto não são
+#         corrigíveis por nós — nunca suprimir por função/arquivo da glintfx.
+#       ASAN_OPTIONS  — detect_leaks=1 fixado explicitamente (já é o default no
+#         Linux; declarado aqui para o gate não regredir silenciosamente se
+#         esse default mudar upstream).
+#       UBSAN_OPTIONS — print_stacktrace=1 para aborts simbolizados;
+#         halt_on_error=1 cinto-e-suspensório com -fno-sanitize-recover=all
+#         (flag de compile-time, definida no topo do CMakeLists.txt) para que
+#         um UB seja sempre falha dura de teste, nunca um diagnóstico impresso
+#         e ignorado; suppressions=ubsan_suppressions.txt — mesmo espírito do
+#         LSAN_OPTIONS acima, mas para UB real e rastreado em código de
+#         terceiro (ver cabeçalho daquele arquivo — hoje só o vptr:ElementDocument
+#         do teardown do RmlUi pinado; NUNCA um padrão que também case com
+#         código autoral glintfx).
+# ---------------------------------------------------------------------------
+if(GLINTFX_SANITIZE)
+  get_property(_glintfx_all_tests DIRECTORY PROPERTY TESTS)
+  set_tests_properties(${_glintfx_all_tests} PROPERTIES ENVIRONMENT
+    "LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan_suppressions.txt;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:suppressions=${CMAKE_CURRENT_SOURCE_DIR}/ubsan_suppressions.txt")
+endif()

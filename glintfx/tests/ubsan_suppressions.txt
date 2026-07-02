@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# EN: UndefinedBehaviorSanitizer suppression file for the TST-L1-MEM nightly
+#     gate (GLINTFX_SANITIZE=ON). Consumed via UBSAN_OPTIONS=suppressions=<this
+#     file>, injected for every test in glintfx/tests/CMakeLists.txt.
+#
+#     Scope rule (non-negotiable, same as lsan_suppressions.txt): every entry
+#     here MUST be a documented, tracked, upstream finding — never a blanket
+#     silence of a whole check category, and never anything that could also
+#     match glintfx-authored code.
+#
+# PT: Arquivo de suppression do UndefinedBehaviorSanitizer para o gate noturno
+#     TST-L1-MEM (GLINTFX_SANITIZE=ON). Consumido via UBSAN_OPTIONS=
+#     suppressions=<este arquivo>, injetado para todo teste em
+#     glintfx/tests/CMakeLists.txt.
+#
+#     Regra de escopo (não-negociável, igual a lsan_suppressions.txt): toda
+#     entrada aqui DEVE ser um achado documentado e rastreado — nunca um
+#     silenciamento genérico de categoria inteira de check, e nunca algo que
+#     também possa casar com código autoral da glintfx.
+
+# EN: vptr:ElementDocument — RmlUi (pinned commit 2cd28864, fetched via
+#     FetchContent, third-party, NOT glintfx code) reads through an
+#     ElementDocument* whose ElementDocument-derived part has already finished
+#     destructing, during its own teardown chain:
+#       Element::SetOwnerDocument (Source/Core/Element.cpp:2128)
+#         owner_document->GetContext()   <- vptr check fires here
+#       called from Element::SetParent (Element.cpp:2190)
+#       called from ~Element() (Element.cpp:108), itself invoked from
+#       ~ElementDocument() while releasing that very document's own children
+#       (Context::ReleaseUnloadedDocuments, Context.cpp:1567).
+#     i.e. a child element's owner_document pointer aliases the document
+#     object that is mid-self-destruction: ~ElementDocument() (derived part)
+#     has already run, so at the point Element::SetOwnerDocument dereferences
+#     it, the live dynamic type is only the base Element subobject, not
+#     ElementDocument — a real, strict-UB, textbook "call through a pointer to
+#     the derived type of an object whose derived part is already destroyed"
+#     pattern. In practice GetContext() only touches base-Element state that
+#     is still alive, so it is not observed to corrupt memory or misbehave —
+#     but it is technically UB and correctly flagged.
+#     100% reproducible: every embed test that loads then releases a document
+#     (8/8 embed tests + all GLFW-backend tests that load a document) hits it
+#     exactly once at teardown. Verified NOT reachable through any
+#     glintfx-authored Element/ElementDocument subclass (grep confirms glintfx
+#     never subclasses Rml::Element / Rml::ElementDocument) — this suppression
+#     cannot mask a glintfx bug.
+#     Reported upstream candidate / local fix candidate: TESTES.md TST-L1-MEM
+#     QA report (this gate's first run, 2026-07-02). NOT patched in-tree:
+#     RmlUi is a pinned FetchContent source, patching it here would silently
+#     fork the pin without going through the normal
+#     bump-the-GIT_TAG-and-review path. Re-verify (and consider raising
+#     upstream / bumping the pin) whenever RMLUI GIT_TAG in CMakeLists.txt
+#     changes.
+# PT: vptr:ElementDocument — o RmlUi (commit pinado 2cd28864, fetchado via
+#     FetchContent, terceiro, NÃO código glintfx) lê através de um
+#     ElementDocument* cuja parte derivada ElementDocument já terminou de ser
+#     destruída, durante a própria cadeia de teardown dele:
+#       Element::SetOwnerDocument (Source/Core/Element.cpp:2128)
+#         owner_document->GetContext()   <- o check de vptr dispara aqui
+#       chamado por Element::SetParent (Element.cpp:2190)
+#       chamado por ~Element() (Element.cpp:108), por sua vez invocado por
+#       ~ElementDocument() ao liberar os próprios filhos daquele documento
+#       (Context::ReleaseUnloadedDocuments, Context.cpp:1567).
+#     ou seja, o ponteiro owner_document de um elemento-filho aponta para o
+#     próprio objeto documento que está no meio da auto-destruição:
+#     ~ElementDocument() (parte derivada) já rodou, então no ponto em que
+#     Element::SetOwnerDocument o desreferencia, o tipo dinâmico vivo é só o
+#     subobjeto base Element, não ElementDocument — um padrão real, de UB
+#     estrito, livro-texto de "chamada através de ponteiro para o tipo
+#     derivado de um objeto cuja parte derivada já foi destruída". Na
+#     prática GetContext() só toca estado da base Element ainda viva, então
+#     não se observa corrupção de memória ou mau comportamento — mas é UB
+#     tecnicamente e corretamente sinalizado.
+#     100% reprodutível: todo teste embed que carrega e depois libera um
+#     documento (8/8 testes embed + todos os testes de backend GLFW que
+#     carregam documento) dispara exatamente uma vez no teardown. Verificado
+#     NÃO alcançável através de nenhuma subclasse Element/ElementDocument
+#     autoral da glintfx (grep confirma que a glintfx nunca subclassa
+#     Rml::Element / Rml::ElementDocument) — esta suppression não pode
+#     mascarar um bug da glintfx.
+#     Candidato a reporte upstream / candidato a fix local: relatório de QA
+#     do TST-L1-MEM (1ª execução deste gate, 2026-07-02). NÃO corrigido
+#     in-tree: RmlUi é fonte FetchContent pinado, corrigi-lo aqui faria um
+#     fork silencioso do pin sem passar pelo caminho normal de
+#     bump-do-GIT_TAG-e-review. Reverificar (e considerar reportar upstream /
+#     atualizar o pin) sempre que o GIT_TAG do RMLUI em CMakeLists.txt mudar.
+vptr:ElementDocument

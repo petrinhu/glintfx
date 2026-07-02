@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the get_element_box() sanity scene (element_box_scene.rml). #probe is
+       positioned absolutely with no margin/border/padding, so its border-box geometry is
+       exactly (left, top, width, height) as authored -- a deterministic oracle for
+       UiLayer::get_element_box()/App::get_element_box().
+   PT: Estilos para a cena de sanidade do get_element_box() (element_box_scene.rml). #probe é
+       posicionado absolutamente sem margem/borda/padding, então sua geometria border-box é
+       exatamente (left, top, width, height) como autorada -- um oráculo determinístico para
+       UiLayer::get_element_box()/App::get_element_box(). */
+body { background-color: #101010; }
+#probe {
+  display: block; position: absolute;
+  left: 20px; top: 15px; width: 60px; height: 40px;
+  background-color: #ffffff;
+}

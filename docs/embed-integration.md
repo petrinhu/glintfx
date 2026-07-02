@@ -35,6 +35,7 @@
   - **Recommended pattern:** author RCSS in `dp` units at a fixed logical canvas (e.g. 960×540), call `set_viewport(1920, 1080)` (physical backbuffer), and `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. RmlUi scales the layout to fill the physical backbuffer without any manual RCSS edits.
   - `App` has parity: `AppConfig::dp_ratio` and `App::set_dp_ratio(float)`.
   - Verified: `dp_ratio_sanity` test renders a 100dp×100dp white box; scale factor at ratio=2.0 vs ratio=1.0 is exactly **4.0×** (200×200 px vs 100×100 px).
+- **`get_element_box(id)` (F2, v0.2.5)** returns `ElementBox{found, x, y, w, h}` -- the element's **border-box** (`Rml::BoxArea::Border`: includes border, excludes margin) in the **same physical-pixel, top-left-origin, y-down space as `set_viewport(w, h)`**. If the RCSS geometry is authored in `dp` units, the returned `x/y/w/h` are already the **scaled physical-pixel result** (post-`dp_ratio` multiplication) -- callers never need to multiply by `dp_ratio` themselves. `found=false` (all fields zero) when the id does not exist in the currently loaded document, or no document is loaded yet. Parity: `App::get_element_box` (same signature, same units -- `App` owns the whole window so there is no additional sub-viewport offset to account for). Header: `glintfx/include/glintfx/element_box.hpp`. Verified: `element_box_sanity`/`app_element_box_smoke` tests.
 
 **PT:**
 - `set_viewport(w, h)` espera os **pixels reais do backbuffer**. Os mesmos `(w, h)` alimentam duas coisas acopladas, 1:1: a dimensão do contexto RmlUi via `Engine::set_viewport` -> `context->SetDimensions` e o viewport GL via `render_compose` -> `begin_frame_compose`.
@@ -44,6 +45,7 @@
   - **Padrão recomendado:** autore o RCSS em unidades `dp` num canvas lógico fixo (ex.: 960×540), chame `set_viewport(1920, 1080)` (backbuffer físico) e `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. O RmlUi escala o layout para preencher o backbuffer físico sem nenhuma edição de RCSS.
   - `App` tem paridade: `AppConfig::dp_ratio` e `App::set_dp_ratio(float)`.
   - Verificado: teste `dp_ratio_sanity` renderiza box branco 100dp×100dp; fator de escala em ratio=2.0 vs ratio=1.0 é exatamente **4.0×** (200×200 px vs 100×100 px).
+- **`get_element_box(id)` (F2, v0.2.5)** retorna `ElementBox{found, x, y, w, h}` -- o **border-box** do elemento (`Rml::BoxArea::Border`: inclui borda, exclui margem) no **mesmo espaço de pixels físicos, origem superior-esquerda, y pra baixo, de `set_viewport(w, h)`**. Se a geometria RCSS for autorada em unidades `dp`, o `x/y/w/h` retornado já é o **resultado em pixels físicos escalado** (pós-multiplicação por `dp_ratio`) -- chamadores nunca precisam multiplicar por `dp_ratio` eles mesmos. `found=false` (todos os campos zero) quando o id não existe no documento carregado atualmente, ou nenhum documento carregado ainda. Paridade: `App::get_element_box` (mesma assinatura, mesmas unidades -- o `App` é dono da janela inteira, então não há offset adicional de sub-viewport a considerar). Header: `glintfx/include/glintfx/element_box.hpp`. Verificado: testes `element_box_sanity`/`app_element_box_smoke`.
 
 ## 2. GL state contract / Contrato de estado GL
 

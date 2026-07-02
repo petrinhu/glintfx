@@ -187,6 +187,24 @@ void UiLayer::set_click_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_click_callback(std::move(cb));
 }
 
+ElementBox UiLayer::get_element_box(const char* id) const {
+  ElementBox box;
+  if (!impl_->ok) return box;
+  float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
+  if (!impl_->engine.get_element_box(id, x, y, w, h)) return box;
+  box.found = true;
+  // EN: content-space -> window-space: add the sub-viewport offset (0,0 until Task 3 wires
+  //     set_viewport(x,y,w,h,target_h) -- impl_->x/y do not exist yet at this point in the
+  //     plan; Task 3 introduces them and this line becomes "box.x = x + impl_->x", etc.
+  //     Written here as the FINAL form so Task 3 does not need to touch this function again.
+  // PT: espaço-conteúdo -> espaço-janela: soma o offset da sub-viewport (0,0 até a Task 3
+  //     conectar set_viewport(x,y,w,h,target_h) -- impl_->x/y ainda não existem neste ponto do
+  //     plano; a Task 3 os introduz e esta linha vira a forma final abaixo). Escrita aqui já na
+  //     forma FINAL pra que a Task 3 não precise tocar esta função de novo.
+  box.x = x; box.y = y; box.w = w; box.h = h;
+  return box;
+}
+
 void UiLayer::process_event(const UiEvent& ev) {
   // EN: Guard: drop events when the layer is not ready or context is gone.
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.

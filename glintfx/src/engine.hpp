@@ -89,6 +89,17 @@ public:
   //     v0.2.5). Ver Bootstrap::set_click_callback para o contrato completo de ordem/lifetime.
   void set_click_callback(std::function<void(const char*)> cb);
 
+  // EN: Query the border-box geometry of an element by id -- forwards to
+  //     Bootstrap::get_element_box (F2, v0.2.5). Content-local space (offset-free); UiLayer/
+  //     App translate to window-space at the public boundary. Returns false when not ok(),
+  //     no document is loaded, or the id is not found; x/y/w/h are left untouched in that case.
+  // PT: Consulta a geometria border-box de um elemento por id -- encaminha a
+  //     Bootstrap::get_element_box (F2, v0.2.5). Espaço local de conteúdo (offset-free);
+  //     UiLayer/App traduzem para espaço-janela na fronteira pública. Retorna false quando
+  //     não ok(), nenhum documento estiver carregado, ou o id não for encontrado; x/y/w/h
+  //     ficam intocados nesse caso.
+  bool get_element_box(const char* id, float& x, float& y, float& w, float& h) const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.
   //     Binds are registered against the RmlUi context BEFORE LoadDocument so that

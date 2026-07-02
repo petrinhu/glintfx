@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <glintfx/ui_event.hpp>
+#include <glintfx/element_box.hpp>
 
 namespace glintfx {
 
@@ -143,6 +144,21 @@ public:
   //     listener sempre lê o callback CORRENTE no momento do clique, não o valor no attach.
   //     Paridade com App::set_click_callback (mesma assinatura).
   void set_click_callback(std::function<void(const char* element_id)> cb);
+
+  // EN: Query the border-box geometry of an element by id. Coordinate space: window/render-
+  //     target physical pixels, top-left origin, y-down -- the SAME space as UiEvent's mouse
+  //     coordinates (see ElementBox doc-comment and docs/embed-integration.md section 10).
+  //     Border-box (includes border, excludes margin). Returns ElementBox{found=false} (all
+  //     fields zeroed) when the id is not found in the currently loaded document, or no
+  //     document is loaded yet. Parity with App::get_element_box (same signature).
+  // PT: Consulta a geometria border-box de um elemento por id. Espaço de coordenadas: pixels
+  //     físicos do render-target/janela, origem superior-esquerda, y pra baixo -- o MESMO
+  //     espaço das coordenadas de mouse do UiEvent (ver doc-comment de ElementBox e
+  //     docs/embed-integration.md seção 10). Border-box (inclui borda, exclui margem). Retorna
+  //     ElementBox{found=false} (todos os campos zerados) quando o id não é encontrado no
+  //     documento carregado atualmente, ou nenhum documento carregado ainda. Paridade com
+  //     App::get_element_box (mesma assinatura).
+  ElementBox get_element_box(const char* id) const;
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with App. Call order: create_data_model

@@ -1,4 +1,5 @@
-/* EN: "btn_a" is a directly-id'd, clickable target. "panel" wraps a plain <span> with NO id --
+/* SPDX-License-Identifier: MPL-2.0
+   EN: "btn_a" is a directly-id'd, clickable target. "panel" wraps a plain <span> with NO id --
        proves the ancestor-walk (click lands on the span, callback must report "panel"). "empty"
        has no id anywhere in its subtree -- proves the "" fallback.
    PT: "btn_a" é alvo clicável com id direto. "panel" envolve um <span> SEM id -- prova a subida

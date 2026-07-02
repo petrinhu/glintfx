@@ -122,7 +122,15 @@ public:
     //     de origem armazena RGB não-zero (comum em bordas anti-aliased e regiões
     //     transparentes de borda dura) produzem um halo colorido claro ao redor da forma.
     unsigned char* p = px.get();
-    for (int i = 0; i < w * h; ++i) {
+    // EN: Compute the pixel count in unsigned 64-bit arithmetic before the loop — `w`/`h`
+    //     come straight from stb_image's decode of a possibly-hostile asset file, so `w * h`
+    //     in signed `int` arithmetic is UB on overflow for large-enough malformed dimensions.
+    // PT: Calcula a contagem de pixels em aritmética sem sinal de 64 bits antes do loop — `w`/`h`
+    //     vêm direto do decode do stb_image de um arquivo de asset potencialmente hostil, então
+    //     `w * h` em aritmética `int` assinada é UB por overflow para dimensões malformadas
+    //     grandes o bastante.
+    const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
+    for (size_t i = 0; i < pixel_count; ++i) {
       unsigned int a = p[i * 4 + 3];
       p[i * 4 + 0] = static_cast<unsigned char>(p[i * 4 + 0] * a / 255u);
       p[i * 4 + 1] = static_cast<unsigned char>(p[i * 4 + 1] * a / 255u);

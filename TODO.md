@@ -11,10 +11,10 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | A3 | W0 | Arquitetura | ADR — ABI interna: System V AMD64 estrita; `_start` alinha stack 16B. Decidido → [ADR-0003](docs/adr/0003-internal-abi.md). **OWD** | Alta | — | Baixa | 💡 Decisão tomada | — |
 | A4 | W0 | Arquitetura | ADR — alocador: bump sobre `mmap`, assinatura `malloc/free/realloc` final. Decidido → [ADR-0004](docs/adr/0004-allocator-strategy.md). **OWD** | Alta | — | Média | 💡 Decisão tomada | — |
 | A5 | W0 | Arquitetura | ADR — layout ELF: estático no-PIE, entry `_start`. Decidido → [ADR-0005](docs/adr/0005-elf-layout.md). **OWD** | Alta | — | Baixa | 💡 Decisão tomada | — |
-| A6 | W1 | Build | Build system (`Makefile`): regras `clang -ffreestanding -nostdlib` + `nasm -f elf64` + `ld -nostdlib -static -no-pie -e _start`; alvos build/test/clean/run | Alta | A5 | Média | ⏳ Pendente | — |
-| B1 | W1 | Bootstrap | `types.h` próprio (sem stdint/stddef): `size_t`, `ssize_t`, `uintptr_t`, `NULL`, `bool` | Alta | — | Baixa | ⏳ Pendente | — |
-| B2 | W1 | Bootstrap | Constantes de syscall (números) e flags (open/mmap/etc.) para x86-64 | Alta | — | Baixa | ⏳ Pendente | — |
-| STD-SPDX | W1 | Convenções | Header SPDX `SPDX-License-Identifier: MPL-2.0` + copyright no topo de TODO arquivo de código (C `//`, NASM `;`, Makefile `#`), aplicado desde a criação (DoD herdado). Definir snippet padrão no `CLAUDE.md` | Média | — | Baixa | ⏳ Pendente | — |
+| A6 | W1 | Build | Build system (`Makefile`): regras `clang -ffreestanding -nostdlib` + `nasm -f elf64` + `ld -nostdlib -static -no-pie -e _start`; alvos build/test/clean/run | Alta | A5 | Média | 🔍 Pendente verificação | — |
+| B1 | W1 | Bootstrap | `types.h` próprio (sem stdint/stddef): `size_t`, `ssize_t`, `uintptr_t`, `NULL`, `bool` | Alta | — | Baixa | 🔍 Pendente verificação | — |
+| B2 | W1 | Bootstrap | Constantes de syscall (números) e flags (open/mmap/etc.) para x86-64 | Alta | — | Baixa | 🔍 Pendente verificação | — |
+| STD-SPDX | W1 | Convenções | Header SPDX `SPDX-License-Identifier: MPL-2.0` + copyright no topo de TODO arquivo de código (C `//`, NASM `;`, Makefile `#`), aplicado desde a criação (DoD herdado). Definir snippet padrão no `CLAUDE.md` | Média | — | Baixa | 🔍 Pendente verificação | — |
 | B3 | W2 | Bootstrap | Camada de syscall: wrappers `syscall0..6` em ASM/inline (rax + rdi/rsi/rdx/r10/r8/r9) | Alta | A1, A3, B2 | Média | ⏳ Pendente | — |
 | B4 | W3 | Bootstrap | `_start` em ASM: alinhar stack, ler argc/argv/envp do stack inicial, chamar `main`, capturar retorno. **Fundação** | Alta | B3, A3, A5 | Alta | ⏳ Pendente | — |
 | B5 | W4 | Bootstrap | `sys_exit` + binário mínimo `exit(42)`. **GATE: valida pipeline build→link→run** | Alta | B4, A6 | Baixa | ⏳ Pendente | — |
@@ -110,6 +110,8 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 **Ativos (com gatilho real):**
 
+- **Camada 0 — drift `syscall_nums.h`↔`.inc`** (Minor · achado review W1 · gatilho: quando `B6`/`sys_write`+ empurrar a tabela p/ 3+ constantes): hoje `SYS_exit=60` bate nos 2 arquivos (C `#define` + NASM `%define`), YAGNI aceitável p/ 1 valor. Adicionar grep-diff dos pares `#define`/`%define` ao `TST-STATIC` (W11) quando a tabela crescer.
+- **Camada 0 — `check_spdx.sh` robustez** (Minor · achado review W1 · gatilho: reuso no `TST-STATIC` W11 ou mudança da estrutura de pastas): sob `set -eu`, `find` derruba o script "alto" (sem msg amigável) se `src/`/`include/`/`tests/`/`tools/` forem **deletadas** (não só esvaziadas). Dormente hoje (as 4 têm `.gitkeep`). Endurecer antes de virar gate formal do `TST-STATIC`.
 - **`.github/workflows/ci.yml`** (Minor · gatilho: próxima varredura de robustez de CI): `libxkbcommon-dev` ausente (presente no Forgejo; implícito por transitividade no `ubuntu-latest`) -- adicionar p/ consistência/robustez.
 - **Em-dashes pré-existentes** em doc-comments de `ui_layer.hpp` (gatilho: qualquer varredura de doc; **candidato a varrer junto de `L1.10-APIDOC`**, mesmo header): trocar por `--`.
 - **GAP-2b FBO custom do host** (metade não ativada do GAP-2 original · **ADIADO, sem demanda confirmada**): permitir compor num FBO do host (≠ FBO 0). A metade "origem de viewport" do GAP-2 original foi ativada na v0.2.5 (`L1.13-VPORIGIN`, ver Concluídos abaixo); o alvo de composição continua sempre FBO 0 -- hardcoded no backend RmlUi, não muda com este item. GusWorld compõe no FBO 0 hoje, sem demanda real por FBO custom.

@@ -4,7 +4,7 @@
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-00599C.svg)](#)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.2.4](https://img.shields.io/badge/Version-0.2.4-blue.svg)](CHANGELOG.md)
+[![Version: 0.2.5](https://img.shields.io/badge/Version-0.2.5-blue.svg)](CHANGELOG.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
 [![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
@@ -44,6 +44,9 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 - **Data-model binding:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, with live lists driven by `data-for` in RML -- scrolling logs, menus, inventories.
 - **PNG, JPEG, and TGA textures:** decoded via stb_image with correct premultiplied-alpha handling for the GL3 blend.
 - **DPI-aware layout (`dp_ratio`)** and **`set_asset_base_url`** for assets that don't live next to the process's working directory.
+- **Click callback (hit-test):** `set_click_callback(std::function<void(const char* id)>)` on both `App` and `UiLayer` reports the id of the clicked element (bubbling up to the nearest ancestor with an id, `""` if none) -- lets a host react to UI clicks without owning RmlUi's event system.
+- **Element geometry query:** `get_element_box(const char* id)` returns the border-box geometry (`x, y, w, h`, window-space physical pixels) of any element by id -- useful for a host that needs to align its own overlays with UI elements.
+- **Letterbox viewport (`UiLayer` only):** `set_viewport(x, y, w, h, target_h)` composes the UI within a sub-region of the host's window, with a configurable origin (not just `(0, 0)`).
 - **Clean public API:** two RAII facades (`glintfx::App`, `glintfx::UiLayer`); no third-party types leak into your headers.
 - **Self-contained build:** RmlUi fetched automatically; gl3w vendored (works offline); GLFW/FreeType/OpenGL from the system. `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library with no GLFW dependency at all.
 - **Bundled showcase:** a runnable demo exercising all five effects.
@@ -68,7 +71,7 @@ RmlUi 6.3 is fetched at configure time; gl3w is vendored in the repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.2.4)
+  GIT_TAG        v0.2.5)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -198,19 +201,19 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Known limitations
 
-`glintfx` v0.2.4 is honest about what is not yet there:
+`glintfx` v0.2.5 is honest about what is not yet there:
 
 - **Linux x86-64 only.** No Windows/macOS.
 - **One `App` per process.** GLFW and RmlUi global state make a second instance undefined behaviour.
 - **The `mask` effect needs a real GPU.** Under Mesa/llvmpipe (software, e.g. headless CI) the dual-sampler mask shader crashes, a Mesa bug rather than a glintfx bug. The CI variant runs without the mask card.
 - **GLFW window backend is optional.** By default (`-DGLINTFX_BACKEND_GLFW=ON`) the standalone `glintfx::App` is compiled and GLFW is linked. With `-DGLINTFX_BACKEND_GLFW=OFF` (embed-only build) only `glintfx::UiLayer` is available and the library does not drag GLFW as a transitive dependency. Designed for SDL3/X11 hosts (e.g. GusWorld) that own the window and GL context themselves. See [ADR-0008](docs/adr/0008-embed-guest-mode.md).
 - **SDL and X11 standalone backends are planned but not yet implemented.** The embed path (host provides the GL context) is the integration point for non-GLFW hosts today.
-- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 18-test suite (GLFW=ON) and 8-test embed suite (GLFW=OFF) run automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
+- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 23-test suite (GLFW=ON) and 11-test embed suite (GLFW=OFF) run automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
 - **Two CMake integration paths:** `FetchContent` / `add_subdirectory` (recommended when building from source) and `find_package(glintfx)` for an installed tree via `cmake --install`, linking `glintfx::glintfx`; `glintfxConfig.cmake` and RmlUi are co-installed under the same prefix.
 
 ### Roadmap and vision
 
-> **Current release: v0.2.4** (stable, tagged), 2026-07-01. Full history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Current release: v0.2.5** (stable, tagged), 2026-07-02. Full history in [`CHANGELOG.md`](CHANGELOG.md).
 
 **Delivered (v0.2.x):**
 
@@ -218,6 +221,8 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Optional GLFW backend, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library (`UiLayer` only) with no GLFW dependency, for SDL3/X11 hosts.
 - **`dp_ratio` and `set_asset_base_url`, v0.2.2:** DPI-aware layout scaling and a configurable asset base URL, on both `App` and `UiLayer`.
 - **Data-model binding and PNG/JPG textures, v0.2.3:** `create_data_model`/`bind_*`/`set_*` with `data-for` list iteration; texture decoding via stb_image with correct alpha premultiplication.
+- **UA stylesheet, v0.2.4:** built-in `display: block` defaults for structural elements, merged into every document as a low-specificity base.
+- **Click callback, element geometry, and letterbox viewport, v0.2.5:** `set_click_callback` (hit-test id reporting), `get_element_box` (border-box geometry query), and `UiLayer::set_viewport(x, y, w, h, target_h)` (configurable composition origin) -- all driven by real requirements from the GusWorld consumer. See `docs/embed-integration.md` section 10 for the shared window-space coordinate contract.
 
 **Planned (paused, not yet started):**
 
@@ -230,7 +235,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
-- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.2.4`).
+- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.2.5`).
 - **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. It is **dormant** (only ADRs 0001-0005 and scaffolding exist, implementation not started) and is a long-term internalization target, independent of glintfx.
 
 Treat glintfx as the product; Layer 0 is a separate, dormant long-term track.
@@ -266,6 +271,9 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 - **Ligação de data-model:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, com listas vivas dirigidas por `data-for` no RML -- logs rolantes, menus, inventários.
 - **Texturas PNG, JPEG e TGA:** decodificadas via stb_image com tratamento correto de alpha premultiplicado para o blend GL3.
 - **Layout sensível a DPI (`dp_ratio`)** e **`set_asset_base_url`** para assets que não ficam ao lado do diretório de trabalho do processo.
+- **Callback de clique (hit-test):** `set_click_callback(std::function<void(const char* id)>)` em `App` e `UiLayer` reporta o id do elemento clicado (sobe até o ancestral mais próximo com id, `""` se nenhum) -- permite a um host reagir a cliques na UI sem ser dono do sistema de eventos do RmlUi.
+- **Consulta de geometria de elemento:** `get_element_box(const char* id)` retorna a geometria border-box (`x, y, w, h`, pixels físicos espaço-janela) de qualquer elemento por id -- útil para um host alinhar seus próprios overlays com elementos da UI.
+- **Viewport letterbox (só em `UiLayer`):** `set_viewport(x, y, w, h, target_h)` compõe a UI numa sub-região da janela do host, com origem configurável (não só `(0, 0)`).
 - **API pública limpa:** duas fachadas RAII (`glintfx::App`, `glintfx::UiLayer`); nenhum tipo de terceiro vaza para seus headers.
 - **Build autocontido:** RmlUi baixado automaticamente; gl3w vendorizado (funciona offline); GLFW/FreeType/OpenGL do sistema. `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only sem nenhuma dependência de GLFW.
 - **Showcase embutido:** um demo executável exercitando os cinco efeitos.
@@ -290,7 +298,7 @@ RmlUi 6.3 é baixado em tempo de configure; gl3w é vendorizado no repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.2.4)
+  GIT_TAG        v0.2.5)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -420,19 +428,19 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 
 ### Limitações conhecidas
 
-A v0.2.4 do `glintfx` é honesta sobre o que ainda não existe:
+A v0.2.5 do `glintfx` é honesta sobre o que ainda não existe:
 
 - **Apenas Linux x86-64.** Sem Windows/macOS.
 - **Um `App` por processo.** O estado global de GLFW e RmlUi torna uma segunda instância comportamento indefinido.
 - **O efeito `mask` exige GPU real.** Sob Mesa/llvmpipe (software, ex.: CI headless) o shader de mask dual-sampler crasha, bug do Mesa e não do glintfx. A variante de CI roda sem o card mask.
 - **Backend de janela GLFW é opcional.** Por padrão (`-DGLINTFX_BACKEND_GLFW=ON`) o `glintfx::App` standalone é compilado e o GLFW é linkado. Com `-DGLINTFX_BACKEND_GLFW=OFF` (build embed-only) só o `glintfx::UiLayer` está disponível e a biblioteca não arrasta GLFW como dep transitiva. Projetado para hosts SDL3/X11 (ex.: GusWorld) que possuem a janela e o contexto GL por conta própria. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md).
 - **Backends standalone SDL e X11 estão planejados mas não implementados.** O caminho embed (host fornece o contexto GL) é o ponto de integração para hosts não-GLFW hoje.
-- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 18 testes (GLFW=ON) e a suíte embed de 8 testes (GLFW=OFF) rodam automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
+- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 23 testes (GLFW=ON) e a suíte embed de 11 testes (GLFW=OFF) rodam automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
 - **Dois caminhos de integração CMake:** `FetchContent` / `add_subdirectory` (recomendado ao buildar do fonte) e `find_package(glintfx)` para uma árvore instalada via `cmake --install`, linkando `glintfx::glintfx`; `glintfxConfig.cmake` e o RmlUi são co-instalados sob o mesmo prefixo.
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.2.4** (estável, taggeada), 2026-07-01. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+> **Lançamento atual: v0.2.5** (estável, taggeada), 2026-07-02. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 
 **Entregue (v0.2.x):**
 
@@ -440,6 +448,8 @@ A v0.2.4 do `glintfx` é honesta sobre o que ainda não existe:
 - **Backend GLFW opcional, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only (só `UiLayer`) sem dependência de GLFW, para hosts SDL3/X11.
 - **`dp_ratio` e `set_asset_base_url`, v0.2.2:** escala de layout sensível a DPI e base URL de asset configurável, em `App` e `UiLayer`.
 - **Ligação de data-model e texturas PNG/JPG, v0.2.3:** `create_data_model`/`bind_*`/`set_*` com iteração de lista via `data-for`; decodificação de textura via stb_image com premultiplicação correta de alpha.
+- **Stylesheet UA, v0.2.4:** defaults embutidos de `display: block` para elementos estruturais, mesclados em todo documento como base de baixa especificidade.
+- **Callback de clique, geometria de elemento e viewport letterbox, v0.2.5:** `set_click_callback` (reporte de id via hit-test), `get_element_box` (consulta de geometria border-box) e `UiLayer::set_viewport(x, y, w, h, target_h)` (origem de composição configurável) -- todos dirigidos por requisitos reais do consumidor GusWorld. Ver `docs/embed-integration.md` seção 10 para o contrato de coordenadas espaço-janela compartilhado.
 
 **Planejado (pausado, ainda não iniciado):**
 
@@ -452,7 +462,7 @@ A v0.2.4 do `glintfx` é honesta sobre o que ainda não existe:
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
-- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.2.4`).
+- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.2.5`).
 - **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. Está **dormente** (só os ADRs 0001-0005 e scaffold existem, implementação ainda não iniciada) e é um alvo de internalização de longo prazo, independente do glintfx.
 
 Trate o glintfx como o produto; a Camada 0 é uma trilha dormente de longo prazo, separada.

@@ -7,7 +7,7 @@ This repository hosts two independent tracks. Know which one you are in before e
 
 | Layer / Camada | Path | Status | Build |
 | :--- | :--- | :--- | :--- |
-| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.2.4**, released, two consumption modes (`App` + `UiLayer`) | CMake |
+| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.2.5**, released, two consumption modes (`App` + `UiLayer`) | CMake |
 | **Layer 0: `loucura_c_asm`** (sovereign runtime, **dormant track**) | `src/`, `include/` | not implemented (ADRs only) | Makefile (future) |
 
 Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; it is a **dormant, long-term internalization target** (decisions only, no implementation yet). They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).
@@ -34,8 +34,8 @@ ctest --test-dir glintfx/build --output-on-failure
 
 **`GLINTFX_BACKEND_GLFW`** (CMake option, default `ON`) controls how much of the library is compiled:
 
-- `ON` (default): compiles the standalone `glintfx::App` facade, `window_glfw.cpp`, and the RmlUi GLFW platform adapter; links `glfw`. The suite has **17 tests** under Xvfb: `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`, `app_dp_ratio_smoke`, `render_sanity` (structural pixel-statistics, tolerant of llvmpipe non-determinism), `data_model_smoke`, `data_model_scalar`, `data_model_list`, `texture_png_alpha`, plus the 7 embed tests below.
-- `OFF` (embed-only): only `Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock` are compiled, `glfw` is **not** linked into the library (test fixtures still use GLFW via a test-only helper target). Runs the 7 embed tests: `ui_layer_attach`, `ui_layer_compose`, `gl_state_guard`, `ui_layer_events`, `ui_layer_sanity`, `dp_ratio_sanity`, `base_url_sanity`. This is the build mode SDL3/X11 hosts (e.g. GusWorld) consume -- see [ADR-0008](docs/adr/0008-embed-guest-mode.md).
+- `ON` (default): compiles the standalone `glintfx::App` facade, `window_glfw.cpp`, and the RmlUi GLFW platform adapter; links `glfw`. The suite has **23 tests** under Xvfb: `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`, `app_dp_ratio_smoke`, `app_click_callback_smoke`, `app_element_box_smoke`, `render_sanity` (structural pixel-statistics, tolerant of llvmpipe non-determinism), `data_model_smoke`, `data_model_scalar`, `data_model_list`, `texture_png_alpha`, plus the 11 embed tests below.
+- `OFF` (embed-only): only `Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock` are compiled, `glfw` is **not** linked into the library (test fixtures still use GLFW via a test-only helper target). Runs the 11 embed tests: `ui_layer_attach`, `ui_layer_compose`, `gl_state_guard`, `ui_layer_events`, `ui_layer_sanity`, `dp_ratio_sanity`, `base_url_sanity`, `ua_stylesheet_sanity`, `click_callback_sanity`, `element_box_sanity`, `viewport_origin_sanity`. This is the build mode SDL3/X11 hosts (e.g. GusWorld) consume -- see [ADR-0008](docs/adr/0008-embed-guest-mode.md). Mouse coordinates and `get_element_box` results are in window-space physical pixels; `set_viewport(x, y, w, h, target_h)` converts them to OpenGL's bottom-up viewport internally -- see [`docs/embed-integration.md`](docs/embed-integration.md) section 10 for the full coordinate contract.
 
 ```sh
 cmake -S glintfx -B glintfx/build -DGLINTFX_BACKEND_GLFW=OFF -DGLINTFX_BUILD_TESTS=ON   # embed-only
@@ -69,7 +69,7 @@ glintfx/                 Layer 1: the C++ library (active product)
                           ui_layer.cpp, data_binder.cpp, base_url_file_interface.hpp,
                           stb_image_impl.cpp, gl_state.hpp, system_clock.cpp
   demos/showcase/        showcase.rml/.rcss + glintfx_showcase + glintfx_capture
-  tests/                 ctest smokes + sanity tests (17 with GLFW=ON, 7 embed-only) + opt-in
+  tests/                 ctest smokes + sanity tests (23 with GLFW=ON, 11 embed-only) + opt-in
                           golden_test (Xvfb)
   third_party/gl3w/      vendored gl3w loader (public domain) + Khronos headers (MIT)
   third_party/stb/       vendored stb_image.h (public domain / MIT) for PNG/JPG decode

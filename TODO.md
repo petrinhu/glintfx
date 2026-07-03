@@ -20,7 +20,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | B5 | W4 | Bootstrap | `sys_exit` + binário mínimo `exit(42)`. **GATE: valida pipeline build→link→run** | Alta | B4, A6 | Baixa | 🔍 Pendente verificação | — |
 | B6 | W5 | Bootstrap | `sys_write` + "hello world" 100% puro (valida saída por syscall) | Alta | B5 | Baixa | 🔍 Pendente verificação | — |
 | B7 | W6 | Bootstrap | `sys_read` (entrada) | Média | B6 | Baixa | 🔍 Pendente verificação | — |
-| C1 | W6 | Testes | Harness de teste próprio (sem libc): `assert` próprio + runner que reporta via `write` e exit code (habilita TDD do resto) | Alta | B6, B1 | Média | ⏳ Pendente | — |
+| C1 | W6 | Testes | Harness de teste próprio (sem libc): `assert` próprio + runner que reporta via `write` e exit code (habilita TDD do resto) | Alta | B6, B1 | Média | 🔍 Pendente verificação | — |
 | D1 | W7 | Libc-Núcleo | Primitivas de memória: `memcpy/memset/memmove/memcmp` (atenção: `-fno-builtin` p/ clang não reintroduzir) | Alta | C1 | Média | ⏳ Pendente | — |
 | D2 | W8 | Libc-Núcleo | Operações de string: `strlen/strcmp/strncmp/strcpy/strncpy/strcat/strchr` | Alta | D1 | Média | ⏳ Pendente | — |
 | D3 | W9 | Libc-Núcleo | Conversões `int↔string`: `itoa/utoa` (base 10 e 16), `atoi/atou` | Alta | D2 | Média | ⏳ Pendente | — |

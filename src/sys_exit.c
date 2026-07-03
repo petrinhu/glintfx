@@ -11,7 +11,7 @@
 #include "syscall.h"
 #include "syscall_nums.h"
 
-void sys_exit(int code) {
+_Noreturn void sys_exit(int code) {
     syscall1(SYS_exit, code);
     __builtin_unreachable(); // SYS_exit never returns to here.
 }

@@ -1,1 +1,2 @@
 exit42 42
+hello 0

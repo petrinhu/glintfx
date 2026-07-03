@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-07-03: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.5`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 23 testes GLFW=ON / 11 embed). A Camada 0 (C+ASM puro, zero libc) descrita mais abaixo segue como decisões tomadas (ADR 0001–0005) mas é uma **trilha soberana dormente**: ainda não há implementação (W1+ do `TODO.md` pendente). Leia primeiro a seção "glintfx" abaixo.
+> Estado em 2026-07-03: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.5`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 23 testes GLFW=ON / 11 embed). A Camada 0 (C+ASM puro, zero libc) **ACORDOU** — o incremento inaugural de bootstrap I/O (W1→B7) foi entregue: pipeline freestanding provado ponta-a-ponta + wrappers de syscall + `_start` + helpers `exit`/`write`/`read`, tudo zero libc (itens em `🔍`, aguardam auditoria `AUD-ABI`/W12 pro `✅`). Segue em estágio muito inicial — a libc própria (memória/string/conversão/alocador) e a meta plena de internalização clean-room seguem distantes, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
 
 ## Duas camadas neste repo
 
@@ -58,9 +58,11 @@ Fachada fina sobre módulos internos (M0 Bootstrap RmlUi, M1 Platform GLFW+FreeT
 
 Leia antes de mexer em `render_gl3.cpp`/`ui_layer.cpp`: **premultiplied alpha + composição sempre no FBO 0** (origem do viewport hardcoded em `(0,0)`); **MSAA desligado** (`RMLUI_NUM_MSAA_SAMPLES=0`, necessário sob Mesa/llvmpipe); **ordem fixa do data-model** (`create_data_model → bind_* → load() → set_*`); **gate de encapsulamento via grep include-based**, não nome cru de macro (`GLINTFX_BACKEND_GLFW` casa a substring "GLFW" mas não é leak de tipo de terceiro). Lista completa, com referências de linha: [`AGENTS.md`](AGENTS.md) seção "Gotchas críticos".
 
-## Camada 0 -- núcleo soberano dormente (C + ASM puro)
+## Camada 0 -- núcleo soberano (C + ASM puro)
 
-`loucura_c_asm` é o nome do repositório inteiro e também o nome desta trilha **dormente**: um projeto **sério em C + Assembly puros**, com uma restrição central e inegociável:
+> **Estado (2026-07-03):** ACORDADA. Bootstrap I/O (W1→B7) entregue — pipeline freestanding provado, wrappers `syscall0..6`, `_start`, helpers `exit`/`write`/`read`, `Makefile`, 3 programas de teste (`exit42`/`hello`/`echo_stdin`), zero libc. Itens em `🔍` (aguardam `AUD-ABI`/W12). Próximo: `C1` (harness próprio → TDD), depois `D1/D2/D3` (memória/string/conversão), `E1/E2` (alocador/mini-printf). A meta plena (internalizar RmlUi/gl3w/FreeType/GLFW clean-room) segue a anos — sem pressa nem prazo.
+
+`loucura_c_asm` é o nome do repositório inteiro e também o nome desta trilha: um projeto **sério em C + Assembly puros**, com uma restrição central e inegociável:
 
 - **ZERO bibliotecas. Sem libc, sem stdio, sem nada.** Nem `printf`, nem `malloc`, nem string ops prontas.
 - O que faltar, **construímos do zero** (esta é a "loucura" do nome). A nossa própria substituta da libc vive no repo.
@@ -84,7 +86,7 @@ Consequência prática: a única ponte com o mundo é a **interface de syscalls 
 
 ### Como buildar (sem libc)
 
-Ainda não há `Makefile` -- quando o primeiro código surgir, consolidar estes comandos nele. Comandos canônicos:
+O `Makefile` na raiz (entregue em `A6`) já consolida estes comandos — use `make build` / `make test` / `make run` / `make clean` no dia a dia. Os comandos canônicos abaixo são a referência do que o Makefile faz (e úteis pra invocação manual):
 
 ```sh
 # Compilar C freestanding (sem libc, sem PIC, sem stack protector)
@@ -122,9 +124,9 @@ strace ./build/programa                # ver as syscalls de verdade (auditar a n
 ```
 glintfx/  Camada 1 (ATIVA): a lib C++. include/glintfx/ (headers públicos), src/, demos/,
           tests/, third_party/ (gl3w, stb_image vendorizados), CMakeLists.txt.
-src/      Camada 0 (dormente): Codigo-fonte (.c e .asm). Nossa runtime/substituta-de-libc.
-include/  Camada 0 (dormente): Headers da API que criarmos (.h e .inc do NASM).
-tests/    Camada 0 (dormente): Testes (harness ainda a definir -- provavelmente runner proprio).
+src/      Camada 0 (ATIVA): Codigo-fonte (.c e .asm). Runtime/substituta-de-libc: syscall.asm, start.asm, sys_{exit,write,read}.c.
+include/  Camada 0 (ATIVA): Headers (.h e .inc do NASM): types.h, syscall_nums.h/.inc, syscall.h, sys_{exit,write,read}.h.
+tests/    Camada 0 (ATIVA): exit42/hello/echo_stdin + expected_exit.txt (harness do Makefile; runner proprio C1 e futuro).
 docs/     Notas de RE, papers, decisoes (ADR), specs/plans, referencias de syscall/ABI -- das DUAS camadas.
 tools/    Scripts auxiliares (build, dump, automacao de RE).
 build/    Artefatos (.o, binarios) da Camada 0. Ignorado pelo git.

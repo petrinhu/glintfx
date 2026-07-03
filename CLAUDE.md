@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-07-01: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.4`** (Codeberg + GitHub, CI verde, suíte de 18 testes). A Camada 0 (C+ASM puro, zero libc) descrita mais abaixo segue como decisões tomadas (ADR 0001–0005) mas é uma **trilha soberana dormente**: ainda não há implementação (W1+ do `TODO.md` pendente). Leia primeiro a seção "glintfx" abaixo.
+> Estado em 2026-07-03: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.5`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 23 testes GLFW=ON / 11 embed). A Camada 0 (C+ASM puro, zero libc) descrita mais abaixo segue como decisões tomadas (ADR 0001–0005) mas é uma **trilha soberana dormente**: ainda não há implementação (W1+ do `TODO.md` pendente). Leia primeiro a seção "glintfx" abaixo.
 
 ## Duas camadas neste repo
 
@@ -15,11 +15,13 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 `glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
-- **Lançada:** v0.1.0 → **v0.2.4** (2026-07-01). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+- **Lançada:** v0.1.0 → **v0.2.5** (2026-07-02). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
   - **`glintfx::App`** ([`glintfx/include/glintfx/app.hpp`](glintfx/include/glintfx/app.hpp)) -- standalone, dono da janela GLFW e do loop de frame (`poll → update → render → swap`).
   - **`glintfx::UiLayer`** ([`glintfx/include/glintfx/ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp)) -- embed/guest mode: anexa ao contexto GL de um host (não cria janela), render **compose-only** (sem `glClear`, sem swap -- o host é dono dos dois), eventos injetados (`UiEvent` + `Key`), `GlStateGuard` salva e restaura o estado GL tocado. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md) (decisão) e [`docs/embed-integration.md`](docs/embed-integration.md) (contrato de integração, fonte de verdade para hosts).
-- **Capacidades entregues até v0.2.4:**
+- **Capacidades entregues até v0.2.5:**
+  - **Hit-test / geometria para o host** (v0.2.5): `set_click_callback(fn(const char* id))` reporta o id do elemento clicado (hit-test interno do RmlUi devolvido ao host; sobe ancestrais até achar id, `""` se nenhum); `get_element_box(id) → ElementBox{found,x,y,w,h}` dá a geometria border-box em px físicos do viewport. Ambos em `App` e `UiLayer`. Mata o padrão de espelhar geometria de RCSS à mão no host. Ver `docs/embed-integration.md` seção 10.
+  - **Viewport com origem / letterbox** (v0.2.5): `UiLayer::set_viewport(x,y,w,h,target_h)` compõe a UI numa sub-região do FBO 0 (só `UiLayer`; `App` é dono da janela). **Contrato de coordenadas:** mouse (`UiEvent`) e `get_element_box` sempre em espaço-janela (top-left, y-down); o `UiLayer` traduz pro offset GL bottom-up via `target_h` (altura total da janela), `gl_offset_y = target_h - y - h`. Composição segue no FBO 0; só a origem muda. `set_viewport(w,h)` legado = `(0,0,w,h)`. ADR-0008 (adendo F3), `docs/embed-integration.md` seção 10.
   - **UA-stylesheet embutida** (v0.2.4): defaults de `display: block` para elementos estruturais (`div`, `p`, `h1..h6`, `ul`, `ol`, `li`, `section`, `article`, `header`, `footer`, `nav`, `main`), mescladas em todo documento via `StyleSheetContainer::CombineStyleSheetContainer()` no `Bootstrap::load()` (base de baixa especificidade -- regra do autor sobrepõe). Em `App` e `UiLayer`. Verificada por `ua_stylesheet_sanity`.
   - Efeitos GL3 data-driven via RCSS (glow/box-shadow, drop-shadow, degradê, backdrop-blur, blur, mask) -- sintaxe em [`docs/effects.md`](docs/effects.md).
   - **Data-model binding** (v0.2.3): `create_data_model(name)` → `bind_number/string/bool/list(key)` → `load()` → `set_number/string/bool/list(key, ...)`. Ordem obrigatória, enforçada pelo engine (`bind_*` após `load()` retorna `false`). Listas iteram no RML via `data-for`. Disponível em `App` e `UiLayer`. Ver `docs/embed-integration.md` seção 6.
@@ -28,7 +30,7 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
   - **`set_asset_base_url`** (v0.2.2): prefixa caminhos relativos de asset, útil quando o CWD do processo não é o diretório do documento.
   - Navegação por `Key` (gamepad/teclado) injetada via `process_event`; ainda **sem** `set_focus(id)` programático (roadmap -- INBOX `GAP-4` no `TODO.md`).
 - **1º consumidor real:** **GusWorld** (jogo SDL3), embed mode no cockpit (ADR-010 no repo do GusWorld).
-- **v2 (component library, Atomic Design):** PLANEJADA e PAUSADA -- spec aprovada em `docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`, branch `feat/v2-f2-components` (não iniciada). Ver `TODO.md` seção v2.
+- **v2 (component library, Atomic Design):** modo **PULL INCREMENTAL** (decisão do líder 2026-07-01) -- não agendada como projeto; backlog puxado por demanda real. Spec aprovada em `docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`, branch `feat/v2-f2-components` (parada, não abandonada). Nenhuma das releases pós-v1 precisou de componentes. Ver `TODO.md` seção v2.
 
 ### Build e teste (glintfx)
 
@@ -40,7 +42,7 @@ sudo dnf install glfw-devel freetype-devel mesa-libGL-devel
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON
 cmake --build glintfx/build -j
 
-# suíte completa (17 testes, sob Xvfb / Mesa llvmpipe)
+# suíte completa (23 testes GLFW=ON / 11 embed GLFW=OFF, sob Xvfb / Mesa llvmpipe)
 ctest --test-dir glintfx/build --output-on-failure
 ```
 

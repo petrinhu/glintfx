@@ -13,11 +13,21 @@
 //         proves mouse translation accounts for the offset. A click at the OLD
 //         (pre-offset) window coordinates must NOT hit anything any more -- proves the
 //         translation is not just "sometimes right".
-//     (4) Pixel column-range shift (X axis only -- unambiguous regardless of glReadPixels'
-//         row-origin convention): the rendered marker's bright-pixel column range shifts by
-//         exactly offset_x -- proves the ACTUAL renderer wiring (RenderInterface_GL3::
-//         SetViewport's offset_x/offset_y parameters) works, not just this test's own
-//         bookkeeping.
+//     (4) Pixel column-range shift (X axis, absolute value) AND row-range shift (Y axis,
+//         DELTA between the two configs already rendered in (1)/(2)): the rendered marker's
+//         bright-pixel column range shifts by exactly offset_x, and its row range shifts by
+//         exactly (gl_offset_y at (2)) - (gl_offset_y at (1)) = 70 - 0 = 70 rows -- proves the
+//         ACTUAL renderer wiring (RenderInterface_GL3::SetViewport's offset_x/offset_y
+//         parameters, gl_offset_y = target_h - y - h) works, not just this test's own
+//         bookkeeping. The row check was DROPPED in the first cut of this test on the theory
+//         that glReadPixels' row-origin convention made an absolute-row assertion ambiguous;
+//         that theory was wrong -- glReadPixels has a well-defined bottom-origin convention
+//         (row 0 = window bottom, same as glViewport) -- but rather than hardcode the
+//         absolute row (which WOULD couple the test to that convention), this test asserts
+//         only the SHIFT between two readbacks, which is convention-agnostic AND still fails
+//         hard if gl_offset_y's formula regresses (e.g. gl_offset_y = y instead of
+//         target_h - y - h: verified by injecting that exact bug and confirming this
+//         assertion fails -- see commit message for the before/after numbers).
 //     (5) Resize while in letterbox mode: an injected UiEvent::Type::Resize changes content
 //         h -- get_element_box must still report the SAME x offset afterwards (x does not
 //         depend on h) and must not crash (gl_offset_y recompute path, see process_event's
@@ -37,11 +47,22 @@
 //         "target" -- prova que a tradução de mouse contabiliza o offset. Um clique nas
 //         coordenadas de janela ANTIGAS (pré-offset) não deve mais acertar nada -- prova que
 //         a tradução não é só "às vezes certa".
-//     (4) Deslocamento da faixa de coluna de pixel (só eixo X -- inequívoco independente da
-//         convenção de origem de linha do glReadPixels): a faixa de colunas de pixel
-//         brilhante do marcador renderizado desloca exatamente offset_x -- prova que a
-//         fiação REAL do renderer (parâmetros offset_x/offset_y de RenderInterface_GL3::
-//         SetViewport) funciona, não só a contabilidade deste teste.
+//     (4) Deslocamento da faixa de coluna de pixel (eixo X, valor absoluto) E da faixa de
+//         linha (eixo Y, DELTA entre as duas configs já renderizadas em (1)/(2)): a faixa de
+//         colunas de pixel brilhante do marcador renderizado desloca exatamente offset_x, e
+//         sua faixa de linhas desloca exatamente (gl_offset_y em (2)) - (gl_offset_y em (1))
+//         = 70 - 0 = 70 linhas -- prova que a fiação REAL do renderer (parâmetros
+//         offset_x/offset_y de RenderInterface_GL3::SetViewport, gl_offset_y =
+//         target_h - y - h) funciona, não só a contabilidade deste teste. A checagem de linha
+//         foi CORTADA no primeiro corte deste teste sob a teoria de que a convenção de
+//         origem de linha do glReadPixels tornava uma asserção de linha absoluta ambígua;
+//         essa teoria estava errada -- o glReadPixels tem convenção bem definida de origem na
+//         base (linha 0 = base da janela, igual ao glViewport) -- mas em vez de fixar a linha
+//         absoluta (o que ACOPLARIA o teste a essa convenção), este teste assere só o
+//         DESLOCAMENTO entre duas leituras, o que é agnóstico à convenção E ainda assim falha
+//         forte se a fórmula do gl_offset_y regredir (ex.: gl_offset_y = y em vez de
+//         target_h - y - h: verificado injetando exatamente esse bug e confirmando que esta
+//         asserção falha -- ver mensagem do commit pros números antes/depois).
 //     (5) Resize em modo letterbox: um UiEvent::Type::Resize injetado muda o h de conteúdo --
 //         get_element_box deve continuar reportando o MESMO offset x depois (x não depende de
 //         h) e não deve crashar (caminho de recálculo de gl_offset_y, ver o case Resize de
@@ -74,6 +95,30 @@ static void bright_col_range(const std::vector<unsigned char>& px, int w, int h,
       if (p[0] > 200 && p[1] > 200 && p[2] > 200) {
         if (min_col < 0 || col < min_col) min_col = col;
         if (col > max_col) max_col = col;
+      }
+    }
+}
+
+// EN: min/max BRIGHT pixel ROW. glReadPixels' row 0 is the window BOTTOM (same convention as
+//     glViewport's y), so this is well-defined -- but section (4) below deliberately does NOT
+//     assert an absolute row value; it asserts the DELTA between two readbacks (offset_y=0 vs
+//     offset_y=70), which is agnostic to which end row 0 represents and still catches a wrong
+//     gl_offset_y formula (see section (4)'s comment above main()).
+// PT: linha mínima/máxima de pixel BRILHANTE. A linha 0 do glReadPixels é a BASE da janela
+//     (mesma convenção do y do glViewport), então é bem definido -- mas a seção (4) abaixo
+//     deliberadamente NÃO assere um valor de linha absoluto; ela assere o DELTA entre duas
+//     leituras (offset_y=0 vs offset_y=70), o que é agnóstico a qual extremidade a linha 0
+//     representa e ainda assim pega uma fórmula errada de gl_offset_y (ver o comentário da
+//     seção (4) acima de main()).
+static void bright_row_range(const std::vector<unsigned char>& px, int w, int h,
+                              int& min_row, int& max_row) {
+  min_row = -1; max_row = -1;
+  for (int row = 0; row < h; ++row)
+    for (int col = 0; col < w; ++col) {
+      const unsigned char* p = &px[(size_t)(row * w + col) * 3];
+      if (p[0] > 200 && p[1] > 200 && p[2] > 200) {
+        if (min_row < 0 || row < min_row) min_row = row;
+        if (row > max_row) max_row = row;
       }
     }
 }
@@ -121,6 +166,18 @@ int main() {
     std::fprintf(stderr, "FAIL: (1) min_col=%d expected ~20\n", min_col0);
     return 6;
   }
+  // EN: baseline row range at gl_offset_y=0 (legacy 2-arg set_viewport above never touches
+  //     gl_offset_y, see UiLayer::set_viewport(w,h)) -- saved for the DELTA assertion in
+  //     section (4) below, which is what actually exercises the gl_offset_y formula.
+  // PT: faixa de linha baseline em gl_offset_y=0 (o set_viewport(w,h) legado de 2 args acima
+  //     nunca toca gl_offset_y, ver UiLayer::set_viewport(w,h)) -- guardada pra asserção de
+  //     DELTA na seção (4) abaixo, que é o que de fato exercita a fórmula do gl_offset_y.
+  int min_row0 = -1, max_row0 = -1;
+  bright_row_range(px, WIN_W, WIN_H, min_row0, max_row0);
+  if (min_row0 < 0) {
+    std::fprintf(stderr, "FAIL: (1) no bright pixel rows found (min_row0)\n");
+    return 13;
+  }
 
   // ---------------------------------------------------------------------------
   // (2) Letterbox -- set_viewport(x=100,y=80,w=200,h=150,target_h=300).
@@ -152,6 +209,7 @@ int main() {
 
   // ---------------------------------------------------------------------------
   // (4) Pixel column-range shift -- proves the actual GL offset_x wiring.
+  //     (4b) below: row-range DELTA -- proves the actual GL offset_y (gl_offset_y) wiring.
   // ---------------------------------------------------------------------------
   glReadPixels(0, 0, WIN_W, WIN_H, GL_RGB, GL_UNSIGNED_BYTE, px.data());
   int min_col1 = -1, max_col1 = -1;
@@ -160,6 +218,42 @@ int main() {
     std::fprintf(stderr, "FAIL: (4) min_col shifted to %d, expected ~%d (= %d + 100)\n",
                  min_col1, min_col0 + 100, min_col0);
     return 10;
+  }
+
+  // EN: (4b) Row-range DELTA -- the assertion this task exists to add. gl_offset_y at (1) is
+  //     0 (legacy 2-arg set_viewport); gl_offset_y at (2) is target_h - y - h = 300-80-150 =
+  //     70 (see UiLayer::set_viewport(x,y,w,h,target_h) in ui_layer.cpp). Content w/h is
+  //     identical in both configs (200x150), so the ONLY thing that can move the bright rows
+  //     is that glViewport(offset_x, offset_y, w, h) call inside EndFrame() -- i.e. this is
+  //     the actual renderer wiring, not this test's bookkeeping. A wrong formula --
+  //     e.g. gl_offset_y = y (= 80) instead of target_h - y - h (= 70) -- shifts by a
+  //     different amount and fails this assertion (verified by injecting exactly that bug;
+  //     see the commit message for the observed before/after shift values).
+  // PT: (4b) DELTA da faixa de linha -- a asserção que esta tarefa existe pra adicionar.
+  //     gl_offset_y em (1) é 0 (set_viewport legado de 2 args); gl_offset_y em (2) é
+  //     target_h - y - h = 300-80-150 = 70 (ver UiLayer::set_viewport(x,y,w,h,target_h) em
+  //     ui_layer.cpp). O w/h do conteúdo é idêntico nas duas configs (200x150), então a ÚNICA
+  //     coisa que pode mover as linhas brilhantes é aquela chamada
+  //     glViewport(offset_x, offset_y, w, h) dentro de EndFrame() -- ou seja, é a fiação REAL
+  //     do renderer, não a contabilidade deste teste. Uma fórmula errada -- ex.:
+  //     gl_offset_y = y (= 80) em vez de target_h - y - h (= 70) -- desloca por uma
+  //     quantidade diferente e falha esta asserção (verificado injetando exatamente esse bug;
+  //     ver a mensagem do commit pros valores de deslocamento observados antes/depois).
+  int min_row1 = -1, max_row1 = -1;
+  bright_row_range(px, WIN_W, WIN_H, min_row1, max_row1);
+  const float expected_row_shift = 70.f;  // target_h(300) - y(80) - h(150), minus gl_offset_y(1)=0
+  const float row_shift_min = (float)(min_row1 - min_row0);
+  const float row_shift_max = (float)(max_row1 - max_row0);
+  if (min_row1 < 0 || !approx(row_shift_min, expected_row_shift, 3.f)) {
+    std::fprintf(stderr, "FAIL: (4b) min_row shifted by %.0f, expected ~%.0f "
+                 "(gl_offset_y delta = target_h-y-h - 0 = 300-80-150 - 0)\n",
+                 row_shift_min, expected_row_shift);
+    return 14;
+  }
+  if (max_row1 < 0 || !approx(row_shift_max, expected_row_shift, 3.f)) {
+    std::fprintf(stderr, "FAIL: (4b) max_row shifted by %.0f, expected ~%.0f\n",
+                 row_shift_max, expected_row_shift);
+    return 15;
   }
 
   // ---------------------------------------------------------------------------

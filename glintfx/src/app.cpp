@@ -195,6 +195,21 @@ bool App::snapshot(const char* ppm_path) {
   return true;
 }
 
+void App::set_click_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_click_callback(std::move(cb));
+}
+
+ElementBox App::get_element_box(const char* id) const {
+  ElementBox box;
+  if (!impl_->ok) return box;
+  float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
+  if (impl_->engine.get_element_box(id, x, y, w, h)) {
+    box.found = true; box.x = x; box.y = y; box.w = w; box.h = h;
+  }
+  return box;
+}
+
 void App::run() {
   while (running()) {
     poll_events();

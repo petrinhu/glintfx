@@ -1,0 +1,8 @@
+<rml>
+<head><link type="text/rcss" href="click_scene.rcss"/></head>
+<body>
+  <div id="btn_a">&nbsp;</div>
+  <div id="panel"><span>&nbsp;</span></div>
+  <div class="empty">&nbsp;</div>
+</body>
+</rml>

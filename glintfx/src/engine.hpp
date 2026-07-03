@@ -16,6 +16,7 @@
 // PT: Só forward-declaration — nenhum tipo RmlUi/GL visível aos chamadores.
 namespace Rml { class Context; class SystemInterface; }
 #include <cstddef>
+#include <functional>
 
 namespace glintfx {
 
@@ -72,15 +73,34 @@ public:
   //     Usado pelo App (dono da janela). NÃO faz swap de buffers.
   void render_standalone(int w, int h);
 
-  // EN: Compose-only frame path — no glClear, no swap, GL state guarded (T3).
-  //     Implemented in T3. In T1 this is a documented no-op stub.
-  // PT: Caminho compose-only — sem glClear, sem swap, estado GL protegido (T3).
-  //     Implementado na T3. Na T1 este é um stub no-op documentado.
-  void render_compose(int w, int h);
+  // EN: Compose-only frame path. (offset_x, offset_y) are OpenGL-native (bottom-left-origin)
+  //     viewport offset -- ALREADY CONVERTED by the caller (UiLayer). Engine stays offset-space
+  //     agnostic: it never interprets these values, only forwards them.
+  // PT: Caminho compose-only. (offset_x, offset_y) são offset de viewport NATIVO do OpenGL
+  //     (origem inferior-esquerda) -- JÁ CONVERTIDO pelo chamador (UiLayer). O Engine
+  //     permanece agnóstico ao espaço do offset: nunca interpreta esses valores, só repassa.
+  void render_compose(int offset_x, int offset_y, int w, int h);
 
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().
   Rml::Context* context();
+
+  // EN: Register a click callback -- forwards to Bootstrap::set_click_callback (F1, v0.2.5).
+  //     See Bootstrap::set_click_callback for the full ordering/lifetime contract.
+  // PT: Registra um callback de clique -- encaminha a Bootstrap::set_click_callback (F1,
+  //     v0.2.5). Ver Bootstrap::set_click_callback para o contrato completo de ordem/lifetime.
+  void set_click_callback(std::function<void(const char*)> cb);
+
+  // EN: Query the border-box geometry of an element by id -- forwards to
+  //     Bootstrap::get_element_box (F2, v0.2.5). Content-local space (offset-free); UiLayer/
+  //     App translate to window-space at the public boundary. Returns false when not ok(),
+  //     no document is loaded, or the id is not found; x/y/w/h are left untouched in that case.
+  // PT: Consulta a geometria border-box de um elemento por id -- encaminha a
+  //     Bootstrap::get_element_box (F2, v0.2.5). Espaço local de conteúdo (offset-free);
+  //     UiLayer/App traduzem para espaço-janela na fronteira pública. Retorna false quando
+  //     não ok(), nenhum documento estiver carregado, ou o id não for encontrado; x/y/w/h
+  //     ficam intocados nesse caso.
+  bool get_element_box(const char* id, float& x, float& y, float& w, float& h) const;
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.

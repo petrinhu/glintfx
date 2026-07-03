@@ -38,15 +38,29 @@ public:
   // PT: Finaliza o frame e restaura o estado GL salvo.
   void end_frame();
 
-  // EN: Compose-only begin: set viewport + notify RmlUi — NO glClear, NO alpha-fix.
-  //     Calls glViewport(0, 0, w, h) — the UI is always composited from the origin (0,0).
-  //     For embed mode this means the host's scene and the UI must share the same pixel origin;
-  //     sub-region compositing (non-zero offset) is not supported in the F1 contract.
-  // PT: Begin compose-only: define viewport + notifica RmlUi — SEM glClear, SEM alpha-fix.
-  //     Chama glViewport(0, 0, w, h) — a UI é sempre composta a partir da origem (0,0).
-  //     No embed mode isso significa que a cena do host e a UI devem compartilhar a mesma
-  //     origem de pixel; composição em sub-região (offset não-zero) não é suportada no contrato F1.
-  void begin_frame_compose(int w, int h);
+  // EN: Compose-only begin: notify RmlUi of the sub-viewport size AND placement -- NO glClear,
+  //     NO alpha-fix. (offset_x, offset_y) are OpenGL's NATIVE bottom-left-origin viewport
+  //     offset (NOT the UiLayer public top-down contract -- see UiLayer::set_viewport's doc
+  //     comment and the ADR-0008 "F3 implementation update" section for the conversion
+  //     formula). Forwarded verbatim to RenderInterface_GL3::SetViewport(w, h, offset_x,
+  //     offset_y); RmlUi applies it ONLY at the final blit inside EndFrame()
+  //     (glViewport(offset_x, offset_y, w, h) right before the fullscreen-quad draw onto
+  //     FBO 0) -- confirmed by reading the pinned backend source
+  //     (RmlUi_Renderer_GL3.cpp:909-910). Internal render-layer passes (the UI's own content
+  //     rasterisation into its private FBOs) are UNAFFECTED by the offset -- they always start
+  //     at (0,0), exactly as before F3 (RmlUi_Renderer_GL3.cpp:857).
+  // PT: Begin compose-only: notifica o RmlUi do tamanho E posicionamento da sub-viewport --
+  //     SEM glClear, SEM alpha-fix. (offset_x, offset_y) são o offset de viewport NATIVO do
+  //     OpenGL, origem inferior-esquerda (NÃO o contrato público top-down do UiLayer -- ver o
+  //     doc-comment de UiLayer::set_viewport e a seção "F3 implementation update" do ADR-0008
+  //     pra fórmula de conversão). Repassado literalmente a
+  //     RenderInterface_GL3::SetViewport(w, h, offset_x, offset_y); o RmlUi o aplica SÓ no
+  //     blit final dentro de EndFrame() (glViewport(offset_x, offset_y, w, h) logo antes do
+  //     draw do quad fullscreen no FBO 0) -- confirmado lendo o source do backend pinado
+  //     (RmlUi_Renderer_GL3.cpp:909-910). Os passes internos do render-layer (rasterização do
+  //     próprio conteúdo da UI nos FBOs privados dela) NÃO são afetados pelo offset -- sempre
+  //     começam em (0,0), exatamente como antes da F3 (RmlUi_Renderer_GL3.cpp:857).
+  void begin_frame_compose(int offset_x, int offset_y, int w, int h);
 
   // EN: Compose-only end: call RmlUi EndFrame — NO FBO0 alpha-fix.
   // PT: End compose-only: chama EndFrame do RmlUi — SEM alpha-fix do FBO0.

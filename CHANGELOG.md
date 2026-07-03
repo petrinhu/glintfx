@@ -9,6 +9,33 @@
 
 ---
 
+## [0.2.5] - 2026-07-02
+
+### Added / Adicionado
+
+- **EN:** `set_click_callback(std::function<void(const char* element_id)>)` on both `UiLayer` and `App` -- fires on "click" (bubble phase, listener attached to the document root by `load()`), reporting the id of the clicked element, or the nearest ancestor id if the target itself has none, or `""` if no element in the ancestor chain has an id. No ordering constraint versus `load()` -- can be set before or after. Verified by `click_callback_sanity` and `app_click_callback_smoke`. Resolves `L1.11-CLICKCB`.
+  **PT:** `set_click_callback(std::function<void(const char* element_id)>)` em `UiLayer` e `App` -- dispara em "click" (fase bubble, listener anexado à raiz do documento por `load()`), reportando o id do elemento clicado, ou o id do ancestral mais próximo se o próprio alvo não tiver, ou `""` se nenhum elemento na cadeia de ancestrais tiver id. Sem restrição de ordem vs. `load()` -- pode ser setado antes ou depois. Verificado por `click_callback_sanity` e `app_click_callback_smoke`. Resolve `L1.11-CLICKCB`.
+- **EN:** `get_element_box(const char* id) -> ElementBox { bool found; float x, y, w, h; }` on both `UiLayer` and `App` -- returns the border-box geometry (`Rml::BoxArea::Border`) of an element by id, in window-space physical pixels, or `found=false` if the id does not exist or no document is loaded yet. New public header `glintfx/element_box.hpp`. Verified by `element_box_sanity` and `app_element_box_smoke`. Resolves `L1.12-ELEMBOX`.
+  **PT:** `get_element_box(const char* id) -> ElementBox { bool found; float x, y, w, h; }` em `UiLayer` e `App` -- retorna a geometria border-box (`Rml::BoxArea::Border`) de um elemento por id, em pixels físicos espaço-janela, ou `found=false` se o id não existir ou nenhum documento estiver carregado ainda. Novo header público `glintfx/element_box.hpp`. Verificado por `element_box_sanity` e `app_element_box_smoke`. Resolve `L1.12-ELEMBOX`.
+- **EN:** `UiLayer::set_viewport(int x, int y, int w, int h, int target_h)` -- places the composited UI within a sub-region of the host's window (letterbox), resolving the hardcoded-`(0,0)`-origin gap tracked as `GAP-2` since ADR-0008. `(x, y)` are top-down window-space (the same convention as `UiEvent`'s mouse coordinates and `get_element_box()`'s return value); `target_h` is the host's full render-target height, used only to convert internally to OpenGL's bottom-up viewport offset. The legacy `set_viewport(w, h)` (2-arg) is unchanged and equivalent to `(0, 0, w, h, h)`. `UiLayer`-only by design -- `App` always owns its whole window, so a sub-viewport offset is meaningless there (see ADR-0008 "F3 implementation update"). Verified by `viewport_origin_sanity`. Resolves `L1.13-VPORIGIN` and the origin half of `GAP-2` (the custom-host-FBO half of `GAP-2` remains open, see `docs/embed-integration.md` section 8).
+  **PT:** `UiLayer::set_viewport(int x, int y, int w, int h, int target_h)` -- posiciona a UI composta numa sub-região da janela do host (letterbox), resolvendo a lacuna de origem hardcoded em `(0,0)` rastreada como `GAP-2` desde o ADR-0008. `(x, y)` são espaço-janela top-down (a mesma convenção das coordenadas de mouse do `UiEvent` e do retorno de `get_element_box()`); `target_h` é a altura total do render-target do host, usada só pra converter internamente para o offset de viewport bottom-up do OpenGL. O `set_viewport(w, h)` legado (2 args) é inalterado e equivalente a `(0, 0, w, h, h)`. Só em `UiLayer` por design -- o `App` sempre possui a janela inteira, então um offset de sub-viewport não faz sentido lá (ver "F3 implementation update" no ADR-0008). Verificado por `viewport_origin_sanity`. Resolve `L1.13-VPORIGIN` e a metade "origem" do `GAP-2` (a metade "FBO custom do host" do `GAP-2` segue em aberto, ver `docs/embed-integration.md` seção 8).
+- **EN:** Nightly memory gate (`TST-L1-MEM`): CMake option `GLINTFX_SANITIZE` (ASan+UBSan+LSan) with suppression files for third-party noise, mirrored on GitHub Actions and Codeberg Forgejo Actions (cron + manual dispatch). Landed in this release window ahead of the API additions above -- not itself part of F1/F2/F3, noted here for release-window completeness. See `TESTES.md`.
+  **PT:** Gate noturno de memória (`TST-L1-MEM`): opção CMake `GLINTFX_SANITIZE` (ASan+UBSan+LSan) com arquivos de supressão para ruído de terceiros, espelhado em GitHub Actions e Codeberg Forgejo Actions (cron + dispatch manual). Entrou nesta janela de release antes das adições de API acima -- não faz parte em si de F1/F2/F3, anotado aqui por completude da janela. Ver `TESTES.md`.
+
+### Docs / Documentação
+
+- **EN:** ADR-0008 -- new dated section "F3 implementation update -- configurable viewport origin (v0.2.5)", added after "F1 implementation constraints" without reopening the `Accepted` decision. `docs/embed-integration.md` -- new section 10 ("Click callback, element geometry, and the window-space coordinate contract"), consolidating the three v0.2.5 additions and their shared coordinate contract; sections 0, 1, 2, and 8 updated in place to point at it.
+  **PT:** ADR-0008 -- nova seção datada "F3 implementation update -- configurable viewport origin (v0.2.5)", acrescentada após "F1 implementation constraints" sem reabrir a decisão `Accepted`. `docs/embed-integration.md` -- nova seção 10 ("Callback de clique, geometria de elemento e o contrato de coordenadas espaço-janela"), consolidando as três adições da v0.2.5 e o contrato de coordenadas compartilhado; seções 0, 1, 2 e 8 atualizadas no lugar para apontar para ela.
+
+### Testing / Testes
+
+- **EN:** 5 new tests this release (`click_callback_sanity`, `app_click_callback_smoke`, `element_box_sanity`, `app_element_box_smoke`, `viewport_origin_sanity`; 3 of the 5 run in both build configs). Suite size: **23 tests** with `GLINTFX_BACKEND_GLFW=ON`, **11** with `=OFF` (embed-only).
+  **PT:** 5 testes novos nesta release (`click_callback_sanity`, `app_click_callback_smoke`, `element_box_sanity`, `app_element_box_smoke`, `viewport_origin_sanity`; 3 dos 5 rodam nos 2 configs de build). Tamanho da suíte: **23 testes** com `GLINTFX_BACKEND_GLFW=ON`, **11** com `=OFF` (embed-only).
+
+[0.2.5]: https://codeberg.org/petrinhu/glintfx/releases/tag/v0.2.5
+
+---
+
 ## [0.2.4] - 2026-07-01
 
 ### Added / Adicionado

@@ -236,19 +236,21 @@ void RenderGl3::end_frame() {
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
-void RenderGl3::begin_frame_compose(int w, int h) {
+void RenderGl3::begin_frame_compose(int offset_x, int offset_y, int w, int h) {
   if (!impl_) return;
-  // EN: NO glClear here — the host owns the framebuffer contents (scene already drawn).
-  // PT: SEM glClear aqui — o host é dono do conteúdo do framebuffer (cena já desenhada).
-  //
-  // EN: Viewport origin is hardcoded to (0, 0): the UI composites from the bottom-left corner
-  //     of the window. Sub-region compositing (e.g. a UI panel at a pixel offset) is not
-  //     supported in the F1 contract; the host must use a full-window render target.
-  // PT: Origem do viewport é hardcoded em (0, 0): a UI compõe a partir do canto inferior esquerdo
-  //     da janela. Composição em sub-região (ex.: painel UI em offset de pixel) não é suportada
-  //     no contrato F1; o host deve usar um render target de janela inteira.
-  glViewport(0, 0, w, h);
-  impl_->renderer.SetViewport(w, h);
+  // EN: NO glClear here -- the host owns the framebuffer contents (scene already drawn).
+  //     NO direct glViewport() call here either (removed, v0.2.5): SetViewport()+BeginFrame()
+  //     below already issue glViewport(0,0,w,h) internally for the content-rasterisation
+  //     passes (RmlUi_Renderer_GL3.cpp:857); a pre-call here was dead code, immediately
+  //     overwritten. The offset-aware glViewport(offset_x,offset_y,w,h) happens INSIDE
+  //     EndFrame() (see header doc comment).
+  // PT: SEM glClear aqui -- o host é dono do conteúdo do framebuffer (cena já desenhada).
+  //     SEM chamada direta a glViewport() aqui tampouco (removida, v0.2.5): SetViewport()+
+  //     BeginFrame() abaixo já emitem glViewport(0,0,w,h) internamente pros passes de
+  //     rasterização de conteúdo (RmlUi_Renderer_GL3.cpp:857); uma pré-chamada aqui era código
+  //     morto, imediatamente sobrescrito. O glViewport(offset_x,offset_y,w,h) com offset
+  //     acontece DENTRO de EndFrame() (ver doc-comment do header).
+  impl_->renderer.SetViewport(w, h, offset_x, offset_y);
   impl_->renderer.BeginFrame();
 }
 

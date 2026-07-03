@@ -26,6 +26,46 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min.rml COPYONLY)
 
+# EN: click_scene.rml/.rcss (F1, v0.2.5) -- shared by click_callback_sanity (embed, both
+#     configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_click_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
+#     Copied once here, next to min.rml, so both consumers find the same single copy.
+# PT: click_scene.rml/.rcss (F1, v0.2.5) -- compartilhado por click_callback_sanity (embed,
+#     2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_click_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
+#     Copiado uma vez aqui, junto do min.rml, para que os dois consumidores achem a mesma cópia.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/click_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/click_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/click_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/click_scene.rcss COPYONLY)
+
+# EN: element_box_scene.rml/.rcss (F2, v0.2.5) -- shared by element_box_sanity (embed, both
+#     configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_element_box_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
+#     Copied once here, next to click_scene.*, so both consumers find the same single copy.
+# PT: element_box_scene.rml/.rcss (F2, v0.2.5) -- compartilhado por element_box_sanity (embed,
+#     2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_element_box_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
+#     Copiado uma vez aqui, junto do click_scene.*, para que os dois consumidores achem a
+#     mesma cópia.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/element_box_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/element_box_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/element_box_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/element_box_scene.rcss COPYONLY)
+
+# EN: viewport_origin_scene.rml/.rcss (F3, v0.2.5) -- used only by viewport_origin_sanity
+#     (embed, both configs). Copied once here, next to element_box_scene.*, so the test finds
+#     it regardless of WORKING_DIRECTORY (CMAKE_CURRENT_BINARY_DIR, same pattern as
+#     click_callback_sanity/element_box_sanity below).
+# PT: viewport_origin_scene.rml/.rcss (F3, v0.2.5) -- usado só por viewport_origin_sanity
+#     (embed, 2 configs). Copiado uma vez aqui, junto de element_box_scene.*, para que o
+#     teste o encontre independente do WORKING_DIRECTORY (CMAKE_CURRENT_BINARY_DIR, mesmo
+#     padrão de click_callback_sanity/element_box_sanity abaixo).
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -97,6 +137,49 @@ if(GLINTFX_BACKEND_GLFW)
   add_test(NAME app_dp_ratio_smoke
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:app_dp_ratio_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_click_callback_smoke -- App parity smoke for set_click_callback() (F1, v0.2.5).
+  #     No pixel/hit assertion (that is click_callback_sanity's job via UiLayer, same Engine
+  #     path); this only proves the surface is wired on App and ok() stays true after render.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention); click_scene.rml
+  #     is copied once to CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/click_scene.rml".
+  # PT: app_click_callback_smoke -- smoke de paridade do App para set_click_callback() (F1, v0.2.5).
+  #     Sem asserção de pixel/hit (isso é papel de click_callback_sanity via UiLayer, mesmo
+  #     caminho de Engine); só prova que a superfície está conectada no App e ok() permanece
+  #     true após o render. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do bloco GLFW em
+  #     todo o repo); click_scene.rml é copiado uma vez para CMAKE_CURRENT_BINARY_DIR acima,
+  #     endereçado aqui como "tests/click_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_click_callback_smoke app_click_callback_smoke.cpp)
+  target_link_libraries(app_click_callback_smoke PRIVATE glintfx)
+  add_test(NAME app_click_callback_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_click_callback_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_element_box_smoke -- App parity smoke for get_element_box() (F2, v0.2.5).
+  #     No pixel assertion (that is element_box_sanity's job via UiLayer, same Engine path);
+  #     this only proves the surface is wired on App and returns found=true for a known id.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention);
+  #     element_box_scene.rml is copied once to CMAKE_CURRENT_BINARY_DIR above, addressed
+  #     here as "tests/element_box_scene.rml".
+  # PT: app_element_box_smoke -- smoke de paridade do App para get_element_box() (F2, v0.2.5).
+  #     Sem asserção de pixel (isso é papel de element_box_sanity via UiLayer, mesmo caminho
+  #     de Engine); só prova que a superfície está conectada no App e retorna found=true para
+  #     um id conhecido. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do bloco GLFW em todo
+  #     o repo); element_box_scene.rml é copiado uma vez para CMAKE_CURRENT_BINARY_DIR acima,
+  #     endereçado aqui como "tests/element_box_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_element_box_smoke app_element_box_smoke.cpp)
+  target_link_libraries(app_element_box_smoke PRIVATE glintfx)
+  add_test(NAME app_element_box_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_element_box_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -553,6 +636,91 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rcss
 add_test(NAME ua_stylesheet_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ua_stylesheet_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: click_callback_sanity -- verifies UiLayer::set_click_callback() (F1, v0.2.5): direct id,
+#     ancestor-walk fallback for a child without id, "" fallback for a subtree with no id
+#     anywhere, and no callback invocation for a click outside any element. Runs in BOTH
+#     build configs (embed-mode test, links ${_embed_dep} like the other embed tests above).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     ua_stylesheet_sanity/dp_ratio_sanity/ui_layer_sanity (scene-specific rml/rcss pair
+#     copied next to min.rml at the top of this file, addressed here by bare filename).
+# PT: click_callback_sanity -- verifica UiLayer::set_click_callback() (F1, v0.2.5): id direto,
+#     fallback de subida de ancestral para filho sem id, fallback "" para subárvore sem id em
+#     lugar nenhum, e nenhuma invocação do callback para clique fora de qualquer elemento.
+#     Roda em AMBAS as configs (teste de embed mode, linka ${_embed_dep} como os outros
+#     testes embed acima). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) --
+#     mesmo padrão de ua_stylesheet_sanity/dp_ratio_sanity/ui_layer_sanity (par rml/rcss
+#     específico da cena, copiado junto do min.rml no topo deste arquivo, endereçado aqui
+#     por nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(click_callback_sanity click_callback_sanity.cpp)
+target_link_libraries(click_callback_sanity PRIVATE ${_embed_dep})
+add_test(NAME click_callback_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:click_callback_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: element_box_sanity -- verifies UiLayer::get_element_box() (F2, v0.2.5): exact RCSS-
+#     authored border-box geometry for a known id, found=false + zeroed fields for an unknown
+#     id, and found=false when no document is loaded yet. Runs in BOTH build configs
+#     (embed-mode test, links ${_embed_dep} like the other embed tests above).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     click_callback_sanity/ua_stylesheet_sanity (scene-specific rml/rcss pair copied next to
+#     min.rml at the top of this file, addressed here by bare filename).
+# PT: element_box_sanity -- verifica UiLayer::get_element_box() (F2, v0.2.5): geometria
+#     border-box exata autorada no RCSS para um id conhecido, found=false + campos zerados
+#     para id desconhecido, e found=false quando nenhum documento está carregado ainda. Roda
+#     em AMBAS as configs (teste de embed mode, linka ${_embed_dep} como os outros testes
+#     embed acima). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo
+#     padrão de click_callback_sanity/ua_stylesheet_sanity (par rml/rcss específico da cena,
+#     copiado junto do min.rml no topo deste arquivo, endereçado aqui por nome de arquivo
+#     simples).
+# ---------------------------------------------------------------------------
+add_executable(element_box_sanity element_box_sanity.cpp)
+target_link_libraries(element_box_sanity PRIVATE ${_embed_dep})
+add_test(NAME element_box_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:element_box_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: viewport_origin_sanity -- integration proof for UiLayer::set_viewport(x,y,w,h,target_h)
+#     (F3, v0.2.5): backward-compat of the legacy 2-arg overload, letterbox offset applied to
+#     get_element_box()'s window-space return value, click-through-offset (mouse translation),
+#     the actual GL offset_x wiring (pixel column-range shift, glReadPixels-based), and a
+#     Resize while in letterbox mode. Exercises F1 (set_click_callback) + F2
+#     (get_element_box) as deterministic oracles -- see the file header for the full
+#     assertion list. Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like
+#     the other embed tests above). Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h
+#     directly and gl3w is a PRIVATE dep of glintfx (not propagated to callers).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied next to
+#     min.rml at the top of this file, addressed here by bare filename).
+# PT: viewport_origin_sanity -- prova de integração de UiLayer::set_viewport(x,y,w,h,target_h)
+#     (F3, v0.2.5): compat retroativa da sobrecarga legada de 2 args, offset de letterbox
+#     aplicado ao retorno espaço-janela de get_element_box(), clique-através-do-offset
+#     (tradução de mouse), a fiação REAL do offset_x do GL (deslocamento de faixa de coluna
+#     de pixel, via glReadPixels), e um Resize em modo letterbox. Exercita F1
+#     (set_click_callback) + F2 (get_element_box) como oráculos determinísticos -- ver o
+#     cabeçalho do arquivo pra lista completa de asserções. Roda em AMBAS as configs (teste de
+#     embed mode, linka ${_embed_dep} como os outros testes embed acima). Linka gl3w
+#     explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é dep PRIVATE da
+#     glintfx (não propagado aos callers). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (=
+#     build/tests/) -- mesmo padrão de click_callback_sanity/element_box_sanity (par rml/rcss
+#     específico da cena, copiado junto do min.rml no topo deste arquivo, endereçado aqui por
+#     nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(viewport_origin_sanity viewport_origin_sanity.cpp)
+target_link_libraries(viewport_origin_sanity PRIVATE ${_embed_dep} gl3w)
+add_test(NAME viewport_origin_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:viewport_origin_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

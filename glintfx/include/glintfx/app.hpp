@@ -5,6 +5,7 @@
 #pragma once
 #include <memory>
 #include <cstddef>
+#include <functional>
 // EN: version() moved to its own header (L1.9-VERSEMBED) so embed-only consumers that
 //     never include app.hpp still get glintfx::version(). Re-included here (transitively)
 //     so existing code that only includes app.hpp keeps compiling unchanged.
@@ -13,6 +14,7 @@
 //     aqui (transitivamente) para que código existente que só inclui app.hpp continue
 //     compilando sem mudanças.
 #include <glintfx/version.hpp>
+#include <glintfx/element_box.hpp>
 namespace glintfx {
 
 // EN: Configuration for App construction. Zero-initialize safe; defaults are sane.
@@ -125,6 +127,31 @@ public:
   // EN: Convenience loop: poll + update + render until !running().
   // PT: Laço de conveniência: poll + update + render até !running().
   void run();
+
+  // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
+  //     clicked element that has a non-empty id ("" if none reached before the document root).
+  //     No ordering constraint versus load(): safe to call before or after it. Parity with
+  //     UiLayer::set_click_callback (same signature).
+  // PT: Registra um callback de clique -- reporta o id do ancestral-ou-o-próprio mais próximo
+  //     do elemento clicado que tenha id não-vazio ("" se nenhum for encontrado até a raiz do
+  //     documento). Sem restrição de ordem vs. load(): seguro chamar antes ou depois. Paridade
+  //     com UiLayer::set_click_callback (mesma assinatura).
+  void set_click_callback(std::function<void(const char* element_id)> cb);
+
+  // EN: Query the border-box geometry of an element by id. Coordinate space: window physical
+  //     pixels, top-left origin, y-down -- App owns the whole window, so there is no sub-
+  //     viewport offset to translate (unlike UiLayer, whose set_viewport(x,y,w,h,target_h)
+  //     shifts this space -- see UiLayer::get_element_box). Returns ElementBox{found=false}
+  //     (all fields zeroed) when the id is not found in the currently loaded document, or no
+  //     document is loaded yet. Parity with UiLayer::get_element_box (same signature).
+  // PT: Consulta a geometria border-box de um elemento por id. Espaço de coordenadas: pixels
+  //     físicos da janela, origem superior-esquerda, y pra baixo -- o App é dono da janela
+  //     inteira, então não há offset de sub-viewport a traduzir (diferente do UiLayer, cujo
+  //     set_viewport(x,y,w,h,target_h) desloca esse espaço -- ver UiLayer::get_element_box).
+  //     Retorna ElementBox{found=false} (todos os campos zerados) quando o id não é encontrado
+  //     no documento carregado atualmente, ou nenhum documento carregado ainda. Paridade com
+  //     UiLayer::get_element_box (mesma assinatura).
+  ElementBox get_element_box(const char* id) const;
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model

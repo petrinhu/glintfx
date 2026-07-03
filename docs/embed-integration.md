@@ -25,25 +25,31 @@
 
 **PT:** O `UiLayer` nunca limpa o framebuffer e nunca troca buffers. O host é dono dos dois.
 
+**EN:** When using the letterbox `set_viewport(x, y, w, h, target_h)` overload (F3, v0.2.5), the host must clear/redraw its scene across the **FULL window** at step 2 (not just the sub-region) before calling `render()` -- `render()` itself never clears, and the sub-viewport it composites into no longer covers the whole backbuffer. See section 10 for the full contract.
+
+**PT:** Ao usar a sobrecarga letterbox `set_viewport(x, y, w, h, target_h)` (F3, v0.2.5), o host deve limpar/redesenhar a cena na **janela INTEIRA** no passo 2 (não só na sub-região) antes de chamar `render()` -- o `render()` em si nunca limpa, e a sub-viewport na qual ele compõe não cobre mais o backbuffer inteiro. Ver a seção 10 para o contrato completo.
+
 ## 1. Coordinates and DPI / Coordenadas e DPI
 
 **EN:**
 - `set_viewport(w, h)` expects the **real backbuffer pixels**. The same `(w, h)` drives two coupled things, 1:1: the RmlUi context dimensions (the layout coordinate space) via `Engine::set_viewport` -> `context->SetDimensions` (`glintfx/src/engine.cpp:44-49`, cached in `ui_layer.cpp:98-103`), and the GL viewport via `render_compose` -> `begin_frame_compose` -> `glViewport(0,0,w,h)` + `renderer.SetViewport(w,h)` (`glintfx/src/render_gl3.cpp:114-115`).
 - `UiLayerConfig{logical_width = 1280, logical_height = 720}` (`glintfx/include/glintfx/ui_layer.hpp`) is only the **initial** context size passed at attach. `set_viewport` overrides it.
-- Composition always targets the **window backbuffer (FBO 0)** with viewport origin hardcoded at `(0,0)`. A custom host FBO bound before `render()` is **not** used as the composition target. Sub region compositing is not supported.
+- Composition always targets the **window backbuffer (FBO 0)**. The viewport **origin** within FBO 0 is configurable since v0.2.5 via `UiLayer::set_viewport(x, y, w, h, target_h)` -- see section 10. A custom host FBO bound before `render()` is still **not** used as the composition target.
 - **dp_ratio (density-independent pixel ratio).** `UiLayerConfig::dp_ratio` (default `1.0f`) and `UiLayer::set_dp_ratio(float)` expose `Rml::Context::SetDensityIndependentPixelRatio`. When set, the RCSS `dp` unit scales: `1dp = dp_ratio physical px`. The `px` RCSS unit is always one physical pixel and is NOT affected by dp_ratio.
   - **Recommended pattern:** author RCSS in `dp` units at a fixed logical canvas (e.g. 960×540), call `set_viewport(1920, 1080)` (physical backbuffer), and `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. RmlUi scales the layout to fill the physical backbuffer without any manual RCSS edits.
   - `App` has parity: `AppConfig::dp_ratio` and `App::set_dp_ratio(float)`.
   - Verified: `dp_ratio_sanity` test renders a 100dp×100dp white box; scale factor at ratio=2.0 vs ratio=1.0 is exactly **4.0×** (200×200 px vs 100×100 px).
+- **`get_element_box(id)` (F2, v0.2.5)** returns `ElementBox{found, x, y, w, h}` -- the element's **border-box** (`Rml::BoxArea::Border`: includes border, excludes margin) in the **same physical-pixel, top-left-origin, y-down space as `set_viewport(w, h)`**. If the RCSS geometry is authored in `dp` units, the returned `x/y/w/h` are already the **scaled physical-pixel result** (post-`dp_ratio` multiplication) -- callers never need to multiply by `dp_ratio` themselves. `found=false` (all fields zero) when the id does not exist in the currently loaded document, or no document is loaded yet. Parity: `App::get_element_box` (same signature, same units -- `App` owns the whole window so there is no additional sub-viewport offset to account for). Header: `glintfx/include/glintfx/element_box.hpp`. Verified: `element_box_sanity`/`app_element_box_smoke` tests.
 
 **PT:**
 - `set_viewport(w, h)` espera os **pixels reais do backbuffer**. Os mesmos `(w, h)` alimentam duas coisas acopladas, 1:1: a dimensão do contexto RmlUi via `Engine::set_viewport` -> `context->SetDimensions` e o viewport GL via `render_compose` -> `begin_frame_compose`.
 - `UiLayerConfig{logical_width = 1280, logical_height = 720}` é só a dimensão **inicial** do contexto. `set_viewport` a sobrescreve.
-- A composição mira sempre o **backbuffer da janela (FBO 0)** com origem do viewport fixa em `(0,0)`. Composição em sub região não é suportada.
+- A composição mira sempre o **backbuffer da janela (FBO 0)**. A **origem** do viewport dentro do FBO 0 é configurável desde a v0.2.5 via `UiLayer::set_viewport(x, y, w, h, target_h)` -- ver seção 10. Um FBO custom do host ligado antes de `render()` ainda **não** é usado como alvo de composição.
 - **dp_ratio (density-independent pixel ratio).** `UiLayerConfig::dp_ratio` (padrão `1.0f`) e `UiLayer::set_dp_ratio(float)` expõem `Rml::Context::SetDensityIndependentPixelRatio`. Quando definido, a unidade RCSS `dp` escala: `1dp = dp_ratio px físicos`. A unidade `px` do RCSS é sempre um pixel físico e NÃO é afetada pelo dp_ratio.
   - **Padrão recomendado:** autore o RCSS em unidades `dp` num canvas lógico fixo (ex.: 960×540), chame `set_viewport(1920, 1080)` (backbuffer físico) e `set_dp_ratio(1920.0f / 960.0f)` = `2.0f`. O RmlUi escala o layout para preencher o backbuffer físico sem nenhuma edição de RCSS.
   - `App` tem paridade: `AppConfig::dp_ratio` e `App::set_dp_ratio(float)`.
   - Verificado: teste `dp_ratio_sanity` renderiza box branco 100dp×100dp; fator de escala em ratio=2.0 vs ratio=1.0 é exatamente **4.0×** (200×200 px vs 100×100 px).
+- **`get_element_box(id)` (F2, v0.2.5)** retorna `ElementBox{found, x, y, w, h}` -- o **border-box** do elemento (`Rml::BoxArea::Border`: inclui borda, exclui margem) no **mesmo espaço de pixels físicos, origem superior-esquerda, y pra baixo, de `set_viewport(w, h)`**. Se a geometria RCSS for autorada em unidades `dp`, o `x/y/w/h` retornado já é o **resultado em pixels físicos escalado** (pós-multiplicação por `dp_ratio`) -- chamadores nunca precisam multiplicar por `dp_ratio` eles mesmos. `found=false` (todos os campos zero) quando o id não existe no documento carregado atualmente, ou nenhum documento carregado ainda. Paridade: `App::get_element_box` (mesma assinatura, mesmas unidades -- o `App` é dono da janela inteira, então não há offset adicional de sub-viewport a considerar). Header: `glintfx/include/glintfx/element_box.hpp`. Verificado: testes `element_box_sanity`/`app_element_box_smoke`.
 
 ## 2. GL state contract / Contrato de estado GL
 
@@ -73,7 +79,7 @@
 2. **Depth mask and depth func.** Only the depth test enable bit is restored. If the host relies on a specific `glDepthMask` or `glDepthFunc`, it must reset them.
 3. **Textures on other units.** Only the 2D texture bound on the active unit observed is restored. Do not assume bindings on other texture units survive; re bind per draw.
 4. **Out of scope state.** Pixel store / unpack alignment, sRGB framebuffer enable, polygon mode, primitive restart, and anything not in the table above are not restored.
-5. **Host owns clear and swap.** The host clears and draws its scene into FBO 0 and calls `render()` afterwards, before the swap. `render()` always composes onto FBO 0; a custom host FBO is not the target (`ui_layer.hpp:64-79`). Viewport origin is `(0,0)`.
+5. **Host owns clear and swap.** The host clears and draws its scene into FBO 0 and calls `render()` afterwards, before the swap. `render()` always composes onto FBO 0; a custom host FBO is not the target (`ui_layer.hpp:64-79`). Viewport origin within FBO 0 is `(0,0)` by default, configurable since v0.2.5 (section 10).
 6. **Current context.** The host must make its GL context current before constructing the `UiLayer` and before every `render()`.
 
 **PT: Invariantes do host (o que NÃO é restaurado, então o host deve honrar):**
@@ -81,7 +87,7 @@
 2. **Depth mask e depth func.** Só o enable do depth test é restaurado. Se o host depende de um `glDepthMask` ou `glDepthFunc` específico, deve re setar.
 3. **Texturas em outras unidades.** Só a textura 2D ligada na unidade ativa observada é restaurada. Não assuma que bindings em outras unidades de textura sobrevivem; re vincule por draw.
 4. **Estado fora de escopo.** Pixel store / unpack alignment, sRGB framebuffer enable, polygon mode, primitive restart e qualquer coisa fora da tabela acima não são restaurados.
-5. **Host é dono do clear e do swap.** O host limpa e desenha a cena no FBO 0 e chama `render()` depois, antes do swap. O `render()` sempre compõe no FBO 0; um FBO custom do host não é o alvo (`ui_layer.hpp:64-79`). Origem do viewport é `(0,0)`.
+5. **Host é dono do clear e do swap.** O host limpa e desenha a cena no FBO 0 e chama `render()` depois, antes do swap. O `render()` sempre compõe no FBO 0; um FBO custom do host não é o alvo (`ui_layer.hpp:64-79`). A origem do viewport dentro do FBO 0 é `(0,0)` por padrão, configurável desde a v0.2.5 (seção 10).
 6. **Contexto corrente.** O host deve tornar o contexto GL corrente antes de construir o `UiLayer` e antes de cada `render()`.
 
 ## 3. GL loader / Loader GL
@@ -256,13 +262,15 @@ ui.set_list("log", lines, 3);
 
 **EN:** Candidate features for a later release:
 1. ~~**Logical to physical scaling (dp_ratio).**~~ **Resolved in v0.2.2.** `UiLayerConfig::dp_ratio`, `UiLayer::set_dp_ratio(float)`, `AppConfig::dp_ratio`, and `App::set_dp_ratio(float)` are now available. See section 1 for the full contract.
-2. **Custom host FBO target plus configurable viewport origin.** Today `render()` always composes onto FBO 0 at origin `(0,0)`. Compositing into a host owned offscreen FBO, or into a sub region, is not supported.
-3. ~~**Asset base URL override.**~~ **Resolved in v0.2.2.** `UiLayer::set_asset_base_url(const char*)` and `App::set_asset_base_url(const char*)` are now available. See section 4 for the full contract.
+2. ~~**Configurable viewport origin.**~~ **Resolved in v0.2.5.** `UiLayer::set_viewport(x, y, w, h, target_h)` places the composited UI within a sub-region of the host's window. See section 10.
+3. **Custom host FBO target.** `render()` still always composes onto FBO 0; compositing into a host-owned offscreen FBO is not supported.
+4. ~~**Asset base URL override.**~~ **Resolved in v0.2.2.** `UiLayer::set_asset_base_url(const char*)` and `App::set_asset_base_url(const char*)` are now available. See section 4 for the full contract.
 
 **PT:** Features candidatas para uma versão futura:
 1. ~~**Escala lógico para físico (dp_ratio).**~~ **Resolvido na v0.2.2.** `UiLayerConfig::dp_ratio`, `UiLayer::set_dp_ratio(float)`, `AppConfig::dp_ratio` e `App::set_dp_ratio(float)` estão disponíveis. Ver seção 1 para o contrato completo.
-2. **Alvo de FBO custom do host mais origem de viewport configurável.** Hoje o `render()` sempre compõe no FBO 0 na origem `(0,0)`. Compor num FBO offscreen do host, ou numa sub região, não é suportado.
-3. ~~**Override de base URL de assets.**~~ **Resolvido na v0.2.2.** `UiLayer::set_asset_base_url(const char*)` e `App::set_asset_base_url(const char*)` estão disponíveis. Ver seção 4 para o contrato completo.
+2. ~~**Origem de viewport configurável.**~~ **Resolvido na v0.2.5.** `UiLayer::set_viewport(x, y, w, h, target_h)` posiciona a UI composta numa sub-região da janela do host. Ver seção 10.
+3. **Alvo de FBO custom do host.** O `render()` ainda sempre compõe no FBO 0; compor num FBO offscreen de posse do host não é suportado.
+4. ~~**Override de base URL de assets.**~~ **Resolvido na v0.2.2.** `UiLayer::set_asset_base_url(const char*)` e `App::set_asset_base_url(const char*)` estão disponíveis. Ver seção 4 para o contrato completo.
 
 ## 9. UA stylesheet (display: block defaults) / Stylesheet UA (defaults de display: block)
 
@@ -294,6 +302,28 @@ especificidade igual ou maior no seu próprio RCSS a sobrepõe (comportamento pa
 cascata CSS, não um caso especial). Não é necessário `@import` nem opt-in -- está sempre
 ativa. Elementos fora desta lista (ex.: `span`, tags customizadas) continuam com default
 `inline`, igual ao próprio RmlUi; adicione sua própria regra `display` se precisar.
+
+## 10. Click callback, element geometry, and the window-space coordinate contract (v0.2.5) / Callback de clique, geometria de elemento e o contrato de coordenadas espaço-janela (v0.2.5)
+
+**EN:** Three additions close the "host mirrors RCSS geometry by hand" gap:
+
+- **`set_click_callback(std::function<void(const char* element_id)>)`** (`UiLayer` + `App`, parity): fires on every "click" (bubble phase, listener attached to the document root by `load()`). Reports the id of the click TARGET, or the nearest ANCESTOR with a non-empty id if the target itself has none, or `""` if no element in the ancestor chain has an id. No ordering constraint versus `load()` -- can be set before or after. Verified by `click_callback_sanity` and `app_click_callback_smoke`.
+- **`get_element_box(const char* id) -> ElementBox { bool found; float x, y, w, h; }`** (`UiLayer` + `App`, parity): border-box geometry of an element by id. Units, dp_ratio interaction, and the `found=false` contract are documented in section 1 -- this section only adds the coordinate-SPACE guarantee below.
+- **`UiLayer::set_viewport(int x, int y, int w, int h, int target_h)`** (`UiLayer`-only, F3): places the composited UI within a sub-region of the host's window (letterbox). The legacy `set_viewport(w, h)` is unchanged and equivalent to `(0, 0, w, h, h)`. See section 0 for the host's per-frame clear obligation under letterbox mode.
+
+**The coordinate contract (read this before using any of the three):** every coordinate that crosses the public API boundary -- `UiEvent`'s mouse `x`/`y`, `get_element_box()`'s return value, and `set_viewport`'s `x`/`y` -- is **window/render-target physical pixels, top-left origin, y-down**. This is the SAME convention regardless of whether a viewport offset is active. `UiLayer` performs ALL translation to/from its own offset-free content space internally: it subtracts `(x, y)` from mouse coordinates before forwarding to RmlUi, and adds `(x, y)` to `get_element_box()`'s raw content-space result before returning it. **The host never needs to convert coordinates for input or geometry queries.** The ONE place OpenGL's native bottom-up viewport convention leaks through is `set_viewport`'s `target_h` parameter (the host's own window height) -- needed only because `glViewport` is unavoidably bottom-left-origin at the final composite step (`gl_offset_y = target_h - y - h`); see the ADR-0008 "F3 implementation update" section for the exact formula. `App` never has an offset (it owns its whole window), so `App::get_element_box()` needs no translation and `App` does not gain `set_viewport`.
+
+**Why F1/F2/F3 are documented together:** they share one coordinate system by design, and a sign error in any of the three translation points (`process_event`'s `MouseMove`, `get_element_box`, `set_viewport`'s formula) is exactly the class of silent desync bug that `set_click_callback` was built to eliminate on the host side -- reintroduced inside glintfx instead. The integration test `viewport_origin_sanity` exercises all three together as one oracle-checked scenario (click-through-offset, geometry-through-offset, and the actual GL pixel placement) rather than in isolation.
+
+**PT:** Três adições fecham a lacuna "o host espelha geometria do RCSS à mão":
+
+- **`set_click_callback(std::function<void(const char* element_id)>)`** (`UiLayer` + `App`, paridade): dispara em todo "click" (fase bubble, listener anexado à raiz do documento por `load()`). Reporta o id do ALVO do clique, ou o ANCESTRAL mais próximo com id não-vazio se o próprio alvo não tiver, ou `""` se nenhum elemento na cadeia de ancestrais tiver id. Sem restrição de ordem vs. `load()` -- pode ser setado antes ou depois. Verificado por `click_callback_sanity` e `app_click_callback_smoke`.
+- **`get_element_box(const char* id) -> ElementBox { bool found; float x, y, w, h; }`** (`UiLayer` + `App`, paridade): geometria border-box de um elemento por id. Unidades, interação com dp_ratio e o contrato `found=false` estão documentados na seção 1 -- esta seção só acrescenta a garantia de ESPAÇO de coordenadas abaixo.
+- **`UiLayer::set_viewport(int x, int y, int w, int h, int target_h)`** (`UiLayer`-only, F3): posiciona a UI composta numa sub-região da janela do host (letterbox). O `set_viewport(w, h)` legado é inalterado e equivalente a `(0, 0, w, h, h)`. Ver seção 0 para a obrigação de clear por-frame do host em modo letterbox.
+
+**O contrato de coordenadas (leia antes de usar qualquer uma das três):** toda coordenada que cruza a fronteira pública da API -- `x`/`y` de mouse do `UiEvent`, o retorno de `get_element_box()`, e `x`/`y` de `set_viewport` -- é **pixels físicos do render-target/janela, origem superior-esquerda, y pra baixo**. É a MESMA convenção independente de haver offset de viewport ativo. O `UiLayer` faz TODA a tradução de/para seu próprio espaço de conteúdo offset-free internamente: subtrai `(x, y)` das coordenadas de mouse antes de repassar ao RmlUi, e soma `(x, y)` ao resultado bruto (espaço-conteúdo) de `get_element_box()` antes de devolver. **O host nunca precisa converter coordenadas pra input ou queries de geometria.** O ÚNICO lugar onde a convenção nativa bottom-up de viewport do OpenGL vaza é o parâmetro `target_h` de `set_viewport` (a altura da própria janela do host) -- necessário só porque o `glViewport` é inevitavelmente origem inferior-esquerda no passo final de composição (`gl_offset_y = target_h - y - h`); ver a seção "F3 implementation update" do ADR-0008 pra fórmula exata. `App` nunca tem offset (possui a janela inteira), então `App::get_element_box()` não precisa de tradução e `App` não ganha `set_viewport`.
+
+**Por que F1/F2/F3 são documentadas juntas:** compartilham UM único sistema de coordenadas por design, e um erro de sinal em qualquer um dos três pontos de tradução (`MouseMove` de `process_event`, `get_element_box`, a fórmula de `set_viewport`) é exatamente a classe de bug silencioso de desalinhamento que o `set_click_callback` foi construído pra eliminar do lado do host -- reintroduzida dentro do próprio glintfx. O teste de integração `viewport_origin_sanity` exercita as três juntas como um cenário único com oráculo (clique-através-do-offset, geometria-através-do-offset e o posicionamento real de pixel no GL), não isoladamente.
 
 ## See also / Veja também
 

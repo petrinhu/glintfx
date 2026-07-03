@@ -8,9 +8,9 @@ This repository hosts two independent tracks. Know which one you are in before e
 | Layer / Camada | Path | Status | Build |
 | :--- | :--- | :--- | :--- |
 | **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.2.5**, released, two consumption modes (`App` + `UiLayer`) | CMake |
-| **Layer 0: `loucura_c_asm`** (sovereign runtime, **dormant track**) | `src/`, `include/` | not implemented (ADRs only) | Makefile (future) |
+| **Layer 0: `loucura_c_asm`** (sovereign runtime, **early-stage track**) | `src/`, `include/` | bootstrap I/O delivered (W1->B7): freestanding pipeline + syscalls + `exit`/`write`/`read`, zero libc; own libc/harness in progress | `Makefile` (root) |
 
-Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; it is a **dormant, long-term internalization target** (decisions only, no implementation yet). They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).
+Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; it has an inaugural increment delivered (a freestanding `_start` + raw syscall wrappers + `exit`/`write`/`read` helpers, proven by three test binaries via `make test`) but is still a **very early-stage, long-term internalization target** -- no own libc/allocator/test harness yet. They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).
 
 ---
 
@@ -75,7 +75,9 @@ glintfx/                 Layer 1: the C++ library (active product)
   third_party/stb/       vendored stb_image.h (public domain / MIT) for PNG/JPG decode
   CMakeLists.txt
 consumer-example/        drop-in proof: consumes glintfx via FetchContent
-src/, include/           Layer 0: C/ASM runtime (scaffold only, not implemented, dormant)
+src/, include/           Layer 0: C/ASM runtime (bootstrap I/O delivered, early-stage), built via
+                          the root Makefile (`make build`/`test`/`run`/`clean`), distinct from
+                          glintfx's CMake build
 docs/adr/                ADRs 0001-0005 (Layer 0) + 0006-0008 (layers, license, embed mode)
 docs/embed-integration.md  host integration contract for UiLayer (frame lifecycle, GL state,
                           dp_ratio, base URL, data model, textures) -- authoritative reference

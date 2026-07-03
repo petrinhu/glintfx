@@ -229,16 +229,16 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **v2 -- game UI component library:** menus, dialogue boxes, windows, font styles, and GPU effect components (Atomic Design, tokens-first), all declared in RCSS. Approved spec: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (branch `feat/v2-f2-components`).
 - **`set_focus(id)` on `UiLayer`:** programmatic focus control for hosts whose model owns selection (e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation). Tracked as `GAP-4` in `TODO.md`.
 
-**Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, gl3w, FreeType, and GLFW** (the whole userspace stack) over the course of years. This connects to **Layer 0** (the pure C/ASM runtime, currently dormant) as the base for internalization. **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
+**Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, gl3w, FreeType, and GLFW** (the whole userspace stack) over the course of years. This connects to **Layer 0** (the pure C/ASM runtime, now bootstrapping) as the base for internalization. **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
 
 ### About this repository (two layers)
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
 - **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.2.5`).
-- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. It is **dormant** (only ADRs 0001-0005 and scaffolding exist, implementation not started) and is a long-term internalization target, independent of glintfx.
+- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Bootstrap I/O delivered:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end by three sovereign test binaries (`make test`; purity checked with `strace`). Still a **very early-stage, long-term track**: no own libc/allocator/test harness yet, and internalizing glintfx's dependencies (RmlUi, gl3w, FreeType, GLFW) remains years away.
 
-Treat glintfx as the product; Layer 0 is a separate, dormant long-term track.
+Treat glintfx as the product; Layer 0 is a separate, early-stage long-term track.
 
 ### License
 
@@ -456,16 +456,16 @@ A v0.2.5 do `glintfx` é honesta sobre o que ainda não existe:
 - **v2 -- component library de UI de jogo:** menus, caixas de diálogo, janelas, estilos de fonte e componentes de efeito GPU (Atomic Design, tokens-first), todos declarados em RCSS. Spec aprovada: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (branch `feat/v2-f2-components`).
 - **`set_focus(id)` no `UiLayer`:** controle de foco programático para hosts cujo modelo é dono da seleção (ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi). Rastreado como `GAP-4` no `TODO.md`.
 
-**Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, gl3w, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Isso se conecta à **Camada 0** (o runtime C/ASM puro, hoje dormente) como base de internalização. **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
+**Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, gl3w, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Isso se conecta à **Camada 0** (o runtime C/ASM puro, hoje em bootstrap) como base de internalização. **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
 
 ### Sobre este repositório (duas camadas)
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
 - **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.2.5`).
-- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. Está **dormente** (só os ADRs 0001-0005 e scaffold existem, implementação ainda não iniciada) e é um alvo de internalização de longo prazo, independente do glintfx.
+- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Bootstrap de I/O entregue:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta por três binários soberanos de teste (`make test`; pureza checada via `strace`). Ainda é uma trilha **de estágio bem inicial e longo prazo**: não há libc/alocador/harness de teste próprios ainda, e internalizar as dependências do glintfx (RmlUi, gl3w, FreeType, GLFW) segue a anos de distância.
 
-Trate o glintfx como o produto; a Camada 0 é uma trilha dormente de longo prazo, separada.
+Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo em estágio inicial, separada.
 
 ### Licença
 

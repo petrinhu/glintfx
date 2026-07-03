@@ -67,17 +67,29 @@ $(OBJ) $(BIN):
 
 # EN: Runs every program and checks its exit code against the manifest tests/expected_exit.txt
 #     (lines "<name> <expected-code>"; missing entry defaults to 0). Temporary harness for this
-#     increment -- superseded by the C1 test runner (TODO.md, W6) once it exists.
+#     increment -- superseded by the C1 test runner (TODO.md, W6) once it exists. Stdin is
+#     explicitly redirected from /dev/null (B7): none of the programs in this manifest need
+#     real input today, but leaving stdin attached to whatever invoked `make` (a human's
+#     terminal, in particular) would make a future stdin-reading gate program (e.g. B7's
+#     echo_stdin) block indefinitely waiting for input instead of seeing an immediate EOF.
+#     Explicit > implicit: this makes "no input" a documented guarantee, not an accident of
+#     how `make test` happened to be invoked.
 # PT: Roda todo programa e checa o exit code contra o manifesto tests/expected_exit.txt
 #     (linhas "<nome> <codigo-esperado>"; entrada ausente assume 0). Harness temporario deste
-#     incremento -- substituido pelo runner de teste C1 (TODO.md, W6) quando existir.
+#     incremento -- substituido pelo runner de teste C1 (TODO.md, W6) quando existir. O stdin
+#     e' explicitamente redirecionado de /dev/null (B7): nenhum programa deste manifesto
+#     precisa de entrada real hoje, mas deixar o stdin herdado de quem chamou `make` (o
+#     terminal de um humano, em particular) faria um futuro programa-gate que le stdin (ex.:
+#     o echo_stdin da B7) travar indefinidamente esperando entrada em vez de ver um EOF
+#     imediato. Explicito > implicito: isso torna "sem entrada" uma garantia documentada, nao
+#     um acidente de como o `make test` foi chamado.
 test: build
 	@status=0; \
 	for prog in $(PROGRAMS); do \
 		name=$$(basename $$prog); \
 		expected=$$(awk -v n="$$name" '$$1==n{print $$2}' tests/expected_exit.txt 2>/dev/null); \
 		[ -n "$$expected" ] || expected=0; \
-		$$prog; actual=$$?; \
+		$$prog < /dev/null; actual=$$?; \
 		if [ "$$actual" = "$$expected" ]; then \
 			echo "PASS: $$name (exit=$$actual)"; \
 		else \

@@ -19,7 +19,7 @@ Tabela de pendências e planejamento. **As linhas estão na ordem de execução 
 | B4 | W3 | Bootstrap | `_start` em ASM: alinhar stack, ler argc/argv/envp do stack inicial, chamar `main`, capturar retorno. **Fundação** | Alta | B3, A3, A5 | Alta | 🔍 Pendente verificação | — |
 | B5 | W4 | Bootstrap | `sys_exit` + binário mínimo `exit(42)`. **GATE: valida pipeline build→link→run** | Alta | B4, A6 | Baixa | 🔍 Pendente verificação | — |
 | B6 | W5 | Bootstrap | `sys_write` + "hello world" 100% puro (valida saída por syscall) | Alta | B5 | Baixa | 🔍 Pendente verificação | — |
-| B7 | W6 | Bootstrap | `sys_read` (entrada) | Média | B6 | Baixa | ⏳ Pendente | — |
+| B7 | W6 | Bootstrap | `sys_read` (entrada) | Média | B6 | Baixa | 🔍 Pendente verificação | — |
 | C1 | W6 | Testes | Harness de teste próprio (sem libc): `assert` próprio + runner que reporta via `write` e exit code (habilita TDD do resto) | Alta | B6, B1 | Média | ⏳ Pendente | — |
 | D1 | W7 | Libc-Núcleo | Primitivas de memória: `memcpy/memset/memmove/memcmp` (atenção: `-fno-builtin` p/ clang não reintroduzir) | Alta | C1 | Média | ⏳ Pendente | — |
 | D2 | W8 | Libc-Núcleo | Operações de string: `strlen/strcmp/strncmp/strcpy/strncpy/strcat/strchr` | Alta | D1 | Média | ⏳ Pendente | — |
@@ -112,6 +112,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 
 - **Camada 0 — drift `syscall_nums.h`↔`.inc`** (Minor · achado review W1 · gatilho: quando `B6`/`sys_write`+ empurrar a tabela p/ 3+ constantes): hoje `SYS_exit=60` bate nos 2 arquivos (C `#define` + NASM `%define`), YAGNI aceitável p/ 1 valor. Adicionar grep-diff dos pares `#define`/`%define` ao `TST-STATIC` (W11) quando a tabela crescer.
 - **Camada 0 — `check_spdx.sh` robustez** (Minor · achado review W1 · gatilho: reuso no `TST-STATIC` W11 ou mudança da estrutura de pastas): sob `set -eu`, `find` derruba o script "alto" (sem msg amigável) se `src/`/`include/`/`tests/`/`tools/` forem **deletadas** (não só esvaziadas). Dormente hoje (as 4 têm `.gitkeep`). Endurecer antes de virar gate formal do `TST-STATIC`.
+- **Camada 0 — harness `test:` usa `< /dev/null` global** (Minor · achado review B7 · gatilho: `C1`/W6, o runner de teste próprio): o `make test` redireciona stdin de `/dev/null` p/ todo teste (determinismo, evita `echo_stdin` travar). Trade-off: um teste futuro que precise de conteúdo específico de stdin fica bloqueado no harness automático. Quando o `C1` redesenhar o runner, decidir fixture de stdin por-teste (ex.: `tests/<name>.stdin` opcional).
 - **`.github/workflows/ci.yml`** (Minor · gatilho: próxima varredura de robustez de CI): `libxkbcommon-dev` ausente (presente no Forgejo; implícito por transitividade no `ubuntu-latest`) -- adicionar p/ consistência/robustez.
 - **Em-dashes pré-existentes** em doc-comments de `ui_layer.hpp` (gatilho: qualquer varredura de doc; **candidato a varrer junto de `L1.10-APIDOC`**, mesmo header): trocar por `--`.
 - **GAP-2b FBO custom do host** (metade não ativada do GAP-2 original · **ADIADO, sem demanda confirmada**): permitir compor num FBO do host (≠ FBO 0). A metade "origem de viewport" do GAP-2 original foi ativada na v0.2.5 (`L1.13-VPORIGIN`, ver Concluídos abaixo); o alvo de composição continua sempre FBO 0 -- hardcoded no backend RmlUi, não muda com este item. GusWorld compõe no FBO 0 hoje, sem demanda real por FBO custom.

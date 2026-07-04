@@ -7,6 +7,7 @@
 #include "bootstrap.hpp"
 #include "render_gl3.hpp"
 #include "base_url_file_interface.hpp"
+#include "decorator_polygon.hpp"
 #include "ua_stylesheet.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/StreamMemory.h>
@@ -23,6 +24,49 @@ namespace glintfx {
 struct Bootstrap::Impl {
   BaseUrlFileInterface file_iface;  // EN: installed before Rml::Initialise(); mutable base_url.
                                     // PT: instalado antes de Rml::Initialise(); base_url mutável.
+  // EN: "polygon(<sides>, <color>[, <rotation>])" decorator instancer (v0.2.6). Held as an
+  //     UniquePtr, DEFAULT-CONSTRUCTED TO NULL HERE and only allocated AFTER Rml::Initialise()
+  //     returns true (see init() below) -- this is NOT the same lifetime pattern as file_iface
+  //     above (which IS a by-value member constructed eagerly, before Initialise()).
+  //     PolygonDecoratorInstancer's constructor calls EffectSpecification::RegisterProperty()
+  //     /AddParser(), which look up globally-registered parsers ("number", "color", "angle") by
+  //     name in StyleSheetSpecification's registry. That registry (and the PropertyId counter
+  //     backing RegisterProperty) is populated by StyleSheetSpecification::Initialise(), which
+  //     Rml::Initialise() calls internally BEFORE Factory::Initialise() constructs RmlUi's own
+  //     built-in instancers (see Source/Core/Core.cpp and Source/Core/Factory.cpp in the pinned
+  //     RmlUi source) -- so constructing this instancer any earlier reads an empty/not-yet-
+  //     initialised registry. This was found the hard way: making it a by-value member (like
+  //     file_iface, constructed at `new Impl()` time, i.e. BEFORE Rml::Initialise()) segfaulted
+  //     every test that called Bootstrap::init() (SIGSEGV, rc=139 under Xvfb) -- window_smoke/
+  //     render_smoke (which never call init()) still passed, isolating the cause to this
+  //     ordering. Once allocated (after Initialise() succeeds), it must still outlive
+  //     Rml::Shutdown() -- RmlUi's Factory keeps a raw, non-owning pointer to every registered
+  //     instancer -- which UniquePtr's automatic destruction (impl_ is only ever deleted AFTER
+  //     Rml::Shutdown() completes, in both init()'s CreateContext-failure path and shutdown()
+  //     below) still satisfies, same end result as file_iface's by-value approach.
+  // PT: Instancer do decorator "polygon(<lados>, <cor>[, <rotacao>])" (v0.2.6). Guardado como
+  //     UniquePtr, DEFAULT-CONSTRUÍDO NULO AQUI e só alocado APÓS Rml::Initialise() retornar
+  //     true (ver init() abaixo) -- NÃO é o mesmo padrão de lifetime do file_iface acima (que É
+  //     um membro por valor construído avidamente, antes do Initialise()).
+  //     O construtor de PolygonDecoratorInstancer chama EffectSpecification::RegisterProperty()
+  //     /AddParser(), que buscam parsers registrados globalmente ("number", "color", "angle")
+  //     por nome no registro do StyleSheetSpecification. Esse registro (e o contador de
+  //     PropertyId por trás de RegisterProperty) é populado por
+  //     StyleSheetSpecification::Initialise(), que o Rml::Initialise() chama internamente ANTES
+  //     de Factory::Initialise() construir os próprios instancers embutidos do RmlUi (ver
+  //     Source/Core/Core.cpp e Source/Core/Factory.cpp no source pinado do RmlUi) -- então
+  //     construir este instancer mais cedo lê um registro vazio/ainda-não-inicializado. Isso foi
+  //     descoberto na marra: torná-lo um membro por valor (como file_iface, construído no
+  //     momento do `new Impl()`, ou seja, ANTES do Rml::Initialise()) fazia segfault em todo
+  //     teste que chamava Bootstrap::init() (SIGSEGV, rc=139 sob Xvfb) -- window_smoke/
+  //     render_smoke (que nunca chamam init()) continuavam passando, isolando a causa nessa
+  //     ordem. Uma vez alocado (após Initialise() ter sucesso), ainda precisa sobreviver ao
+  //     Rml::Shutdown() -- a Factory do RmlUi guarda um ponteiro cru, não-dono, de cada
+  //     instancer registrado -- o que a destruição automática do UniquePtr (impl_ só é deletado
+  //     APÓS Rml::Shutdown() terminar, tanto no caminho de falha de CreateContext em init()
+  //     quanto em shutdown() abaixo) ainda satisfaz, mesmo resultado final da abordagem por
+  //     valor do file_iface.
+  Rml::UniquePtr<glintfx::PolygonDecoratorInstancer> polygon_instancer;
   Rml::Context* ctx = nullptr;
   Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
@@ -126,6 +170,26 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
     return false;
   }
   impl_->initialised = true;
+
+  // EN: Construct + register the "polygon" decorator instancer -- MUST happen AFTER
+  //     Rml::Initialise() returns true (see the long Impl comment above for why: its
+  //     constructor needs the "number"/"color"/"angle" parser registry that Initialise() just
+  //     populated) and BEFORE any load(), since decorators are resolved while parsing RCSS
+  //     (v0.2.6, consumer-driven by GusWorld's hex slider node). Registered as "polygon" so
+  //     "decorator: polygon(6, #5fd0ff);" resolves. Rml::Factory::RegisterDecoratorInstancer
+  //     stores a raw, non-owning pointer -- see the Impl comment above for the lifetime rule
+  //     that keeps the pointee valid until Rml::Shutdown() completes.
+  // PT: Constrói + registra o instancer do decorator "polygon" -- DEVE acontecer APÓS
+  //     Rml::Initialise() retornar true (ver o comentário longo do Impl acima pro motivo: o
+  //     construtor dele precisa do registro de parsers "number"/"color"/"angle" que o
+  //     Initialise() acabou de popular) e ANTES de qualquer load(), já que decorators são
+  //     resolvidos ao parsear RCSS (v0.2.6, consumer-driven pelo nó hex slider do GusWorld).
+  //     Registrado como "polygon" para que "decorator: polygon(6, #5fd0ff);" resolva.
+  //     Rml::Factory::RegisterDecoratorInstancer guarda um ponteiro cru, não-dono -- ver o
+  //     comentário do Impl acima pra regra de lifetime que mantém o apontado válido até o
+  //     Rml::Shutdown() terminar.
+  impl_->polygon_instancer = Rml::MakeUnique<glintfx::PolygonDecoratorInstancer>();
+  Rml::Factory::RegisterDecoratorInstancer("polygon", impl_->polygon_instancer.get());
 
   // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
   //     alone to a document) so it stays reusable as a merge base for every load().

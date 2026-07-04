@@ -725,6 +725,41 @@ add_test(NAME viewport_origin_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: polygon_sanity -- verifies the "polygon(<sides>, <color>[, <rotation>])" decorator
+#     (v0.2.6, decorator_polygon.{hpp,cpp}, consumer-driven by GusWorld's hex slider node):
+#     alpha-shape proof (box centre opaque, box corner transparent -- distinguishes a polygon
+#     from a filled rectangle) for a hexagon (#hex, sides=6) and an octagon (#oct, sides=8),
+#     plus a shape-changes-with-`sides` proof (an east-of-centre sample point is background
+#     for the hexagon but opaque for the octagon -- see the file header for the full geometry).
+#     Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like the other embed
+#     tests above; the decorator is backend-agnostic, registered by Bootstrap which is always
+#     compiled). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern
+#     as ua_stylesheet_sanity/dp_ratio_sanity (scene-specific rml/rcss pair copied here).
+# PT: polygon_sanity -- verifica o decorator "polygon(<lados>, <cor>[, <rotacao>])" (v0.2.6,
+#     decorator_polygon.{hpp,cpp}, consumer-driven pelo nó hex slider do GusWorld): prova de
+#     alpha-shape (centro da caixa opaco, canto da caixa transparente -- distingue um polígono
+#     de um retângulo preenchido) para um hexágono (#hex, sides=6) e um octógono (#oct,
+#     sides=8), mais uma prova de que a forma muda com `sides` (um ponto amostrado a leste do
+#     centro é background para o hexágono mas opaco para o octógono -- ver o cabeçalho do
+#     arquivo para a geometria completa). Roda em AMBAS as configs (teste de embed mode, linka
+#     ${_embed_dep} como os outros testes embed acima; o decorator é backend-agnóstico,
+#     registrado pelo Bootstrap que é sempre compilado). WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de
+#     ua_stylesheet_sanity/dp_ratio_sanity (par rml/rcss específico da cena copiado aqui).
+# ---------------------------------------------------------------------------
+add_executable(polygon_sanity polygon_sanity.cpp)
+target_link_libraries(polygon_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/polygon_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/polygon_scene.rcss COPYONLY)
+add_test(NAME polygon_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:polygon_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

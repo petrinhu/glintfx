@@ -25,6 +25,7 @@ RmlUi 6.3 styling looks like CSS but differs in important ways. Keep these rules
 | Box shadow / outer glow | `box-shadow` | `COLOR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (alpha-shaped) | `filter: drop-shadow(...)` | `COLOR x y blur` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Linear gradient | `decorator: linear-gradient(...)` | `angle, color, color, ...` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
+| Regular polygon fill | `decorator: polygon(...)` | `sides, color[, rotation]` | `decorator: polygon(6, #5fd0ff);` |
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Blur filter | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COLOR COLOR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -60,6 +61,26 @@ You can also use a gradient on a section to give backdrop-blur rich content to s
     decorator: linear-gradient(135deg, #6a0ddc, #e02828, #0f8a4a);
 }
 ```
+
+### How-to: a regular polygon (e.g. a hexagon node)
+
+`decorator: polygon(<sides>, <color>[, <rotation>])` fills the element's box with a solid-color regular N-gon (a triangle-fan inscribed in a circle of radius = half the SHORTER box dimension, centred in the box). `sides` must be an integer ≥ 3. `rotation` is optional (degrees); the default orientation points the first vertex straight up. There is **no separate polygon-glow or polygon-clip API** — reuse the existing `filter: drop-shadow(...)` (follows the element's alpha shape, so it outlines the polygon exactly) and `mask-image: polygon(...)` (any decorator, including `polygon`, can be used as a mask source) instead of adding new surface area.
+
+```css
+.hex {
+    decorator: polygon(6, #5fd0ff);           /* hexagon, vertex pointing up, sides>=3 required */
+}
+.hex-glow {
+    decorator: polygon(6, #5fd0ff);
+    filter: drop-shadow(#5fd0ff80 0 0 20px);  /* glow that hugs the hexagon outline -- zero new code */
+}
+.hex-clip {
+    background-color: #ffffff;
+    mask-image: polygon(6, #000f);            /* clips background-color to the hexagon shape */
+}
+```
+
+For a non-square element the polygon does **not** stretch to fill the longer axis — it stays a regular (equilateral) shape, centred, with empty box margin on the longer axis (same idea as a circular `border-radius` on a rectangle). Size a square element if you want the polygon to touch every edge.
 
 ### How-to: backdrop blur
 
@@ -115,6 +136,7 @@ A estilização do RmlUi 6.3 parece CSS mas difere de formas importantes. Lembre
 | Box shadow / glow externo | `box-shadow` | `COR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (segue o alpha) | `filter: drop-shadow(...)` | `COR x y blur` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Gradiente linear | `decorator: linear-gradient(...)` | `ângulo, cor, cor, ...` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
+| Preenchimento de polígono regular | `decorator: polygon(...)` | `lados, cor[, rotação]` | `decorator: polygon(6, #5fd0ff);` |
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Filtro blur | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COR COR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -150,6 +172,26 @@ Você também pode usar um gradiente numa seção para dar ao backdrop-blur cont
     decorator: linear-gradient(135deg, #6a0ddc, #e02828, #0f8a4a);
 }
 ```
+
+### How-to: um polígono regular (ex.: um nó hexagonal)
+
+`decorator: polygon(<lados>, <cor>[, <rotação>])` preenche a caixa do elemento com um N-ágono regular de cor sólida (um triangle-fan inscrito num círculo de raio = metade da dimensão MENOR da caixa, centrado na caixa). `lados` deve ser um inteiro >= 3. `rotação` é opcional (graus); a orientação padrão aponta o primeiro vértice reto pra cima. **Não há API separada de glow-de-polígono ou clip-de-polígono** — reuse o `filter: drop-shadow(...)` já existente (segue a forma do alpha do elemento, então contorna o polígono exatamente) e `mask-image: polygon(...)` (qualquer decorator, incluindo `polygon`, pode ser usado como fonte de máscara) em vez de adicionar superfície nova.
+
+```css
+.hex {
+    decorator: polygon(6, #5fd0ff);           /* hexágono, vértice apontando pra cima, sides>=3 obrigatório */
+}
+.hex-glow {
+    decorator: polygon(6, #5fd0ff);
+    filter: drop-shadow(#5fd0ff80 0 0 20px);  /* glow que abraça o contorno do hexágono -- zero código novo */
+}
+.hex-clip {
+    background-color: #ffffff;
+    mask-image: polygon(6, #000f);            /* recorta o background-color na forma do hexágono */
+}
+```
+
+Para um elemento não-quadrado o polígono **não** estica para preencher o eixo mais longo — permanece uma forma regular (equilátera), centrada, com margem vazia de caixa no eixo mais longo (mesma ideia de um `border-radius` circular num retângulo). Dimensione um elemento quadrado se quiser que o polígono toque todas as bordas.
 
 ### How-to: backdrop blur
 

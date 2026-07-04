@@ -127,6 +127,7 @@ set(_glintfx_sources
   src/stb_image_impl.cpp
   src/bootstrap.cpp
   src/data_binder.cpp
+  src/decorator_polygon.cpp
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp

@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** `decorator: polygon(<sides>, <color>[, <rotation>])` -- a new custom RCSS decorator that fills an element's box with a solid-color regular N-gon (triangle-fan inscribed in a circle of radius = half the shorter box dimension; `sides` must be an integer >= 3; `rotation` is optional, in degrees, default orientation points the first vertex straight up). Consumer-driven by GusWorld's hexagonal slider node. No shader, no change to `render_gl3.cpp` or RmlUi core -- pure extension via the public `Rml::Decorator`/`Rml::DecoratorInstancer` interface, modelled directly on `Rml::DecoratorStraightGradient` (new internal files `glintfx/src/decorator_polygon.{hpp,cpp}`, registered by `Bootstrap::init()`). Glow and clip-path use cases need zero new code: `filter: drop-shadow(...)` already follows the polygon's alpha shape, and `mask-image: polygon(...)` already works because any decorator can be a mask source. Verified by `polygon_sanity` (alpha-shape proof: box centre opaque, box corner transparent; shape-changes-with-`sides` proof: an east-of-centre sample point is background for a hexagon but opaque for an octagon). Documented in `docs/effects.md`.
+  **PT:** `decorator: polygon(<lados>, <cor>[, <rotação>])` -- um novo decorator RCSS customizado que preenche a caixa de um elemento com um N-ágono regular de cor sólida (triangle-fan inscrito num círculo de raio = metade da dimensão menor da caixa; `lados` deve ser um inteiro >= 3; `rotação` é opcional, em graus, orientação padrão aponta o primeiro vértice reto pra cima). Consumer-driven pelo nó slider hexagonal do GusWorld. Sem shader, sem mudança em `render_gl3.cpp` ou no core do RmlUi -- pura extensão via a interface pública `Rml::Decorator`/`Rml::DecoratorInstancer`, moldada diretamente em `Rml::DecoratorStraightGradient` (novos arquivos internos `glintfx/src/decorator_polygon.{hpp,cpp}`, registrados por `Bootstrap::init()`). Casos de uso de glow e clip-path não precisam de código novo: `filter: drop-shadow(...)` já segue a forma do alpha do polígono, e `mask-image: polygon(...)` já funciona porque qualquer decorator pode ser fonte de máscara. Verificado por `polygon_sanity` (prova de alpha-shape: centro da caixa opaco, canto da caixa transparente; prova de que a forma muda com `lados`: um ponto amostrado a leste do centro é background para um hexágono mas opaco para um octógono). Documentado em `docs/effects.md`.
+
+### Testing / Testes
+
+- **EN:** 1 new test this release (`polygon_sanity`, runs in both build configs). Suite size: **24 tests** with `GLINTFX_BACKEND_GLFW=ON`, **12** with `=OFF` (embed-only).
+  **PT:** 1 teste novo nesta release (`polygon_sanity`, roda nos 2 configs de build). Tamanho da suíte: **24 testes** com `GLINTFX_BACKEND_GLFW=ON`, **12** com `=OFF` (embed-only).
+
 ---
 
 ## [0.2.5] - 2026-07-02

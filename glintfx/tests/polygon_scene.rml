@@ -1,0 +1,9 @@
+<rml>
+<head>
+  <link type="text/rcss" href="polygon_scene.rcss"/>
+</head>
+<body>
+  <div id="hex" class="hex"></div>
+  <div id="oct" class="oct"></div>
+</body>
+</rml>

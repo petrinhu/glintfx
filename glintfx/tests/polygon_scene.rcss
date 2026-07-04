@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for polygon_sanity (v0.2.6): two 200x200 squares at known absolute positions,
+       one decorated with the default hexagon (sides=6, vertex-up), one with an octagon
+       (sides=8). Both are exactly square so the inscribed-circle radius (half the shorter
+       box dimension) equals half the box width/height in both cases -- see
+       decorator_polygon.cpp for the inscribe rule.
+   PT: Cena para polygon_sanity (v0.2.6): dois quadrados 200x200 em posições absolutas
+       conhecidas, um decorado com o hexágono padrão (sides=6, vértice pra cima), outro com
+       um octógono (sides=8). Ambos são exatamente quadrados, então o raio do círculo
+       inscrito (metade da dimensão menor da caixa) é igual à metade da largura/altura da
+       caixa nos dois casos -- ver decorator_polygon.cpp para a regra de inscrição. */
+body {
+  background-color: #000000;
+}
+.hex {
+  position: absolute;
+  left: 50px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, #ffffff);
+}
+.oct {
+  position: absolute;
+  left: 300px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(8, #ffffff);
+}

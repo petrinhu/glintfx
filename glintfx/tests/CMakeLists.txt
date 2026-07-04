@@ -782,6 +782,37 @@ add_test(NAME polygon_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: polygon_gradient_sanity -- verifies the "polygon(<sides>, radial-gradient(...) /
+#     linear-gradient(...))" fill extension (v0.3.1, decorator_polygon.{hpp,cpp}, consumer-driven
+#     by GusWorld's brass hexagon corner nodes needing centre-clear -> edge-dark screw-head
+#     volume): radial ramp direction, explicit stop-percentage placement, linear angle-to-direction
+#     mapping, the pre-existing SOLID fill left untouched, and fill-syntax/`sides` hardening
+#     (malformed fill or sides<3 -> decorator ignored, fail-high). Companion to polygon_sanity.cpp
+#     (geometry + `sides` hardening only, unmodified, still passing). Same build-config/
+#     WORKING_DIRECTORY pattern as polygon_sanity above.
+# PT: polygon_gradient_sanity -- verifica a extensão de preenchimento "polygon(<lados>,
+#     radial-gradient(...) / linear-gradient(...))" (v0.3.1, decorator_polygon.{hpp,cpp},
+#     consumer-driven pelos nós hexagonais de latão dos cantos do GusWorld que precisavam do
+#     volume de cabeça-de-parafuso centro-claro -> borda-escura): direção da rampa radial,
+#     posicionamento explícito de porcentagem de stop, mapeamento ângulo-para-direção do linear, o
+#     preenchimento SOLID pré-existente intocado, e hardening de sintaxe de preenchimento/`sides`
+#     (preenchimento malformado ou sides<3 -> decorator ignorado, fail-high). Companheiro de
+#     polygon_sanity.cpp (só geometria + hardening de `sides`, sem modificação, continua passando).
+#     Mesmo padrão de config-de-build/WORKING_DIRECTORY do polygon_sanity acima.
+# ---------------------------------------------------------------------------
+add_executable(polygon_gradient_sanity polygon_gradient_sanity.cpp)
+target_link_libraries(polygon_gradient_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_gradient_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/polygon_gradient_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_gradient_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/polygon_gradient_scene.rcss COPYONLY)
+add_test(NAME polygon_gradient_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:polygon_gradient_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: input_hardening_sanity -- proves the three v0.3.0 input-surface hardening fixes (security
 #     audit) reject invalid input fail-high without breaking valid use, all via the UiLayer/Engine
 #     path shared with App: Bootstrap::load(nullptr) -> false with no SIGABRT [CRITICAL];

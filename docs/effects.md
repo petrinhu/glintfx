@@ -25,7 +25,7 @@ RmlUi 6.3 styling looks like CSS but differs in important ways. Keep these rules
 | Box shadow / outer glow | `box-shadow` | `COLOR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (alpha-shaped) | `filter: drop-shadow(...)` | `COLOR x y blur` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Linear gradient | `decorator: linear-gradient(...)` | `angle, color, color, ...` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
-| Regular polygon fill | `decorator: polygon(...)` | `sides, color[, rotation]` | `decorator: polygon(6, #5fd0ff);` |
+| Regular polygon fill | `decorator: polygon(...)` | `sides, fill[, rotation]` (`fill` = color, `radial-gradient(...)`, or `linear-gradient(...)`) | `decorator: polygon(6, radial-gradient(#fff, #C9A24B 55%, #7A5A2E));` |
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Blur filter | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COLOR COLOR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -84,6 +84,31 @@ You can also use a gradient on a section to give backdrop-blur rich content to s
 
 For a non-square element the polygon does **not** stretch to fill the longer axis — it stays a regular (equilateral) shape, centred, with empty box margin on the longer axis (same idea as a circular `border-radius` on a rectangle). Size a square element if you want the polygon to touch every edge.
 
+### How-to: a polygon with a gradient fill (e.g. a brass screw-head)
+
+The `<fill>` argument of `polygon(<sides>, <fill>[, <rotation>])` accepts a `radial-gradient(...)` or `linear-gradient(...)` in place of a solid color — this gives the polygon a real per-pixel color ramp (the same fragment shader RmlUi's own `radial-gradient`/`linear-gradient` decorators use), not a faceted approximation:
+
+```css
+.screw-head {
+    /* Radial: bright highlight in the middle, dark toward the rim -- classic "bolt head" volume.
+       "at 40% 35%" moves the highlight up-left for an off-center light source; the last stop (t=1)
+       always lands exactly on the polygon's own inscribed-circle edge. */
+    decorator: polygon(6, radial-gradient(circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100%));
+}
+.diagonal-hex {
+    /* Linear: angle is mandatory (no CSS "to <side>" keyword support), 0deg = up, clockwise. */
+    decorator: polygon(6, linear-gradient(135deg, #6a0ddc, #0f8a4a));
+}
+```
+
+Syntax notes (see `decorator_polygon.cpp`'s `ParseFill()` for the exact grammar):
+
+- **Radial:** `radial-gradient([circle [at <x%> <y%>],] <color> <position%>?, <color> <position%>?, ...)`. The `circle at ...` prefix is optional (default centre `50% 50%`); only `circle` is supported (no `ellipse` — the polygon's fill shape is always its own inscribed circle). Stop `<position%>` is optional and auto-spaced like CSS when omitted; the **last** stop always lands on the polygon's own inscribed-circle radius (not CSS's farthest-corner default), which is what makes the outer ring line up with the shape's own edge.
+- **Linear:** `linear-gradient(<angle>, <color> <position%>?, <color> <position%>?, ...)`. The angle is **mandatory** here — this implementation does not support the CSS `to <side>` keyword form. The gradient line spans exactly the polygon's inscribed-circle diameter, centred on the polygon, independent of `rotation` (rotation only turns the N-gon's vertices, never the fill axis).
+- Stop colors accept the same syntax as a plain `<color>` (hex, `rgb()`/`rgba()`, named colors). Stop positions must be a percentage (or omitted for auto-spacing) — lengths (`px`, `em`, ...) are not supported for a polygon fill stop and are rejected.
+- Solid-color fill (`polygon(6, #C9A24B)`) is unchanged and unaffected by any of the above.
+- A malformed fill (bad color, bad stop, missing linear angle, empty gradient) makes the **whole decorator** ignored, fail-high, exactly like an out-of-range `sides` — never a partial or garbage render.
+
 ### How-to: backdrop blur
 
 `backdrop-filter: blur(...)` blurs whatever is **behind** a semi-transparent element. It only looks like anything if there is content behind it, so place the card over a gradient or busy background.
@@ -138,7 +163,7 @@ A estilização do RmlUi 6.3 parece CSS mas difere de formas importantes. Lembre
 | Box shadow / glow externo | `box-shadow` | `COR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (segue o alpha) | `filter: drop-shadow(...)` | `COR x y blur` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Gradiente linear | `decorator: linear-gradient(...)` | `ângulo, cor, cor, ...` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
-| Preenchimento de polígono regular | `decorator: polygon(...)` | `lados, cor[, rotação]` | `decorator: polygon(6, #5fd0ff);` |
+| Preenchimento de polígono regular | `decorator: polygon(...)` | `lados, preenchimento[, rotação]` (`preenchimento` = cor, `radial-gradient(...)`, ou `linear-gradient(...)`) | `decorator: polygon(6, radial-gradient(#fff, #C9A24B 55%, #7A5A2E));` |
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Filtro blur | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COR COR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -196,6 +221,33 @@ Você também pode usar um gradiente numa seção para dar ao backdrop-blur cont
 ```
 
 Para um elemento não-quadrado o polígono **não** estica para preencher o eixo mais longo — permanece uma forma regular (equilátera), centrada, com margem vazia de caixa no eixo mais longo (mesma ideia de um `border-radius` circular num retângulo). Dimensione um elemento quadrado se quiser que o polígono toque todas as bordas.
+
+### How-to: um polígono com preenchimento em gradiente (ex.: uma cabeça de parafuso de latão)
+
+O argumento `<preenchimento>` de `polygon(<lados>, <preenchimento>[, <rotação>])` aceita um `radial-gradient(...)` ou `linear-gradient(...)` no lugar de uma cor sólida — isso dá ao polígono uma rampa de cor real por-pixel (o mesmo shader de fragmento que os próprios decorators `radial-gradient`/`linear-gradient` do RmlUi usam), não uma aproximação facetada:
+
+```css
+.cabeca-parafuso {
+    /* Radial: highlight claro no meio, escuro em direção à borda -- volume clássico de "cabeça de
+       parafuso". "at 40% 35%" move o highlight pra cima-esquerda, simulando uma fonte de luz
+       fora do centro; o último stop (t=1) sempre cai exatamente na borda do círculo inscrito do
+       próprio polígono. */
+    decorator: polygon(6, radial-gradient(circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100%));
+}
+.hex-diagonal {
+    /* Linear: o ângulo é obrigatório (sem suporte à palavra-chave "to <side>" do CSS), 0deg = pra
+       cima, sentido horário. */
+    decorator: polygon(6, linear-gradient(135deg, #6a0ddc, #0f8a4a));
+}
+```
+
+Notas de sintaxe (ver `ParseFill()` em `decorator_polygon.cpp` para a gramática exata):
+
+- **Radial:** `radial-gradient([circle [at <x%> <y%>],] <cor> <posição%>?, <cor> <posição%>?, ...)`. O prefixo `circle at ...` é opcional (centro default `50% 50%`); só `circle` é suportado (sem `ellipse` — a forma de preenchimento do polígono é sempre o próprio círculo inscrito). A `<posição%>` do stop é opcional e auto-espaçada como no CSS quando omitida; o **último** stop sempre cai no raio do círculo inscrito do próprio polígono (não no default farthest-corner do CSS), o que faz o anel externo alinhar com a borda da própria forma.
+- **Linear:** `linear-gradient(<ângulo>, <cor> <posição%>?, <cor> <posição%>?, ...)`. O ângulo é **obrigatório** aqui -- esta implementação não suporta a forma de palavra-chave `to <side>` do CSS. A linha do gradiente cobre exatamente o diâmetro do círculo inscrito do polígono, centrada no polígono, independente de `rotação` (rotação só gira os vértices do N-ágono, nunca o eixo do preenchimento).
+- Cores de stop aceitam a mesma sintaxe de uma `<cor>` simples (hex, `rgb()`/`rgba()`, cores nomeadas). Posições de stop devem ser uma porcentagem (ou omitidas para auto-espaçamento) — comprimentos (`px`, `em`, ...) não são suportados para um stop de preenchimento de polígono e são rejeitados.
+- Preenchimento de cor sólida (`polygon(6, #C9A24B)`) continua inalterado e não é afetado por nada disso.
+- Um preenchimento malformado (cor inválida, stop inválido, ângulo do linear ausente, gradiente vazio) faz o **decorator inteiro** ser ignorado, fail-high, exatamente como um `lados` fora do range -- nunca um render parcial ou lixo.
 
 ### How-to: backdrop blur
 

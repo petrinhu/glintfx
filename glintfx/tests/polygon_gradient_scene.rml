@@ -1,0 +1,17 @@
+<rml>
+<head>
+  <link type="text/rcss" href="polygon_gradient_scene.rcss"/>
+</head>
+<body>
+  <!-- Row 1 (200x200): gradient-fill proofs. -->
+  <div id="radial" class="radial"></div>
+  <div id="radial_stop" class="radial_stop"></div>
+  <div id="linear" class="linear"></div>
+  <div id="solid" class="solid"></div>
+  <!-- Row 2 (80x80): fill-hardening matrix. -->
+  <div id="bad_radial" class="bad_radial"></div>
+  <div id="bad_linear" class="bad_linear"></div>
+  <div id="bad_fill" class="bad_fill"></div>
+  <div id="bad_sides" class="bad_sides"></div>
+</body>
+</rml>

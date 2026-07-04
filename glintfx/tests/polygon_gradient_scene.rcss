@@ -1,0 +1,102 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for polygon_gradient_sanity (v0.3.1 -- "polygon(<sides>, radial-gradient(...) /
+       linear-gradient(...))"). All row-1 boxes are 200x200 and square, so the inscribed-circle
+       radius (half the SHORTER box dimension, per decorator_polygon.cpp) is 100 in every case;
+       "east"/"west" horizontal offsets up to 86px from centre stay inside the hexagon (the
+       apothem for a vertex-up regular hexagon of circumradius 100 is 100*cos(30deg) ~= 86.6px --
+       see polygon_sanity.cpp's own east-sample geometry proof for the same constant).
+   PT: Cena para polygon_gradient_sanity (v0.3.1 -- "polygon(<lados>, radial-gradient(...) /
+       linear-gradient(...))"). Todas as caixas da fileira 1 são 200x200 e quadradas, então o raio
+       do círculo inscrito (metade da dimensão MENOR da caixa, conforme decorator_polygon.cpp) é
+       100 em todos os casos; offsets horizontais "leste"/"oeste" até 86px do centro ficam dentro
+       do hexágono (o apótema de um hexágono regular vértice-pra-cima de circunraio 100 é
+       100*cos(30deg) ~= 86.6px -- ver a própria prova de geometria da amostra leste em
+       polygon_sanity.cpp para a mesma constante). */
+
+body {
+  background-color: #000000;
+}
+
+/* Row 1 -- gradient-fill proofs (200x200, radius 100, centre = left+100,150). */
+.radial {
+  /* 2-stop radial: centre near-white (t=0), east r=80 near-black (t=0.8). */
+  position: absolute;
+  left: 50px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, radial-gradient(#ffffff, #000000));
+}
+.radial_stop {
+  /* 3-stop radial with an explicit 80% stop: at exactly r=80 (t=0.80) the colour must be pure
+     red -- if the 80% position were ignored (treated as "auto", evenly spacing the sole interior
+     stop to t=0.5) the colour at r=80 would instead already be deep into the red->black blend,
+     not pure red. r=40 (t=0.40) must still read clearly white-ish (far from red), confirming the
+     ramp does not turn red early. */
+  position: absolute;
+  left: 280px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, radial-gradient(#ffffff, #ff0000 80%, #000000 100%));
+}
+.linear {
+  /* linear-gradient(90deg, ...): angle 0=up, clockwise, so 90deg points due EAST -- the gradient
+     line runs left(white)->right(black). West-of-centre must read brighter than east-of-centre. */
+  position: absolute;
+  left: 510px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, linear-gradient(90deg, #ffffff, #000000));
+}
+.solid {
+  /* Solid fill must stay UNCHANGED by this feature: the GusWorld brass colour, flat, no ramp. */
+  position: absolute;
+  left: 740px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, #C9A24B);
+}
+
+/* Row 2 -- fill-hardening matrix (80x80, centre = left+40, 340), all with a dark-grey own
+   background so a REJECTED decorator is distinguishable from both "opaque fill" and pure black. */
+.bad_radial {   /* radial-gradient() -- empty stop list -- REJECTED. */
+  position: absolute;
+  left: 50px;
+  top: 300px;
+  width: 80px;
+  height: 80px;
+  background-color: #303030;
+  decorator: polygon(6, radial-gradient());
+}
+.bad_linear {   /* linear-gradient(#fff, #000) -- missing mandatory angle -- REJECTED. */
+  position: absolute;
+  left: 150px;
+  top: 300px;
+  width: 80px;
+  height: 80px;
+  background-color: #303030;
+  decorator: polygon(6, linear-gradient(#ffffff, #000000));
+}
+.bad_fill {     /* not-a-color -- neither a colour nor a gradient function -- REJECTED. */
+  position: absolute;
+  left: 250px;
+  top: 300px;
+  width: 80px;
+  height: 80px;
+  background-color: #303030;
+  decorator: polygon(6, not-a-color);
+}
+.bad_sides {    /* sides=2 < 3 -- REJECTED even though the fill itself is a well-formed gradient
+                   (proves the pre-existing `sides` guard still runs, order-independent of the new
+                   fill parsing). */
+  position: absolute;
+  left: 350px;
+  top: 300px;
+  width: 80px;
+  height: 80px;
+  background-color: #303030;
+  decorator: polygon(2, radial-gradient(#ffffff, #000000));
+}

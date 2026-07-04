@@ -2,10 +2,13 @@
 
 > **EN:** All notable changes to glintfx. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project follows [Semantic Versioning](https://semver.org/).
 > **PT:** Todas as mudanças notáveis do glintfx. Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); o projeto segue [Versionamento Semântico](https://semver.org/).
+>
+> **EN:** Mirrored on [Codeberg](https://codeberg.org/petrinhu/glintfx) · [GitHub](https://github.com/petrinhu/glintfx) -- every `vX.Y.Z` tag exists identically on both remotes.
+> **PT:** Espelhado no [Codeberg](https://codeberg.org/petrinhu/glintfx) · [GitHub](https://github.com/petrinhu/glintfx) -- cada tag `vX.Y.Z` existe idêntica nos dois remotos.
 
 ---
 
-## [0.3.0] - 2026-07-04
+## [0.3.0] - 2026-07-04 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.3.0)
 
 ### Added / Adicionado
 
@@ -36,7 +39,7 @@
 
 ---
 
-## [0.2.5] - 2026-07-02
+## [0.2.5] - 2026-07-02 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.2.5)
 
 ### Added / Adicionado
 
@@ -158,7 +161,7 @@
 
 ---
 
-## [0.1.0] - 2026-06-29
+## [0.1.0] - 2026-06-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.1.0)
 
 First release of **glintfx**: a drop-in C++ library for Linux x86-64 that fuses RmlUi 6.3 (HTML/CSS UI) with a GL3 effects renderer. / Primeiro lançamento do **glintfx**: biblioteca C++ drop-in para Linux x86-64 que funde RmlUi 6.3 (UI HTML/CSS) com um renderer de efeitos GL3.
 

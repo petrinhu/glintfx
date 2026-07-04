@@ -2,12 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-07-03: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.2.5`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 23 testes GLFW=ON / 11 embed). A Camada 0 (C+ASM puro, zero libc) **ACORDOU** — o incremento inaugural de bootstrap I/O (W1→B7) foi entregue: pipeline freestanding provado ponta-a-ponta + wrappers de syscall + `_start` + helpers `exit`/`write`/`read`, tudo zero libc (itens em `🔍`, aguardam auditoria `AUD-ABI`/W12 pro `✅`). Segue em estágio muito inicial — a libc própria (memória/string/conversão/alocador) e a meta plena de internalização clean-room seguem distantes, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
+> Estado em 2026-07-04: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.3.0`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 26 testes GLFW=ON / 13 embed). A Camada 0 (C+ASM puro, zero libc) tem a **implementação COMPLETA**: bootstrap I/O (`_start`, wrappers de syscall, `exit`/`write`/`read`) → harness próprio de teste (`C1`, habilita TDD) → libc-núcleo (memória, string, conversão int↔string) → mini-printf → alocador bump via `mmap`, tudo zero libc e sob TDD + review adversarial (itens em `🔍`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` `core-v0.1.0` pro `✅`). A meta plena de internalização clean-room (RmlUi/gl3w/FreeType/GLFW) segue distante, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
 
 ## Duas camadas neste repo
 
 - **Camada 1 -- glintfx (ATIVA, é o produto):** biblioteca C++ que une RmlUi (UI HTML/CSS) ao renderer de efeitos GL3. Pasta `glintfx/`. Ver seção dedicada abaixo.
-- **Camada 0 -- `loucura_c_asm` (DORMENTE, trajetória de longo prazo):** o runtime freestanding C+ASM, zero libc, descrito no resto deste documento. Pastas `src/`, `include/` na raiz. É o **alvo de internalização** clean-room de longo prazo da Camada 1 (a "loucura" do nome do repo) -- não há pressa nem prazo.
+- **Camada 0 -- `loucura_c_asm` (implementação COMPLETA, aguardando auditoria; trajetória de longo prazo):** o runtime freestanding C+ASM, zero libc, descrito no resto deste documento. Pastas `src/`, `include/` na raiz. É o **alvo de internalização** clean-room de longo prazo da Camada 1 (a "loucura" do nome do repo) -- não há pressa nem prazo.
 
 Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md) (as duas camadas não se linkam; a fronteira é o processo, não o linker).
 
@@ -15,11 +15,13 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 `glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
-- **Lançada:** v0.1.0 → **v0.2.5** (2026-07-02). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+- **Lançada:** v0.1.0 → **v0.3.0** (2026-07-04). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
   - **`glintfx::App`** ([`glintfx/include/glintfx/app.hpp`](glintfx/include/glintfx/app.hpp)) -- standalone, dono da janela GLFW e do loop de frame (`poll → update → render → swap`).
   - **`glintfx::UiLayer`** ([`glintfx/include/glintfx/ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp)) -- embed/guest mode: anexa ao contexto GL de um host (não cria janela), render **compose-only** (sem `glClear`, sem swap -- o host é dono dos dois), eventos injetados (`UiEvent` + `Key`), `GlStateGuard` salva e restaura o estado GL tocado. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md) (decisão) e [`docs/embed-integration.md`](docs/embed-integration.md) (contrato de integração, fonte de verdade para hosts).
-- **Capacidades entregues até v0.2.5:**
+- **Capacidades entregues até v0.3.0:**
+  - **Decorator `polygon()` (shape primitive)** (v0.3.0): `decorator: polygon(<lados>, <cor>[, <rotação>])` preenche a caixa do elemento com um N-ágono regular (triangle-fan), `lados ∈ [3, 1024]` com fail-high (ignora e loga) em input inválido/hostil. Glow via `filter: drop-shadow` e clip via `mask-image` funcionam de graça (qualquer decorator serve de alpha-shape/máscara). Ver `docs/effects.md`.
+  - **Hardening de superfície de entrada da API** (v0.3.0): `load(nullptr)` retorna `false` em vez de abortar o host (`std::terminate()`); `set_dp_ratio` rejeita `!isfinite`/`≤0` mantendo o valor anterior; `set_viewport` rejeita `w/h≤0` como no-op. `version()` corrigido -- estava travado em `"0.2.4"` desde a v0.2.5 por bump esquecido no CMake, agora reflete a tag corretamente.
   - **Hit-test / geometria para o host** (v0.2.5): `set_click_callback(fn(const char* id))` reporta o id do elemento clicado (hit-test interno do RmlUi devolvido ao host; sobe ancestrais até achar id, `""` se nenhum); `get_element_box(id) → ElementBox{found,x,y,w,h}` dá a geometria border-box em px físicos do viewport. Ambos em `App` e `UiLayer`. Mata o padrão de espelhar geometria de RCSS à mão no host. Ver `docs/embed-integration.md` seção 10.
   - **Viewport com origem / letterbox** (v0.2.5): `UiLayer::set_viewport(x,y,w,h,target_h)` compõe a UI numa sub-região do FBO 0 (só `UiLayer`; `App` é dono da janela). **Contrato de coordenadas:** mouse (`UiEvent`) e `get_element_box` sempre em espaço-janela (top-left, y-down); o `UiLayer` traduz pro offset GL bottom-up via `target_h` (altura total da janela), `gl_offset_y = target_h - y - h`. Composição segue no FBO 0; só a origem muda. `set_viewport(w,h)` legado = `(0,0,w,h)`. ADR-0008 (adendo F3), `docs/embed-integration.md` seção 10.
   - **UA-stylesheet embutida** (v0.2.4): defaults de `display: block` para elementos estruturais (`div`, `p`, `h1..h6`, `ul`, `ol`, `li`, `section`, `article`, `header`, `footer`, `nav`, `main`), mescladas em todo documento via `StyleSheetContainer::CombineStyleSheetContainer()` no `Bootstrap::load()` (base de baixa especificidade -- regra do autor sobrepõe). Em `App` e `UiLayer`. Verificada por `ua_stylesheet_sanity`.
@@ -42,7 +44,7 @@ sudo dnf install glfw-devel freetype-devel mesa-libGL-devel
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON
 cmake --build glintfx/build -j
 
-# suíte completa (23 testes GLFW=ON / 11 embed GLFW=OFF, sob Xvfb / Mesa llvmpipe)
+# suíte completa (26 testes GLFW=ON / 13 embed GLFW=OFF, sob Xvfb / Mesa llvmpipe)
 ctest --test-dir glintfx/build --output-on-failure
 ```
 
@@ -60,7 +62,7 @@ Leia antes de mexer em `render_gl3.cpp`/`ui_layer.cpp`: **premultiplied alpha + 
 
 ## Camada 0 -- núcleo soberano (C + ASM puro)
 
-> **Estado (2026-07-03):** ACORDADA. Bootstrap I/O (W1→B7) entregue — pipeline freestanding provado, wrappers `syscall0..6`, `_start`, helpers `exit`/`write`/`read`, `Makefile`, 3 programas de teste (`exit42`/`hello`/`echo_stdin`), zero libc. Itens em `🔍` (aguardam `AUD-ABI`/W12). Próximo: `C1` (harness próprio → TDD), depois `D1/D2/D3` (memória/string/conversão), `E1/E2` (alocador/mini-printf). A meta plena (internalizar RmlUi/gl3w/FreeType/GLFW clean-room) segue a anos — sem pressa nem prazo.
+> **Estado (2026-07-04):** IMPLEMENTAÇÃO COMPLETA (aguardando auditoria). Pipeline entregue ponta-a-ponta, tudo zero libc e sob TDD (red/green/refactor) + review adversarial: bootstrap I/O (`_start`, wrappers `syscall0..6`, helpers `exit`/`write`/`read`) → harness de teste próprio (`C1`, habilita TDD) → libc-núcleo (`D1` memória: `memcpy`/`memset`/`memmove`/`memcmp`; `D2` string: `strlen`/`strcmp`/`strncmp`/`strcpy`/`strncpy`/`strcat`/`strchr`; `D3` conversão int↔string) → `E2` mini-printf → `E1` alocador bump via `mmap`. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. A meta plena (internalizar RmlUi/gl3w/FreeType/GLFW clean-room) segue a anos — sem pressa nem prazo.
 
 `loucura_c_asm` é o nome do repositório inteiro e também o nome desta trilha: um projeto **sério em C + Assembly puros**, com uma restrição central e inegociável:
 

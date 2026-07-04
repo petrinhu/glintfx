@@ -325,6 +325,28 @@ ativa. Elementos fora desta lista (ex.: `span`, tags customizadas) continuam com
 
 **Por que F1/F2/F3 são documentadas juntas:** compartilham UM único sistema de coordenadas por design, e um erro de sinal em qualquer um dos três pontos de tradução (`MouseMove` de `process_event`, `get_element_box`, a fórmula de `set_viewport`) é exatamente a classe de bug silencioso de desalinhamento que o `set_click_callback` foi construído pra eliminar do lado do host -- reintroduzida dentro do próprio glintfx. O teste de integração `viewport_origin_sanity` exercita as três juntas como um cenário único com oráculo (clique-através-do-offset, geometria-através-do-offset e o posicionamento real de pixel no GL), não isoladamente.
 
+## 11. Input hardening (v0.3.0) / Hardening de entrada (v0.3.0)
+
+**EN:** Three public entry points now treat their arguments as coming from a less-trusted caller (RCSS/mod/dynamic source), fail-safe (reject and keep the previous state), never fail-open:
+
+- **`load(rml_path)`** -- passing `nullptr` now returns `false` instead of constructing an internal `std::string(nullptr)` (undefined behaviour that used to crash the host via `std::terminate()`). Same guard already existed on the sibling entry points (`DataBinder`, `get_element_box`, `set_base_url`); it was only missing from `load()` itself.
+- **`set_dp_ratio(ratio)`** (section 1) -- rejects `!std::isfinite(ratio) || ratio <= 0` and keeps the previous ratio instead of applying it. A `NaN` or `0` ratio previously propagated silently into every subsequent `dp`-unit layout computation.
+- **`set_viewport(...)`** (section 0), both the 2-arg and the 5-arg (`UiLayer` letterbox) overloads -- rejects `w <= 0 || h <= 0` as a no-op, mirroring the guard already present on the `Resize` event path in `process_event()`.
+
+Both `App` and `UiLayer` have parity on all three. Verified by `input_hardening_sanity` (embed, both `GLINTFX_BACKEND_GLFW` configs) and `app_input_hardening_smoke` (GLFW-only), both UBSan-clean under `GLINTFX_SANITIZE=ON`.
+
+**EN:** Also new in v0.3.0: a `decorator: polygon(sides, color[, rotation])` shape primitive is available for RCSS authored inside embedded documents, with the same `sides ∈ [3, 1024]` input validation as everything else in this section (invalid input is ignored with a warning, never a crash). It has no embed-specific behaviour -- see [`docs/effects.md`](effects.md) for the full syntax and how-to.
+
+**PT:** Três pontos de entrada públicos agora tratam os argumentos como vindos de um chamador menos confiável (RCSS/mod/fonte dinâmica), fail-safe (rejeita e mantém o estado anterior), nunca fail-open:
+
+- **`load(rml_path)`** -- passar `nullptr` agora retorna `false` em vez de construir um `std::string(nullptr)` interno (comportamento indefinido que antes derrubava o host via `std::terminate()`). O mesmo guard já existia nos pontos de entrada irmãos (`DataBinder`, `get_element_box`, `set_base_url`); faltava só no próprio `load()`.
+- **`set_dp_ratio(ratio)`** (seção 1) -- rejeita `!std::isfinite(ratio) || ratio <= 0` e mantém o ratio anterior em vez de aplicá-lo. Um ratio `NaN` ou `0` antes se propagava silenciosamente para todo cálculo de layout subsequente com unidade `dp`.
+- **`set_viewport(...)`** (seção 0), tanto a sobrecarga de 2 args quanto a de 5 args (letterbox do `UiLayer`) -- rejeita `w <= 0 || h <= 0` como no-op, replicando o guard já presente no caminho do evento `Resize` em `process_event()`.
+
+`App` e `UiLayer` têm paridade nos três. Verificado por `input_hardening_sanity` (embed, nos 2 configs de `GLINTFX_BACKEND_GLFW`) e `app_input_hardening_smoke` (GLFW-only), ambos UBSan-limpos sob `GLINTFX_SANITIZE=ON`.
+
+**PT:** Também novo na v0.3.0: uma shape primitive `decorator: polygon(lados, cor[, rotação])` está disponível para RCSS autorado dentro de documentos embutidos, com a mesma validação de entrada `lados ∈ [3, 1024]` do resto desta seção (entrada inválida é ignorada com aviso, nunca crash). Não tem comportamento específico de embed -- ver [`docs/effects.md`](effects.md) para a sintaxe completa e o how-to.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

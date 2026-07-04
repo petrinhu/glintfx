@@ -125,7 +125,7 @@ Esta seção é o par da **Camada 1** para o "Catálogo aplicável (projeto base
 Relação com a suíte existente:
 
 - Os testes **smoke/sanity** documentados acima (`window_smoke`, `render_sanity`, `ui_layer_*`, `data_model_*`, `texture_png_alpha`, etc.) são a **camada por-feature**: nascem junto da implementação (TDD via SDD), rodam no CI a cada push, e cobrem T1 (unit/component) + a regressão **visual/estrutural** (via `render_sanity`/`ui_layer_sanity`, e `golden_test` opt-in). **Não** viram itens `TST-L1-*` — já existem e já são gate.
-- Os `TST-L1-*` abaixo são a **rede larga**: os gates transversais (estáticos, dinâmicos, de supply-chain e de contrato) que hoje **não** estão no CI (o CI atual roda só a matriz de 18/8 testes) e que fecham classes inteiras de bug que a suíte por-feature não pega.
+- Os `TST-L1-*` abaixo são a **rede larga**: os gates transversais (estáticos, dinâmicos, de supply-chain e de contrato) que hoje **não** estão no CI (o CI atual roda só a matriz de 26/13 testes) e que fecham classes inteiras de bug que a suíte por-feature não pega.
 
 **Porte e cerimônia (anti over-engineering).** early / eixo técnico elevado, variante **Pipeline-Lean**, Kanban leve **pull-based**: o catálogo é **podado** ao perfil real (lib C++ gráfica; **sem rede, sem PII, sem DB, sem auth**; superfície real = arquivos de asset + parsers de terceiros vendorizados + estado/recurso GPU/GL + um contrato público de embed). Nenhum item é big-bang: os baratos e sempre-verdes entram no CI já; os mais caros entram **por demanda/pull** conforme a superfície que tocam amadurece.
 

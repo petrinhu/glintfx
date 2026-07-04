@@ -3,7 +3,17 @@
   <link type="text/rcss" href="polygon_scene.rcss"/>
 </head>
 <body>
+  <!-- Row 1 (200x200): geometry proofs. -->
   <div id="hex" class="hex"></div>
   <div id="oct" class="oct"></div>
+  <div id="rot" class="rot"></div>
+  <!-- Row 2 (80x80): input-validation matrix. -->
+  <div id="empty" class="empty"></div>
+  <div id="neg" class="neg"></div>
+  <div id="small" class="small"></div>
+  <div id="tri" class="tri"></div>
+  <div id="max" class="max"></div>
+  <div id="huge" class="huge"></div>
+  <div id="huge2" class="huge2"></div>
 </body>
 </rml>

@@ -68,7 +68,30 @@
 #include <RmlUi/Core/PropertyDefinition.h>
 #include <RmlUi/Core/RenderManager.h>
 
+#include <cmath>  // EN: std::lround (symmetric round for the sides count). PT: std::lround (arredondamento simétrico do nº de lados).
+
 namespace glintfx {
+
+// EN: Upper bound on the polygon side count, part of the input-surface hardening (v0.2.6 review):
+//     RCSS is not always author-trusted -- it can arrive from a theme, a mod, or dynamically
+//     generated content -- so a hostile or typo'd "polygon(999999999, ...)" must not be allowed
+//     to tessellate ~a billion triangles (a DoS-by-input). 1024 is deliberately generous: past
+//     ~64 sides a filled polygon is already visually indistinguishable from a circle in a UI, so
+//     1024 never constrains a real use case while still bounding the vertex/index buffers to a
+//     few KB. Enforced together with the sides>=3 floor as a single range check in
+//     InstanceDecorator() below; out-of-range input is rejected (decorator ignored + log), same
+//     fail-high path as every other invalid input.
+// PT: Limite superior da contagem de lados do polígono, parte do hardening da superfície de
+//     entrada (review v0.2.6): RCSS nem sempre é confiável do autor -- pode vir de um tema, um
+//     mod, ou conteúdo gerado dinamicamente -- então um "polygon(999999999, ...)" hostil ou com
+//     typo não pode tesselar ~um bilhão de triângulos (um DoS-por-entrada). 1024 é
+//     deliberadamente folgado: acima de ~64 lados um polígono preenchido já é visualmente
+//     indistinguível de um círculo numa UI, então 1024 nunca limita um caso de uso real e ainda
+//     assim limita os buffers de vértice/índice a poucos KB. Aplicado junto com o piso sides>=3
+//     como uma única checagem de range em InstanceDecorator() abaixo; entrada fora do range é
+//     rejeitada (decorator ignorado + log), mesmo caminho fail-high de toda outra entrada
+//     inválida.
+static constexpr int POLYGON_MAX_SIDES = 1024;
 
 // EN: The "angle" RCSS parser (PropertyParserNumber with Units=ANGLE, zero_unit=RAD) stores the
 //     raw number tagged with either Unit::DEG or Unit::RAD (or RAD for a bare "0"). RmlUi's own
@@ -194,7 +217,25 @@ void PolygonDecorator::RenderElement(Rml::Element* element, Rml::DecoratorDataHa
 }
 
 PolygonDecoratorInstancer::PolygonDecoratorInstancer() {
-  ids_.sides = RegisterProperty("sides", "6").AddParser("number").GetId();
+  // EN: `sides` default is "0" (an INVALID value, below the sides>=3 minimum), NOT "6". This is
+  //     deliberate: an author who writes "decorator: polygon();" (empty parentheses) supplies no
+  //     positional value for `sides`, so RmlUi fills it with THIS default. A default of "6"
+  //     would silently turn "polygon()" into an opaque white hexagon -- an asymmetric surprise,
+  //     since "polygon(6)" (sides given, colour omitted) already fails to parse. With a default
+  //     of "0", "polygon()" resolves sides=0, which falls into the existing `sides < 3`
+  //     rejection in InstanceDecorator() below (decorator ignored + a warning log) -- fail-high
+  //     on empty/invalid input rather than fail-silent. An EXPLICIT sides value in the RCSS
+  //     (e.g. "polygon(6, #fff)") overrides this default, so correct usage is unaffected.
+  // PT: O default de `sides` é "0" (um valor INVÁLIDO, abaixo do mínimo sides>=3), NÃO "6". Isso
+  //     é deliberado: um autor que escreve "decorator: polygon();" (parênteses vazios) não
+  //     fornece valor posicional pra `sides`, então o RmlUi o preenche com ESTE default. Um
+  //     default de "6" transformaria silenciosamente "polygon()" num hexágono branco opaco --
+  //     uma surpresa assimétrica, já que "polygon(6)" (sides dado, cor omitida) já falha o
+  //     parse. Com default "0", "polygon()" resolve sides=0, que cai na rejeição `sides < 3` já
+  //     existente em InstanceDecorator() abaixo (decorator ignorado + log de aviso) -- fail-high
+  //     em entrada vazia/inválida em vez de fail-silent. Um valor de sides EXPLÍCITO no RCSS
+  //     (ex.: "polygon(6, #fff)") sobrepõe este default, então o uso correto não é afetado.
+  ids_.sides = RegisterProperty("sides", "0").AddParser("number").GetId();
   ids_.color = RegisterProperty("color", "#ffffff").AddParser("color").GetId();
   ids_.rotation = RegisterProperty("rotation", "0deg").AddParser("angle").GetId();
   // EN: DESIGN NOTE (found the hard way -- see polygon_sanity's first failed run): the spec's
@@ -241,23 +282,72 @@ Rml::SharedPtr<Rml::Decorator> PolygonDecoratorInstancer::InstanceDecorator(cons
   if (!p_sides || !p_color || !p_rotation)
     return nullptr;
 
-  // EN: "number" parser always stores its value as a plain float (see
-  //     PropertyParserNumber::ParseValue); round-to-nearest before truncating to int so an
-  //     author writing "polygon(6.0, ...)" (or a fractional value produced by an animation/
-  //     interpolation down the line) does not get floor-truncated to the side below.
-  // PT: O parser "number" sempre guarda o valor como float puro (ver
-  //     PropertyParserNumber::ParseValue); arredonda antes de truncar pra int para que um autor
-  //     escrevendo "polygon(6.0, ...)" (ou um valor fracionário produzido por uma animação/
-  //     interpolação no futuro) não seja truncado pra baixo (floor) pro lado de menos.
-  const int sides = static_cast<int>(p_sides->Get<float>() + 0.5f);
-  if (sides < 3) {
+  // EN: INPUT HARDENING (v0.2.6 review): RCSS is not always author-trusted -- it can arrive from
+  //     a theme, a mod, or dynamically generated content -- so `sides` is validated defensively.
+  //     The "number" parser stores the value as a plain float (see PropertyParserNumber::
+  //     ParseValue). CRITICAL: the range check is done ON THE FLOAT, BEFORE any conversion to int.
+  //     Converting an out-of-int-range or non-finite float to int is UNDEFINED BEHAVIOUR in C++
+  //     (float-cast-overflow) -- "polygon(1e30)", "polygon(1e400)" (parses to +inf), or a NaN
+  //     could otherwise yield INT_MIN/garbage/a UBSan abort BEFORE any `> 1024` check on the int
+  //     ran. So: reject first (single unified check: `!isfinite` catches NaN/inf; `< 3` catches
+  //     the floor, the empty "polygon()" whose default sides="0" resolves to 0.0f, and every
+  //     negative -- including huge negatives like -1e30; `> MAX` catches the ceiling / hostile
+  //     huge positives). Only AFTER the float is proven finite and within [3, POLYGON_MAX_SIDES]
+  //     is std::lround/cast reached -- provably overflow-free. The log names the value RECEIVED
+  //     (the raw float, %g, so "polygon(-1)"/"polygon(100000)" report -1/100000, not a rounded or
+  //     clamped surrogate) and the valid range. Fail-high on invalid input, never fail-silent.
+  // PT: HARDENING DE ENTRADA (review v0.2.6): RCSS nem sempre é confiável do autor -- pode vir de
+  //     um tema, um mod, ou conteúdo gerado dinamicamente -- então `sides` é validado
+  //     defensivamente. O parser "number" guarda o valor como float puro (ver
+  //     PropertyParserNumber::ParseValue). CRÍTICO: a checagem de range é feita NO FLOAT, ANTES de
+  //     qualquer conversão pra int. Converter um float fora do range de int ou não-finito pra int
+  //     é COMPORTAMENTO INDEFINIDO em C++ (float-cast-overflow) -- "polygon(1e30)", "polygon(1e400)"
+  //     (parseia pra +inf), ou um NaN poderiam senão produzir INT_MIN/lixo/um abort do UBSan
+  //     ANTES de qualquer checagem `> 1024` no int rodar. Então: rejeita primeiro (checagem única
+  //     unificada: `!isfinite` pega NaN/inf; `< 3` pega o piso, o "polygon()" vazio cujo default
+  //     sides="0" resolve pra 0.0f, e todo negativo -- incluindo negativos gigantes como -1e30;
+  //     `> MAX` pega o teto / positivos gigantes hostis). Só DEPOIS de o float ser provado finito
+  //     e dentro de [3, POLYGON_MAX_SIDES] o std::lround/cast é alcançado -- provadamente sem
+  //     overflow. O log nomeia o valor RECEBIDO (o float bruto, %g, para que
+  //     "polygon(-1)"/"polygon(100000)" reportem -1/100000, não um substituto arredondado ou
+  //     clampado) e o range válido. Fail-high em entrada inválida, nunca fail-silent.
+  const float sides_f = p_sides->Get<float>();
+  if (!std::isfinite(sides_f) || sides_f < 3.0f || sides_f > float(POLYGON_MAX_SIDES)) {
     Rml::Log::Message(Rml::Log::LT_WARNING,
-        "decorator: polygon() requires sides >= 3, got %d -- decorator ignored.", sides);
+        "decorator: polygon() requires sides in [3, %d], got %g -- decorator ignored "
+        "(e.g. an empty 'polygon()' has no sides value).", POLYGON_MAX_SIDES, sides_f);
     return nullptr;
   }
+  // EN: sides_f is now proven finite and within [3, POLYGON_MAX_SIDES] -- std::lround (nearest,
+  //     round-half-away-from-zero) and the int cast are both overflow-free here. Rounding (vs a
+  //     bare truncating cast) makes "polygon(6.0)" and any interpolated fractional resolve to the
+  //     nearest side count.
+  // PT: sides_f agora é provadamente finito e dentro de [3, POLYGON_MAX_SIDES] -- std::lround
+  //     (mais próximo, half-away-from-zero) e o cast pra int são ambos sem overflow aqui. O
+  //     arredondamento (vs um cast truncante nu) faz "polygon(6.0)" e qualquer fracionário
+  //     interpolado resolver para a contagem de lados mais próxima.
+  const int sides = static_cast<int>(std::lround(sides_f));
 
   const Rml::Colourb color = p_color->Get<Rml::Colourb>();
-  const float rotation_rad = ResolveAngleRadians(p_rotation->GetNumericValue());
+
+  // EN: `rotation` is intentionally NOT range-validated: any finite angle is legitimate. Negative
+  //     ("polygon(6, #fff, -90deg)" spins counter-clockwise) and >360deg angles are all valid and
+  //     must render -- the angle is periodic and fed straight to sin/cos, which accept any finite
+  //     real. The ONLY defence here is finiteness: a non-finite angle (a NaN/inf, e.g. from an
+  //     animation gone wrong) would produce NaN vertex positions and a garbage/absent polygon, so
+  //     it is coerced to 0deg (render unrotated) rather than propagated. This is deliberately
+  //     narrower than the `sides` handling -- do NOT add sign/magnitude checks on rotation.
+  // PT: `rotation` intencionalmente NÃO é validado por range: qualquer ângulo finito é legítimo.
+  //     Negativo ("polygon(6, #fff, -90deg)" gira anti-horário) e ângulos >360deg são todos
+  //     válidos e devem renderizar -- o ângulo é periódico e vai direto pro sin/cos, que aceitam
+  //     qualquer real finito. A ÚNICA defesa aqui é finitude: um ângulo não-finito (um NaN/inf,
+  //     ex.: de uma animação deu errado) produziria posições de vértice NaN e um polígono
+  //     lixo/ausente, então é coagido pra 0deg (renderiza sem rotação) em vez de propagado. Isso é
+  //     deliberadamente mais estreito que o tratamento de `sides` -- NÃO adicione checagens de
+  //     sinal/magnitude na rotation.
+  float rotation_rad = ResolveAngleRadians(p_rotation->GetNumericValue());
+  if (!std::isfinite(rotation_rad))
+    rotation_rad = 0.0f;
 
   auto decorator = Rml::MakeShared<PolygonDecorator>();
   if (decorator->Initialise(sides, color, rotation_rad))

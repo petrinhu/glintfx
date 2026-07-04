@@ -1,17 +1,30 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* EN: Scene for polygon_sanity (v0.2.6): two 200x200 squares at known absolute positions,
-       one decorated with the default hexagon (sides=6, vertex-up), one with an octagon
-       (sides=8). Both are exactly square so the inscribed-circle radius (half the shorter
-       box dimension) equals half the box width/height in both cases -- see
-       decorator_polygon.cpp for the inscribe rule.
-   PT: Cena para polygon_sanity (v0.2.6): dois quadrados 200x200 em posições absolutas
-       conhecidas, um decorado com o hexágono padrão (sides=6, vértice pra cima), outro com
-       um octógono (sides=8). Ambos são exatamente quadrados, então o raio do círculo
-       inscrito (metade da dimensão menor da caixa) é igual à metade da largura/altura da
-       caixa nos dois casos -- ver decorator_polygon.cpp para a regra de inscrição. */
+/* EN: Scene for polygon_sanity (v0.2.6 + review-fix input-hardening matrix).
+       Row 1 (three 200x200 squares) proves geometry: default hexagon (vertex-up), octagon
+       (sides=8), and a -30deg-rotated hexagon (proves rotation is applied AND that a negative
+       angle is legitimate). All 200x200 and square, so the inscribed-circle radius (half the
+       shorter box dimension) is 100 in every case -- see decorator_polygon.cpp for the rule.
+       Row 2 (seven 80x80 squares) is the input-validation matrix: each is a distinct hostile /
+       invalid / boundary `sides` value. A rejected decorator renders NOTHING (the box shows its
+       own background), an accepted one fills the box centre opaque white. `empty` gets a dark
+       grey background so the pixel check can tell "decorator rejected, background showing"
+       apart from a pure-black (nothing) box.
+   PT: Cena para polygon_sanity (v0.2.6 + matriz de hardening de entrada do review-fix).
+       Fileira 1 (tres quadrados 200x200) prova geometria: hexagono padrao (vertice pra cima),
+       octogono (sides=8), e um hexagono rotacionado -30deg (prova que a rotacao e aplicada E que
+       um angulo negativo e legitimo). Todos 200x200 e quadrados, entao o raio do circulo inscrito
+       (metade da dimensao menor da caixa) e 100 em todos os casos -- ver decorator_polygon.cpp.
+       Fileira 2 (sete quadrados 80x80) e a matriz de validacao de entrada: cada um e um valor de
+       `sides` hostil / invalido / de fronteira distinto. Um decorator rejeitado NAO renderiza
+       nada (a caixa mostra o proprio background), um aceito preenche o centro da caixa de branco
+       opaco. `empty` recebe background cinza escuro para o check de pixel distinguir "decorator
+       rejeitado, background aparecendo" de uma caixa preta pura (nada). */
+
 body {
   background-color: #000000;
 }
+
+/* Row 1 -- geometry proofs (200x200, radius 100). */
 .hex {
   position: absolute;
   left: 50px;
@@ -22,9 +35,85 @@ body {
 }
 .oct {
   position: absolute;
-  left: 300px;
+  left: 280px;
   top: 50px;
   width: 200px;
   height: 200px;
   decorator: polygon(8, #ffffff);
+}
+/* -30deg rotation moves a hexagon VERTEX onto due-east: default hexagon vertices sit at
+   -90+/-30,... so east (0deg) is an edge midpoint (apothem, ~86.6px, OUTSIDE r=95); rotating by
+   -30deg puts a vertex exactly at 0deg (full radius 100px, INSIDE r=95). So `rot`'s east sample
+   is opaque where `hex`'s east sample is background -- proving the (negative) rotation is applied.
+   Rotacao -30deg move um VERTICE do hexagono pro leste: vertices do hexagono padrao ficam em
+   -90+/-30,... entao leste (0deg) e ponto-medio de aresta (apotema ~86.6px, FORA de r=95);
+   rotacionar -30deg poe um vertice exatamente em 0deg (raio cheio 100px, DENTRO de r=95). Entao a
+   amostra leste de `rot` e opaca onde a de `hex` e background -- provando que a rotacao (negativa)
+   e aplicada. */
+.rot {
+  position: absolute;
+  left: 510px;
+  top: 50px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, #ffffff, -30deg);
+}
+
+/* Row 2 -- input-validation matrix (80x80, centre = left+40, top+40 = 330). */
+.empty {  /* polygon() empty -> default sides=0 < 3 -> REJECTED. Own bg dark grey. */
+  position: absolute;
+  left: 50px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  background-color: #303030;
+  decorator: polygon();
+}
+.neg {    /* sides=-1 < 3 -> REJECTED (log must say -1, not 0). */
+  position: absolute;
+  left: 150px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(-1, #ffffff);
+}
+.small {  /* sides=2 < 3 -> REJECTED (floor is exclusive below 3). */
+  position: absolute;
+  left: 250px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(2, #ffffff);
+}
+.tri {    /* sides=3 -> ACCEPTED (floor is inclusive at 3). */
+  position: absolute;
+  left: 350px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(3, #ffffff);
+}
+.max {    /* sides=1024 = POLYGON_MAX_SIDES -> ACCEPTED (ceiling inclusive). */
+  position: absolute;
+  left: 450px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(1024, #ffffff);
+}
+.huge {   /* sides=100000 > 1024 -> REJECTED (DoS-by-typo guard). */
+  position: absolute;
+  left: 550px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(100000, #ffffff);
+}
+.huge2 {  /* sides=1e30 -> REJECTED, and must NOT trigger float-cast-overflow UB. */
+  position: absolute;
+  left: 650px;
+  top: 290px;
+  width: 80px;
+  height: 80px;
+  decorator: polygon(1e30, #ffffff);
 }

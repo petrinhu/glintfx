@@ -1,5 +1,6 @@
 exit42 42
 hello 0
+test_alloc 0
 selftest 0
 test_conv 0
 test_mem 0

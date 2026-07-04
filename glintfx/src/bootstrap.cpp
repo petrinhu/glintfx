@@ -241,6 +241,51 @@ bool Bootstrap::load(const char* rml_path) {
   if (!rml_path) return false;
   Rml::ElementDocument* doc = impl_->ctx->LoadDocument(rml_path);
   if (!doc) return false;
+
+  // EN: BUG FIX (reported by GusWorld, 2026-07-04): load() used to overwrite impl_->doc
+  //     with the NEW document without ever closing the PREVIOUS one. Since impl_->doc is
+  //     the only reference glintfx held, every reload on the SAME Bootstrap/UiLayer/App
+  //     (e.g. menu-screen navigation calling load(next_path) repeatedly) stacked one more
+  //     live document into the Rml::Context forever: (1) a silent memory leak, one document
+  //     per reload; (2) the previous document stayed Show()n and kept rendering UNDERNEATH
+  //     the new one -- a "ghost document" bug, most visible with transparency/glow.
+  //     Close the OLD document only AFTER the NEW one has loaded successfully (this line),
+  //     not before LoadDocument() above -- decision: if the new load fails (returns above),
+  //     the caller keeps whatever was on screen instead of being left with a blank
+  //     Context (0 documents). A previous fail-early attempt (guard right before
+  //     LoadDocument(), unconditional) was rejected for exactly that regression: it would
+  //     leave the UiLayer/App with NO visible document until the NEXT successful load(),
+  //     which is a worse UX than "briefly stale but visible".
+  //     Rml::ElementDocument::Close() is equivalent to Rml::Context::UnloadDocument(doc)
+  //     here (both exist; Close() needs no Context* and reads slightly more directly at
+  //     the call site) -- destruction is DEFERRED to the next Rml::Context::Update() (see
+  //     ElementDocument.h/Context.h in the pinned RmlUi source), which Engine::update()
+  //     already calls once per frame in production, so no change to the frame loop is
+  //     needed for the deferred teardown to actually happen.
+  // PT: CORREÇÃO DE BUG (relatado pelo GusWorld, 2026-07-04): load() sobrescrevia
+  //     impl_->doc com o documento NOVO sem nunca fechar o ANTERIOR. Como impl_->doc era a
+  //     única referência que a glintfx mantinha, todo reload no MESMO Bootstrap/UiLayer/App
+  //     (ex.: navegação entre telas de menu chamando load(proximo_path) repetidamente)
+  //     empilhava mais um documento vivo no Rml::Context para sempre: (1) vazamento de
+  //     memória silencioso, um documento por reload; (2) o documento anterior continuava
+  //     Show()n e seguia renderizando POR BAIXO do novo -- bug de "documento fantasma",
+  //     mais visível com transparência/glow.
+  //     Fecha o documento ANTIGO só APÓS o NOVO ter carregado com sucesso (esta linha), não
+  //     antes do LoadDocument() acima -- decisão: se o novo load falhar (retorna acima), o
+  //     chamador mantém o que já estava na tela em vez de ficar com um Context em branco (0
+  //     documentos). Uma tentativa anterior de fechar cedo (guard logo antes do
+  //     LoadDocument(), incondicional) foi rejeitada por exatamente essa regressão: deixaria
+  //     a UiLayer/App SEM nenhum documento visível até o PRÓXIMO load() bem-sucedido, o que
+  //     é pior UX que "levemente desatualizado mas visível".
+  //     Rml::ElementDocument::Close() equivale a Rml::Context::UnloadDocument(doc) aqui
+  //     (ambos existem; Close() dispensa o Context* e lê um pouco mais direto no call site)
+  //     -- a destruição é DIFERIDA até o próximo Rml::Context::Update() (ver
+  //     ElementDocument.h/Context.h no source pinado do RmlUi), que o Engine::update() já
+  //     chama uma vez por frame em produção, então nenhuma mudança no loop de frame é
+  //     necessária para a destruição diferida realmente acontecer.
+  if (impl_->doc && impl_->doc != doc) {
+    impl_->doc->Close();
+  }
   if (impl_->ua_style_sheet) {
     // EN: Merge UA base (low specificity) under the document's own sheet (merged ON TOP
     //     -- StyleSheet::MergeStyleSheet's specificity_offset accumulation resolves ties

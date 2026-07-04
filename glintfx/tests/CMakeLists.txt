@@ -842,6 +842,43 @@ add_test(NAME input_hardening_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: document_reload_leak -- regression test for the GusWorld-reported bug (2026-07-04):
+#     Bootstrap::load() used to stack documents in the same Rml::Context without closing the
+#     previous one on every reload (memory leak + "ghost document" rendering underneath).
+#     Drives Engine::load()/Engine::update() directly (internal test, links RmlUi::Core
+#     explicitly for Rml::Context::GetNumDocuments() -- same pattern as engine_smoke.cpp) and
+#     asserts the document count stays at 1 across a menu-navigation sequence (A->B->A) and
+#     across 5x repeated reload of the same path. Runs in BOTH build configs (links
+#     ${_embed_dep}, same GL-context-fixture pattern as the other embed tests above) since the
+#     fixed code (bootstrap.cpp/engine.cpp) is always compiled regardless of
+#     GLINTFX_BACKEND_GLFW. min.rml (top of this file) and min_partial.rml (copied above for
+#     ui_layer_compose) are reused as two distinct documents -- no new scene assets needed.
+#     WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml"/"tests/min_partial.rml" resolve to
+#     build/tests/*.rml regardless of where ctest is invoked from.
+# PT: document_reload_leak -- teste de regressão para o bug relatado pelo GusWorld (2026-07-04):
+#     Bootstrap::load() empilhava documentos no mesmo Rml::Context sem fechar o anterior a cada
+#     reload (vazamento de memória + "documento fantasma" renderizando por baixo). Dispara
+#     Engine::load()/Engine::update() diretamente (teste interno, linka RmlUi::Core
+#     explicitamente para Rml::Context::GetNumDocuments() -- mesmo padrão de engine_smoke.cpp)
+#     e verifica que a contagem de documentos permanece em 1 ao longo de uma sequência de
+#     navegação de menu (A->B->A) e ao longo de 5x reload repetido do mesmo path. Roda em AMBAS
+#     as configs de build (linka ${_embed_dep}, mesmo padrão de fixture de contexto GL dos
+#     outros testes embed acima) já que o código corrigido (bootstrap.cpp/engine.cpp) é sempre
+#     compilado independente de GLINTFX_BACKEND_GLFW. min.rml (topo deste arquivo) e
+#     min_partial.rml (copiado acima para ui_layer_compose) são reutilizados como dois
+#     documentos distintos -- nenhum asset de cena novo é necessário. WORKING_DIRECTORY =
+#     CMAKE_BINARY_DIR para que "tests/min.rml"/"tests/min_partial.rml" resolvam para
+#     build/tests/*.rml independente de onde o ctest é invocado.
+# ---------------------------------------------------------------------------
+add_executable(document_reload_leak document_reload_leak.cpp)
+target_link_libraries(document_reload_leak PRIVATE ${_embed_dep} RmlUi::Core)
+add_test(NAME document_reload_leak
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:document_reload_leak>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

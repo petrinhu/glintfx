@@ -188,6 +188,24 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(atoi("-9999999999"), INT_MIN);
     }
 
+    // EN: E2 watch-item (ex-INBOX, closed here): a case right at the saturation BOUNDARY that
+    //     must NOT saturate -- guards the `>` vs `>=` off-by-one in the saturating check
+    //     (src/conv.c: `if (magnitude > (limit - digit) / 10)`). The implementation was already
+    //     correct; this test only closes the missing regression coverage the D3 review flagged.
+    //     `2147483640` is `INT_MAX` (2147483647) minus 7 -- comfortably below the ceiling, so a
+    //     `>=` regression (which would incorrectly saturate values strictly less than the limit)
+    //     would be caught here.
+    // PT: Item-vigia do E2 (ex-INBOX, fechado aqui): um caso bem na FRONTEIRA de saturacao que
+    //     NAO deve saturar -- guarda o off-by-one `>` vs `>=` na checagem saturante
+    //     (src/conv.c: `if (magnitude > (limit - digit) / 10)`). A implementacao ja estava
+    //     correta; este teste so fecha a cobertura de regressao que faltava, apontada pelo
+    //     review do D3. `2147483640` e' `INT_MAX` (2147483647) menos 7 -- confortavelmente
+    //     abaixo do teto, entao uma regressao pra `>=` (que saturaria incorretamente valores
+    //     estritamente menores que o limite) seria pega aqui.
+    {
+        TEST_ASSERT_EQ(atoi("2147483640"), 2147483640);
+    }
+
     // ---- atou ------------------------------------------------------------------------
     // EN: Basic cases -- "0", UINT_MAX exactly, leading '+'.
     // PT: Casos basicos -- "0", UINT_MAX exato, '+' inicial.
@@ -211,6 +229,14 @@ int main(int argc, char** argv, char** envp) {
     // PT: Overflow SATURA em UINT_MAX.
     {
         TEST_ASSERT_EQ(atou("99999999999"), UINT_MAX);
+    }
+
+    // EN: E2 watch-item (ex-INBOX, closed here): the same near-boundary guard as atoi's above,
+    //     for atou's saturating check. `4294967290` is `UINT_MAX` (4294967295) minus 5.
+    // PT: Item-vigia do E2 (ex-INBOX, fechado aqui): a mesma guarda de quase-fronteira do atoi
+    //     acima, pra checagem saturante do atou. `4294967290` e' `UINT_MAX` (4294967295) menos 5.
+    {
+        TEST_ASSERT_EQ(atou("4294967290"), 4294967290u);
     }
 
     TEST_PASS();

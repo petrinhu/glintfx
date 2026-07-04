@@ -55,14 +55,36 @@ bool DataBinder::create(Rml::Context* ctx, const char* name) {
   return true;
 }
 
+// EN: Guard against duplicate keys BEFORE touching any storage — same principle as
+//     create()'s "if (... || impl_->created) return false;" check-before-mutate.
+//     Rml::DataModelConstructor::Bind() does NOT overwrite an existing binding
+//     (RmlUi's DataModel::BindVariable uses variables.emplace(), a no-op on collision
+//     that just returns false); if we had already replaced the map entry via
+//     operator=(unique_ptr), the previous cell would already be freed by the time
+//     Bind() reports failure, and RmlUi's internal Rml::DataModel would be left holding
+//     a dangling pointer to it — a use-after-free the moment any view re-evaluates that
+//     variable. Checking `.find(key) != end()` first means a duplicate call is a pure
+//     no-op: nothing is allocated, nothing is freed, nothing is (re)bound.
+// PT: Guard contra chaves duplicadas ANTES de tocar em qualquer storage — mesmo princípio
+//     do check-before-mutate de create() ("if (... || impl_->created) return false;").
+//     Rml::DataModelConstructor::Bind() NÃO sobrescreve um binding existente (o
+//     DataModel::BindVariable do RmlUi usa variables.emplace(), no-op em colisão que só
+//     retorna false); se já tivéssemos substituído a entrada do mapa via
+//     operator=(unique_ptr), a célula anterior já estaria liberada quando Bind() reporta
+//     falha, e o Rml::DataModel interno do RmlUi ficaria com um ponteiro pendurado pra
+//     ela — um use-after-free no instante em que qualquer view reavaliar essa variável.
+//     Checar `.find(key) != end()` antes faz da chamada duplicada um no-op puro: nada é
+//     alocado, nada é liberado, nada é (re)ligado.
 bool DataBinder::bind_number(const char* key, double initial) {
   if (!impl_->created || !key) return false;
+  if (impl_->nums.find(key) != impl_->nums.end()) return false;
   auto& cell = impl_->nums[key] = std::make_unique<double>(initial);
   return impl_->ctor.Bind(Rml::String(key), cell.get());
 }
 
 bool DataBinder::bind_string(const char* key, const char* initial) {
   if (!impl_->created || !key) return false;
+  if (impl_->strs.find(key) != impl_->strs.end()) return false;
   auto& cell = impl_->strs[key] =
       std::make_unique<Rml::String>(initial ? initial : "");
   return impl_->ctor.Bind(Rml::String(key), cell.get());
@@ -70,12 +92,14 @@ bool DataBinder::bind_string(const char* key, const char* initial) {
 
 bool DataBinder::bind_bool(const char* key, bool initial) {
   if (!impl_->created || !key) return false;
+  if (impl_->bools.find(key) != impl_->bools.end()) return false;
   auto& cell = impl_->bools[key] = std::make_unique<bool>(initial);
   return impl_->ctor.Bind(Rml::String(key), cell.get());
 }
 
 bool DataBinder::bind_list(const char* key) {
   if (!impl_->created || !key) return false;
+  if (impl_->lists.find(key) != impl_->lists.end()) return false;
   auto& cell = impl_->lists[key] =
       std::make_unique<std::vector<Rml::String>>();
   return impl_->ctor.Bind(Rml::String(key), cell.get());

@@ -411,6 +411,40 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: data_model_rebind_uaf — regression test for the duplicate-key
+  #     heap-use-after-free in DataBinder::bind_* (audit finding, 2026-07-04).
+  #     Duplicate bind_number/bind_string/bind_bool/bind_list on the SAME key must
+  #     return false as a pure no-op (guard checks map membership BEFORE touching
+  #     storage); the surviving (first) cell must stay fully functional through
+  #     load() + set_*() + render, proven via the same {{label}}/{{hp}} views as
+  #     data_model_scalar (tests/ui/scalar.rml, already copied above — chosen over
+  #     hud.rml because it @font-face-loads OpenSans and actually rasterises glyphs
+  #     under Xvfb/llvmpipe, per data_model_scalar's own proof).
+  #     Under GLINTFX_SANITIZE=ON, ASan must stay silent — without the guard, the
+  #     duplicate call would free the cell the pre-existing Bind() binding still
+  #     points to, and this test's render pass would dereference it (UAF abort).
+  # PT: data_model_rebind_uaf — teste de regressão para o heap-use-after-free de
+  #     chave duplicada em DataBinder::bind_* (achado de auditoria, 2026-07-04).
+  #     bind_number/bind_string/bind_bool/bind_list duplicado na MESMA chave deve
+  #     retornar false como no-op puro (guard checa presença no mapa ANTES de tocar
+  #     o storage); a célula sobrevivente (primeira) deve continuar totalmente
+  #     funcional através de load() + set_*() + render, provado via as mesmas views
+  #     {{label}}/{{hp}} do data_model_scalar (tests/ui/scalar.rml, já copiado acima —
+  #     escolhido em vez de hud.rml porque carrega OpenSans via @font-face e de fato
+  #     rasteriza glifos sob Xvfb/llvmpipe, conforme a própria prova do data_model_scalar).
+  #     Sob GLINTFX_SANITIZE=ON, o ASan deve ficar em silêncio — sem o guard, a
+  #     chamada duplicada liberaria a célula que o Bind() pré-existente ainda
+  #     aponta, e o passe de render deste teste a desreferenciaria (abort UAF).
+  # ---------------------------------------------------------------------------
+  add_executable(data_model_rebind_uaf data_model_rebind_uaf.cpp)
+  target_link_libraries(data_model_rebind_uaf PRIVATE glintfx)
+  add_test(NAME data_model_rebind_uaf
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:data_model_rebind_uaf>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
 
 # ---------------------------------------------------------------------------

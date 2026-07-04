@@ -2,13 +2,20 @@
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](LICENSE)
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-00599C.svg)](#)
+[![Language: C](https://img.shields.io/badge/Language-C-A8B9CC.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
+[![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.3.1](https://img.shields.io/badge/Version-0.3.1-blue.svg)](CHANGELOG.md)
+[![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
+[![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
 [![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
 [![CI (Codeberg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
+
+<sub>**EN:** the `C`/`Assembly` badges describe this **repository** as a whole -- it also hosts `loucura_c_asm` ("Layer 0"), a separate, unreleased, zero-libc C+ASM runtime that does **not** link into glintfx (glintfx itself is pure C++; see [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md)). The `API: pre-1.0` badge reflects [Semantic Versioning](https://semver.org/)'s pre-1.0.0 clause: the public API may still change between minor versions.</sub>
+<sub>**PT:** os badges `C`/`Assembly` descrevem este **repositório** como um todo -- ele também hospeda o `loucura_c_asm` ("Camada 0"), um runtime C+ASM zero-libc separado e ainda não lançado, que **não** linka no glintfx (o glintfx em si é C++ puro; ver [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md)). O badge `API: pre-1.0` reflete a cláusula pré-1.0.0 do [Versionamento Semântico](https://semver.org/): a API pública ainda pode mudar entre versões minor.</sub>
 
 > **EN:** A drop-in C++ library that fuses an HTML/CSS UI engine ([RmlUi 6.3](https://github.com/mikke89/RmlUi)) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask). Link one CMake target and write CSS, with no OpenGL/GLFW/RmlUi wiring by hand. Two consumption modes: the standalone `glintfx::App` (owns its window) and `glintfx::UiLayer` (embeds into a host-owned GL context, e.g. a game engine).
 >
@@ -39,7 +46,7 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 ### Features
 
 - **Drop-in integration:** one target (`glintfx::glintfx`) via CMake `FetchContent` or `find_package(glintfx)`; no manual graphics setup.
-- **Data-driven effects:** glow, gradient, backdrop-blur, drop-shadow, mask, and a regular-polygon fill (`decorator: polygon(sides, color[, rotation])`, e.g. a hexagon node), all expressed in `.rcss` (no imperative effect API to learn).
+- **Data-driven effects:** glow, gradient, backdrop-blur, drop-shadow, mask, and a regular-polygon fill (`decorator: polygon(sides, fill[, rotation])`, `fill` a solid `color` or a `radial-gradient(...)`/`linear-gradient(...)` -- e.g. a hexagon node with a "brass screw-head" volume), all expressed in `.rcss` (no imperative effect API to learn).
 - **Two consumption modes:** the standalone `glintfx::App` (owns the window and the frame loop) and `glintfx::UiLayer` (embed/guest mode: attaches to a host-owned GL context, compose-only render, injected events; see [`docs/embed-integration.md`](docs/embed-integration.md)). Both share the same data-model, dp_ratio, and base-URL API.
 - **Data-model binding:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, with live lists driven by `data-for` in RML -- scrolling logs, menus, inventories.
 - **PNG, JPEG, and TGA textures:** decoded via stb_image with correct premultiplied-alpha handling for the GL3 blend.
@@ -162,7 +169,7 @@ Effects are **data-driven**: you declare them in `.rcss`. RmlUi 6.3 syntax diffe
 | Outer glow / box shadow | `box-shadow: COLOR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (alpha-shaped) | `filter: drop-shadow(COLOR x y blur)` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Gradient | `decorator: linear-gradient(angle, colors)` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
-| Regular polygon fill | `decorator: polygon(sides, color[, rotation])` | `decorator: polygon(6, #5fd0ff);` |
+| Regular polygon fill | `decorator: polygon(sides, fill[, rotation])`, `fill` = `color` or `radial-/linear-gradient(...)` | `decorator: polygon(6, #5fd0ff);` |
 | Backdrop blur | `backdrop-filter: blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Blur filter | `filter: blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image: horizontal-gradient(COLOR COLOR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -210,14 +217,14 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **The `mask` effect needs a real GPU.** Under Mesa/llvmpipe (software, e.g. headless CI) the dual-sampler mask shader crashes, a Mesa bug rather than a glintfx bug. The CI variant runs without the mask card.
 - **GLFW window backend is optional.** By default (`-DGLINTFX_BACKEND_GLFW=ON`) the standalone `glintfx::App` is compiled and GLFW is linked. With `-DGLINTFX_BACKEND_GLFW=OFF` (embed-only build) only `glintfx::UiLayer` is available and the library does not drag GLFW as a transitive dependency. Designed for SDL3/X11 hosts (e.g. GusWorld) that own the window and GL context themselves. See [ADR-0008](docs/adr/0008-embed-guest-mode.md).
 - **SDL and X11 standalone backends are planned but not yet implemented.** The embed path (host provides the GL context) is the integration point for non-GLFW hosts today.
-- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 26-test suite (GLFW=ON) and 13-test embed suite (GLFW=OFF) run automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
+- **CI active (GitHub Actions + Codeberg Forgejo Actions).** The 29-test suite (GLFW=ON) and 15-test embed suite (GLFW=OFF) run automatically on every push/PR via `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Validation happens on the first push to the respective remote.
 - **Two CMake integration paths:** `FetchContent` / `add_subdirectory` (recommended when building from source) and `find_package(glintfx)` for an installed tree via `cmake --install`, linking `glintfx::glintfx`; `glintfxConfig.cmake` and RmlUi are co-installed under the same prefix.
 
 ### Roadmap and vision
 
-> **Current release: v0.3.0** (stable, tagged), 2026-07-04. Full history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Current release: v0.3.1** (stable, tagged), 2026-07-04. Full history in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Delivered (v0.2.x-v0.3.0):**
+**Delivered (v0.2.x-v0.3.1):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** the `UiLayer` facade **attaches to a host-owned GL context** (game / engine) instead of creating its own window -- compose-only render, injected events, full GL state save/restore (`GlStateGuard`). Enables using glintfx **inside** a game without owning the window. First consumer: GusWorld / GusEngine (SDL3). The standalone `App` stays intact for UI-only apps. Integration contract: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Optional GLFW backend, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library (`UiLayer` only) with no GLFW dependency, for SDL3/X11 hosts.
@@ -226,6 +233,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **UA stylesheet, v0.2.4:** built-in `display: block` defaults for structural elements, merged into every document as a low-specificity base.
 - **Click callback, element geometry, and letterbox viewport, v0.2.5:** `set_click_callback` (hit-test id reporting), `get_element_box` (border-box geometry query), and `UiLayer::set_viewport(x, y, w, h, target_h)` (configurable composition origin) -- all driven by real requirements from the GusWorld consumer. See `docs/embed-integration.md` section 10 for the shared window-space coordinate contract.
 - **`polygon()` decorator and API input hardening, v0.3.0:** `decorator: polygon(sides, color[, rotation])`, a solid-color regular-N-gon shape primitive (`sides` clamped to `[3, 1024]`, fail-high on invalid input; glow and clip-path reuse `drop-shadow`/`mask-image` with zero new API) -- driven by GusWorld's hexagonal slider node. Plus hardening of the public API surface: `load(nullptr)` now returns `false` instead of crashing the host, `set_dp_ratio`/`set_viewport` reject non-finite or non-positive values, and `version()` is fixed to report the actual tag (it had been stuck reporting `"0.2.4"` since v0.2.5). See [`docs/effects.md`](docs/effects.md).
+- **Gradient polygon fill and two memory-safety fixes, v0.3.1:** `polygon()`'s fill argument now also accepts `radial-gradient(...)`/`linear-gradient(...)` (a real per-pixel color ramp via RmlUi's own gradient shader, not a faceted approximation) -- driven by GusWorld's brass "screw-head" corner nodes. Plus two bugs found via audit: `load()` used to leak the previously loaded document and leave it rendering as a visible "ghost" underneath the new one on every reload; `bind_number`/`bind_string`/`bind_bool`/`bind_list` used to trigger a heap-use-after-free when called twice with the same key before `load()`. Both are now guarded, fail-safe. See [`CHANGELOG.md`](CHANGELOG.md).
 
 **Planned (paused, not yet started):**
 
@@ -269,7 +277,7 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 ### Features
 
 - **Integração drop-in:** um alvo (`glintfx::glintfx`) via CMake `FetchContent` ou `find_package(glintfx)`; sem setup gráfico manual.
-- **Efeitos data-driven:** glow, degradê, backdrop-blur, drop-shadow, mask e um preenchimento de polígono regular (`decorator: polygon(lados, cor[, rotação])`, ex.: um nó hexagonal), todos expressos em `.rcss` (sem API imperativa de efeito para aprender).
+- **Efeitos data-driven:** glow, degradê, backdrop-blur, drop-shadow, mask e um preenchimento de polígono regular (`decorator: polygon(lados, preenchimento[, rotação])`, `preenchimento` uma `cor` sólida ou um `radial-gradient(...)`/`linear-gradient(...)` -- ex.: um nó hexagonal com volume de "cabeça de parafuso de latão"), todos expressos em `.rcss` (sem API imperativa de efeito para aprender).
 - **Dois modos de consumo:** o `glintfx::App` standalone (dono da janela e do loop de frame) e o `glintfx::UiLayer` (embed/guest mode: anexa ao contexto GL de um host, render compose-only, eventos injetados; ver [`docs/embed-integration.md`](docs/embed-integration.md)). Os dois compartilham a mesma API de data-model, dp_ratio e base-URL.
 - **Ligação de data-model:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, com listas vivas dirigidas por `data-for` no RML -- logs rolantes, menus, inventários.
 - **Texturas PNG, JPEG e TGA:** decodificadas via stb_image com tratamento correto de alpha premultiplicado para o blend GL3.
@@ -392,7 +400,7 @@ Os efeitos são **data-driven**: você os declara no `.rcss`. A sintaxe do RmlUi
 | Glow externo / box shadow | `box-shadow: COR x y blur spread` | `box-shadow: #5fd0ff 0 0 32px 8px;` |
 | Drop shadow (segue o alpha) | `filter: drop-shadow(COR x y blur)` | `filter: drop-shadow(#5fd0ff80 0 0 20px);` |
 | Degradê | `decorator: linear-gradient(ângulo, cores)` | `decorator: linear-gradient(45deg, #ff6a00, #ee0979);` |
-| Preenchimento de polígono regular | `decorator: polygon(lados, cor[, rotação])` | `decorator: polygon(6, #5fd0ff);` |
+| Preenchimento de polígono regular | `decorator: polygon(lados, preenchimento[, rotação])`, `preenchimento` = `cor` ou `radial-/linear-gradient(...)` | `decorator: polygon(6, #5fd0ff);` |
 | Backdrop blur | `backdrop-filter: blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Filtro blur | `filter: blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image: horizontal-gradient(COR COR)` | `mask-image: horizontal-gradient(#000f #0000);` |
@@ -440,14 +448,14 @@ A v0.3.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **O efeito `mask` exige GPU real.** Sob Mesa/llvmpipe (software, ex.: CI headless) o shader de mask dual-sampler crasha, bug do Mesa e não do glintfx. A variante de CI roda sem o card mask.
 - **Backend de janela GLFW é opcional.** Por padrão (`-DGLINTFX_BACKEND_GLFW=ON`) o `glintfx::App` standalone é compilado e o GLFW é linkado. Com `-DGLINTFX_BACKEND_GLFW=OFF` (build embed-only) só o `glintfx::UiLayer` está disponível e a biblioteca não arrasta GLFW como dep transitiva. Projetado para hosts SDL3/X11 (ex.: GusWorld) que possuem a janela e o contexto GL por conta própria. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md).
 - **Backends standalone SDL e X11 estão planejados mas não implementados.** O caminho embed (host fornece o contexto GL) é o ponto de integração para hosts não-GLFW hoje.
-- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 26 testes (GLFW=ON) e a suíte embed de 13 testes (GLFW=OFF) rodam automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
+- **CI ativo (GitHub Actions + Codeberg Forgejo Actions).** A suíte de 29 testes (GLFW=ON) e a suíte embed de 15 testes (GLFW=OFF) rodam automaticamente em todo push/PR via `.github/workflows/ci.yml` e `.forgejo/workflows/ci.yml`. A validação ocorre no primeiro push ao remote correspondente.
 - **Dois caminhos de integração CMake:** `FetchContent` / `add_subdirectory` (recomendado ao buildar do fonte) e `find_package(glintfx)` para uma árvore instalada via `cmake --install`, linkando `glintfx::glintfx`; `glintfxConfig.cmake` e o RmlUi são co-instalados sob o mesmo prefixo.
 
 ### Roadmap e visão
 
 > **Lançamento atual: v0.3.0** (estável, taggeada), 2026-07-04. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 
-**Entregue (v0.2.x-v0.3.0):**
+**Entregue (v0.2.x-v0.3.1):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** a fachada `UiLayer` **anexa ao contexto GL de um host** (jogo / engine) em vez de criar a própria janela -- render compose-only, eventos injetados, save/restore completo do estado GL (`GlStateGuard`). Permite usar o glintfx **dentro** de um jogo sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). O `App` standalone permanece intacto para apps só-de-UI. Contrato de integração: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Backend GLFW opcional, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only (só `UiLayer`) sem dependência de GLFW, para hosts SDL3/X11.
@@ -456,6 +464,7 @@ A v0.3.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Stylesheet UA, v0.2.4:** defaults embutidos de `display: block` para elementos estruturais, mesclados em todo documento como base de baixa especificidade.
 - **Callback de clique, geometria de elemento e viewport letterbox, v0.2.5:** `set_click_callback` (reporte de id via hit-test), `get_element_box` (consulta de geometria border-box) e `UiLayer::set_viewport(x, y, w, h, target_h)` (origem de composição configurável) -- todos dirigidos por requisitos reais do consumidor GusWorld. Ver `docs/embed-integration.md` seção 10 para o contrato de coordenadas espaço-janela compartilhado.
 - **Decorator `polygon()` e hardening de entrada da API, v0.3.0:** `decorator: polygon(lados, cor[, rotação])`, uma shape primitive de N-ágono regular de cor sólida (`lados` limitado a `[3, 1024]`, fail-high em input inválido; glow e clip-path reusam `drop-shadow`/`mask-image` sem API nova) -- dirigido pelo nó slider hexagonal do GusWorld. Mais hardening da superfície pública: `load(nullptr)` agora retorna `false` em vez de derrubar o host, `set_dp_ratio`/`set_viewport` rejeitam valores não-finitos ou não-positivos, e `version()` foi corrigido para reportar a tag real (estava travado em `"0.2.4"` desde a v0.2.5). Ver [`docs/effects.md`](docs/effects.md).
+- **Preenchimento em gradiente no polygon() e dois fixes de segurança de memória, v0.3.1:** o argumento de preenchimento do `polygon()` agora também aceita `radial-gradient(...)`/`linear-gradient(...)` (rampa de cor real por-pixel via o próprio shader de gradiente do RmlUi, não uma aproximação facetada) -- dirigido pelos nós "cabeça de parafuso" de latão dos cantos do GusWorld. Mais dois bugs achados via auditoria: `load()` vazava o documento carregado anteriormente e o deixava renderizando como um "fantasma" visível por baixo do novo a cada reload; `bind_number`/`bind_string`/`bind_bool`/`bind_list` disparava um heap-use-after-free quando chamado duas vezes com a mesma chave antes do `load()`. Ambos agora têm guard, fail-safe. Ver [`CHANGELOG.md`](CHANGELOG.md).
 
 **Planejado (pausado, ainda não iniciado):**
 

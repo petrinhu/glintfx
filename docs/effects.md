@@ -108,6 +108,7 @@ Syntax notes (see `decorator_polygon.cpp`'s `ParseFill()` for the exact grammar)
 - Stop colors accept the same syntax as a plain `<color>` (hex, `rgb()`/`rgba()`, named colors). Stop positions must be a percentage (or omitted for auto-spacing) — lengths (`px`, `em`, ...) are not supported for a polygon fill stop and are rejected.
 - Solid-color fill (`polygon(6, #C9A24B)`) is unchanged and unaffected by any of the above.
 - A malformed fill (bad color, bad stop, missing linear angle, empty gradient) makes the **whole decorator** ignored, fail-high, exactly like an out-of-range `sides` — never a partial or garbage render.
+- **Stop count limit:** up to **16 stops** per gradient — inherited from RmlUi's own gradient shader (`MAX_NUM_STOPS`, shared with the native `radial-gradient`/`linear-gradient` decorators, not something this feature introduces). Extra stops beyond the 16th are silently clamped, not rejected.
 
 ### How-to: backdrop blur
 
@@ -248,6 +249,7 @@ Notas de sintaxe (ver `ParseFill()` em `decorator_polygon.cpp` para a gramática
 - Cores de stop aceitam a mesma sintaxe de uma `<cor>` simples (hex, `rgb()`/`rgba()`, cores nomeadas). Posições de stop devem ser uma porcentagem (ou omitidas para auto-espaçamento) — comprimentos (`px`, `em`, ...) não são suportados para um stop de preenchimento de polígono e são rejeitados.
 - Preenchimento de cor sólida (`polygon(6, #C9A24B)`) continua inalterado e não é afetado por nada disso.
 - Um preenchimento malformado (cor inválida, stop inválido, ângulo do linear ausente, gradiente vazio) faz o **decorator inteiro** ser ignorado, fail-high, exatamente como um `lados` fora do range -- nunca um render parcial ou lixo.
+- **Limite de stops:** até **16 stops** por gradiente — herdado do próprio shader de gradiente do RmlUi (`MAX_NUM_STOPS`, compartilhado com os decorators nativos `radial-gradient`/`linear-gradient`, não algo introduzido por esta feature). Stops além do 16º são silenciosamente clampados, não rejeitados.
 
 ### How-to: backdrop blur
 

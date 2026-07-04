@@ -221,6 +221,24 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
 
 bool Bootstrap::load(const char* rml_path) {
   if (!impl_ || !impl_->ctx) return false;
+  // EN: CRITICAL null-guard (input-hardening audit, v0.3.0). Rml::Context::LoadDocument takes a
+  //     `const Rml::String&` (= std::string); a null `rml_path` would construct std::string from
+  //     a null pointer -- undefined behaviour that in practice throws std::logic_error, and since
+  //     glintfx is built -fno-exceptions-agnostic and the host (e.g. GusWorld) does not wrap
+  //     load() in a try/catch, the uncaught exception calls std::terminate() -> SIGABRT, taking
+  //     the ENTIRE host process down. A bad path from the caller must fail soft (return false),
+  //     never abort the host. This mirrors the null-guards already present across the API
+  //     (DataBinder::create/bind_*, Bootstrap::get_element_box, BaseUrlFileInterface::
+  //     set_base_url) -- load() was the one entry point that lacked it.
+  // PT: Null-guard CRÍTICO (auditoria de hardening de entrada, v0.3.0). Rml::Context::LoadDocument
+  //     recebe `const Rml::String&` (= std::string); um `rml_path` nulo construiria std::string a
+  //     partir de ponteiro nulo -- comportamento indefinido que na prática lança std::logic_error,
+  //     e como o host (ex.: GusWorld) não envolve load() num try/catch, a exceção não capturada
+  //     chama std::terminate() -> SIGABRT, derrubando o PROCESSO HOST INTEIRO. Um caminho ruim do
+  //     chamador deve falhar suave (retornar false), nunca abortar o host. Espelha os null-guards
+  //     já presentes na API (DataBinder::create/bind_*, Bootstrap::get_element_box,
+  //     BaseUrlFileInterface::set_base_url) -- load() era o único ponto de entrada sem ele.
+  if (!rml_path) return false;
   Rml::ElementDocument* doc = impl_->ctx->LoadDocument(rml_path);
   if (!doc) return false;
   if (impl_->ua_style_sheet) {

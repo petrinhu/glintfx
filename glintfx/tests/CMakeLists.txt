@@ -183,6 +183,28 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: app_input_hardening_smoke -- App-path parity smoke for the v0.3.0 input-hardening audit
+  #     fixes (GLFW backend only): App::load(nullptr) returns false without aborting the process
+  #     (Bootstrap::load null-guard, CRITICAL), and App::set_dp_ratio(0/-1/NaN/inf) does not crash
+  #     and keeps ok() true. The pixel-level proof lives in input_hardening_sanity (embed path,
+  #     both configs); this only proves the App surface shares the same guards. WORKING_DIRECTORY
+  #     = CMAKE_BINARY_DIR so "tests/min.rml" resolves (copied unconditionally at the top).
+  # PT: app_input_hardening_smoke -- smoke de paridade do caminho App para os fixes da auditoria de
+  #     hardening de entrada v0.3.0 (só backend GLFW): App::load(nullptr) retorna false sem abortar
+  #     o processo (null-guard de Bootstrap::load, CRITICAL), e App::set_dp_ratio(0/-1/NaN/inf) não
+  #     crasha e mantém ok() true. A prova a nível de pixel está em input_hardening_sanity (caminho
+  #     embed, 2 configs); este só prova que a superfície do App compartilha as mesmas guardas.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml" resolva (copiado no topo).
+  # ---------------------------------------------------------------------------
+  add_executable(app_input_hardening_smoke app_input_hardening_smoke.cpp)
+  target_link_libraries(app_input_hardening_smoke PRIVATE glintfx)
+  add_test(NAME app_input_hardening_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_input_hardening_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: Shared assets for visual tests (render_sanity and golden_test).
   #     Copy showcase RML variants, RCSS, font, and test RML variant so both tests find
   #     them at runtime from WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/).
@@ -756,6 +778,35 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_scene.rcss
 add_test(NAME polygon_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:polygon_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: input_hardening_sanity -- proves the three v0.3.0 input-surface hardening fixes (security
+#     audit) reject invalid input fail-high without breaking valid use, all via the UiLayer/Engine
+#     path shared with App: Bootstrap::load(nullptr) -> false with no SIGABRT [CRITICAL];
+#     Engine::set_dp_ratio(0/-1/NaN/inf) ignored (layout not degenerated), set_dp_ratio(2.0) still
+#     scales; UiLayer::set_viewport(w/h<=0) no-op (both overloads), valid viewport still renders.
+#     Reuses dp_ratio_scene.rml/.rcss (copied above for dp_ratio_sanity) as a deterministic
+#     bright-pixel oracle. Runs in BOTH build configs (embed-mode, links ${_embed_dep} + gl3w for
+#     the direct GL readback in offscreen.hpp). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR
+#     (= build/tests/) so dp_ratio_scene.rml resolves by bare name.
+# PT: input_hardening_sanity -- prova que os tres fixes de hardening da superficie de entrada
+#     v0.3.0 (auditoria de seguranca) rejeitam entrada invalida fail-high sem quebrar uso valido,
+#     todos via o caminho UiLayer/Engine compartilhado com o App: Bootstrap::load(nullptr) ->
+#     false sem SIGABRT [CRITICAL]; Engine::set_dp_ratio(0/-1/NaN/inf) ignorado (layout nao
+#     degenerado), set_dp_ratio(2.0) ainda escala; UiLayer::set_viewport(w/h<=0) no-op (as duas
+#     sobrecargas), viewport valido ainda renderiza. Reusa dp_ratio_scene.rml/.rcss (copiado acima
+#     para dp_ratio_sanity) como oraculo deterministico de pixels brilhantes. Roda em AMBAS as
+#     configs (embed-mode, linka ${_embed_dep} + gl3w para o readback GL direto em offscreen.hpp).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para dp_ratio_scene.rml
+#     resolver por nome simples.
+# ---------------------------------------------------------------------------
+add_executable(input_hardening_sanity input_hardening_sanity.cpp)
+target_link_libraries(input_hardening_sanity PRIVATE ${_embed_dep} gl3w)
+add_test(NAME input_hardening_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:input_hardening_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

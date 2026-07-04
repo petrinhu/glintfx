@@ -11,6 +11,7 @@
 #include "bootstrap.hpp"
 #include "data_binder.hpp"
 #include <RmlUi/Core.h>
+#include <cmath>  // EN: std::isfinite (dp-ratio input hardening). PT: std::isfinite (hardening do dp-ratio).
 
 namespace glintfx {
 
@@ -52,6 +53,15 @@ bool Engine::load(const char* rml_path) {
 
 void Engine::set_viewport(int w, int h) {
   if (!impl_->ok) return;
+  // EN: Defence-in-depth w/h guard (input-hardening audit, v0.3.0). UiLayer::set_viewport already
+  //     guards before reaching here, but validating at this common Engine point too means no
+  //     current or future caller can push a zero/negative dimension into
+  //     Rml::Context::SetDimensions (degenerate layout). Same rationale as set_dp_ratio's guard.
+  // PT: Guard de w/h em defesa-em-profundidade (auditoria de hardening, v0.3.0). UiLayer::
+  //     set_viewport já valida antes de chegar aqui, mas validar também neste ponto comum do
+  //     Engine garante que nenhum caller atual ou futuro empurre uma dimensão zero/negativa para
+  //     Rml::Context::SetDimensions (layout degenerado). Mesma racional do guard do set_dp_ratio.
+  if (w <= 0 || h <= 0) return;
   if (auto* c = impl_->boot.context()) {
     c->SetDimensions(Rml::Vector2i(w, h));
   }
@@ -59,6 +69,30 @@ void Engine::set_viewport(int w, int h) {
 
 void Engine::set_dp_ratio(float ratio) {
   if (!impl_->ok) return;
+  // EN: Input-hardening (audit, v0.3.0). The dp ratio scales the RCSS `dp` unit and feeds
+  //     Rml::Context::SetDensityIndependentPixelRatio, which propagates it through 40+ layout
+  //     calculations. A non-positive ratio (0 / negative) collapses every dp-sized element to
+  //     zero; a non-finite ratio (NaN/inf, e.g. from a `real_w / logical_w` where logical_w
+  //     ended up 0) silently poisons the entire layout with NaN, producing an invisible or
+  //     garbage UI with no error. Reject anything that is not a finite positive number: keep the
+  //     previous (or default 1.0) ratio and log. Applied here at the single common Engine point
+  //     so App and UiLayer are both covered. Mirrors the fail-high spirit of the polygon() sides
+  //     hardening: invalid input is ignored, never propagated.
+  // PT: Hardening de entrada (auditoria, v0.3.0). O dp ratio escala a unidade RCSS `dp` e
+  //     alimenta Rml::Context::SetDensityIndependentPixelRatio, que o propaga por 40+ cálculos de
+  //     layout. Um ratio não-positivo (0 / negativo) colapsa todo elemento dimensionado em dp
+  //     para zero; um ratio não-finito (NaN/inf, ex.: de um `real_w / logical_w` onde logical_w
+  //     acabou 0) envenena silenciosamente todo o layout com NaN, produzindo uma UI invisível ou
+  //     lixo sem erro. Rejeita qualquer coisa que não seja um número finito positivo: mantém o
+  //     ratio anterior (ou o default 1.0) e loga. Aplicado aqui no ponto comum único do Engine
+  //     para que App e UiLayer sejam ambos cobertos. Espelha o espírito fail-high do hardening do
+  //     sides de polygon(): entrada inválida é ignorada, nunca propagada.
+  if (!std::isfinite(ratio) || ratio <= 0.0f) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+        "set_dp_ratio(%g) ignored -- dp ratio must be a finite positive number "
+        "(previous ratio kept).", ratio);
+    return;
+  }
   if (auto* c = impl_->boot.context()) {
     // EN: SetDensityIndependentPixelRatio is idempotent when ratio hasn't changed;
     //     it re-triggers layout when it has, so no need to guard here.

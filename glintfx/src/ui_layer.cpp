@@ -127,6 +127,19 @@ bool UiLayer::load(const char* rml_path) {
 
 void UiLayer::set_viewport(int w, int h) {
   if (!impl_->ok) return;
+  // EN: Input-hardening (audit, v0.3.0). w/h are viewport dimensions fed to
+  //     Rml::Context::SetDimensions; a zero/negative dimension degenerates the layout engine.
+  //     Skip silently and keep the previous viewport -- this replicates the exact guard that
+  //     already lives in process_event(Resize) (`if (ev.width <= 0 || ev.height <= 0) break;`);
+  //     the two set_viewport overloads were the ones that lacked it. x/y/target_h are NOT
+  //     validated: a legitimate letterbox offset can be negative.
+  // PT: Hardening de entrada (auditoria, v0.3.0). w/h são dimensões de viewport passadas a
+  //     Rml::Context::SetDimensions; uma dimensão zero/negativa degenera o motor de layout.
+  //     Ignora silenciosamente e mantém o viewport anterior -- replica o guard exato que já
+  //     existe em process_event(Resize) (`if (ev.width <= 0 || ev.height <= 0) break;`); as duas
+  //     sobrecargas de set_viewport eram as que não o tinham. x/y/target_h NÃO são validados: um
+  //     offset de letterbox legítimo pode ser negativo.
+  if (w <= 0 || h <= 0) return;
   impl_->w = w;
   impl_->h = h;
   impl_->x = impl_->y = impl_->gl_offset_x = impl_->gl_offset_y = 0;
@@ -137,6 +150,13 @@ void UiLayer::set_viewport(int w, int h) {
 
 void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
   if (!impl_->ok) return;
+  // EN: Same w/h guard as the 2-arg overload above (input-hardening audit, v0.3.0). Only w/h are
+  //     checked -- x/y (letterbox origin) and target_h can legitimately be any value including
+  //     negative offsets. Keeps the previous viewport on invalid dimensions.
+  // PT: Mesmo guard de w/h da sobrecarga de 2 args acima (auditoria de hardening, v0.3.0). Só w/h
+  //     são checados -- x/y (origem do letterbox) e target_h podem legitimamente ser qualquer
+  //     valor, incluindo offsets negativos. Mantém o viewport anterior em dimensões inválidas.
+  if (w <= 0 || h <= 0) return;
   impl_->x = x;
   impl_->y = y;
   impl_->w = w;

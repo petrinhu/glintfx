@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -236,7 +236,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.4.0** (stable, tagged), 2026-07-07. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
+> **Current release: v0.4.1** (stable, tagged), 2026-07-07. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
 
 **Delivered (v0.2.x-v0.4.0):**
 
@@ -482,7 +482,7 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.4.0** (estável, taggeada), 2026-07-07. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
+> **Lançamento atual: v0.4.1** (estável, taggeada), 2026-07-07. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
 
 **Entregue (v0.2.x-v0.4.0):**
 

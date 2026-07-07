@@ -232,6 +232,7 @@ int main() {
   for (float bc : bad_coords) {
     ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = bc, .y = bc });
     ui.process_event({ .type = glintfx::UiEvent::Type::MouseWheel, .x = 0.f, .y = bc });
+    ui.process_event({ .type = glintfx::UiEvent::Type::MouseWheel, .x = bc, .y = 0.f });
   }
   std::puts("input_hardening_sanity: MouseMove/MouseWheel non-finite coords -> no crash OK");
 

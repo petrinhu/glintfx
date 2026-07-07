@@ -3,6 +3,10 @@
 // Fachada drop-in: motor de UI + efeitos GL3.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
+#include <glintfx/config.hpp>
+#if !GLINTFX_BACKEND_GLFW
+#error "glintfx::App requires GLINTFX_BACKEND_GLFW=ON (embed-only build: use glintfx::UiLayer)"
+#endif
 #include <memory>
 #include <cstddef>
 #include <functional>
@@ -154,11 +158,11 @@ public:
   ElementBox get_element_box(const char* id) const;
 
   // EN: Scroll an element's nearest scrolling ancestor(s) so the element becomes visible
-  //     (GLINTFX-SCROLL-1, v0.3.2). Parity with UiLayer::scroll_element_into_view (same
+  //     (GLINTFX-SCROLL-1, v0.4.0). Parity with UiLayer::scroll_element_into_view (same
   //     signature/semantics -- see there for the full contract: instant/synchronous, wraps
   //     Rml::Element::ScrollIntoView(bool)).
   // PT: Rola o(s) ancestral(is) rolável(eis) mais próximo(s) de um elemento para que ele fique
-  //     visível (GLINTFX-SCROLL-1, v0.3.2). Paridade com UiLayer::scroll_element_into_view
+  //     visível (GLINTFX-SCROLL-1, v0.4.0). Paridade com UiLayer::scroll_element_into_view
   //     (mesma assinatura/semântica -- ver lá o contrato completo: instantâneo/síncrono,
   //     encapsula Rml::Element::ScrollIntoView(bool)).
   bool scroll_element_into_view(const char* id, bool align_with_top = true) const;

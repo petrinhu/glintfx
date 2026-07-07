@@ -1,0 +1,17 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<rml>
+<head>
+  <link type="text/rcss" href="resize_scene.rcss"/>
+  <!-- EN: Resize sanity scene (AUD-PUB-1) -- #probe fills the whole viewport
+           (width:100%/height:100%, no margin/border/padding), so its border-box
+           geometry is a deterministic oracle that must track window resize.
+       PT: Cena de sanidade de resize (AUD-PUB-1) -- #probe preenche a viewport
+           inteira (width:100%/height:100%, sem margem/borda/padding), então sua
+           geometria border-box é um oráculo determinístico que deve acompanhar
+           o resize da janela. -->
+  <title>glintfx resize sanity</title>
+</head>
+<body>
+  <div id="probe">&nbsp;</div>
+</body>
+</rml>

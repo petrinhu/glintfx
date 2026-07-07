@@ -42,6 +42,14 @@ struct App::Impl {
   Engine                                engine;
   int  w  = 0;
   int  h  = 0;
+  // EN: Last window framebuffer size seen by render() (AUD-PUB-1 fix). Seeded to the
+  //     AppConfig construction size so the first render() frame is a no-op resize (the
+  //     Engine::attach() call already set these initial dims -- see App::App() below).
+  // PT: Último tamanho de framebuffer da janela visto por render() (fix AUD-PUB-1).
+  //     Semeado com o tamanho de construção do AppConfig, então o 1º frame de render() é um
+  //     resize no-op (Engine::attach() já setou essas dims iniciais -- ver App::App() abaixo).
+  int  last_render_w = 0;
+  int  last_render_h = 0;
   bool ok = false;
 };
 
@@ -56,6 +64,16 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
   // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
   if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
+  // EN: Seed the resize-tracking cache (AUD-PUB-1 fix) with the dims Engine::attach() just
+  //     used to construct the Rml::Context. render() only re-applies set_viewport() when the
+  //     window size differs from this cache, so the first frame does not redo the identical
+  //     SetDimensions() call attach() already made.
+  // PT: Semeia o cache de rastreio de resize (fix AUD-PUB-1) com as dims que Engine::attach()
+  //     acabou de usar para construir o Rml::Context. render() só reaplica set_viewport()
+  //     quando o tamanho da janela difere deste cache, então o 1º frame não repete a mesma
+  //     chamada SetDimensions() que attach() já fez.
+  impl_->last_render_w = cfg.width;
+  impl_->last_render_h = cfg.height;
 }
 
 App::~App() = default;
@@ -152,6 +170,31 @@ void App::render() {
   if (!impl_->ok) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
+  // EN: AUD-PUB-1 fix -- App::render() used to feed (w, h) straight into
+  //     Engine::render_standalone() without ever calling Engine::set_viewport(), the only
+  //     path that reaches Rml::Context::SetDimensions() (engine.cpp). The window resized at
+  //     the GLFW/GL level but the RmlUi layout stayed frozen at the AppConfig
+  //     construction-time dimensions forever. Fix (Option A, automatic, zero new public
+  //     API): re-flow the layout whenever the observed size differs from the last frame's
+  //     cached size, BEFORE rendering with the new size. set_viewport() already guards
+  //     w<=0||h<=0 (engine.cpp) -- a transiently-zero size (e.g. minimized window) is a
+  //     harmless no-op there, and the cache is only updated when it actually changes, so a
+  //     later real size is picked up on the next frame.
+  // PT: fix AUD-PUB-1 -- App::render() alimentava (w, h) direto em
+  //     Engine::render_standalone() sem nunca chamar Engine::set_viewport(), o único
+  //     caminho que alcança Rml::Context::SetDimensions() (engine.cpp). A janela
+  //     redimensionava no nível GLFW/GL mas o layout do RmlUi ficava congelado para sempre
+  //     nas dimensões de construção do AppConfig. Fix (Opção A, automático, zero API pública
+  //     nova): refaz o layout sempre que o tamanho observado difere do tamanho cacheado do
+  //     último frame, ANTES de renderizar com o novo tamanho. set_viewport() já guarda
+  //     w<=0||h<=0 (engine.cpp) -- um tamanho transitoriamente zero (ex.: janela minimizada)
+  //     é um no-op inofensivo lá, e o cache só é atualizado quando de fato muda, então um
+  //     tamanho real posterior é capturado no próximo frame.
+  if (w != impl_->last_render_w || h != impl_->last_render_h) {
+    impl_->engine.set_viewport(w, h);
+    impl_->last_render_w = w;
+    impl_->last_render_h = h;
+  }
   impl_->engine.render_standalone(w, h);
   impl_->window.swap();
 }

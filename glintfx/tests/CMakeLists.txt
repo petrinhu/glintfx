@@ -81,6 +81,19 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scroll_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scroll_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/scroll_scene.rcss COPYONLY)
 
+# EN: resize_scene.rml/.rcss (AUD-PUB-1, v0.5.0) -- used only by app_resize_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix,
+#     same as element_box_scene.*/scroll_scene.* above). Copied unconditionally here so it
+#     is always present, same convention as the rest of this shared-asset block.
+# PT: resize_scene.rml/.rcss (AUD-PUB-1, v0.5.0) -- usado só por app_resize_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/",
+#     mesmo padrão de element_box_scene.*/scroll_scene.* acima). Copiado incondicionalmente
+#     aqui, mesma convenção do resto deste bloco de assets compartilhados.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/resize_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/resize_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -248,6 +261,37 @@ if(GLINTFX_BACKEND_GLFW)
   add_test(NAME app_input_hardening_smoke
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:app_input_hardening_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_resize_smoke -- regression test for App standalone not re-flowing RmlUi layout
+  #     on window resize (AUD-PUB-1, v0.5.0). App::render() must now cache the last known
+  #     window size and call Engine::set_viewport() (-> Rml::Context::SetDimensions) when it
+  #     changes between frames, before Engine::render_standalone(). See app_resize_smoke.cpp
+  #     for the full bug/fix/oracle writeup. GLFW-only: forces a real OS-level
+  #     glfwSetWindowSize() via glfwGetCurrentContext(), so it links `glfw` directly for the
+  #     header/symbols (glintfx links glfw PRIVATE, not propagated to consumers -- same
+  #     rationale as golden_test linking gl3w directly below). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR (repo-wide GLFW-block convention); resize_scene.rml is copied once
+  #     to CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/resize_scene.rml".
+  # PT: app_resize_smoke -- teste de regressão para o App standalone não refazer o layout do
+  #     RmlUi em resize de janela (AUD-PUB-1, v0.5.0). App::render() agora precisa cachear o
+  #     último tamanho de janela conhecido e chamar Engine::set_viewport() (->
+  #     Rml::Context::SetDimensions) quando ele mudar entre frames, antes de
+  #     Engine::render_standalone(). Ver app_resize_smoke.cpp para o relato completo de
+  #     bug/fix/oráculo. Só GLFW: força um glfwSetWindowSize() real no nível do SO via
+  #     glfwGetCurrentContext(), então linka `glfw` diretamente pelo header/símbolos
+  #     (glintfx linka glfw PRIVATE, não propagado a consumidores -- mesma racional de
+  #     golden_test linkando gl3w diretamente abaixo). WORKING_DIRECTORY = CMAKE_BINARY_DIR
+  #     (convenção do bloco GLFW em todo o repo); resize_scene.rml é copiado uma vez para
+  #     CMAKE_CURRENT_BINARY_DIR acima, endereçado aqui como "tests/resize_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_resize_smoke app_resize_smoke.cpp)
+  target_link_libraries(app_resize_smoke PRIVATE glintfx glfw)
+  add_test(NAME app_resize_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_resize_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

@@ -107,6 +107,9 @@ jobs:
       #     git, curl, and build-essential, but NOT the graphics/GL stacks.
       #     Commands run as root inside the container -- no sudo needed.
       #     - git: required by CMake FetchContent to clone RmlUi.
+      #     - clang: README.md declares "Compiler: clang" -- build-and-test must
+      #       actually build the lib with clang, not just lint it (lint-and-scan
+      #       already runs clang-tidy but never compiles the lib itself with clang).
       #     - libglfw3-dev: installed for BOTH configs -- in GLFW=OFF mode the embed
       #       tests use a hidden GLFW window as a test-only GL context fixture.
       #     - libgl1-mesa-dev / libegl1-mesa-dev: OpenGL + EGL headers (FindOpenGL).
@@ -117,6 +120,9 @@ jobs:
       #     git, curl e build-essential, mas NAO as stacks de GL/graficos.
       #     Comandos rodam como root dentro do container -- sem sudo necessario.
       #     - git: necessario para FetchContent clonar o RmlUi.
+      #     - clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
+      #       de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
+      #       clang-tidy mas nunca compila a lib em si com clang).
       #     - libglfw3-dev: instalado em AMBAS as configs -- no modo GLFW=OFF os testes
       #       embed usam janela GLFW oculta como fixture de contexto GL so-de-teste.
       #     - libgl1-mesa-dev / libegl1-mesa-dev: headers OpenGL + EGL (FindOpenGL).
@@ -127,20 +133,26 @@ jobs:
         run: |
           apt-get update -q
           apt-get install -y --no-install-recommends \
-            cmake g++ git \
+            cmake clang git \
             libglfw3-dev libfreetype-dev \
             libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
             libgl1-mesa-dri \
             xvfb
 
       # EN: Configure with the matrix backend flag. Demos OFF -- showcase requires App/GLFW.
+      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER pinned to clang/clang++ -- aligns the
+      #     build with README.md's declared toolchain (was silently defaulting to g++).
       # PT: Configura com a flag de backend da matrix. Demos OFF -- showcase requer App/GLFW.
+      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER fixados em clang/clang++ -- alinha o
+      #     build ao toolchain declarado no README.md (estava caindo em g++ em silencio).
       - name: configure
         run: |
           cmake -S glintfx -B glintfx/build-${{ matrix.backend }} \
             -DGLINTFX_BUILD_TESTS=ON \
             -DGLINTFX_BUILD_DEMOS=OFF \
-            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }}
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
 
       - name: build
         run: cmake --build glintfx/build-${{ matrix.backend }} -j$(nproc)

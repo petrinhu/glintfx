@@ -72,11 +72,17 @@ jobs:
           key: rmlui-${{ runner.os }}-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
 
       # EN: Install system build and runtime dependencies.
+      #     clang: README.md declares "Compiler: clang" -- build-and-test must actually
+      #     build the lib with clang, not just lint it (lint-and-scan already runs
+      #     clang-tidy but never compiles the lib itself with clang).
       #     libglfw3-dev: installed for BOTH configs -- in GLFW=OFF mode the embed tests
       #     create a hidden GLFW window as a test-only GL context fixture; the library
       #     itself does not link GLFW in that config.
       #     libgl1-mesa-dri: llvmpipe (Mesa software GL renderer required by Xvfb).
       # PT: Instala dependencias de build e runtime do sistema.
+      #     clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
+      #     de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
+      #     clang-tidy mas nunca compila a lib em si com clang).
       #     libglfw3-dev: instalado em AMBAS as configs -- no modo GLFW=OFF os testes embed
       #     criam uma janela GLFW oculta como fixture de contexto GL so-de-teste; a biblioteca
       #     em si nao linka GLFW nessa config.
@@ -85,21 +91,27 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
-            cmake g++ \
+            cmake clang \
             libglfw3-dev libfreetype-dev \
             libgl1-mesa-dev libgl1-mesa-dri \
             xvfb
 
       # EN: Configure with the matrix backend flag. Demos OFF -- the showcase requires the
       #     GLFW App and is skipped automatically when GLINTFX_BACKEND_GLFW=OFF anyway.
+      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER pinned to clang/clang++ -- aligns the
+      #     build with README.md's declared toolchain (was silently defaulting to g++).
       # PT: Configura com a flag de backend da matrix. Demos OFF -- o showcase requer o
       #     App GLFW e e pulado automaticamente com GLINTFX_BACKEND_GLFW=OFF de qualquer forma.
+      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER fixados em clang/clang++ -- alinha o
+      #     build ao toolchain declarado no README.md (estava caindo em g++ em silencio).
       - name: configure
         run: |
           cmake -S glintfx -B glintfx/build-${{ matrix.backend }} \
             -DGLINTFX_BUILD_TESTS=ON \
             -DGLINTFX_BUILD_DEMOS=OFF \
-            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }}
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
 
       - name: build
         run: cmake --build glintfx/build-${{ matrix.backend }} -j$(nproc)

@@ -68,15 +68,31 @@ int main() {
   //     from INSIDE its own invocation (plausible real pattern: "clicked 'Play' -> swap in the
   //     next screen's handler"). Without the local-copy guard in ClickEventListener::
   //     ProcessEvent, the std::move-assignment inside the nested set_click_callback() call
-  //     destroys the std::function target while ProcessEvent is still invoking it through the
-  //     cb_ pointer -- a use-after-free that ASan/UBSan should catch on a regression.
+  //     destroys the std::function target (this very closure, heap-allocated because it captures
+  //     3 references) while ProcessEvent is still invoking it through the cb_ pointer. The
+  //     `swapped = true;` line AFTER the nested set_click_callback() call below is the actual
+  //     tooth: it re-derefs the reference-to-`swapped` stored INSIDE this closure's own
+  //     heap storage. With the guard (`auto cb = *cb_` in bootstrap.cpp -- a stack copy survives
+  //     reassignment of *cb_), that storage is untouched and the write is safe. Without the
+  //     guard, *cb_ was just destroyed by the nested call and this line is a genuine
+  //     heap-use-after-free that ASan catches (proven empirically: this test previously passed
+  //     identically with and without the guard because nothing was read/written post-reassignment
+  //     -- there was no dereference for ASan to catch).
   // PT: (D) Reentrância (AUD-TEC-3) -- o primeiro handler troca a si mesmo por um segundo
   //     handler de DENTRO da própria invocação (padrão real plausível: "clicou em 'Play' ->
   //     troca o handler da tela seguinte"). Sem a guarda de cópia local em
   //     ClickEventListener::ProcessEvent, o std::move-assignment dentro da chamada aninhada a
-  //     set_click_callback() destrói o alvo do std::function enquanto ProcessEvent ainda o
-  //     invoca via o ponteiro cb_ -- um use-after-free que ASan/UBSan deve capturar numa
-  //     regressão.
+  //     set_click_callback() destrói o alvo do std::function (esta própria closure, alocada no
+  //     heap por capturar 3 referências) enquanto ProcessEvent ainda a invoca via o ponteiro
+  //     cb_. A linha `swapped = true;` APÓS a chamada aninhada a set_click_callback() abaixo é
+  //     o dente de fato: ela re-derreferencia a referência-a-`swapped` guardada DENTRO do
+  //     armazenamento no heap desta própria closure. Com a guarda (`auto cb = *cb_` em
+  //     bootstrap.cpp -- uma cópia na stack sobrevive à reatribuição de *cb_), esse
+  //     armazenamento fica intocado e a escrita é segura. Sem a guarda, *cb_ acabou de ser
+  //     destruído pela chamada aninhada e esta linha é um heap-use-after-free real que o ASan
+  //     captura (provado empiricamente: este teste antes passava idêntico com e sem a guarda
+  //     porque nada era lido/escrito pós-reatribuição -- não havia dereferência para o ASan
+  //     capturar).
   // ---------------------------------------------------------------------------
   std::vector<std::string> reentrant_hits;
   bool swapped = false;
@@ -87,6 +103,11 @@ int main() {
       ui.set_click_callback([&reentrant_hits](const char* id2) {
         reentrant_hits.emplace_back(std::string("second:") + id2);
       });
+      // EN: Tooth of this test -- see comment block above. Reads AND writes `swapped` through
+      //     the reference stored inside THIS closure, after the closure may have been freed.
+      // PT: Dente deste teste -- ver bloco de comentário acima. Lê E escreve `swapped` através
+      //     da referência guardada DENTRO desta closure, depois que ela pode ter sido liberada.
+      swapped = true;
     }
   });
 

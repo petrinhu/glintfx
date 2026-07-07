@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: AUD-C0-3 (AUDIT_FIND.md) -- stdout golden-file manifest, sibling of expected_exit.txt.
+#     Lines "<program-name> <golden-file-path-relative-to-repo-root>"; a program NOT listed here
+#     is only checked for exit code (the original, unchanged contract). A program listed here
+#     has its stdout captured to a temp file and byte-exact `cmp`'d against the named golden file
+#     -- see the `test` target in the Makefile. Comment lines (starting with '#') and blank lines
+#     are ignored.
+# PT: AUD-C0-3 (AUDIT_FIND.md) -- manifesto golden-file de stdout, irmao do expected_exit.txt.
+#     Linhas "<nome-do-programa> <caminho-do-golden-relativo-a-raiz-do-repo>"; um programa NAO
+#     listado aqui so tem o exit code checado (o contrato original, inalterado). Um programa
+#     listado aqui tem seu stdout capturado num arquivo temporario e comparado byte-a-byte (`cmp`)
+#     contra o golden nomeado -- ver o alvo `test` no Makefile. Linhas de comentario (iniciando
+#     com '#') e linhas em branco sao ignoradas.
+printf_e2e tests/golden/printf_e2e.expected

@@ -83,18 +83,50 @@ $(OBJ) $(BIN):
 #     o echo_stdin da B7) travar indefinidamente esperando entrada em vez de ver um EOF
 #     imediato. Explicito > implicito: isso torna "sem entrada" uma garantia documentada, nao
 #     um acidente de como o `make test` foi chamado.
+# EN: AUD-C0-3 (AUDIT_FIND.md) extension: some gate programs (today: printf_e2e, see its file
+#     header) exercise the real stdout I/O path -- not just the exit code -- and need their
+#     output verified byte-exact against a golden file, not just eyeballed with `od -c`. A second
+#     manifest, tests/expected_stdout.txt ("<name> <golden-path>", same lookup shape as
+#     expected_exit.txt), opts a program IN to this stricter check; a program absent from it
+#     keeps the original exit-code-only contract unchanged. When a golden entry exists, stdout is
+#     redirected to a temp file (never a shell command-substitution `$(...)`, which would eat any
+#     trailing newline(s) and silently corrupt the byte-exact comparison) and diffed with `cmp
+#     -s` -- POSIX `cmp` with no output, exit 0 iff every byte matches.
+# PT: Extensao do AUD-C0-3 (AUDIT_FIND.md): alguns programas-gate (hoje: printf_e2e, ver o
+#     cabecalho do arquivo dele) exercitam o caminho real de I/O de stdout -- nao so o exit code
+#     -- e precisam ter a saida verificada byte-a-byte contra um golden file, nao so olhada por
+#     cima com `od -c`. Um segundo manifesto, tests/expected_stdout.txt ("<nome> <caminho-do-
+#     golden>", mesmo formato de busca do expected_exit.txt), opta IN um programa pra essa
+#     checagem mais rigorosa; um programa ausente dele mantem o contrato original de so-exit-code
+#     inalterado. Quando existe uma entrada golden, o stdout e' redirecionado pra um arquivo
+#     temporario (nunca uma substituicao de comando de shell `$(...)`, que comeria qualquer
+#     quebra-de-linha final e corromperia silenciosamente a comparacao byte-a-byte) e comparado
+#     com `cmp -s` -- `cmp` POSIX sem saida, exit 0 sse todo byte bate.
 test: build
 	@status=0; \
 	for prog in $(PROGRAMS); do \
 		name=$$(basename $$prog); \
 		expected=$$(awk -v n="$$name" '$$1==n{print $$2}' tests/expected_exit.txt 2>/dev/null); \
 		[ -n "$$expected" ] || expected=0; \
-		$$prog < /dev/null; actual=$$?; \
-		if [ "$$actual" = "$$expected" ]; then \
-			echo "PASS: $$name (exit=$$actual)"; \
+		golden=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stdout.txt 2>/dev/null); \
+		if [ -n "$$golden" ]; then \
+			outtmp=$$(mktemp); \
+			$$prog < /dev/null > "$$outtmp"; actual=$$?; \
+			if [ "$$actual" = "$$expected" ] && cmp -s "$$outtmp" "$$golden"; then \
+				echo "PASS: $$name (exit=$$actual, stdout==$$golden)"; \
+			else \
+				echo "FAIL: $$name (exit=$$actual, expected=$$expected, stdout vs $$golden mismatch)"; \
+				status=1; \
+			fi; \
+			rm -f "$$outtmp"; \
 		else \
-			echo "FAIL: $$name (exit=$$actual, expected=$$expected)"; \
-			status=1; \
+			$$prog < /dev/null; actual=$$?; \
+			if [ "$$actual" = "$$expected" ]; then \
+				echo "PASS: $$name (exit=$$actual)"; \
+			else \
+				echo "FAIL: $$name (exit=$$actual, expected=$$expected)"; \
+				status=1; \
+			fi; \
 		fi; \
 	done; \
 	exit $$status

@@ -5,10 +5,13 @@
 //     spec cases from the task brief: malloc (non-NULL + 16-byte alignment, memory is
 //     writable/readable), multiple mallocs (distinct, non-overlapping -- proved by writing a
 //     unique pattern into each block and checking none corrupted another), realloc (growing
-//     preserves old content, realloc(NULL,n)==malloc, realloc(p,0) per this project's
-//     documented choice), free(NULL) and free(p) as safe no-ops, malloc(0) per this project's
-//     documented choice, and exhausting the first arena to force a SECOND `mmap`'d arena
-//     (proves arena growth -- pointers from the second arena are equally valid/writable).
+//     preserves old content, SHRINKING preserves the surviving prefix, realloc(NULL,n)==malloc,
+//     realloc(p,0) per this project's documented choice), free(NULL) and free(p) as safe no-ops,
+//     malloc(0) per this project's documented choice, malloc's integer-overflow guard
+//     (malloc((size_t)-1) == NULL -- both the shrink test and the overflow-guard test are
+//     AUD-C0-5/AUDIT_FIND.md follow-ups, see their own comments below), and exhausting the first
+//     arena to force a SECOND `mmap`'d arena (proves arena growth -- pointers from the second
+//     arena are equally valid/writable).
 // PT: Programa-gate do E1 -- TDD VERMELHO primeiro: escrito contra include/alloc.h ANTES de
 //     src/alloc.c ter corpo de verdade, entao o link falhou (undefined reference a
 //     malloc/free/realloc) ate o E1 ser implementado. Ver relatorio da tarefa pro erro
@@ -16,10 +19,13 @@
 //     (nao-NULL + alinhamento a 16 bytes, memoria e' escrivivel/legivel), multiplos mallocs
 //     (distintos, nao-sobrepostos -- provado escrevendo um padrao unico em cada bloco e
 //     checando que nenhum corrompeu o outro), realloc (crescer preserva conteudo antigo,
-//     realloc(NULL,n)==malloc, realloc(p,0) conforme a escolha documentada deste projeto),
-//     free(NULL) e free(p) como no-ops seguros, malloc(0) conforme a escolha documentada deste
-//     projeto, e esgotar a primeira arena pra forcar uma SEGUNDA arena `mmap`'ada (prova o
-//     crescimento de arena -- ponteiros da segunda arena sao igualmente validos/escriviveis).
+//     ENCOLHER preserva o prefixo sobrevivente, realloc(NULL,n)==malloc, realloc(p,0) conforme a
+//     escolha documentada deste projeto), free(NULL) e free(p) como no-ops seguros, malloc(0)
+//     conforme a escolha documentada deste projeto, a guarda de overflow de inteiro do malloc
+//     (malloc((size_t)-1) == NULL, o teste de encolher e o de guarda de overflow sao ambos
+//     follow-ups do AUDIT_FIND.md, ver os comentarios proprios deles abaixo), e esgotar a
+//     primeira arena pra forcar uma SEGUNDA arena `mmap`'ada (prova o crescimento de arena --
+//     ponteiros da segunda arena sao igualmente validos/escriviveis).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "test.h"
 #include "alloc.h"
@@ -111,6 +117,36 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(grown[63], (unsigned char)0x42);
     }
 
+    // ---- realloc: shrinking preserves the surviving prefix --------------------
+    // EN: AUD-C0-5 (AUDIT_FIND.md): the `copy_size = (old_size < size) ? old_size : size` branch
+    //     in src/alloc.c's realloc() -- the SHRINK direction (new `size` < old `size`) -- had no
+    //     regression test (only the growing direction was covered above). Allocate 64 bytes,
+    //     stamp a known pattern into all 64, shrink to 8 via realloc, and verify the surviving
+    //     first 8 bytes are exactly what they were before the shrink (the discarded tail is not
+    //     re-checked -- it belongs to the old, now-abandoned block, per this project's
+    //     free()-is-a-no-op/leak-by-design contract, ADR-0004).
+    // PT: AUD-C0-5 (AUDIT_FIND.md): o ramo `copy_size = (old_size < size) ? old_size : size` do
+    //     realloc() em src/alloc.c -- a direcao de ENCOLHER (novo `size` < `size` antigo) -- nao
+    //     tinha teste de regressao (so a direcao de crescer estava coberta acima). Aloca 64
+    //     bytes, carimba um padrao conhecido nos 64, encolhe pra 8 via realloc, e verifica que os
+    //     8 bytes sobreviventes sao exatamente o que eram antes do encolhimento (a cauda
+    //     descartada nao e' reconferida -- pertence ao bloco antigo, agora abandonado, conforme o
+    //     contrato deste projeto de free()-e'-no-op/leak-by-design, ADR-0004).
+    {
+        unsigned char* p = (unsigned char*)malloc(64);
+        TEST_ASSERT(p != NULL);
+        for (size_t i = 0; i < 64; i++) {
+            p[i] = (unsigned char)(i + 1);
+        }
+
+        unsigned char* shrunk = (unsigned char*)realloc(p, 8);
+        TEST_ASSERT(shrunk != NULL);
+        TEST_ASSERT_EQ((uintptr_t)shrunk % 16, (uintptr_t)0);
+        for (size_t i = 0; i < 8; i++) {
+            TEST_ASSERT_EQ(shrunk[i], (unsigned char)(i + 1));
+        }
+    }
+
     // EN: realloc(NULL, n) behaves exactly like malloc(n).
     // PT: realloc(NULL, n) se comporta exatamente como malloc(n).
     {
@@ -150,6 +186,24 @@ int main(int argc, char** argv, char** envp) {
     {
         void* p = malloc(0);
         TEST_ASSERT(p == NULL);
+    }
+
+    // ---- malloc: integer-overflow guard --------------------------------------
+    // EN: AUD-C0-5 (AUDIT_FIND.md): src/alloc.c:167's overflow guard -- rejecting any `size` that
+    //     would make `size + ALLOC_HEADER_SIZE`, rounded up to ALLOC_ALIGN, wrap `size_t` -- was
+    //     verified correct by reading but had no regression test. `(size_t)-1` is `SIZE_MAX`, the
+    //     most extreme value the guard must catch (nowhere close to fitting in any real arena);
+    //     malloc MUST return NULL, never attempt the wrapped-around arithmetic that would
+    //     otherwise hand back a too-small buffer the caller believes is huge.
+    // PT: AUD-C0-5 (AUDIT_FIND.md): a guarda de overflow de src/alloc.c:167 -- rejeitar qualquer
+    //     `size` que faria `size + ALLOC_HEADER_SIZE`, arredondado pra ALLOC_ALIGN, estourar
+    //     `size_t` -- estava verificada correta por leitura mas sem teste de regressao.
+    //     `(size_t)-1` e' `SIZE_MAX`, o valor mais extremo que a guarda precisa pegar (nem perto
+    //     de caber em arena nenhuma de verdade); o malloc DEVE retornar NULL, nunca tentar a
+    //     aritmetica com wraparound que de outra forma devolveria um buffer pequeno demais que
+    //     quem chamou acredita ser enorme.
+    {
+        TEST_ASSERT(malloc((size_t)-1) == NULL);
     }
 
     // ---- arena exhaustion: force a second mmap'd arena ------------------------

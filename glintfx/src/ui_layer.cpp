@@ -36,9 +36,17 @@ constexpr int kMaxViewportDim = 32768;
 // EN: Map glintfx::Key to Rml::Input::KeyIdentifier.
 //     Gamepad nav: Up/Down/Left/Right → arrow keys; Enter → Return; Escape stays Escape.
 //     Tab drives RmlUi's built-in focus cycle; Space/Backspace for text widget editing.
+//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
+//     KI_NEXT — names confirmed by grepping the pinned RmlUi source
+//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR is Page Up,
+//     KI_NEXT is Page Down — RmlUi's own naming, not a typo here).
 // PT: Mapeia glintfx::Key para Rml::Input::KeyIdentifier.
 //     Nav por gamepad: Up/Down/Left/Right → setas; Enter → Return; Escape permanece Escape.
 //     Tab aciona o ciclo de foco interno do RmlUi; Space/Backspace para edição em widget de texto.
+//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
+//     KI_NEXT — nomes confirmados grepando o source pinado do RmlUi
+//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR é Page Up,
+//     KI_NEXT é Page Down — nomenclatura do próprio RmlUi, não é erro de digitação aqui).
 static Rml::Input::KeyIdentifier to_rml_key(Key k) noexcept {
   switch (k) {
     case Key::Up:        return Rml::Input::KI_UP;
@@ -50,6 +58,11 @@ static Rml::Input::KeyIdentifier to_rml_key(Key k) noexcept {
     case Key::Tab:       return Rml::Input::KI_TAB;
     case Key::Space:     return Rml::Input::KI_SPACE;
     case Key::Backspace: return Rml::Input::KI_BACK;
+    case Key::Delete:    return Rml::Input::KI_DELETE;
+    case Key::Home:      return Rml::Input::KI_HOME;
+    case Key::End:       return Rml::Input::KI_END;
+    case Key::PageUp:    return Rml::Input::KI_PRIOR;
+    case Key::PageDown:  return Rml::Input::KI_NEXT;
     default:             return Rml::Input::KI_UNKNOWN;
   }
 }

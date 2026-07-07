@@ -16,8 +16,19 @@
 
 namespace glintfx {
 
-// EN: Logical key identifiers — navigation-oriented subset. Extend for text editing as needed.
-// PT: Identificadores lógicos de tecla — subconjunto orientado a navegação. Extender conforme necessário.
+// EN: Logical key identifiers — navigation-oriented subset, extended (AUD-PUB-3, v0.5.0) with
+//     the 5 text-editing/document-navigation keys RmlUi already supports natively
+//     (KI_DELETE/KI_HOME/KI_END/KI_PRIOR/KI_NEXT, confirmed by grepping the pinned RmlUi source
+//     — see to_rml_key() in ui_layer.cpp). Letters/digits (Ctrl+C/V/Z shortcuts) are a larger,
+//     separate scope (would also need a UiEvent::Type::Text-style codepoint path for real text
+//     input) and were deliberately deferred — see the AUD-PUB-6 INBOX seed in TODO.md.
+// PT: Identificadores lógicos de tecla — subconjunto orientado a navegação, estendido
+//     (AUD-PUB-3, v0.5.0) com as 5 teclas de edição de texto/navegação de documento que o
+//     RmlUi já suporta nativamente (KI_DELETE/KI_HOME/KI_END/KI_PRIOR/KI_NEXT, confirmado
+//     grepando o source pinado do RmlUi — ver to_rml_key() em ui_layer.cpp). Letras/dígitos
+//     (atalhos Ctrl+C/V/Z) são um escopo maior e separado (exigiria também um caminho de
+//     codepoint estilo UiEvent::Type::Text para entrada de texto real) e foram deliberadamente
+//     adiados — ver a semente INBOX AUD-PUB-6 no TODO.md.
 enum class Key {
   None,
   Up,        // EN: d-pad up / arrow up.     PT: d-pad cima / seta acima.
@@ -28,7 +39,12 @@ enum class Key {
   Escape,    // EN: cancel / back button.     PT: cancelar / botão voltar.
   Tab,       // EN: focus cycle.              PT: ciclo de foco.
   Space,     // EN: space bar / face button.  PT: barra de espaço / botão face.
-  Backspace  // EN: delete backward.          PT: apagar para trás.
+  Backspace, // EN: delete backward.          PT: apagar para trás.
+  Delete,    // EN: delete forward.           PT: apagar para frente (Del).
+  Home,      // EN: line/document start.      PT: início de linha/documento.
+  End,       // EN: line/document end.        PT: fim de linha/documento.
+  PageUp,    // EN: scroll/page up.           PT: rolar/página acima.
+  PageDown   // EN: scroll/page down.         PT: rolar/página abaixo.
 };
 
 // EN: Keyboard/gamepad modifier bitmask — combine with bitwise-OR.

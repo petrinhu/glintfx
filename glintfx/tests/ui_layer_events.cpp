@@ -84,6 +84,33 @@ int main() {
                      .pressed = false,
                      .key     = glintfx::Key::Escape });
 
+  // EN: AUD-PUB-3 (v0.5.0) — the 5 new Key values (Delete/Home/End/PageUp/PageDown) round-trip
+  //     through to_rml_key() into RmlUi's ProcessKeyDown/Up without crashing. Rml::Context is
+  //     forward-declared/opaque to this test (no public accessor exposes "last processed key"),
+  //     so — same as the pre-existing Down/Enter/Escape assertions above — the only externally
+  //     observable contract at the UiLayer boundary is "does not crash, ok() stays true after
+  //     the sequence" (checked once at the end of main()). This is intentionally a smoke test,
+  //     not a mapping-correctness test: to_rml_key()'s switch/case mapping itself is exhaustive
+  //     and reviewed at the call site (ui_layer.cpp) instead.
+  // PT: AUD-PUB-3 (v0.5.0) — os 5 valores novos de Key (Delete/Home/End/PageUp/PageDown)
+  //     percorrem to_rml_key() até ProcessKeyDown/Up do RmlUi sem crashar. O Rml::Context é
+  //     forward-declared/opaco para este teste (nenhum acessor público expõe "última tecla
+  //     processada"), então — igual às asserções pré-existentes de Down/Enter/Escape acima —
+  //     o único contrato observável externamente na fronteira do UiLayer é "não crasha, ok()
+  //     permanece true após a sequência" (checado uma vez ao fim do main()). É
+  //     intencionalmente um teste de fumaça, não de corretude de mapeamento: o próprio
+  //     switch/case de to_rml_key() é exaustivo e revisado no call site (ui_layer.cpp).
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = true,  .key = glintfx::Key::Delete });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = false, .key = glintfx::Key::Delete });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = true,  .key = glintfx::Key::Home });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = false, .key = glintfx::Key::Home });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = true,  .key = glintfx::Key::End });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = false, .key = glintfx::Key::End });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = true,  .key = glintfx::Key::PageUp });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = false, .key = glintfx::Key::PageUp });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = true,  .key = glintfx::Key::PageDown });
+  ui.process_event({ .type = glintfx::UiEvent::Type::Key, .pressed = false, .key = glintfx::Key::PageDown });
+
   // EN: Resize with zero dimensions — must be silently ignored (guard inside process_event).
   //     Sending zero before a valid resize exercises the guard path without crashing.
   // PT: Resize com dimensões zero — deve ser ignorado silenciosamente (guard interno em process_event).

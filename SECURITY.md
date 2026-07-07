@@ -13,8 +13,8 @@
 
 | Version | Supported |
 | :--- | :--- |
-| 0.3.x | Yes |
-| < 0.3.0 | No |
+| 0.4.x | Yes |
+| < 0.4.0 | No |
 
 ### Reporting a vulnerability
 
@@ -50,8 +50,8 @@ O `glintfx` está em estágio inicial. Apenas a última linha de release recebe 
 
 | Versão | Suportada |
 | :--- | :--- |
-| 0.3.x | Sim |
-| < 0.3.0 | Não |
+| 0.4.x | Sim |
+| < 0.4.0 | Não |
 
 ### Reportar uma vulnerabilidade
 

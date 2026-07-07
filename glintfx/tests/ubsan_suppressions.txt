@@ -90,7 +90,7 @@ vptr:ElementDocument
 #     together — see the matching-mechanism note at the end) — RmlUi (same pinned commit,
 #     third-party, NOT glintfx code) hits an analogous teardown-order UB pattern inside its
 #     OWN internal scrollbar widget, Rml::WidgetScroll, first exercised by scroll_sanity.cpp
-#     (GLINTFX-SCROLL-1, v0.3.2) — it is the first scene/test in the whole suite whose
+#     (GLINTFX-SCROLL-1, v0.4.0) — it is the first scene/test in the whole suite whose
 #     overflow-y:auto content actually overflows enough to instantiate a live scrollbar
 #     (30 x 30px items in a 100px-tall container, scroll_scene.rcss).
 #     ~WidgetScroll() (Source/Core/WidgetScroll.cpp:44-60) calls RemoveEventListener on up to
@@ -145,13 +145,13 @@ vptr:ElementDocument
 #     overflow-y:auto (or overflow-x) container whose content actually overflows its box
 #     enough for RmlUi to materialise a live WidgetScroll.
 #     Reported upstream candidate / local fix candidate: GLINTFX-SCROLL-1 implementation
-#     notes (v0.3.2, 2026-07-07). NOT patched in-tree — same pinned-FetchContent rationale
+#     notes (v0.4.0, 2026-07-07). NOT patched in-tree — same pinned-FetchContent rationale
 #     as the entry above; re-verify whenever RMLUI GIT_TAG changes.
 # PT: vptr:*WidgetScroll.cpp* + vptr:*RemoveEventListener* (DUAS entradas, ambas
 #     necessárias juntas — ver a nota do mecanismo de match no fim) — o RmlUi (mesmo commit
 #     pinado, terceiro, NÃO código glintfx) atinge um padrão análogo de UB de ordem-de-
 #     teardown dentro do PRÓPRIO widget interno de scrollbar, Rml::WidgetScroll, exercitado
-#     pela primeira vez por scroll_sanity.cpp (GLINTFX-SCROLL-1, v0.3.2) — é a primeira
+#     pela primeira vez por scroll_sanity.cpp (GLINTFX-SCROLL-1, v0.4.0) — é a primeira
 #     cena/teste de toda a suíte cujo conteúdo overflow-y:auto de fato transborda o
 #     suficiente para instanciar uma scrollbar viva (30 itens de 30px num container de 100px
 #     de altura, scroll_scene.rcss).
@@ -211,7 +211,7 @@ vptr:ElementDocument
 #     overflow-y:auto (ou overflow-x) cujo conteúdo de fato transbordasse a caixa o
 #     suficiente para o RmlUi materializar um WidgetScroll vivo.
 #     Candidato a reporte upstream / candidato a fix local: notas de implementação do
-#     GLINTFX-SCROLL-1 (v0.3.2, 2026-07-07). NÃO corrigido in-tree — mesma racional de
+#     GLINTFX-SCROLL-1 (v0.4.0, 2026-07-07). NÃO corrigido in-tree — mesma racional de
 #     FetchContent pinado da entrada acima; reverificar sempre que o RMLUI GIT_TAG mudar.
 vptr:*WidgetScroll.cpp*
 vptr:*RemoveEventListener*

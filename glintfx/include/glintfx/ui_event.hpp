@@ -66,7 +66,7 @@ struct UiEvent {
     Resize,       // EN: logical viewport resize (width, height in pixels).
                   // PT: redimensionamento lógico do viewport (width, height em pixels).
     // EN: Mouse-wheel / trackpad scroll (x, y — delta, NOT position; see the field comments
-    //     below). GLINTFX-SCROLL-1, v0.3.2.
+    //     below). GLINTFX-SCROLL-1, v0.4.0.
     //
     //     WHICH ELEMENT SCROLLS — HOVER, NOT FOCUS (confirmed by reading the pinned RmlUi
     //     source, examples/RmlUi/Source/Core/Context.cpp): Context::ProcessMouseWheel(Vector2f,
@@ -93,7 +93,7 @@ struct UiEvent {
     //     use scroll_element_into_view()/set_element_scroll_top() to follow a focus-driven
     //     selection programmatically instead (see UiLayer::scroll_element_into_view).
     // PT: Rolagem de roda-do-mouse / trackpad (x, y — delta, NÃO posição; ver os comentários
-    //     dos campos abaixo). GLINTFX-SCROLL-1, v0.3.2.
+    //     dos campos abaixo). GLINTFX-SCROLL-1, v0.4.0.
     //
     //     QUAL ELEMENTO ROLA — HOVER, NÃO FOCO (confirmado lendo o source pinado do RmlUi,
     //     examples/RmlUi/Source/Core/Context.cpp): Context::ProcessMouseWheel(Vector2f, int)

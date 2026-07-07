@@ -42,7 +42,7 @@ project(hello_glintfx LANGUAGES CXX)
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.3.0)
+  GIT_TAG        v0.4.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(hello main.cpp)
@@ -185,7 +185,7 @@ project(hello_glintfx LANGUAGES CXX)
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.3.0)
+  GIT_TAG        v0.4.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(hello main.cpp)

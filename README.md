@@ -89,7 +89,7 @@ RmlUi 6.3 is fetched at configure time; gl3w is vendored in the repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.3.0)
+  GIT_TAG        v0.4.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -224,7 +224,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Known limitations
 
-`glintfx` v0.3.0 is honest about what is not yet there:
+`glintfx` v0.4.0 is honest about what is not yet there:
 
 - **Linux x86-64 only.** No Windows/macOS.
 - **One `App` per process.** GLFW and RmlUi global state make a second instance undefined behaviour.
@@ -261,7 +261,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
-- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.3.0`).
+- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.4.0`).
 - **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Core implementation complete, pending audit:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end -> a hand-rolled test harness enabling TDD -> a small core libc (memory, string, int-to-string conversion) -> a mini-printf -> a bump allocator over `mmap`, all zero libc and delivered under TDD plus adversarial review. Items sit at `🔍 Pending verification` awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. Still a **long-term track**: internalizing glintfx's dependencies (RmlUi, gl3w, FreeType, GLFW) remains years away.
 
 Treat glintfx as the product; Layer 0 is a separate long-term track, now implementation-complete and awaiting audit.
@@ -335,7 +335,7 @@ RmlUi 6.3 é baixado em tempo de configure; gl3w é vendorizado no repo.
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.3.0)
+  GIT_TAG        v0.4.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -470,7 +470,7 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 
 ### Limitações conhecidas
 
-A v0.3.0 do `glintfx` é honesta sobre o que ainda não existe:
+A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 - **Apenas Linux x86-64.** Sem Windows/macOS.
 - **Um `App` por processo.** O estado global de GLFW e RmlUi torna uma segunda instância comportamento indefinido.
@@ -482,7 +482,7 @@ A v0.3.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.3.0** (estável, taggeada), 2026-07-04. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
+> **Lançamento atual: v0.4.0** (estável, taggeada), 2026-07-07. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
 
 **Entregue (v0.2.x-v0.4.0):**
 
@@ -507,7 +507,7 @@ A v0.3.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
-- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.3.0`).
+- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.4.0`).
 - **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação do núcleo completa, aguardando auditoria:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta -> um harness de teste próprio habilitando TDD -> uma libc-núcleo pequena (memória, string, conversão int↔string) -> um mini-printf -> um alocador bump via `mmap`, tudo zero libc e entregue sob TDD mais review adversarial. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. Ainda é uma trilha **de longo prazo**: internalizar as dependências do glintfx (RmlUi, gl3w, FreeType, GLFW) segue a anos de distância.
 
 Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada, agora com a implementação completa e aguardando auditoria.

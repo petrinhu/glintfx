@@ -198,7 +198,7 @@ public:
   ElementBox get_element_box(const char* id) const;
 
   // EN: Scroll an element's nearest scrolling ancestor(s) (e.g. an overflow-y:auto container)
-  //     so the element becomes visible (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven by
+  //     so the element becomes visible (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven by
   //     GusWorld: keyboard/gamepad selection moving inside a 30-item menu list had no way to
   //     "follow" the selection out of the visible area). Wraps Rml::Element::ScrollIntoView(bool):
   //     align_with_top true aligns the element to the top of the scrollable view, false to the
@@ -211,7 +211,7 @@ public:
   //       ui.set_string("selected_id", next_item_id);        // app-side selection state
   //       ui.scroll_element_into_view(next_item_id);          // follow it into view
   // PT: Rola o(s) ancestral(is) rolável(eis) mais próximo(s) de um elemento (ex.: um container
-  //     overflow-y:auto) para que ele fique visível (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven
+  //     overflow-y:auto) para que ele fique visível (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven
   //     pelo GusWorld: a seleção por teclado/gamepad se movendo dentro de uma lista de menu de
   //     30 itens não tinha como "seguir" a seleção para fora da área visível). Encapsula
   //     Rml::Element::ScrollIntoView(bool): align_with_top true alinha o elemento ao topo da

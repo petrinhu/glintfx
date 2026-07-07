@@ -166,21 +166,25 @@ void UiLayer::set_viewport(int w, int h) {
 void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
   if (!impl_->ok) return;
   // EN: Same w/h guard as the 2-arg overload above (input-hardening audit, v0.3.0). Only w/h are
-  //     checked -- x/y (letterbox origin) and target_h can legitimately be any value including
-  //     negative offsets. Keeps the previous viewport on invalid dimensions.
-  // PT: Mesmo guard de w/h da sobrecarga de 2 args acima (auditoria de hardening, v0.3.0). Só w/h
-  //     são checados -- x/y (origem do letterbox) e target_h podem legitimamente ser qualquer
-  //     valor, incluindo offsets negativos. Mantém o viewport anterior em dimensões inválidas.
+  //     checked here -- x/y (letterbox origin) can legitimately be any value including negative
+  //     offsets. target_h (total window height) must stay positive, see AUD-TEC-4 below. Keeps
+  //     the previous viewport on invalid dimensions.
+  // PT: Mesmo guard de w/h da sobrecarga de 2 args acima (auditoria de hardening, v0.3.0). Aqui
+  //     só w/h são checados -- x/y (origem do letterbox) podem legitimamente ser qualquer valor,
+  //     incluindo offsets negativos. target_h (altura total da janela) precisa continuar
+  //     positivo, ver AUD-TEC-4 abaixo. Mantém o viewport anterior em dimensões inválidas.
   // EN: Guard (AUD-TEC-4): x/y/target_h/w/h all capped at a sane ceiling so
   //     `target_h - y - h` below cannot signed-overflow (UB) -- e.g. target_h=INT_MAX would
-  //     transiently underflow int range as the subtraction proceeds. w/h must stay positive
-  //     (> 0, same rule as the 2-arg overload); x/y/target_h may legitimately be negative
-  //     (letterbox origin) but not adversarially huge in either direction.
+  //     transiently underflow int range as the subtraction proceeds. w/h and target_h must stay
+  //     positive (> 0, target_h is the total window height, same rule as the 2-arg overload's
+  //     w/h); only x/y may legitimately be negative (letterbox origin) but not adversarially
+  //     huge in either direction.
   // PT: Guard (AUD-TEC-4): x/y/target_h/w/h todos limitados a um teto são para que
   //     `target_h - y - h` abaixo não dê overflow com sinal (UB) -- ex.: target_h=INT_MAX
-  //     faria a subtração transbordar o range de int. w/h precisam continuar positivos (> 0,
-  //     mesma regra da sobrecarga de 2 args); x/y/target_h podem legitimamente ser negativos
-  //     (origem de letterbox) mas não adversarialmente enormes em nenhuma direção.
+  //     faria a subtração transbordar o range de int. w/h e target_h precisam continuar
+  //     positivos (> 0, target_h é a altura total da janela, mesma regra do w/h da sobrecarga
+  //     de 2 args); só x/y podem legitimamente ser negativos (origem de letterbox) mas não
+  //     adversarialmente enormes em nenhuma direção.
   if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim ||
       x < -kMaxViewportDim || x > kMaxViewportDim ||
       y < -kMaxViewportDim || y > kMaxViewportDim ||

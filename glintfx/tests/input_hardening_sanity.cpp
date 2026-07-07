@@ -18,6 +18,10 @@
 //     Fix 3 (IMPORTANT) -- UiLayer::set_viewport: w/h <= 0 degenerates the layout. Tested by
 //       applying each bad (w,h) and asserting the box stays ~baseline (previous viewport kept),
 //       then a legitimate viewport still renders.
+//     Fix 4 (AUD-TEC-2) -- UiLayer::process_event: non-finite ev.x/ev.y in MouseMove would hit
+//       UB on static_cast<int>(NaN); in MouseWheel it would poison RmlUi's scroll offset with
+//       NaN. Tested by sending NaN/+inf/-inf coords through both event types and asserting no
+//       crash, then a legitimate MouseMove + MouseWheel{0,-1} still renders (happy path intact).
 //
 // PT: input_hardening_sanity -- prova que os tres fixes de hardening da superficie de entrada da
 //     auditoria de seguranca v0.3.0 rejeitam entrada invalida fail-high, SEM quebrar uso valido.
@@ -39,6 +43,11 @@
 //     Fix 3 (IMPORTANT) -- UiLayer::set_viewport: w/h <= 0 degenera o layout. Testado aplicando
 //       cada (w,h) ruim e verificando que o box permanece ~baseline (viewport anterior mantido),
 //       depois um viewport legitimo ainda renderiza.
+//     Fix 4 (AUD-TEC-2) -- UiLayer::process_event: ev.x/ev.y não-finitos em MouseMove bateriam
+//       em UB no static_cast<int>(NaN); em MouseWheel envenenariam o offset de scroll do RmlUi
+//       com NaN. Testado enviando coords NaN/+inf/-inf pelos dois tipos de evento e verificando
+//       ausência de crash, depois um MouseMove + MouseWheel{0,-1} legítimo ainda renderiza
+//       (caminho feliz intacto).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
@@ -204,6 +213,43 @@ int main() {
     std::puts("input_hardening_sanity FAIL: legitimate set_viewport(W,H) did not render the box "
               "(happy path broken by the guard)");
     return 11;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: Fix 4 (AUD-TEC-2) -- process_event() must reject non-finite ev.x/ev.y instead of
+  //     UB-casting them (MouseMove: static_cast<int>(NaN) is UB per [conv.fpint]) or poisoning
+  //     RmlUi's scroll offset with NaN (MouseWheel). No pixel oracle needed here -- the tooth
+  //     is a crash/UB, not a layout change: with the guard removed this loop may crash, hang,
+  //     or silently corrupt scroll state depending on the implementation.
+  // PT: Fix 4 (AUD-TEC-2) -- process_event() deve rejeitar ev.x/ev.y não-finitos em vez de
+  //     castar via UB (MouseMove: static_cast<int>(NaN) é UB por [conv.fpint]) ou envenenar o
+  //     offset de scroll do RmlUi com NaN (MouseWheel). Sem oráculo de pixel aqui -- o dente é
+  //     um crash/UB, não mudança de layout: com a guarda removida este laço pode crashar,
+  //     travar, ou corromper o estado de scroll silenciosamente dependendo da implementação.
+  // ---------------------------------------------------------------------------
+  const float bad_coords[] = { std::nanf(""), std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity() };
+  for (float bc : bad_coords) {
+    ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = bc, .y = bc });
+    ui.process_event({ .type = glintfx::UiEvent::Type::MouseWheel, .x = 0.f, .y = bc });
+  }
+  std::puts("input_hardening_sanity: MouseMove/MouseWheel non-finite coords -> no crash OK");
+
+  // EN: happy path intact -- a legitimate MouseMove + MouseWheel{0,-1} still work (no crash,
+  //     scene still renders at ~baseline; dp_ratio_scene.rml has no scrollable content so this
+  //     is a render/crash proof, not a scroll-amount proof -- scroll behavior itself is covered
+  //     by scroll_sanity.cpp).
+  // PT: caminho feliz intacto -- MouseMove + MouseWheel{0,-1} legítimos ainda funcionam (sem
+  //     crash, cena ainda renderiza em ~baseline; dp_ratio_scene.rml não tem conteúdo rolável
+  //     então isto é prova de render/crash, não de quantidade de rolagem -- o comportamento de
+  //     scroll em si é coberto por scroll_sanity.cpp).
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = 50.f, .y = 50.f });
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseWheel, .x = 0.f, .y = -1.f });
+  const size_t after_wheel = bright_now(ui, W, H);
+  if (after_wheel < lo || after_wheel > hi) {
+    std::puts("input_hardening_sanity FAIL: legitimate MouseMove/MouseWheel broke the layout "
+              "(happy path broken by the guard)");
+    return 12;
   }
 
   std::puts("input_hardening_sanity: PASS");

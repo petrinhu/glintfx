@@ -14,6 +14,7 @@
 #include "system_clock.hpp"
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Input.h>
+#include <cmath>
 
 namespace glintfx {
 
@@ -317,6 +318,13 @@ void UiLayer::process_event(const UiEvent& ev) {
       //     mas repassados. espaço-janela -> espaço-conteúdo (F3, v0.2.5): subtrai o offset da
       //     sub-viewport (0,0 em modo legado) antes de repassar ao RmlUi, que só conhece o
       //     próprio espaço de conteúdo offset-free -- ver o doc-comment de set_viewport().
+      // EN: Guard (AUD-TEC-2): static_cast<int> of a non-finite float is UB ([conv.fpint]).
+      //     A host may forward NaN/inf coords (driver glitch, network replay) -- reject before
+      //     the cast, same rule already enforced by set_element_scroll_top.
+      // PT: Guard (AUD-TEC-2): static_cast<int> de float não-finito é UB ([conv.fpint]). Um
+      //     host pode repassar coords NaN/inf (glitch de driver, replay de rede) -- rejeita
+      //     antes do cast, mesma regra já aplicada em set_element_scroll_top.
+      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
       c->ProcessMouseMove(static_cast<int>(ev.x) - impl_->x, static_cast<int>(ev.y) - impl_->y,
                           to_rml_mods(ev.modifiers));
       break;
@@ -373,6 +381,11 @@ void UiLayer::process_event(const UiEvent& ev) {
       //     `hover`, resolve Element::GetClosestScrollableContainer() a partir dele, e é no-op
       //     quando hover é nulo). Usa a sobrecarga de Vector2f, não a de float único deprecada
       //     (ver Context.h: "@deprecated Please use the Vector2f version").
+      // EN: Guard (AUD-TEC-2): a non-finite delta would poison the scroll offset with NaN
+      //     inside RmlUi. Reject before forwarding -- same rule as MouseMove above.
+      // PT: Guard (AUD-TEC-2): um delta não-finito envenenaria o offset de scroll com NaN
+      //     dentro do RmlUi. Rejeita antes de repassar -- mesma regra do MouseMove acima.
+      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
       c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
       break;
 

@@ -102,6 +102,53 @@ public:
   //     ficam intocados nesse caso.
   bool get_element_box(const char* id, float& x, float& y, float& w, float& h) const;
 
+  // EN: Scroll an element's scrolling ancestor(s) into view -- forwards to
+  //     Bootstrap::scroll_element_into_view (GLINTFX-SCROLL-1, v0.3.2). Instant, synchronous.
+  //     Returns false when not ok(), no document is loaded, or the id is not found.
+  // PT: Rola o(s) ancestral(is) rolável(eis) de um elemento até ele ficar visível -- encaminha a
+  //     Bootstrap::scroll_element_into_view (GLINTFX-SCROLL-1, v0.3.2). Instantâneo, síncrono.
+  //     Retorna false quando não ok(), nenhum documento estiver carregado, ou o id não for
+  //     encontrado.
+  bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Query an element's own vertical scroll offset -- forwards to
+  //     Bootstrap::get_element_scroll_top (GLINTFX-SCROLL-1, v0.3.2). Returns false (out param
+  //     untouched) when not ok(), no document is loaded, or the id is not found.
+  // PT: Consulta o offset de rolagem vertical próprio de um elemento -- encaminha a
+  //     Bootstrap::get_element_scroll_top (GLINTFX-SCROLL-1, v0.3.2). Retorna false (out param
+  //     intocado) quando não ok(), nenhum documento estiver carregado, ou o id não for
+  //     encontrado.
+  bool get_element_scroll_top(const char* id, float& out_scroll_top) const;
+
+  // EN: Query an element's total scrollable content height -- forwards to
+  //     Bootstrap::get_element_scroll_height (GLINTFX-SCROLL-1, v0.3.2). Returns false (out
+  //     param untouched) when not ok(), no document is loaded, or the id is not found.
+  // PT: Consulta a altura total do conteúdo rolável de um elemento -- encaminha a
+  //     Bootstrap::get_element_scroll_height (GLINTFX-SCROLL-1, v0.3.2). Retorna false (out
+  //     param intocado) quando não ok(), nenhum documento estiver carregado, ou o id não for
+  //     encontrado.
+  bool get_element_scroll_height(const char* id, float& out_scroll_height) const;
+
+  // EN: Query an element's client (visible) height -- forwards to
+  //     Bootstrap::get_element_client_height (GLINTFX-SCROLL-1, v0.3.2). Returns false (out
+  //     param untouched) when not ok(), no document is loaded, or the id is not found.
+  // PT: Consulta a altura de cliente (visível) de um elemento -- encaminha a
+  //     Bootstrap::get_element_client_height (GLINTFX-SCROLL-1, v0.3.2). Retorna false (out
+  //     param intocado) quando não ok(), nenhum documento estiver carregado, ou o id não for
+  //     encontrado.
+  bool get_element_client_height(const char* id, float& out_client_height) const;
+
+  // EN: Set an element's own vertical scroll offset -- forwards to
+  //     Bootstrap::set_element_scroll_top (GLINTFX-SCROLL-1, v0.3.2). RmlUi clamps internally;
+  //     this layer rejects non-finite input. Returns false when not ok(), no document is
+  //     loaded, the id is not found, or scroll_top is not finite.
+  // PT: Define o offset de rolagem vertical próprio de um elemento -- encaminha a
+  //     Bootstrap::set_element_scroll_top (GLINTFX-SCROLL-1, v0.3.2). O RmlUi satura
+  //     internamente; esta camada rejeita entrada não-finita. Retorna false quando não ok(),
+  //     nenhum documento estiver carregado, o id não for encontrado, ou scroll_top não for
+  //     finito.
+  bool set_element_scroll_top(const char* id, float scroll_top) const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.
   //     Binds are registered against the RmlUi context BEFORE LoadDocument so that

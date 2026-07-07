@@ -63,8 +63,64 @@ struct UiEvent {
                   // PT: tecla de teclado/gamepad (key, modifiers, pressed).
     Text,         // EN: unicode text input (text — null-terminated UTF-8, lifetime ≥ call).
                   // PT: entrada de texto unicode (text — UTF-8 terminado em '\0', lifetime ≥ chamada).
-    Resize        // EN: logical viewport resize (width, height in pixels).
+    Resize,       // EN: logical viewport resize (width, height in pixels).
                   // PT: redimensionamento lógico do viewport (width, height em pixels).
+    // EN: Mouse-wheel / trackpad scroll (x, y — delta, NOT position; see the field comments
+    //     below). GLINTFX-SCROLL-1, v0.3.2.
+    //
+    //     WHICH ELEMENT SCROLLS — HOVER, NOT FOCUS (confirmed by reading the pinned RmlUi
+    //     source, examples/RmlUi/Source/Core/Context.cpp): Context::ProcessMouseWheel(Vector2f,
+    //     int) (line 804) reads the `hover` member — the element under the pointer, tracked
+    //     internally by the most recent ProcessMouseMove/ProcessMouseButtonDown call, NOT the
+    //     focused/keyboard-active element — and is a safe, crash-free no-op when hover is null
+    //     (line 811: `else if (!hover) { scroll_controller->Reset(); return true; }`). When
+    //     hover IS set, the actual scroll target is resolved from it via
+    //     `Element* target = hover->GetClosestScrollableContainer()` (line 829), which walks
+    //     UP the ancestor chain from the hovered element looking for the nearest overflow-
+    //     auto/scroll container; if NONE of hover's ancestors are scrollable,
+    //     GetClosestScrollableContainer() itself returns nullptr (confirmed in
+    //     examples/RmlUi/Source/Core/Element.cpp) and the wheel event is ALSO a safe no-op —
+    //     it never scrolls an unrelated ancestor "by accident". PRACTICAL CONSEQUENCE: a
+    //     MouseWheel event with no preceding MouseMove over the target area is silently
+    //     dropped (hover is whatever the LAST MouseMove left it as, possibly none) — send a
+    //     MouseMove to the desired position immediately BEFORE MouseWheel if the host does not
+    //     already track hover via its own per-frame move events:
+    //       ui.process_event({ .type = UiEvent::Type::MouseMove, .x = mouse_x, .y = mouse_y });
+    //       ui.process_event({ .type = UiEvent::Type::MouseWheel, .x = 0.f, .y = wheel_dy });
+    //     Focus (keyboard/gamepad selection, Rml::Context's `focus`/FindFocusElement) is a
+    //     SEPARATE concept entirely unused by ProcessMouseWheel — a focused-but-not-hovered
+    //     list (e.g. selected via gamepad, cursor elsewhere) does NOT receive wheel scroll;
+    //     use scroll_element_into_view()/set_element_scroll_top() to follow a focus-driven
+    //     selection programmatically instead (see UiLayer::scroll_element_into_view).
+    // PT: Rolagem de roda-do-mouse / trackpad (x, y — delta, NÃO posição; ver os comentários
+    //     dos campos abaixo). GLINTFX-SCROLL-1, v0.3.2.
+    //
+    //     QUAL ELEMENTO ROLA — HOVER, NÃO FOCO (confirmado lendo o source pinado do RmlUi,
+    //     examples/RmlUi/Source/Core/Context.cpp): Context::ProcessMouseWheel(Vector2f, int)
+    //     (linha 804) lê o membro `hover` — o elemento sob o ponteiro, rastreado internamente
+    //     pela chamada ProcessMouseMove/ProcessMouseButtonDown mais recente, NÃO o elemento com
+    //     foco/ativo por teclado — e é um no-op seguro e sem crash quando hover é nulo (linha
+    //     811: `else if (!hover) { scroll_controller->Reset(); return true; }`). Quando hover
+    //     ESTÁ definido, o alvo real de rolagem é resolvido a partir dele via
+    //     `Element* target = hover->GetClosestScrollableContainer()` (linha 829), que sobe a
+    //     cadeia de ancestrais a partir do elemento em hover procurando o container overflow-
+    //     auto/scroll mais próximo; se NENHUM ancestral de hover for rolável,
+    //     GetClosestScrollableContainer() em si retorna nullptr (confirmado em
+    //     examples/RmlUi/Source/Core/Element.cpp) e o evento de wheel TAMBÉM é um no-op seguro
+    //     -- nunca rola um ancestral não-relacionado "por acidente". CONSEQUÊNCIA PRÁTICA: um
+    //     evento MouseWheel sem um MouseMove precedente sobre a área-alvo é descartado
+    //     silenciosamente (hover é o que o ÚLTIMO MouseMove deixou, possivelmente nenhum) —
+    //     envie um MouseMove para a posição desejada IMEDIATAMENTE ANTES do MouseWheel se o
+    //     host não já rastrear hover via seus próprios eventos de move por-frame:
+    //       ui.process_event({ .type = UiEvent::Type::MouseMove, .x = mouse_x, .y = mouse_y });
+    //       ui.process_event({ .type = UiEvent::Type::MouseWheel, .x = 0.f, .y = wheel_dy });
+    //     Foco (seleção por teclado/gamepad, `focus`/FindFocusElement do Rml::Context) é um
+    //     conceito TOTALMENTE SEPARADO, nunca usado por ProcessMouseWheel — uma lista com foco
+    //     mas sem hover (ex.: selecionada via gamepad, cursor em outro lugar) NÃO recebe
+    //     rolagem de wheel; use scroll_element_into_view()/set_element_scroll_top() para seguir
+    //     uma seleção guiada por foco programaticamente em vez disso (ver
+    //     UiLayer::scroll_element_into_view).
+    MouseWheel
   };
 
   // EN: L1.10-APIDOC: default changed from MouseMove to None (breaking change to an already
@@ -81,8 +137,21 @@ struct UiEvent {
   //     o comentário da struct acima e todos os call sites em tests/ui_layer_events.cpp) não
   //     são afetados.
   Type        type      = Type::None;
-  float       x         = 0.f;          // EN: pointer X  (MouseMove). PT: X do ponteiro.
-  float       y         = 0.f;          // EN: pointer Y  (MouseMove). PT: Y do ponteiro.
+  // EN: Dual-purpose, like width/height below for Resize: pointer POSITION for MouseMove
+  //     (pixels, window-space), but wheel/scroll DELTA for MouseWheel (arbitrary units — one
+  //     "notch" of a traditional wheel is conventionally ~1.0; trackpads may send fractional
+  //     values). MouseWheel convention mirrors Rml::Context::ProcessMouseWheel: positive x
+  //     scrolls right, positive y scrolls down (see Context.h in the pinned RmlUi source).
+  // PT: Duplo propósito, como width/height abaixo para Resize: POSIÇÃO do ponteiro no
+  //     MouseMove (pixels, espaço-janela), mas DELTA de rolagem no MouseWheel (unidades
+  //     arbitrárias — um "clique" de roda tradicional é convencionalmente ~1.0; trackpads
+  //     podem enviar valores fracionários). Convenção do MouseWheel espelha
+  //     Rml::Context::ProcessMouseWheel: x positivo rola para a direita, y positivo rola
+  //     para baixo (ver Context.h no source pinado do RmlUi).
+  float       x         = 0.f;          // EN: pointer X (MouseMove) / wheel delta X (MouseWheel).
+                                        // PT: X do ponteiro (MouseMove) / delta X de roda (MouseWheel).
+  float       y         = 0.f;          // EN: pointer Y (MouseMove) / wheel delta Y (MouseWheel).
+                                        // PT: Y do ponteiro (MouseMove) / delta Y de roda (MouseWheel).
   int         button    = 0;            // EN: 0=left,1=right,2=middle (MouseButton).
                                         // PT: 0=esquerdo,1=direito,2=meio.
   bool        pressed   = false;        // EN: button/key down? (MouseButton, Key).

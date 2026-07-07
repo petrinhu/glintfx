@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Scene for the GLINTFX-SCROLL-1 sanity test (v0.3.2) -- an overflow-y:auto container
+       (#scroller, 120x100 border-box, no margin/border/padding) taller in content than in
+       viewport: 30 items x 30px = 900px content vs. 100px client height, giving a
+       deterministic scrollable range of exactly [0, 800] (GetScrollHeight() - GetClientHeight()
+       = 900 - 100). #item-29's content-local top offset is 29*30 = 870px, past the 800px max,
+       so scroll_element_into_view("item-29") is expected to land on the CLAMPED value 800 --
+       see the test file header for the full oracle derivation.
+   PT: Cena para o teste de sanidade GLINTFX-SCROLL-1 (v0.3.2) -- um container overflow-y:auto
+       (#scroller, border-box 120x100, sem margem/borda/padding) com conteúdo mais alto que o
+       viewport: 30 itens x 30px = 900px de conteúdo vs. 100px de altura de cliente, dando um
+       intervalo rolável determinístico de exatamente [0, 800] (GetScrollHeight() -
+       GetClientHeight() = 900 - 100). O offset de topo local-de-conteúdo do #item-29 é
+       29*30 = 870px, além do máximo de 800px, então scroll_element_into_view("item-29") deve
+       cair no valor SATURADO 800 -- ver o cabeçalho do arquivo de teste pra derivação completa
+       do oráculo. */
+body { background-color: #101010; }
+
+#scroller {
+  display: block;
+  position: absolute;
+  left: 10px; top: 10px;
+  width: 120px; height: 100px;
+  margin: 0; padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #202020;
+}
+
+#scroller > div {
+  display: block;
+  width: 100%; height: 30px;
+  margin: 0; padding: 0;
+  background-color: #303030;
+}

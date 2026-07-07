@@ -153,6 +153,46 @@ public:
   //     UiLayer::get_element_box (mesma assinatura).
   ElementBox get_element_box(const char* id) const;
 
+  // EN: Scroll an element's nearest scrolling ancestor(s) so the element becomes visible
+  //     (GLINTFX-SCROLL-1, v0.3.2). Parity with UiLayer::scroll_element_into_view (same
+  //     signature/semantics -- see there for the full contract: instant/synchronous, wraps
+  //     Rml::Element::ScrollIntoView(bool)).
+  // PT: Rola o(s) ancestral(is) rolável(eis) mais próximo(s) de um elemento para que ele fique
+  //     visível (GLINTFX-SCROLL-1, v0.3.2). Paridade com UiLayer::scroll_element_into_view
+  //     (mesma assinatura/semântica -- ver lá o contrato completo: instantâneo/síncrono,
+  //     encapsula Rml::Element::ScrollIntoView(bool)).
+  bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Query an element's own vertical scroll offset, in RCSS pixels. Parity with
+  //     UiLayer::get_element_scroll_top (same signature/semantics).
+  // PT: Consulta o offset de rolagem vertical próprio de um elemento, em pixels RCSS. Paridade
+  //     com UiLayer::get_element_scroll_top (mesma assinatura/semântica).
+  bool get_element_scroll_top(const char* id, float& out_scroll_top) const;
+
+  // EN: Query an element's total scrollable content height, in RCSS pixels. Parity with
+  //     UiLayer::get_element_scroll_height (same signature/semantics; see there for the full
+  //     scroll-metrics-trio usage formula shared with get_element_scroll_top/
+  //     get_element_client_height).
+  // PT: Consulta a altura total do conteúdo rolável de um elemento, em pixels RCSS. Paridade
+  //     com UiLayer::get_element_scroll_height (mesma assinatura/semântica; ver lá a fórmula
+  //     completa de uso do trio de métricas de rolagem, compartilhada com
+  //     get_element_scroll_top/get_element_client_height).
+  bool get_element_scroll_height(const char* id, float& out_scroll_height) const;
+
+  // EN: Query an element's client (visible) height, in RCSS pixels. Parity with
+  //     UiLayer::get_element_client_height (same signature/semantics).
+  // PT: Consulta a altura de cliente (visível) de um elemento, em pixels RCSS. Paridade com
+  //     UiLayer::get_element_client_height (mesma assinatura/semântica).
+  bool get_element_client_height(const char* id, float& out_client_height) const;
+
+  // EN: Set an element's own vertical scroll offset directly, in RCSS pixels. Parity with
+  //     UiLayer::set_element_scroll_top (same signature/semantics, including the non-finite
+  //     input rejection).
+  // PT: Define o offset de rolagem vertical próprio de um elemento diretamente, em pixels
+  //     RCSS. Paridade com UiLayer::set_element_scroll_top (mesma assinatura/semântica,
+  //     incluindo a rejeição de entrada não-finita).
+  bool set_element_scroll_top(const char* id, float scroll_top) const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model
   //     -> bind_* -> load() -> set_*(). Engine enforces the ordering constraint

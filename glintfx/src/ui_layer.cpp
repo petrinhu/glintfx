@@ -265,6 +265,31 @@ ElementBox UiLayer::get_element_box(const char* id) const {
   return box;
 }
 
+bool UiLayer::scroll_element_into_view(const char* id, bool align_with_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.scroll_element_into_view(id, align_with_top);
+}
+
+bool UiLayer::get_element_scroll_top(const char* id, float& out_scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_scroll_top(id, out_scroll_top);
+}
+
+bool UiLayer::get_element_scroll_height(const char* id, float& out_scroll_height) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_scroll_height(id, out_scroll_height);
+}
+
+bool UiLayer::get_element_client_height(const char* id, float& out_client_height) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_client_height(id, out_client_height);
+}
+
+bool UiLayer::set_element_scroll_top(const char* id, float scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.set_element_scroll_top(id, scroll_top);
+}
+
 void UiLayer::process_event(const UiEvent& ev) {
   // EN: Guard: drop events when the layer is not ready or context is gone.
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.
@@ -324,6 +349,31 @@ void UiLayer::process_event(const UiEvent& ev) {
       // PT: Entrada de texto UTF-8 — repassado ao RmlUi como-está (lida com sequências multi-byte).
       //     text deve permanecer válido durante esta chamada; lifetime é do chamador.
       if (ev.text) c->ProcessTextInput(Rml::String(ev.text));
+      break;
+
+    case T::MouseWheel:
+      // EN: Wheel/trackpad delta forwarding (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven by
+      //     GusWorld's 30-item overflow-y:auto menu list, which could not scroll in embed mode).
+      //     Unlike MouseMove/MouseButton, NO sub-viewport offset translation here: ev.x/ev.y are
+      //     a DELTA (scroll amount), not a window-space position, so there is nothing to subtract
+      //     impl_->x/y from -- RmlUi's Context::ProcessMouseWheel(Vector2f, mods) takes the delta
+      //     as-is and scrolls whatever element is currently under `hover` (set by the most recent
+      //     ProcessMouseMove/ProcessMouseButtonDown -- confirmed by reading Context.cpp: it reads
+      //     the `hover` member, resolves Element::GetClosestScrollableContainer() from there, and
+      //     is a no-op when hover is null). The Vector2f overload is used, not the deprecated
+      //     single-float one (see Context.h: "@deprecated Please use the Vector2f version").
+      // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven
+      //     pela lista de menu de 30 itens overflow-y:auto do GusWorld, que não conseguia rolar em
+      //     embed mode). Diferente de MouseMove/MouseButton, SEM tradução de offset de sub-
+      //     viewport aqui: ev.x/ev.y são um DELTA (quantidade de rolagem), não uma posição
+      //     espaço-janela, então não há nada para subtrair de impl_->x/y -- o
+      //     Context::ProcessMouseWheel(Vector2f, mods) do RmlUi recebe o delta como está e rola o
+      //     elemento que estiver sob `hover` no momento (definido pelo ProcessMouseMove/
+      //     ProcessMouseButtonDown mais recente -- confirmado lendo Context.cpp: lê o membro
+      //     `hover`, resolve Element::GetClosestScrollableContainer() a partir dele, e é no-op
+      //     quando hover é nulo). Usa a sobrecarga de Vector2f, não a de float único deprecada
+      //     (ver Context.h: "@deprecated Please use the Vector2f version").
+      c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
       break;
 
     case T::Resize:

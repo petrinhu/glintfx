@@ -210,6 +210,31 @@ ElementBox App::get_element_box(const char* id) const {
   return box;
 }
 
+bool App::scroll_element_into_view(const char* id, bool align_with_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.scroll_element_into_view(id, align_with_top);
+}
+
+bool App::get_element_scroll_top(const char* id, float& out_scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_scroll_top(id, out_scroll_top);
+}
+
+bool App::get_element_scroll_height(const char* id, float& out_scroll_height) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_scroll_height(id, out_scroll_height);
+}
+
+bool App::get_element_client_height(const char* id, float& out_client_height) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_element_client_height(id, out_client_height);
+}
+
+bool App::set_element_scroll_top(const char* id, float scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.set_element_scroll_top(id, scroll_top);
+}
+
 void App::run() {
   while (running()) {
     poll_events();

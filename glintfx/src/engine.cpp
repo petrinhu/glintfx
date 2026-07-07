@@ -155,6 +155,31 @@ bool Engine::get_element_box(const char* id, float& x, float& y, float& w, float
   return impl_->boot.get_element_box(id, x, y, w, h);
 }
 
+bool Engine::scroll_element_into_view(const char* id, bool align_with_top) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.scroll_element_into_view(id, align_with_top);
+}
+
+bool Engine::get_element_scroll_top(const char* id, float& out_scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.get_element_scroll_top(id, out_scroll_top);
+}
+
+bool Engine::get_element_scroll_height(const char* id, float& out_scroll_height) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.get_element_scroll_height(id, out_scroll_height);
+}
+
+bool Engine::get_element_client_height(const char* id, float& out_client_height) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.get_element_client_height(id, out_client_height);
+}
+
+bool Engine::set_element_scroll_top(const char* id, float scroll_top) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.set_element_scroll_top(id, scroll_top);
+}
+
 // ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
 //     create_data_model / bind_*: blocked when !ok or after load().

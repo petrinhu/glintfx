@@ -197,6 +197,127 @@ public:
   //     App::get_element_box (mesma assinatura).
   ElementBox get_element_box(const char* id) const;
 
+  // EN: Scroll an element's nearest scrolling ancestor(s) (e.g. an overflow-y:auto container)
+  //     so the element becomes visible (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven by
+  //     GusWorld: keyboard/gamepad selection moving inside a 30-item menu list had no way to
+  //     "follow" the selection out of the visible area). Wraps Rml::Element::ScrollIntoView(bool):
+  //     align_with_top true aligns the element to the top of the scrollable view, false to the
+  //     bottom. Instant (synchronous) -- the resulting scroll offset is readable via
+  //     get_element_scroll_top() immediately after this call returns, no update() needed in
+  //     between. Returns false (no-op) when the id is not found in the currently loaded
+  //     document, or no document is loaded yet -- same guard shape as get_element_box.
+  //     Typical use, gamepad/keyboard menu navigation (the GusWorld scenario):
+  //       // On Key::Down moving selection to the next item:
+  //       ui.set_string("selected_id", next_item_id);        // app-side selection state
+  //       ui.scroll_element_into_view(next_item_id);          // follow it into view
+  // PT: Rola o(s) ancestral(is) rolável(eis) mais próximo(s) de um elemento (ex.: um container
+  //     overflow-y:auto) para que ele fique visível (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven
+  //     pelo GusWorld: a seleção por teclado/gamepad se movendo dentro de uma lista de menu de
+  //     30 itens não tinha como "seguir" a seleção para fora da área visível). Encapsula
+  //     Rml::Element::ScrollIntoView(bool): align_with_top true alinha o elemento ao topo da
+  //     área rolável, false ao fundo. Instantâneo (síncrono) -- o offset de rolagem resultante
+  //     é lido via get_element_scroll_top() imediatamente após esta chamada retornar, sem
+  //     precisar de update() no meio. Retorna false (no-op) quando o id não é encontrado no
+  //     documento carregado atualmente, ou nenhum documento carregado ainda -- mesmo formato de
+  //     guard de get_element_box.
+  //     Uso típico, navegação de menu por gamepad/teclado (o cenário do GusWorld):
+  //       // No Key::Down movendo a seleção para o próximo item:
+  //       ui.set_string("selected_id", next_item_id);        // estado de seleção do app
+  //       ui.scroll_element_into_view(next_item_id);          // segue ele até a área visível
+  bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Query an element's own vertical scroll offset, in RCSS pixels (e.g. how far an
+  //     overflow-y:auto container has been scrolled down). Returns false (out_scroll_top left
+  //     untouched) when the id is not found or no document is loaded yet -- same guard shape as
+  //     get_element_box. Chosen as bool + out-param (not an ElementBox-style aggregate struct):
+  //     a single scalar does not benefit from a named 4-field struct the way border-box
+  //     geometry does; this mirrors the internal Bootstrap/Engine signature 1:1 with no
+  //     translation at this boundary.
+  // PT: Consulta o offset de rolagem vertical próprio de um elemento, em pixels RCSS (ex.:
+  //     quanto um container overflow-y:auto foi rolado para baixo). Retorna false
+  //     (out_scroll_top intocado) quando o id não é encontrado ou nenhum documento carregado
+  //     ainda -- mesmo formato de guard de get_element_box. Escolhido como bool + out-param (não
+  //     um struct agregado no estilo ElementBox): um único escalar não se beneficia de um struct
+  //     nomeado de 4 campos como a geometria border-box se beneficia; isso espelha 1:1 a
+  //     assinatura interna de Bootstrap/Engine, sem tradução nesta fronteira.
+  bool get_element_scroll_top(const char* id, float& out_scroll_top) const;
+
+  // EN: Query the total scrollable content height of an element, in RCSS pixels (its own
+  //     padding included, margin excluded -- same box-model slice RmlUi documents for
+  //     GetScrollHeight()). Completes the scroll-metrics trio with get_element_scroll_top() and
+  //     get_element_client_height() below -- exactly the three values RmlUi itself groups
+  //     together (see Element.h) and everything a host needs to build a CUSTOM scrollbar (the
+  //     builtin one already renders when the RCSS declares overflow-y: scroll/auto; this trio
+  //     is for hosts that want to draw their own indicator instead, e.g. matching a game's HUD
+  //     style):
+  //       float scroll_top = 0.f, scroll_h = 0.f, client_h = 0.f;
+  //       ui.get_element_scroll_top("list", scroll_top);
+  //       ui.get_element_scroll_height("list", scroll_h);
+  //       ui.get_element_client_height("list", client_h);
+  //       float scroll_fraction = (scroll_h > client_h)
+  //           ? scroll_top / (scroll_h - client_h) : 0.f;      // 0..1, guard divide-by-zero
+  //       float thumb_size_fraction = client_h / scroll_h;      // 0..1
+  //     Returns false (out_scroll_height left untouched) when the id is not found or no
+  //     document is loaded yet -- same guard shape as get_element_box.
+  // PT: Consulta a altura total do conteúdo rolável de um elemento, em pixels RCSS (padding
+  //     próprio incluso, margem excluída -- a mesma fatia do box-model que o RmlUi documenta
+  //     para GetScrollHeight()). Completa o trio de métricas de rolagem com
+  //     get_element_scroll_top() e get_element_client_height() abaixo -- exatamente os três
+  //     valores que o próprio RmlUi agrupa (ver Element.h) e tudo que um host precisa para
+  //     construir uma scrollbar CUSTOMIZADA (a embutida já renderiza quando o RCSS declara
+  //     overflow-y: scroll/auto; este trio é para hosts que querem desenhar seu próprio
+  //     indicador, ex.: casando com o estilo de HUD de um jogo):
+  //       float scroll_top = 0.f, scroll_h = 0.f, client_h = 0.f;
+  //       ui.get_element_scroll_top("list", scroll_top);
+  //       ui.get_element_scroll_height("list", scroll_h);
+  //       ui.get_element_client_height("list", client_h);
+  //       float fracao_rolada = (scroll_h > client_h)
+  //           ? scroll_top / (scroll_h - client_h) : 0.f;      // 0..1, guardar divisão por zero
+  //       float fracao_tamanho_thumb = client_h / scroll_h;     // 0..1
+  //     Retorna false (out_scroll_height intocado) quando o id não é encontrado ou nenhum
+  //     documento carregado ainda -- mesmo formato de guard de get_element_box.
+  bool get_element_scroll_height(const char* id, float& out_scroll_height) const;
+
+  // EN: Query the client (visible) height of an element, in RCSS pixels -- the third member of
+  //     the scroll-metrics trio (see get_element_scroll_height()'s doc-comment above for the
+  //     full usage formula). Returns false (out_client_height left untouched) when the id is
+  //     not found or no document is loaded yet -- same guard shape as get_element_box.
+  // PT: Consulta a altura de cliente (visível) de um elemento, em pixels RCSS -- o terceiro
+  //     membro do trio de métricas de rolagem (ver o doc-comment de get_element_scroll_height()
+  //     acima para a fórmula de uso completa). Retorna false (out_client_height intocado)
+  //     quando o id não é encontrado ou nenhum documento carregado ainda -- mesmo formato de
+  //     guard de get_element_box.
+  bool get_element_client_height(const char* id, float& out_client_height) const;
+
+  // EN: Set an element's own vertical scroll offset directly, in RCSS pixels. RmlUi clamps the
+  //     value internally to [0, scroll_height - client_height] -- an out-of-range value is
+  //     saturated, not rejected. Applied synchronously (not animated): a subsequent
+  //     get_element_scroll_top() call reads the new (clamped) value back immediately.
+  //     Input hardening: rejects non-finite scroll_top (NaN/inf) with false and no effect --
+  //     same fail-high spirit as set_dp_ratio()'s NaN/inf guard (v0.3.0 hardening audit).
+  //     Returns false when the id is not found, no document is loaded yet, or scroll_top is
+  //     not finite.
+  //     Typical use, a custom scrollbar thumb the host draws and drags itself:
+  //       float scroll_h = 0.f, client_h = 0.f;
+  //       ui.get_element_scroll_height("list", scroll_h);
+  //       ui.get_element_client_height("list", client_h);
+  //       ui.set_element_scroll_top("list", drag_fraction * (scroll_h - client_h));
+  // PT: Define o offset de rolagem vertical próprio de um elemento diretamente, em pixels
+  //     RCSS. O RmlUi satura o valor internamente em [0, scroll_height - client_height] -- um
+  //     valor fora do intervalo é saturado, não rejeitado. Aplicado sincronamente (não
+  //     animado): uma chamada subsequente a get_element_scroll_top() lê o novo valor (saturado)
+  //     de volta imediatamente.
+  //     Hardening de entrada: rejeita scroll_top não-finito (NaN/inf) com false e sem efeito --
+  //     mesmo espírito fail-high do guard de NaN/inf de set_dp_ratio() (auditoria de hardening
+  //     v0.3.0). Retorna false quando o id não é encontrado, nenhum documento carregado ainda,
+  //     ou scroll_top não é finito.
+  //     Uso típico, um thumb de scrollbar customizado que o host desenha e arrasta:
+  //       float scroll_h = 0.f, client_h = 0.f;
+  //       ui.get_element_scroll_height("list", scroll_h);
+  //       ui.get_element_client_height("list", client_h);
+  //       ui.set_element_scroll_top("list", drag_fraction * (scroll_h - client_h));
+  bool set_element_scroll_top(const char* id, float scroll_top) const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with App. Call order: create_data_model
   //     -> bind_* -> load() -> set_*. All methods forward to Engine; the Engine

@@ -66,6 +66,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rcss COPYONLY)
 
+# EN: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.3.2) -- shared by scroll_sanity (embed,
+#     both configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_scroll_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
+#     Copied once here, next to viewport_origin_scene.*, so both consumers find the same
+#     single copy -- same reasoning as element_box_scene.* above.
+# PT: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.3.2) -- compartilhado por scroll_sanity
+#     (embed, 2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_scroll_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
+#     Copiado uma vez aqui, junto do viewport_origin_scene.*, para que os dois consumidores
+#     achem a mesma cópia -- mesma razão do element_box_scene.* acima.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scroll_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/scroll_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scroll_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/scroll_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -180,6 +195,37 @@ if(GLINTFX_BACKEND_GLFW)
   add_test(NAME app_element_box_smoke
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:app_element_box_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_scroll_smoke -- App parity smoke for scroll_element_into_view()/
+  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.3.2). No wheel
+  #     assertion (App has no process_event/input-dispatch surface at all -- App::run()'s only
+  #     input path is poll_events() -> glfwPollEvents(), with no GLFW callbacks wired to RmlUi;
+  #     wheel forwarding is embed-only, proven in scroll_sanity.cpp via UiLayer). This only
+  #     proves the three scroll methods are wired on App and return the expected values for a
+  #     known id (same Engine path scroll_sanity.cpp exercises via UiLayer). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR (repo-wide GLFW-block convention); scroll_scene.rml is copied once to
+  #     CMAKE_CURRENT_BINARY_DIR by the scroll_sanity block below, addressed here as
+  #     "tests/scroll_scene.rml".
+  # PT: app_scroll_smoke -- smoke de paridade do App para scroll_element_into_view()/
+  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.3.2). Sem
+  #     asserção de wheel (o App não tem NENHUMA superfície de process_event/dispatch de input
+  #     -- o único caminho de input do App::run() é poll_events() -> glfwPollEvents(), sem
+  #     callbacks GLFW conectados ao RmlUi; o encaminhamento de wheel é exclusivo do embed mode,
+  #     provado em scroll_sanity.cpp via UiLayer). Só prova que os três métodos de rolagem estão
+  #     conectados no App e retornam os valores esperados para um id conhecido (mesmo caminho de
+  #     Engine que scroll_sanity.cpp exercita via UiLayer). WORKING_DIRECTORY = CMAKE_BINARY_DIR
+  #     (convenção do bloco GLFW em todo o repo); scroll_scene.rml é copiado uma vez para
+  #     CMAKE_CURRENT_BINARY_DIR pelo bloco scroll_sanity abaixo, endereçado aqui como
+  #     "tests/scroll_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_scroll_smoke app_scroll_smoke.cpp)
+  target_link_libraries(app_scroll_smoke PRIVATE glintfx)
+  add_test(NAME app_scroll_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_scroll_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -742,6 +788,41 @@ target_link_libraries(element_box_sanity PRIVATE ${_embed_dep})
 add_test(NAME element_box_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:element_box_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: scroll_sanity -- verifies GLINTFX-SCROLL-1 (v0.3.2, consumer-driven by GusWorld: a
+#     30-item overflow-y:auto menu list could not scroll in embed mode): wheel-delta
+#     forwarding (UiEvent::Type::MouseWheel -> Rml::Context::ProcessMouseWheel, with a
+#     direction "tooth" -- opposite-sign delta scrolls the other way) and the three
+#     programmatic scroll methods (scroll_element_into_view, get/set_element_scroll_top),
+#     plus null-id/unknown-id/no-document-yet/non-finite-input hardening on all three. Runs in
+#     BOTH build configs (embed-mode test, links ${_embed_dep} like the other embed tests
+#     above). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied here,
+#     addressed by bare filename).
+# PT: scroll_sanity -- verifica GLINTFX-SCROLL-1 (v0.3.2, consumer-driven pelo GusWorld: uma
+#     lista de menu de 30 itens overflow-y:auto não conseguia rolar em embed mode):
+#     encaminhamento de delta de wheel (UiEvent::Type::MouseWheel -> Rml::Context::
+#     ProcessMouseWheel, com um "dente" de direção -- delta de sinal oposto rola pro outro
+#     lado) e os três métodos de rolagem programática (scroll_element_into_view,
+#     get/set_element_scroll_top), mais hardening de id nulo/id desconhecido/nenhum-documento-
+#     ainda/entrada não-finita nos três. Roda em AMBAS as configs (teste de embed mode, linka
+#     ${_embed_dep} como os outros testes embed acima). WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de click_callback_sanity/
+#     element_box_sanity (par rml/rcss específico da cena copiado aqui, endereçado por nome de
+#     arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(scroll_sanity scroll_sanity.cpp)
+target_link_libraries(scroll_sanity PRIVATE ${_embed_dep})
+# EN: scroll_scene.rml/.rcss already copied to CMAKE_CURRENT_BINARY_DIR unconditionally at the
+#     top of this file (shared with app_scroll_smoke).
+# PT: scroll_scene.rml/.rcss já copiado para CMAKE_CURRENT_BINARY_DIR incondicionalmente no
+#     topo deste arquivo (compartilhado com app_scroll_smoke).
+add_test(NAME scroll_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:scroll_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

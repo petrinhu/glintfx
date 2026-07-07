@@ -11,6 +11,8 @@
 #include "ua_stylesheet.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/StreamMemory.h>
+#include <cmath>   // EN: std::isfinite (set_element_scroll_top input hardening).
+                   // PT: std::isfinite (hardening de entrada de set_element_scroll_top).
 #include <cstring>
 
 namespace glintfx {
@@ -331,6 +333,51 @@ bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, fl
   const Rml::Vector2f offset = el->GetAbsoluteOffset(Rml::BoxArea::Border);
   const Rml::Vector2f size   = el->GetBox().GetSize(Rml::BoxArea::Border);
   x = offset.x; y = offset.y; w = size.x; h = size.y;
+  return true;
+}
+
+bool Bootstrap::scroll_element_into_view(const char* id, bool align_with_top) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  el->ScrollIntoView(align_with_top);
+  return true;
+}
+
+bool Bootstrap::get_element_scroll_top(const char* id, float& out_scroll_top) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  out_scroll_top = el->GetScrollTop();
+  return true;
+}
+
+bool Bootstrap::get_element_scroll_height(const char* id, float& out_scroll_height) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  out_scroll_height = el->GetScrollHeight();
+  return true;
+}
+
+bool Bootstrap::get_element_client_height(const char* id, float& out_client_height) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  out_client_height = el->GetClientHeight();
+  return true;
+}
+
+bool Bootstrap::set_element_scroll_top(const char* id, float scroll_top) const {
+  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Reject non-finite input BEFORE touching RmlUi -- see the doc-comment in bootstrap.hpp
+  //     for why Element::SetScrollTop offers no guard of its own.
+  // PT: Rejeita entrada não-finita ANTES de tocar o RmlUi -- ver o doc-comment em bootstrap.hpp
+  //     pro motivo de Element::SetScrollTop não oferecer guard próprio.
+  if (!std::isfinite(scroll_top)) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  el->SetScrollTop(scroll_top);
   return true;
 }
 

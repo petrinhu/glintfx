@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-07-04: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.3.1`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 29 testes GLFW=ON / 15 embed). A Camada 0 (C+ASM puro, zero libc) tem a **implementação COMPLETA**: bootstrap I/O (`_start`, wrappers de syscall, `exit`/`write`/`read`) → harness próprio de teste (`C1`, habilita TDD) → libc-núcleo (memória, string, conversão int↔string) → mini-printf → alocador bump via `mmap`, tudo zero libc e sob TDD + review adversarial (itens em `🔍`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` `core-v0.1.0` pro `✅`). A meta plena de internalização clean-room (RmlUi/gl3w/FreeType/GLFW) segue distante, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
+> Estado em 2026-07-07: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.4.0`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 31 testes GLFW=ON / 16 embed). A Camada 0 (C+ASM puro, zero libc) tem a **implementação COMPLETA**: bootstrap I/O (`_start`, wrappers de syscall, `exit`/`write`/`read`) → harness próprio de teste (`C1`, habilita TDD) → libc-núcleo (memória, string, conversão int↔string) → mini-printf → alocador bump via `mmap`, tudo zero libc e sob TDD + review adversarial (itens em `🔍`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` `core-v0.1.0` pro `✅`). A meta plena de internalização clean-room (RmlUi/gl3w/FreeType/GLFW) segue distante, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
 
 ## Duas camadas neste repo
 
@@ -15,11 +15,12 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 `glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
-- **Lançada:** v0.1.0 → **v0.3.1** (2026-07-04). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+- **Lançada:** v0.1.0 → **v0.4.0** (2026-07-07). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
   - **`glintfx::App`** ([`glintfx/include/glintfx/app.hpp`](glintfx/include/glintfx/app.hpp)) -- standalone, dono da janela GLFW e do loop de frame (`poll → update → render → swap`).
   - **`glintfx::UiLayer`** ([`glintfx/include/glintfx/ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp)) -- embed/guest mode: anexa ao contexto GL de um host (não cria janela), render **compose-only** (sem `glClear`, sem swap -- o host é dono dos dois), eventos injetados (`UiEvent` + `Key`), `GlStateGuard` salva e restaura o estado GL tocado. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md) (decisão) e [`docs/embed-integration.md`](docs/embed-integration.md) (contrato de integração, fonte de verdade para hosts).
-- **Capacidades entregues até v0.3.1:**
+- **Capacidades entregues até v0.4.0:**
+  - **Rolagem em embed mode** (v0.4.0, `GLINTFX-SCROLL-1`): `UiEvent::Type::MouseWheel` (rola o ancestral rolável mais próximo do elemento em HOVER, não foco -- confirmado comportalmente por review adversarial) + 5 métodos programáticos em `UiLayer`/`App` (`scroll_element_into_view`, trio de métricas `get/set_element_scroll_top`+`get_element_scroll_height`+`get_element_client_height`). `App` não encaminha wheel (não tem `process_event` nenhum, lacuna pré-existente) -- só `UiLayer`. Ver `docs/embed-integration.md`.
   - **Preenchimento em gradiente no `polygon()`** (v0.3.1): o preenchimento do `polygon()` aceita `radial-gradient(...)`/`linear-gradient(...)` além de cor sólida -- rampa de cor real por-pixel via o próprio shader de gradiente do RmlUi (não facetada), consumer-driven pelo nó "cabeça de parafuso" do GusWorld. Ver `docs/effects.md`.
   - **Dois fixes de segurança de memória** (v0.3.1, achados via auditoria): `load()` não vaza mais o documento anterior (fechava sem `Close()`, causando leak + "fantasma" renderizando por baixo a cada reload); `bind_number/string/bool/list` não corrompe mais memória quando chamado 2x com a mesma chave antes do `load()` (era um heap-use-after-free real, capturado ao vivo pelo ASan). Ver `CHANGELOG.md`.
   - **Decorator `polygon()` (shape primitive)** (v0.3.0): `decorator: polygon(<lados>, <cor>[, <rotação>])` preenche a caixa do elemento com um N-ágono regular (triangle-fan), `lados ∈ [3, 1024]` com fail-high (ignora e loga) em input inválido/hostil. Glow via `filter: drop-shadow` e clip via `mask-image` funcionam de graça (qualquer decorator serve de alpha-shape/máscara). Ver `docs/effects.md`.
@@ -46,7 +47,7 @@ sudo dnf install glfw-devel freetype-devel mesa-libGL-devel
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON
 cmake --build glintfx/build -j
 
-# suíte completa (29 testes GLFW=ON / 15 embed GLFW=OFF, sob Xvfb / Mesa llvmpipe)
+# suíte completa (31 testes GLFW=ON / 16 embed GLFW=OFF, sob Xvfb / Mesa llvmpipe)
 ctest --test-dir glintfx/build --output-on-failure
 ```
 

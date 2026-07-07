@@ -71,6 +71,16 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 
 RmlUi 6.3 is fetched at configure time; gl3w is vendored in the repo.
 
+### Compatibility
+
+| Component | Requirement | Notes |
+| :--- | :--- | :--- |
+| RmlUi | **6.3**, pinned via CMake `FetchContent` to a fixed upstream commit | Only this exact pinned version is supported/tested. Other RmlUi versions are not supported -- swapping the `GIT_TAG` in `glintfx/CMakeLists.txt` is unsupported and untested. |
+| OpenGL | **3.3, core profile** | Required at runtime by the GL3 render layer. |
+| Compiler | **clang** (C++17 floor, C++23 target) | `glintfx/CMakeLists.txt` does not pin or enforce a minimum clang version (no `CMAKE_CXX_COMPILER` check). **GCC is not officially declared/documented as supported** -- however, this repository's own CI (`.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`) installs and builds the library with `g++` on every push/PR, so GCC builds are exercised in practice even though it is not a documented contract. If you rely on GCC, treat it as unverified upstream of this table and report build issues. |
+| CMake | **>= 3.16** | Enforced by `cmake_minimum_required` in `glintfx/CMakeLists.txt`. |
+| OS / Architecture | **Linux x86-64 only** | No Windows/macOS/ARM support; see [Known limitations](#known-limitations). |
+
 ### Quick start
 
 **1. Consume `glintfx` via CMake FetchContent.** In your `CMakeLists.txt`:
@@ -205,7 +215,11 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Tutorial:** [`docs/getting-started.md`](docs/getting-started.md), from zero to your first effect.
 - **How-to / reference:** [`docs/effects.md`](docs/effects.md), the RCSS effect syntax.
 - **Embed integration:** [`docs/embed-integration.md`](docs/embed-integration.md), the contract for hosts that own their window and GL context (`glintfx::UiLayer`).
+- **Packaging:** [`docs/packaging.md`](docs/packaging.md), the `cmake --install` + `find_package(glintfx)` flow for consuming a pre-built tree.
+- **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md), the most likely integration errors and their fixes.
+- **API reference:** the public headers under [`glintfx/include/glintfx/`](glintfx/include/glintfx/) are fully doc-commented (bilingual, EN then PT) -- treat them as the authoritative, always-current API reference; a generated (Doxygen) reference is not yet published.
 - **Architecture / rationale:** the [ADRs](docs/adr/README.md) and the [design spec](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
+- **Versioning policy:** [`CONTRIBUTING.md#versioning`](CONTRIBUTING.md#versioning) -- what counts as a minor vs. a patch release while glintfx is pre-1.0.
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md). **AI agents:** [`AGENTS.md`](AGENTS.md). **Security:** [`SECURITY.md`](SECURITY.md).
 
 ### Known limitations
@@ -302,6 +316,16 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 | Runtime | OpenGL 3.3 |
 
 RmlUi 6.3 é baixado em tempo de configure; gl3w é vendorizado no repo.
+
+### Compatibilidade
+
+| Componente | Requisito | Notas |
+| :--- | :--- | :--- |
+| RmlUi | **6.3**, pinado via `FetchContent` do CMake a um commit fixo do upstream | Só essa versão exata pinada é suportada/testada. Outras versões do RmlUi não são suportadas -- trocar o `GIT_TAG` em `glintfx/CMakeLists.txt` não é suportado nem testado. |
+| OpenGL | **3.3, core profile** | Exigido em runtime pelo render layer GL3. |
+| Compilador | **clang** (piso C++17, alvo C++23) | O `glintfx/CMakeLists.txt` não pina nem exige uma versão mínima de clang (sem checagem de `CMAKE_CXX_COMPILER`). **GCC não é declarado/documentado oficialmente como suportado** -- porém, o próprio CI deste repositório (`.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`) instala e builda a biblioteca com `g++` em todo push/PR, então builds com GCC são exercitados na prática mesmo sem ser um contrato documentado. Se você depender de GCC, trate como não-verificado a montante desta tabela e reporte problemas de build. |
+| CMake | **>= 3.16** | Exigido por `cmake_minimum_required` em `glintfx/CMakeLists.txt`. |
+| SO / Arquitetura | **Somente Linux x86-64** | Sem suporte a Windows/macOS/ARM; ver [Limitações conhecidas](#limitações-conhecidas). |
 
 ### Quick start
 
@@ -437,7 +461,11 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 - **Tutorial:** [`docs/getting-started.md`](docs/getting-started.md), do zero ao primeiro efeito.
 - **How-to / reference:** [`docs/effects.md`](docs/effects.md), a sintaxe RCSS dos efeitos.
 - **Integração embed:** [`docs/embed-integration.md`](docs/embed-integration.md), o contrato para hosts donos da própria janela e contexto GL (`glintfx::UiLayer`).
+- **Packaging:** [`docs/packaging.md`](docs/packaging.md), o fluxo `cmake --install` + `find_package(glintfx)` para consumir uma árvore pré-buildada.
+- **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md), os erros de integração mais prováveis e suas correções.
+- **API reference:** os headers públicos em [`glintfx/include/glintfx/`](glintfx/include/glintfx/) são totalmente doc-commented (bilíngue, EN depois PT) -- trate-os como a referência de API autoritativa e sempre atual; uma referência gerada (Doxygen) ainda não está publicada.
 - **Arquitetura / racional:** os [ADRs](docs/adr/README.md) e a [spec de design](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
+- **Política de versionamento:** [`CONTRIBUTING.md#versionamento`](CONTRIBUTING.md#versionamento) -- o que conta como release minor vs. patch enquanto o glintfx está pré-1.0.
 - **Contribuir:** [`CONTRIBUTING.md`](CONTRIBUTING.md). **Agentes de IA:** [`AGENTS.md`](AGENTS.md). **Segurança:** [`SECURITY.md`](SECURITY.md).
 
 ### Limitações conhecidas

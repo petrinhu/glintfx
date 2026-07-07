@@ -157,6 +157,13 @@ void App::render() {
 }
 
 bool App::snapshot(const char* ppm_path) {
+  // EN: Guard: null path is a caller error, not a crash (fopen(NULL) is UB). Twin of the
+  //     load(nullptr) guard hardened in v0.3.0 — this is the same class of bug, applied to
+  //     the other public const char* path parameter.
+  // PT: Guard: caminho nulo é erro do caller, não crash (fopen(NULL) é UB). Gêmeo do guard
+  //     de load(nullptr) endurecido na v0.3.0 — mesma classe de bug, aplicada ao outro
+  //     parâmetro público const char* de caminho.
+  if (!ppm_path) return false;
   // EN: Render one frame, read FBO 0 BEFORE swap (back-buffer has defined content here),
   //     save as PPM, then swap. On many GL implementations (including Mesa/llvmpipe under
   //     Xvfb) the back-buffer content is undefined AFTER glfwSwapBuffers, so capture must

@@ -4,24 +4,30 @@
 //     Engine path, which App shares). Proves that on the standalone App facade too:
 //       (1) App::load(nullptr) returns false and does NOT abort the process (Bootstrap::load
 //           null-guard -- CRITICAL: without it, std::string(nullptr) -> terminate() -> SIGABRT).
+//       (1b) App::snapshot(nullptr) returns false and does NOT abort the process (AUD-TEC-1 --
+//           twin of the load(nullptr) guard; without it, fopen(NULL) is UB / crashes on glibc).
 //       (2) App::set_dp_ratio() with 0 / negative / NaN / inf does not crash and leaves ok()
 //           true (the invalid ratio is ignored at the common Engine point).
 //       (3) The happy path still works: a valid load + set_dp_ratio(2.0) + one render frame.
 //     No pixel assertion -- this only proves the App surface is wired to the same guards and does
 //     not fault. TOOTH for (1): with the load() null-guard removed, this test aborts (SIGABRT)
-//     and never prints PASS.
+//     and never prints PASS. TOOTH for (1b): with the snapshot() null-guard removed, this test
+//     crashes on fopen(NULL) and never prints PASS.
 // PT: app_input_hardening_smoke -- smoke de paridade do caminho App para os fixes da auditoria de
 //     hardening de entrada v0.3.0 (só backend GLFW; a prova a nível de pixel é
 //     input_hardening_sanity via o caminho UiLayer/Engine, que o App compartilha). Prova que na
 //     fachada standalone App também:
 //       (1) App::load(nullptr) retorna false e NÃO aborta o processo (null-guard de
 //           Bootstrap::load -- CRITICAL: sem ele, std::string(nullptr) -> terminate() -> SIGABRT).
+//       (1b) App::snapshot(nullptr) retorna false e NÃO aborta o processo (AUD-TEC-1 -- gêmeo
+//           do guard de load(nullptr); sem ele, fopen(NULL) é UB / crasha na glibc).
 //       (2) App::set_dp_ratio() com 0 / negativo / NaN / inf não crasha e mantém ok() true (o
 //           ratio inválido é ignorado no ponto comum do Engine).
 //       (3) O caminho feliz ainda funciona: um load válido + set_dp_ratio(2.0) + um frame.
 //     Sem asseração de pixel -- só prova que a superfície do App está ligada às mesmas guardas e
 //     não falha. DENTE para (1): com o null-guard de load() removido, este teste aborta (SIGABRT)
-//     e nunca imprime PASS.
+//     e nunca imprime PASS. DENTE para (1b): com o null-guard de snapshot() removido, este teste
+//     crasha em fopen(NULL) e nunca imprime PASS.
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/glintfx.hpp>
 #include <cmath>
@@ -44,6 +50,13 @@ int main() {
   if (app.load(nullptr)) {
     std::puts("app_input_hardening_smoke FAIL: load(nullptr) returned true (expected false)");
     return 2;
+  }
+
+  // (1b) snapshot(nullptr) -> false, no abort/crash (fopen(NULL) UB). TOOTH: guard removed ->
+  //      crash here (AUD-TEC-1).
+  if (app.snapshot(nullptr)) {
+    std::puts("app_input_hardening_smoke FAIL: snapshot(nullptr) returned true (expected false)");
+    return 6;
   }
 
   // (2) invalid dp ratios: must not crash, ok() stays true.

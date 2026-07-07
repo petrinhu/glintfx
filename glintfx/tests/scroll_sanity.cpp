@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: Verifies the GLINTFX-SCROLL-1 feature (v0.3.2, consumer-driven by GusWorld: a 30-item
+// EN: Verifies the GLINTFX-SCROLL-1 feature (v0.4.0, consumer-driven by GusWorld: a 30-item
 //     overflow-y:auto menu list could not scroll in embed mode) end-to-end through UiLayer's
 //     PUBLIC API only (glintfx::UiLayer::process_event/get_element_scroll_top/
 //     set_element_scroll_top/scroll_element_into_view -- never Bootstrap/Engine/Rml::Context
@@ -59,7 +59,7 @@
 //     alignment math, so this is a robust oracle even without replicating RmlUi's alignment
 //     formula here.
 //
-// PT: Verifica a feature GLINTFX-SCROLL-1 (v0.3.2, consumer-driven pelo GusWorld: uma lista de
+// PT: Verifica a feature GLINTFX-SCROLL-1 (v0.4.0, consumer-driven pelo GusWorld: uma lista de
 //     menu de 30 itens overflow-y:auto não conseguia rolar em embed mode) ponta-a-ponta só pela
 //     API PÚBLICA do UiLayer (glintfx::UiLayer::process_event/get_element_scroll_top/
 //     set_element_scroll_top/scroll_element_into_view -- nunca Bootstrap/Engine/Rml::Context

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: App parity smoke for the five scroll methods (GLINTFX-SCROLL-1, v0.3.2):
+// EN: App parity smoke for the five scroll methods (GLINTFX-SCROLL-1, v0.4.0):
 //     scroll_element_into_view()/get_element_scroll_top()/set_element_scroll_top()/
 //     get_element_scroll_height()/get_element_client_height() -- proves the surface is wired
 //     on App and returns the expected true/values for a known id. Full behavioural proof (wheel
 //     forwarding, clamping, hardening) lives in scroll_sanity.cpp via UiLayer (same Engine
 //     path App delegates to).
-// PT: Smoke de paridade do App para os cinco métodos de rolagem (GLINTFX-SCROLL-1, v0.3.2):
+// PT: Smoke de paridade do App para os cinco métodos de rolagem (GLINTFX-SCROLL-1, v0.4.0):
 //     scroll_element_into_view()/get_element_scroll_top()/set_element_scroll_top()/
 //     get_element_scroll_height()/get_element_client_height() -- prova que a superfície está
 //     conectada no App e retorna os true/valores esperados para um id conhecido. A prova

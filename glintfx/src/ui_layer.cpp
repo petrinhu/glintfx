@@ -393,7 +393,7 @@ void UiLayer::process_event(const UiEvent& ev) {
       break;
 
     case T::MouseWheel:
-      // EN: Wheel/trackpad delta forwarding (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven by
+      // EN: Wheel/trackpad delta forwarding (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven by
       //     GusWorld's 30-item overflow-y:auto menu list, which could not scroll in embed mode).
       //     Unlike MouseMove/MouseButton, NO sub-viewport offset translation here: ev.x/ev.y are
       //     a DELTA (scroll amount), not a window-space position, so there is nothing to subtract
@@ -403,7 +403,7 @@ void UiLayer::process_event(const UiEvent& ev) {
       //     the `hover` member, resolves Element::GetClosestScrollableContainer() from there, and
       //     is a no-op when hover is null). The Vector2f overload is used, not the deprecated
       //     single-float one (see Context.h: "@deprecated Please use the Vector2f version").
-      // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven
+      // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven
       //     pela lista de menu de 30 itens overflow-y:auto do GusWorld, que não conseguia rolar em
       //     embed mode). Diferente de MouseMove/MouseButton, SEM tradução de offset de sub-
       //     viewport aqui: ev.x/ev.y são um DELTA (quantidade de rolagem), não uma posição

@@ -18,6 +18,16 @@
 
 namespace glintfx {
 
+// EN: Sane ceiling for viewport dimensions/offsets (AUD-TEC-4). No real display or letterbox
+//     layout needs more than this; the point is to keep `target_h - y - h` (set_viewport's
+//     gl_offset_y computation, below) comfortably inside int range so it can never
+//     signed-overflow (UB) even with adversarial input close to INT_MAX.
+// PT: Teto são para dimensões/offsets de viewport (AUD-TEC-4). Nenhum display ou layout de
+//     letterbox real precisa de mais que isto; o objetivo é manter `target_h - y - h` (o
+//     cálculo de gl_offset_y do set_viewport, abaixo) folgado dentro do range de int, para que
+//     nunca dê overflow com sinal (UB) mesmo com entrada adversarial perto de INT_MAX.
+constexpr int kMaxViewportDim = 32768;
+
 // ---------------------------------------------------------------------------
 // EN: Internal translation helpers — never exposed in public headers.
 // PT: Helpers internos de tradução — nunca expostos nos headers públicos.
@@ -140,7 +150,11 @@ void UiLayer::set_viewport(int w, int h) {
   //     existe em process_event(Resize) (`if (ev.width <= 0 || ev.height <= 0) break;`); as duas
   //     sobrecargas de set_viewport eram as que não o tinham. x/y/target_h NÃO são validados: um
   //     offset de letterbox legítimo pode ser negativo.
-  if (w <= 0 || h <= 0) return;
+  // EN: Guard (AUD-TEC-4): also cap w/h at a sane ceiling -- kMaxViewportDim is shared with the
+  //     5-arg overload below so both reject the same range.
+  // PT: Guard (AUD-TEC-4): também limita w/h a um teto são -- kMaxViewportDim é compartilhado
+  //     com a sobrecarga de 5 args abaixo para que ambas rejeitem o mesmo range.
+  if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim) return;
   impl_->w = w;
   impl_->h = h;
   impl_->x = impl_->y = impl_->gl_offset_x = impl_->gl_offset_y = 0;
@@ -157,7 +171,22 @@ void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
   // PT: Mesmo guard de w/h da sobrecarga de 2 args acima (auditoria de hardening, v0.3.0). Só w/h
   //     são checados -- x/y (origem do letterbox) e target_h podem legitimamente ser qualquer
   //     valor, incluindo offsets negativos. Mantém o viewport anterior em dimensões inválidas.
-  if (w <= 0 || h <= 0) return;
+  // EN: Guard (AUD-TEC-4): x/y/target_h/w/h all capped at a sane ceiling so
+  //     `target_h - y - h` below cannot signed-overflow (UB) -- e.g. target_h=INT_MAX would
+  //     transiently underflow int range as the subtraction proceeds. w/h must stay positive
+  //     (> 0, same rule as the 2-arg overload); x/y/target_h may legitimately be negative
+  //     (letterbox origin) but not adversarially huge in either direction.
+  // PT: Guard (AUD-TEC-4): x/y/target_h/w/h todos limitados a um teto são para que
+  //     `target_h - y - h` abaixo não dê overflow com sinal (UB) -- ex.: target_h=INT_MAX
+  //     faria a subtração transbordar o range de int. w/h precisam continuar positivos (> 0,
+  //     mesma regra da sobrecarga de 2 args); x/y/target_h podem legitimamente ser negativos
+  //     (origem de letterbox) mas não adversarialmente enormes em nenhuma direção.
+  if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim ||
+      x < -kMaxViewportDim || x > kMaxViewportDim ||
+      y < -kMaxViewportDim || y > kMaxViewportDim ||
+      target_h <= 0 || target_h > kMaxViewportDim) {
+    return;
+  }
   impl_->x = x;
   impl_->y = y;
   impl_->w = w;

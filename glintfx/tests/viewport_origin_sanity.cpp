@@ -32,6 +32,10 @@
 //         h -- get_element_box must still report the SAME x offset afterwards (x does not
 //         depend on h) and must not crash (gl_offset_y recompute path, see process_event's
 //         Resize case in ui_layer.cpp).
+//     (6) AUD-TEC-4: set_viewport(0, INT_MAX, 100, INT_MAX, INT_MAX) -- adversarial y/h/target_h
+//         near INT_MAX must be a no-op (previous letterbox viewport from (5) kept, no crash, no
+//         UBSan signed-overflow hit on `target_h - y - h`), proving the kMaxViewportDim ceiling
+//         added to both set_viewport overloads.
 //
 // PT: Prova de integração do contrato de coordenadas da F3 -- exercita F1 (clique) + F2
 //     (get_element_box) + F3 (set_viewport com origem) juntas, porque compartilham UM único
@@ -67,10 +71,15 @@
 //         get_element_box deve continuar reportando o MESMO offset x depois (x não depende de
 //         h) e não deve crashar (caminho de recálculo de gl_offset_y, ver o case Resize de
 //         process_event em ui_layer.cpp).
+//     (6) AUD-TEC-4: set_viewport(0, INT_MAX, 100, INT_MAX, INT_MAX) -- y/h/target_h
+//         adversariais perto de INT_MAX devem ser no-op (viewport letterbox anterior de (5)
+//         mantido, sem crash, sem overflow com sinal no UBSan em `target_h - y - h`), provando
+//         o teto kMaxViewportDim adicionado às duas sobrecargas de set_viewport.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
 #include "offscreen.hpp"
+#include <climits>
 #include <cstdio>
 #include <cmath>
 #include <string>
@@ -266,6 +275,22 @@ int main() {
   if (!box2.found || !approx(box2.x, 120.f)) {
     std::fprintf(stderr, "FAIL: (5) box.x=%.1f expected ~120 (unchanged by Resize)\n", box2.x);
     return 12;
+  }
+
+  // ---------------------------------------------------------------------------
+  // (6) AUD-TEC-4 -- adversarial y/h/target_h near INT_MAX must be a no-op: previous letterbox
+  //     viewport (from (5), x=120) kept, no crash, no UBSan signed-overflow hit inside
+  //     `target_h - y - h`.
+  // ---------------------------------------------------------------------------
+  ui.set_viewport(0, INT_MAX, 100, INT_MAX, INT_MAX);
+  if (!ui.ok()) { std::puts("FAIL: (6) ok() false after adversarial set_viewport"); return 16; }
+  ui.update(); ui.render();
+  if (!ui.ok()) { std::puts("FAIL: (6) ok() false after render() post adversarial set_viewport"); return 17; }
+  auto box3 = ui.get_element_box("target");
+  if (!box3.found || !approx(box3.x, 120.f)) {
+    std::fprintf(stderr, "FAIL: (6) box.x=%.1f expected ~120 (adversarial set_viewport must be "
+                 "a no-op)\n", box3.x);
+    return 18;
   }
 
   std::puts("viewport_origin_sanity: PASS");

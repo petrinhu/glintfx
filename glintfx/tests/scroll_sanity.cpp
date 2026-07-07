@@ -25,7 +25,14 @@
 //           synchronous (RmlUi's ScrollIntoViewOptions default behavior is
 //           ScrollBehavior::Instant per ScrollTypes.h, and Element::SetScrollTop has no
 //           animation path at all -- confirmed by reading Element.cpp) -- asserted on the
-//           very next get_element_scroll_top() call, no settling needed.
+//           very next get_element_scroll_top() call, no settling needed. B4 below additionally
+//           closes a coverage gap found by the GLINTFX-SCROLL-1 review's mutation testing:
+//           item-29 (used for the clamped-800 oracle) saturates to the SAME value under both
+//           align_with_top=true and =false, so it never discriminates the parameter -- a
+//           mutation flipping align_with_top -> !align_with_top in
+//           Bootstrap::scroll_element_into_view slipped through undetected. item-10 sits inside
+//           the scrollable range for both alignments and yields two DIFFERENT scroll_top values,
+//           giving that mutation a tooth (dente).
 //
 //       (C) Hardening: null id / unknown id / no-document-yet on all five new methods return
 //           false without crashing; a non-finite (NaN/+inf) scroll_top is REJECTED (verified by
@@ -79,6 +86,13 @@
 //           ScrollBehavior::Instant conforme ScrollTypes.h, e Element::SetScrollTop não tem
 //           caminho de animação nenhum -- confirmado lendo Element.cpp) -- verificado na
 //           chamada a get_element_scroll_top() imediatamente seguinte, sem settling necessário.
+//           O caso B4 abaixo fecha um gap de cobertura achado pelo mutation testing do review
+//           GLINTFX-SCROLL-1: o item-29 (usado no oráculo do valor saturado 800) satura pro
+//           MESMO valor sob align_with_top=true e =false, então nunca discrimina o parâmetro --
+//           uma mutação trocando align_with_top -> !align_with_top em
+//           Bootstrap::scroll_element_into_view passava despercebida. O item-10 fica dentro do
+//           intervalo rolável para as duas alinhamentos e produz dois valores de scroll_top
+//           DIFERENTES, dando dente a essa mutação.
 //
 //       (C) Hardening: id nulo / id desconhecido / nenhum-documento-ainda nos cinco métodos
 //           novos retornam false sem crashar; um scroll_top não-finito (NaN/+inf) é REJEITADO
@@ -243,8 +257,61 @@ int main() {
     return 34;
   }
 
+  // ---------------------------------------------------------------------------
+  // (B4) GLINTFX-SCROLL-1 review (mutation testing): item-29 above happens to saturate to the
+  //      SAME clamped value (800) under both align_with_top=true and =false, so it never
+  //      actually exercises the parameter discriminantly -- a mutation flipping
+  //      `align_with_top` -> `!align_with_top` inside Bootstrap::scroll_element_into_view slips
+  //      through undetected. item-10 (content-local top offset 300px) sits squarely inside the
+  //      [0,800] scrollable range for BOTH alignments, so neither saturates and the two results
+  //      diverge. Oracle derived by reading Element::ScrollIntoView/GetScrollOffsetDelta in the
+  //      pinned RmlUi source: ScrollAlignment::Start (align_with_top=true) resolves to the
+  //      item's content-local top offset verbatim (300); ScrollAlignment::End
+  //      (align_with_top=false) resolves to that same offset minus (client_height - item_height)
+  //      = 300 - (100 - 30) = 230. Both are independent of the scroll_top in effect BEFORE the
+  //      call -- it cancels out algebraically in Element::ScrollIntoView's delta math -- so no
+  //      reset is needed between the two calls below.
+  // ---------------------------------------------------------------------------
+  if (!ui.scroll_element_into_view("item-10", /*align_with_top=*/true)) {
+    std::puts("FAIL: scroll_into_view(item-10, align_with_top=true)"); return 35;
+  }
+  if (!ui.get_element_scroll_top("scroller", top)) {
+    std::puts("FAIL: get_scroll_top after scroll_into_view(item-10, align_with_top=true)"); return 36;
+  }
+  const float top_aligned_top = top;
+  if (!approx(top_aligned_top, 300.f, 1.5f)) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_top=%.2f expected ~300 after scroll_into_view(item-10, align_with_top=true)\n",
+                 top_aligned_top);
+    return 37;
+  }
+
+  if (!ui.scroll_element_into_view("item-10", /*align_with_top=*/false)) {
+    std::puts("FAIL: scroll_into_view(item-10, align_with_top=false)"); return 38;
+  }
+  if (!ui.get_element_scroll_top("scroller", top)) {
+    std::puts("FAIL: get_scroll_top after scroll_into_view(item-10, align_with_top=false)"); return 39;
+  }
+  const float top_aligned_bottom = top;
+  if (!approx(top_aligned_bottom, 230.f, 1.5f)) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_top=%.2f expected ~230 after scroll_into_view(item-10, align_with_top=false)\n",
+                 top_aligned_bottom);
+    return 40;
+  }
+
+  // The dente: the two alignments MUST land on different scroll_top values. This is the
+  // assertion mutation testing proved item-29 alone could never provide.
+  if (approx(top_aligned_top, top_aligned_bottom, 5.0f)) {
+    std::fprintf(stderr,
+                 "FAIL: align_with_top=true (%.2f) and align_with_top=false (%.2f) produced the "
+                 "SAME scroll_top -- the align_with_top parameter was not exercised discriminantly\n",
+                 top_aligned_top, top_aligned_bottom);
+    return 41;
+  }
+
   // Reset to a clean baseline before the wheel (part A) assertions below.
-  if (!ui.set_element_scroll_top("scroller", 0.f)) { std::puts("FAIL: reset scroll_top to 0"); return 35; }
+  if (!ui.set_element_scroll_top("scroller", 0.f)) { std::puts("FAIL: reset scroll_top to 0"); return 42; }
 
   // ---------------------------------------------------------------------------
   // (A0) Wheel over an element with NO scrollable ancestor -- (170, 170) is body background,
@@ -263,9 +330,9 @@ int main() {
                  "FAIL: scroll_top=%.2f after wheel over a non-scrollable hover target "
                  "(expected ~0, unrelated ancestor must not scroll)\n",
                  top_after_offtarget_wheel);
-    return 36;
+    return 43;
   }
-  if (!ui.ok()) { std::puts("FAIL: ok() false after off-target wheel"); return 37; }
+  if (!ui.ok()) { std::puts("FAIL: ok() false after off-target wheel"); return 44; }
 
   // ---------------------------------------------------------------------------
   // (A1) Wheel forwarding -- hover over #scroller (border-box window-space (10,10)-(130,110);
@@ -277,7 +344,7 @@ int main() {
   if (!(top_after_down > 20.f)) {
     std::fprintf(stderr, "FAIL: scroll_top=%.2f after positive wheel delta, expected clearly > 0\n",
                  top_after_down);
-    return 38;
+    return 45;
   }
 
   // ---------------------------------------------------------------------------
@@ -291,14 +358,14 @@ int main() {
                  "FAIL: scroll_top=%.2f after negative wheel delta did not decrease from %.2f "
                  "(opposite-sign delta must scroll the other way)\n",
                  top_after_up, top_after_down);
-    return 39;
+    return 46;
   }
   if (top_after_up < -0.5f) {
     std::fprintf(stderr, "FAIL: scroll_top=%.2f went negative\n", top_after_up);
-    return 40;
+    return 47;
   }
 
-  if (!ui.ok()) { std::puts("FAIL: ok() false after scroll sequence"); return 41; }
+  if (!ui.ok()) { std::puts("FAIL: ok() false after scroll sequence"); return 48; }
 
   std::puts("scroll_sanity: PASS");
   return 0;

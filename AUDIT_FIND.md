@@ -1,10 +1,12 @@
 # AUDIT_FIND.md — Auditoria de distribuição pública + memória (2026-07-07)
 
 > Auditoria READ-ONLY conduzida por Caetano (CTO). **Toda claim arquivo:linha abaixo foi
-> verificada pessoalmente contra o código real desta árvore** (`main` @ `7e8eff8`, v0.4.0).
-> Nenhum arquivo existente foi tocado — este é o único arquivo criado. A seção 5 (Plano de
-> Transição, `AUD-TRANS-*`) é um PLANO (documento de decisão para o líder), não uma execução —
-> nenhum código muda agora. Documento de trabalho interno, pt-br.
+> verificada pessoalmente contra o código real desta árvore** (`main` @ `7e8eff8`, v0.4.0;
+> refs do `TODO.md` re-verificadas após o commit externo `cfb68e9`, que só adicionou o item
+> de INBOX referenciando este documento — os achados AUD-TEC-10/AUD-C0-6 continuam válidos).
+> Nenhum arquivo existente foi tocado por esta auditoria — este é o único arquivo criado.
+> A seção 5 (Plano de Transição, `AUD-TRANS-*`) é um PLANO (documento de decisão para o
+> líder), não uma execução — nenhum código muda agora. Documento de trabalho interno, pt-br.
 
 ---
 
@@ -20,7 +22,7 @@
 
 Camada 0: **nenhum achado crítico** — a implementação está correta nos pontos delicados (INT_MIN, saturação, overlap, promoções variádicas, guarda de overflow do alocador, ABI dos wrappers). Os achados são UB pedante (`memmove` compara ponteiros relacionalmente), código morto não testado (`syscall0/2/4/5`), o caminho de I/O do `mini_printf` sem gate automatizado, e um ADR que promete helpers que não existem.
 
-Adicionalmente (pedido do líder), a **seção 5** traz o **Plano de Transição** (`AUD-TRANS-*`): o caminho técnico pra Camada 1 (glintfx) deixar de chamar RmlUi/gl3w/FreeType/GLFW como acessório e rodar autossuficiente sobre a Camada 0 — detalhamento do épico já existente `L1-INTERNALIZE` (LW8, `TODO.md:92`). Resumo: a primeira coisa NÃO é código, é a **decisão de fronteira** (o modelo "camadas não se linkam" do ADR-0006 precisa evoluir pra internalização fazer sentido — pergunta aberta pro líder, 3 opções); ordem recomendada gl3w (P, quick win que prova o processo clean-room) → FreeType via `FontEngineInterface` plugável (G) → RmlUi por subsistema (GG, endgame); GLFW com recomendação de **não** internalizar (o build embed-only já vive sem ele); fronteira irredutível = Mesa/libGL/driver/kernel.
+Adicionalmente (pedido do líder), a **seção 5** traz o **Plano de Transição** (`AUD-TRANS-*`): o caminho técnico pra Camada 1 (glintfx) deixar de chamar RmlUi/gl3w/FreeType/GLFW como acessório e rodar autossuficiente sobre a Camada 0 — detalhamento do épico já existente `L1-INTERNALIZE` (o item `L1-INTERNALIZE` do TODO.md, hoje ~l.92 @ `cfb68e9`). Resumo: a primeira coisa NÃO é código, é a **decisão de fronteira** (o modelo "camadas não se linkam" do ADR-0006 precisa evoluir pra internalização fazer sentido — pergunta aberta pro líder, 3 opções); ordem recomendada gl3w (P, quick win que prova o processo clean-room) → FreeType via `FontEngineInterface` plugável (G) → RmlUi por subsistema (GG, endgame); GLFW com recomendação de **não** internalizar (o build embed-only já vive sem ele); fronteira irredutível = Mesa/libGL/driver/kernel.
 
 **Contagem: 10 AUD-PUB · 10 AUD-TEC · 6 AUD-C0 · 8 AUD-MEM · 6 AUD-TRANS = 40 achados.**
 
@@ -28,13 +30,13 @@ Adicionalmente (pedido do líder), a **seção 5** traz o **Plano de Transição
 
 ## 2. Tabela de achados técnicos/produto
 
-Ondas propostas (ordem de execução): **AW1** dominó de robustez (1 sessão, sem decisão de design) → **AW2** higiene de versão/licença/docs → **AW3** frescor do TODO.md → **AW4** generalização de API (exige decisão do líder via AskUserQuestion) → **AW5** Camada 0 (anexar às ondas `TST-*`/`AUD-*` já existentes). Memória (`AUD-MEM-*`) na seção 4, própria. Os itens `AUD-TRANS-*` pertencem à onda **LW8** (o épico `L1-INTERNALIZE` já existente no `TODO.md:92`) e são PLANO, não execução — detalhados na seção 5.
+Ondas propostas (ordem de execução): **AW1** dominó de robustez (1 sessão, sem decisão de design) → **AW2** higiene de versão/licença/docs → **AW3** frescor do TODO.md → **AW4** generalização de API (exige decisão do líder via AskUserQuestion) → **AW5** Camada 0 (anexar às ondas `TST-*`/`AUD-*` já existentes). Memória (`AUD-MEM-*`) na seção 4, própria. Os itens `AUD-TRANS-*` pertencem à onda **LW8** (o épico `L1-INTERNALIZE` já existente no TODO.md, hoje ~l.92 @ `cfb68e9`) e são PLANO, não execução — detalhados na seção 5.
 
 | ID | Onda | Grupo | Descrição Técnica | Prioridade | Pré-requisito | Dificuldade | Status | Estado Auditado |
 |---|---|---|---|---|---|---|---|---|
 | AUD-TEC-1 | AW1 | glintfx/Robustez | `App::snapshot(nullptr)` → `fopen(NULL)` UB/crash — gêmeo do `load(nullptr)` já caçado (`app.cpp:183`) | Alta | — | Trivial | ⏳ Pendente | achado novo |
 | AUD-TEC-2 | AW1 | glintfx/Robustez | NaN/inf em `UiEvent.x/y` não validados em `MouseMove` (cast float→int UB, `ui_layer.cpp:320`) e `MouseWheel` (`ui_layer.cpp:376`) — guard de finitude existe em `set_element_scroll_top` mas não foi propagado | Alta | — | Fácil | ⏳ Pendente | achado novo |
-| AUD-TEC-5 | AW1 | glintfx/Robustez | `id=""` aceito nos 6 métodos por-id (`bootstrap.cpp:330-372`) — **confirma item já na INBOX do TODO.md (l.118), ainda aberto**; fechar junto de AUD-TEC-1/2 (mesma varredura dominó) | Média | — | Fácil | ⏳ Pendente | já na INBOX |
+| AUD-TEC-5 | AW1 | glintfx/Robustez | `id=""` aceito nos 6 métodos por-id (`bootstrap.cpp:330-372`) — **confirma o item já na INBOX do TODO.md (o item "`id=""` (string vazia) aceito onde deveria falhar, em todos os métodos por-id", hoje ~l.122 @ `cfb68e9`), ainda aberto**; fechar junto de AUD-TEC-1/2 (mesma varredura dominó) | Média | — | Fácil | ⏳ Pendente | já na INBOX |
 | AUD-TEC-3 | AW1 | glintfx/Robustez | Reentrância: `set_click_callback` chamado de dentro do próprio callback → UAF do `std::function` em execução (`bootstrap.cpp:325-327`) | Média | — | Média | ⏳ Pendente | achado novo |
 | AUD-TEC-4 | AW1 | glintfx/Robustez | Overflow de int com sinal em `gl_offset_y = target_h - y - h` (`ui_layer.cpp:167,401`); dims sem teto são | Média | — | Fácil | ⏳ Pendente | achado novo |
 | AUD-TEC-8 | AW2 | glintfx/Docs | Deriva de versão: README PT diz v0.3.0 (l.457) vs EN v0.4.0 (l.225); `GIT_TAG v0.3.0` em 4 snippets; tag fantasma "v0.3.2" em headers+`ubsan_suppressions.txt`; `SECURITY.md` sem 0.4.x; `embed-integration.md` ancorado "as of v0.2.1" | Alta | — | Fácil | ⏳ Pendente | achado novo |
@@ -43,7 +45,7 @@ Ondas propostas (ordem de execução): **AW1** dominó de robustez (1 sessão, s
 | AUD-PUB-7 | AW2 | glintfx/Docs | Jargão GusWorld em doc pública: roadmap do README com rationale nominal por item (l.234-237/466-469), "brass screw-head" como exemplo canônico (l.49, `effects.md:87`), `embed-integration.md` com exemplo único "cockpit" | Média | — | Fácil | ⏳ Pendente | achado novo |
 | AUD-PUB-8 | AW2 | glintfx/Docs | Gaps de doc pública: sem doc de packaging/`cmake --install`, sem tabela de compatibilidade (RmlUi pinada? gcc?), sem troubleshooting, seção Documentation não aponta os headers como API reference | Média | — | Média | ⏳ Pendente | achado novo |
 | AUD-TEC-9 | AW2 | glintfx/Build | `app.hpp` incluído avulso num build embed-only (`GLINTFX_BACKEND_GLFW=0`) → link error críptico; falta guard no próprio header | Baixa | — | Trivial | ⏳ Pendente | achado novo |
-| AUD-TEC-10 | AW3 | TODO.md/Frescor | 3 defeitos no TODO.md: l.55 "LW9 pendente onda de verificação" contradiz l.53 "LW9 ✅ FECHADA"; l.86 `AUD-L1-PARSE` lista 2 achados JÁ remediados no código como "PRIORIDADE ALTA -- 2 achados reais"; l.106 link do plano F2 só existe no branch, 404 no `main` | Alta | — | Trivial | ⏳ Pendente | achado novo |
+| AUD-TEC-10 | AW3 | TODO.md/Frescor | 3 defeitos no TODO.md: a frase "LW9 entregue e testada, pendente onda de verificação." (parágrafo "Ordem recomendada" da seção Camada 1, hoje ~l.55 @ `cfb68e9`) contradiz "LW9 ✅ FECHADA" (parágrafo "Estado" da mesma seção, hoje ~l.53 @ `cfb68e9`); o item `AUD-L1-PARSE` (hoje ~l.86 @ `cfb68e9`) lista 2 achados JÁ remediados no código como "PRIORIDADE ALTA -- 2 achados reais"; o item `L2-COMPONENTS` (hoje ~l.106 @ `cfb68e9`) — link do plano F2 só existe no branch, 404 no `main` | Alta | — | Trivial | ⏳ Pendente | achado novo |
 | AUD-PUB-1 | AW4 | glintfx/API | `App` standalone não refaz layout em resize: `render()` nunca chama `SetDimensions`, `App` não tem `set_viewport` — UI congela nas dims do `AppConfig` | Alta | decisão do líder | Média | ⏳ Pendente | achado novo |
 | AUD-PUB-4 | AW4 | glintfx/API | Click callback insuficiente p/ consumidor genérico: só `const char* id` — sem botão (right-click), sem coords, sem double-click; elementos sem id indistinguíveis (`""`) | Média | decisão do líder | Média | ⏳ Pendente | achado novo |
 | AUD-PUB-3 | AW4 | glintfx/API | `enum Key` é subconjunto gamepad-nav (`ui_event.hpp:19-32`); faltam Delete/Home/End/PageUp/PageDown/letras/dígitos p/ app desktop (RmlUi já tem os `KI_*` prontos) | Média | decisão do líder | Fácil | ⏳ Pendente | achado novo |
@@ -57,7 +59,7 @@ Ondas propostas (ordem de execução): **AW1** dominó de robustez (1 sessão, s
 | AUD-C0-3 | AW5 | Camada0/Testes | `mini_printf` (wrapper stdout + laço de flush >256B, `printf.c:265-309`) com ZERO teste automatizado — `test_printf.c` só cobre `mini_vsnprintf` (admitido no próprio cabeçalho) | Média | anexar a TST-INT (W11) | Fácil | ⏳ Pendente | achado novo |
 | AUD-C0-4 | AW5 | Camada0/ADR | ADR-0002 promete `IS_ERR(x)`/`ERR_CODE(x)` + header de códigos de erro que NÃO existem (grep vazio); call-sites aplicam o contrato `-errno` ad-hoc | Média | antes de REL-TAG | Fácil | ⏳ Pendente | achado novo |
 | AUD-C0-5 | AW5 | Camada0/Testes | Testes faltantes menores: guarda de overflow do `malloc` (`alloc.c:167`) sem regressão; `realloc` shrink não testado; prova do caminho de FALHA do harness não versionada (sonda descartável) | Baixa | anexar a TST-MEM/TST-INT | Fácil | ⏳ Pendente | achado novo |
-| AUD-C0-6 | AW5 | Housekeeping | TODO.md B1 (l.15) lista `bool` como entregável de `types.h` mas ele foi deliberadamente omitido (keyword C23); `out.ppm` (1.6 MB) commitado na raiz — artefato de render stray | Baixa | — | Trivial | ⏳ Pendente | achado novo |
+| AUD-C0-6 | AW5 | Housekeeping | o item B1 do TODO.md (hoje ~l.15 @ `cfb68e9`) lista `bool` como entregável de `types.h` mas ele foi deliberadamente omitido (keyword C23, ver doc-comment em `include/types.h:4-14`); `out.ppm` (1.6 MB) commitado na raiz — artefato de render stray | Baixa | — | Trivial | ⏳ Pendente | achado novo |
 | AUD-TRANS-5 | LW8 | Transição/ADR | **Decisão de fronteira** (bloqueia todo o resto da trilha): o modelo ADR-0006 "camadas não se linkam" precisa evoluir pra internalização acontecer — 3 opções (link estático incremental / process-boundary com IPC / clean-room dentro da Camada 1 com soberania em fase 2) — **decisão do líder, propor ADR-0009** | Alta (é o gate) | L1-INTERNALIZE | Média (decisão+ADR) | 💡 Decisão pendente | plano |
 | AUD-TRANS-0 | LW8 | Transição/Camada 0 | Pré-requisitos na Camada 0 (onda nova `SOV-*`): alocador geral com `free` real (E1 bump não sustenta UI de vida longa), float↔string, libm-núcleo, syscalls novos (`clock_gettime`, `munmap`, `socket`/`connect`/`sendmsg`/`recvmsg`, futex), runtime C++ freestanding (condicional a AUD-TRANS-5) | Média | AUD-TRANS-5; REL-TAG core-v0.1.0 | GG (decomponível) | ⏳ Pendente | plano |
 | AUD-TRANS-1 | LW8 | Transição/gl3w | Internalizar gl3w: loader GL próprio gerado clean-room do registro Khronos (`gl.xml`) — substitui `third_party/gl3w` mantendo suíte verde; **1º marco recomendado** (prova o processo clean-room ponta a ponta com risco mínimo) | Média | AUD-TRANS-5 | P | ⏳ Pendente | plano |
@@ -76,7 +78,7 @@ Ondas propostas (ordem de execução): **AW1** dominó de robustez (1 sessão, s
 FILE* f = fopen(ppm_path, "wb");
 if (!f) return false;
 ```
-`fopen(NULL, "wb")` é UB (crash na glibc). É **exatamente o mesmo padrão** do CRITICAL `load(nullptr)` corrigido na v0.3.0 (guard hoje em `bootstrap.cpp:243`): único outro método público que recebe `const char*` de caminho e ficou fora da varredura dominó daquela release.
+`fopen(NULL, "wb")` é UB (crash na glibc). É **exatamente o mesmo padrão** do CRITICAL `load(nullptr)` corrigido na v0.3.0 (guard hoje em `bootstrap.cpp:243`, dentro de `Bootstrap::load`): único outro método público que recebe `const char*` de caminho e ficou fora da varredura dominó daquela release.
 
 **Por que importa.** O GusWorld não usa `snapshot()` (é `App`-only). Um consumidor público que capture screenshots (ferramenta de CI própria, gerador de thumbnails) e passe um caminho computado que pode ser nulo derruba o processo host — a mesma classe de severidade que motivou o hardening da v0.3.0.
 
@@ -90,16 +92,16 @@ if (!ppm_path) return false;  // EN: null path is a caller error, not a crash. P
 
 ### AUD-TEC-2 — NaN/inf em coordenadas de mouse (guard de finitude não propagado)
 
-**Problema exato.** `glintfx/src/ui_layer.cpp:320` (case `MouseMove`):
+**Problema exato.** `glintfx/src/ui_layer.cpp:320` (case `T::MouseMove` dentro de `UiLayer::process_event`):
 ```cpp
 c->ProcessMouseMove(static_cast<int>(ev.x) - impl_->x, static_cast<int>(ev.y) - impl_->y,
                     to_rml_mods(ev.modifiers));
 ```
-`static_cast<int>` de float NaN/inf é UB ([conv.fpint]). E `ui_layer.cpp:376` (case `MouseWheel`):
+`static_cast<int>` de float NaN/inf é UB ([conv.fpint]). E `ui_layer.cpp:376` (case `T::MouseWheel`, mesma função `UiLayer::process_event`):
 ```cpp
 c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
 ```
-delta não-finito flui direto pro RmlUi e pode envenenar o offset de scroll com NaN. O projeto **já tem** essa regra: `set_element_scroll_top` rejeita não-finito (`bootstrap.cpp:377`), e a memória do projeto registra "validar float antes do cast" como lição da sessão (feedback_auditoria_domino). Faltou aplicar aos irmãos de `process_event` — `MouseButton` (se usa `ev.x/y`) deve ser varrido junto.
+delta não-finito flui direto pro RmlUi e pode envenenar o offset de scroll com NaN. O projeto **já tem** essa regra: `set_element_scroll_top` rejeita não-finito (`Bootstrap::set_element_scroll_top`, `bootstrap.cpp:377`), e a memória do projeto registra "validar float antes do cast" como lição da sessão (feedback_auditoria_domino). Faltou aplicar aos irmãos de `process_event` — `MouseButton` (se usa `ev.x/y`) deve ser varrido junto.
 
 **Por que importa.** `UiEvent.x/y` são a superfície de entrada mais quente do embed mode — o host repassa valores de terceiros (driver, replay de input, rede). O GusWorld manda coords SDL sempre finitas; outro host pode não mandar.
 
@@ -114,7 +116,7 @@ if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) return;  // ou break no case
 
 ### AUD-TEC-5 — `id=""` nos 6 métodos por-id (fechar o item da INBOX junto da onda AW1)
 
-**Problema exato.** Confirmado no código atual: `bootstrap.cpp:330,340,348,356,364,372` — todos os 6 métodos (`get_element_box`, `scroll_element_into_view`, `get_element_scroll_top/height`, `get_element_client_height`, `set_element_scroll_top`) usam `if (!impl_ || !impl_->doc || !id) return false;` sem checar `id[0]`. O item já está na INBOX do `TODO.md` (l.118) e está **acurado** — só não foi executado.
+**Problema exato.** Confirmado no código atual: `bootstrap.cpp:330,340,348,356,364,372` — todos os 6 métodos (`get_element_box`, `scroll_element_into_view`, `get_element_scroll_top/height`, `get_element_client_height`, `set_element_scroll_top`) usam `if (!impl_ || !impl_->doc || !id) return false;` sem checar `id[0]`. O item já está na INBOX do `TODO.md` (o item "`id=""` (string vazia) aceito onde deveria falhar, em todos os métodos por-id", hoje ~l.122 @ `cfb68e9`) e está **acurado** — só não foi executado.
 
 **Correção.** Trocar o guard nos 6 pontos por `if (!impl_ || !impl_->doc || !id || !*id) return ...;` (nos que retornam `ElementBox`, retornar `{}` com `found=false` como já fazem pro id nulo). **Teste:** casos `""` em `element_box_sanity.cpp` e `scroll_sanity.cpp`.
 
@@ -122,21 +124,21 @@ if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) return;  // ou break no case
 
 ### AUD-TEC-3 — UAF por reentrância em `set_click_callback`
 
-**Problema exato.** `bootstrap.cpp:325-327`: `set_click_callback` faz `impl_->click_cb = std::move(cb)`. O `ClickEventListener::ProcessEvent` (`bootstrap.cpp:92-112`) invoca via ponteiro `cb_ = &impl_->click_cb`. Se o handler do consumidor chamar `set_click_callback(...)` **de dentro do próprio handler** (padrão plausível: "clicou em 'Play' → troca o handler da tela seguinte"), o `std::function` em execução é destruído durante a sua própria invocação → use-after-free.
+**Problema exato.** `bootstrap.cpp:325-327` (`Bootstrap::set_click_callback`): `set_click_callback` faz `impl_->click_cb = std::move(cb)`. O `ClickEventListener::ProcessEvent` (`bootstrap.cpp:92-112`) invoca via ponteiro `cb_ = &impl_->click_cb` (setado no construtor do listener, chamado em `bootstrap.cpp:318`). Se o handler do consumidor chamar `set_click_callback(...)` **de dentro do próprio handler** (padrão plausível: "clicou em 'Play' → troca o handler da tela seguinte"), o `std::function` em execução é destruído durante a sua própria invocação → use-after-free.
 
 **Correção (preferida).** No `ProcessEvent`, copiar o functor para uma variável local antes de invocar:
 ```cpp
 auto cb = *cb_;          // cópia barata; sobrevive a reatribuições reentrantes
 if (cb) cb(id_str);
 ```
-Alternativa mais leve: documentar a proibição no doc-comment de `set_click_callback` em `app.hpp:139` e `ui_layer.hpp:183`. Recomendo a cópia — custo desprezível, elimina a classe inteira.
+Alternativa mais leve: documentar a proibição no doc-comment de `set_click_callback` em `app.hpp:139` (declaração de `App::set_click_callback`) e `ui_layer.hpp:183` (declaração de `UiLayer::set_click_callback`). Recomendo a cópia — custo desprezível, elimina a classe inteira.
 **Teste:** callback que troca o próprio callback e re-clica; rodar sob ASan (a suíte nightly já existe).
 
 ### AUD-TEC-4 — Overflow de int com sinal em `gl_offset_y`
 
-**Problema exato.** `ui_layer.cpp:167` (e uso em `:401`): `impl_->gl_offset_y = target_h - y - h;` — `x/y/target_h` não têm validação nenhuma e `w/h` só `>0` sem teto. Com valores próximos de `INT_MAX`, a subtração transborda (UB de signed overflow). `Rml::Vector2i(w,h)` gigante em `SetDimensions` (`engine.cpp:66`) também tenta layout absurdo.
+**Problema exato.** `ui_layer.cpp:167` (dentro de `UiLayer::set_viewport(x,y,w,h,target_h)`, e uso análogo no handler `T::Resize` em `:401`): `impl_->gl_offset_y = target_h - y - h;` — `x/y/target_h` não têm validação nenhuma e `w/h` só `>0` sem teto. Com valores próximos de `INT_MAX`, a subtração transborda (UB de signed overflow). `Rml::Vector2i(w,h)` gigante em `SetDimensions` (`engine.cpp:66`, dentro de `Engine::set_viewport`) também tenta layout absurdo.
 
-**Correção.** Definir um teto são (ex.: `constexpr int kMaxDim = 32768;`) e rejeitar (no-op, consistente com o guard atual de `w/h<=0` em `ui_layer.cpp:142,159`) qualquer `w/h/target_h` fora de `(0, kMaxDim]` e `x/y` fora de `[-kMaxDim, kMaxDim]`. Com o teto, `target_h - y - h` cabe folgado em int.
+**Correção.** Definir um teto são (ex.: `constexpr int kMaxDim = 32768;`) e rejeitar (no-op, consistente com o guard atual de `w/h<=0` nas duas sobrecargas de `UiLayer::set_viewport`, `ui_layer.cpp:142,159`) qualquer `w/h/target_h` fora de `(0, kMaxDim]` e `x/y` fora de `[-kMaxDim, kMaxDim]`. Com o teto, `target_h - y - h` cabe folgado em int.
 **Teste:** `set_viewport(0, INT_MAX, 100, INT_MAX, INT_MAX)` em `viewport_origin_sanity.cpp` → no-op, sem UBSan hit.
 
 **Não fazer:** não mudar a assinatura pública aqui (isso é AUD-PUB-5/decisão de design).
@@ -144,12 +146,12 @@ Alternativa mais leve: documentar a proibição no doc-comment de `set_click_cal
 ### AUD-TEC-8 — Deriva de versão nas docs públicas (varredura única)
 
 **Problemas exatos (todos confirmados):**
-1. `README.md:457` (PT): "Lançamento atual: **v0.3.0** ... 2026-07-04" — o EN em `README.md:225` já diz v0.4.0/2026-07-07. Corrigir o PT para espelhar o EN.
-2. `README.md:213` (EN) e `:445` (PT): "glintfx v0.3.0 is honest about..." → v0.4.0.
-3. `GIT_TAG v0.3.0` em `README.md:82`, `README.md:314`, `docs/getting-started.md:45`, `docs/getting-started.md:188` → `v0.4.0`. (Alternativa melhor a prova de futuro: comentário `# pin to the latest tag` ao lado, e item de checklist de release "bump GIT_TAG nos snippets" — a causa-raiz é não estar no checklist.)
-4. Tag fantasma **"v0.3.2"**: `app.hpp:157,161`, `ui_event.hpp:69,96`, `ui_layer.hpp:201,214` e `glintfx/tests/ubsan_suppressions.txt:93,148,154,214` — a feature GLINTFX-SCROLL-1 saiu como **v0.4.0**; não existe tag v0.3.2. Trocar todas as 10 ocorrências por "v0.4.0".
-5. `SECURITY.md:16-17` (e bloco PT `:53-54`): tabela diz "0.3.x Yes / <0.3.0 No" → "0.4.x Yes / <0.4.0 No". (Também citado dentro de AUD-L1-PARSE — ver AUD-TEC-10.)
-6. `docs/embed-integration.md:3` e `:5`: "Line references point at the source as of glintfx **v0.2.1**" — o doc já documenta features até v0.4.0. Ou re-ancorar as refs de linha na v0.4.0 (trabalho maior), ou trocar a frase por "line references are approximate; verify against the current source" (honesto e barato). Recomendo a 2ª + re-ancorar apenas as refs realmente citadas nas seções novas.
+1. `README.md:457` (PT, seção "Roadmap e visão"): "Lançamento atual: **v0.3.0** ... 2026-07-04" — o EN em `README.md:225` (seção "Roadmap and vision") já diz v0.4.0/2026-07-07. Corrigir o PT para espelhar o EN.
+2. `README.md:213` (EN, seção "Known limitations") e `:445` (PT, seção "Limitações conhecidas"): "glintfx v0.3.0 is honest about..." → v0.4.0.
+3. `GIT_TAG v0.3.0` no snippet cmake de `README.md:82` (Quick start EN), `README.md:314` (Quick start PT), `docs/getting-started.md:45` e `docs/getting-started.md:188` → `v0.4.0`. (Alternativa melhor a prova de futuro: comentário `# pin to the latest tag` ao lado, e item de checklist de release "bump GIT_TAG nos snippets" — a causa-raiz é não estar no checklist.)
+4. Tag fantasma **"v0.3.2"**: doc-comment de `scroll_element_into_view` em `app.hpp:157,161`, doc-comment do enum `MouseWheel` em `ui_event.hpp:69,96`, doc-comment de `scroll_element_into_view` em `ui_layer.hpp:201,214`, e os dois blocos de suppression `vptr:*WidgetScroll.cpp*`/`vptr:*RemoveEventListener*` em `glintfx/tests/ubsan_suppressions.txt:93,148,154,214` — a feature GLINTFX-SCROLL-1 saiu como **v0.4.0**; não existe tag v0.3.2. Trocar todas as 10 ocorrências por "v0.4.0".
+5. `SECURITY.md:16-17` (tabela "Supported versions", EN) e bloco PT equivalente `SECURITY.md:53-54` ("Versões suportadas"): tabela diz "0.3.x Yes / <0.3.0 No" → "0.4.x Yes / <0.4.0 No". (Também citado dentro de AUD-L1-PARSE — ver AUD-TEC-10.)
+6. `docs/embed-integration.md:3` e `:5` (parágrafo de abertura EN/PT do documento): "Line references point at the source as of glintfx **v0.2.1**" — o doc já documenta features até v0.4.0. Ou re-ancorar as refs de linha na v0.4.0 (trabalho maior), ou trocar a frase por "line references are approximate; verify against the current source" (honesto e barato). Recomendo a 2ª + re-ancorar apenas as refs realmente citadas nas seções novas.
 
 **Por que importa.** É a cara pública da lib: um consumidor que segue o tutorial pina v0.3.0 e não recebe os fixes de memória da v0.3.1 nem o scroll da v0.4.0.
 
@@ -179,10 +181,10 @@ Não reescrever tags passadas (históricas, imutáveis); a política vale daqui 
 ### AUD-PUB-7 — Jargão GusWorld em doc pública
 
 **Problemas exatos.**
-1. `README.md:49`: feature list usa `"brass screw-head" volume` como exemplo canônico do polygon — trocar por exemplo neutro ("e.g. a hexagonal badge or gauge fill").
-2. `README.md:234-237` (EN) e `:466-469` (PT): cada item do roadmap "Delivered" embute o rationale nominal ("driven by GusWorld's hexagonal slider node", "GusWorld's unscrollable menu list"). Mover o "porquê consumer-driven" pro CHANGELOG (onde já está em detalhe) e descrever a capability em termos do que ela faz pro leitor. Manter UMA menção honesta "battle-tested by a real consumer (GusWorld, an SDL3 game)" na seção de status — isso é marketing legítimo, o problema é o rationale por-item.
-3. `docs/embed-integration.md:192-217`: a seção "Cockpit example" + `cockpit.rml` + "verb menu driven by WASD/gamepad" (`:132-145`) — renomear para um exemplo neutro ("Overlay panel example", `panel.rml`) mantendo GusWorld citado como primeiro consumidor real na introdução (`:3-5`), que é apropriado.
-4. `docs/effects.md:87` ("How-to: ... brass screw-head") — opcional, baixa prioridade (é um how-to real e funciona).
+1. `README.md:49` (seção "Features"): feature list usa `"brass screw-head" volume` como exemplo canônico do polygon — trocar por exemplo neutro ("e.g. a hexagonal badge or gauge fill").
+2. `README.md:234-237` (EN, bullets "Delivered" de v0.2.5 a v0.4.0) e `:466-469` (PT, mesmos 4 bullets): cada item do roadmap "Delivered" embute o rationale nominal ("driven by GusWorld's hexagonal slider node" em `:235`, "GusWorld's unscrollable menu list" em `:237`). Mover o "porquê consumer-driven" pro CHANGELOG (onde já está em detalhe) e descrever a capability em termos do que ela faz pro leitor. Manter UMA menção honesta "battle-tested by a real consumer (GusWorld, an SDL3 game)" na seção de status — isso é marketing legítimo, o problema é o rationale por-item.
+3. `docs/embed-integration.md:192-217` (a subseção "### Cockpit example", dentro da seção "6. Data model", indo até a excerpt `cockpit.rml`): a seção "Cockpit example" + `cockpit.rml` + "a verb menu driven by WASD, arrows, or gamepad" (seção "5. Focus navigation", `:132-145`, quote exata em `:135`) — renomear para um exemplo neutro ("Overlay panel example", `panel.rml`) mantendo GusWorld citado como primeiro consumidor real na introdução (`:3-5`), que é apropriado.
+4. `docs/effects.md:87` (título "### How-to: a polygon with a gradient fill (e.g. a brass screw-head)") — opcional, baixa prioridade (é um how-to real e funciona).
 
 **Não fazer:** não apagar o GusWorld da história do projeto (CHANGELOG e ADRs devem continuar citando — são registros de rationale). O alvo é só a doc de *uso* público.
 
@@ -195,7 +197,7 @@ Não reescrever tags passadas (históricas, imutáveis); a política vale daqui 
 
 ### AUD-TEC-9 — `app.hpp` avulso em build embed-only
 
-**Problema exato.** `glintfx.hpp:13` protege com `#if GLINTFX_BACKEND_GLFW`, mas quem inclui `<glintfx/app.hpp>` direto num build embed-only compila e falha no LINK com erro críptico (símbolos de `app.cpp`, que não foi compilado — `glintfx/CMakeLists.txt:137-146`).
+**Problema exato.** `glintfx/include/glintfx/glintfx.hpp:13` protege com `#if GLINTFX_BACKEND_GLFW` (guarda o `#include <glintfx/app.hpp>` da linha seguinte), mas quem inclui `<glintfx/app.hpp>` direto num build embed-only compila e falha no LINK com erro críptico (símbolos de `app.cpp`, que não foi compilado — o bloco `if(GLINTFX_BACKEND_GLFW)...endif()` de `glintfx/CMakeLists.txt:137-146`).
 
 **Correção.** No topo de `app.hpp` (após o SPDX):
 ```cpp
@@ -210,15 +212,15 @@ Erro em compile-time com mensagem acionável em vez de link error.
 
 Executar num único commit `docs(todo)` — o TODO.md é o arquivo canônico e as 3 divergências confundem qualquer planejamento:
 
-1. **Linha 55** — trocar `LW9 entregue e testada, pendente onda de verificação.` por `LW9 ✅ fechada (entregue+testada+auditada, v0.2.5).` — a linha 53 e a tabela (l.75-77, itens ✅+✓) já registram o fechamento; o texto é resíduo de estado anterior.
-2. **Linha 86** (`AUD-L1-PARSE`) — os "2 achados reais" JÁ FORAM remediados (confirmado: o laço de premultiply usa `size_t pixel_count`, `render_gl3.cpp:132-133`; `SECURITY.md` já não diz "0.1.x"). Trocar `**PRIORIDADE ALTA -- 2 achados reais.** [...] Achados: (1) **overflow inteiro** no bound `i < w*h` (`int`) no premultiply; (2) `SECURITY.md` desatualizado ("0.1.x suportada").` por `**Os 2 achados originais já foram remediados adiantados** (overflow `w*h` → `size_t pixel_count` em `render_gl3.cpp`; `SECURITY.md` atualizado). Resta a auditoria formal: fuzz (libFuzzer/AFL++), cap de dimensão (`STBI_MAX_DIMENSIONS`), DoS por alocação.` e rebaixar a Prioridade de Alta para Média (o que a mantinha Alta eram os achados abertos). Nota: o `SECURITY.md` voltou a defasar (0.3.x vs v0.4.0) — coberto por AUD-TEC-8 item 5.
-3. **Linha 106** (`L2-COMPONENTS`) — o caminho `docs/superpowers/plans/2026-06-30-glintfx-v2-f2-components.md` **não existe no `main`** (verificado: `docs/superpowers/plans/` só tem 6 arquivos, nenhum f2; o plano vive só no branch `feat/v2-f2-components`). Trocar por `Plano pronto **no branch `feat/v2-f2-components`** (arquivo `docs/superpowers/plans/2026-06-30-glintfx-v2-f2-components.md`, não mergeado no `main`), branch parada`.
+1. **O texto "LW9 entregue e testada, pendente onda de verificação."** (parágrafo "Ordem recomendada" da seção Camada 1 do TODO.md, hoje ~l.55 @ `cfb68e9`) — trocar por `LW9 ✅ fechada (entregue+testada+auditada, v0.2.5).` — o parágrafo "Estado" da mesma seção (hoje ~l.53 @ `cfb68e9`) e a tabela (itens `L1.11-CLICKCB`/`L1.12-ELEMBOX`/`L1.13-VPORIGIN`, hoje ~l.75-77 @ `cfb68e9`, todos ✅+✓) já registram o fechamento; o texto é resíduo de estado anterior.
+2. **O item `AUD-L1-PARSE`** (hoje ~l.86 @ `cfb68e9`) — os "2 achados reais" JÁ FORAM remediados (confirmado: o laço de premultiply usa `size_t pixel_count`, dentro da função de decode/premultiply de textura em `render_gl3.cpp:132-133`; `SECURITY.md` já não diz "0.1.x"). Trocar `**PRIORIDADE ALTA -- 2 achados reais.** [...] Achados: (1) **overflow inteiro** no bound `i < w*h` (`int`) no premultiply; (2) `SECURITY.md` desatualizado ("0.1.x suportada").` por `**Os 2 achados originais já foram remediados adiantados** (overflow `w*h` → `size_t pixel_count` em `render_gl3.cpp`; `SECURITY.md` atualizado). Resta a auditoria formal: fuzz (libFuzzer/AFL++), cap de dimensão (`STBI_MAX_DIMENSIONS`), DoS por alocação.` e rebaixar a Prioridade de Alta para Média (o que a mantinha Alta eram os achados abertos). Nota: o `SECURITY.md` voltou a defasar (0.3.x vs v0.4.0) — coberto por AUD-TEC-8 item 5.
+3. **O item `L2-COMPONENTS`** (hoje ~l.106 @ `cfb68e9`) — o caminho `docs/superpowers/plans/2026-06-30-glintfx-v2-f2-components.md` **não existe no `main`** (verificado: `docs/superpowers/plans/` só tem 6 arquivos, nenhum f2; o plano vive só no branch `feat/v2-f2-components`). Trocar por `Plano pronto **no branch `feat/v2-f2-components`** (arquivo `docs/superpowers/plans/2026-06-30-glintfx-v2-f2-components.md`, não mergeado no `main`), branch parada`.
 
-Opcionais (baixa prioridade, mesma sessão se barato): (a) anotar na convenção da linha 5 que na Camada 1 o review final do `internal-auditor` na entrega equivale à onda de verificação (é a prática real; a regra escrita só menciona `TST-*`/`AUD-*`); (b) `L1.9`/`L1.10` rotulados LW5 mas com pré-req `L2-EMBED` (V2W2) — anotar "(entregues pós-embed)" pra desfazer a inversão aparente.
+Opcionais (baixa prioridade, mesma sessão se barato): (a) anotar na convenção de frescor (parágrafo inicial "Convenção de frescor: implementação entregue → 🔍 Pendente verificação...", hoje ~l.5 @ `cfb68e9`) que na Camada 1 o review final do `internal-auditor` na entrega equivale à onda de verificação (é a prática real; a regra escrita só menciona `TST-*`/`AUD-*`); (b) `L1.9`/`L1.10` rotulados LW5 mas com pré-req `L2-EMBED` (V2W2) — anotar "(entregues pós-embed)" pra desfazer a inversão aparente.
 
 ### AUD-PUB-1 — `App` standalone não refaz layout em resize (bug real, mas AW4: decisão de forma)
 
-**Problema exato.** `app.cpp:149-157`: `render()` lê o tamanho atual da janela e chama `engine.render_standalone(w,h)` (`engine.cpp:115`), que faz `begin_frame → Render → end_frame` — **nunca** `Context::SetDimensions` (que só existe em `Engine::set_viewport`, `engine.cpp:66`, jamais chamado pelo `App`). `App` não expõe `set_viewport` (confirmado: zero ocorrências em `app.hpp` fora de comentários). Resultado: janela GLFW redimensionável (default), mas o layout RmlUi congela nas dims do `AppConfig` — a UI não reflui, esticando/cortando.
+**Problema exato.** `app.cpp:149-157` (corpo de `App::render`): `render()` lê o tamanho atual da janela e chama `engine.render_standalone(w,h)` (`engine.cpp:115`, início de `Engine::render_standalone`), que faz `begin_frame → Render → end_frame` — **nunca** `Context::SetDimensions` (que só existe em `Engine::set_viewport`, `engine.cpp:66`, jamais chamado pelo `App`). `App` não expõe `set_viewport` (confirmado: zero ocorrências em `app.hpp` fora de comentários). Resultado: janela GLFW redimensionável (default), mas o layout RmlUi congela nas dims do `AppConfig` — a UI não reflui, esticando/cortando.
 
 **Por que importa.** É O caso de uso do consumidor "app desktop" — o tipo de consumidor público que o `App` existe pra servir. O GusWorld nunca tocou nisso (usa `UiLayer` + `set_viewport` manual).
 
@@ -235,13 +237,13 @@ Opcionais (baixa prioridade, mesma sessão se barato): (a) anotar na convenção
 
 ### AUD-PUB-3 — `enum Key` gamepad-shaped
 
-**Problema exato.** `ui_event.hpp:19-32`: `enum class Key { None, Up, Down, Left, Right, Enter, Escape, Tab, Space, Backspace }` — o próprio comentário admite "navigation-oriented subset. Extend for text editing as needed". Faltam p/ app desktop: `Delete`, `Home`, `End`, `PageUp`, `PageDown`, F1-F12, letras/dígitos (atalhos Ctrl+C/V/Z). O mapeamento `to_rml_key` (`ui_layer.cpp:31-44`) já traduz pro RmlUi — os `KI_DELETE/KI_HOME/KI_END/KI_PRIOR/KI_NEXT/KI_A..` upstream existem, é só ampliar o enum + switch.
+**Problema exato.** `ui_event.hpp:19-32` (`enum class Key` completo): `enum class Key { None, Up, Down, Left, Right, Enter, Escape, Tab, Space, Backspace }` — o próprio comentário admite "navigation-oriented subset. Extend for text editing as needed". Faltam p/ app desktop: `Delete`, `Home`, `End`, `PageUp`, `PageDown`, F1-F12, letras/dígitos (atalhos Ctrl+C/V/Z). O mapeamento `to_rml_key` (`ui_layer.cpp:31-44`, função completa) já traduz pro RmlUi — os `KI_DELETE/KI_HOME/KI_END/KI_PRIOR/KI_NEXT/KI_A..` upstream existem, é só ampliar o enum + switch.
 
 **Correção (aditiva, não-breaking):** ampliar `Key` com `Delete, Home, End, PageUp, PageDown` (bloco 1, barato e inequívoco) e avaliar com o líder se letras/dígitos entram já ou ficam como semente INBOX (text input real exigiria também evento `TextInput` com codepoint — escopo maior, claramente pull-based). **Teste:** casos novos em `ui_layer_events.cpp`.
 
 ### AUD-PUB-4 — Click callback insuficiente
 
-**Problema exato.** `app.hpp:139` / `ui_layer.hpp:183`: `set_click_callback(std::function<void(const char* element_id)>)` — sem botão, sem coordenadas, sem double-click; elementos sem id colapsam em `""` (`bootstrap.cpp:111`). Suficiente pro menu do GusWorld (todo botão tem id); insuficiente pra menu de contexto (right-click), double-click-para-abrir, ou listas geradas onde dar id a cada item é oneroso.
+**Problema exato.** `app.hpp:139` (`App::set_click_callback`) / `ui_layer.hpp:183` (`UiLayer::set_click_callback`): `set_click_callback(std::function<void(const char* element_id)>)` — sem botão, sem coordenadas, sem double-click; elementos sem id colapsam em `""` (`bootstrap.cpp:111`, dentro de `ClickEventListener::ProcessEvent`). Suficiente pro menu do GusWorld (todo botão tem id); insuficiente pra menu de contexto (right-click), double-click-para-abrir, ou listas geradas onde dar id a cada item é oneroso.
 
 **Correção (decisão do líder — é a mudança de API mais visível):**
 - **Opção A (aditiva):** manter o callback atual e adicionar `set_click_info_callback(std::function<void(const ClickInfo&)>)` com `struct ClickInfo { const char* id; int button; bool double_click; float x, y; }` (novo header ou dentro de `ui_event.hpp`).
@@ -250,34 +252,34 @@ Registrar como semente INBOX se não houver demanda — mas o right-click é o g
 
 ### AUD-PUB-5 — Contrato FBO 0 + `target_h` (documentar como decisão; feature já adiada)
 
-**Problema.** `ui_layer.hpp:112` + `ui_layer.cpp:167`: `target_h` existe só pra converter origem top-left → bottom-up do `glViewport`, e o render mira FBO 0 incondicionalmente (limitação F1 já documentada em `ui_layer.hpp:143-151` e ADR-0008). A feature real (compor num FBO do host) já está adiada como **GAP-2b na INBOX** — correto pelo modo pull.
+**Problema.** `ui_layer.hpp:112` (assinatura de `UiLayer::set_viewport(x,y,w,h,target_h)`) + `ui_layer.cpp:167` (corpo dessa sobrecarga): `target_h` existe só pra converter origem top-left → bottom-up do `glViewport`, e o render mira FBO 0 incondicionalmente (limitação F1 já documentada no doc-comment de `UiLayer::render` em `ui_layer.hpp:143-151` e ADR-0008). A feature real (compor num FBO do host) já está adiada como **GAP-2b na INBOX** — correto pelo modo pull.
 
 **Correção (só doc):** garantir que `embed-integration.md` declare a limitação em seção própria "Scope and limitations" (hoje está espalhada em doc-comment + ADR) e que o doc-comment de `set_viewport` diga explicitamente "if you composite into your own FBO, this parameter model does not apply — see GAP-2b". Nada de código.
 
 ### AUD-PUB-6 — Gaps de API genérica (REGISTRAR como sementes; não implementar)
 
-Um consumidor genérico pediria, e o GusWorld nunca pediu (logo não existem): **(a)** `unload()`/`hide()`/`show()` — hoje a única forma de "tirar a UI da tela" é carregar outro `.rml`; **(b)** múltiplos documentos/overlay modal — `Bootstrap` guarda 1 doc, 1 contexto (`bootstrap.cpp:73,213`); **(c)** eventos RmlUi além de click — `ClickEventListener` só escuta `EventId::Click` (`bootstrap.cpp:317`); sem change/submit/focus/blur, formulários são inertes pro host; **(d)** setters imperativos por id (`set_text`, `add_class`, `set_property`); **(e)** leitura de volta do data-model (`get_number/string/bool` — hoje write-only, two-way binding é invisível ao host); **(f)** `load_font` em runtime; **(g)** cursor callback (`SystemInterface::SetMouseCursor` não repassado); **(h)** clipboard callbacks.
+Um consumidor genérico pediria, e o GusWorld nunca pediu (logo não existem): **(a)** `unload()`/`hide()`/`show()` — hoje a única forma de "tirar a UI da tela" é carregar outro `.rml`; **(b)** múltiplos documentos/overlay modal — `Bootstrap::Impl` guarda 1 doc, 1 contexto (campos `doc`/`ctx`, `bootstrap.cpp:73,213`); **(c)** eventos RmlUi além de click — `ClickEventListener` só escuta `EventId::Click` (registro em `Bootstrap::load`, `bootstrap.cpp:317`); sem change/submit/focus/blur, formulários são inertes pro host; **(d)** setters imperativos por id (`set_text`, `add_class`, `set_property`); **(e)** leitura de volta do data-model (`get_number/string/bool` — hoje write-only, two-way binding é invisível ao host); **(f)** `load_font` em runtime; **(g)** cursor callback (`SystemInterface::SetMouseCursor` não repassado); **(h)** clipboard callbacks.
 
 **Correção:** adicionar à INBOX do `TODO.md` como sementes individuais no padrão do GAP-4 existente ("semente, sem demanda, NÃO urgente"), com uma linha cada. **Por quê registrar se é pull:** o roadmap público fica honesto (consumidores veem o que está no radar), e o custo é 8 linhas de INBOX. **Não fazer:** implementar qualquer um sem demanda confirmada — decisão canônica do líder de 2026-07-01 (pull incremental).
 
 ### AUD-TEC-6 — Dívida de forma da API (consolidar antes da v1.0)
 
 **Problemas exatos (5 subitens):**
-1. Quatro contratos de erro coexistem: `set_dp_ratio` inválido **loga e ignora** (`engine.cpp:90-95`); `set_viewport` inválido é **no-op silencioso** (`ui_layer.cpp:142,159`); `set_element_scroll_top` não-finito **retorna false** (`bootstrap.cpp:377`); `set_number/string/bool/list` com chave errada é **void silencioso** (`data_binder.cpp:108-146`).
+1. Quatro contratos de erro coexistem: `set_dp_ratio` inválido **loga e ignora** (`Engine::set_dp_ratio`, `engine.cpp:90-95`); `set_viewport` inválido é **no-op silencioso** (as 2 sobrecargas de `UiLayer::set_viewport`, `ui_layer.cpp:142,159`); `set_element_scroll_top` não-finito **retorna false** (`Bootstrap::set_element_scroll_top`, `bootstrap.cpp:377`); `set_number/string/bool/list` com chave errada é **void silencioso** (os 4 setters de `DataBinder`, `data_binder.cpp:108-146`).
 2. `bind_*` retorna `bool` mas `set_*` retorna `void` — typo de chave em `set_number("hp_", x)` é indetectável.
-3. Mutadores marcados `const`: `set_element_scroll_top(...) const` e `scroll_element_into_view(...) const` (`ui_layer.hpp:319`, `app.hpp:194`).
-4. `enum class Key` (scoped) vs `enum Mod` unscoped despejando `Mod_None/Mod_Shift/...` em `namespace glintfx` (`ui_event.hpp:21` vs `:36`).
-5. `UiEvent.button` é `int` mágico documentado por comentário (`ui_event.hpp:155`) enquanto `key` é enum; e `UiLayerConfig::logical_width/height` vs `AppConfig::width/height` pro mesmo conceito.
+3. Mutadores marcados `const`: `set_element_scroll_top(...) const` (`ui_layer.hpp:319`, `app.hpp:194`) e `scroll_element_into_view(...) const` (`ui_layer.hpp:227`, `app.hpp:164` — números corrigidos nesta revisão de higiene: a citação original apontava `app.hpp:194` para os dois métodos, mas essa linha é `set_element_scroll_top` nas duas classes; `scroll_element_into_view` está em `ui_layer.hpp:227`/`app.hpp:164`).
+4. `enum class Key` (scoped) vs `enum Mod` unscoped despejando `Mod_None/Mod_Shift/...` em `namespace glintfx` (`ui_event.hpp:21` vs `ui_event.hpp:36`).
+5. `UiEvent.button` é `int` mágico documentado por comentário (`ui_event.hpp:155`, campo `button` da struct `UiEvent`) enquanto `key` é enum; e `UiLayerConfig::logical_width/height` vs `AppConfig::width/height` pro mesmo conceito.
 
 **Correção:** é um pacote **breaking** — não corrigir aos poucos. Propor ao líder um único milestone "API consolidation" (candidato natural: v0.5.0 sob o critério novo do AUD-PUB-9, ou v1.0): política de erro única (`bool` + log em nível warning), `set_*` → `bool`, remover `const` dos mutadores, `enum class Mod` com operadores bitwise, `enum class MouseButton`. Documentar a migração no CHANGELOG. **Não fazer:** não misturar com features — release só de consolidação.
 
 ### AUD-TEC-7 — Gaps de cobertura de teste
 
 **Problemas exatos:**
-1. **Data-model 100% não testado no caminho embed:** os 4 testes (`data_model_smoke/scalar/list/rebind_uaf`) usam `glintfx::App` e vivem dentro do bloco `if(GLINTFX_BACKEND_GLFW)` (`tests/CMakeLists.txt:92-494`; o comentário nas linhas 6-11 do próprio arquivo já admite o skip silencioso do rebind no embed). A API é anunciada como paridade (`ui_layer.hpp:321` "parity with App") e é exatamente a que o consumidor embed real usa — mas o caminho `UiLayer` nunca é exercitado. **Correção:** `data_model_embed_sanity.cpp` com `UiLayer` offscreen (usar `offscreen.hpp` como os demais sanity), registrado FORA do bloco GLFW (roda nos 2 configs): create → bind_number/string/bool/list → load → set_* → render → capture e assert de pixel/box.
+1. **Data-model 100% não testado no caminho embed:** os 4 testes (`data_model_smoke/scalar/list/rebind_uaf`) usam `glintfx::App` e vivem dentro do bloco `if(GLINTFX_BACKEND_GLFW)...endif()` inteiro de `glintfx/tests/CMakeLists.txt:92-494` (verificado: l.92 abre o bloco, l.494 é o `endif() # GLINTFX_BACKEND_GLFW` que o fecha). **Sub-claim não confirmada nesta revisão de higiene** (sinalizada ao líder, não corrigida por falta de certeza): "o comentário nas linhas 6-11 do próprio arquivo já admite o skip silencioso do rebind no embed" — `tests/CMakeLists.txt:6-11` comenta sobre `GLINTFX_GOLDEN_TEST`, não sobre o rebind; o cabeçalho de `data_model_rebind_uaf.cpp` também não contém essa admissão. O mais próximo é o comentário sobre bind duplicado ser um "silent no-op on collision" em `data_model_rebind_uaf.cpp:6-8` — mecanismo do `Bind()`, não sobre a suíte ser pulada no embed. A API é anunciada como paridade (seção "Data-model API (T1) — parity with App", `ui_layer.hpp:322` — corrigido nesta revisão de `:321`, que é só o separador `// ---` imediatamente acima) e é exatamente a que o consumidor embed real usa — mas o caminho `UiLayer` nunca é exercitado. **Correção:** `data_model_embed_sanity.cpp` com `UiLayer` offscreen (usar `glintfx/tests/offscreen.hpp` como os demais sanity), registrado FORA do bloco GLFW (roda nos 2 configs): create → bind_number/string/bool/list → load → set_* → render → capture e assert de pixel/box.
 2. **`set_bool` zero testes** (grep vazio em `tests/*.cpp`); `bind_bool` só no path de rejeição do `rebind_uaf`. **Correção:** adicionar bind_bool+set_bool com `data-if` no `data_model_scalar` e no novo teste embed.
 3. **`App::run()` zero testes.** Aceitável (loop bloqueante), mas documentar no doc-comment que é a composição testada de `poll/update/render` — ou teste com fechamento programado da janela.
-4. **2º `create_data_model` retorna false silencioso** (`data_binder.cpp:41` — `impl_->created` limita a 1 modelo). Não testado nem documentado. **Correção mínima:** documentar o limite no doc-comment de `create_data_model` (App e UiLayer) + assert do false no teste. Suporte a múltiplos modelos = semente INBOX (AUD-PUB-6).
+4. **2º `create_data_model` retorna false silencioso** (`data_binder.cpp:41`, dentro de `DataBinder::create` — `impl_->created` limita a 1 modelo). Não testado nem documentado. **Correção mínima:** documentar o limite no doc-comment de `create_data_model` (App e UiLayer) + assert do false no teste. Suporte a múltiplos modelos = semente INBOX (AUD-PUB-6).
 
 ### AUD-C0-1 — `memmove`: comparação relacional de ponteiros é UB estrito
 
@@ -292,31 +294,31 @@ if (du < su) { /* forward */ } else if (du > su) { /* backward */ }
 
 ### AUD-C0-2 — `syscall0/2/4/5`: código morto não testado
 
-**Problema exato.** `src/syscall.asm` define 7 aridades; só `syscall1` (exit), `syscall3` (write/read) e `syscall6` (mmap) têm call-sites (grep confirmado: `syscall0/2/4/5` só aparecem em declarações de `include/syscall.h:15-20` e comentários). Os reshuffles de registrador de `syscall4`/`syscall5` nunca são exercitados.
+**Problema exato.** `src/syscall.asm` define 7 aridades; só `syscall1` (exit), `syscall3` (write/read) e `syscall6` (mmap) têm call-sites (grep confirmado: `syscall0/2/4/5` só aparecem em declarações de `include/syscall.h:15-20` — bloco com as declarações `syscall0` a `syscall5`, `syscall6` fica em `:21` — e comentários). Os reshuffles de registrador de `syscall4`/`syscall5` nunca são exercitados.
 
 **Correção (decisão, apresentar ao líder):** **(a) podar** os 4 wrappers sem uso (YAGNI; ADR-0001 diz que adicionar de volta é barato) — recomendada pro corte `core-v0.1.0`, zera a superfície não-testada; ou **(b) testar** cada aridade contra um syscall real (ex.: `getpid`=39 pra `syscall0` — exigiria adicionar a constante). **Anexar ao `AUD-ABI` no TODO.md.**
 
 ### AUD-C0-3 — `mini_printf` (stdout) sem gate automatizado
 
-**Problema exato.** `src/printf.c:265-309` (`mini_flush`, `mini_flush_sink`, o laço de flush pra runs >256B e a soma de `total`) não tem NENHUM teste: `tests/test_printf.c` cobre só `mini_vsnprintf` (o próprio cabeçalho do teste admite, linhas 4-11: o harness só checa exit code, não captura stdout; a validação foi um `od -c` manual fora do CI). É a única lógica de laço não-trivial do arquivo.
+**Problema exato.** `src/printf.c:265-309` (`mini_flush` em `:265-274`, `mini_flush_sink` em `:276-293`, `mini_printf` em `:295-309` — o laço de flush pra runs >256B e a soma de `total`) não tem NENHUM teste: `tests/test_printf.c` cobre só `mini_vsnprintf` (o próprio cabeçalho do teste admite, linhas 4-11: o harness só checa exit code, não captura stdout; a validação foi um `od -c` manual fora do CI). É a única lógica de laço não-trivial do arquivo.
 
 **Correção.** O item `TST-INT` (W11) já promete E2E com stdout golden — **nomear explicitamente** no seu escopo: "programa que emite via `mini_printf` uma saída >256 bytes (força ≥2 flushes) comparada byte a byte com golden file". Sem isso o TST-INT pode passar sem nunca tocar o flush loop.
 
 ### AUD-C0-4 — ADR-0002 promete `IS_ERR`/`ERR_CODE` inexistentes
 
-**Problema exato.** `docs/adr/0002-error-contract.md:21`: "we'll provide small helpers/macros (e.g. `IS_ERR(x)`, `ERR_CODE(x)`) ... Error codes live in our own header". Grep em `include/ src/ tests/` = zero ocorrências. Cada call-site aplica o contrato `-errno` ad-hoc (`alloc.c:140-142` checa faixa de ponteiro; `echo_stdin.c:44` checa `n<0` implícito). Sem bug funcional, mas o ADR ratificado ("one-way-door") diverge da realidade — ruído permanente se a tag sair assim.
+**Problema exato.** `docs/adr/0002-error-contract.md:21` (seção "Consequences / Consequências"): "we'll provide small helpers/macros (e.g. `IS_ERR(x)`, `ERR_CODE(x)`) ... Error codes live in our own header". Grep em `include/ src/ tests/` = zero ocorrências. Cada call-site aplica o contrato `-errno` ad-hoc (`alloc.c:140-142`, função `mmap_failed`, checa faixa de ponteiro; `tests/echo_stdin.c:44` checa `n<0` implícito no `else` final). Sem bug funcional, mas o ADR ratificado ("one-way-door") diverge da realidade — ruído permanente se a tag sair assim.
 
 **Correção (decisão, 2 opções):** **(a)** emendar o ADR-0002 com uma nota datada "helpers adiados por YAGNI; cada call-site checa inline até haver 3+ consumidores do padrão" (recomendada — coerente com o tom do projeto); ou **(b)** criar `include/errcode.h` com os macros + constantes usadas e refatorar os 2 call-sites. Resolver **antes do `REL-TAG`**.
 
 ### AUD-C0-5 — Testes menores faltantes (anexar às ondas TST-*)
 
-1. Guarda de overflow do `malloc` (`alloc.c:167` — verificada correta na leitura, mas o próprio código pede re-verificação pro AUD-SEC em `alloc.c:82`): adicionar `TEST_ASSERT(malloc((size_t)-1) == NULL);` em `test_alloc.c`.
-2. `realloc` shrink (ramo `copy_size = size` de `alloc.c:231`): caso `realloc(p_64, 8)` preservando os 8 primeiros bytes.
-3. Caminho de FALHA do harness não versionado: a prova de que `TEST_ASSERT` aborta com `FAIL: file:line` correto é uma "sonda descartável nunca commitada" (`tests/selftest.c:28-31`). Criar alvo `make test-negative` que builda uma sonda que DEVE sair 1 com stderr casando golden — fecha a única parte do C1 sem regressão. Candidato a subitem do `TST-INT`.
+1. Guarda de overflow do `malloc` (`alloc.c:167`, dentro de `malloc()` — verificada correta na leitura, mas o próprio doc-comment do arquivo pede re-verificação pro AUD-SEC em `alloc.c:82` PT / `:40` EN): adicionar `TEST_ASSERT(malloc((size_t)-1) == NULL);` em `test_alloc.c`.
+2. `realloc` shrink (ramo `copy_size = (old_size < size) ? old_size : size` de `alloc.c:231`, dentro de `realloc()`): caso `realloc(p_64, 8)` preservando os 8 primeiros bytes.
+3. Caminho de FALHA do harness não versionado: a prova de que `TEST_ASSERT` aborta com `FAIL: file:line` correto é uma "sonda descartável nunca commitada" (parágrafo PT do cabeçalho de `tests/selftest.c:28-31`; equivalente EN em `:12-16`). Criar alvo `make test-negative` que builda uma sonda que DEVE sair 1 com stderr casando golden — fecha a única parte do C1 sem regressão. Candidato a subitem do `TST-INT`.
 
 ### AUD-C0-6 — Housekeeping
 
-1. `TODO.md:15` (item B1) lista "`bool`" como entregável de `types.h`, mas `include/types.h:4-14` documenta a omissão deliberada (keyword C23). Corrigir o texto do B1 pra "(`bool` = keyword C23, não redefinido)".
+1. O item B1 do TODO.md (hoje ~l.15 @ `cfb68e9`) lista "`bool`" como entregável de `types.h`, mas o doc-comment de `include/types.h:4-14` documenta a omissão deliberada (keyword C23). Corrigir o texto do B1 pra "(`bool` = keyword C23, não redefinido)".
 2. `out.ppm` (1.6 MB) commitado na **raiz** — artefato de render (leftover de demo/snapshot). Propor ao líder: remover do tracking + adicionar `*.ppm` da raiz ao `.gitignore` (verificar antes se algo o referencia — grep rápido em docs). Não deletar sem confirmação (regra de reversibilidade).
 
 ---
@@ -379,7 +381,7 @@ Nos corpos das memórias locais, wikilinks usam hífen (`[[project-v2-roadmap-st
 ## 5. Plano de Transição — Camada 1 rodando sozinha sobre a Camada 0 (`AUD-TRANS-*`)
 
 > **Natureza deste capítulo: PLANO, não execução.** Nenhum código muda agora. É o detalhamento
-> técnico do épico `L1-INTERNALIZE` (LW8, `TODO.md:92` — "independência clean-room das libs
+> técnico do épico `L1-INTERNALIZE` (LW8, item `L1-INTERNALIZE` do TODO.md, hoje ~l.92 @ `cfb68e9` — "independência clean-room das libs
 > userspace (RmlUi/gl3w/FreeType/GLFW); fronteira irredutível = libGL/driver/kernel") pra dar ao
 > líder base de decisão sobre cronograma e sequência. Sem prazo, como o CLAUDE.md registra.
 
@@ -393,7 +395,7 @@ Nos corpos das memórias locais, wikilinks usam hífen (`[[project-v2-roadmap-st
 | **GLFW** | Só com `GLINTFX_BACKEND_GLFW=ON` (default): janela+contexto+input do `App` standalone (`window_glfw.cpp`) | Janela, contexto GL, eventos de input, swap | **Sim**: o build embed-only (`OFF`) já elimina GLFW por completo — o host é dono de janela/input (ADR-0008) |
 | **Renderer de efeitos GL3** | `render_gl3.hpp:2`: "Thin RAII wrapper around RmlUi's `RenderInterface_GL3`" | Os efeitos (glow/blur/mask/gradiente) são shaders DO RmlUi, não nossos | Não — nota importante: o "nosso renderer" hoje é o deles embrulhado |
 | **libstdc++/libc/libm** | Toolchain (std::function/vector/chrono, `<cmath>`) | Todo o corpo C++ da Camada 1 | Camada 0 tem mem/str/conv(int)/printf-mini/alloc-bump — núcleo C, não C++ |
-| **Mesa/libGL + driver + kernel** | `find_package(OpenGL)` | Execução GL de verdade | **Fronteira irredutível** — não é alvo (já registrado no `TODO.md:92`) |
+| **Mesa/libGL + driver + kernel** | `find_package(OpenGL)` | Execução GL de verdade | **Fronteira irredutível** — não é alvo (já registrado no item `L1-INTERNALIZE` do TODO.md, hoje ~l.92 @ `cfb68e9`) |
 
 Duas consequências dessa fotografia que moldam o plano inteiro:
 - **A Camada 1 não fala com FreeType nem com metade do RmlUi diretamente** — fala com *interfaces plugáveis* do RmlUi. Isso significa que a internalização pode avançar **por trás das interfaces, sem tocar a API pública do glintfx** (a suíte — 31 testes GLFW=ON / 16 embed — continua sendo o contrato).

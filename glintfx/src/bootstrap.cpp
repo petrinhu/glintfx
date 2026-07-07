@@ -108,7 +108,21 @@ public:
     //     do RML poderia ter escrito sejam reportados; o id do próprio documento (normalmente
     //     não definido) ainda é checado uma vez, de forma inclusiva.
     while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    (*cb_)((el && !el->GetId().empty()) ? el->GetId().c_str() : "");
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Copy the functor before invoking (AUD-TEC-3): cb_ points into
+    //     Bootstrap::Impl::click_cb. If the callback itself calls set_click_callback(...) (a
+    //     plausible pattern -- "clicked 'Play' -> swap in the next screen's handler"), that
+    //     std::move-assigns a NEW value into *cb_ while THIS invocation is still executing,
+    //     which would destroy the std::function's current target out from under itself ->
+    //     use-after-free. A local copy survives reentrant reassignment of *cb_.
+    // PT: Copia o functor antes de invocar (AUD-TEC-3): cb_ aponta para
+    //     Bootstrap::Impl::click_cb. Se o próprio callback chamar set_click_callback(...)
+    //     (padrão plausível -- "clicou em 'Play' -> troca o handler da tela seguinte"), isso
+    //     faz std::move-assign de um valor NOVO em *cb_ enquanto ESTA invocação ainda está
+    //     executando, destruindo o alvo atual do std::function debaixo de si mesmo ->
+    //     use-after-free. Uma cópia local sobrevive à reatribuição reentrante de *cb_.
+    auto cb = *cb_;
+    if (cb) cb(id_str);
   }
 
   void OnDetach(Rml::Element* /*element*/) override { delete this; }
@@ -327,7 +341,13 @@ void Bootstrap::set_click_callback(std::function<void(const char*)> cb) {
 }
 
 bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   Rml::Element* el = impl_->doc->GetElementById(id);
   if (!el) return false;
   const Rml::Vector2f offset = el->GetAbsoluteOffset(Rml::BoxArea::Border);
@@ -337,7 +357,13 @@ bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, fl
 }
 
 bool Bootstrap::scroll_element_into_view(const char* id, bool align_with_top) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   Rml::Element* el = impl_->doc->GetElementById(id);
   if (!el) return false;
   el->ScrollIntoView(align_with_top);
@@ -345,7 +371,13 @@ bool Bootstrap::scroll_element_into_view(const char* id, bool align_with_top) co
 }
 
 bool Bootstrap::get_element_scroll_top(const char* id, float& out_scroll_top) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   Rml::Element* el = impl_->doc->GetElementById(id);
   if (!el) return false;
   out_scroll_top = el->GetScrollTop();
@@ -353,7 +385,13 @@ bool Bootstrap::get_element_scroll_top(const char* id, float& out_scroll_top) co
 }
 
 bool Bootstrap::get_element_scroll_height(const char* id, float& out_scroll_height) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   Rml::Element* el = impl_->doc->GetElementById(id);
   if (!el) return false;
   out_scroll_height = el->GetScrollHeight();
@@ -361,7 +399,13 @@ bool Bootstrap::get_element_scroll_height(const char* id, float& out_scroll_heig
 }
 
 bool Bootstrap::get_element_client_height(const char* id, float& out_client_height) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   Rml::Element* el = impl_->doc->GetElementById(id);
   if (!el) return false;
   out_client_height = el->GetClientHeight();
@@ -369,7 +413,13 @@ bool Bootstrap::get_element_client_height(const char* id, float& out_client_heig
 }
 
 bool Bootstrap::set_element_scroll_top(const char* id, float scroll_top) const {
-  if (!impl_ || !impl_->doc || !id) return false;
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
   // EN: Reject non-finite input BEFORE touching RmlUi -- see the doc-comment in bootstrap.hpp
   //     for why Element::SetScrollTop offers no guard of its own.
   // PT: Rejeita entrada não-finita ANTES de tocar o RmlUi -- ver o doc-comment em bootstrap.hpp

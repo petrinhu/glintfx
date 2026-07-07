@@ -2,12 +2,16 @@
 // EN: Verifies UiLayer::get_element_box(): (A) found element returns the exact RCSS-authored
 //     border-box geometry (left:20 top:15 60x40 -- absolute positioning, no margin/border/
 //     padding in this scene, so border-box == the raw left/top/width/height); (B) unknown id
-//     returns found=false with all-zero fields; (C) no document loaded yet returns found=false.
+//     returns found=false with all-zero fields; (C) no document loaded yet returns found=false;
+//     (D) id="" (AUD-TEC-5) returns found=false -- empty string must fail-high like null, not
+//     silently fall through to a GetElementById("") lookup.
 // PT: Verifica UiLayer::get_element_box(): (A) elemento encontrado retorna exatamente a
 //     geometria border-box autorada no RCSS (left:20 top:15 60x40 -- posicionamento absoluto,
 //     sem margem/borda/padding nesta cena, então border-box == left/top/width/height crus);
 //     (B) id desconhecido retorna found=false com campos todos zero; (C) nenhum documento
-//     carregado ainda retorna found=false.
+//     carregado ainda retorna found=false; (D) id="" (AUD-TEC-5) retorna found=false -- string
+//     vazia deve falhar fail-high como nulo, não cair silenciosamente numa busca
+//     GetElementById("").
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
@@ -45,6 +49,13 @@ int main() {
   if (missing.found || missing.x != 0.f || missing.w != 0.f) {
     std::puts("FAIL: unknown id did not return the zeroed default");
     return 7;
+  }
+
+  // (D) id="" (AUD-TEC-5) -- must fail-high like null, not fall through to GetElementById("").
+  auto empty_id = ui.get_element_box("");
+  if (empty_id.found || empty_id.x != 0.f || empty_id.w != 0.f) {
+    std::puts("FAIL: id=\"\" did not return the zeroed found=false default");
+    return 8;
   }
 
   std::puts("element_box_sanity: PASS");

@@ -34,10 +34,10 @@
 //           the scrollable range for both alignments and yields two DIFFERENT scroll_top values,
 //           giving that mutation a tooth (dente).
 //
-//       (C) Hardening: null id / unknown id / no-document-yet on all five new methods return
-//           false without crashing; a non-finite (NaN/+inf) scroll_top is REJECTED (verified by
-//           proving the scroll_top value stays unchanged after the rejected call, not just by
-//           the false return).
+//       (C) Hardening: null id / empty id "" (AUD-TEC-5) / unknown id / no-document-yet on all
+//           five new methods return false without crashing; a non-finite (NaN/+inf) scroll_top
+//           is REJECTED (verified by proving the scroll_top value stays unchanged after the
+//           rejected call, not just by the false return).
 //
 //       (A0) Wheel over a hover target with NO scrollable ancestor is a safe no-op (does not
 //           crash, does not scroll an unrelated ancestor "by accident") -- ProcessMouseWheel
@@ -94,9 +94,10 @@
 //           intervalo rolável para as duas alinhamentos e produz dois valores de scroll_top
 //           DIFERENTES, dando dente a essa mutação.
 //
-//       (C) Hardening: id nulo / id desconhecido / nenhum-documento-ainda nos cinco métodos
-//           novos retornam false sem crashar; um scroll_top não-finito (NaN/+inf) é REJEITADO
-//           (verificado provando que o valor de scroll_top permanece inalterado após a chamada
+//       (C) Hardening: id nulo / id vazio "" (AUD-TEC-5) / id desconhecido / nenhum-documento-
+//           ainda nos cinco métodos novos retornam false sem crashar; um scroll_top não-finito
+//           (NaN/+inf) é REJEITADO (verificado provando que o valor de scroll_top permanece
+//           inalterado após a chamada
 //           rejeitada, não só pelo retorno false).
 //
 //       (A0) Wheel sobre um alvo de hover SEM ancestral rolável é um no-op seguro (não crasha,
@@ -194,6 +195,14 @@ int main() {
   if (ui.get_element_scroll_height("does-not-exist", probe)) { std::puts("FAIL: get_scroll_height(unknown id)"); return 16; }
   if (ui.get_element_client_height(nullptr, probe)) { std::puts("FAIL: get_client_height(nullptr)"); return 17; }
   if (ui.get_element_client_height("does-not-exist", probe)) { std::puts("FAIL: get_client_height(unknown id)"); return 18; }
+
+  // (C1b, AUD-TEC-5) id="" must fail-high the same way null does -- not silently fall through
+  // to a GetElementById("") lookup.
+  if (ui.scroll_element_into_view("")) { std::puts("FAIL: scroll_into_view(\"\")"); return 49; }
+  if (ui.get_element_scroll_top("", probe)) { std::puts("FAIL: get_scroll_top(\"\")"); return 50; }
+  if (ui.set_element_scroll_top("", 10.f)) { std::puts("FAIL: set_scroll_top(\"\")"); return 51; }
+  if (ui.get_element_scroll_height("", probe)) { std::puts("FAIL: get_scroll_height(\"\")"); return 52; }
+  if (ui.get_element_client_height("", probe)) { std::puts("FAIL: get_client_height(\"\")"); return 53; }
 
   // ---------------------------------------------------------------------------
   // (B0) Scroll-metrics trio -- scroll_height/client_height match the scene oracle:

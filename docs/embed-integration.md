@@ -113,7 +113,7 @@
   - Pass `nullptr` or `""` to clear.
   - `App::set_asset_base_url(const char*)` provides parity with `UiLayer`.
   - Verified: `base_url_sanity` test loads `embed_scene.rml` (not present in the CWD) successfully after `set_asset_base_url("base_url_assets")`. The rendered frame passes all three pixel statistics.
-- **How to point at fonts and sprites (traditional pattern):** call `load("<dir>/cockpit.rml")` and place `cockpit.rcss`, the font file, and sprites at paths the RML/RCSS reference relative to their own location. For example `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolves to `<dir>/fonts/...`. This pattern works without any base URL.
+- **How to point at fonts and sprites (traditional pattern):** call `load("<dir>/panel.rml")` and place `panel.rcss`, the font file, and sprites at paths the RML/RCSS reference relative to their own location. For example `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolves to `<dir>/fonts/...`. This pattern works without any base URL.
 - **Cautions:** absolute paths in RmlUi URLs may lose the leading slash during canonicalisation, so prefer relative paths. The base URL override is most useful for absolute asset roots or when the process CWD cannot be controlled.
 
 **PT:**
@@ -123,7 +123,7 @@
   - Passe `nullptr` ou `""` para limpar.
   - `App::set_asset_base_url(const char*)` tem paridade com `UiLayer`.
   - Verificado: teste `base_url_sanity` carrega `embed_scene.rml` (ausente no CWD) com sucesso após `set_asset_base_url("base_url_assets")`. O frame renderizado passa as três estatísticas de pixel.
-- **Como apontar fontes e sprites (padrão tradicional):** chame `load("<dir>/cockpit.rml")` e coloque `cockpit.rcss`, o arquivo de fonte e os sprites em caminhos que a RML/RCSS referencia relativo à própria localização. Por exemplo `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolve para `<dir>/fonts/...`. Este padrão funciona sem nenhum base URL.
+- **Como apontar fontes e sprites (padrão tradicional):** chame `load("<dir>/panel.rml")` e coloque `panel.rcss`, o arquivo de fonte e os sprites em caminhos que a RML/RCSS referencia relativo à própria localização. Por exemplo `@font-face { src: "fonts/PixelOperatorMono.ttf"; }` resolve para `<dir>/fonts/...`. Este padrão funciona sem nenhum base URL.
 - **Cautelas:** caminhos absolutos em URLs do RmlUi podem perder a barra inicial na canonicalização; prefira caminhos relativos. O override de base URL é mais útil para raízes de asset absolutas ou quando o CWD do processo não pode ser controlado.
 
 ## 5. Focus navigation / Navegação por foco
@@ -132,13 +132,13 @@
 - `process_event` with `UiEvent::Type::Key` forwards `ProcessKeyDown/Up` to the RmlUi context (`glintfx/src/ui_layer.cpp:143-154`), mapping `Key::Up/Down/Left/Right` to the arrow keys, `Enter` to Return, `Escape` to Escape, and `Tab` to Tab (`ui_layer.cpp:31-44`). A host maps its gamepad and keyboard to `glintfx::Key` and injects through `process_event`.
 - **Proven today:** events reach the context without a crash (this is the event plumbing).
 - **Not yet movement:** actual focus movement between elements requires the **document** to declare focusable elements (`tabindex`) and, for directional arrow navigation, the RCSS `nav` property. The standalone embed path does not ship focusable components, so the events arrive but there is nothing to navigate.
-- **For a host menu (for example a verb menu driven by WASD, arrows, or gamepad):** map the input to `glintfx::Key` and inject it (ready today), and author the menu RML with `tabindex` plus `nav`, or use a focus first menu component. `Tab` cycling works out of the box for elements with `tabindex`; arrow navigation requires the `nav` property.
+- **For a host menu (for example a menu driven by WASD, arrow keys, or a gamepad):** map the input to `glintfx::Key` and inject it (ready today), and author the menu RML with `tabindex` plus `nav`, or use a focus first menu component. `Tab` cycling works out of the box for elements with `tabindex`; arrow navigation requires the `nav` property.
 
 **PT:**
 - `process_event` com `UiEvent::Type::Key` encaminha `ProcessKeyDown/Up` ao contexto RmlUi (`glintfx/src/ui_layer.cpp:143-154`), mapeando `Key::Up/Down/Left/Right` para as setas, `Enter` para Return, `Escape` para Escape e `Tab` para Tab (`ui_layer.cpp:31-44`). O host mapeia o gamepad e o teclado para `glintfx::Key` e injeta via `process_event`.
 - **Provado hoje:** os eventos chegam ao contexto sem crash (este é o encaminhamento do evento).
 - **Ainda não o movimento:** o movimento de foco real entre elementos exige o **documento** declarar elementos focáveis (`tabindex`) e, para a navegação direcional por setas, a propriedade RCSS `nav`. O caminho embed por si só não traz componentes focáveis, então os eventos chegam mas não há o que navegar.
-- **Para um menu do host (por exemplo um menu de verbos por WASD, setas ou gamepad):** mapeie o input para `glintfx::Key` e injete (pronto hoje), e autore o RML do menu com `tabindex` mais `nav`, ou use um componente de menu focus first. O ciclo por `Tab` funciona de imediato para elementos com `tabindex`; a navegação por setas exige a propriedade `nav`.
+- **Para um menu do host (por exemplo um menu por WASD, setas ou gamepad):** mapeie o input para `glintfx::Key` e injete (pronto hoje), e autore o RML do menu com `tabindex` mais `nav`, ou use um componente de menu focus first. O ciclo por `Tab` funciona de imediato para elementos com `tabindex`; a navegação por setas exige a propriedade `nav`.
 
 **EN:** glintfx does not expose a `set_focus(id)` method today: focus is glintfx-owned, and `Tab`/arrow keys move it on their own through `tabindex`/`nav` as described above. Hosts whose MODEL is the owner of selection (rather than the RmlUi focus ring) should drive the highlight through **data-binding** (a bound class or attribute via the data model, section 6), not through `:focus`. This is the pattern used by GusWorld. `set_focus(id)` is a roadmap item, tracked as `GAP-4` in the INBOX of `TODO.md`.
 
@@ -189,35 +189,35 @@ set_number / set_string / set_bool / set_list(key, ...)      // 4. update each f
 
 **PT:** Posse de memória: os slots de variável ligados são de posse do engine (`DataBinder` guarda um `std::unique_ptr` por chave em `std::map` para endereços estáveis). O consumidor passa valores por cópia e não deve gerenciar nem guardar ponteiros brutos para a memória das células.
 
-### Cockpit example / Exemplo do cockpit
+### Overlay panel example / Exemplo de painel overlay
 
-**EN:** A game HUD with a numeric HP bar, verb and target strings, and a scrolling action log. The `data-for` attribute iterates the list; `{{line}}` is the per-item alias.
+**EN:** A generic overlay panel with a numeric status value, two label strings, and a scrolling log list. The `data-for` attribute iterates the list; `{{line}}` is the per-item alias.
 
-**PT:** Um HUD de jogo com barra de HP numérica, strings de verbo e alvo e um log de ações rolante. O atributo `data-for` itera a lista; `{{line}}` é o alias por item.
+**PT:** Um painel overlay genérico com um valor numérico de status, duas strings de rótulo e um log rolante. O atributo `data-for` itera a lista; `{{line}}` é o alias por item.
 
 ```cpp
 // C++ -- create and bind before load()
-ui.create_data_model("hud");
-ui.bind_number("hp",     100.0);
-ui.bind_string("verb",   "");
-ui.bind_string("target", "");
+ui.create_data_model("panel");
+ui.bind_number("status", 100.0);
+ui.bind_string("label",  "");
+ui.bind_string("detail", "");
 ui.bind_list  ("log");
 
-ui.load("cockpit.rml");   // views compile here
+ui.load("panel.rml");   // views compile here
 
 // per-frame update
-ui.set_number("hp",     player.hp);
-ui.set_string("verb",   action.verb);
-ui.set_string("target", action.target);
+ui.set_number("status", state.status);
+ui.set_string("label",  state.label);
+ui.set_string("detail", state.detail);
 const char* lines[] = { log[0].c_str(), log[1].c_str(), log[2].c_str() };
 ui.set_list("log", lines, 3);
 ```
 
 ```html
-<!-- cockpit.rml excerpt -->
-<body data-model="hud">
-  <p>HP {{hp}}</p>
-  <p>{{verb}} -- {{target}}</p>
+<!-- panel.rml excerpt -->
+<body data-model="panel">
+  <p>Status {{status}}</p>
+  <p>{{label}} -- {{detail}}</p>
   <p data-for="line : log">{{line}}</p>
 </body>
 ```

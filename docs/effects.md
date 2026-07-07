@@ -84,13 +84,13 @@ You can also use a gradient on a section to give backdrop-blur rich content to s
 
 For a non-square element the polygon does **not** stretch to fill the longer axis — it stays a regular (equilateral) shape, centred, with empty box margin on the longer axis (same idea as a circular `border-radius` on a rectangle). Size a square element if you want the polygon to touch every edge.
 
-### How-to: a polygon with a gradient fill (e.g. a brass screw-head)
+### How-to: a polygon with a gradient fill (e.g. a metallic badge)
 
 The `<fill>` argument of `polygon(<sides>, <fill>[, <rotation>])` accepts a `radial-gradient(...)` or `linear-gradient(...)` in place of a solid color — this gives the polygon a real per-pixel color ramp (the same fragment shader RmlUi's own `radial-gradient`/`linear-gradient` decorators use), not a faceted approximation:
 
 ```css
-.screw-head {
-    /* Radial: bright highlight in the middle, dark toward the rim -- classic "bolt head" volume.
+.badge {
+    /* Radial: bright highlight in the middle, dark toward the rim -- classic embossed-disc volume.
        "at 40% 35%" moves the highlight up-left for an off-center light source; the last stop (t=1)
        always lands exactly on the polygon's own inscribed-circle edge. */
     decorator: polygon(6, radial-gradient(circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100%));

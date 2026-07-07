@@ -1,4 +1,4 @@
-NOTICE — loucura_c_asm
+NOTICE — glintfx
 Copyright (c) 2026 Petrus Silva Costa
 Licensed under the Mozilla Public License 2.0 (MPL-2.0). See LICENSE.
 
@@ -20,6 +20,10 @@ study / reverse-engineering).
 
 - OpenGL (libGL / Mesa) — MIT/SGI-style licenses; copyright their respective
   authors.
+
+- GLFW — https://www.glfw.org — zlib/libpng License.
+  Copyright (c) 2002-2006 Marcus Geelnard, (c) 2006-2019 Camilla Löwy.
+  Linked only when built with GLINTFX_BACKEND_GLFW=ON (the default).
 
 ────────────────────────────────────────────────────────────────────────
 Bundled (vendored) third-party source files (included in this repository)

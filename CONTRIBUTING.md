@@ -55,6 +55,14 @@ Before submitting, build the `consumer-example/` too, to confirm the drop-in pat
 - Keep PRs focused. Describe what changed and how you tested it. Confirm the test suite passes and the demo still renders.
 - New unplanned findings go to the **INBOX** at the bottom of [`TODO.md`](TODO.md), not into the ordered table.
 
+### Versioning
+
+`glintfx` follows [Semantic Versioning](https://semver.org/) with an explicit rule while in the 0.x line:
+
+> While in 0.x: **minor** = any addition or change to the public API/ABI (new method, new header, changed signature); **patch** = only bug fixes, docs, or internal-only changes. Intentional breaking changes are documented in the CHANGELOG's "Changed" section with a migration note. From 1.0 onward: strict SemVer.
+
+This policy applies going forward. Past tags are historical and are not rewritten to match it.
+
 ### Licensing of contributions
 
 The project is **MPL-2.0** and currently has a single author, which keeps relicensing clean. External contributions may require a contributor agreement (CLA) or relicensing consent before they can be merged. If you plan a substantial contribution, open an issue first so this can be sorted out. Do not copy code from third-party libraries; any reimplementation of their behaviour must be clean-room (from understanding, not from their source).
@@ -114,6 +122,14 @@ Antes de enviar, builde também o `consumer-example/` para confirmar que o camin
 - Quando um commit fecha ou avança um item do `TODO.md`, cite o ID dele no corpo (ex.: `L1-API`) e atualize o `Status` no mesmo commit (trabalho entregue vai para `🔍 Pendente verificação`, nunca direto para `✅`).
 - Mantenha os PRs focados. Descreva o que mudou e como testou. Confirme que a suíte passa e que o demo ainda renderiza.
 - Descobertas novas não planejadas vão para a **INBOX** no fim do [`TODO.md`](TODO.md), não para a tabela ordenada.
+
+### Versionamento
+
+O `glintfx` segue [Semantic Versioning](https://semver.org/) com uma regra explícita enquanto estiver na linha 0.x:
+
+> Enquanto 0.x: **minor** = qualquer adição ou mudança de API/ABI pública (método novo, header novo, assinatura alterada); **patch** = só correção de bug, doc, interno. Breaking intencional documentado na seção "Changed" do CHANGELOG com nota de migração. A partir de 1.0: SemVer estrito.
+
+Esta política vale daqui pra frente. Tags passadas são históricas e não são reescritas para se adequar a ela.
 
 ### Licença das contribuições
 

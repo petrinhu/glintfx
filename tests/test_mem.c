@@ -4,7 +4,8 @@
 //     until D1 is implemented. See task report for the captured red-phase error. Covers the
 //     spec cases from the task brief: memcpy (basic copy, n=0, return value), memset (fill
 //     value, n=0, value >255 truncation), memmove (forward overlap, backward overlap, no
-//     overlap == memcpy behaviour), memcmp (equal, first-less, first-greater, diff-in-last-
+//     overlap == memcpy behaviour, dst==src, n==0 -- the last two added as the AUD-C0-1
+//     follow-up, AUDIT_FIND.md), memcmp (equal, first-less, first-greater, diff-in-last-
 //     byte, n=0, unsigned-byte comparison across 0x7F).
 // PT: Programa-gate do D1 -- TDD VERMELHO primeiro: escrito contra include/mem.h ANTES de
 //     src/mem.c ter corpo de verdade, entao o link falha (undefined reference a
@@ -12,7 +13,8 @@
 //     erro capturado na fase vermelha. Cobre os casos da especificacao do brief da tarefa:
 //     memcpy (copia basica, n=0, valor de retorno), memset (preenche valor, n=0, truncamento
 //     de valor >255), memmove (overlap forward, overlap backward, sem overlap == comportamento
-//     de memcpy), memcmp (iguais, primeiro-menor, primeiro-maior, diferenca-no-ultimo-byte,
+//     de memcpy, dst==src, n==0 -- os dois ultimos acrescentados como follow-up do AUD-C0-1,
+//     AUDIT_FIND.md), memcmp (iguais, primeiro-menor, primeiro-maior, diferenca-no-ultimo-byte,
 //     n=0, comparacao unsigned de byte atravessando 0x7F).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "test.h"
@@ -136,6 +138,40 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(dst[1], 20);
         TEST_ASSERT_EQ(dst[2], 30);
         TEST_ASSERT_EQ(dst[3], 40);
+    }
+
+    // EN: AUD-C0-1 follow-up (AUDIT_FIND.md, annotated in the D1 doc-comment of src/mem.c):
+    //     dst == src (same address, du == su in the uintptr_t comparison) -- neither branch of
+    //     the if/else-if is taken, the function must be a safe no-op that still returns dst and
+    //     leaves every byte untouched (the buffer's own bytes are both source and destination).
+    // PT: Follow-up do AUD-C0-1 (AUDIT_FIND.md, anotado no doc-comment do D1 em src/mem.c):
+    //     dst == src (mesmo endereco, du == su na comparacao via uintptr_t) -- nenhum dos ramos
+    //     if/else-if e' tomado, a funcao deve ser um no-op seguro que ainda assim retorna dst e
+    //     deixa todo byte intocado (os bytes do proprio buffer sao origem e destino ao mesmo
+    //     tempo).
+    {
+        unsigned char buf[5] = {1, 2, 3, 4, 5};
+        void* ret = memmove(buf, buf, 5);
+        TEST_ASSERT_EQ(ret, (void*)buf);
+        TEST_ASSERT_EQ(buf[0], 1);
+        TEST_ASSERT_EQ(buf[1], 2);
+        TEST_ASSERT_EQ(buf[2], 3);
+        TEST_ASSERT_EQ(buf[3], 4);
+        TEST_ASSERT_EQ(buf[4], 5);
+    }
+
+    // EN: AUD-C0-1 follow-up: n == 0 with dst != src -- must not touch dst (either branch's loop
+    //     bound is 0 iterations either way), must still return dst.
+    // PT: Follow-up do AUD-C0-1: n == 0 com dst != src -- nao deve tocar dst (o limite do laco de
+    //     qualquer um dos dois ramos e' 0 iteracoes de qualquer forma), ainda deve retornar dst.
+    {
+        unsigned char src[3] = {9, 9, 9};
+        unsigned char dst[3] = {1, 2, 3};
+        void* ret = memmove(dst, src, 0);
+        TEST_ASSERT_EQ(ret, dst);
+        TEST_ASSERT_EQ(dst[0], 1);
+        TEST_ASSERT_EQ(dst[1], 2);
+        TEST_ASSERT_EQ(dst[2], 3);
     }
 
     // ---- memcmp -----------------------------------------------------------

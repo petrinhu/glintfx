@@ -75,19 +75,48 @@ void* memmove(void* dst, const void* src, size_t n) {
     unsigned char* d = (unsigned char*)dst;
     const unsigned char* s = (const unsigned char*)src;
 
+    // EN: AUD-C0-1 (AUDIT_FIND.md): comparing `d`/`s` directly with `<`/`>` would be UNDEFINED
+    //     BEHAVIOUR -- relational comparison between pointers is only defined by the C standard
+    //     when both operands point into (or one-past) the SAME array/object (C23 6.5.9p6).
+    //     `dst`/`src` here are two independent objects handed in by the caller; the standard
+    //     gives no guarantee about their relative address order, even though on this project's
+    //     one and only target (x86-64 Linux, flat address space, no segmentation) the raw
+    //     pointer comparison happens to produce the ordering we want in practice. Casting both
+    //     to `uintptr_t` (an unsigned INTEGER type, include/types.h) sidesteps the
+    //     object-pointer rule entirely: ordinary unsigned-integer comparison is always
+    //     well-defined, and the numeric value of a pointer cast to `uintptr_t` is guaranteed (on
+    //     this project's only target) to reflect its address. This changes only the comparison
+    //     OPERANDS, not the algorithm -- the overlap-safety reasoning in the two branches below
+    //     is unchanged.
+    // PT: AUD-C0-1 (AUDIT_FIND.md): comparar `d`/`s` diretamente com `<`/`>` seria COMPORTAMENTO
+    //     INDEFINIDO -- comparacao relacional entre ponteiros so' e' definida pelo padrao C
+    //     quando os dois operandos apontam pro MESMO array/objeto (ou um-alem-do-fim dele) (C23
+    //     6.5.9p6). `dst`/`src` aqui sao dois objetos independentes recebidos de quem chamou; o
+    //     padrao nao da' garantia nenhuma sobre a ordem relativa de endereco deles, mesmo que no
+    //     unico alvo deste projeto (x86-64 Linux, espaco de enderecos plano, sem segmentacao) a
+    //     comparacao crua de ponteiro acabe produzindo na pratica a ordenacao que queremos.
+    //     Converter os dois pra `uintptr_t` (um tipo INTEIRO sem sinal, include/types.h) contorna
+    //     inteiramente a regra de ponteiro-de-objeto: comparacao comum de inteiro sem sinal e'
+    //     sempre bem-definida, e o valor numerico de um ponteiro convertido pra `uintptr_t` e'
+    //     garantido (no unico alvo deste projeto) refletir seu endereco. Isso muda so' os
+    //     OPERANDOS da comparacao, nao o algoritmo -- o raciocinio de seguranca-de-overlap nos
+    //     dois ramos abaixo continua o mesmo.
+    uintptr_t du = (uintptr_t)d;
+    uintptr_t su = (uintptr_t)s;
+
     // EN: No overlap risk (or dst < src): plain forward copy is safe -- by the time we would
     //     ever write into a byte that is still needed as source, we have not reached it yet
-    //     (dst[i] never catches up to s+i while writing forward when d < s, and when d == s
-    //     it is a no-op copy either way).
+    //     (dst[i] never catches up to s+i while writing forward when du < su, and when
+    //     du == su it is a no-op copy either way).
     // PT: Sem risco de overlap (ou dst < src): copia forward simples e' segura -- no momento
     //     em que chegariamos a escrever num byte ainda necessario como origem, ainda nao o
-    //     alcancamos (dst[i] nunca alcanca s+i escrevendo pra frente quando d < s, e quando
-    //     d == s e' uma copia no-op de qualquer forma).
-    if (d < s) {
+    //     alcancamos (dst[i] nunca alcanca s+i escrevendo pra frente quando du < su, e quando
+    //     du == su e' uma copia no-op de qualquer forma).
+    if (du < su) {
         for (size_t i = 0; i < n; i++) {
             d[i] = s[i];
         }
-    } else if (d > s) {
+    } else if (du > su) {
         // EN: dst > src: forward copy would overwrite source bytes before they are read
         //     (whenever the regions overlap). Copy BACKWARD instead, from the last byte to
         //     the first, so every source byte is read before the write that could clobber it.
@@ -99,9 +128,9 @@ void* memmove(void* dst, const void* src, size_t n) {
             d[i - 1] = s[i - 1];
         }
     }
-    // EN: d == s: same address, nothing to do (also correctly handled by falling through
+    // EN: du == su: same address, nothing to do (also correctly handled by falling through
     //     with neither branch taken).
-    // PT: d == s: mesmo endereco, nada a fazer (tambem tratado corretamente caindo adiante
+    // PT: du == su: mesmo endereco, nada a fazer (tambem tratado corretamente caindo adiante
     //     sem tomar nenhum dos dois ramos).
 
     return dst;

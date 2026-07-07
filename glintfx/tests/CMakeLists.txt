@@ -66,12 +66,12 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/viewport_origin_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/viewport_origin_scene.rcss COPYONLY)
 
-# EN: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.3.2) -- shared by scroll_sanity (embed,
+# EN: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.4.0) -- shared by scroll_sanity (embed,
 #     both configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_scroll_smoke
 #     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
 #     Copied once here, next to viewport_origin_scene.*, so both consumers find the same
 #     single copy -- same reasoning as element_box_scene.* above.
-# PT: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.3.2) -- compartilhado por scroll_sanity
+# PT: scroll_scene.rml/.rcss (GLINTFX-SCROLL-1, v0.4.0) -- compartilhado por scroll_sanity
 #     (embed, 2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_scroll_smoke
 #     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
 #     Copiado uma vez aqui, junto do viewport_origin_scene.*, para que os dois consumidores
@@ -200,7 +200,7 @@ if(GLINTFX_BACKEND_GLFW)
 
   # ---------------------------------------------------------------------------
   # EN: app_scroll_smoke -- App parity smoke for scroll_element_into_view()/
-  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.3.2). No wheel
+  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.4.0). No wheel
   #     assertion (App has no process_event/input-dispatch surface at all -- App::run()'s only
   #     input path is poll_events() -> glfwPollEvents(), with no GLFW callbacks wired to RmlUi;
   #     wheel forwarding is embed-only, proven in scroll_sanity.cpp via UiLayer). This only
@@ -210,7 +210,7 @@ if(GLINTFX_BACKEND_GLFW)
   #     CMAKE_CURRENT_BINARY_DIR by the scroll_sanity block below, addressed here as
   #     "tests/scroll_scene.rml".
   # PT: app_scroll_smoke -- smoke de paridade do App para scroll_element_into_view()/
-  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.3.2). Sem
+  #     get_element_scroll_top()/set_element_scroll_top() (GLINTFX-SCROLL-1, v0.4.0). Sem
   #     asserção de wheel (o App não tem NENHUMA superfície de process_event/dispatch de input
   #     -- o único caminho de input do App::run() é poll_events() -> glfwPollEvents(), sem
   #     callbacks GLFW conectados ao RmlUi; o encaminhamento de wheel é exclusivo do embed mode,
@@ -792,7 +792,7 @@ add_test(NAME element_box_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
-# EN: scroll_sanity -- verifies GLINTFX-SCROLL-1 (v0.3.2, consumer-driven by GusWorld: a
+# EN: scroll_sanity -- verifies GLINTFX-SCROLL-1 (v0.4.0, consumer-driven by GusWorld: a
 #     30-item overflow-y:auto menu list could not scroll in embed mode): wheel-delta
 #     forwarding (UiEvent::Type::MouseWheel -> Rml::Context::ProcessMouseWheel, with a
 #     direction "tooth" -- opposite-sign delta scrolls the other way) and the three
@@ -802,7 +802,7 @@ add_test(NAME element_box_sanity
 #     above). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
 #     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied here,
 #     addressed by bare filename).
-# PT: scroll_sanity -- verifica GLINTFX-SCROLL-1 (v0.3.2, consumer-driven pelo GusWorld: uma
+# PT: scroll_sanity -- verifica GLINTFX-SCROLL-1 (v0.4.0, consumer-driven pelo GusWorld: uma
 #     lista de menu de 30 itens overflow-y:auto não conseguia rolar em embed mode):
 #     encaminhamento de delta de wheel (UiEvent::Type::MouseWheel -> Rml::Context::
 #     ProcessMouseWheel, com um "dente" de direção -- delta de sinal oposto rola pro outro

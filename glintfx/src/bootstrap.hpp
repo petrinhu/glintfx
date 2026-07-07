@@ -82,7 +82,7 @@ public:
   bool get_element_box(const char* id, float& x, float& y, float& w, float& h) const;
 
   // EN: Scroll an element's nearest scrolling ancestor(s) so the element becomes visible
-  //     (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven: GusWorld could not follow keyboard/gamepad
+  //     (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven: GusWorld could not follow keyboard/gamepad
   //     selection when it moved outside an overflow-y:auto menu list). Thin wrapper over
   //     Rml::Element::ScrollIntoView(bool) -- NOT the ScrollIntoViewOptions overload, which
   //     exposes more knobs (horizontal alignment, ScrollBehavior::Smooth) than this API needs.
@@ -94,7 +94,7 @@ public:
   //     get_element_scroll_top(). Returns false (no-op) when no document is loaded or id is not
   //     found -- same guard shape as get_element_box.
   // PT: Rola o(s) ancestral(is) rolável(eis) mais próximo(s) de um elemento para que ele fique
-  //     visível (GLINTFX-SCROLL-1, v0.3.2 -- consumer-driven: o GusWorld não conseguia acompanhar
+  //     visível (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven: o GusWorld não conseguia acompanhar
   //     a seleção por teclado/gamepad quando ela saía de uma lista de menu overflow-y:auto).
   //     Wrapper fino sobre Rml::Element::ScrollIntoView(bool) -- NÃO a sobrecarga
   //     ScrollIntoViewOptions, que expõe mais opções (alinhamento horizontal, ScrollBehavior::

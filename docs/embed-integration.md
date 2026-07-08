@@ -367,6 +367,84 @@ Verified by `scroll_sanity` (embed, both `GLINTFX_BACKEND_GLFW` configs) and `ap
 
 Verificado por `scroll_sanity` (embed, nos 2 configs de `GLINTFX_BACKEND_GLFW`) e `app_scroll_smoke` (GLFW-only, paridade de scroll programático pro `App`). Ver `CHANGELOG.md` para a descrição completa.
 
+## 13. Extended navigation keys and click info (v0.5.0) / Teclas de navegação estendidas e click info (v0.5.0)
+
+**EN:** Two additions, both purely additive to the API described in sections 5 and 10:
+
+**(a) `enum class Key` gained 5 text-editing/document-navigation values:** `Delete`, `Home`, `End`, `PageUp`, `PageDown` (`glintfx/include/glintfx/ui_event.hpp`), mapped in `to_rml_key()` (`glintfx/src/ui_layer.cpp`) to RmlUi's own `KI_DELETE`/`KI_HOME`/`KI_END`/`KI_PRIOR`/`KI_NEXT`. They flow through `process_event`'s existing `UiEvent::Type::Key` path exactly like the pre-existing `Key::Up/Down/Left/Right/Enter/Escape/Tab` documented in section 5 -- no new event type, no new method. Whether they *move* anything still depends on the target document declaring `tabindex`/`nav` (same "not yet movement" caveat as section 5); glintfx only forwards the key. Letters/digits (e.g. text-field shortcuts) remain out of scope -- see `AUD-PUB-6` in the `TODO.md` INBOX.
+
+**(b) `set_click_info_callback(std::function<void(const ClickInfo&)>)`** on both `UiLayer` and `App` (`glintfx/include/glintfx/click_info.hpp`) -- a **second, additive click channel**. It does **not** replace `set_click_callback` (section 10, id-only): both can be registered at the same time, and both keep firing independently on the same click.
+
+```cpp
+struct ClickInfo {
+  const char* id;           // nearest ancestor-or-self id, "" if none (same lifetime
+                             // contract as set_click_callback's element_id: valid only
+                             // for the duration of the callback)
+  int         button;       // 0=left, 1=right, 2=middle
+  float       x, y;         // window-space physical pixels, same convention as
+                             // get_element_box() (section 10)
+  bool        double_click; // true only for Rml::EventId::Dblclick
+};
+```
+
+- **`button` is functional for all three mouse buttons.** Left (`0`) comes from RmlUi's native `Click`/`Dblclick` events. Right (`1`) and middle (`2`) do **not** exist as native RmlUi click events -- glintfx synthesizes them from a paired `Mousedown`+`Mouseup`: on a non-primary `Mousedown` it remembers the resolved element id and button; if the paired `Mouseup` (same button) resolves to the **same** element, the callback fires once using that `Mouseup`'s own button/coordinates. A down-on-A/drag/up-on-B sequence does **not** fire -- this mirrors RmlUi's own left-click rule (`Context::ProcessMouseButtonUp` only dispatches `Click` when the press target is still the active/hover element at release).
+- **`double_click` is left-only.** RmlUi has no `Dblclick` equivalent for non-primary buttons, and inventing detection via a custom timer was deliberately rejected as out of scope -- a right/middle `ClickInfo` always reports `double_click=false`, even for two fast right-clicks on the same element.
+- **Coordinates follow the section-10 contract**: window/render-target physical pixels, top-left origin, y-down. `UiLayer::set_click_info_callback` adds the active sub-viewport offset internally (same translation as `get_element_box`); `App` needs no translation (owns the whole window).
+
+```cpp
+// C++ -- register both channels; they coexist
+ui.set_click_callback([](const char* id) {
+  // cheap, id-only routing
+});
+ui.set_click_info_callback([](const glintfx::ClickInfo& info) {
+  if (info.button == 1) {
+    open_context_menu(info.id, info.x, info.y);   // right-click
+  } else if (info.double_click) {
+    open_item(info.id);                            // left double-click
+  }
+});
+```
+
+Verified by `click_callback_sanity` (single click; the exact 4-event double-click ordering; right/middle-click parity with `button`/`double_click`; drag-off non-firing; no regression of the id-only channel).
+
+**PT:** Duas adições, ambas puramente aditivas à API descrita nas seções 5 e 10:
+
+**(a) `enum class Key` ganhou 5 valores de edição de texto/navegação de documento:** `Delete`, `Home`, `End`, `PageUp`, `PageDown` (`glintfx/include/glintfx/ui_event.hpp`), mapeados em `to_rml_key()` (`glintfx/src/ui_layer.cpp`) para os próprios `KI_DELETE`/`KI_HOME`/`KI_END`/`KI_PRIOR`/`KI_NEXT` do RmlUi. Fluem pelo caminho já existente `UiEvent::Type::Key` de `process_event`, exatamente como os `Key::Up/Down/Left/Right/Enter/Escape/Tab` pré-existentes documentados na seção 5 -- nenhum tipo de evento novo, nenhum método novo. Se algo de fato *se move* continua dependendo do documento-alvo declarar `tabindex`/`nav` (mesma ressalva "ainda não o movimento" da seção 5); o glintfx só encaminha a tecla. Letras/dígitos (ex.: atalhos de campo de texto) seguem fora de escopo -- ver `AUD-PUB-6` na INBOX do `TODO.md`.
+
+**(b) `set_click_info_callback(std::function<void(const ClickInfo&)>)`** em `UiLayer` e `App` (`glintfx/include/glintfx/click_info.hpp`) -- um **segundo canal de clique, aditivo**. **Não** substitui o `set_click_callback` (seção 10, só-id): os dois podem ser registrados ao mesmo tempo, e ambos continuam disparando independentemente no mesmo clique.
+
+```cpp
+struct ClickInfo {
+  const char* id;           // id do ancestral-ou-o-próprio mais próximo, "" se nenhum
+                             // (mesmo contrato de lifetime do element_id de
+                             // set_click_callback: válido só durante a chamada)
+  int         button;       // 0=esquerdo, 1=direito, 2=meio
+  float       x, y;         // pixels físicos espaço-janela, mesma convenção do
+                             // get_element_box() (seção 10)
+  bool        double_click; // true só para Rml::EventId::Dblclick
+};
+```
+
+- **`button` é funcional para os três botões do mouse.** O esquerdo (`0`) vem dos eventos nativos `Click`/`Dblclick` do RmlUi. Direito (`1`) e meio (`2`) **não existem** como eventos nativos de clique do RmlUi -- o glintfx os sintetiza a partir de um par `Mousedown`+`Mouseup`: num `Mousedown` não-primário ele lembra o id do elemento resolvido e o botão; se o `Mouseup` pareado (mesmo botão) resolve para o **mesmo** elemento, o callback dispara uma vez usando o botão/coordenadas do próprio `Mouseup`. Uma sequência down-em-A/arrasta/up-em-B **não** dispara -- espelha a própria regra de clique esquerdo do RmlUi (`Context::ProcessMouseButtonUp` só despacha `Click` quando o alvo da pressão ainda é o elemento ativo/hover na soltura).
+- **`double_click` é esquerdo-apenas.** O RmlUi não tem equivalente de `Dblclick` para botões não-primários, e inventar detecção via timer customizado foi deliberadamente rejeitada como fora de escopo -- um `ClickInfo` de direito/meio sempre reporta `double_click=false`, mesmo para dois cliques direitos rápidos no mesmo elemento.
+- **As coordenadas seguem o contrato da seção 10**: pixels físicos do render-target/janela, origem superior-esquerda, y pra baixo. `UiLayer::set_click_info_callback` soma o offset da sub-viewport ativa internamente (mesma tradução do `get_element_box`); o `App` não precisa de tradução (dono da janela inteira).
+
+```cpp
+// C++ -- registra os dois canais; eles coexistem
+ui.set_click_callback([](const char* id) {
+  // roteamento barato, só-id
+});
+ui.set_click_info_callback([](const glintfx::ClickInfo& info) {
+  if (info.button == 1) {
+    abrir_menu_contexto(info.id, info.x, info.y);   // clique direito
+  } else if (info.double_click) {
+    abrir_item(info.id);                             // duplo-clique esquerdo
+  }
+});
+```
+
+Verificado por `click_callback_sanity` (clique simples; a ordem exata dos 4 eventos de duplo-clique; paridade de clique direito/meio com `button`/`double_click`; não-disparo em drag-off; não-regressão do canal só-id).
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

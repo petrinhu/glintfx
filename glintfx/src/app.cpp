@@ -51,6 +51,16 @@ struct App::Impl {
   int  last_render_w = 0;
   int  last_render_h = 0;
   bool ok = false;
+
+  // EN: AUD-PUB-1-TWIN (v0.5.0) -- shared diff-and-set_viewport helper, see the doc-comment on
+  //     the out-of-line definition below (just above App::render()) for the full rationale.
+  //     Called by BOTH render() and snapshot() so a window resize is picked up identically
+  //     regardless of which one runs first after it.
+  // PT: AUD-PUB-1-TWIN (v0.5.0) -- helper compartilhado de diff-e-set_viewport, ver o
+  //     doc-comment na definição fora-de-linha abaixo (logo acima de App::render()) pra
+  //     racional completa. Chamado por AMBOS render() e snapshot() para que um resize de janela
+  //     seja capturado identicamente independente de qual dos dois roda primeiro depois dele.
+  void sync_viewport(int w, int h);
 };
 
 App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
@@ -164,37 +174,57 @@ void App::update() {
   if (impl_->ok) impl_->engine.update();
 }
 
+// EN: AUD-PUB-1 fix, extracted as a shared helper (AUD-PUB-1-TWIN, v0.5.0) -- App::render()
+//     used to feed (w, h) straight into Engine::render_standalone() without ever calling
+//     Engine::set_viewport(), the only path that reaches Rml::Context::SetDimensions()
+//     (engine.cpp). The window resized at the GLFW/GL level but the RmlUi layout stayed frozen
+//     at the AppConfig construction-time dimensions forever. Fix (Option A, automatic, zero new
+//     public API): re-flow the layout whenever the observed size differs from the last frame's
+//     cached size, BEFORE rendering with the new size. set_viewport() already guards
+//     w<=0||h<=0 (engine.cpp) -- a transiently-zero size (e.g. minimized window) is a harmless
+//     no-op there, and the cache is only updated when it actually changes, so a later real size
+//     is picked up on the next call.
+//     TWIN BUG (found by adversarial review, v0.5.0): App::snapshot() had the EXACT SAME bug --
+//     it read window.size() and called render_standalone(w, h) directly, with no
+//     sync_viewport() call at all, sharing NEITHER the fix NOR the last_render_w/h cache with
+//     render(). A resize with no intervening render() (e.g. host calls only snapshot() in a
+//     tight loop, or resize happens between the last render() and a snapshot() call) captured a
+//     PPM with the layout frozen at the previous size. Both render() and snapshot() now call
+//     this ONE helper so there is a single source of truth for "did the window size change
+//     since we last told RmlUi about it" -- impossible for the two call sites to drift again.
+// PT: Fix AUD-PUB-1, extraído como helper compartilhado (AUD-PUB-1-TWIN, v0.5.0) --
+//     App::render() alimentava (w, h) direto em Engine::render_standalone() sem nunca chamar
+//     Engine::set_viewport(), o único caminho que alcança Rml::Context::SetDimensions()
+//     (engine.cpp). A janela redimensionava no nível GLFW/GL mas o layout do RmlUi ficava
+//     congelado para sempre nas dimensões de construção do AppConfig. Fix (Opção A, automático,
+//     zero API pública nova): refaz o layout sempre que o tamanho observado difere do tamanho
+//     cacheado do último frame, ANTES de renderizar com o novo tamanho. set_viewport() já
+//     guarda w<=0||h<=0 (engine.cpp) -- um tamanho transitoriamente zero (ex.: janela
+//     minimizada) é um no-op inofensivo lá, e o cache só é atualizado quando de fato muda,
+//     então um tamanho real posterior é capturado na próxima chamada.
+//     BUG GÊMEO (achado por review adversarial, v0.5.0): App::snapshot() tinha O MESMO bug
+//     EXATO -- lia window.size() e chamava render_standalone(w, h) direto, sem NENHUMA chamada
+//     a sync_viewport(), sem compartilhar NEM o fix NEM o cache last_render_w/h com render(). Um
+//     resize sem render() no meio (ex.: host chama só snapshot() num loop apertado, ou resize
+//     acontece entre o último render() e uma chamada a snapshot()) capturava um PPM com o layout
+//     congelado no tamanho anterior. render() e snapshot() agora chamam este ÚNICO helper, então
+//     existe uma única fonte de verdade para "o tamanho da janela mudou desde que avisamos o
+//     RmlUi" -- impossível os dois call sites voltarem a divergir.
+void App::Impl::sync_viewport(int w, int h) {
+  if (w != last_render_w || h != last_render_h) {
+    engine.set_viewport(w, h);
+    last_render_w = w;
+    last_render_h = h;
+  }
+}
+
 void App::render() {
   // EN: Guard: no-op if subsystem init failed (consistent with load()/running()).
   // PT: Guard: no-op se a inicialização falhou (consistente com load()/running()).
   if (!impl_->ok) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
-  // EN: AUD-PUB-1 fix -- App::render() used to feed (w, h) straight into
-  //     Engine::render_standalone() without ever calling Engine::set_viewport(), the only
-  //     path that reaches Rml::Context::SetDimensions() (engine.cpp). The window resized at
-  //     the GLFW/GL level but the RmlUi layout stayed frozen at the AppConfig
-  //     construction-time dimensions forever. Fix (Option A, automatic, zero new public
-  //     API): re-flow the layout whenever the observed size differs from the last frame's
-  //     cached size, BEFORE rendering with the new size. set_viewport() already guards
-  //     w<=0||h<=0 (engine.cpp) -- a transiently-zero size (e.g. minimized window) is a
-  //     harmless no-op there, and the cache is only updated when it actually changes, so a
-  //     later real size is picked up on the next frame.
-  // PT: fix AUD-PUB-1 -- App::render() alimentava (w, h) direto em
-  //     Engine::render_standalone() sem nunca chamar Engine::set_viewport(), o único
-  //     caminho que alcança Rml::Context::SetDimensions() (engine.cpp). A janela
-  //     redimensionava no nível GLFW/GL mas o layout do RmlUi ficava congelado para sempre
-  //     nas dimensões de construção do AppConfig. Fix (Opção A, automático, zero API pública
-  //     nova): refaz o layout sempre que o tamanho observado difere do tamanho cacheado do
-  //     último frame, ANTES de renderizar com o novo tamanho. set_viewport() já guarda
-  //     w<=0||h<=0 (engine.cpp) -- um tamanho transitoriamente zero (ex.: janela minimizada)
-  //     é um no-op inofensivo lá, e o cache só é atualizado quando de fato muda, então um
-  //     tamanho real posterior é capturado no próximo frame.
-  if (w != impl_->last_render_w || h != impl_->last_render_h) {
-    impl_->engine.set_viewport(w, h);
-    impl_->last_render_w = w;
-    impl_->last_render_h = h;
-  }
+  impl_->sync_viewport(w, h);
   impl_->engine.render_standalone(w, h);
   impl_->window.swap();
 }
@@ -218,6 +248,16 @@ bool App::snapshot(const char* ppm_path) {
   if (!impl_->ok) return false;
   int w = 0, h = 0;
   impl_->window.size(w, h);
+  // EN: AUD-PUB-1-TWIN fix (v0.5.0, found by adversarial review of the AUD-PUB-1 render() fix)
+  //     -- snapshot() used to skip this call entirely and go straight to render_standalone(),
+  //     capturing a PPM with a layout frozen at whatever size RmlUi last knew about. See the
+  //     sync_viewport() doc-comment (above App::render()) for the full history.
+  // PT: Fix AUD-PUB-1-TWIN (v0.5.0, achado por review adversarial do fix AUD-PUB-1 de
+  //     render()) -- snapshot() pulava esta chamada inteiramente e ia direto pro
+  //     render_standalone(), capturando um PPM com layout congelado no último tamanho que o
+  //     RmlUi conhecia. Ver o doc-comment de sync_viewport() (acima de App::render()) pra
+  //     história completa.
+  impl_->sync_viewport(w, h);
   impl_->engine.render_standalone(w, h);
   // EN: FBO 0 now contains the complete composited frame. Read before swap.
   // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap.

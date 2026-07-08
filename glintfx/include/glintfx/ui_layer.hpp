@@ -356,8 +356,21 @@ public:
   //     (const char*, double, bool, size_t).
   // -------------------------------------------------------------------------
 
-  // EN: Create a data model. Call before bind_* and before load().
-  // PT: Cria um data model. Chamar antes de bind_* e antes de load().
+  // EN: Create a data model. Call before bind_* and before load(). LIMIT: at most ONE data
+  //     model per UiLayer instance -- a second create_data_model() call (any name, including a
+  //     different one) returns false and is a silent no-op; the first model stays the only one
+  //     bound (DataBinder's `created` flag, checked-before-mutate). Not currently surfaced to
+  //     the caller other than the false return -- if multiple independent models are needed,
+  //     bind all variables under the ONE model created here. Exercised end-to-end (embed path)
+  //     by data_model_embed_sanity.cpp. AUD-TEC-7 (2026-07-08).
+  // PT: Cria um data model. Chamar antes de bind_* e antes de load(). LIMITE: no máximo UM
+  //     data model por instância de UiLayer -- uma segunda chamada a create_data_model()
+  //     (qualquer nome, mesmo diferente) retorna false e é um no-op silencioso; o primeiro
+  //     modelo permanece o único ligado (flag `created` do DataBinder, check-before-mutate).
+  //     Não é sinalizado ao chamador além do retorno false -- se múltiplos modelos
+  //     independentes forem necessários, ligue todas as variáveis sob o ÚNICO modelo criado
+  //     aqui. Exercitado ponta-a-ponta (caminho embed) por data_model_embed_sanity.cpp.
+  //     AUD-TEC-7 (2026-07-08).
   bool create_data_model(const char* name);
 
   // EN: Bind a numeric (double) cell with an optional initial value.

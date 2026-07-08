@@ -1,0 +1,49 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: Data-model embed-path oracle document (AUD-TEC-7). Binds to the "hud" data model
+      created by data_model_embed_sanity.cpp via UiLayer::create_data_model/bind_*, exposing:
+        hp    (number) -- drives #hpbox's ".wide" class via data-class-wide="hp > 50".
+        label (string) -- drives #namebox's ".wide" class via data-class-wide="label == 'B'".
+        flag  (bool)   -- drives #flagwide's ".wide" class via data-class-wide="flag" (the
+                          reliable, round-trip-safe bind_bool/set_bool oracle) AND #flagpanel's
+                          presence via data-if="flag" (the one-directional never-visible ->
+                          visible oracle -- see data_model_embed_scene.rcss for why the reverse
+                          direction is not geometry-asserted on this second element).
+        log   (list)   -- drives one cloned <div class="item"> per entry via data-for="log",
+                           each tagged with a synthetic id "item-<index>" via
+                           data-attr-id="'item-' + it_index" so the test can probe existence of
+                           a specific index with UiLayer::get_element_box(id).found.
+      No @font-face / text content anywhere -- unlike ui/scalar.rml and ui/log.rml (used by the
+      App-path data_model_scalar.cpp/data_model_list.cpp), this document must render
+      deterministically in the embed-only build (GLINTFX_BACKEND_GLFW=OFF) too, where
+      demos/showcase/assets/ (the OpenSans font) is never copied to the build tree (that
+      file(COPY ...) block in tests/CMakeLists.txt lives inside if(GLINTFX_BACKEND_GLFW)).
+  PT: Documento-oráculo do caminho embed do data-model (AUD-TEC-7). Liga ao data model "hud"
+      criado por data_model_embed_sanity.cpp via UiLayer::create_data_model/bind_*, expondo:
+        hp    (número) -- dirige a classe ".wide" de #hpbox via data-class-wide="hp > 50".
+        label (string) -- dirige a classe ".wide" de #namebox via data-class-wide="label == 'B'".
+        flag  (bool)   -- dirige a presença de #flagpanel via data-if="flag".
+        log   (lista)  -- dirige um <div class="item"> clonado por entrada via data-for="log",
+                           cada um marcado com um id sintético "item-<indice>" via
+                           data-attr-id="'item-' + it_index" para o teste sondar a existência de
+                           um índice específico com UiLayer::get_element_box(id).found.
+      Sem @font-face / conteúdo de texto em lugar nenhum -- diferente de ui/scalar.rml e
+      ui/log.rml (usados pelo data_model_scalar.cpp/data_model_list.cpp do caminho App), este
+      documento precisa renderizar deterministicamente também no build embed-only
+      (GLINTFX_BACKEND_GLFW=OFF), onde demos/showcase/assets/ (a fonte OpenSans) nunca é
+      copiado para a árvore de build (aquele bloco file(COPY ...) em tests/CMakeLists.txt vive
+      dentro de if(GLINTFX_BACKEND_GLFW)).
+-->
+<rml>
+<head>
+  <link type="text/rcss" href="data_model_embed_scene.rcss"/>
+  <title>glintfx data_model_embed_sanity scene</title>
+</head>
+<body data-model="hud">
+  <div id="hpbox" data-class-wide="hp > 50">&nbsp;</div>
+  <div id="namebox" data-class-wide="label == 'B'">&nbsp;</div>
+  <div id="flagwide" data-class-wide="flag">&nbsp;</div>
+  <div id="flagpanel" data-if="flag">&nbsp;</div>
+  <div class="item" data-for="log" data-attr-id="'item-' + it_index">&nbsp;</div>
+</body>
+</rml>

@@ -1001,6 +1001,43 @@ add_test(NAME input_hardening_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: data_model_embed_sanity -- embed-path (UiLayer) end-to-end proof for the data-model API
+#     (AUD-TEC-7, 2026-07-08 audit finding): create_data_model/bind_number/bind_string/
+#     bind_bool/bind_list/load/set_number/set_string/set_bool/set_list, all via UiLayer, never
+#     exercised before this file (the 4 pre-existing data_model_* tests are App-only, GLFW-only
+#     block). Also covers set_bool (previously zero tests anywhere) and the second-
+#     create_data_model()-returns-false limit. Geometry-only oracle via get_element_box() (no
+#     font/pixel readback) so it renders deterministically in BOTH build configs -- same
+#     reasoning as click_callback_sanity/element_box_sanity/scroll_sanity above. Runs in BOTH
+#     build configs (links ${_embed_dep}, no gl3w needed -- get_element_box() only).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
+#     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied here).
+# PT: data_model_embed_sanity -- prova ponta-a-ponta do caminho embed (UiLayer) para a API de
+#     data-model (achado de auditoria AUD-TEC-7, 2026-07-08): create_data_model/bind_number/
+#     bind_string/bind_bool/bind_list/load/set_number/set_string/set_bool/set_list, todos via
+#     UiLayer, nunca exercitados antes deste arquivo (os 4 testes data_model_* pré-existentes
+#     são só-App, bloco só-GLFW). Também cobre set_bool (zero testes em qualquer lugar antes) e
+#     o limite de 2ª create_data_model()-retorna-false. Oráculo só-de-geometria via
+#     get_element_box() (sem fonte/readback de pixel) então renderiza deterministicamente nas
+#     DUAS configs de build -- mesmo raciocínio de click_callback_sanity/element_box_sanity/
+#     scroll_sanity acima. Roda em AMBAS as configs de build (linka ${_embed_dep}, sem
+#     necessidade de gl3w -- só get_element_box()). WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de click_callback_sanity/
+#     element_box_sanity (par rml/rcss específico da cena copiado aqui).
+# ---------------------------------------------------------------------------
+add_executable(data_model_embed_sanity data_model_embed_sanity.cpp)
+target_link_libraries(data_model_embed_sanity PRIVATE ${_embed_dep})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/data_model_embed_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/data_model_embed_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/data_model_embed_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/data_model_embed_scene.rcss COPYONLY)
+add_test(NAME data_model_embed_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:data_model_embed_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: document_reload_leak -- regression test for the GusWorld-reported bug (2026-07-04):
 #     Bootstrap::load() used to stack documents in the same Rml::Context without closing the
 #     previous one on every reload (memory leak + "ghost document" rendering underneath).

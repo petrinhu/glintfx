@@ -1,0 +1,111 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the data_model_embed_sanity scene (AUD-TEC-7). Every id/class here is a
+       geometry-only oracle read back through UiLayer::get_element_box() -- no font, no text,
+       no pixel readback needed (unlike the App-path data_model_scalar/data_model_list tests,
+       which rely on App::snapshot()+PPM brightness because UiLayer has no snapshot() method).
+       #hpbox / #namebox / #flagwide: fixed 20x20 base box; the shared ".wide" class (driven by
+       data-class-wide in the RML) widens to 80px -- a clean, unambiguous, ROUND-TRIP-SAFE width
+       delta get_element_box() can assert on directly in both directions (verified empirically:
+       toggling a data-class-* rule reflows the box correctly on every transition, repeatedly).
+       #flagpanel: data-if toggles this element's own "display:none" property (confirmed by
+       reading RmlUi's DataViewIf::Update in DataViewDefault.cpp) -- collapses w/h to 0 without
+       removing the element from the DOM (get_element_box() still finds it via GetElementById,
+       just with a zeroed box). IMPORTANT, empirically confirmed by instrumenting
+       DataViewDefault.cpp directly (not a glintfx bug -- reproduces with a plain in-flow, non-
+       absolute element too): this collapse is reliable only the FIRST time an element goes
+       visible->invisible from a NEVER-laid-out baseline. Once an element has been laid out with
+       a real box at least once, RmlUi's cached border-box (Element::GetBox()) is NOT reset back
+       to zero on a later display:none, even though DataViewIf::Update *does* correctly
+       set/remove the Display property every time (confirmed via debug instrumentation -- the
+       property toggles correctly, only the cached layout box does not). So #flagpanel is used
+       ONLY for the one reliable direction (never-visible -> visible); the reversible round-trip
+       proof of set_bool's propagation uses #flagwide's data-class-wide (proven reliable both
+       ways) instead.
+       .item: data-for template row; each generated clone gets an id "item-<index>" via
+       data-attr-id in the RML, existence checked with get_element_box(id).found -- geometry is
+       irrelevant here (all clones share the same class rule), only presence/absence matters.
+   PT: Estilos para a cena do data_model_embed_sanity (AUD-TEC-7). Todo id/class aqui é um
+       oráculo só-de-geometria lido de volta via UiLayer::get_element_box() -- sem fonte, sem
+       texto, sem readback de pixel necessário (diferente dos testes App-path
+       data_model_scalar/data_model_list, que dependem de App::snapshot()+brilho PPM porque o
+       UiLayer não tem método snapshot()).
+       #hpbox / #namebox / #flagwide: caixa base fixa 20x20; a classe compartilhada ".wide"
+       (dirigida por data-class-wide no RML) alarga para 80px -- um delta de largura limpo,
+       inequívoco e SEGURO-PARA-ROUND-TRIP que get_element_box() verifica diretamente nas duas
+       direções (confirmado empiricamente: alternar uma regra data-class-* reflui a caixa
+       corretamente em toda transição, repetidamente).
+       #flagpanel: data-if alterna a própria propriedade "display:none" do elemento (confirmado
+       lendo o DataViewIf::Update do RmlUi em DataViewDefault.cpp) -- colapsa w/h para 0 sem
+       remover o elemento do DOM (get_element_box() ainda o encontra via GetElementById, só com
+       a caixa zerada). IMPORTANTE, confirmado empiricamente instrumentando DataViewDefault.cpp
+       diretamente (não é bug da glintfx -- reproduz com um elemento simples em fluxo, não-
+       absoluto, também): esse colapso só é confiável na PRIMEIRA vez que um elemento vai de
+       visível->invisível a partir de um baseline NUNCA laid-out. Uma vez que um elemento foi
+       laid out com uma caixa real ao menos uma vez, a border-box em cache do RmlUi
+       (Element::GetBox()) NÃO é resetada para zero num display:none posterior, mesmo que o
+       DataViewIf::Update *de fato* defina/remova a propriedade Display corretamente a cada vez
+       (confirmado via instrumentação de debug -- a propriedade alterna corretamente, só a caixa
+       de layout em cache não). Por isso #flagpanel é usado SÓ para a direção confiável (nunca-
+       visível -> visível); a prova de round-trip reversível da propagação do set_bool usa o
+       data-class-wide do #flagwide (provado confiável nas duas direções) em vez disso.
+       .item: linha-molde do data-for; cada clone gerado recebe um id "item-<indice>" via
+       data-attr-id no RML, existência verificada com get_element_box(id).found -- geometria é
+       irrelevante aqui (todos os clones compartilham a mesma regra de classe), só
+       presença/ausência importa.
+*/
+body {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: #101010;
+}
+div {
+  display: block;
+  position: absolute;
+}
+
+/* EN: Grouped ID+class selector (specificity 1,1,0 per branch) -- MUST outrank the plain per-id
+       base rules below (specificity 1,0,0) regardless of declaration order, because CSS/RCSS
+       cascade resolves by specificity first, source order only as a tiebreaker among EQUAL
+       specificities. A bare ".wide { width:80px; }" (specificity 0,1,0) would lose to "#hpbox
+       { width:20px; }" (1,0,0) and silently never apply -- exactly the regression this file's
+       own test caught on first attempt (hpbox stayed 20px after set_number(99) instead of
+       widening to 80px).
+   PT: Seletor agrupado ID+classe (especificidade 1,1,0 por ramo) -- precisa superar as regras
+       base por-id simples abaixo (especificidade 1,0,0) independente da ordem de declaração,
+       porque a cascata CSS/RCSS resolve por especificidade primeiro, ordem de origem só como
+       desempate entre especificidades IGUAIS. Um ".wide { width:80px; }" solto (especificidade
+       0,1,0) perderia para "#hpbox { width:20px; }" (1,0,0) e nunca aplicaria silenciosamente
+       -- exatamente a regressão que o próprio teste deste arquivo pegou na primeira tentativa
+       (hpbox ficou em 20px após set_number(99) em vez de alargar para 80px). */
+#hpbox.wide, #namebox.wide, #flagwide.wide { width: 80px; }
+
+#hpbox {
+  left: 0px; top: 0px;
+  width: 20px; height: 20px;
+  background-color: #ff0000;
+}
+
+#namebox {
+  left: 0px; top: 30px;
+  width: 20px; height: 20px;
+  background-color: #00ff00;
+}
+
+#flagwide {
+  left: 0px; top: 60px;
+  width: 20px; height: 20px;
+  background-color: #00ffff;
+}
+
+#flagpanel {
+  left: 0px; top: 90px;
+  width: 50px; height: 50px;
+  background-color: #0000ff;
+}
+
+.item {
+  left: 100px; top: 0px;
+  width: 10px; height: 10px;
+  background-color: #ffff00;
+}

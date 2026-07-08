@@ -129,8 +129,20 @@ public:
   // PT: Renderiza um frame (begin_frame → passe de render de UI → end_frame → swap).
   void render();
 
-  // EN: Convenience loop: poll + update + render until !running().
-  // PT: Laço de conveniência: poll + update + render até !running().
+  // EN: Convenience loop: poll + update + render until !running() (blocking; returns only
+  //     after the window closes or ok() turns false). This is exactly the composition of
+  //     poll_events() -> update() -> render() already exercised frame-by-frame by every other
+  //     App test in this suite (app_smoke, data_model_*, app_resize_smoke, etc.) -- run()
+  //     itself has no test of its own because a blocking loop cannot be asserted on without
+  //     either an external quit signal or a timeout race, and the 3 calls it composes are
+  //     already covered individually. AUD-TEC-7 (2026-07-08).
+  // PT: Laço de conveniência: poll + update + render até !running() (bloqueante; só retorna
+  //     depois que a janela fecha ou ok() vira false). É exatamente a composição de
+  //     poll_events() -> update() -> render() já exercitada frame-a-frame por todo outro
+  //     teste de App desta suíte (app_smoke, data_model_*, app_resize_smoke, etc.) -- run()
+  //     em si não tem teste próprio porque um laço bloqueante não dá pra verificar sem um
+  //     sinal externo de saída ou uma corrida de timeout, e as 3 chamadas que ele compõe já
+  //     estão cobertas individualmente. AUD-TEC-7 (2026-07-08).
   void run();
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
@@ -228,8 +240,19 @@ public:
   //     restrição de ordem (bind_* após load() retorna false). API usa tipos C simples.
   // -------------------------------------------------------------------------
 
-  // EN: Create a data model. Call before bind_* and before load().
-  // PT: Cria um data model. Chamar antes de bind_* e antes de load().
+  // EN: Create a data model. Call before bind_* and before load(). LIMIT: at most ONE data
+  //     model per App instance -- a second create_data_model() call (any name, including a
+  //     different one) returns false and is a silent no-op; the first model stays the only one
+  //     bound (DataBinder's `created` flag, checked-before-mutate). Not currently surfaced to
+  //     the caller other than the false return -- if multiple independent models are needed,
+  //     bind all variables under the ONE model created here. AUD-TEC-7 (2026-07-08).
+  // PT: Cria um data model. Chamar antes de bind_* e antes de load(). LIMITE: no máximo UM
+  //     data model por instância de App -- uma segunda chamada a create_data_model() (qualquer
+  //     nome, mesmo diferente) retorna false e é um no-op silencioso; o primeiro modelo
+  //     permanece o único ligado (flag `created` do DataBinder, check-before-mutate). Não é
+  //     sinalizado ao chamador além do retorno false -- se múltiplos modelos independentes
+  //     forem necessários, ligue todas as variáveis sob o ÚNICO modelo criado aqui.
+  //     AUD-TEC-7 (2026-07-08).
   bool create_data_model(const char* name);
 
   // EN: Bind a numeric (double) cell with an optional initial value.

@@ -7,7 +7,7 @@ This repository hosts two independent tracks. Know which one you are in before e
 
 | Layer / Camada | Path | Status | Build |
 | :--- | :--- | :--- | :--- |
-| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.5.0**, released, two consumption modes (`App` + `UiLayer`) | CMake |
+| **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.6.0**, released, two consumption modes (`App` + `UiLayer`) | CMake |
 | **Layer 0: `loucura_c_asm`** (sovereign runtime, **implementation complete, pending audit**) | `src/`, `include/` | freestanding pipeline + syscalls + `exit`/`write`/`read` -> own test harness (`C1`) -> core libc (memory/string/int-string conversion) -> mini-printf -> bump allocator over `mmap`, zero libc, under TDD | `Makefile` (root) |
 
 Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; its implementation is now **complete** (freestanding `_start` + raw syscall wrappers + `exit`/`write`/`read` helpers, a hand-rolled test harness enabling TDD, a small core libc for memory/string/int-string-conversion, a mini-printf, and a bump allocator over `mmap`), delivered under TDD and adversarial review. Items sit at `🔍 Pending verification`, awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. It remains a **long-term internalization target** -- full clean-room internalization of RmlUi/gl3w/FreeType/GLFW is still years away. They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).

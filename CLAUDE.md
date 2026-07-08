@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Estado em 2026-07-07: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.4.1`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 31 testes GLFW=ON / 16 embed; a `v0.4.1` é um patch de robustez/hardening da auditoria de distribuição pública — sem mudança de API, drop-in). A Camada 0 (C+ASM puro, zero libc) tem a **implementação COMPLETA**: bootstrap I/O (`_start`, wrappers de syscall, `exit`/`write`/`read`) → harness próprio de teste (`C1`, habilita TDD) → libc-núcleo (memória, string, conversão int↔string) → mini-printf → alocador bump via `mmap`, tudo zero libc e sob TDD + review adversarial (itens em `🔍`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` `core-v0.1.0` pro `✅`). A meta plena de internalização clean-room (RmlUi/gl3w/FreeType/GLFW) segue distante, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
+> Estado em 2026-07-07: o produto ativo deste repositório é o **glintfx** (lib C++ RmlUi+GL3), lançado e taggeado até **`v0.5.0`** (Codeberg + GitHub, CI dual verde + nightly sanitizer, suíte de 32 testes GLFW=ON / 16 embed; a `v0.5.0` generaliza a API pós-auditoria de distribuição pública — `enum Key` completo, `set_click_info_callback`/`ClickInfo`, `App` refaz layout em resize — minor/drop-in; o CI agora builda com clang). A Camada 0 (C+ASM puro, zero libc) tem a **implementação COMPLETA**: bootstrap I/O (`_start`, wrappers de syscall, `exit`/`write`/`read`) → harness próprio de teste (`C1`, habilita TDD) → libc-núcleo (memória, string, conversão int↔string) → mini-printf → alocador bump via `mmap`, tudo zero libc e sob TDD + review adversarial (itens em `🔍`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` `core-v0.1.0` pro `✅`). A meta plena de internalização clean-room (RmlUi/gl3w/FreeType/GLFW) segue distante, sem prazo. Leia a seção "glintfx" (produto ativo) e depois a "Camada 0" abaixo.
 
 ## Duas camadas neste repo
 
@@ -15,7 +15,7 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 `glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
-- **Lançada:** v0.1.0 → **v0.4.1** (2026-07-07). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
+- **Lançada:** v0.1.0 → **v0.5.0** (2026-07-07). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
   - **`glintfx::App`** ([`glintfx/include/glintfx/app.hpp`](glintfx/include/glintfx/app.hpp)) -- standalone, dono da janela GLFW e do loop de frame (`poll → update → render → swap`).
   - **`glintfx::UiLayer`** ([`glintfx/include/glintfx/ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp)) -- embed/guest mode: anexa ao contexto GL de um host (não cria janela), render **compose-only** (sem `glClear`, sem swap -- o host é dono dos dois), eventos injetados (`UiEvent` + `Key`), `GlStateGuard` salva e restaura o estado GL tocado. Ver [ADR-0008](docs/adr/0008-embed-guest-mode.md) (decisão) e [`docs/embed-integration.md`](docs/embed-integration.md) (contrato de integração, fonte de verdade para hosts).

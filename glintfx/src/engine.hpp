@@ -17,6 +17,7 @@
 namespace Rml { class Context; class SystemInterface; }
 #include <cstddef>
 #include <functional>
+#include <glintfx/click_info.hpp>
 
 namespace glintfx {
 
@@ -90,6 +91,17 @@ public:
   // PT: Registra um callback de clique -- encaminha a Bootstrap::set_click_callback (F1,
   //     v0.2.5). Ver Bootstrap::set_click_callback para o contrato completo de ordem/lifetime.
   void set_click_callback(std::function<void(const char*)> cb);
+
+  // EN: Register a richer click callback -- forwards to Bootstrap::set_click_info_callback
+  //     (AUD-PUB-4, v0.5.0). Straight passthrough, no coordinate translation here -- x/y stay
+  //     in Bootstrap's content-local space; UiLayer/App translate to window-space at the public
+  //     boundary (see Bootstrap::set_click_info_callback / ClickInfo doc-comment).
+  // PT: Registra um callback de clique mais rico -- encaminha a
+  //     Bootstrap::set_click_info_callback (AUD-PUB-4, v0.5.0). Repasse direto, sem tradução de
+  //     coordenada aqui -- x/y permanecem no espaço local de conteúdo do Bootstrap; UiLayer/App
+  //     traduzem para espaço-janela na fronteira pública (ver Bootstrap::set_click_info_callback
+  //     / doc-comment de ClickInfo).
+  void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
   // EN: Query the border-box geometry of an element by id -- forwards to
   //     Bootstrap::get_element_box (F2, v0.2.5). Content-local space (offset-free); UiLayer/

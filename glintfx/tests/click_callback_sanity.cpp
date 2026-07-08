@@ -128,6 +128,125 @@ int main() {
     return 11;
   }
 
+  // ---------------------------------------------------------------------------
+  // EN: (E) AUD-PUB-4 (v0.5.0) -- set_click_info_callback: parallel channel, does NOT replace
+  //     the id-only callback above (both fire independently on the same click, proven by (F)
+  //     below re-checking `hits` still grows).
+  // PT: (E) AUD-PUB-4 (v0.5.0) -- set_click_info_callback: canal paralelo, NÃO substitui o
+  //     callback só-id acima (ambos disparam independentemente no mesmo clique, provado pelo
+  //     (F) abaixo reconferindo que `hits` continua crescendo).
+  // ---------------------------------------------------------------------------
+  std::vector<glintfx::ClickInfo> info_hits;
+  ui.set_click_info_callback([&info_hits](const glintfx::ClickInfo& info) {
+    info_hits.push_back(info);
+  });
+
+  // (E1) Single click on btn_a: id="btn_a", button=0 (left -- the only button RmlUi's Click
+  // event ever carries, see ClickInfo's doc-comment), coords close to the click point (50,30 --
+  // "close" because mouse_x/mouse_y report where the button was RELEASED, not exactly the
+  // MouseMove target; both are inside btn_a's box either way), double_click=false.
+  click_at(ui, 50.f, 30.f);
+  if (info_hits.size() != 1) {
+    std::fprintf(stderr, "FAIL(E1): expected 1 info hit, got %zu\n", info_hits.size());
+    return 12;
+  }
+  if (std::string(info_hits[0].id) != "btn_a") {
+    std::fprintf(stderr, "FAIL(E1): id='%s' expected 'btn_a'\n", info_hits[0].id);
+    return 13;
+  }
+  if (info_hits[0].button != 0) {
+    std::fprintf(stderr, "FAIL(E1): button=%d expected 0\n", info_hits[0].button);
+    return 14;
+  }
+  if (info_hits[0].double_click) {
+    std::fprintf(stderr, "FAIL(E1): double_click=true on a single click\n");
+    return 15;
+  }
+  // EN: Coordinates must land inside btn_a's box (see click_scene.rcss) -- a loose bound
+  //     (not an exact-pixel match) because RmlUi reports the release point, and window-space
+  //     == content-local space here (no set_viewport(x,y,w,h,target_h) letterbox offset was
+  //     configured by this test, so UiLayer's translation is a no-op (+0)).
+  // PT: As coordenadas devem cair dentro da caixa do btn_a (ver click_scene.rcss) -- limite
+  //     frouxo (não exact-pixel) porque o RmlUi reporta o ponto de soltura, e espaço-janela
+  //     == espaço local de conteúdo aqui (nenhum offset de letterbox
+  //     set_viewport(x,y,w,h,target_h) foi configurado por este teste, então a tradução do
+  //     UiLayer é um no-op (+0)).
+  if (info_hits[0].x < 0.f || info_hits[0].x > 300.f || info_hits[0].y < 0.f || info_hits[0].y > 200.f) {
+    std::fprintf(stderr, "FAIL(E1): coords (%.1f, %.1f) out of viewport bounds\n",
+                 info_hits[0].x, info_hits[0].y);
+    return 16;
+  }
+
+  // (E2) One more click_at() on the SAME spot, immediately after E1 (within RmlUi's 0.5s / 3dp
+  // thresholds, both trivially satisfied -- no sleep, same exact point) -- E1's click already
+  // armed RmlUi's internal last_click_element/last_click_time (Context.cpp:660-673), so THIS
+  // click_at's mousedown is itself the "second click" of the pair: it fires Dblclick
+  // (double_click=true) BEFORE its own mouseup fires the paired Click (double_click=false) --
+  // 2 more info_hits from this single click_at call. A second click_at() right after that
+  // consumes the RESET state (Dblclick's dispatch clears last_click_element/time,
+  // Context.cpp:666-667) as a fresh, non-double single click -- 1 more info_hit. Total: 4 hits
+  // after E1+E2 combined (1 from E1 + 3 from E2's two click_at calls), verified by grepping the
+  // pinned RmlUi source: ProcessMouseButtonDown dispatches Dblclick on mousedown when
+  // active==last_click_element within the time/distance window and immediately resets that
+  // state; ProcessMouseButtonUp unconditionally dispatches Click when button_index==0 and
+  // active==hover, regardless of the double-click state (mouseup always fires Click, mousedown
+  // conditionally ALSO fires Dblclick -- they are independent RmlUi events, not one replacing
+  // the other, hence 2 events for the "second click" of a double-click).
+  // PT: (E2) Mais um click_at() no MESMO ponto, logo após E1 (dentro dos limiares de 0.5s/3dp
+  // do RmlUi, ambos trivialmente satisfeitos -- sem sleep, mesmo ponto exato) -- o clique de E1
+  // já armou o last_click_element/last_click_time interno do RmlUi (Context.cpp:660-673),
+  // então o mousedown DESTE click_at já É o "segundo clique" do par: dispara Dblclick
+  // (double_click=true) ANTES do próprio mouseup disparar o Click pareado (double_click=false)
+  // -- 2 info_hits a mais desta única chamada de click_at. Um segundo click_at() logo depois
+  // consome o estado RESETADO (o despacho do Dblclick limpa last_click_element/time,
+  // Context.cpp:666-667) como um clique único novo, não-duplo -- mais 1 info_hit. Total: 4 hits
+  // após E1+E2 combinados (1 de E1 + 3 das duas chamadas click_at de E2), verificado grepando o
+  // source pinado do RmlUi: ProcessMouseButtonDown dispara Dblclick no mousedown quando
+  // active==last_click_element dentro da janela de tempo/distância e reseta esse estado
+  // imediatamente; ProcessMouseButtonUp incondicionalmente dispara Click quando
+  // button_index==0 e active==hover, independente do estado de duplo-clique (mouseup sempre
+  // dispara Click, mousedown condicionalmente TAMBÉM dispara Dblclick -- são eventos RmlUi
+  // independentes, um não substitui o outro, por isso 2 eventos para o "segundo clique" de um
+  // duplo-clique).
+  click_at(ui, 50.f, 30.f);
+  click_at(ui, 50.f, 30.f);
+  if (info_hits.size() != 4) {
+    std::fprintf(stderr, "FAIL(E2): expected 4 info hits after a double-click sequence, got %zu\n",
+                 info_hits.size());
+    return 17;
+  }
+  if (!info_hits[1].double_click) {
+    std::fprintf(stderr, "FAIL(E2): info_hits[1] (Dblclick, from E2's 1st mousedown) reported double_click=false\n");
+    return 18;
+  }
+  if (info_hits[2].double_click) {
+    std::fprintf(stderr, "FAIL(E2): info_hits[2] (Click, from E2's 1st mouseup) reported double_click=true\n");
+    return 19;
+  }
+  if (info_hits[3].double_click) {
+    std::fprintf(stderr, "FAIL(E2): info_hits[3] (Click, from E2's 2nd click_at -- state reset after the Dblclick) reported double_click=true\n");
+    return 20;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: (F) Non-regression: the id-only callback (A/B/C/D above) must still be alive and firing
+  //     after set_click_info_callback was registered -- proves the two channels are independent
+  //     (neither set_* call clobbers the other's storage). `hits` from the reentrancy test (D)
+  //     ended at 2; each of the 3 clicks in (E1/E2) above adds one more "second:btn_a" hit via
+  //     the still-installed 2nd reentrant handler.
+  // PT: (F) Não-regressão: o callback só-id (A/B/C/D acima) precisa continuar vivo e disparando
+  //     após set_click_info_callback ter sido registrado -- prova que os dois canais são
+  //     independentes (nenhuma chamada set_* atropela o armazenamento da outra). `hits` do
+  //     teste de reentrância (D) terminou em 2; cada um dos 3 cliques em (E1/E2) acima soma
+  //     mais um hit "second:btn_a" via o 2º handler reentrante ainda instalado.
+  // ---------------------------------------------------------------------------
+  if (reentrant_hits.size() != 5) {
+    std::fprintf(stderr,
+                 "FAIL(F): expected 5 reentrant_hits (id-only callback still firing), got %zu\n",
+                 reentrant_hits.size());
+    return 21;
+  }
+
   std::puts("click_callback_sanity: PASS");
   return 0;
 }

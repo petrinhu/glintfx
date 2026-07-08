@@ -250,6 +250,18 @@ void App::set_click_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_click_callback(std::move(cb));
 }
 
+void App::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
+  if (!impl_->ok) return;
+  // EN: Straight passthrough (AUD-PUB-4, v0.5.0) -- no coordinate translation needed: App owns
+  //     the whole window, so the sub-viewport offset UiLayer::set_click_info_callback adds is
+  //     always (0,0) here (same reasoning as App::get_element_box's lack of offset addition).
+  // PT: Repasse direto (AUD-PUB-4, v0.5.0) -- sem tradução de coordenada necessária: o App é
+  //     dono da janela inteira, então o offset de sub-viewport que
+  //     UiLayer::set_click_info_callback soma é sempre (0,0) aqui (mesma racional da ausência
+  //     de soma de offset em App::get_element_box).
+  impl_->engine.set_click_info_callback(std::move(cb));
+}
+
 ElementBox App::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

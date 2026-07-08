@@ -76,6 +76,11 @@ struct Bootstrap::Impl {
   // PT: Parseada uma vez em init(), reutilizada como base de merge por todo load() -- ver lá.
   Rml::SharedPtr<Rml::StyleSheetContainer> ua_style_sheet;
   std::function<void(const char*)> click_cb;  // NEW (F1): empty by default.
+  // EN: AUD-PUB-4 (v0.5.0) -- second/parallel channel, see Bootstrap::set_click_info_callback.
+  //     Empty by default; independent of click_cb (both can be set, both fire on the same click).
+  // PT: AUD-PUB-4 (v0.5.0) -- segundo canal/paralelo, ver Bootstrap::set_click_info_callback.
+  //     Vazio por padrão; independente de click_cb (ambos podem ser setados, ambos disparam no mesmo clique).
+  std::function<void(const ClickInfo&)> click_info_cb;
 };
 
 // EN: Bubble-phase "click" listener attached to each loaded document's root (F1, v0.2.5).
@@ -141,6 +146,76 @@ private:
   //     documento é descarregado/destruído, então doc_ e `this` compartilham lifetime
   //     igual-ou-menor por construção.
   Rml::ElementDocument* doc_;
+};
+
+// EN: Bubble-phase "click"/"dblclick" listener attached to each loaded document's root
+//     (AUD-PUB-4, v0.5.0) -- the ClickInfo-reporting sibling of ClickEventListener above. TWO
+//     instances are attached per load() (see load() below), one on Rml::EventId::Click
+//     (is_double_=false) and one on Rml::EventId::Dblclick (is_double_=true) -- a SINGLE
+//     instance is deliberately NOT shared across both AddEventListener registrations: each
+//     instance self-deletes independently in its own OnDetach (RmlUi's own idiom, same as
+//     ClickEventListener above), and attaching one instance to two different EventIds would
+//     make OnDetach fire twice against the same `this`, a double-delete. Same ancestor-walk
+//     and reentrancy-safe local-copy-before-invoke discipline as ClickEventListener (AUD-TEC-3).
+// PT: Listener de "click"/"dblclick" em fase bubble anexado à raiz de cada documento carregado
+//     (AUD-PUB-4, v0.5.0) -- o irmão que reporta ClickInfo do ClickEventListener acima. DUAS
+//     instâncias são anexadas por load() (ver load() abaixo), uma em Rml::EventId::Click
+//     (is_double_=false) e uma em Rml::EventId::Dblclick (is_double_=true) -- uma ÚNICA
+//     instância deliberadamente NÃO é compartilhada entre os dois registros de
+//     AddEventListener: cada instância autodeleta independentemente no próprio OnDetach (idioma
+//     do próprio RmlUi, igual ao ClickEventListener acima), e anexar uma instância a dois
+//     EventId diferentes faria OnDetach disparar duas vezes contra o mesmo `this`, um
+//     double-delete. Mesma subida de ancestral e disciplina de cópia local antes de invocar,
+//     segura contra reentrância, do ClickEventListener (AUD-TEC-3).
+class ClickInfoEventListener : public Rml::EventListener {
+public:
+  ClickInfoEventListener(std::function<void(const ClickInfo&)>* cb, Rml::ElementDocument* doc,
+                          bool is_double)
+      : cb_(cb), doc_(doc), is_double_(is_double) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    // EN: Same ancestor-walk-to-nearest-id as ClickEventListener::ProcessEvent above (id="" if
+    //     no ancestor up to doc_ has one) -- see the detailed comment there for why the walk
+    //     stops AT doc_ instead of overshooting into the context's internal root element.
+    // PT: Mesma subida de ancestral até o id mais próximo do ClickEventListener::ProcessEvent
+    //     acima (id="" se nenhum ancestral até doc_ tiver um) -- ver o comentário detalhado lá
+    //     do motivo de a subida parar EM doc_ em vez de ultrapassar pro elemento root interno
+    //     do contexto.
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+
+    // EN: Parameter names confirmed by grepping the pinned RmlUi source
+    //     (Source/Core/Context.cpp:1538-1541, GenerateMouseEventParameters): "button", "mouse_x",
+    //     "mouse_y". button defaults to 0 (left) when absent -- matches Click/Dblclick's own
+    //     implicit left-button-only dispatch (see ClickInfo's doc-comment "KNOWN LIMITATION").
+    // PT: Nomes de parâmetro confirmados grepando o source pinado do RmlUi
+    //     (Source/Core/Context.cpp:1538-1541, GenerateMouseEventParameters): "button", "mouse_x",
+    //     "mouse_y". button tem default 0 (esquerdo) quando ausente -- bate com o despacho
+    //     implícito só-botão-esquerdo do próprio Click/Dblclick (ver "LIMITAÇÃO CONHECIDA" no
+    //     doc-comment de ClickInfo).
+    ClickInfo info;
+    info.id           = id_str;
+    info.button       = event.GetParameter<int>("button", 0);
+    info.x            = event.GetParameter<float>("mouse_x", 0.f);
+    info.y            = event.GetParameter<float>("mouse_y", 0.f);
+    info.double_click = is_double_;
+
+    // EN: Copy the functor before invoking (AUD-TEC-3, same reentrancy guard as
+    //     ClickEventListener::ProcessEvent above -- see the detailed comment there).
+    // PT: Copia o functor antes de invocar (AUD-TEC-3, mesma guarda de reentrância do
+    //     ClickEventListener::ProcessEvent acima -- ver o comentário detalhado lá).
+    auto cb = *cb_;
+    if (cb) cb(info);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const ClickInfo&)>* cb_;
+  Rml::ElementDocument* doc_;
+  bool is_double_;
 };
 
 Bootstrap::~Bootstrap() { shutdown(); }
@@ -330,6 +405,16 @@ bool Bootstrap::load(const char* rml_path) {
   doc->Show();
   doc->AddEventListener(Rml::EventId::Click,
                          new ClickEventListener(&impl_->click_cb, doc), false);
+  // EN: AUD-PUB-4 (v0.5.0) -- two separate ClickInfoEventListener instances, one per EventId
+  //     (see the class-level comment on ClickInfoEventListener above for why they must NOT be
+  //     the same instance).
+  // PT: AUD-PUB-4 (v0.5.0) -- duas instâncias separadas de ClickInfoEventListener, uma por
+  //     EventId (ver o comentário de nível de classe em ClickInfoEventListener acima do motivo
+  //     de NÃO poderem ser a mesma instância).
+  doc->AddEventListener(Rml::EventId::Click,
+                         new ClickInfoEventListener(&impl_->click_info_cb, doc, false), false);
+  doc->AddEventListener(Rml::EventId::Dblclick,
+                         new ClickInfoEventListener(&impl_->click_info_cb, doc, true), false);
   impl_->doc = doc;
   return true;
 }
@@ -338,6 +423,10 @@ Rml::Context* Bootstrap::context() { return impl_ ? impl_->ctx : nullptr; }
 
 void Bootstrap::set_click_callback(std::function<void(const char*)> cb) {
   if (impl_) impl_->click_cb = std::move(cb);
+}
+
+void Bootstrap::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
+  if (impl_) impl_->click_info_cb = std::move(cb);
 }
 
 bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {

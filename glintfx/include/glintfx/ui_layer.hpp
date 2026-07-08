@@ -10,6 +10,7 @@
 #include <functional>
 #include <glintfx/ui_event.hpp>
 #include <glintfx/element_box.hpp>
+#include <glintfx/click_info.hpp>
 
 namespace glintfx {
 
@@ -181,6 +182,31 @@ public:
   //     listener sempre lê o callback CORRENTE no momento do clique, não o valor no attach.
   //     Paridade com App::set_click_callback (mesma assinatura).
   void set_click_callback(std::function<void(const char* element_id)> cb);
+
+  // EN: Register a RICHER click callback -- id + button + coordinates + double-click, a
+  //     second/parallel channel alongside set_click_callback (AUD-PUB-4, v0.5.0). Does NOT
+  //     replace set_click_callback -- both can be registered simultaneously and both fire
+  //     independently on the same click (see ClickInfo's doc-comment for the full contract,
+  //     including a double-click firing this callback 3 times total, and the `button` field's
+  //     known limitation: effectively always 0, since RmlUi never dispatches Click/Dblclick for
+  //     non-primary mouse buttons). Coordinate space: window/render-target physical pixels,
+  //     top-left origin, y-down -- SAME convention as get_element_box (the sub-viewport offset
+  //     from set_viewport(x,y,w,h,target_h) is added here, mirroring get_element_box's
+  //     translation). No ordering constraint versus load(). Parity with
+  //     App::set_click_info_callback (same signature).
+  // PT: Registra um callback de clique MAIS RICO -- id + botão + coordenadas + duplo-clique,
+  //     um segundo canal/paralelo ao set_click_callback (AUD-PUB-4, v0.5.0). NÃO substitui
+  //     set_click_callback -- ambos podem ser registrados simultaneamente e ambos disparam
+  //     independentemente no mesmo clique (ver o doc-comment de ClickInfo para o contrato
+  //     completo, incluindo um duplo-clique disparando este callback 3 vezes no total, e a
+  //     limitação conhecida do campo `button`: na prática sempre 0, já que o RmlUi nunca
+  //     despacha Click/Dblclick para botões não-primários do mouse). Espaço de coordenadas:
+  //     pixels físicos do render-target/janela, origem superior-esquerda, y pra baixo -- MESMA
+  //     convenção de get_element_box (o offset de sub-viewport de
+  //     set_viewport(x,y,w,h,target_h) é somado aqui, espelhando a tradução de
+  //     get_element_box). Sem restrição de ordem vs. load(). Paridade com
+  //     App::set_click_info_callback (mesma assinatura).
+  void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
   // EN: Query the border-box geometry of an element by id. Coordinate space: window/render-
   //     target physical pixels, top-left origin, y-down -- the SAME space as UiEvent's mouse

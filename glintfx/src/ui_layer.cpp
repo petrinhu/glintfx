@@ -294,6 +294,40 @@ void UiLayer::set_click_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_click_callback(std::move(cb));
 }
 
+void UiLayer::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
+  if (!impl_->ok) return;
+  // EN: AUD-PUB-4 (v0.5.0): unlike set_click_callback (id-only, no coordinate translation
+  //     needed), the ClickInfo the Engine/Bootstrap hand back carries x/y in CONTENT-LOCAL
+  //     space (offset-free -- see Engine::set_click_info_callback's doc-comment). Wrap the
+  //     host's callback in a translating lambda that adds the current sub-viewport offset
+  //     (impl_->x/y) before forwarding -- the SAME translation get_element_box() applies
+  //     (box.x = x + impl_->x). Captures a raw Impl* (not `this`/shared_ptr): safe because the
+  //     wrapped lambda is stored inside Bootstrap::Impl::click_info_cb, which lives inside
+  //     impl_->engine's Bootstrap, which is a member of THIS UiLayer::Impl -- the callback
+  //     cannot outlive the Impl it points into. Reads impl_->x/y at INVOCATION time (not
+  //     capture time) so a later set_viewport() call is honoured for every subsequent click.
+  // PT: AUD-PUB-4 (v0.5.0): diferente de set_click_callback (só-id, sem tradução de
+  //     coordenada necessária), o ClickInfo que o Engine/Bootstrap devolvem carrega x/y no
+  //     espaço LOCAL DE CONTEÚDO (offset-free -- ver o doc-comment de
+  //     Engine::set_click_info_callback). Envolve o callback do host numa lambda tradutora que
+  //     soma o offset de sub-viewport corrente (impl_->x/y) antes de repassar -- a MESMA
+  //     tradução que get_element_box() aplica (box.x = x + impl_->x). Captura um Impl* cru (não
+  //     `this`/shared_ptr): seguro porque a lambda envolvida fica armazenada dentro de
+  //     Bootstrap::Impl::click_info_cb, que vive dentro do Bootstrap de impl_->engine, que é
+  //     membro DESTE UiLayer::Impl -- o callback não pode sobreviver ao Impl para o qual
+  //     aponta. Lê impl_->x/y no momento da INVOCAÇÃO (não no momento da captura), então uma
+  //     chamada posterior a set_viewport() é respeitada em todo clique subsequente.
+  Impl* self = impl_.get();
+  impl_->engine.set_click_info_callback(
+      [self, cb = std::move(cb)](const ClickInfo& info) {
+        if (!cb) return;
+        ClickInfo translated = info;
+        translated.x += static_cast<float>(self->x);
+        translated.y += static_cast<float>(self->y);
+        cb(translated);
+      });
+}
+
 ElementBox UiLayer::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

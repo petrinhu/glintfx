@@ -14,8 +14,38 @@
 #include <cmath>   // EN: std::isfinite (set_element_scroll_top input hardening).
                    // PT: std::isfinite (hardening de entrada de set_element_scroll_top).
 #include <cstring>
+#include <string>  // EN: std::string -- pending right/middle-click down-target storage below.
+                   // PT: std::string -- armazenamento do alvo pendente de down direito/meio abaixo.
 
 namespace glintfx {
+
+// EN: Pending-down record for right/middle-click synthesis (AUD-PUB-4 gap closure, v0.5.0).
+//     Declared at NAMESPACE scope, deliberately NOT nested inside Bootstrap::Impl -- Impl
+//     itself is a PRIVATE member type of Bootstrap (`private: struct Impl;` in bootstrap.hpp),
+//     so only Bootstrap's own member functions may name `Bootstrap::Impl`. The
+//     ClickInfoButtonDownListener/UpListener classes below are ordinary Rml::EventListener
+//     subclasses -- neither members nor friends of Bootstrap -- so they cannot hold a
+//     `Bootstrap::Impl*` (would be an access-control error at the point of use, same reason the
+//     existing ClickEventListener/ClickInfoEventListener above hold raw
+//     `std::function<...>*` pointers into Impl's fields instead of an `Impl*`). This type is
+//     free-standing for the identical reason; Impl (below) holds an array of it as a plain
+//     member, and the listener pair is handed a pointer straight to that array.
+// PT: Registro de down pendente para a síntese de clique direito/meio (fechamento de gap
+//     AUD-PUB-4, v0.5.0). Declarado em escopo de NAMESPACE, deliberadamente NÃO aninhado dentro
+//     de Bootstrap::Impl -- o próprio Impl é um tipo membro PRIVADO de Bootstrap
+//     (`private: struct Impl;` em bootstrap.hpp), então só as funções-membro do próprio
+//     Bootstrap podem nomear `Bootstrap::Impl`. As classes ClickInfoButtonDownListener/
+//     UpListener abaixo são subclasses comuns de Rml::EventListener -- nem membros nem friends
+//     de Bootstrap -- então não podem guardar um `Bootstrap::Impl*` (seria erro de controle de
+//     acesso no ponto de uso, mesmo motivo pelo qual os ClickEventListener/
+//     ClickInfoEventListener já existentes acima guardam ponteiros crus
+//     `std::function<...>*` para campos do Impl em vez de um `Impl*`). Este tipo é
+//     independente pelo motivo idêntico; o Impl (abaixo) guarda um array dele como membro
+//     comum, e o par de listeners recebe um ponteiro direto para esse array.
+struct PendingButtonDown {
+  bool valid = false;
+  std::string id;
+};
 
 // EN: Impl tracks context, initialisation state, and owns the process-global FileInterface.
 //     The FileInterface must outlive Rml::Shutdown() — keeping it in Impl satisfies that.
@@ -81,6 +111,27 @@ struct Bootstrap::Impl {
   // PT: AUD-PUB-4 (v0.5.0) -- segundo canal/paralelo, ver Bootstrap::set_click_info_callback.
   //     Vazio por padrão; independente de click_cb (ambos podem ser setados, ambos disparam no mesmo clique).
   std::function<void(const ClickInfo&)> click_info_cb;
+
+  // EN: AUD-PUB-4 gap closure (v0.5.0) -- pending "button went down here" record for the
+  //     right/middle click synthesis (see ClickInfoButtonDownListener/UpListener below, and the
+  //     PendingButtonDown type comment above for why this is a namespace-scope type, not a
+  //     nested one). Indexed DIRECTLY by RmlUi button_index (0=left, 1=right, 2=middle); index
+  //     0 is never written/read (left goes through the native Click/Dblclick path above,
+  //     unchanged) -- wasting one slot buys a trivial, mistake-proof `pending[button]` at both
+  //     call sites instead of an off-by-one `pending[button - 1]`. Reset to `valid=false` at
+  //     the top of every load() (see below) so a down that never got its matching up before a
+  //     document reload cannot spuriously match an unrelated id in the NEW document.
+  // PT: Fechamento de gap AUD-PUB-4 (v0.5.0) -- registro pendente "o botão desceu aqui" para a
+  //     síntese de clique direito/meio (ver ClickInfoButtonDownListener/UpListener abaixo, e o
+  //     comentário do tipo PendingButtonDown acima pro motivo de ser um tipo de escopo de
+  //     namespace, não aninhado). Indexado DIRETAMENTE pelo button_index do RmlUi (0=esquerdo,
+  //     1=direito, 2=meio); o índice 0 nunca é escrito/lido (esquerdo passa pelo caminho nativo
+  //     Click/Dblclick acima, inalterado) -- desperdiçar um slot compra um `pending[button]`
+  //     trivial e à prova de erro nos dois call sites, em vez de um `pending[button - 1]`
+  //     off-by-one. Resetado para `valid=false` no topo de todo load() (ver abaixo) para que um
+  //     down que nunca recebeu seu up pareado antes de um reload de documento não bata
+  //     acidentalmente com um id não relacionado no documento NOVO.
+  PendingButtonDown pending_button_down[3];
 };
 
 // EN: Bubble-phase "click" listener attached to each loaded document's root (F1, v0.2.5).
@@ -216,6 +267,165 @@ private:
   std::function<void(const ClickInfo&)>* cb_;
   Rml::ElementDocument* doc_;
   bool is_double_;
+};
+
+// EN: Mousedown half of the right/middle-click synthesis pair (AUD-PUB-4 gap closure, v0.5.0).
+//     Bubble-phase listener attached to Rml::EventId::Mousedown on the document root -- fires
+//     for EVERY button (RmlUi dispatches Mousedown for all of them, Context.cpp:649/703), but
+//     only ACTS when button != 0: button 0 (left) is deliberately left untouched here, it is
+//     already fully covered by the native Click/Dblclick path above (ClickInfoEventListener) --
+//     acting on it too would double-fire click_info_cb for every left click.
+//     Records the ancestor-walked id (SAME walk as ClickEventListener/ClickInfoEventListener --
+//     stop at doc_, never overshoot into the context's internal root) into
+//     Impl::pending_button_down[button], to be consumed by ClickInfoButtonUpListener below.
+//     Does NOT invoke click_info_cb itself -- a click is a down+up PAIR, only the up (if it
+//     matches) fires the callback.
+// PT: Metade Mousedown do par de síntese de clique direito/meio (fechamento de gap AUD-PUB-4,
+//     v0.5.0). Listener em fase bubble anexado a Rml::EventId::Mousedown na raiz do documento --
+//     dispara para TODO botão (o RmlUi despacha Mousedown para todos eles, Context.cpp:649/703),
+//     mas só AGE quando button != 0: o botão 0 (esquerdo) é deliberadamente deixado intocado
+//     aqui, já é totalmente coberto pelo caminho nativo Click/Dblclick acima
+//     (ClickInfoEventListener) -- agir nele também dispararia click_info_cb em dobro para todo
+//     clique esquerdo.
+//     Registra o id obtido pela subida de ancestral (MESMA subida de
+//     ClickEventListener/ClickInfoEventListener -- para em doc_, nunca ultrapassa pro root
+//     interno do contexto) em Impl::pending_button_down[button], a ser consumido pelo
+//     ClickInfoButtonUpListener abaixo. NÃO invoca click_info_cb por si só -- um clique é um PAR
+//     down+up, só o up (se bater) dispara o callback.
+class ClickInfoButtonDownListener : public Rml::EventListener {
+public:
+  // EN: `pending` points into Impl::pending_button_down (a 3-entry array) -- see the
+  //     PendingButtonDown type comment above for why this is a raw pointer to a namespace-scope
+  //     type rather than a `Bootstrap::Impl*`.
+  // PT: `pending` aponta para dentro de Impl::pending_button_down (array de 3 entradas) -- ver
+  //     o comentário do tipo PendingButtonDown acima pro motivo de ser um ponteiro cru pra um
+  //     tipo de escopo de namespace em vez de um `Bootstrap::Impl*`.
+  ClickInfoButtonDownListener(PendingButtonDown* pending, Rml::ElementDocument* doc)
+      : pending_(pending), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    // EN: Parameter name/semantics confirmed the same way as ClickInfoEventListener above
+    //     (Source/Core/Context.cpp:1538-1541 GenerateMouseEventParameters) -- Mousedown carries
+    //     the same "button" parameter Click/Dblclick do.
+    // PT: Nome/semântica do parâmetro confirmados do mesmo jeito que ClickInfoEventListener
+    //     acima (Source/Core/Context.cpp:1538-1541 GenerateMouseEventParameters) -- Mousedown
+    //     carrega o mesmo parâmetro "button" que Click/Dblclick.
+    const int button = event.GetParameter<int>("button", 0);
+    // EN: button==0 (left): native Click/Dblclick path already covers it, ignore here.
+    //     button>2: unknown/exotic hardware button (RmlUi itself only names 0/1/2) -- no slot
+    //     to record it into (pending_ has 3 entries), ignore rather than index OOB.
+    // PT: button==0 (esquerdo): já coberto pelo caminho nativo Click/Dblclick, ignora aqui.
+    //     button>2: botão de hardware exótico/desconhecido (o próprio RmlUi só nomeia 0/1/2) --
+    //     sem slot para registrar (pending_ tem 3 entradas), ignora em vez de indexar fora dos
+    //     limites.
+    if (button <= 0 || button > 2) return;
+
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+
+    pending_[button].valid = true;
+    pending_[button].id    = id_str;
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  PendingButtonDown* pending_;
+  Rml::ElementDocument* doc_;
+};
+
+// EN: Mouseup half of the right/middle-click synthesis pair (AUD-PUB-4 gap closure, v0.5.0) --
+//     the counterpart of ClickInfoButtonDownListener above. On a non-primary Mouseup, checks
+//     whether Impl::pending_button_down[button] is armed (a matching Mousedown was seen since
+//     the last consumed up/document load) and, if the up's own ancestor-walked id matches the
+//     down's recorded id, fires click_info_cb ONCE with THIS event's own button/mouse_x/mouse_y
+//     (mirrors RmlUi's own left-click semantics: Click's coordinates are the release point, not
+//     the press point -- see ClickInfoEventListener's parameter-name comment above) and
+//     double_click=false (RmlUi has no Dblclick for non-primary buttons -- see ClickInfo's
+//     doc-comment "KNOWN LIMITATION"). The pending slot is consumed (valid=false) on EVERY
+//     non-primary up regardless of whether the id matched, so a single Mousedown can arm at
+//     most one Mouseup outcome (match-and-fire, or mismatch-and-drop) -- it never leaks into a
+//     LATER, unrelated up.
+// PT: Metade Mouseup do par de síntese de clique direito/meio (fechamento de gap AUD-PUB-4,
+//     v0.5.0) -- a contraparte do ClickInfoButtonDownListener acima. Num Mouseup não-primário,
+//     checa se Impl::pending_button_down[button] está armado (um Mousedown pareado foi visto
+//     desde o último up consumido/load de documento) e, se o id obtido pela subida de ancestral
+//     do próprio up bate com o id registrado do down, dispara click_info_cb UMA VEZ com o
+//     próprio botão/mouse_x/mouse_y DESTE evento (espelha a semântica de clique esquerdo do
+//     próprio RmlUi: as coordenadas do Click são o ponto de soltura, não o de pressão -- ver o
+//     comentário de nome de parâmetro do ClickInfoEventListener acima) e double_click=false (o
+//     RmlUi não tem Dblclick para botões não-primários -- ver "LIMITAÇÃO CONHECIDA" no
+//     doc-comment de ClickInfo). O slot pendente é consumido (valid=false) em TODO up
+//     não-primário independente do id ter batido, então um único Mousedown pode armar no máximo
+//     um resultado de Mouseup (bate-e-dispara, ou não-bate-e-descarta) -- nunca vaza para um up
+//     POSTERIOR e não relacionado.
+class ClickInfoButtonUpListener : public Rml::EventListener {
+public:
+  // EN: `pending` -- same array pointer as ClickInfoButtonDownListener (both listener instances
+  //     for one load() point at the SAME Impl::pending_button_down array, so a down recorded by
+  //     one is visible to the other). `cb` points into Impl::click_info_cb, same raw-pointer-
+  //     into-Impl-field pattern as ClickEventListener/ClickInfoEventListener above (see the
+  //     PendingButtonDown type comment for why an `Impl*` itself cannot be named here).
+  // PT: `pending` -- mesmo ponteiro de array do ClickInfoButtonDownListener (ambas as instâncias
+  //     de listener de um load() apontam para o MESMO array Impl::pending_button_down, então um
+  //     down registrado por uma é visível pela outra). `cb` aponta para dentro de
+  //     Impl::click_info_cb, mesmo padrão de ponteiro-cru-para-campo-do-Impl de
+  //     ClickEventListener/ClickInfoEventListener acima (ver o comentário do tipo
+  //     PendingButtonDown pro motivo de um `Impl*` em si não poder ser nomeado aqui).
+  ClickInfoButtonUpListener(PendingButtonDown* pending, std::function<void(const ClickInfo&)>* cb,
+                             Rml::ElementDocument* doc)
+      : pending_(pending), cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    const int button = event.GetParameter<int>("button", 0);
+    if (button <= 0 || button > 2) return; // EN: same left/OOB exclusion as the down half.
+                                            // PT: mesma exclusão esquerdo/OOB da metade down.
+
+    PendingButtonDown& pending = pending_[button];
+    if (!pending.valid) return; // EN: up with no matching down we tracked -- ignore.
+                                 // PT: up sem down pareado rastreado -- ignora.
+    // EN: Consume unconditionally BEFORE the id comparison below -- a down that does not lead
+    //     to a matching up (drag-off) must not remain armed for some LATER, unrelated up on the
+    //     same button.
+    // PT: Consome incondicionalmente ANTES da comparação de id abaixo -- um down que não leva a
+    //     um up pareado (arrastar-para-fora) não pode continuar armado para algum up POSTERIOR,
+    //     não relacionado, no mesmo botão.
+    pending.valid = false;
+
+    if (!cb_ || !*cb_) return;
+
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* up_id = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+
+    if (pending.id != up_id) return; // EN: down and up landed on different elements -- no click.
+                                      // PT: down e up caíram em elementos diferentes -- sem clique.
+
+    ClickInfo info;
+    info.id           = up_id;
+    info.button        = button;
+    info.x             = event.GetParameter<float>("mouse_x", 0.f);
+    info.y             = event.GetParameter<float>("mouse_y", 0.f);
+    info.double_click  = false; // EN: no native Dblclick for non-primary buttons.
+                                 // PT: sem Dblclick nativo para botões não-primários.
+
+    // EN: Copy the functor before invoking (AUD-TEC-3, same reentrancy guard as the other
+    //     listeners in this file -- see ClickEventListener::ProcessEvent for the detailed
+    //     comment).
+    // PT: Copia o functor antes de invocar (AUD-TEC-3, mesma guarda de reentrância dos outros
+    //     listeners deste arquivo -- ver ClickEventListener::ProcessEvent pro comentário
+    //     detalhado).
+    auto cb = *cb_;
+    if (cb) cb(info);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  PendingButtonDown* pending_;
+  std::function<void(const ClickInfo&)>* cb_;
+  Rml::ElementDocument* doc_;
 };
 
 Bootstrap::~Bootstrap() { shutdown(); }
@@ -415,6 +625,25 @@ bool Bootstrap::load(const char* rml_path) {
                          new ClickInfoEventListener(&impl_->click_info_cb, doc, false), false);
   doc->AddEventListener(Rml::EventId::Dblclick,
                          new ClickInfoEventListener(&impl_->click_info_cb, doc, true), false);
+  // EN: AUD-PUB-4 gap closure (v0.5.0) -- right/middle click synthesis pair, registered on the
+  //     NEW document like every other listener above. Reset pending_button_down FIRST (before
+  //     registering), not after -- a Mousedown on the OLD document with no matching Mouseup
+  //     before this reload must not survive into the new document's lifetime and spuriously
+  //     match an unrelated element sharing the same id (see the field comment on
+  //     Impl::pending_button_down for the full rationale).
+  // PT: Fechamento de gap AUD-PUB-4 (v0.5.0) -- par de síntese de clique direito/meio,
+  //     registrado no documento NOVO como todo outro listener acima. Reseta
+  //     pending_button_down PRIMEIRO (antes de registrar), não depois -- um Mousedown no
+  //     documento ANTIGO sem Mouseup pareado antes deste reload não pode sobreviver ao lifetime
+  //     do documento novo e bater acidentalmente com um elemento não relacionado que compartilhe
+  //     o mesmo id (ver o comentário de campo de Impl::pending_button_down pra racional
+  //     completa).
+  for (auto& p : impl_->pending_button_down) { p.valid = false; p.id.clear(); }
+  doc->AddEventListener(Rml::EventId::Mousedown,
+                         new ClickInfoButtonDownListener(impl_->pending_button_down, doc), false);
+  doc->AddEventListener(Rml::EventId::Mouseup,
+                         new ClickInfoButtonUpListener(impl_->pending_button_down,
+                                                        &impl_->click_info_cb, doc), false);
   impl_->doc = doc;
   return true;
 }

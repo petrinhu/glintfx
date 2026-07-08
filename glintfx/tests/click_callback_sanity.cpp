@@ -30,6 +30,22 @@ static void click_at(glintfx::UiLayer& ui, float x, float y) {
   ui.process_event({ .type = glintfx::UiEvent::Type::MouseButton, .button = 0, .pressed = false });
 }
 
+// EN: AUD-PUB-4 (v0.5.0) -- synthesizes a non-primary (right=1/middle=2) click the same way
+//     click_at() synthesizes a left one: MouseMove (hover) + MouseButton down + MouseButton up,
+//     same point, given button. Exercises ClickInfoButtonDownListener/UpListener in
+//     bootstrap.cpp (Mousedown/Mouseup pair, since RmlUi never dispatches native Click for
+//     non-primary buttons).
+// PT: AUD-PUB-4 (v0.5.0) -- sintetiza um clique não-primário (direito=1/meio=2) do mesmo jeito
+//     que click_at() sintetiza um esquerdo: MouseMove (hover) + MouseButton down + MouseButton
+//     up, mesmo ponto, button dado. Exercita ClickInfoButtonDownListener/UpListener em
+//     bootstrap.cpp (par Mousedown/Mouseup, já que o RmlUi nunca despacha Click nativo para
+//     botões não-primários).
+static void button_click_at(glintfx::UiLayer& ui, int button, float x, float y) {
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = x, .y = y });
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseButton, .button = button, .pressed = true });
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseButton, .button = button, .pressed = false });
+}
+
 int main() {
   glintfx::WindowGlfw host;
   if (!host.create("click_cb_host", 300, 200)) { std::puts("FAIL: host create"); return 1; }
@@ -245,6 +261,93 @@ int main() {
                  "FAIL(F): expected 5 reentrant_hits (id-only callback still firing), got %zu\n",
                  reentrant_hits.size());
     return 21;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: (G) AUD-PUB-4 gap closure (v0.5.0) -- right(1)/middle(2) ClickInfo::button is now
+  //     FUNCTIONAL, synthesized from Mousedown+Mouseup (RmlUi has no native Click for
+  //     non-primary buttons; see click_info.hpp's "SOURCE" doc-comment). `hits.size()` (the
+  //     id-only channel, fed only by native EventId::Click) must NOT grow from these -- proves
+  //     Mousedown/Mouseup handling is isolated to the new listener pair and does not leak into
+  //     ClickEventListener.
+  // PT: (G) Fechamento de gap AUD-PUB-4 (v0.5.0) -- ClickInfo::button direito(1)/meio(2) agora é
+  //     FUNCIONAL, sintetizado de Mousedown+Mouseup (o RmlUi não tem Click nativo para botões
+  //     não-primários; ver o doc-comment "ORIGEM" de click_info.hpp). `hits.size()` (o canal
+  //     só-id, alimentado só por EventId::Click nativo) NÃO pode crescer com estes -- prova que
+  //     o tratamento de Mousedown/Mouseup fica isolado no novo par de listeners e não vaza para
+  //     o ClickEventListener.
+  // ---------------------------------------------------------------------------
+  const size_t hits_before_button_synthesis = hits.size();
+
+  button_click_at(ui, 1, 50.f, 30.f);  // right-click on btn_a
+  if (info_hits.size() != 5) {
+    std::fprintf(stderr, "FAIL(G1): expected 5 info hits after right-click, got %zu\n", info_hits.size());
+    return 22;
+  }
+  if (info_hits[4].button != 1) {
+    std::fprintf(stderr, "FAIL(G1): button=%d expected 1 (right)\n", info_hits[4].button);
+    return 23;
+  }
+  if (std::string(info_hits[4].id) != "btn_a") {
+    std::fprintf(stderr, "FAIL(G1): id='%s' expected 'btn_a'\n", info_hits[4].id);
+    return 24;
+  }
+  if (info_hits[4].double_click) {
+    std::fprintf(stderr, "FAIL(G1): double_click=true on a right-click (no native Dblclick for non-primary buttons)\n");
+    return 25;
+  }
+
+  button_click_at(ui, 2, 50.f, 30.f);  // middle-click on btn_a
+  if (info_hits.size() != 6) {
+    std::fprintf(stderr, "FAIL(G2): expected 6 info hits after middle-click, got %zu\n", info_hits.size());
+    return 26;
+  }
+  if (info_hits[5].button != 2) {
+    std::fprintf(stderr, "FAIL(G2): button=%d expected 2 (middle)\n", info_hits[5].button);
+    return 27;
+  }
+
+  if (hits.size() != hits_before_button_synthesis) {
+    std::fprintf(stderr,
+                 "FAIL(G3): id-only channel grew from right/middle clicks (%zu -> %zu) -- "
+                 "Mousedown/Mouseup leaked into ClickEventListener\n",
+                 hits_before_button_synthesis, hits.size());
+    return 28;
+  }
+
+  // EN: (G4) Non-regression -- left click still reports button=0 through the SAME
+  //     set_click_info_callback channel after the right/middle listeners fired above.
+  // PT: (G4) Não-regressão -- clique esquerdo continua reportando button=0 pelo MESMO canal
+  //     set_click_info_callback depois dos listeners de direito/meio terem disparado acima.
+  click_at(ui, 50.f, 30.f);
+  if (info_hits.back().button != 0) {
+    std::fprintf(stderr, "FAIL(G4): left click after right/middle reported button=%d, expected 0\n",
+                 info_hits.back().button);
+    return 29;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: (H) Drag-off -- Mousedown{button=1} on btn_a, Mouseup{button=1} on "panel" (a DIFFERENT
+  //     element) must NOT fire click_info_cb (mirrors RmlUi's own left-click rule: a press that
+  //     is released over a different element is not a click). Proves
+  //     ClickInfoButtonUpListener's id-match guard, not just its happy path above.
+  // PT: (H) Arrastar-para-fora -- Mousedown{button=1} no btn_a, Mouseup{button=1} no "panel" (um
+  //     elemento DIFERENTE) NÃO pode disparar click_info_cb (espelha a própria regra de clique
+  //     esquerdo do RmlUi: uma pressão solta sobre um elemento diferente não é um clique). Prova
+  //     a guarda de correspondência de id do ClickInfoButtonUpListener, não só o caminho feliz
+  //     acima.
+  // ---------------------------------------------------------------------------
+  const size_t info_hits_before_drag_off = info_hits.size();
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = 50.f, .y = 30.f });   // hover btn_a
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseButton, .button = 1, .pressed = true });
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = 50.f, .y = 80.f });   // hover panel
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseButton, .button = 1, .pressed = false });
+  if (info_hits.size() != info_hits_before_drag_off) {
+    std::fprintf(stderr,
+                 "FAIL(H): drag-off (down on btn_a, up on panel) fired a click, got %zu info hits "
+                 "(expected no change from %zu)\n",
+                 info_hits.size(), info_hits_before_drag_off);
+    return 30;
   }
 
   std::puts("click_callback_sanity: PASS");

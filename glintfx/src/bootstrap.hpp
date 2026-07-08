@@ -75,28 +75,35 @@ public:
   // EN: Register a RICHER click callback -- reports id + button + coordinates + double-click,
   //     a second/parallel channel alongside set_click_callback (AUD-PUB-4, v0.5.0). Does NOT
   //     replace or interact with set_click_callback -- both can be registered simultaneously
-  //     and both fire independently on the same click. Sourced from the native
-  //     Rml::EventId::Click AND Rml::EventId::Dblclick events (a double-click fires THIS
-  //     callback a total of 3 times: Click on mouse-down-1-up, Dblclick on mouse-down-2 with
-  //     double_click=true, Click again on mouse-down-2-up -- this mirrors RmlUi's own event
-  //     model exactly, see ClickInfo's doc-comment for the full contract and the `button`
-  //     field's known limitation (effectively always 0 -- RmlUi never dispatches Click for
-  //     non-primary buttons). x/y are in Bootstrap's own content-local space (offset-free);
-  //     UiLayer/App translate to window-space at the public boundary, same as get_element_box.
+  //     and both fire independently on the same click.
+  //     LEFT (button 0): sourced from the native Rml::EventId::Click AND Rml::EventId::Dblclick
+  //     events (a double-click fires THIS callback a total of 3 times: Click on
+  //     mouse-down-1-up, Dblclick on mouse-down-2 with double_click=true, Click again on
+  //     mouse-down-2-up -- mirrors RmlUi's own event model exactly).
+  //     RIGHT/MIDDLE (button 1/2, v0.5.0 gap closure): RmlUi never dispatches Click/Dblclick for
+  //     non-primary buttons, so we synthesize it from a Mousedown+Mouseup pair -- fires once,
+  //     double_click always false, ONLY when the paired down and up resolved to the SAME
+  //     element id (drag-off cancels, same rule as RmlUi's own left-click). See ClickInfo's
+  //     doc-comment for the full contract.
+  //     x/y are in Bootstrap's own content-local space (offset-free); UiLayer/App translate to
+  //     window-space at the public boundary, same as get_element_box.
   //     No ordering constraint versus load(); safe to call before or after it.
   // PT: Registra um callback de clique MAIS RICO -- reporta id + botão + coordenadas +
   //     duplo-clique, um segundo canal/paralelo ao set_click_callback (AUD-PUB-4, v0.5.0). NÃO
   //     substitui nem interage com set_click_callback -- ambos podem ser registrados
-  //     simultaneamente e ambos disparam independentemente no mesmo clique. Originado dos
-  //     eventos nativos Rml::EventId::Click E Rml::EventId::Dblclick (um duplo-clique dispara
-  //     ESTE callback um total de 3 vezes: Click no mouse-down-1-up, Dblclick no mouse-down-2
-  //     com double_click=true, Click de novo no mouse-down-2-up -- isso espelha exatamente o
-  //     próprio modelo de evento do RmlUi, ver o doc-comment de ClickInfo para o contrato
-  //     completo e a limitação conhecida do campo `button` (na prática sempre 0 -- o RmlUi
-  //     nunca dispara Click para botões não-primários). x/y estão no espaço local de conteúdo
-  //     próprio do Bootstrap (offset-free); UiLayer/App traduzem para espaço-janela na
-  //     fronteira pública, igual a get_element_box. Sem restrição de ordem vs. load(); seguro
-  //     chamar antes ou depois.
+  //     simultaneamente e ambos disparam independentemente no mesmo clique.
+  //     ESQUERDO (botão 0): originado dos eventos nativos Rml::EventId::Click E
+  //     Rml::EventId::Dblclick (um duplo-clique dispara ESTE callback um total de 3 vezes: Click
+  //     no mouse-down-1-up, Dblclick no mouse-down-2 com double_click=true, Click de novo no
+  //     mouse-down-2-up -- espelha exatamente o próprio modelo de evento do RmlUi).
+  //     DIREITO/MEIO (botão 1/2, fechamento de gap v0.5.0): o RmlUi nunca dispara Click/Dblclick
+  //     para botões não-primários, então sintetizamos a partir de um par Mousedown+Mouseup --
+  //     dispara uma vez, double_click sempre false, SÓ quando o down e o up pareados resolveram
+  //     para o MESMO id de elemento (arrastar-para-fora cancela, mesma regra do clique esquerdo
+  //     do próprio RmlUi). Ver o doc-comment de ClickInfo para o contrato completo.
+  //     x/y estão no espaço local de conteúdo próprio do Bootstrap (offset-free); UiLayer/App
+  //     traduzem para espaço-janela na fronteira pública, igual a get_element_box. Sem restrição
+  //     de ordem vs. load(); seguro chamar antes ou depois.
   void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
   // EN: Query the border-box geometry of an element by id, in the LATEST loaded document's

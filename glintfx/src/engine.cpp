@@ -155,6 +155,11 @@ void Engine::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
   impl_->boot.set_click_info_callback(std::move(cb));
 }
 
+void Engine::set_scroll_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_scroll_callback(std::move(cb));
+}
+
 bool Engine::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {
   if (!impl_->ok) return false;
   return impl_->boot.get_element_box(id, x, y, w, h);

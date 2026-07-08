@@ -328,6 +328,17 @@ void UiLayer::set_click_info_callback(std::function<void(const ClickInfo&)> cb) 
       });
 }
 
+void UiLayer::set_scroll_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  // EN: Straight passthrough (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- unlike
+  //     set_click_info_callback, there is no coordinate payload here to translate by the
+  //     sub-viewport offset (impl_->x/y): the callback carries only an id string.
+  // PT: Repasse direto (desdobramento do GLINTFX-SCROLL-1, v0.6.0) -- diferente do
+  //     set_click_info_callback, não há payload de coordenada aqui a traduzir pelo offset de
+  //     sub-viewport (impl_->x/y): o callback carrega só uma string de id.
+  impl_->engine.set_scroll_callback(std::move(cb));
+}
+
 ElementBox UiLayer::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

@@ -103,6 +103,19 @@ public:
   //     / doc-comment de ClickInfo).
   void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
+  // EN: Register a scroll callback -- forwards to Bootstrap::set_scroll_callback
+  //     (GLINTFX-SCROLL-1 follow-up, v0.6.0). Straight passthrough, id-only (no coordinate
+  //     translation applies -- there is none for scroll, unlike ClickInfo's x/y). See
+  //     Bootstrap::set_scroll_callback for the full contract (fires on wheel, native scrollbar
+  //     drag, and the programmatic scroll methods; empty/null callback is a safe no-op).
+  // PT: Registra um callback de rolagem -- encaminha a Bootstrap::set_scroll_callback
+  //     (desdobramento do GLINTFX-SCROLL-1, v0.6.0). Repasse direto, só-id (não há tradução de
+  //     coordenada aplicável -- não existe uma pro scroll, diferente do x/y do ClickInfo). Ver
+  //     Bootstrap::set_scroll_callback para o contrato completo (dispara em wheel, arraste de
+  //     scrollbar nativa, e os métodos programáticos de rolagem; callback nulo/vazio é no-op
+  //     seguro).
+  void set_scroll_callback(std::function<void(const char*)> cb);
+
   // EN: Query the border-box geometry of an element by id -- forwards to
   //     Bootstrap::get_element_box (F2, v0.2.5). Content-local space (offset-free); UiLayer/
   //     App translate to window-space at the public boundary. Returns false when not ok(),

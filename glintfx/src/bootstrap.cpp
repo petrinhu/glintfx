@@ -111,6 +111,13 @@ struct Bootstrap::Impl {
   // PT: AUD-PUB-4 (v0.5.0) -- segundo canal/paralelo, ver Bootstrap::set_click_info_callback.
   //     Vazio por padrão; independente de click_cb (ambos podem ser setados, ambos disparam no mesmo clique).
   std::function<void(const ClickInfo&)> click_info_cb;
+  // EN: GLINTFX-SCROLL-1 follow-up (v0.6.0) -- see Bootstrap::set_scroll_callback for the full
+  //     contract (fires on every source of scrolling: wheel, native scrollbar drag, and the
+  //     programmatic scroll_element_into_view/set_element_scroll_top). Empty by default.
+  // PT: Desdobramento do GLINTFX-SCROLL-1 (v0.6.0) -- ver Bootstrap::set_scroll_callback para o
+  //     contrato completo (dispara em toda fonte de rolagem: wheel, arraste de scrollbar nativa,
+  //     e o scroll_element_into_view/set_element_scroll_top programático). Vazio por padrão.
+  std::function<void(const char*)> scroll_cb;
 
   // EN: AUD-PUB-4 gap closure (v0.5.0) -- pending "button went down here" record for the
   //     right/middle click synthesis (see ClickInfoButtonDownListener/UpListener below, and the
@@ -428,6 +435,56 @@ private:
   Rml::ElementDocument* doc_;
 };
 
+// EN: Bubble-phase "scroll" listener attached to each loaded document's root
+//     (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- same shape as ClickEventListener above (id-only,
+//     ancestor-walk-to-nearest-id, reentrancy-safe local copy before invoke), but for
+//     Rml::EventId::Scroll instead of Click. EventId::Scroll's target IS the element whose own
+//     scroll offset changed (Source/Core/Element.cpp SetScrollTop/SetScrollLeft dispatch on
+//     `this`, confirmed in the pinned RmlUi source) -- typically an overflow-y:auto container
+//     that already carries an author-given id, but the ancestor walk is kept identical to
+//     ClickEventListener's for consistency/robustness (e.g. a scrollable element without its own
+//     id still resolves to its nearest ancestor id, "" if none up to doc_).
+// PT: Listener de "scroll" em fase bubble anexado à raiz de cada documento carregado
+//     (desdobramento do GLINTFX-SCROLL-1, v0.6.0) -- mesma forma do ClickEventListener acima
+//     (só-id, subida de ancestral até o id mais próximo, cópia local segura contra reentrância
+//     antes de invocar), mas para Rml::EventId::Scroll em vez de Click. O alvo do
+//     EventId::Scroll É o elemento cujo próprio offset de rolagem mudou
+//     (Source/Core/Element.cpp SetScrollTop/SetScrollLeft despacham em `this`, confirmado no
+//     source pinado do RmlUi) -- tipicamente um container overflow-y:auto que já carrega um id
+//     autorado, mas a subida de ancestral é mantida idêntica à do ClickEventListener por
+//     consistência/robustez (ex.: um elemento rolável sem id próprio ainda resolve para o id do
+//     ancestral mais próximo, "" se nenhum até doc_).
+class ScrollEventListener : public Rml::EventListener {
+public:
+  ScrollEventListener(std::function<void(const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    // EN: Same ancestor-walk-stops-at-doc_ rule as ClickEventListener::ProcessEvent above -- see
+    //     the detailed comment there for why the walk must not overshoot into the context's
+    //     internal root element.
+    // PT: Mesma regra de subida-para-em-doc_ do ClickEventListener::ProcessEvent acima -- ver o
+    //     comentário detalhado lá do motivo de a subida não poder ultrapassar pro elemento root
+    //     interno do contexto.
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Copy the functor before invoking (AUD-TEC-3 reentrancy guard, same reasoning as
+    //     ClickEventListener::ProcessEvent above).
+    // PT: Copia o functor antes de invocar (guarda de reentrância AUD-TEC-3, mesmo raciocínio de
+    //     ClickEventListener::ProcessEvent acima).
+    auto cb = *cb_;
+    if (cb) cb(id_str);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*)>* cb_;
+  Rml::ElementDocument* doc_;
+};
+
 Bootstrap::~Bootstrap() { shutdown(); }
 
 bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int h) {
@@ -644,6 +701,13 @@ bool Bootstrap::load(const char* rml_path) {
   doc->AddEventListener(Rml::EventId::Mouseup,
                          new ClickInfoButtonUpListener(impl_->pending_button_down,
                                                         &impl_->click_info_cb, doc), false);
+  // EN: GLINTFX-SCROLL-1 follow-up (v0.6.0) -- same bubble-phase-listener-on-doc-root pattern as
+  //     every listener above; see Bootstrap::set_scroll_callback for the full contract.
+  // PT: Desdobramento do GLINTFX-SCROLL-1 (v0.6.0) -- mesmo padrão de listener-em-fase-bubble-na-
+  //     raiz-do-documento de todo listener acima; ver Bootstrap::set_scroll_callback para o
+  //     contrato completo.
+  doc->AddEventListener(Rml::EventId::Scroll,
+                         new ScrollEventListener(&impl_->scroll_cb, doc), false);
   impl_->doc = doc;
   return true;
 }
@@ -656,6 +720,10 @@ void Bootstrap::set_click_callback(std::function<void(const char*)> cb) {
 
 void Bootstrap::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
   if (impl_) impl_->click_info_cb = std::move(cb);
+}
+
+void Bootstrap::set_scroll_callback(std::function<void(const char*)> cb) {
+  if (impl_) impl_->scroll_cb = std::move(cb);
 }
 
 bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {

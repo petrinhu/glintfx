@@ -302,6 +302,15 @@ void App::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
   impl_->engine.set_click_info_callback(std::move(cb));
 }
 
+void App::set_scroll_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  // EN: Straight passthrough (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- id-only, no coordinate
+  //     translation applicable (there is none for scroll, unlike ClickInfo's x/y).
+  // PT: Repasse direto (desdobramento do GLINTFX-SCROLL-1, v0.6.0) -- só-id, sem tradução de
+  //     coordenada aplicável (não existe uma pro scroll, diferente do x/y do ClickInfo).
+  impl_->engine.set_scroll_callback(std::move(cb));
+}
+
 ElementBox App::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

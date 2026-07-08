@@ -50,6 +50,16 @@
 //           (900px / 100px, see the scene oracle below), the numbers a host needs to build a
 //           custom scrollbar (see the doc-comments in ui_layer.hpp for the usage formula).
 //
+//       (E) set_scroll_callback (GLINTFX-SCROLL-1 follow-up, v0.6.0): fires with the scrolled
+//           element's own id on a synchronous set_element_scroll_top() call; does NOT re-fire
+//           when the SAME offset is set again (RmlUi's own dedup inside Element::SetScrollTop --
+//           `if (new_offset != scroll_offset.y) { ...; DispatchEvent(Scroll, ...); }`, confirmed
+//           by reading Element.cpp); fires again for a genuinely different offset; also fires
+//           (possibly more than once, one per animated smoothscroll step) from wheel-driven
+//           scrolling, proving the callback is not restricted to the synchronous programmatic
+//           path; and clearing the callback (passing an empty std::function) makes a further
+//           scroll a safe no-op -- no crash, ok() stays true.
+//
 //     Scene oracle (scroll_scene.rml/.rcss): #scroller is a 120x100 border-box (no margin/
 //     border/padding) containing 30 x 30px-tall items (900px content) -- an exact, deterministic
 //     scrollable range of [0, 800] (GetScrollHeight() 900 - GetClientHeight() 100). #item-29's
@@ -113,6 +123,17 @@
 //           números que um host precisa para construir uma scrollbar customizada (ver os
 //           doc-comments em ui_layer.hpp pra fórmula de uso).
 //
+//       (E) set_scroll_callback (desdobramento do GLINTFX-SCROLL-1, v0.6.0): dispara com o id
+//           próprio do elemento rolado numa chamada síncrona a set_element_scroll_top(); NÃO
+//           redispara quando o MESMO offset é definido de novo (dedup do próprio RmlUi dentro de
+//           Element::SetScrollTop -- `if (new_offset != scroll_offset.y) { ...;
+//           DispatchEvent(Scroll, ...); }`, confirmado lendo Element.cpp); dispara de novo para
+//           um offset genuinamente diferente; também dispara (possivelmente mais de uma vez, um
+//           por passo animado do smoothscroll) a partir de rolagem via wheel, provando que o
+//           callback não fica restrito ao caminho programático síncrono; e limpar o callback
+//           (passando um std::function vazio) torna uma rolagem seguinte um no-op seguro -- sem
+//           crash, ok() permanece true.
+//
 //     Oráculo da cena (scroll_scene.rml/.rcss): #scroller é um border-box 120x100 (sem margem/
 //     borda/padding) contendo 30 itens de 30px de altura (900px de conteúdo) -- um intervalo
 //     rolável exato e determinístico de [0, 800] (GetScrollHeight() 900 - GetClientHeight()
@@ -128,6 +149,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <string>
 #include <thread>
 
 static bool approx(float a, float b, float tol) { return std::fabs(a - b) <= tol; }
@@ -375,6 +397,87 @@ int main() {
   }
 
   if (!ui.ok()) { std::puts("FAIL: ok() false after scroll sequence"); return 48; }
+
+  // ---------------------------------------------------------------------------
+  // (E) set_scroll_callback -- GLINTFX-SCROLL-1 follow-up (v0.6.0).
+  // ---------------------------------------------------------------------------
+  int scroll_cb_count = 0;
+  std::string scroll_cb_last_id;
+  ui.set_scroll_callback([&](const char* id) {
+    ++scroll_cb_count;
+    scroll_cb_last_id = id ? id : "<null>";
+  });
+
+  // (E0) Reset to a known baseline, THEN register-observed scroll to a new value fires once.
+  if (!ui.set_element_scroll_top("scroller", 0.f)) { std::puts("FAIL: reset scroll_top to 0 for E"); return 54; }
+  const int count_after_reset = scroll_cb_count; // baseline may already be 0.f (no-op, no fire).
+
+  if (!ui.set_element_scroll_top("scroller", 123.f)) { std::puts("FAIL: set_scroll_top(123) for scroll callback"); return 55; }
+  if (scroll_cb_count != count_after_reset + 1) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_cb_count=%d expected %d after set_element_scroll_top(123)\n",
+                 scroll_cb_count, count_after_reset + 1);
+    return 56;
+  }
+  if (scroll_cb_last_id != "scroller") {
+    std::fprintf(stderr, "FAIL: scroll_cb_last_id=\"%s\" expected \"scroller\"\n",
+                 scroll_cb_last_id.c_str());
+    return 57;
+  }
+
+  // (E1) Dedup: RmlUi's Element::SetScrollTop only DispatchEvent(Scroll) when the offset
+  //      actually CHANGES -- setting the SAME value again must NOT re-fire the callback.
+  const int count_before_repeat = scroll_cb_count;
+  if (!ui.set_element_scroll_top("scroller", 123.f)) { std::puts("FAIL: set_scroll_top(123) again"); return 58; }
+  if (scroll_cb_count != count_before_repeat) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_cb_count=%d expected still %d (same-value set must not re-fire)\n",
+                 scroll_cb_count, count_before_repeat);
+    return 59;
+  }
+
+  // (E2) Dente: a genuinely DIFFERENT value fires again.
+  if (!ui.set_element_scroll_top("scroller", 200.f)) { std::puts("FAIL: set_scroll_top(200)"); return 60; }
+  if (scroll_cb_count != count_before_repeat + 1) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_cb_count=%d expected %d after a different-value set\n",
+                 scroll_cb_count, count_before_repeat + 1);
+    return 61;
+  }
+
+  // (E3) Wheel-driven scrolling also fires the callback (may fire more than once, one per
+  //      animated smoothscroll step) -- proves the callback is not restricted to the
+  //      synchronous programmatic path above.
+  const int count_before_wheel = scroll_cb_count;
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseMove, .x = 70.f, .y = 60.f });
+  ui.process_event({ .type = glintfx::UiEvent::Type::MouseWheel, .x = 0.f, .y = 2.f });
+  settle_scroll(ui, "scroller");
+  if (scroll_cb_count <= count_before_wheel) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_cb_count=%d did not increase after wheel scroll (before=%d)\n",
+                 scroll_cb_count, count_before_wheel);
+    return 62;
+  }
+  if (scroll_cb_last_id != "scroller") {
+    std::fprintf(stderr, "FAIL: scroll_cb_last_id=\"%s\" expected \"scroller\" after wheel\n",
+                 scroll_cb_last_id.c_str());
+    return 63;
+  }
+
+  // (E4, hardening) Clearing the callback (empty std::function, "cuidado com () vazio") -- a
+  //      further scroll must be a safe no-op: no crash, ok() stays true, no further count bump.
+  const int count_before_clear = scroll_cb_count;
+  ui.set_scroll_callback(nullptr);
+  if (!ui.set_element_scroll_top("scroller", 10.f)) {
+    std::puts("FAIL: set_scroll_top(10) after clearing scroll callback"); return 64;
+  }
+  if (!ui.ok()) { std::puts("FAIL: ok() false after scroll with cleared callback"); return 65; }
+  if (scroll_cb_count != count_before_clear) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_cb_count=%d changed after clearing callback (expected still %d)\n",
+                 scroll_cb_count, count_before_clear);
+    return 66;
+  }
 
   std::puts("scroll_sanity: PASS");
   return 0;

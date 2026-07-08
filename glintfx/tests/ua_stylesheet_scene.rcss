@@ -6,3 +6,19 @@
 body { background-color: #101010; }
 .red  { width: 100px; height: 40px; background-color: #ff0000; }
 .blue { width: 100px; height: 40px; background-color: #0000ff; }
+
+/* EN: #scroller -- proves the UA-stylesheet's scrollbar defaults (v0.6.0) without ANY
+       scrollbar-specific rule authored here: 100x50 border-box, overflow-y:auto, containing a
+       200px-tall .filler -- forces a vertical scrollbar. Same "must rely SOLELY on glintfx's
+       embedded default" intent as .red/.blue above.
+   PT: #scroller -- prova os defaults de scrollbar da UA-stylesheet (v0.6.0) sem NENHUMA regra
+       específica de scrollbar autorada aqui: border-box 100x50, overflow-y:auto, contendo um
+       .filler de 200px de altura -- força uma scrollbar vertical. Mesma intenção "deve depender
+       SOMENTE do default embutido do glintfx" do .red/.blue acima. */
+#scroller {
+  display: block; position: absolute;
+  left: 20px; top: 90px; width: 100px; height: 50px;
+  overflow-y: auto;
+  background-color: #101010;
+}
+.filler { height: 200px; }

@@ -5,11 +5,19 @@
 //     stack -- their row ranges are DISJOINT. Order-agnostic (doesn't assert which one
 //     is "on top"): disjointness alone is the proof, robust to either glReadPixels row
 //     convention.
+//     v0.6.0: also scans #scroller's rightmost strip for the UA-stylesheet's scrollbar
+//     defaults (scrollbarvertical/slidertrack/sliderbar/sliderarrowdec/sliderarrowinc) --
+//     WITHOUT them the scrollbar is zero-size (see ua_stylesheet.hpp's doc-comment), so this
+//     is a real regression guard, not a decorative addition.
 // PT: Varre o framebuffer por pixels vermelho/azul puros e registra a faixa de linhas.
 //     Se os 2 divs são inline (bug de hoje, sem UA-stylesheet), compartilham a mesma
 //     line box -- as faixas de linha SE SOBREPÕEM. Se são block (corrigido por T1),
 //     empilham -- as faixas ficam DISJUNTAS. Não assume qual fica "em cima": a
 //     disjunção sozinha é a prova, robusta a qualquer convenção de linha do glReadPixels.
+//     v0.6.0: também varre a faixa mais à direita do #scroller pelos defaults de scrollbar
+//     da UA-stylesheet (scrollbarvertical/slidertrack/sliderbar/sliderarrowdec/
+//     sliderarrowinc) -- SEM eles a scrollbar tem tamanho zero (ver o doc-comment de
+//     ua_stylesheet.hpp), então isto é um guard de regressão de verdade, não um adorno.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
@@ -38,6 +46,39 @@ static RowRange scan(const std::vector<unsigned char>& px, int w, int h,
       if (pred(p)) { if (r.min_row < 0) r.min_row = row; r.max_row = row; ++r.count; }
     }
   return r;
+}
+
+// EN: v0.6.0 -- scrollbar-default coverage. #scroller's own background-color is #101010 (~16,16,
+//     16, same as body); the UA-stylesheet's scrollbar rules (scrollbarvertical/slidertrack/
+//     sliderbar/sliderarrowdec/sliderarrowinc) blend translucent WHITE (alpha 0x20/0x40/0x80)
+//     over that base -- the darkest of the three (slidertrack, alpha 0x20 = 12.5%) already
+//     resolves to ~46 per channel (16*0.875 + 255*0.125), well above any anti-aliasing noise on
+//     the plain #101010 background. Without the UA scrollbar defaults (WidgetScroll zero-sizes
+//     the track/arrows when no RCSS-authored height/width resolves -- see ua_stylesheet.hpp's
+//     doc-comment), NO pixel in this strip would ever cross this threshold.
+// PT: v0.6.0 -- cobertura dos defaults de scrollbar. O background-color próprio do #scroller é
+//     #101010 (~16,16,16, igual ao body); as regras de scrollbar da UA-stylesheet
+//     (scrollbarvertical/slidertrack/sliderbar/sliderarrowdec/sliderarrowinc) misturam BRANCO
+//     translúcido (alpha 0x20/0x40/0x80) sobre essa base -- a mais escura das três (slidertrack,
+//     alpha 0x20 = 12,5%) já resolve para ~46 por canal (16*0,875 + 255*0,125), bem acima de
+//     qualquer ruído de anti-aliasing sobre o fundo #101010 puro. Sem os defaults de scrollbar da
+//     UA (o WidgetScroll zera o tamanho de track/setas quando nenhuma altura/largura autorada em
+//     RCSS resolve -- ver o doc-comment de ua_stylesheet.hpp), NENHUM pixel nesta faixa
+//     cruzaria este limiar.
+static bool is_scrollbar_tint(const unsigned char* p) {
+  return p[0] > 35 && p[1] > 35 && p[2] > 35;
+}
+
+static size_t scan_col_strip(const std::vector<unsigned char>& px, int w, int h,
+                              int x0, int x1, int y0, int y1,
+                              bool (*pred)(const unsigned char*)) {
+  size_t count = 0;
+  for (int row = y0; row < y1 && row < h; ++row)
+    for (int col = x0; col < x1 && col < w; ++col) {
+      const unsigned char* p = &px[(size_t)(row * w + col) * 3];
+      if (pred(p)) ++count;
+    }
+  return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +140,30 @@ int main() {
         "(red=[%d,%d], blue=[%d,%d])\n",
         red.min_row, red.max_row, blue.min_row, blue.max_row);
     return 4;
+  }
+
+  // ---------------------------------------------------------------------------
+  // v0.6.0 -- scrollbar-default coverage: #scroller is authored at document-space (top-down)
+  // border-box (20,90)-(120,140) (see ua_stylesheet_scene.rcss). glReadPixels' row 0 is the
+  // window BOTTOM (well-defined convention, same as glViewport -- confirmed and exercised
+  // already by viewport_origin_sanity.cpp), so document-space rows [90,140) map to GL-space rows
+  // [H-140, H-90) = [20,70). The scrollbar (UA default width 10dp) occupies the rightmost 10
+  // document-space columns of the border-box, [110,120) -- columns need no flip (unambiguous,
+  // same reasoning as viewport_origin_sanity.cpp's column scan).
+  // ---------------------------------------------------------------------------
+  const int scrollbar_x0 = 108, scrollbar_x1 = 121;
+  const int scrollbar_y0 = H - 140, scrollbar_y1 = H - 90;
+  const size_t scrollbar_tint_count =
+      scan_col_strip(px, W, H, scrollbar_x0, scrollbar_x1, scrollbar_y0, scrollbar_y1,
+                     is_scrollbar_tint);
+  std::printf("ua_stylesheet_sanity: scrollbar tint pixels in strip=%zu (min 150)\n",
+              scrollbar_tint_count);
+  if (scrollbar_tint_count < 150) {
+    std::fprintf(stderr,
+        "ua_stylesheet_sanity FAIL: #scroller's vertical scrollbar did not render "
+        "(tint pixels=%zu, mínimo 150) -- UA-stylesheet scrollbar defaults missing/broken\n",
+        scrollbar_tint_count);
+    return 5;
   }
 
   std::puts("ua_stylesheet_sanity: PASS");

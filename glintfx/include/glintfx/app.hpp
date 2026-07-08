@@ -176,6 +176,32 @@ public:
   //     Paridade com UiLayer::set_click_info_callback (mesma assinatura).
   void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
+  // EN: Register a scroll callback -- reports the id of the ancestor-or-self nearest to the
+  //     element whose OWN scroll offset just changed ("" if none), one call PER SOURCE OF
+  //     SCROLLING glintfx does not distinguish: wheel (one call per animated smoothscroll step,
+  //     not just at rest), native scrollbar thumb/track/arrow interaction, and the programmatic
+  //     scroll_element_into_view()/set_element_scroll_top() calls below. glintfx does NOT play
+  //     audio itself -- this is the hook a host uses to, e.g., trigger its own scroll sound.
+  //     Deduped against the CURRENT offset by RmlUi itself: setting the same scroll position
+  //     twice in a row does not re-fire. No numeric offset is carried by this callback (the
+  //     underlying Rml::EventId::Scroll event itself carries none) -- call
+  //     get_element_scroll_top(id) from inside the callback if the value is needed. Parity with
+  //     UiLayer::set_scroll_callback (same signature). Null/empty callback is a safe no-op. No
+  //     ordering constraint versus load().
+  // PT: Registra um callback de rolagem -- reporta o id do ancestral-ou-o-próprio mais próximo
+  //     do elemento cujo PRÓPRIO offset de rolagem acabou de mudar ("" se nenhum), uma chamada
+  //     POR FONTE DE ROLAGEM que a glintfx não distingue: wheel (uma chamada por passo animado
+  //     do smoothscroll, não só ao assentar), interação com a scrollbar nativa (thumb/track/
+  //     setas), e as chamadas programáticas scroll_element_into_view()/set_element_scroll_top()
+  //     abaixo. A glintfx NÃO toca áudio -- este é o gancho que um host usa para, ex., disparar
+  //     seu próprio som de rolagem. Deduplicado contra o offset CORRENTE pelo próprio RmlUi:
+  //     definir a mesma posição de rolagem duas vezes seguidas não redispara. Nenhum offset
+  //     numérico é carregado por este callback (o próprio evento Rml::EventId::Scroll
+  //     subjacente não carrega nenhum) -- chame get_element_scroll_top(id) de dentro do callback
+  //     se o valor for necessário. Paridade com UiLayer::set_scroll_callback (mesma assinatura).
+  //     Callback nulo/vazio é no-op seguro. Sem restrição de ordem vs. load().
+  void set_scroll_callback(std::function<void(const char* element_id)> cb);
+
   // EN: Query the border-box geometry of an element by id. Coordinate space: window physical
   //     pixels, top-left origin, y-down -- App owns the whole window, so there is no sub-
   //     viewport offset to translate (unlike UiLayer, whose set_viewport(x,y,w,h,target_h)

@@ -106,6 +106,56 @@ public:
   //     de ordem vs. load(); seguro chamar antes ou depois.
   void set_click_info_callback(std::function<void(const ClickInfo&)> cb);
 
+  // EN: Register a scroll callback (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- reports the id of the
+  //     ancestor-or-self nearest to the element whose OWN scroll offset just changed, same
+  //     ancestor-walk-to-nearest-id rule as set_click_callback ("" if none). Fires for EVERY
+  //     source of scrolling glintfx does not itself distinguish: wheel (via
+  //     Rml::Context::ProcessMouseWheel's smoothscroll animation, one Scroll event per animated
+  //     step, NOT just at rest), native scrollbar thumb drag/track click/arrow click
+  //     (Source/Core/WidgetScroll.cpp -- all funnel through Element::SetScrollTop/SetScrollLeft),
+  //     and this library's own scroll_element_into_view()/set_element_scroll_top(). Confirmed by
+  //     reading the pinned RmlUi source (Source/Core/Element.cpp: SetScrollTop/SetScrollLeft each
+  //     do `if (new_offset != scroll_offset.*) { ...; DispatchEvent(EventId::Scroll,
+  //     Dictionary()); }` -- deduped against the CURRENT offset, so setting the same value twice
+  //     fires only once; and Source/Core/EventSpecification.cpp:39 registers EventId::Scroll with
+  //     bubbles=true, target = the scrolled element itself, dispatched WITH AN EMPTY Dictionary
+  //     (no wheel-delta/position parameters carried on this event -- unlike Mousescroll). A host
+  //     that needs the numeric offset reads it back via the already-existing
+  //     get_element_scroll_top(id) inside the callback -- kept as a SEPARATE call (not bundled
+  //     into this callback's signature) because the event itself carries no such payload, mirrors
+  //     set_click_callback's minimal (id-only) shape rather than set_click_info_callback's richer
+  //     one (there is no button/coordinate/double-click analogue for a scroll). No ordering
+  //     constraint versus load(): the listener reads the CURRENT callback at scroll time, not at
+  //     attach time. A null/empty std::function is a safe no-op (ProcessEvent checks `!cb_ ||
+  //     !*cb_` before touching the target element, same guard as ClickEventListener). Safe to
+  //     call before or after load(); no-op before init() (impl_ still null).
+  // PT: Registra um callback de rolagem (desdobramento do GLINTFX-SCROLL-1, v0.6.0) -- reporta o
+  //     id do ancestral-ou-o-próprio mais próximo do elemento cujo PRÓPRIO offset de rolagem
+  //     acabou de mudar, mesma regra de subida de ancestral até o id mais próximo do
+  //     set_click_callback ("" se nenhum). Dispara para TODA fonte de rolagem que a glintfx não
+  //     distingue internamente: wheel (via a animação smoothscroll de
+  //     Rml::Context::ProcessMouseWheel, um evento Scroll por passo animado, NÃO só ao
+  //     assentar), arrastar/clicar na scrollbar nativa (thumb/track/setas --
+  //     Source/Core/WidgetScroll.cpp -- todos convergem em Element::SetScrollTop/SetScrollLeft),
+  //     e o scroll_element_into_view()/set_element_scroll_top() da própria biblioteca.
+  //     Confirmado lendo o source pinado do RmlUi (Source/Core/Element.cpp: SetScrollTop/
+  //     SetScrollLeft cada um faz `if (new_offset != scroll_offset.*) { ...;
+  //     DispatchEvent(EventId::Scroll, Dictionary()); }` -- deduplicado contra o offset CORRENTE,
+  //     então definir o mesmo valor duas vezes dispara só uma vez; e
+  //     Source/Core/EventSpecification.cpp:39 registra EventId::Scroll com bubbles=true, alvo = o
+  //     próprio elemento rolado, despachado com um Dictionary VAZIO (nenhum parâmetro de
+  //     delta-de-wheel/posição carregado neste evento -- diferente do Mousescroll). Um host que
+  //     precisa do offset numérico o lê de volta via o já existente get_element_scroll_top(id)
+  //     dentro do callback -- mantido como chamada SEPARADA (não empacotado na assinatura deste
+  //     callback) porque o próprio evento não carrega esse payload, espelha a forma mínima
+  //     (só-id) do set_click_callback em vez da mais rica do set_click_info_callback (não há
+  //     análogo de botão/coordenada/duplo-clique para uma rolagem). Sem restrição de ordem vs.
+  //     load(): o listener lê o callback CORRENTE no momento da rolagem, não no attach. Um
+  //     std::function nulo/vazio é um no-op seguro (ProcessEvent checa `!cb_ || !*cb_` antes de
+  //     tocar o elemento-alvo, mesmo guard do ClickEventListener). Seguro chamar antes ou depois
+  //     de load(); no-op antes de init() (impl_ ainda nulo).
+  void set_scroll_callback(std::function<void(const char* id)> cb);
+
   // EN: Query the border-box geometry of an element by id, in the LATEST loaded document's
   //     own content-local space (top-left origin, y-down, offset-free -- UiLayer/App translate
   //     to window-space at the public boundary). Returns false if no document is loaded or the

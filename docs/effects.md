@@ -134,6 +134,140 @@ Syntax notes (see `decorator_polygon.cpp`'s `ParseFill()` for the exact grammar)
 
 > **Important:** the `mask` effect requires a **real GPU**. Under Mesa/llvmpipe (the software renderer used in headless CI) the dual-sampler mask shader crashes (`free(): invalid next size`). This is a Mesa bug, not a glintfx bug. The headless test variant omits the mask card.
 
+### How-to: style scrollbars
+
+RmlUi generates scrollbars automatically whenever an element's content overflows its box and the relevant `overflow` property computes to `auto` or `scroll`. There is **no separate C++ API for scrollbar appearance** — you style the elements RmlUi creates internally, the same way you style anything else, with ordinary RCSS selectors. No new glintfx code is involved.
+
+**Enabling scroll:**
+
+| Property | Effect |
+| :--- | :--- |
+| `overflow-y: auto;` | Vertical scrollbar only |
+| `overflow-x: auto;` | Horizontal scrollbar only |
+| `overflow: auto;` | Both axes (shorthand for `overflow-x` + `overflow-y`) |
+
+Accepted keywords: `visible` (default — no clipping, no scrollbar), `hidden` (clips content, no scrollbar), `auto` (scrollbar appears only when content actually overflows the box), `scroll` (scrollbar is always shown, even when content fits).
+
+```css
+.menu-list {
+    display: block;
+    height: 320dp;      /* a bounded box -- overflow only triggers past this size */
+    overflow-y: auto;   /* vertical scrollbar when content is taller than the box */
+}
+```
+
+**The scrollbar elements.** RmlUi appends non-DOM child elements to the scrolling element; reach them with an ordinary descendant selector off your own class:
+
+| Element (RCSS tag) | Role |
+| :--- | :--- |
+| `scrollbarvertical` | The whole vertical scrollbar assembly (track + thumb + 2 arrows) |
+| `scrollbarhorizontal` | The whole horizontal scrollbar assembly |
+| `slidertrack` | The channel the thumb slides along |
+| `sliderbar` | The thumb — the part you drag |
+| `sliderarrowdec` | The "decrement" arrow button (scrolls up for vertical, left for horizontal) |
+| `sliderarrowinc` | The "increment" arrow button (scrolls down for vertical, right for horizontal) |
+| `scrollbarcorner` | The small square where a vertical and a horizontal scrollbar meet (only relevant when both axes overflow at once) |
+
+**Bar width (vertical) / height (horizontal) — the scrollbar's own thickness:**
+
+```css
+.menu-list scrollbarvertical   { width: 14dp; }   /* thickness of a vertical bar   */
+.menu-list scrollbarhorizontal { height: 14dp; }  /* thickness of a horizontal bar */
+```
+
+**Thumb color:** `background-color` (or `background`/`decorator` for a gradient or an image) on `sliderbar`. Pseudo-classes work exactly like on any other element.
+
+```css
+.menu-list scrollbarvertical sliderbar {
+    background-color: #5fd0ffcc;
+    border-radius: 4dp;
+}
+.menu-list scrollbarvertical sliderbar:hover {
+    background-color: #5fd0ffff;
+}
+```
+
+**Arrow colors:** `background-color`/`decorator` on `sliderarrowdec` and `sliderarrowinc`. They're two independent elements — one at each end of the track — so style them separately if you want, say, different icons.
+
+```css
+.menu-list scrollbarvertical sliderarrowdec,
+.menu-list scrollbarvertical sliderarrowinc {
+    height: 14dp;
+    background-color: #5fd0ff40;
+}
+```
+
+**Fixed-size thumb:** set an explicit `height` on `sliderbar` for a vertical bar (`width` for a horizontal bar). Any explicit length opts the thumb **out** of RmlUi's automatic proportional sizing — it stays exactly that size no matter how much content overflows.
+
+```css
+.fixed-thumb scrollbarvertical sliderbar {
+    height: 40dp;   /* always 40dp tall, regardless of content length */
+}
+```
+
+**Min/max thumb size (still proportional, just clamped):** `min-height`/`max-height` on `sliderbar` (vertical) or `min-width`/`max-width` (horizontal) bound the *proportional* size RmlUi computes — the thumb keeps shrinking and growing with content length, just never below `min-*` or above `max-*`. This only has an effect while `height`/`width` is left at its default (`auto`) — do not combine with an explicit fixed size above.
+
+```css
+.menu-list scrollbarvertical sliderbar {
+    min-height: 24dp;   /* stays big enough to grab even in a very long list */
+    max-height: 120dp;  /* never balloons to dominate a short list */
+}
+```
+
+**Proportional auto-size (the default — nothing to configure):** leave `height`/`width` and `min-*`/`max-*` unset on `sliderbar` and RmlUi automatically sizes the thumb proportional to `visible content / total content` (the same math a browser scrollbar uses), recomputed every time the content or box size changes. This is what you get for free the moment you enable a scrollbar with `overflow`, with zero extra RCSS.
+
+**Track:** `background-color`/`decorator`/`border` on `slidertrack`.
+
+```css
+.menu-list scrollbarvertical slidertrack {
+    background-color: #1a1a2e80;
+    border-radius: 4dp;
+}
+```
+
+**Consolidated example — a game menu scrollbar:**
+
+```css
+.menu-list {
+    display: block;
+    height: 320dp;
+    overflow-y: auto;
+}
+
+.menu-list scrollbarvertical {
+    width: 14dp;
+}
+
+.menu-list scrollbarvertical slidertrack {
+    background-color: #1a1a2e80;
+    border-radius: 4dp;
+}
+
+.menu-list scrollbarvertical sliderbar {
+    background-color: #5fd0ffcc;   /* proportional thumb: no height set -> auto */
+    border-radius: 4dp;
+    min-height: 24dp;              /* clamp: never too small to grab      */
+    max-height: 120dp;             /* clamp: never dominates a short list */
+}
+.menu-list scrollbarvertical sliderbar:hover {
+    background-color: #5fd0ffff;
+}
+
+.menu-list scrollbarvertical sliderarrowdec,
+.menu-list scrollbarvertical sliderarrowinc {
+    height: 14dp;
+    background-color: #5fd0ff40;
+}
+.menu-list scrollbarvertical sliderarrowdec:hover,
+.menu-list scrollbarvertical sliderarrowinc:hover {
+    background-color: #5fd0ff80;
+}
+```
+
+Horizontal scrollbars follow the exact same pattern under `scrollbarhorizontal`, swapping `height`⇄`width` on `sliderbar` (the thumb's "length" axis matches the scroll axis: `height`/`min-height`/`max-height` for vertical, `width`/`min-width`/`max-width` for horizontal).
+
+> Scroll **sound** (the audio cue played when the user scrolls) is a host-side concern set via `set_scroll_callback` (v0.6.0) — it is not part of RCSS styling; see the CHANGELOG for that API.
+
 ### Putting it together
 
 The showcase uses two sections: a near-black one for the glow and gradient cards (dark background makes the halo unmistakable), and a colourful gradient section for the blur and mask cards (so backdrop-blur has something to smear and the mask fades over rich content). Read [`../glintfx/demos/showcase/showcase.rcss`](../glintfx/demos/showcase/showcase.rcss) and [`showcase.rml`](../glintfx/demos/showcase/showcase.rml) for the full, working layout.
@@ -274,6 +408,140 @@ Notas de sintaxe (ver `ParseFill()` em `decorator_polygon.cpp` para a gramática
 ```
 
 > **Importante:** o efeito `mask` exige uma **GPU real**. Sob Mesa/llvmpipe (o renderer de software usado em CI headless) o shader de mask dual-sampler crasha (`free(): invalid next size`). Isso é um bug do Mesa, não do glintfx. A variante de teste headless omite o card mask.
+
+### How-to: estilizar barras de rolagem (scrollbars)
+
+O RmlUi gera barras de rolagem automaticamente sempre que o conteúdo de um elemento excede sua caixa e a propriedade `overflow` relevante computa para `auto` ou `scroll`. **Não há API C++ separada para a aparência da scrollbar** — você estiliza os elementos que o RmlUi cria internamente, do mesmo jeito que estiliza qualquer outra coisa, com seletores RCSS comuns. Nenhum código novo do glintfx está envolvido.
+
+**Habilitando a rolagem:**
+
+| Propriedade | Efeito |
+| :--- | :--- |
+| `overflow-y: auto;` | Só barra vertical |
+| `overflow-x: auto;` | Só barra horizontal |
+| `overflow: auto;` | Ambos os eixos (shorthand para `overflow-x` + `overflow-y`) |
+
+Palavras-chave aceitas: `visible` (padrão -- sem clip, sem barra), `hidden` (recorta o conteúdo, sem barra), `auto` (a barra aparece só quando o conteúdo realmente excede a caixa), `scroll` (a barra é sempre exibida, mesmo quando o conteúdo cabe).
+
+```css
+.menu-list {
+    display: block;
+    height: 320dp;      /* uma caixa com altura fixa -- o overflow só dispara acima disso */
+    overflow-y: auto;   /* barra vertical quando o conteúdo for mais alto que a caixa */
+}
+```
+
+**Os elementos da scrollbar.** O RmlUi anexa elementos filhos não-DOM ao elemento rolável; alcance-os com um seletor descendente comum a partir da sua própria classe:
+
+| Elemento (tag RCSS) | Papel |
+| :--- | :--- |
+| `scrollbarvertical` | O conjunto inteiro da barra vertical (trilho + thumb + 2 setas) |
+| `scrollbarhorizontal` | O conjunto inteiro da barra horizontal |
+| `slidertrack` | O canal por onde o thumb desliza |
+| `sliderbar` | O thumb -- a parte que você arrasta |
+| `sliderarrowdec` | O botão de seta "decremento" (rola pra cima na vertical, pra esquerda na horizontal) |
+| `sliderarrowinc` | O botão de seta "incremento" (rola pra baixo na vertical, pra direita na horizontal) |
+| `scrollbarcorner` | O quadradinho onde uma barra vertical e uma horizontal se encontram (só relevante quando os dois eixos excedem ao mesmo tempo) |
+
+**Largura da barra (vertical) / altura da barra (horizontal) -- a espessura da própria scrollbar:**
+
+```css
+.menu-list scrollbarvertical   { width: 14dp; }   /* espessura de uma barra vertical   */
+.menu-list scrollbarhorizontal { height: 14dp; }  /* espessura de uma barra horizontal */
+```
+
+**Cor da barra (o thumb):** `background-color` (ou `background`/`decorator` para gradiente ou imagem) no `sliderbar`. Pseudo-classes funcionam exatamente como em qualquer outro elemento.
+
+```css
+.menu-list scrollbarvertical sliderbar {
+    background-color: #5fd0ffcc;
+    border-radius: 4dp;
+}
+.menu-list scrollbarvertical sliderbar:hover {
+    background-color: #5fd0ffff;
+}
+```
+
+**Cor das pontas (as setas):** `background-color`/`decorator` em `sliderarrowdec` e `sliderarrowinc`. São dois elementos independentes -- um em cada ponta do trilho -- então estilize-os separadamente se quiser, por exemplo, ícones diferentes.
+
+```css
+.menu-list scrollbarvertical sliderarrowdec,
+.menu-list scrollbarvertical sliderarrowinc {
+    height: 14dp;
+    background-color: #5fd0ff40;
+}
+```
+
+**Tamanho fixo do thumb:** defina um `height` explícito no `sliderbar` para uma barra vertical (`width` para uma barra horizontal). Qualquer comprimento explícito tira o thumb do dimensionamento proporcional automático do RmlUi -- ele fica exatamente naquele tamanho, não importa quanto o conteúdo exceda.
+
+```css
+.fixed-thumb scrollbarvertical sliderbar {
+    height: 40dp;   /* sempre 40dp de altura, independente do tamanho do conteúdo */
+}
+```
+
+**Tamanho mín/máx do thumb (ainda proporcional, só limitado):** `min-height`/`max-height` no `sliderbar` (vertical) ou `min-width`/`max-width` (horizontal) limitam o tamanho *proporcional* que o RmlUi calcula -- o thumb continua encolhendo e crescendo com o tamanho do conteúdo, só nunca abaixo de `min-*` nem acima de `max-*`. Isso só tem efeito enquanto `height`/`width` fica no padrão (`auto`) -- não combine com um tamanho fixo explícito acima.
+
+```css
+.menu-list scrollbarvertical sliderbar {
+    min-height: 24dp;   /* fica grande o bastante pra agarrar mesmo numa lista bem longa */
+    max-height: 120dp;  /* nunca infla a ponto de dominar uma lista curta */
+}
+```
+
+**Tamanho proporcional automático (o padrão -- nada para configurar):** deixe `height`/`width` e `min-*`/`max-*` sem definir no `sliderbar` e o RmlUi dimensiona o thumb automaticamente proporcional a `conteúdo visível / conteúdo total` (a mesma matemática de uma scrollbar de navegador), recalculado toda vez que o conteúdo ou o tamanho da caixa mudam. É isso que você ganha de graça no momento em que habilita uma scrollbar com `overflow`, sem RCSS extra nenhum.
+
+**Trilho:** `background-color`/`decorator`/`border` no `slidertrack`.
+
+```css
+.menu-list scrollbarvertical slidertrack {
+    background-color: #1a1a2e80;
+    border-radius: 4dp;
+}
+```
+
+**Exemplo consolidado -- uma scrollbar de menu de jogo:**
+
+```css
+.menu-list {
+    display: block;
+    height: 320dp;
+    overflow-y: auto;
+}
+
+.menu-list scrollbarvertical {
+    width: 14dp;
+}
+
+.menu-list scrollbarvertical slidertrack {
+    background-color: #1a1a2e80;
+    border-radius: 4dp;
+}
+
+.menu-list scrollbarvertical sliderbar {
+    background-color: #5fd0ffcc;   /* thumb proporcional: sem height definido -> auto */
+    border-radius: 4dp;
+    min-height: 24dp;              /* limite: nunca pequeno demais pra agarrar   */
+    max-height: 120dp;             /* limite: nunca domina uma lista curta       */
+}
+.menu-list scrollbarvertical sliderbar:hover {
+    background-color: #5fd0ffff;
+}
+
+.menu-list scrollbarvertical sliderarrowdec,
+.menu-list scrollbarvertical sliderarrowinc {
+    height: 14dp;
+    background-color: #5fd0ff40;
+}
+.menu-list scrollbarvertical sliderarrowdec:hover,
+.menu-list scrollbarvertical sliderarrowinc:hover {
+    background-color: #5fd0ff80;
+}
+```
+
+Barras horizontais seguem exatamente o mesmo padrão sob `scrollbarhorizontal`, trocando `height`⇄`width` no `sliderbar` (o eixo de "comprimento" do thumb acompanha o eixo de rolagem: `height`/`min-height`/`max-height` na vertical, `width`/`min-width`/`max-width` na horizontal).
+
+> O **som** da rolagem (o efeito sonoro tocado quando o usuário rola) é responsabilidade do host, configurado via `set_scroll_callback` (v0.6.0) -- não faz parte da estilização RCSS; ver o CHANGELOG para essa API.
 
 ### Juntando tudo
 

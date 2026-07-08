@@ -445,6 +445,64 @@ ui.set_click_info_callback([](const glintfx::ClickInfo& info) {
 
 Verificado por `click_callback_sanity` (clique simples; a ordem exata dos 4 eventos de duplo-clique; paridade de clique direito/meio com `button`/`double_click`; não-disparo em drag-off; não-regressão do canal só-id).
 
+## 14. Scroll callback (v0.6.0) / Callback de rolagem (v0.6.0)
+
+**EN:** `set_scroll_callback(std::function<void(const char* id)>)` on both `UiLayer` and `App` -- purely additive follow-up to section 12. Wraps RmlUi's native `Rml::EventId::Scroll`, fired whenever an element's OWN scroll offset changes.
+
+- **Fires from three sources**, none distinguished from one another: mouse-wheel scrolling (section 12), dragging/clicking the native scrollbar (thumb, track, or arrows -- section "How-to: style scrollbars" in `docs/effects.md` for how those elements look), and the programmatic `scroll_element_into_view()`/`set_element_scroll_top()` (also section 12).
+- **id-only, no offset payload.** Reports the id of the nearest ancestor-or-self of the scrolled element (`""` if none) -- same lifetime contract as `set_click_callback`'s `element_id` (valid only for the duration of the call). The underlying `Rml::EventId::Scroll` carries no numeric data, so if the offset is needed, call `get_element_scroll_top(id)` (section 12) from inside the callback.
+- **Deduplicated by RmlUi itself** against the element's current offset: setting the same scroll position twice in a row does not re-fire. Null/empty callback is a safe no-op; a reentrancy guard (the registered functor is copied before invocation) protects against the callback replacing itself mid-call.
+- **glintfx does not play audio.** This callback is the intended hook for a host to trigger its own scroll sound effect -- see the example below.
+
+```cpp
+// C++ -- play a scroll sound, debounced per-gesture on the host side
+ui.set_scroll_callback([](const char* id) {
+  static std::string last_id;
+  if (id != last_id) {          // coarse debounce: only on a NEW element scrolling
+    last_id = id;
+    audio_play("scroll.wav");
+  }
+});
+```
+
+**Two gotchas:**
+
+**(a) Multiple fires per wheel gesture.** Wheel scrolling in RmlUi is a smoothscroll animation: the callback fires **once per animated step**, not once when the scroll settles. A host that wants exactly one sound per wheel gesture must debounce/coalesce on its own side (as in the example above), not assume one call per user action.
+
+**(b) Recursion risk with non-convergent writes.** `scroll_element_into_view()` and `set_element_scroll_top()` (section 12) are **synchronous** -- they dispatch the underlying `Scroll` event on the SAME call stack before returning, which re-enters this callback. Calling either of them again from inside the callback with a value that does **not converge** to the element's current offset (e.g. a dynamic clamp/snap that always computes something different from what it just read) recurses without bound -> stack overflow. It is safe to call them from inside the callback as long as the written value converges -- RmlUi's own dedup (same offset twice does not re-fire) breaks the cycle, typically within 1-2 iterations for a constant target.
+
+`set_click_callback`/`set_click_info_callback` (section 10 / section 13) are untouched and keep firing independently -- `set_scroll_callback` is a separate, additive channel.
+
+Verified by `scroll_sanity` (case E: fires with the scrolled element's id from wheel scrolling and from the programmatic `set_element_scroll_top`, dedup on a same-value set, and a safe no-op after clearing the callback; case E5: a dedicated case for the convergent-recursion pattern in gotcha (b), asserting it settles in a bounded number of iterations rather than overflowing -- native scrollbar thumb/track/arrow interaction dispatches the same `Rml::EventId::Scroll` internally but is not separately simulated in this test); see `CHANGELOG.md` v0.6.0 for the full write-up. Scrollbar RCSS *appearance* (thickness, thumb/arrow color, sizing) is a styling concern, not this callback -- see `docs/effects.md`'s "How-to: style scrollbars".
+
+**PT:** `set_scroll_callback(std::function<void(const char* id)>)` em `UiLayer` e `App` -- desdobramento puramente aditivo da seção 12. Encapsula o evento nativo `Rml::EventId::Scroll` do RmlUi, disparado sempre que o offset de rolagem PRÓPRIO de um elemento muda.
+
+- **Dispara de três fontes**, nenhuma distinguida da outra: rolagem por wheel do mouse (seção 12), arrastar/clicar a scrollbar nativa (thumb, trilho ou setas -- ver a seção "How-to: estilizar barras de rolagem (scrollbars)" em `docs/effects.md` para a aparência desses elementos), e as chamadas programáticas `scroll_element_into_view()`/`set_element_scroll_top()` (também seção 12).
+- **Só-id, sem payload de offset.** Reporta o id do ancestral-ou-o-próprio mais próximo do elemento rolado (`""` se nenhum) -- mesmo contrato de lifetime do `element_id` de `set_click_callback` (válido só durante a chamada). O `Rml::EventId::Scroll` subjacente não carrega dado numérico nenhum, então, se o offset for necessário, chame `get_element_scroll_top(id)` (seção 12) de dentro do callback.
+- **Deduplicado pelo próprio RmlUi** contra o offset corrente do elemento: definir a mesma posição de rolagem duas vezes seguidas não redispara. Callback nulo/vazio é no-op seguro; uma guarda de reentrância (o functor registrado é copiado antes de invocar) protege contra o callback se substituir no meio da própria chamada.
+- **O glintfx não toca áudio.** Este callback é o gancho pretendido para um host disparar seu próprio efeito sonoro de rolagem -- ver o exemplo abaixo.
+
+```cpp
+// C++ -- toca um som de rolagem, debounced por-gesto do lado do host
+ui.set_scroll_callback([](const char* id) {
+  static std::string last_id;
+  if (id != last_id) {          // debounce grosseiro: só quando um elemento NOVO rola
+    last_id = id;
+    audio_play("scroll.wav");
+  }
+});
+```
+
+**Duas pegadinhas:**
+
+**(a) Múltiplos disparos por gesto de wheel.** A rolagem por wheel no RmlUi é uma animação de smoothscroll: o callback dispara **uma vez por passo animado**, não uma vez quando a rolagem assenta. Um host que quer exatamente um som por gesto de wheel precisa debounce/coalescer do próprio lado (como no exemplo acima), não assumir uma chamada por ação do usuário.
+
+**(b) Risco de recursão com escritas não-convergentes.** `scroll_element_into_view()` e `set_element_scroll_top()` (seção 12) são **síncronos** -- despacham o evento `Scroll` subjacente na MESMA pilha de chamada antes de retornar, o que reentra neste callback. Chamar qualquer um deles novamente de dentro do callback com um valor que NÃO converge para o offset atual do elemento (ex.: um clamp/snap dinâmico que sempre calcula algo diferente do que acabou de ler) recursa sem limite -> stack overflow. É seguro chamá-los de dentro do callback desde que o valor escrito convirja -- o próprio dedup do RmlUi (mesmo offset duas vezes não redispara) quebra o ciclo, tipicamente em 1-2 iterações para um alvo constante.
+
+`set_click_callback`/`set_click_info_callback` (seção 10 / seção 13) seguem intactos e continuam disparando independentemente -- `set_scroll_callback` é um canal separado, aditivo.
+
+Verificado por `scroll_sanity` (caso E: dispara com o id do elemento rolado a partir de wheel e do `set_element_scroll_top` programático, dedup num set de mesmo valor, e no-op seguro após limpar o callback; caso E5: um caso dedicado para o padrão de recursão convergente da pegadinha (b), afirmando que ela assenta num número limitado de iterações em vez de estourar a pilha -- a interação com thumb/trilho/setas da scrollbar nativa despacha o mesmo `Rml::EventId::Scroll` internamente mas não é simulada separadamente neste teste); ver `CHANGELOG.md` v0.6.0 para a descrição completa. A *aparência* RCSS da scrollbar (espessura, cor de thumb/setas, dimensionamento) é uma questão de estilização, não deste callback -- ver "How-to: estilizar barras de rolagem (scrollbars)" em `docs/effects.md`.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

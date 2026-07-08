@@ -479,6 +479,69 @@ int main() {
     return 66;
   }
 
+  // ---------------------------------------------------------------------------
+  // (E5) Recursion safety -- review v0.6.0 Minor #2. set_element_scroll_top() is SYNCHRONOUS
+  //      and dispatches the underlying Scroll event on the SAME call stack (confirmed above,
+  //      Element::SetScrollTop assigns scroll_offset.y BEFORE DispatchEvent), which re-enters
+  //      set_scroll_callback's handler if that handler itself calls set_element_scroll_top/
+  //      scroll_element_into_view. The doc-comment on set_scroll_callback (bootstrap.hpp,
+  //      app.hpp, ui_layer.hpp, engine.hpp) warns this recurses WITHOUT BOUND -> stack overflow
+  //      if the handler writes a value that never converges to the element's current offset.
+  //      This test proves the flip side is true and SAFE in practice, not just in theory: a
+  //      handler that always clamps to a FIXED constant (100.0f) terminates in exactly 2
+  //      invocations, not an unbounded chain -- RmlUi's own dedup inside SetScrollTop
+  //      (`new_offset != scroll_offset.y`) stops the synchronous re-entrant chain the instant
+  //      the offset stops changing:
+  //        1. set_element_scroll_top("scroller", 50.f) [external, non-matching]
+  //           -> offset 0 -> 50, DispatchEvent -> callback fires (count=1)
+  //             -> handler calls set_element_scroll_top("scroller", 100.f)
+  //                -> offset 50 -> 100, DispatchEvent -> callback fires (count=2)
+  //                  -> handler calls set_element_scroll_top("scroller", 100.f) AGAIN
+  //                     -> offset already 100 == 100 -> dedup, NO DispatchEvent, chain ends here
+  //      Deliberately NOT tested here: a handler that writes a value that keeps changing every
+  //      time (e.g. incrementing, or alternating) never hits the dedup and stack-overflows --
+  //      that would crash the test binary and hang/fail CI, so it is intentionally left
+  //      undemonstrated; the doc-comment warning is the record of that unsafe shape.
+  // ---------------------------------------------------------------------------
+  if (!ui.set_element_scroll_top("scroller", 0.f)) { std::puts("FAIL: reset scroll_top to 0 for E5"); return 67; }
+
+  int convergent_cb_count = 0;
+  ui.set_scroll_callback([&](const char* /*id*/) {
+    ++convergent_cb_count;
+    // Re-entrant by design: this executes on the SAME call stack as the Scroll event that
+    // is invoking this very callback. Safe ONLY because the written value is a FIXED
+    // constant -- see the file-header/doc-comment explanation above.
+    ui.set_element_scroll_top("scroller", 100.0f);
+  });
+
+  if (!ui.set_element_scroll_top("scroller", 50.f)) {
+    std::puts("FAIL: set_scroll_top(50) to trigger the convergent recursive handler"); return 68;
+  }
+
+  // Reaching this line at all (no crash, no hang) is part of the proof. The two assertions
+  // below additionally pin down the EXACT converged state -- both the dente for "the handler's
+  // rewrite actually took effect" and for "the recursion is bounded, not merely lucky".
+  float top_after_convergent = -1.f;
+  if (!ui.get_element_scroll_top("scroller", top_after_convergent)) {
+    std::puts("FAIL: get_scroll_top after convergent recursive handler"); return 69;
+  }
+  if (!approx(top_after_convergent, 100.f, 0.5f)) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_top=%.2f expected ~100 (handler's constant) after convergent "
+                 "recursive set_scroll_callback -- the recursive rewrite did not settle\n",
+                 top_after_convergent);
+    return 70;
+  }
+  if (convergent_cb_count != 2) {
+    std::fprintf(stderr,
+                 "FAIL: convergent_cb_count=%d expected exactly 2 (bounded recursion depth for "
+                 "a fixed-constant handler; a different count means the dedup-driven stop "
+                 "condition analyzed in the doc-comment did not hold)\n",
+                 convergent_cb_count);
+    return 71;
+  }
+  if (!ui.ok()) { std::puts("FAIL: ok() false after convergent recursive scroll callback"); return 72; }
+
   std::puts("scroll_sanity: PASS");
   return 0;
 }

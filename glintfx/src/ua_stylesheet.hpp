@@ -2,11 +2,22 @@
 // EN: Embedded User-Agent stylesheet -- 'display: block' defaults for structural elements, plus
 //     minimal usable-out-of-the-box scrollbar defaults (v0.6.0). Applied as a low-specificity
 //     base to every document by Bootstrap::load(); see that file for the merge mechanism
-//     (StyleSheetContainer::CombineStyleSheetContainer). Author rules of equal or higher
+//     (StyleSheetContainer::CombineStyleSheetContainer). Author rules of EQUAL OR HIGHER
 //     specificity always win (e.g. showcase.rcss's own explicit 'display: block' keeps working
 //     unchanged) -- AND the merge order itself (Bootstrap::load() merges the document's OWN
 //     sheet on TOP of this one, see the detailed comment there) means an author rule of EQUAL
-//     specificity to any rule below still wins, not just a strictly-higher one.
+//     specificity to any rule below still wins, not just a strictly-higher one. CAVEAT (review
+//     v0.6.0, Minor #1): "equal specificity" means equal to the SHAPE of the rule below, not to
+//     the tag being styled in isolation -- the 'display: block' rules above are single-tag
+//     selectors (RmlUi specificity ~10000 each), so a single-tag author rule ties and wins as
+//     expected, but the scrollbar rules further down are TWO-TAG COMPOUND selectors (e.g.
+//     `scrollbarvertical sliderbar`, ~20000 -- RmlUi accumulates ~10000 per tag in the selector
+//     chain, StyleSheetSelector.cpp). A single-tag author override on those elements alone (e.g.
+//     `sliderbar { background-color: red; }`, ~10000) is LOWER specificity and does NOT win. To
+//     override a scrollbar default an author must either match the same compound-tag shape
+//     (`scrollbarvertical sliderbar { ... }`) or add a class/id ancestor to unambiguously outrank
+//     it (`.scrollable scrollbarvertical sliderbar { ... }` or `#my-list scrollbarvertical
+//     sliderbar { ... }`) -- see docs/effects.md's scrollbar how-to for worked examples.
 //
 //     Scrollbar defaults (v0.6.0, GLINTFX-SCROLL-1 follow-up): investigated whether RmlUi ships
 //     any built-in default sizing/styling for the scrollbarvertical/horizontal/slidertrack/
@@ -35,11 +46,23 @@
 //     estruturais, mais defaults mínimos de scrollbar usável-de-fábrica (v0.6.0). Aplicada como
 //     base de baixa especificidade a todo documento por Bootstrap::load(); ver esse arquivo para
 //     o mecanismo de merge (StyleSheetContainer::CombineStyleSheetContainer). Regras do autor
-//     com especificidade igual ou maior sempre vencem (ex.: o 'display: block' explícito do
+//     com especificidade IGUAL OU MAIOR sempre vencem (ex.: o 'display: block' explícito do
 //     showcase.rcss segue funcionando sem mudança) -- E a própria ordem do merge (Bootstrap::
 //     load() mescla a sheet PRÓPRIA do documento POR CIMA desta aqui, ver o comentário detalhado
 //     lá) significa que uma regra do autor de especificidade IGUAL a qualquer regra abaixo ainda
-//     vence, não só uma estritamente maior.
+//     vence, não só uma estritamente maior. RESSALVA (review v0.6.0, Minor #1): "especificidade
+//     igual" quer dizer igual ao FORMATO da regra abaixo, não à tag estilizada isoladamente -- as
+//     regras de 'display: block' acima são seletores de UMA tag (especificidade ~10000 cada no
+//     RmlUi), então uma regra de autor de uma tag empata e vence como esperado, mas as regras de
+//     scrollbar mais abaixo são seletores COMPOSTOS DE DUAS TAGS (ex.: `scrollbarvertical
+//     sliderbar`, ~20000 -- o RmlUi acumula ~10000 por tag na cadeia do seletor,
+//     StyleSheetSelector.cpp). Uma sobreposição de autor de uma tag só nesses elementos (ex.:
+//     `sliderbar { background-color: red; }`, ~10000) tem especificidade MENOR e NÃO vence. Para
+//     sobrepor um default de scrollbar o autor precisa ou igualar o mesmo formato composto de tags
+//     (`scrollbarvertical sliderbar { ... }`) ou adicionar um ancestral classe/id para vencer sem
+//     ambiguidade (`.scrollable scrollbarvertical sliderbar { ... }` ou `#minha-lista
+//     scrollbarvertical sliderbar { ... }`) -- ver o how-to de scrollbar em docs/effects.md para
+//     exemplos resolvidos.
 //
 //     Defaults de scrollbar (v0.6.0, desdobramento do GLINTFX-SCROLL-1): investigado se o RmlUi
 //     embute algum default de tamanho/estilo para os tipos de elemento scrollbarvertical/

@@ -222,6 +222,15 @@ public:
   //     x/y, there is no numeric payload here to translate). Parity with App::set_scroll_callback
   //     (same signature). Null/empty callback is a safe no-op. No ordering constraint versus
   //     load().
+  //
+  //     WARNING (recursion, review v0.6.0 Minor #2): scroll_element_into_view()/
+  //     set_element_scroll_top() below are SYNCHRONOUS and dispatch the underlying Scroll event
+  //     on the SAME call stack before returning, which re-enters this callback. Calling either of
+  //     them from inside the callback with a value that does NOT converge to the element's
+  //     current offset (e.g. a badly-written dynamic clamp/snap that always writes something
+  //     different from what it just read) recurses without bound -> stack overflow. Safe as long
+  //     as the written value CONVERGES (RmlUi's own dedup -- same offset twice does not re-fire --
+  //     stops the cycle, typically in 1-2 iterations for a constant target).
   // PT: Registra um callback de rolagem -- reporta o id do ancestral-ou-o-próprio mais próximo
   //     do elemento cujo PRÓPRIO offset de rolagem acabou de mudar ("" se nenhum), uma chamada
   //     POR FONTE DE ROLAGEM que a glintfx não distingue: wheel (uma chamada por passo animado
@@ -236,6 +245,15 @@ public:
   //     id (diferente do x/y do set_click_info_callback, não há payload numérico aqui a
   //     traduzir). Paridade com App::set_scroll_callback (mesma assinatura). Callback nulo/vazio
   //     é no-op seguro. Sem restrição de ordem vs. load().
+  //
+  //     AVISO (recursão, review v0.6.0 Minor #2): scroll_element_into_view()/
+  //     set_element_scroll_top() abaixo são SÍNCRONOS e despacham o evento Scroll subjacente na
+  //     MESMA pilha de chamada antes de retornar, o que reentra neste callback. Chamar qualquer
+  //     um deles de dentro do callback com um valor que NÃO converge para o offset atual do
+  //     elemento (ex.: um clamp/snap dinâmico mal escrito que sempre escreve algo diferente do
+  //     que acabou de ler) recursa sem limite -> stack overflow. Seguro desde que o valor escrito
+  //     CONVIRJA (o dedup do próprio RmlUi -- mesmo offset duas vezes não redispara -- para o
+  //     ciclo, tipicamente em 1-2 iterações para um alvo constante).
   void set_scroll_callback(std::function<void(const char* element_id)> cb);
 
   // EN: Query the border-box geometry of an element by id. Coordinate space: window/render-

@@ -154,6 +154,29 @@ public:
   //     std::function nulo/vazio é um no-op seguro (ProcessEvent checa `!cb_ || !*cb_` antes de
   //     tocar o elemento-alvo, mesmo guard do ClickEventListener). Seguro chamar antes ou depois
   //     de load(); no-op antes de init() (impl_ ainda nulo).
+  //
+  //     WARNING (recursion, review v0.6.0 Minor #2): set_element_scroll_top/
+  //     scroll_element_into_view called SYNCHRONOUSLY dispatch EventId::Scroll on the SAME call
+  //     stack (Element::SetScrollTop -> DispatchEvent before returning), which re-enters this
+  //     callback. If the handler itself calls set_element_scroll_top/scroll_element_into_view
+  //     with a value that does NOT converge to the element's current offset (e.g. a "clamp" that
+  //     always writes something different from what it just read), it recurses without bound ->
+  //     stack overflow. It IS safe to call those methods from inside this callback as long as the
+  //     written value CONVERGES to the current offset -- RmlUi's own dedup inside
+  //     Element::SetScrollTop (`if (new_offset != scroll_offset.*) { ...; DispatchEvent(...); }`)
+  //     stops the cycle the moment the offset stops changing (typically 1-2 iterations for a
+  //     constant target, immediately for a no-op write).
+  //     AVISO (recursão, review v0.6.0 Minor #2): set_element_scroll_top/
+  //     scroll_element_into_view chamados SINCRONAMENTE despacham EventId::Scroll na MESMA pilha
+  //     de chamada (Element::SetScrollTop -> DispatchEvent antes de retornar), o que reentra
+  //     neste callback. Se o próprio handler chamar set_element_scroll_top/
+  //     scroll_element_into_view com um valor que NÃO converge para o offset atual do elemento
+  //     (ex.: um "clamp" que sempre escreve algo diferente do que acabou de ler), ele recursa sem
+  //     limite -> stack overflow. É SEGURO chamar esses métodos de dentro deste callback desde
+  //     que o valor escrito CONVIRJA para o offset atual -- o dedup do próprio RmlUi dentro de
+  //     Element::SetScrollTop (`if (new_offset != scroll_offset.*) { ...; DispatchEvent(...); }`)
+  //     para o ciclo no instante em que o offset para de mudar (tipicamente 1-2 iterações para um
+  //     alvo constante, imediato para uma escrita no-op).
   void set_scroll_callback(std::function<void(const char* id)> cb);
 
   // EN: Query the border-box geometry of an element by id, in the LATEST loaded document's

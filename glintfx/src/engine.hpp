@@ -108,12 +108,24 @@ public:
   //     translation applies -- there is none for scroll, unlike ClickInfo's x/y). See
   //     Bootstrap::set_scroll_callback for the full contract (fires on wheel, native scrollbar
   //     drag, and the programmatic scroll methods; empty/null callback is a safe no-op).
+  //     WARNING (recursion, review v0.6.0 Minor #2): calling set_element_scroll_top/
+  //     scroll_element_into_view from inside this callback with a non-convergent value (never
+  //     settles to the element's current offset) recurses without bound -> stack overflow, since
+  //     both dispatch the Scroll event synchronously on the same call stack. See
+  //     Bootstrap::set_scroll_callback's doc-comment for the full explanation and the safe
+  //     (convergent-value) pattern.
   // PT: Registra um callback de rolagem -- encaminha a Bootstrap::set_scroll_callback
   //     (desdobramento do GLINTFX-SCROLL-1, v0.6.0). Repasse direto, só-id (não há tradução de
   //     coordenada aplicável -- não existe uma pro scroll, diferente do x/y do ClickInfo). Ver
   //     Bootstrap::set_scroll_callback para o contrato completo (dispara em wheel, arraste de
   //     scrollbar nativa, e os métodos programáticos de rolagem; callback nulo/vazio é no-op
   //     seguro).
+  //     AVISO (recursão, review v0.6.0 Minor #2): chamar set_element_scroll_top/
+  //     scroll_element_into_view de dentro deste callback com um valor não-convergente (nunca
+  //     assenta no offset atual do elemento) recursa sem limite -> stack overflow, já que ambos
+  //     despacham o evento Scroll sincronamente na mesma pilha de chamada. Ver o doc-comment de
+  //     Bootstrap::set_scroll_callback para a explicação completa e o padrão seguro (valor
+  //     convergente).
   void set_scroll_callback(std::function<void(const char*)> cb);
 
   // EN: Query the border-box geometry of an element by id -- forwards to

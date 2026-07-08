@@ -168,6 +168,8 @@ Accepted keywords: `visible` (default — no clipping, no scrollbar), `hidden` (
 | `sliderarrowinc` | The "increment" arrow button (scrolls down for vertical, right for horizontal) |
 | `scrollbarcorner` | The small square where a vertical and a horizontal scrollbar meet (only relevant when both axes overflow at once) |
 
+> **Specificity gotcha (overriding glintfx's built-in scrollbar defaults):** glintfx ships minimal UA-stylesheet defaults for these elements (see `ua_stylesheet.hpp`) so a scrollbar is visible and usable even with zero authored RCSS. Those defaults use **two-tag compound selectors** (e.g. `scrollbarvertical sliderbar`), which RmlUi scores at roughly **20000 specificity** (~10000 per tag in the selector chain). A single-tag override written in isolation, like `sliderbar { background-color: red; }` (~10000), is **lower** specificity and will **not** override the default — RmlUi resolves conflicting declarations by specificity score, not by "author vs. built-in". To win, either match the same compound-tag shape (`scrollbarvertical sliderbar { ... }`, as every example on this page already does) or add a class/id ancestor to unambiguously outrank it (`.scrollable scrollbarvertical sliderbar { ... }` or `#my-list scrollbarvertical sliderbar { ... }`).
+
 **Bar width (vertical) / height (horizontal) — the scrollbar's own thickness:**
 
 ```css
@@ -442,6 +444,8 @@ Palavras-chave aceitas: `visible` (padrão -- sem clip, sem barra), `hidden` (re
 | `sliderarrowdec` | O botão de seta "decremento" (rola pra cima na vertical, pra esquerda na horizontal) |
 | `sliderarrowinc` | O botão de seta "incremento" (rola pra baixo na vertical, pra direita na horizontal) |
 | `scrollbarcorner` | O quadradinho onde uma barra vertical e uma horizontal se encontram (só relevante quando os dois eixos excedem ao mesmo tempo) |
+
+> **Pegadinha de especificidade (sobrepondo os defaults de scrollbar embutidos da glintfx):** a glintfx embarca defaults mínimos de UA-stylesheet para esses elementos (ver `ua_stylesheet.hpp`) para que uma scrollbar fique visível e usável mesmo com zero RCSS autorado. Esses defaults usam **seletores compostos de duas tags** (ex.: `scrollbarvertical sliderbar`), que o RmlUi pontua em aproximadamente **20000 de especificidade** (~10000 por tag na cadeia do seletor). Uma sobreposição de uma tag só, escrita isoladamente, como `sliderbar { background-color: red; }` (~10000), tem especificidade **menor** e **não** sobrepõe o default -- o RmlUi resolve declarações conflitantes por pontuação de especificidade, não por "autor vs. embutido". Para vencer, ou iguale o mesmo formato composto de tags (`scrollbarvertical sliderbar { ... }`, como todo exemplo desta página já faz) ou adicione um ancestral classe/id para vencer sem ambiguidade (`.scrollable scrollbarvertical sliderbar { ... }` ou `#minha-lista scrollbarvertical sliderbar { ... }`).
 
 **Largura da barra (vertical) / altura da barra (horizontal) -- a espessura da própria scrollbar:**
 

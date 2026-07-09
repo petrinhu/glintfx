@@ -46,7 +46,7 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 PROGRAM_SRCS := $(wildcard tests/*.c)
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test test-negative check-static clean run
+.PHONY: build test test-negative check-static test-mem clean run
 
 build: $(PROGRAMS)
 
@@ -252,6 +252,83 @@ check-static:
 	tools/check_spdx.sh
 	@echo "--- (d) syscall_nums.h <-> syscall_nums.inc drift ---"
 	tools/check_syscall_nums_sync.sh
+
+# EN: TST-MEM (TODO.md, W11): memory validation of the E1 allocator. Runs `valgrind --tool=
+#     memcheck` over the two gate programs that most directly exercise raw memory (test_alloc,
+#     the allocator's own suite, and test_mem, the D1 memcpy/memset/memmove/memcmp primitives
+#     the allocator is built on).
+#
+#     DOCUMENTED LIMITATION (verified empirically, not assumed -- see task report): valgrind
+#     DOES successfully instrument this freestanding/no-libc/static/no-PIE binary (confirmed: it
+#     ran clean, and separately, on an intentionally-corrupted probe that wrote 2 MiB past a
+#     16-byte allocation, it correctly reported "Invalid write of size 1 ... not stack'd,
+#     malloc'd or (recently) free'd" before the SIGSEGV). What it CANNOT do here is anything
+#     malloc/free-hook-shaped: every run's "HEAP SUMMARY" reports "0 allocs, 0 frees, 0 bytes
+#     allocated" because src/alloc.c never calls libc's malloc/free (there is no libc) -- it
+#     bump-allocates directly over raw `mmap` syscalls (src/sys_mmap.c), which valgrind does not
+#     attribute to its malloc-shaped heap accounting. Concretely this means valgrind here catches
+#     GROSS corruption (writes into entirely unmapped address space -- a real signal, see above)
+#     but NOT the two things "TST-MEM" nominally promises and a libc-hosted valgrind run would
+#     catch for free: (1) leaks -- moot by construction anyway, this project's free() is a
+#     documented no-op / leak-by-design (ADR-0004, ADR-0004's realloc/free contract) so "no
+#     leaks" is not a meaningful pass/fail signal; (2) an out-of-bounds write that lands INSIDE
+#     the current 1 MiB bump arena but past the end of the specific block that was handed out --
+#     invisible to valgrind because our allocator has no per-block redzone (only a real malloc
+#     hook gets that instrumentation for free).
+#
+#     FALLBACK (what actually covers those two gaps): tests/test_alloc.c's own assertions --
+#     every allocation's 16-byte alignment is checked explicitly (TEST_ASSERT_EQ(...% 16, 0)),
+#     and the "multiple mallocs: distinct, non-overlapping" + arena-rollover cases stamp a UNIQUE
+#     byte pattern into each block and re-verify it after allocating siblings, which is exactly
+#     the invariant check (byte-accounting via harness asserts) a bump allocator without
+#     redzones can meaningfully offer -- if the allocator mis-sized/mis-aligned/overlapped a
+#     block, one of those writes would have clobbered a neighbour and TEST_ASSERT_EQ would abort
+#     with FAIL: file:line (verified live by `make test`, which this target also depends on
+#     transitively via `build`). This target does not fake a clean bill of health it cannot
+#     produce; it reports the real, narrower guarantee valgrind gives here (no gross corruption)
+#     on top of that harness-level coverage.
+# PT: TST-MEM (TODO.md, W11): validacao de memoria do alocador E1. Roda `valgrind --tool=
+#     memcheck` sobre os dois programas-gate que mais diretamente exercitam memoria crua
+#     (test_alloc, a suite propria do alocador, e test_mem, as primitivas D1
+#     memcpy/memset/memmove/memcmp sobre as quais o alocador e' construido).
+#
+#     LIMITACAO DOCUMENTADA (verificada empiricamente, nao suposta -- ver relatorio da tarefa): o
+#     valgrind CONSEGUE instrumentar com sucesso este binario freestanding/sem-libc/estatico/
+#     no-PIE (confirmado: rodou limpo, e separadamente, numa sonda intencionalmente corrompida
+#     que escreveu 2 MiB alem de uma alocacao de 16 bytes, reportou corretamente "Invalid write
+#     of size 1 ... not stack'd, malloc'd or (recently) free'd" antes do SIGSEGV). O que ele NAO
+#     CONSEGUE fazer aqui e' qualquer coisa moldada em hook de malloc/free: todo "HEAP SUMMARY"
+#     reporta "0 allocs, 0 frees, 0 bytes allocated" porque src/alloc.c nunca chama malloc/free
+#     da libc (nao ha libc) -- ele bump-aloca direto sobre syscalls `mmap` cruas (src/sys_mmap.c),
+#     que o valgrind nao atribui a sua contabilidade de heap moldada em malloc. Concretamente
+#     isso significa que o valgrind aqui pega corrupcao GROSSEIRA (escritas em espaco de
+#     endereco totalmente nao-mapeado -- um sinal real, ver acima) mas NAO as duas coisas que o
+#     "TST-MEM" nominalmente promete e que uma corrida de valgrind hospedada em libc pegaria de
+#     graca: (1) leaks -- discutivel por construcao de qualquer jeito, o free() deste projeto e'
+#     um no-op documentado / leak-by-design (ADR-0004, contrato realloc/free da ADR-0004) entao
+#     "sem leaks" nao e' um sinal significativo de passa/falha; (2) uma escrita fora dos limites
+#     que caia DENTRO da arena-bump de 1 MiB atual mas alem do fim do bloco especifico que foi
+#     entregue -- invisivel pro valgrind porque nosso alocador nao tem redzone por-bloco (so um
+#     hook de malloc de verdade ganha essa instrumentacao de graca).
+#
+#     FALLBACK (o que de fato cobre essas duas lacunas): as proprias assercoes de
+#     tests/test_alloc.c -- todo alinhamento de 16 bytes de alocacao e' checado explicitamente
+#     (TEST_ASSERT_EQ(...% 16, 0)), e os casos "multiplos mallocs: distintos, nao-sobrepostos" +
+#     rollover-de-arena carimbam um padrao de byte UNICO em cada bloco e reconferem depois de
+#     alocar irmaos, que e' exatamente a checagem de invariante (contabilidade de bytes via
+#     asserts do harness) que um bump allocator sem redzone consegue oferecer de forma
+#     significativa -- se o alocador dimensionasse/alinhasse/sobrepusesse mal um bloco, uma
+#     dessas escritas teria atropelado um vizinho e o TEST_ASSERT_EQ abortaria com FAIL:
+#     arquivo:linha (verificado ao vivo pelo `make test`, do qual este alvo tambem depende
+#     transitivamente via `build`). Este alvo nao finge uma certidao de saude limpa que nao pode
+#     produzir; reporta a garantia real, mais estreita, que o valgrind da aqui (sem corrupcao
+#     grosseira) em cima dessa cobertura em nivel de harness.
+test-mem: build
+	@echo "--- valgrind memcheck: test_alloc (E1 allocator suite) ---"
+	valgrind --error-exitcode=97 --leak-check=full $(BIN)/test_alloc < /dev/null
+	@echo "--- valgrind memcheck: test_mem (D1 memcpy/memset/memmove/memcmp primitives) ---"
+	valgrind --error-exitcode=97 --leak-check=full $(BIN)/test_mem < /dev/null
+	@echo "test-mem: OK (no gross memory corruption under valgrind; see Makefile comment above for the documented malloc-hook-tracking limitation of this freestanding target -- real invariant coverage is tests/test_alloc.c's alignment/non-overlap asserts, exercised by 'make test')"
 
 clean:
 	rm -rf $(BUILD)

@@ -25,6 +25,7 @@ make test-negative   # AUD-C0-5.3: verifica o caminho de FALHA do harness (TEST_
                       # dentro de `make test` via tests/expected_stderr.txt
 make check-static    # TST-STATIC: cppcheck (src/) + clang --analyze (src/) + check_spdx.sh +
                       # check_syscall_nums_sync.sh (drift entre syscall_nums.h/.inc)
+make test-mem        # TST-MEM: valgrind memcheck em test_alloc + test_mem
 ```
 
 **TST-INT — golden files.** Três manifestos irmãos em `tests/` (`expected_exit.txt`,
@@ -42,6 +43,17 @@ corrigidos; falso-positivo inevitável (ex.: `sys_mmap`/`sys_read` cujo parâmet
 `const` mas o contrato documentado no header é o kernel escrevendo através do ponteiro) é
 suprimido cirurgicamente com `// cppcheck-suppress <id>` + rationale, nunca desligando a
 checagem inteira.
+
+**TST-MEM — limitação documentada do valgrind em freestanding.** `valgrind` **consegue**
+instrumentar o binário estático/no-PIE/sem-libc (verificado empiricamente: roda limpo, e detecta
+corretamente "Invalid write" numa sonda que escreve fora da arena mmap'ada inteira, antes do
+SIGSEGV). O que ele **não** consegue: o "HEAP SUMMARY" sempre reporta `0 allocs, 0 frees` porque
+`src/alloc.c` nunca chama `malloc`/`free` da libc — bump-aloca direto sobre `mmap` cru — então
+não há leak-tracking nem redzone por-bloco (uma escrita fora do bloco mas dentro da arena de 1
+MiB é invisível ao valgrind aqui). O fallback real de invariante é `tests/test_alloc.c`:
+alinhamento de 16B e não-sobreposição entre blocos (padrão de byte único por bloco, reconferido),
+já exercitado por `make test` e agora também sob `make test-mem`. Detalhe completo no comentário
+do alvo `test-mem` no `Makefile`.
 
 ## Fora de escopo (projeto base — por enquanto)
 

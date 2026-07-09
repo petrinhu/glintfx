@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: CI pipeline for the Layer 0 sovereign runtime on Codeberg (Forgejo Actions) --
+#     mirrors .github/workflows/core-ci.yml step-for-step so both remotes have
+#     equivalent coverage. See that file for the full gate-sequence rationale (why
+#     build -> test -> check-static -> test-negative -> test-mem, in that exact order,
+#     and what each Makefile target does/does not guarantee).
+#
+#     Separate from and independent of glintfx's .forgejo/workflows/ci.yml/nightly.yml
+#     (Layer 1, glintfx/**). Path-filtered to trigger ONLY when Layer 0 (src/, include/,
+#     tests/, tools/, Makefile) actually changes.
+#
+#     Runner/container: same codeberg-medium + ghcr.io/catthehacker/ubuntu:act-latest
+#     pairing as glintfx's own .forgejo/workflows/ci.yml -- the container ships neither
+#     the freestanding toolchain (nasm/clang/binutils) nor the static-analysis/valgrind
+#     tools, all installed in `install deps`. Commands run as root inside the container
+#     (act-latest), no sudo needed -- see glintfx's ci.yml for the same pattern.
+# PT: Pipeline de CI para o runtime soberano da Camada 0 no Codeberg (Forgejo Actions)
+#     -- espelha .github/workflows/core-ci.yml passo a passo para os 2 remotos terem
+#     cobertura equivalente. Ver aquele arquivo para o racional completo da sequencia
+#     de gates (por que build -> test -> check-static -> test-negative -> test-mem,
+#     nessa ordem exata, e o que cada alvo do Makefile garante/nao garante).
+#
+#     Separado e independente do ci.yml/nightly.yml do glintfx
+#     (.forgejo/workflows/ci.yml/nightly.yml, Camada 1, glintfx/**). Filtrado por path
+#     para disparar SO quando a Camada 0 (src/, include/, tests/, tools/, Makefile) de
+#     fato muda.
+#
+#     Runner/container: mesmo par codeberg-medium + ghcr.io/catthehacker/ubuntu:act-latest
+#     do proprio .forgejo/workflows/ci.yml do glintfx -- o container nao traz nem o
+#     toolchain freestanding (nasm/clang/binutils) nem as ferramentas de analise
+#     estatica/valgrind, todas instaladas em `install deps`. Comandos rodam como root
+#     dentro do container (act-latest), sem sudo necessario -- mesmo padrao do ci.yml
+#     do glintfx.
+name: core-ci
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "tools/**"
+      - "Makefile"
+      - ".forgejo/workflows/core-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "tools/**"
+      - "Makefile"
+      - ".forgejo/workflows/core-ci.yml"
+
+# EN: Cancel in-progress runs on the same ref to spare the shared runner pool.
+# PT: Cancela runs em andamento no mesmo ref para nao ocupar o pool compartilhado.
+concurrency:
+  group: core-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build & test (codeberg-medium / freestanding x86-64)
+    # EN: codeberg-medium: 4 CPU / 8 GB / 10 min -- the stable global runner, same as
+    #     glintfx's own workflow. Do NOT use 'ubuntu-latest' (GitHub label) or 'docker'
+    #     (claudio, offline).
+    # PT: codeberg-medium: 4 CPU / 8 GB / 10 min -- runner global estavel, mesmo do
+    #     proprio workflow do glintfx. NAO usar 'ubuntu-latest' (label GitHub) nem
+    #     'docker' (claudio, offline).
+    runs-on: codeberg-medium
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: install deps
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            nasm clang binutils make cppcheck valgrind
+
+      - name: make build
+        run: make build
+
+      - name: make test
+        run: make test
+
+      - name: make check-static
+        run: make check-static
+
+      - name: make test-negative
+        run: make test-negative
+
+      - name: make test-mem
+        run: make test-mem

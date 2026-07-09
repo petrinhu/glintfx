@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: CI pipeline for the Layer 0 sovereign runtime (C+ASM, zero libc, freestanding --
+#     "loucura_c_asm" itself, root of the repo: src/, include/, tests/, tools/,
+#     Makefile). Separate from and independent of glintfx's ci.yml/nightly.yml (Layer
+#     1, glintfx/**) -- the two products in this repo do not share a build system, a
+#     toolchain, or a workflow. Path-filtered to trigger ONLY when Layer 0 actually
+#     changes; a glintfx/** or docs/**-only push must NOT wake this workflow.
+#
+#     Gate sequence mirrors the Makefile's own target dependency order exactly (see
+#     Makefile header comments for the full rationale behind each target):
+#       make build         -- compiles src/*.c + src/*.asm (the "libc" we are building)
+#                              and every tests/*.c gate program, links with `ld`.
+#       make test           -- runs every program, diffs exit code (always) and
+#                              stdout/stderr (opt-in via tests/expected_std{out,err}.txt)
+#                              against committed goldens.
+#       make check-static    -- (a) cppcheck --std=c23 freestanding mode on src/,
+#                              (b) clang --analyze with the exact freestanding CFLAGS,
+#                              (c) tools/check_spdx.sh (SPDX header presence),
+#                              (d) tools/check_syscall_nums_sync.sh (C header <-> NASM
+#                              .inc syscall-number drift).
+#       make test-negative  -- AUD-C0-5.3: re-verifies the harness's own FAILURE path
+#                              (negative_probe's stderr against a golden) as a named,
+#                              narrowly-scoped CI check.
+#       make test-mem        -- valgrind memcheck over test_alloc (E1 allocator) and
+#                              test_mem (D1 memcpy/memset/memmove/memcmp) -- catches
+#                              gross out-of-mapped-space corruption; see the Makefile's
+#                              own comment on this target for the documented
+#                              malloc-hook-tracking limitation of a freestanding/no-libc
+#                              binary under valgrind (real invariant coverage lives in
+#                              `make test`'s harness asserts, not valgrind's heap
+#                              accounting, which sees "0 allocs, 0 frees" by
+#                              construction here).
+#     Any target above returning non-zero fails the job -- hard gate, no soft-fail step.
+#
+#     No matrix: Layer 0 has exactly one build target (Linux x86-64, ELF, System V
+#     AMD64 ABI -- see CLAUDE.md "Stack e alvo"). A matrix here would be over-engineering
+#     for a single-configuration freestanding runtime.
+#
+#     Deps installed via apt (ubuntu-latest ships none of nasm/valgrind/cppcheck by
+#     default): nasm (assembler, .asm -> ELF64 .o), clang (C23 freestanding compiler),
+#     binutils (ld/objdump/readelf -- ld is on the critical path, the other two are
+#     debug-only but harmless to have), make, cppcheck (check-static (a)), valgrind
+#     (test-mem). No GL/GLFW/FreeType/Xvfb -- those are glintfx-only deps, Layer 0 never
+#     touches graphics.
+# PT: Pipeline de CI para o runtime soberano da Camada 0 (C+ASM, zero libc,
+#     freestanding -- o proprio "loucura_c_asm", raiz do repo: src/, include/, tests/,
+#     tools/, Makefile). Separado e independente do ci.yml/nightly.yml do glintfx
+#     (Camada 1, glintfx/**) -- os dois produtos deste repo nao compartilham sistema de
+#     build, toolchain, nem workflow. Filtrado por path para disparar SO quando a
+#     Camada 0 de fato muda; um push que so toca glintfx/** ou docs/** NAO deve acordar
+#     este workflow.
+#
+#     A sequencia de gates espelha exatamente a ordem de dependencia dos alvos do
+#     proprio Makefile (ver os comentarios de cabecalho do Makefile para o racional
+#     completo de cada alvo):
+#       make build         -- compila src/*.c + src/*.asm (a "libc" que estamos
+#                              construindo) e todo programa-gate tests/*.c, linka com `ld`.
+#       make test           -- roda todo programa, compara exit code (sempre) e
+#                              stdout/stderr (opt-in via tests/expected_std{out,err}.txt)
+#                              contra goldens commitados.
+#       make check-static    -- (a) cppcheck --std=c23 modo freestanding em src/,
+#                              (b) clang --analyze com as mesmas CFLAGS freestanding,
+#                              (c) tools/check_spdx.sh (presenca de header SPDX),
+#                              (d) tools/check_syscall_nums_sync.sh (drift entre header C
+#                              e .inc NASM dos numeros de syscall).
+#       make test-negative  -- AUD-C0-5.3: reverifica o proprio caminho de FALHA do
+#                              harness (stderr do negative_probe contra um golden) como
+#                              checagem de CI nomeada e de escopo estreito.
+#       make test-mem        -- valgrind memcheck sobre test_alloc (alocador E1) e
+#                              test_mem (primitivas D1 memcpy/memset/memmove/memcmp) --
+#                              pega corrupcao grosseira em espaco fora do mapeado; ver o
+#                              proprio comentario deste alvo no Makefile pela limitacao
+#                              documentada de rastreio via hook-de-malloc do valgrind
+#                              num binario freestanding/sem-libc (a cobertura real de
+#                              invariante vive nos asserts do harness do `make test`, nao
+#                              na contabilidade de heap do valgrind, que ve "0 allocs, 0
+#                              frees" por construcao aqui).
+#     Qualquer alvo acima retornando nao-zero falha o job -- gate duro, sem passo
+#     soft-fail.
+#
+#     Sem matrix: a Camada 0 tem exatamente um alvo de build (Linux x86-64, ELF, ABI
+#     System V AMD64 -- ver CLAUDE.md "Stack e alvo"). Uma matrix aqui seria
+#     over-engineering para um runtime freestanding de configuracao unica.
+#
+#     Deps instaladas via apt (ubuntu-latest nao traz nasm/valgrind/cppcheck por
+#     padrao): nasm (assembler, .asm -> .o ELF64), clang (compilador C23 freestanding),
+#     binutils (ld/objdump/readelf -- ld esta no caminho critico, os outros dois sao
+#     so-debug mas inofensivos ter), make, cppcheck (check-static (a)), valgrind
+#     (test-mem). Sem GL/GLFW/FreeType/Xvfb -- essas sao deps so-do-glintfx, a Camada 0
+#     nunca toca graficos.
+name: core-ci
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "tools/**"
+      - "Makefile"
+      - ".github/workflows/core-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "tools/**"
+      - "Makefile"
+      - ".github/workflows/core-ci.yml"
+
+jobs:
+  build-and-test:
+    name: build & test (ubuntu-latest / freestanding x86-64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            nasm clang binutils make cppcheck valgrind
+
+      - name: make build
+        run: make build
+
+      - name: make test
+        run: make test
+
+      - name: make check-static
+        run: make check-static
+
+      - name: make test-negative
+        run: make test-negative
+
+      - name: make test-mem
+        run: make test-mem

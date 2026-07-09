@@ -972,6 +972,52 @@ add_test(NAME polygon_gradient_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: image_tint_sanity -- verifies the "image-tint(<url>)" luminance-key tint decorator
+#     (GLINTFX-TINT-1/2, decorator_image_tint.{hpp,cpp} + the "glintfx-tint" shader injection in
+#     render_gl3.cpp, ADR-0010, consumer-driven by GusWorld: one neutral base texture, N domain
+#     colours at runtime): the load-bearing 3-zone luminance-key selectivity proof
+#     (light+neutral strongly tinted, light+saturated barely tinted, dark untouched), multiply
+#     mode's uniform (non-selective) tint as contrast, mode=None's true no-op parity with the
+#     native image() decorator, fail-high hardening (unknown keyword / out-of-range threshold /
+#     missing texture / empty src -- no crash), CSS opacity composition, the fresh-per-frame
+#     property read (image-tint-color driven live via a data-model + data-style-image-tint-color
+#     binding, NOT baked at GenerateElementData time), and the ResetProgram() state-restore
+#     discipline (a polygon()-gradient / tint / polygon()-gradient triple in the SAME frame,
+#     asserting the LAST gradient renders exactly like the FIRST). Same build-config/
+#     WORKING_DIRECTORY pattern as polygon_sanity/polygon_gradient_sanity above (runs in BOTH
+#     GLINTFX_BACKEND_GLFW configs -- the decorator + shader injection are backend-agnostic).
+# PT: image_tint_sanity -- verifica o decorator de tingimento luminance-key
+#     "image-tint(<url>)" (GLINTFX-TINT-1/2, decorator_image_tint.{hpp,cpp} + a injeção de shader
+#     "glintfx-tint" em render_gl3.cpp, ADR-0010, consumer-driven pelo GusWorld: uma textura base
+#     neutra, N cores de domínio em runtime): a prova de carga de seletividade luminance-key em 3
+#     zonas (claro+neutro fortemente tingido, claro+saturado levemente tingido, escuro intocado),
+#     o tingimento uniforme (não-seletivo) do modo multiply como contraste, o no-op verdadeiro de
+#     mode=None com paridade ao decorator image() nativo, hardening fail-high (keyword
+#     desconhecida / threshold fora de faixa / textura ausente / src vazio -- sem crash),
+#     composição de opacity do CSS, a leitura fresca-por-frame de propriedade (image-tint-color
+#     dirigido ao vivo via um binding data-model + data-style-image-tint-color, NÃO embutido no
+#     momento de GenerateElementData), e a disciplina de restauração de estado de ResetProgram()
+#     (uma tripla polygon()-gradiente / tint / polygon()-gradiente no MESMO frame, afirmando que
+#     o ÚLTIMO gradiente renderiza exatamente como o PRIMEIRO). Mesmo padrão de
+#     config-de-build/WORKING_DIRECTORY de polygon_sanity/polygon_gradient_sanity acima (roda em
+#     AMBAS as configs de GLINTFX_BACKEND_GLFW -- o decorator + a injeção de shader são
+#     backend-agnósticos).
+# ---------------------------------------------------------------------------
+add_executable(image_tint_sanity image_tint_sanity.cpp)
+target_link_libraries(image_tint_sanity PRIVATE ${_embed_dep} gl3w)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/image_tint_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/image_tint_scene.rcss COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_fixture.png
+               ${CMAKE_CURRENT_BINARY_DIR}/image_tint_fixture.png COPYONLY)
+add_test(NAME image_tint_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:image_tint_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: input_hardening_sanity -- proves the three v0.3.0 input-surface hardening fixes (security
 #     audit) reject invalid input fail-high without breaking valid use, all via the UiLayer/Engine
 #     path shared with App: Bootstrap::load(nullptr) -> false with no SIGABRT [CRITICAL];

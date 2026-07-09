@@ -1,0 +1,35 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- EN: Scene for image_tint_sanity (GLINTFX-TINT-1/2). See image_tint_scene.rcss for box
+         geometry/decorator declarations and the full rationale of each proof.
+         data-model="tint_demo" scopes the ONE live variable this scene needs: "tint_color"
+         (string, initial "red"), driving #fresh_tint's image-tint-color via
+         data-style-image-tint-color -- see decorator_image_tint.cpp's ResolveTintState /
+         ADR-0010 Decision (c) for why this element in particular exists (fresh-per-frame read,
+         not baked at GenerateElementData time).
+     PT: Cena para image_tint_sanity (GLINTFX-TINT-1/2). Ver image_tint_scene.rcss pra
+         geometria de caixa/declarações de decorator e a racional completa de cada prova.
+         data-model="tint_demo" escopa a ÚNICA variável viva que esta cena precisa:
+         "tint_color" (string, inicial "red"), dirigindo o image-tint-color de #fresh_tint via
+         data-style-image-tint-color -- ver ResolveTintState de decorator_image_tint.cpp /
+         a Decisão (c) do ADR-0010 pro motivo deste elemento em particular existir (leitura
+         fresca a cada frame, não embutida no momento de GenerateElementData). -->
+<rml>
+<head>
+  <link type="text/rcss" href="image_tint_scene.rcss"/>
+</head>
+<body data-model="tint_demo">
+  <div id="luminance"></div>
+  <div id="fresh_tint" data-style-image-tint-color="tint_color"></div>
+  <div id="multiply"></div>
+  <div id="none_default"></div>
+  <div id="native_image"></div>
+  <div id="bad_mode"></div>
+  <div id="bad_threshold_over"></div>
+  <div id="missing_texture"></div>
+  <div id="empty_src"></div>
+  <div id="opacity_half"></div>
+  <div id="polygon_before"></div>
+  <div id="tint_before"></div>
+  <div id="polygon_after"></div>
+</body>
+</rml>

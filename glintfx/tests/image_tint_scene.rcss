@@ -1,0 +1,185 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for image_tint_sanity (GLINTFX-TINT-1/2 -- "image-tint(<url>)" luminance-key
+       decorator). All texture boxes use image_tint_fixture.png (300x100, 3 zones of 100px each,
+       created for this test -- see the test .cpp for the exact RGB values and why they were
+       chosen): zone A [0,100) light+neutral #f0f0f0 ("rune"), zone B [100,200) light+saturated
+       #f0c040 ("gold trim"), zone C [200,300) dark #202020 ("stone"). Boxes that use the fixture
+       are sized 300x100 (native texture size, 1:1 texel-to-px, no GL_LINEAR magnification
+       blending across zone boundaries at the sampled centres).
+   PT: Cena para image_tint_sanity (GLINTFX-TINT-1/2 -- decorator luminance-key
+       "image-tint(<url>)"). Todas as caixas de textura usam image_tint_fixture.png (300x100, 3
+       zonas de 100px cada, criada para este teste -- ver o .cpp do teste pros valores RGB exatos
+       e o motivo da escolha): zona A [0,100) claro+neutro #f0f0f0 ("runa"), zona B [100,200)
+       claro+saturado #f0c040 ("trim ouro"), zona C [200,300) escuro #202020 ("pedra"). Caixas que
+       usam a fixture são dimensionadas 300x100 (tamanho nativo da textura, texel-para-px 1:1,
+       sem blend de magnificação GL_LINEAR pelas fronteiras de zona nos centros amostrados). */
+
+body {
+  background-color: #000000;
+}
+
+/* Row A -- the load-bearing luminance-key proof + the fresh-per-frame data-binding proof. */
+#luminance {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  width: 300px;
+  height: 100px;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: luminance-multiply;
+  image-tint-color: #ff0000;
+  image-tint-threshold: 0.5;
+}
+#fresh_tint {
+  /* image-tint-color deliberately NOT set here -- driven live via data-style-image-tint-color
+     (see image_tint_scene.rml) + set_string(), proving RenderElement reads it FRESH every call
+     rather than baking it at GenerateElementData time (ADR-0010 Decision (c)). */
+  position: absolute;
+  left: 560px;
+  top: 20px;
+  width: 300px;
+  height: 100px;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: luminance-multiply;
+  image-tint-threshold: 0.5;
+}
+
+/* Row B -- multiply mode: ALL three zones shift toward the tint colour (no luminance-key). */
+#multiply {
+  position: absolute;
+  left: 20px;
+  top: 140px;
+  width: 300px;
+  height: 100px;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: multiply;
+  image-tint-color: #ff0000;
+}
+
+/* Row C -- mode=none no-op vs. the native image() decorator (must read pixel-identical). */
+#none_default {
+  position: absolute;
+  left: 20px;
+  top: 260px;
+  width: 300px;
+  height: 100px;
+  decorator: image-tint(image_tint_fixture.png);
+}
+#native_image {
+  position: absolute;
+  left: 340px;
+  top: 260px;
+  width: 300px;
+  height: 100px;
+  decorator: image(image_tint_fixture.png);
+}
+
+/* Row D -- hardening matrix (own dark-grey background so a rejected/no-op decorator is
+   distinguishable from both a tinted result and pure black). */
+#bad_mode {
+  /* Unknown keyword -- RmlUi's OWN "keyword" parser rejects this at RCSS-parse time and falls
+     back to the property's default ("none") automatically -- must render IDENTICAL to
+     #none_default (mode=none, untouched texture), never garbage/crash. */
+  position: absolute;
+  left: 20px;
+  top: 380px;
+  width: 150px;
+  height: 60px;
+  background-color: #303030;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: bogus-value;
+}
+#bad_threshold_over {
+  /* threshold=5.0 (out of [0,1]) -- CLAMPED to 1.0 (not rejected, see decorator_image_tint.cpp's
+     ResolveTintState doc comment for why threshold clamps instead of rejecting like `sides`).
+     threshold==1.0 also exercises the smoothstep(1.0,1.0,L) edge0==edge1 GLSL edge case
+     (ADR-0010 risk note) -- must not crash / produce NaN pixels. */
+  position: absolute;
+  left: 190px;
+  top: 380px;
+  width: 150px;
+  height: 60px;
+  background-color: #303030;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: luminance-multiply;
+  image-tint-color: #ff0000;
+  image-tint-threshold: 5.0;
+}
+#missing_texture {
+  /* Texture path does not exist on disk -- DecoratorInstancerInterface::GetTexture still
+     resolves structurally (see decorator_image_tint.cpp's InstanceDecorator finding comment);
+     the failure surfaces lazily at render time as an unbound (handle=0) texture -- same
+     behaviour the native image() decorator already has for a bad src. Must not crash. */
+  position: absolute;
+  left: 360px;
+  top: 380px;
+  width: 150px;
+  height: 60px;
+  background-color: #303030;
+  decorator: image-tint(does-not-exist.png);
+}
+#empty_src {
+  /* Empty parens -- "src" resolves to "", InstanceDecorator rejects it fail-high (decorator
+     ignored entirely) -- must show the box's OWN dark-grey background, not a crash. */
+  position: absolute;
+  left: 530px;
+  top: 380px;
+  width: 150px;
+  height: 60px;
+  background-color: #303030;
+  decorator: image-tint();
+}
+
+/* Row E -- opacity interaction: element opacity must still composite correctly under tint. */
+#opacity_half {
+  position: absolute;
+  left: 20px;
+  top: 460px;
+  width: 300px;
+  height: 100px;
+  opacity: 0.5;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: luminance-multiply;
+  image-tint-color: #ff0000;
+  image-tint-threshold: 0.5;
+}
+
+/* Row F -- ResetProgram() state-restore proof (the "dente" for ADR-0010's central "State-restore
+   discipline" risk). THREE elements, in this exact document order, all sharing an identical
+   polygon()-radial-gradient recipe for #polygon_before/#polygon_after (differential A/B): a
+   NATIVE gradient draw (UseProgram(ProgramId::Gradient), cache-checked) sets RmlUi's internal
+   `active_program` cache to Gradient; the TINTED draw between them issues a RAW glUseProgram
+   (bypassing that cache check entirely) -- if (and only if) this-> ResetProgram() is skipped
+   afterwards, the cache is left STUCK at "Gradient" even though the real GL binding is now the
+   tint program; the THIRD element's own UseProgram(ProgramId::Gradient) call would then see
+   "already Gradient" and SKIP the real glUseProgram, rendering #polygon_after with the tint
+   program still bound (wrong uniforms entirely -- a visibly broken, non-white centre). A single
+   isolated tinted-then-gradient pair (no gradient BEFORE the tint draw) would NOT catch this --
+   see render_gl3.cpp's Gl3RenderInterface::RenderShader doc comment. */
+#polygon_before {
+  position: absolute;
+  left: 20px;
+  top: 580px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, radial-gradient(#ffffff, #000000));
+}
+#tint_before {
+  position: absolute;
+  left: 240px;
+  top: 580px;
+  width: 200px;
+  height: 200px;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: luminance-multiply;
+  image-tint-color: #ff0000;
+  image-tint-threshold: 0.5;
+}
+#polygon_after {
+  position: absolute;
+  left: 460px;
+  top: 580px;
+  width: 200px;
+  height: 200px;
+  decorator: polygon(6, radial-gradient(#ffffff, #000000));
+}

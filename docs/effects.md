@@ -270,6 +270,36 @@ Horizontal scrollbars follow the exact same pattern under `scrollbarhorizontal`,
 
 > Scroll **sound** (the audio cue played when the user scrolls) is a host-side concern set via `set_scroll_callback` (v0.6.0) — it is not part of RCSS styling; see the CHANGELOG for that API.
 
+### How-to: tint / recolor a decorator image (`image-color`)
+
+`image-color` is a native RmlUi 6.3 RCSS property (`StyleSheetSpecification.cpp:350`) that tints the texture sampled by an `image`/`tiled-*`/ninepatch decorator — glintfx does not add any code for this, it inherits the capability by using stock RmlUi decorators.
+
+```css
+.rune-frame {
+    decorator: image( runes-base.png );
+    image-color: var(--domain-color, #ffffff);   /* defaults to no tint (white = identity) */
+    transition: image-color 0.3s;                 /* animates smoothly on any state change */
+}
+.rune-frame.domain-fire   { --domain-color: #ff6a3c; }
+.rune-frame.domain-frost  { --domain-color: #6ac8ff; }
+
+/* Or drive it from a @keyframes pulse instead of a state class: */
+@keyframes pulse-glow {
+    0%   { image-color: #ffffff; }
+    50%  { image-color: #ffcc66; }
+    100% { image-color: #ffffff; }
+}
+.rune-frame.charging { animation: pulse-glow 1.2s infinite; }
+```
+
+**What it does.** The renderer multiplies the sampled texel by `image-color` in premultiplied space (`DecoratorTiled.cpp:80`, `quad_colour = computed.image_color().ToPremultiplied(opacity)`, then `MeshUtilities::GenerateQuad(...)` bakes that color into the quad's vertex color): `out.rgb = texel.rgb × tint.rgb`, `out.a = texel.a × tint.a`. White texels become the tint color exactly; black/dark texels stay dark (multiplying by anything leaves near-zero near-zero). It is a genuine multiply, not an overlay or a hue-replace — it is the same mechanism CSS `filter` tint hacks approximate, done natively per-pixel.
+
+**Real use case: one neutral base texture, N domains.** Author a single grayscale/neutral `runes-base.png` — white or light-gray runes on a dark stone base. Ship it once. Recolor per-domain purely through RCSS by setting `image-color` (a CSS custom property per domain, or driven by a data-model binding), with zero extra textures and zero C++ code. Because `image-color` is a `color`-typed property, it is **interpolable**: `transition`/`@keyframes` animate it exactly like `background-color`, so a domain swap or a "charging" pulse can fade smoothly instead of popping.
+
+`var()`/custom properties resolve normally here too (`ElementStyle::ResolveVariables`, the same substitution path every other RCSS property uses) — `image-color: var(--domain-color);` works, including inside `@keyframes`.
+
+**Honest limit: it is a uniform multiply, not a luminance-key.** `image-color` tints the *entire* texture — including texels that already carry their own color. If `runes-base.png` had gold-colored detail pixels mixed with the white/neutral runes, `image-color` would multiply those gold pixels too (shifting their hue, not just the neutral ones), because the shader has no concept of "which pixels are neutral" — it is one scalar multiply applied uniformly. Preserving pre-colored detail while tinting only the neutral/light pixels (a true luminance-key or "recolor mask") is **not supported natively via RCSS today** — it would require a custom shader pass, not a property. Design textures to be tint-targets as fully neutral (grayscale) if you need this pattern; treat a luminance-key decorator as a roadmap candidate, not a current capability.
+
 ### Putting it together
 
 The showcase uses two sections: a near-black one for the glow and gradient cards (dark background makes the halo unmistakable), and a colourful gradient section for the blur and mask cards (so backdrop-blur has something to smear and the mask fades over rich content). Read [`../glintfx/demos/showcase/showcase.rcss`](../glintfx/demos/showcase/showcase.rcss) and [`showcase.rml`](../glintfx/demos/showcase/showcase.rml) for the full, working layout.
@@ -546,6 +576,36 @@ Palavras-chave aceitas: `visible` (padrão -- sem clip, sem barra), `hidden` (re
 Barras horizontais seguem exatamente o mesmo padrão sob `scrollbarhorizontal`, trocando `height`⇄`width` no `sliderbar` (o eixo de "comprimento" do thumb acompanha o eixo de rolagem: `height`/`min-height`/`max-height` na vertical, `width`/`min-width`/`max-width` na horizontal).
 
 > O **som** da rolagem (o efeito sonoro tocado quando o usuário rola) é responsabilidade do host, configurado via `set_scroll_callback` (v0.6.0) -- não faz parte da estilização RCSS; ver o CHANGELOG para essa API.
+
+### How-to: tingir / recolorir a imagem de um decorator (`image-color`)
+
+`image-color` é uma propriedade RCSS nativa do RmlUi 6.3 (`StyleSheetSpecification.cpp:350`) que tinge a textura amostrada por um decorator `image`/`tiled-*`/ninepatch -- a glintfx não adiciona nenhum código pra isso, herda a capacidade por usar decorators nativos do RmlUi.
+
+```css
+.moldura-runas {
+    decorator: image( runes-base.png );
+    image-color: var(--cor-dominio, #ffffff);   /* padrão sem tingimento (branco = identidade) */
+    transition: image-color 0.3s;                /* anima suavemente em qualquer troca de estado */
+}
+.moldura-runas.dominio-fogo   { --cor-dominio: #ff6a3c; }
+.moldura-runas.dominio-gelo   { --cor-dominio: #6ac8ff; }
+
+/* Ou dirija a partir de um @keyframes de pulso em vez de uma classe de estado: */
+@keyframes pulso-glow {
+    0%   { image-color: #ffffff; }
+    50%  { image-color: #ffcc66; }
+    100% { image-color: #ffffff; }
+}
+.moldura-runas.carregando { animation: pulso-glow 1.2s infinite; }
+```
+
+**O que faz.** O renderer multiplica o texel amostrado pelo `image-color` em espaço premultiplicado (`DecoratorTiled.cpp:80`, `quad_colour = computed.image_color().ToPremultiplied(opacity)`, e depois `MeshUtilities::GenerateQuad(...)` embute essa cor na cor de vértice do quad): `out.rgb = texel.rgb × tint.rgb`, `out.a = texel.a × tint.a`. Texels brancos viram exatamente a cor do tingimento; texels pretos/escuros continuam escuros (multiplicar qualquer coisa por perto-de-zero permanece perto-de-zero). É um multiply de verdade, não um overlay ou uma troca de matiz -- é o mesmo mecanismo que hacks de tingimento via `filter` do CSS aproximam, feito nativamente por-pixel aqui.
+
+**Caso de uso real: uma textura base neutra, N domínios.** Autore uma única textura em escala de cinza/neutra `runes-base.png` -- runas brancas ou cinza-claras sobre uma base de pedra escura. Distribua-a uma vez só. Recolora por domínio puramente via RCSS definindo `image-color` (uma custom property CSS por domínio, ou dirigida por um binding de data-model), sem textura extra nenhuma e sem código C++ novo. Como `image-color` é uma propriedade do tipo `color`, ela é **interpolável**: `transition`/`@keyframes` a animam exatamente como `background-color`, então uma troca de domínio ou um pulso de "carregando" pode fazer fade suave em vez de trocar abruptamente.
+
+`var()`/custom properties resolvem normalmente aqui também (`ElementStyle::ResolveVariables`, o mesmo caminho de substituição que qualquer outra propriedade RCSS usa) -- `image-color: var(--cor-dominio);` funciona, inclusive dentro de `@keyframes`.
+
+**Limite honesto: é um multiply uniforme, não um luminance-key.** `image-color` tinge a textura *inteira* -- inclusive texels que já carregam cor própria. Se `runes-base.png` tivesse pixels de detalhe dourados misturados com as runas brancas/neutras, `image-color` multiplicaria esses pixels dourados também (deslocando o matiz deles, não só o dos neutros), porque o shader não tem noção de "quais pixels são neutros" -- é um multiply escalar único aplicado uniformemente. Preservar detalhe pré-colorido enquanto tinge só os pixels claros/neutros (um verdadeiro luminance-key ou "máscara de recoloração") **não é suportado nativamente via RCSS hoje** -- exigiria um passo de shader customizado, não uma propriedade. Desenhe texturas totalmente neutras (escala de cinza) nas áreas-alvo de tingimento se precisar desse padrão; trate um decorator de luminance-key como candidato de roadmap, não uma capacidade atual.
 
 ### Juntando tudo
 

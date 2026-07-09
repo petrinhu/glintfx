@@ -137,7 +137,7 @@ static size_t align_up(size_t n, size_t align) {
 //     num processo x86-64 são chega perto de `(unsigned long)-4095` (o topo do espaço de
 //     endereços), então esta checagem é inambígua sem precisar da sentinela `MAP_FAILED` da
 //     libc (que não se aplica a este wrapper cru).
-static int mmap_failed(void* ret) {
+static int mmap_failed(const void* ret) {
     return (unsigned long)ret >= (unsigned long)-4095;
 }
 

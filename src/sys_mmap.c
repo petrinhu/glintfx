@@ -16,6 +16,22 @@
 #include "syscall.h"
 #include "syscall_nums.h"
 
+// EN: TST-STATIC (TODO.md, W11): cppcheck flags `addr` as "can be declared as pointer to
+//     const" (constParameterPointer) because this function body never writes through it. That
+//     is technically true of the C statements below, but misses the actual contract: `addr` is
+//     the POSIX mmap() hint address, part of the public signature declared in
+//     include/sys_mmap.h (kept intentionally non-const to mirror mmap(2)/POSIX) -- narrowing it
+//     to `const void*` here would desync this definition from that header's `void*` declaration
+//     (a compile error) for zero real safety gain. Suppressed cirurgically, not the whole check.
+// PT: TST-STATIC (TODO.md, W11): o cppcheck aponta `addr` como "pode ser declarado como
+//     ponteiro pra const" (constParameterPointer) porque o corpo desta função nunca escreve
+//     através dele. Isso é tecnicamente verdade das instruções C abaixo, mas ignora o contrato
+//     real: `addr` é o endereço-sugestão do mmap() POSIX, parte da assinatura pública declarada
+//     em include/sys_mmap.h (mantida deliberadamente não-const, espelhando mmap(2)/POSIX) --
+//     estreitar pra `const void*` aqui dessincronizaria esta definição daquela declaração
+//     `void*` do header (erro de compilação) sem ganho real de segurança. Suprimido
+//     cirurgicamente, não a checagem inteira.
+// cppcheck-suppress constParameterPointer
 void* sys_mmap(void* addr, size_t len, int prot, int flags, int fd, long off) {
     return (void*)syscall6(SYS_mmap, (long)addr, (long)len, (long)prot,
                             (long)flags, (long)fd, off);

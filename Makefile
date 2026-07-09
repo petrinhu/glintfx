@@ -46,7 +46,7 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 PROGRAM_SRCS := $(wildcard tests/*.c)
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test test-negative clean run
+.PHONY: build test test-negative check-static clean run
 
 build: $(PROGRAMS)
 
@@ -197,6 +197,61 @@ test-negative: $(BIN)/negative_probe
 
 run: build
 	@for prog in $(PROGRAMS); do echo "--- $$prog ---"; $$prog; echo "exit=$$?"; done
+
+# EN: TST-STATIC (TODO.md, W11): static analysis without executing anything. Three checks,
+#     scoped to src/ (the runtime/"libc" itself -- see TESTES.md for why tests/*.c is out of
+#     scope for cppcheck here: those files deliberately exercise OUR OWN string/mem functions
+#     with patterns cppcheck's libc-shaped heuristics misread as noise, e.g. "unnecessary
+#     comparison of static strings" for a test that is precisely proving strcmp()'s behaviour):
+#       (a) cppcheck in freestanding mode (no missingIncludeSystem noise -- there IS no libc to
+#           find headers for, that "gap" is the whole point of this codebase);
+#       (b) clang --analyze with the EXACT same freestanding flags as the real build (CFLAGS,
+#           minus warnings/paths that do not apply to single-TU analysis) -- catches UB/misuse
+#           classes cppcheck does not (e.g. deeper interprocedural null-deref paths);
+#       (c) tools/check_spdx.sh (STD-SPDX, TODO.md) -- every code file carries the license header;
+#       (d) tools/check_syscall_nums_sync.sh (AUD-C0 finding) -- the C/NASM syscall-number
+#           mirrors have not drifted apart.
+#     Any cppcheck/clang-analyzer finding that is real gets fixed in src/ directly; a finding
+#     that is an inevitable false positive in this freestanding context is suppressed
+#     CIRURGICALLY at its exact call site (`// cppcheck-suppress <id>` with a rationale comment
+#     immediately above -- see src/sys_mmap.c / src/sys_read.c for two real examples), never by
+#     disabling the whole check class.
+# PT: TST-STATIC (TODO.md, W11): analise estatica sem executar nada. Tres/quatro checagens,
+#     restritas a src/ (a runtime/"libc" em si -- ver TESTES.md pro motivo de tests/*.c estar
+#     fora de escopo do cppcheck aqui: esses arquivos exercitam DE PROPOSITO nossas PROPRIAS
+#     funcoes de string/memoria com padroes que as heuristicas do cppcheck, moldadas pra libc,
+#     leem errado como ruido, ex.: "comparacao desnecessaria de strings estaticas" pra um teste
+#     que esta precisamente provando o comportamento do nosso strcmp()):
+#       (a) cppcheck em modo freestanding (sem ruido de missingIncludeSystem -- NAO HA libc pra
+#           achar headers, essa "lacuna" e' o ponto inteiro deste codigo-base);
+#       (b) clang --analyze com as MESMAS flags freestanding do build real (CFLAGS, menos
+#           avisos/caminhos que nao se aplicam a analise de uma unica TU) -- pega classes de
+#           UB/uso indevido que o cppcheck nao pega (ex.: caminhos de null-deref interprocedurais
+#           mais profundos);
+#       (c) tools/check_spdx.sh (STD-SPDX, TODO.md) -- todo arquivo de codigo carrega o header
+#           de licenca;
+#       (d) tools/check_syscall_nums_sync.sh (achado AUD-C0) -- os espelhos C/NASM dos numeros
+#           de syscall nao driftaram um do outro.
+#     Todo achado real de cppcheck/clang-analyzer e' corrigido direto em src/; um achado que e'
+#     falso-positivo inevitavel neste contexto freestanding e' suprimido CIRURGICAMENTE no
+#     ponto de chamada exato (`// cppcheck-suppress <id>` com comentario de racional logo acima
+#     -- ver src/sys_mmap.c / src/sys_read.c pra dois exemplos reais), nunca desligando a
+#     checagem inteira.
+check-static:
+	@echo "--- (a) cppcheck (freestanding, src/) ---"
+	cppcheck --enable=warning,style,performance,portability --std=c23 --platform=unix64 \
+	         --suppress=missingIncludeSystem --inline-suppr --error-exitcode=2 -Iinclude src/
+	@echo "--- (b) clang --analyze (freestanding, src/*.c) ---"
+	@status=0; \
+	for f in src/*.c; do \
+		out=$$(clang --analyze -Xclang -analyzer-output=text $(CFLAGS) "$$f" -o /dev/null 2>&1); \
+		if [ -n "$$out" ]; then echo "$$out"; status=1; fi; \
+	done; \
+	if [ "$$status" -eq 0 ]; then echo "clang --analyze: OK (0 findings across src/*.c)"; else exit 1; fi
+	@echo "--- (c) SPDX header presence ---"
+	tools/check_spdx.sh
+	@echo "--- (d) syscall_nums.h <-> syscall_nums.inc drift ---"
+	tools/check_syscall_nums_sync.sh
 
 clean:
 	rm -rf $(BUILD)

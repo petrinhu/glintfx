@@ -23,6 +23,8 @@ make test           # TST-INT: build + roda toda tests/*.c, exit code + stdout/s
 make test-negative   # AUD-C0-5.3: verifica o caminho de FALHA do harness (TEST_ASSERT aborta com
                       # a mensagem "FAIL: <file>:<line>: <expr>" correta) -- já coberto também
                       # dentro de `make test` via tests/expected_stderr.txt
+make check-static    # TST-STATIC: cppcheck (src/) + clang --analyze (src/) + check_spdx.sh +
+                      # check_syscall_nums_sync.sh (drift entre syscall_nums.h/.inc)
 ```
 
 **TST-INT — golden files.** Três manifestos irmãos em `tests/` (`expected_exit.txt`,
@@ -30,6 +32,16 @@ make test-negative   # AUD-C0-5.3: verifica o caminho de FALHA do harness (TEST_
 programa só é comparado byte-a-byte no fd que tiver entrada registrada; ausência mantém o
 contrato original (só exit code). `tests/printf_e2e.c` força ≥2 flushes do `mini_printf` (saída
 >256B, AUD-C0-3); `tests/negative_probe.c` prova o caminho de falha do `TEST_ASSERT` (AUD-C0-5.3).
+
+**TST-STATIC — escopo do cppcheck restrito a `src/`.** `tests/*.c` fica FORA do cppcheck de
+propósito: os testes exercitam nossas PRÓPRIAS `strcmp`/`memcmp`/`memset` com padrões
+(comparação de strings estáticas, `memset` com valor fora de `unsigned char` testando
+truncamento) que as heurísticas do cppcheck, moldadas pra código hospedado em libc, leem como
+ruído — não são achados reais sobre a runtime que estamos validando. Achados reais em `src/` são
+corrigidos; falso-positivo inevitável (ex.: `sys_mmap`/`sys_read` cujo parâmetro cppcheck sugere
+`const` mas o contrato documentado no header é o kernel escrevendo através do ponteiro) é
+suprimido cirurgicamente com `// cppcheck-suppress <id>` + rationale, nunca desligando a
+checagem inteira.
 
 ## Fora de escopo (projeto base — por enquanto)
 

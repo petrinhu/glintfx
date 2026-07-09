@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: AUD-C0-5.3 (AUDIT_FIND.md) -- stderr golden-file manifest, sibling of
+#     tests/expected_stdout.txt (same lookup shape: "<program-name> <golden-file-path-relative-
+#     to-repo-root>"; comment lines starting with '#' and blank lines are ignored). A program NOT
+#     listed here is only checked for exit code (and stdout, if registered separately in
+#     expected_stdout.txt) -- the original, unchanged contract. A program listed here has its
+#     stderr (fd 2) captured to a temp file and byte-exact `cmp`'d against the named golden --
+#     see the `test` and `test-negative` targets in the Makefile. This is what versions
+#     tests/negative_probe.c's proof that TEST_ASSERT (include/test.h) fails with the exact
+#     "FAIL: <file>:<line>: <expr>" message on a false condition, instead of that proof living
+#     only as a throwaway manual probe (see negative_probe.c's own file header).
+# PT: AUD-C0-5.3 (AUDIT_FIND.md) -- manifesto golden-file de stderr, irmao do
+#     tests/expected_stdout.txt (mesmo formato de busca: "<nome-do-programa> <caminho-do-golden-
+#     relativo-a-raiz-do-repo>"; linhas de comentario iniciando com '#' e linhas em branco sao
+#     ignoradas). Um programa NAO listado aqui so tem o exit code checado (e stdout, se
+#     registrado separadamente em expected_stdout.txt) -- o contrato original, inalterado. Um
+#     programa listado aqui tem seu stderr (fd 2) capturado num arquivo temporario e comparado
+#     byte-a-byte (`cmp`) contra o golden nomeado -- ver os alvos `test` e `test-negative` no
+#     Makefile. E' isso que versiona a prova de tests/negative_probe.c de que o TEST_ASSERT
+#     (include/test.h) falha com a mensagem exata "FAIL: <arquivo>:<linha>: <expr>" numa
+#     condicao falsa, em vez dessa prova viver so como uma sonda manual descartavel (ver o
+#     proprio cabecalho de arquivo do negative_probe.c).
+negative_probe tests/golden/negative_probe.expected

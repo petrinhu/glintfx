@@ -1,5 +1,6 @@
 exit42 42
 hello 0
+negative_probe 1
 printf_e2e 0
 test_alloc 0
 selftest 0

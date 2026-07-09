@@ -16,6 +16,21 @@ Manual de testes do projeto. Stack: C + Assembly puros, freestanding, sem libc, 
 | TST-STATIC | Análise estática | Bugs sem executar: UB, uso indevido, dead code | `clang --analyze` / `scan-build`; cppcheck em modo freestanding |
 | TST-MEM | Memória (alocador) | Leak, double-free, alinhamento, escrita fora de bloco no nosso `malloc` | Testes dedicados do alocador + `valgrind` no binário estático quando viável; checagem de invariantes do bump/free-list |
 
+### Comandos (W11)
+
+```sh
+make test           # TST-INT: build + roda toda tests/*.c, exit code + stdout/stderr golden
+make test-negative   # AUD-C0-5.3: verifica o caminho de FALHA do harness (TEST_ASSERT aborta com
+                      # a mensagem "FAIL: <file>:<line>: <expr>" correta) -- já coberto também
+                      # dentro de `make test` via tests/expected_stderr.txt
+```
+
+**TST-INT — golden files.** Três manifestos irmãos em `tests/` (`expected_exit.txt`,
+`expected_stdout.txt`, `expected_stderr.txt`), todos no formato `<nome> <valor-ou-caminho>`. Um
+programa só é comparado byte-a-byte no fd que tiver entrada registrada; ausência mantém o
+contrato original (só exit code). `tests/printf_e2e.c` força ≥2 flushes do `mini_printf` (saída
+>256B, AUD-C0-3); `tests/negative_probe.c` prova o caminho de falha do `TEST_ASSERT` (AUD-C0-5.3).
+
 ## Fora de escopo (projeto base — por enquanto)
 
 - Sanitizers (ASan/UBSan) exigem runtime próprio em freestanding — reavaliar se virar necessário.

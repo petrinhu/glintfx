@@ -1,0 +1,1 @@
+FAIL: tests/negative_probe.c:78: 1 == 2

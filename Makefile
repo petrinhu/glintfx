@@ -46,7 +46,7 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 PROGRAM_SRCS := $(wildcard tests/*.c)
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test clean run
+.PHONY: build test test-negative clean run
 
 build: $(PROGRAMS)
 
@@ -102,23 +102,55 @@ $(OBJ) $(BIN):
 #     temporario (nunca uma substituicao de comando de shell `$(...)`, que comeria qualquer
 #     quebra-de-linha final e corromperia silenciosamente a comparacao byte-a-byte) e comparado
 #     com `cmp -s` -- `cmp` POSIX sem saida, exit 0 sse todo byte bate.
+# EN: TST-INT (TODO.md, W11) extension: a THIRD manifest, tests/expected_stderr.txt, mirrors
+#     expected_stdout.txt's exact shape ("<name> <golden-path>") but for fd 2. This is what
+#     versions AUD-C0-5.3's negative-path proof: tests/negative_probe.c is a gate program whose
+#     job is to FAIL on purpose (TEST_ASSERT with a false condition) and its stderr -- the
+#     "FAIL: <file>:<line>: <expr>" message from include/test.h -- is now diffed byte-exact
+#     against a committed golden, instead of that proof living only as a throwaway manual probe
+#     (see tests/selftest.c's file header for the prior state). A program with neither a stdout
+#     nor a stderr golden keeps running with both fds inherited from the invoking shell (so e.g.
+#     hello's "hello, world" still shows up live in `make test`'s own output) -- captures only
+#     happen for whichever fd(s) actually have a golden registered, to avoid silently swallowing
+#     output nobody asked to have checked.
+# PT: Extensao do TST-INT (TODO.md, W11): um TERCEIRO manifesto, tests/expected_stderr.txt,
+#     espelha exatamente o formato do expected_stdout.txt ("<nome> <caminho-do-golden>") mas pro
+#     fd 2. E' isso que versiona a prova do caminho NEGATIVO do AUD-C0-5.3:
+#     tests/negative_probe.c e' um programa-gate cujo trabalho e' FALHAR de proposito
+#     (TEST_ASSERT com condicao falsa) e o stderr dele -- a mensagem "FAIL: <arquivo>:<linha>:
+#     <expr>" do include/test.h -- agora e' comparado byte-a-byte contra um golden commitado, em
+#     vez dessa prova viver so como uma sonda manual descartavel (ver o cabecalho do arquivo de
+#     tests/selftest.c pro estado anterior). Um programa sem golden nem de stdout nem de stderr
+#     continua rodando com os dois fds herdados do shell que chamou (entao, ex., o "hello, world"
+#     do hello ainda aparece ao vivo na saida do proprio `make test`) -- so ha captura pro(s)
+#     fd(s) que de fato tem golden registrado, pra nao engolir em silencio saida que ninguem
+#     pediu pra checar.
 test: build
 	@status=0; \
 	for prog in $(PROGRAMS); do \
 		name=$$(basename $$prog); \
 		expected=$$(awk -v n="$$name" '$$1==n{print $$2}' tests/expected_exit.txt 2>/dev/null); \
 		[ -n "$$expected" ] || expected=0; \
-		golden=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stdout.txt 2>/dev/null); \
-		if [ -n "$$golden" ]; then \
-			outtmp=$$(mktemp); \
-			$$prog < /dev/null > "$$outtmp"; actual=$$?; \
-			if [ "$$actual" = "$$expected" ] && cmp -s "$$outtmp" "$$golden"; then \
-				echo "PASS: $$name (exit=$$actual, stdout==$$golden)"; \
+		golden_out=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stdout.txt 2>/dev/null); \
+		golden_err=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stderr.txt 2>/dev/null); \
+		if [ -n "$$golden_out" ] || [ -n "$$golden_err" ]; then \
+			outtmp=$$(mktemp); errtmp=$$(mktemp); \
+			$$prog < /dev/null > "$$outtmp" 2> "$$errtmp"; actual=$$?; \
+			ok=1; detail=""; \
+			[ "$$actual" = "$$expected" ] || ok=0; \
+			if [ -n "$$golden_out" ]; then \
+				if cmp -s "$$outtmp" "$$golden_out"; then detail="$$detail stdout==$$golden_out"; else ok=0; detail="$$detail stdout!=$$golden_out"; fi; \
+			fi; \
+			if [ -n "$$golden_err" ]; then \
+				if cmp -s "$$errtmp" "$$golden_err"; then detail="$$detail stderr==$$golden_err"; else ok=0; detail="$$detail stderr!=$$golden_err"; fi; \
+			fi; \
+			if [ "$$ok" = 1 ]; then \
+				echo "PASS: $$name (exit=$$actual,$$detail)"; \
 			else \
-				echo "FAIL: $$name (exit=$$actual, expected=$$expected, stdout vs $$golden mismatch)"; \
+				echo "FAIL: $$name (exit=$$actual, expected=$$expected,$$detail)"; \
 				status=1; \
 			fi; \
-			rm -f "$$outtmp"; \
+			rm -f "$$outtmp" "$$errtmp"; \
 		else \
 			$$prog < /dev/null; actual=$$?; \
 			if [ "$$actual" = "$$expected" ]; then \
@@ -130,6 +162,38 @@ test: build
 		fi; \
 	done; \
 	exit $$status
+
+# EN: AUD-C0-5.3 convenience alias: re-runs JUST negative_probe (already part of the loop above
+#     via tests/expected_exit.txt + tests/expected_stderr.txt) with a dedicated, narrowly-scoped
+#     target -- useful for fast local iteration on the harness itself (include/test.h) without
+#     rebuilding/rerunning the whole suite, and as an explicitly-named CI/pre-commit check. Not a
+#     SEPARATE code path from `test`'s generic stderr-golden logic above -- same manifests, same
+#     comparison, just filtered to one program.
+# PT: Alias de conveniencia do AUD-C0-5.3: reroda SO o negative_probe (ja parte do laco acima via
+#     tests/expected_exit.txt + tests/expected_stderr.txt) com um alvo dedicado e de escopo
+#     estreito -- util pra iteracao local rapida no proprio harness (include/test.h) sem
+#     rebuildar/rerodar a suite inteira, e como uma checagem de CI/pre-commit explicitamente
+#     nomeada. Nao e' um caminho de codigo SEPARADO da logica generica de golden-de-stderr do
+#     `test` acima -- mesmos manifestos, mesma comparacao, so filtrado pra um programa.
+test-negative: $(BIN)/negative_probe
+	@name=negative_probe; \
+	prog=$(BIN)/$$name; \
+	expected=$$(awk -v n="$$name" '$$1==n{print $$2}' tests/expected_exit.txt); \
+	golden_err=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stderr.txt); \
+	if [ -z "$$golden_err" ]; then \
+		echo "test-negative: FAILED ($$name has no entry in tests/expected_stderr.txt)"; \
+		exit 1; \
+	fi; \
+	errtmp=$$(mktemp); \
+	$$prog < /dev/null > /dev/null 2> "$$errtmp"; actual=$$?; \
+	if [ "$$actual" = "$$expected" ] && cmp -s "$$errtmp" "$$golden_err"; then \
+		echo "PASS: $$name (exit=$$actual, stderr==$$golden_err) -- AUD-C0-5.3 TEST_ASSERT failure path verified"; \
+		rm -f "$$errtmp"; \
+	else \
+		echo "FAIL: $$name (exit=$$actual, expected=$$expected, stderr vs $$golden_err mismatch)"; \
+		rm -f "$$errtmp"; \
+		exit 1; \
+	fi
 
 run: build
 	@for prog in $(PROGRAMS); do echo "--- $$prog ---"; $$prog; echo "exit=$$?"; done

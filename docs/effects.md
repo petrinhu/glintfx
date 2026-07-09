@@ -29,6 +29,8 @@ RmlUi 6.3 styling looks like CSS but differs in important ways. Keep these rules
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Blur filter | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COLOR COLOR)` | `mask-image: horizontal-gradient(#000f #0000);` |
+| Uniform image tint | `image-color` | `COLOR` | `image-color: #ffcc66;` |
+| Luminance-key image tint | `decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` | `url` / `COLOR` / `none\|multiply\|luminance-multiply\|screen` / number | `decorator: image-tint(runes-base.png); image-tint-mode: luminance-multiply;` |
 
 `box-shadow` and `filter: drop-shadow` differ: `box-shadow` is a rectangular (raster-box) shadow, while `drop-shadow` follows the element's alpha shape (e.g. rounded corners). They are independent and can be combined.
 
@@ -298,7 +300,54 @@ Horizontal scrollbars follow the exact same pattern under `scrollbarhorizontal`,
 
 `var()`/custom properties resolve normally here too (`ElementStyle::ResolveVariables`, the same substitution path every other RCSS property uses) — `image-color: var(--domain-color);` works, including inside `@keyframes`.
 
-**Honest limit: it is a uniform multiply, not a luminance-key.** `image-color` tints the *entire* texture — including texels that already carry their own color. If `runes-base.png` had gold-colored detail pixels mixed with the white/neutral runes, `image-color` would multiply those gold pixels too (shifting their hue, not just the neutral ones), because the shader has no concept of "which pixels are neutral" — it is one scalar multiply applied uniformly. Preserving pre-colored detail while tinting only the neutral/light pixels (a true luminance-key or "recolor mask") is **not supported natively via RCSS today** — it would require a custom shader pass, not a property. Design textures to be tint-targets as fully neutral (grayscale) if you need this pattern; treat a luminance-key decorator as a roadmap candidate, not a current capability.
+**Honest limit: it is a uniform multiply, not a luminance-key.** `image-color` tints the *entire* texture — including texels that already carry their own color. If `runes-base.png` had gold-colored detail pixels mixed with the white/neutral runes, `image-color` would multiply those gold pixels too (shifting their hue, not just the neutral ones), because the shader has no concept of "which pixels are neutral" — it is one scalar multiply applied uniformly. Preserving pre-colored detail while tinting only the neutral/light pixels needs a different tool: `image-tint(luminance-multiply)`, below (v0.7.0).
+
+### How-to: luminance-key tint (`image-tint()`)
+
+`image-color` (above) tints everything uniformly. `image-tint(luminance-multiply)` tints only the light+neutral texels of a texture, leaving already-saturated (e.g. gold trim) and dark (e.g. stone) texels alone — a genuinely new glintfx decorator + fragment shader, not a native RmlUi capability. See [ADR-0010](adr/0010-image-tint-luminance-key.md) for the full design rationale.
+
+**Syntax.** The decorator takes a single positional argument, the texture URL; the tint itself is controlled by three standalone, globally-registered, independently-animatable RCSS properties (not decorator arguments):
+
+| Property | Values | Default |
+| :--- | :--- | :--- |
+| `decorator: image-tint( url )` | a texture path | -- |
+| `image-tint-color` | a `color` (accepts `var()`) | `white` |
+| `image-tint-mode` | `none` \| `multiply` \| `luminance-multiply` \| `screen` | `none` |
+| `image-tint-threshold` | a number, clamped to `[0, 0.999]` | `0.55` |
+
+**The four modes.**
+- `none` — true no-op. Identical cost/behavior to a plain `image()` decorator; no shader is even compiled.
+- `multiply` — same math as native `image-color` (`straight × tint_color`), but routed through this decorator instead. Use this only if you also need `image-tint-mode` to be switchable at runtime alongside `luminance-multiply`.
+- `luminance-multiply` — the luminance-key tint: `w = smoothstep(threshold, 1, luminance) × (1 − saturation)`, then `tinted = mix(straight, straight × tint_color, w)`. Light+neutral texels (high luminance, low saturation) get tinted; dark or already-saturated texels are weighted toward zero.
+- `screen` — `1 − (1 − straight) × (1 − tint_color)`, a brightening blend (useful for glow-style tints on dark bases, unlike `multiply`'s darkening behavior).
+
+**Recoloring one base texture into N domains, with animation.**
+
+```css
+.card {
+    decorator: image-tint( runes-base.png );
+    image-tint-mode: luminance-multiply;
+    image-tint-color: var(--domain-color, #ffffff);
+    image-tint-threshold: 0.55;
+    transition: image-tint-color 0.3s;   /* animates smoothly, same as image-color */
+}
+.card.domain-fire  { --domain-color: #ff6a3c; }
+.card.domain-frost { --domain-color: #6ac8ff; }
+
+/* Or drive it from a @keyframes pulse instead of a state class: */
+@keyframes tint-pulse {
+    0%   { image-tint-color: #ffffff; }
+    50%  { image-tint-color: #ffcc66; }
+    100% { image-tint-color: #ffffff; }
+}
+.card.charging { animation: tint-pulse 1.2s infinite; }
+```
+
+One `runes-base.png` (white runes + navy stone + gold trim), N domain colors at runtime, zero extra textures shipped, zero C++ code — this is the GusWorld use case `image-tint()` was built for.
+
+**Honest fidelity note: "preserves saturated texels" is approximate, not exact.** The `(1 − saturation)` weighting is *linear*, not a hard cutoff — a texel that is highly-but-not-fully saturated (e.g. a gold trim with `saturation ≈ 0.69`) still receives a non-trivial fraction of the tint at the default `threshold: 0.55`, roughly 13-16% of a full tint in that case. This is not a bug; it is exactly what the formula computes for any texel whose luminance clears the threshold.
+
+**Tuning `image-tint-threshold` per asset.** To preserve a specific saturated color near-totally, raise `image-tint-threshold` above *that color's own luminance* — this pushes its `smoothstep` weight toward zero. **Trade-off:** raising the threshold also proportionally suppresses tinting of the neutral zone the effect exists to recolor, so keep `threshold` comfortably below the luminance of the texels you actually want tinted. There is no universal default that "just works" for every asset — treat `image-tint-threshold` as a per-asset dial, tuned against your own texture's luminance histogram, not a constant to copy-paste. `0.55` is a reasonable starting point for a base shaped like the example above, not a guarantee.
 
 ### Putting it together
 
@@ -334,6 +383,8 @@ A estilização do RmlUi 6.3 parece CSS mas difere de formas importantes. Lembre
 | Backdrop blur | `backdrop-filter` | `blur(Npx)` | `backdrop-filter: blur(8px);` |
 | Filtro blur | `filter` | `blur(Npx)` | `filter: blur(4px);` |
 | Mask | `mask-image` | `horizontal-gradient(COR COR)` | `mask-image: horizontal-gradient(#000f #0000);` |
+| Tingimento uniforme de imagem | `image-color` | `COR` | `image-color: #ffcc66;` |
+| Tingimento de imagem por luminance-key | `decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` | `url` / `COR` / `none\|multiply\|luminance-multiply\|screen` / número | `decorator: image-tint(runes-base.png); image-tint-mode: luminance-multiply;` |
 
 `box-shadow` e `filter: drop-shadow` diferem: `box-shadow` é uma sombra retangular (box-raster), enquanto `drop-shadow` segue a forma do alpha do elemento (ex.: cantos arredondados). São independentes e podem ser combinados.
 
@@ -605,7 +656,54 @@ Barras horizontais seguem exatamente o mesmo padrão sob `scrollbarhorizontal`, 
 
 `var()`/custom properties resolvem normalmente aqui também (`ElementStyle::ResolveVariables`, o mesmo caminho de substituição que qualquer outra propriedade RCSS usa) -- `image-color: var(--cor-dominio);` funciona, inclusive dentro de `@keyframes`.
 
-**Limite honesto: é um multiply uniforme, não um luminance-key.** `image-color` tinge a textura *inteira* -- inclusive texels que já carregam cor própria. Se `runes-base.png` tivesse pixels de detalhe dourados misturados com as runas brancas/neutras, `image-color` multiplicaria esses pixels dourados também (deslocando o matiz deles, não só o dos neutros), porque o shader não tem noção de "quais pixels são neutros" -- é um multiply escalar único aplicado uniformemente. Preservar detalhe pré-colorido enquanto tinge só os pixels claros/neutros (um verdadeiro luminance-key ou "máscara de recoloração") **não é suportado nativamente via RCSS hoje** -- exigiria um passo de shader customizado, não uma propriedade. Desenhe texturas totalmente neutras (escala de cinza) nas áreas-alvo de tingimento se precisar desse padrão; trate um decorator de luminance-key como candidato de roadmap, não uma capacidade atual.
+**Limite honesto: é um multiply uniforme, não um luminance-key.** `image-color` tinge a textura *inteira* -- inclusive texels que já carregam cor própria. Se `runes-base.png` tivesse pixels de detalhe dourados misturados com as runas brancas/neutras, `image-color` multiplicaria esses pixels dourados também (deslocando o matiz deles, não só o dos neutros), porque o shader não tem noção de "quais pixels são neutros" -- é um multiply escalar único aplicado uniformemente. Preservar detalhe pré-colorido enquanto tinge só os pixels claros/neutros precisa de outra ferramenta: `image-tint(luminance-multiply)`, abaixo (v0.7.0).
+
+### How-to: tingimento por luminance-key (`image-tint()`)
+
+`image-color` (acima) tinge tudo uniformemente. `image-tint(luminance-multiply)` tinge só os texels claros+neutros de uma textura, preservando texels já saturados (ex.: trim ouro) e escuros (ex.: pedra) -- um decorator + fragment shader genuinamente novos da glintfx, não uma capacidade nativa do RmlUi. Ver [ADR-0010](adr/0010-image-tint-luminance-key.md) para a racional de design completa.
+
+**Sintaxe.** O decorator recebe um único argumento posicional, a URL da textura; o tingimento em si é controlado por três propriedades RCSS standalone, registradas globalmente, animáveis independentemente (não são argumentos de decorator):
+
+| Propriedade | Valores | Default |
+| :--- | :--- | :--- |
+| `decorator: image-tint( url )` | um caminho de textura | -- |
+| `image-tint-color` | uma `color` (aceita `var()`) | `white` |
+| `image-tint-mode` | `none` \| `multiply` \| `luminance-multiply` \| `screen` | `none` |
+| `image-tint-threshold` | um número, clampado a `[0, 0.999]` | `0.55` |
+
+**Os quatro modos.**
+- `none` -- no-op de verdade. Custo/comportamento idêntico a um decorator `image()` simples; nenhum shader sequer é compilado.
+- `multiply` -- mesma matemática do `image-color` nativo (`straight × tint_color`), mas roteada por este decorator. Use só se também precisar que `image-tint-mode` seja trocável em runtime junto de `luminance-multiply`.
+- `luminance-multiply` -- o tingimento luminance-key: `w = smoothstep(threshold, 1, luminância) × (1 − saturação)`, depois `tinted = mix(straight, straight × tint_color, w)`. Texels claros+neutros (luminância alta, saturação baixa) são tingidos; texels escuros ou já saturados pesam pra perto de zero.
+- `screen` -- `1 − (1 − straight) × (1 − tint_color)`, um blend de clareamento (útil pra tingimentos estilo-glow sobre bases escuras, ao contrário do comportamento de escurecimento do `multiply`).
+
+**Recolorindo uma textura base em N domínios, com animação.**
+
+```css
+.card {
+    decorator: image-tint( runes-base.png );
+    image-tint-mode: luminance-multiply;
+    image-tint-color: var(--cor-dominio, #ffffff);
+    image-tint-threshold: 0.55;
+    transition: image-tint-color 0.3s;   /* anima suavemente, igual ao image-color */
+}
+.card.dominio-fogo   { --cor-dominio: #ff6a3c; }
+.card.dominio-gelo   { --cor-dominio: #6ac8ff; }
+
+/* Ou dirija por um pulso @keyframes em vez de uma classe de estado: */
+@keyframes tint-pulse {
+    0%   { image-tint-color: #ffffff; }
+    50%  { image-tint-color: #ffcc66; }
+    100% { image-tint-color: #ffffff; }
+}
+.card.carregando { animation: tint-pulse 1.2s infinite; }
+```
+
+Uma única `runes-base.png` (runas brancas + pedra navy + trim ouro), N cores de domínio em runtime, zero textura extra distribuída, zero código C++ -- este é o caso de uso do GusWorld pra qual o `image-tint()` foi construído.
+
+**Nota honesta de fidelidade: "preserva texels saturados" é aproximado, não exato.** A ponderação `(1 − saturação)` é *linear*, não um corte duro -- um texel altamente-mas-não-totalmente-saturado (ex.: um trim ouro com `saturação ≈ 0.69`) ainda recebe uma fração não-trivial do tingimento no `threshold: 0.55` default, cerca de 13-16% de um tingimento pleno nesse caso. Isso não é um bug; é exatamente o que a fórmula calcula pra qualquer texel cuja luminância ultrapasse o threshold.
+
+**Tunando `image-tint-threshold` por asset.** Pra preservar uma cor saturada específica quase-totalmente, suba `image-tint-threshold` acima da *luminância própria daquela cor* -- isso empurra o peso `smoothstep` dela pra perto de zero. **Troca:** subir o threshold também suprime proporcionalmente o tingimento da zona neutra que o efeito existe pra recolorir, então mantenha `threshold` confortavelmente abaixo da luminância dos texels que você de fato quer tingidos. Não existe um default universal que "simplesmente funciona" pra todo asset -- trate `image-tint-threshold` como um dial por-asset, tunado contra o histograma de luminância da sua própria textura, não uma constante pra copiar-e-colar. `0.55` é um ponto de partida razoável pra uma base no formato do exemplo acima, não uma garantia.
 
 ### Juntando tudo
 

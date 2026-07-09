@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.6.0](https://img.shields.io/badge/Version-0.6.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.7.0](https://img.shields.io/badge/Version-0.7.0-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -46,7 +46,7 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 ### Features
 
 - **Drop-in integration:** one target (`glintfx::glintfx`) via CMake `FetchContent` or `find_package(glintfx)`; no manual graphics setup.
-- **Data-driven effects:** glow, gradient, backdrop-blur, drop-shadow, mask, and a regular-polygon fill (`decorator: polygon(sides, fill[, rotation])`, `fill` a solid `color` or a `radial-gradient(...)`/`linear-gradient(...)` -- e.g. a hexagonal badge or gauge fill), all expressed in `.rcss` (no imperative effect API to learn).
+- **Data-driven effects:** glow, gradient, backdrop-blur, drop-shadow, mask, a regular-polygon fill (`decorator: polygon(sides, fill[, rotation])`, `fill` a solid `color` or a `radial-gradient(...)`/`linear-gradient(...)` -- e.g. a hexagonal badge or gauge fill), and a luminance-key texture tint (`decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` -- recolors only light+neutral texels of one base texture into N domain colors, preserving saturated/dark detail), all expressed in `.rcss` (no imperative effect API to learn).
 - **Two consumption modes:** the standalone `glintfx::App` (owns the window and the frame loop) and `glintfx::UiLayer` (embed/guest mode: attaches to a host-owned GL context, compose-only render, injected events; see [`docs/embed-integration.md`](docs/embed-integration.md)). Both share the same data-model, dp_ratio, and base-URL API.
 - **Data-model binding:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, with live lists driven by `data-for` in RML -- scrolling logs, menus, inventories.
 - **PNG, JPEG, and TGA textures:** decoded via stb_image with correct premultiplied-alpha handling for the GL3 blend.
@@ -236,7 +236,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.6.0** (stable, tagged), 2026-07-08. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
+> **Current release: v0.7.0** (stable, tagged), 2026-07-09. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
 
 **Delivered (v0.2.x-v0.4.0):**
 
@@ -292,7 +292,7 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 ### Features
 
 - **Integração drop-in:** um alvo (`glintfx::glintfx`) via CMake `FetchContent` ou `find_package(glintfx)`; sem setup gráfico manual.
-- **Efeitos data-driven:** glow, degradê, backdrop-blur, drop-shadow, mask e um preenchimento de polígono regular (`decorator: polygon(lados, preenchimento[, rotação])`, `preenchimento` uma `cor` sólida ou um `radial-gradient(...)`/`linear-gradient(...)` -- ex.: um selo hexagonal ou preenchimento de medidor), todos expressos em `.rcss` (sem API imperativa de efeito para aprender).
+- **Efeitos data-driven:** glow, degradê, backdrop-blur, drop-shadow, mask, um preenchimento de polígono regular (`decorator: polygon(lados, preenchimento[, rotação])`, `preenchimento` uma `cor` sólida ou um `radial-gradient(...)`/`linear-gradient(...)` -- ex.: um selo hexagonal ou preenchimento de medidor), e um tingimento de textura por luminance-key (`decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` -- recolore só texels claros+neutros de uma textura base em N cores de domínio, preservando detalhe saturado/escuro), todos expressos em `.rcss` (sem API imperativa de efeito para aprender).
 - **Dois modos de consumo:** o `glintfx::App` standalone (dono da janela e do loop de frame) e o `glintfx::UiLayer` (embed/guest mode: anexa ao contexto GL de um host, render compose-only, eventos injetados; ver [`docs/embed-integration.md`](docs/embed-integration.md)). Os dois compartilham a mesma API de data-model, dp_ratio e base-URL.
 - **Ligação de data-model:** `create_data_model` + `bind_number/string/bool/list` + `set_*`, com listas vivas dirigidas por `data-for` no RML -- logs rolantes, menus, inventários.
 - **Texturas PNG, JPEG e TGA:** decodificadas via stb_image com tratamento correto de alpha premultiplicado para o blend GL3.
@@ -482,7 +482,7 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.6.0** (estável, taggeada), 2026-07-08. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
+> **Lançamento atual: v0.7.0** (estável, taggeada), 2026-07-09. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
 
 **Entregue (v0.2.x-v0.4.0):**
 

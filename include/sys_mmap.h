@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: The fourth NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
-//     functions layered on top of syscall0..6"). Mirrors POSIX `mmap()`'s argument shape, but
+//     functions layered on top of syscall1/3/6"). Mirrors POSIX `mmap()`'s argument shape, but
 //     is the RAW kernel wrapper, not the libc one -- this is the one genuinely dangerous
 //     corner of ADR-0002's `-errno` contract in this codebase: on success the kernel returns
 //     the mapped ADDRESS in `rax` (not 0, not a byte count); on failure it returns a negative
@@ -15,7 +15,7 @@
 //     itself does NOT perform that check -- it is the pure, minimal wrapper; the interpretation
 //     lives at the call site (src/alloc.c), same division of labour as sys_read/sys_write.
 // PT: O quarto wrapper de syscall NOMEADO (ADR-0001 -- "helpers C nomeados e tipados sao
-//     funcoes finas por cima" das syscall0..6). Espelha o formato de argumentos do `mmap()`
+//     funcoes finas por cima" das syscall1/3/6). Espelha o formato de argumentos do `mmap()`
 //     POSIX, mas é o wrapper CRU do kernel, não o da libc -- este é o canto genuinamente
 //     perigoso do contrato `-errno` do ADR-0002 neste código-base: em sucesso o kernel retorna
 //     o ENDEREÇO mapeado em `rax` (não 0, não uma contagem de bytes); em falha retorna um

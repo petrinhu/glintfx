@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: The third NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
-//     functions layered on top of syscall0..6"). Mirrors POSIX read(): reads up to `count`
+//     functions layered on top of syscall1/3/6"). Mirrors POSIX read(): reads up to `count`
 //     bytes from file descriptor `fd` into `buf`. Returns the raw kernel value in `rax`: on
 //     success, the number of bytes actually read (may be less than `count` -- short reads are
 //     a real possibility, this helper does NOT loop/retry to fill the buffer); `0` means EOF
@@ -10,7 +10,7 @@
 //     minimal helper: no libc `read(3)` semantics (no `errno` global, no buffering, no
 //     retry-on-EINTR).
 // PT: O terceiro wrapper de syscall NOMEADO (ADR-0001 -- "helpers C nomeados e tipados sao
-//     funcoes finas por cima" das syscall0..6). Espelha o read() POSIX: le ate `count` bytes
+//     funcoes finas por cima" das syscall1/3/6). Espelha o read() POSIX: le ate `count` bytes
 //     do descritor de arquivo `fd` para dentro de `buf`. Retorna o valor cru do kernel em
 //     `rax`: em sucesso, o numero de bytes de fato lidos (pode ser menor que `count` -- short
 //     reads sao uma possibilidade real, este helper NAO faz loop/retry para preencher o

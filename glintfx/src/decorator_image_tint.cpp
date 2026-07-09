@@ -121,11 +121,19 @@ struct TintState {
 //       -color: any resolved Rml::Colourb is valid -- no extra clamp needed.
 //       -threshold: `!isfinite` (NaN/Inf, e.g. from a broken animation) falls back to the
 //         property's own documented default (0.55) FIRST, then the (now guaranteed-finite) value
-//         is clamped to [0,1] -- NOTE this is a *clamp*, not a *reject-the-whole-decorator*,
-//         deliberately DIFFERENT from decorator_polygon.cpp's `sides` guard (which rejects):
-//         an out-of-range threshold is not destructive/DoS-shaped the way a billion-sided polygon
-//         is, so degrading gracefully (clamp) rather than discarding the whole decorator is the
-//         right shape here.
+//         is clamped to [0.0, 0.999] -- the upper bound is STRICTLY below 1.0, not 1.0 itself: the
+//         fragment shader (render_gl3.cpp) feeds this value straight into
+//         `smoothstep(_threshold, 1.0, L)`, and GLSL's smoothstep is explicitly UNDEFINED BEHAVIOUR
+//         when edge0 >= edge1 (the spec's own wording) -- an author-supplied `threshold: 1.0` (or
+//         anything above 1, which a [0,1] clamp would previously flatten TO exactly 1.0) used to
+//         produce edge0==edge1==1.0 on every such element. Mesa/llvmpipe (this repo's CI) happens
+//         to tolerate it, but real GPU drivers (NVIDIA/AMD/Intel) are free to return NaN, which
+//         `mix()` then propagates into the final colour -- a real flicker/corruption bug on
+//         hardware this CI cannot see. NOTE this is still a *clamp*, not a *reject-the-whole-
+//         decorator*, deliberately DIFFERENT from decorator_polygon.cpp's `sides` guard (which
+//         rejects): an out-of-range threshold is not destructive/DoS-shaped the way a
+//         billion-sided polygon is, so degrading gracefully (clamp) rather than discarding the
+//         whole decorator is the right shape here.
 // PT: Lê as três propriedades globais "image-tint-*" diretamente de `element` e protege cada uma
 //     -- chamada FRESCA a cada chamada de RenderElement, nunca cacheada (ver o cabeçalho do
 //     arquivo + a Decisão (c) do ADR-0010). Especificidades de hardening (pedido explícito do
@@ -141,12 +149,20 @@ struct TintState {
 //       -color: qualquer Rml::Colourb resolvido é válido -- sem clamp extra necessário.
 //       -threshold: `!isfinite` (NaN/Inf, ex.: de uma animação quebrada) cai de volta ao default
 //         documentado da própria propriedade (0.55) PRIMEIRO, depois o valor (agora
-//         garantidamente finito) é clampado a [0,1] -- NOTE que isso é um *clamp*, não uma
-//         *rejeição do decorator inteiro*, deliberadamente DIFERENTE da guarda `sides` de
-//         decorator_polygon.cpp (que rejeita): um threshold fora de faixa não é
-//         destrutivo/formato-de-DoS do jeito que um polígono de um bilhão de lados é, então
-//         degradar graciosamente (clamp) em vez de descartar o decorator inteiro é a forma certa
-//         aqui.
+//         garantidamente finito) é clampado a [0.0, 0.999] -- o limite superior é ESTRITAMENTE
+//         abaixo de 1.0, não 1.0 em si: o shader de fragmento (render_gl3.cpp) alimenta esse valor
+//         direto em `smoothstep(_threshold, 1.0, L)`, e o smoothstep do GLSL é explicitamente
+//         COMPORTAMENTO INDEFINIDO quando edge0 >= edge1 (a própria redação da spec) -- um
+//         `threshold: 1.0` fornecido pelo autor (ou qualquer valor acima de 1, que um clamp [0,1]
+//         antes achatava PRA exatamente 1.0) produzia edge0==edge1==1.0 em todo elemento assim.
+//         Mesa/llvmpipe (o CI deste repo) por acaso tolera, mas drivers de GPU reais
+//         (NVIDIA/AMD/Intel) são livres para devolver NaN, que `mix()` então propaga pra cor
+//         final -- um bug real de flicker/corrupção em hardware que este CI não enxerga. NOTE que
+//         isso continua sendo um *clamp*, não uma *rejeição do decorator inteiro*, deliberadamente
+//         DIFERENTE da guarda `sides` de decorator_polygon.cpp (que rejeita): um threshold fora de
+//         faixa não é destrutivo/formato-de-DoS do jeito que um polígono de um bilhão de lados é,
+//         então degradar graciosamente (clamp) em vez de descartar o decorator inteiro é a forma
+//         certa aqui.
 void ResolveTintState(Rml::Element* element, TintState& out) {
   if (const Rml::Property* p_mode = element->GetProperty("image-tint-mode")) {
     switch (p_mode->Get<int>()) {
@@ -167,7 +183,11 @@ void ResolveTintState(Rml::Element* element, TintState& out) {
     float t = p_threshold->Get<float>();
     if (!std::isfinite(t))
       t = 0.55f;
-    out.threshold = std::clamp(t, 0.f, 1.f);
+    // EN: Upper bound is 0.999f, NOT 1.f -- see the doc comment above ("-threshold:") for why
+    //     edge0==edge1==1.0 in the shader's smoothstep() is GLSL UB, not just a visual edge case.
+    // PT: Limite superior é 0.999f, NÃO 1.f -- ver o doc-comment acima ("-threshold:") pra por que
+    //     edge0==edge1==1.0 no smoothstep() do shader é UB do GLSL, não só um edge case visual.
+    out.threshold = std::clamp(t, 0.f, 0.999f);
   }
 }
 

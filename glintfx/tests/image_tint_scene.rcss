@@ -90,10 +90,15 @@ body {
   image-tint-mode: bogus-value;
 }
 #bad_threshold_over {
-  /* threshold=5.0 (out of [0,1]) -- CLAMPED to 1.0 (not rejected, see decorator_image_tint.cpp's
-     ResolveTintState doc comment for why threshold clamps instead of rejecting like `sides`).
-     threshold==1.0 also exercises the smoothstep(1.0,1.0,L) edge0==edge1 GLSL edge case
-     (ADR-0010 risk note) -- must not crash / produce NaN pixels. */
+  /* threshold=5.0 (out of [0,1]) -- CLAMPED to 0.999, NOT 1.0 (not rejected, see
+     decorator_image_tint.cpp's ResolveTintState doc comment for why threshold clamps instead of
+     rejecting like `sides`, and for why the upper bound is STRICTLY below 1.0: a clamp landing
+     exactly on 1.0 would feed smoothstep(1.0,1.0,L) -- edge0==edge1 is GLSL UB by spec, tolerated
+     by this CI's Mesa/llvmpipe but not guaranteed on real GPU drivers). With the fixture's
+     brightest zone (A, L=0.941) still below the clamped 0.999 threshold, this box now exercises
+     DEFINED, deterministic behaviour: every zone's tint weight floors to 0 (smoothstep returns 0
+     for x <= edge0), so the box renders fully UNTINTED -- an extreme/hostile threshold suppresses
+     the effect gracefully instead of producing NaN/undefined pixels. */
   position: absolute;
   left: 190px;
   top: 380px;

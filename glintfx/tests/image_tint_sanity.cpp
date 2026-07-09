@@ -239,14 +239,26 @@ int main() {
       ++failures;
     }
 
-    // 4b -- threshold=5.0 clamped to 1.0: must not crash / produce visibly-broken (NaN-adjacent)
-    //   output. #bad_threshold_over=(190,380,150,60); just confirm the pixel is a plausible,
-    //   finite-looking value (any byte 0-255 trivially satisfies this since GL always writes
-    //   SOME normalized value to an 8-bit target) -- the real assertion is that capture()/the
-    //   whole process did not crash or hang getting here at all.
+    // 4b -- threshold=5.0 clamped to 0.999 (NOT 1.0 -- see decorator_image_tint.cpp's
+    //   ResolveTintState doc comment: edge0==edge1==1.0 is GLSL smoothstep() UB by spec).
+    //   #bad_threshold_over=(190,380,150,60), sampled at box-relative (25,30) -> zone A (same
+    //   box-local zone layout as #bad_mode above: 300px fixture stretched into a 150px box, zone
+    //   A occupies box-local [0,50)). Zone A is the fixture's BRIGHTEST texel (L=0.941), still
+    //   below the clamped 0.999 threshold, so this is now a DEFINED-behaviour assertion, not just
+    //   "did not crash": smoothstep(0.999, 1.0, 0.941) floors to 0 (x <= edge0), so the tint
+    //   weight is exactly 0 everywhere in this box and it must render fully UNTINTED -- i.e.
+    //   close to the fixture's native zone A colour (240,240,240), NOT reddish (image-tint-color
+    //   is #ff0000). An extreme/hostile threshold degrades to "no visible tint", not to
+    //   NaN/undefined pixels.
     const auto* bad_thr = pixel_at(px, W, H, 215, 410);
-    std::printf("image_tint_sanity [bad_threshold_over]: (%d,%d,%d) (no-crash check only)\n",
+    std::printf("image_tint_sanity [bad_threshold_over]: (%d,%d,%d)\n",
         bad_thr[0], bad_thr[1], bad_thr[2]);
+    if (!(bad_thr[0] > 200 && bad_thr[1] > 200 && bad_thr[2] > 200)) {
+      std::puts("image_tint_sanity FAIL [4b]: threshold=5.0 (clamped to 0.999) should leave zone A "
+                 "fully UNTINTED (w=0, smoothstep floors below edge0) -- got a tinted/reddish or "
+                 "otherwise implausible pixel instead of the defined all-zero-weight behaviour");
+      ++failures;
+    }
 
     // 4c -- missing texture file: DecoratorInstancerInterface::GetTexture resolves structurally
     //   (see decorator_image_tint.cpp's InstanceDecorator finding comment) so the decorator DOES

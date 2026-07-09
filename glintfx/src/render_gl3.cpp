@@ -127,7 +127,12 @@ void main() {
     float mx  = max(max(straight.r, straight.g), straight.b);
     float mn  = min(min(straight.r, straight.g), straight.b);
     float sat = mx - mn;
-    float w   = smoothstep(_threshold, 1.0, L) * (1.0 - sat);
+    // Belt-and-suspenders: ResolveTintState (decorator_image_tint.cpp) already clamps
+    // image-tint-threshold to [0, 0.999] on the CPU before it ever reaches this uniform, but
+    // smoothstep(edge0, edge1, x) is GLSL UB the instant edge0 >= edge1 -- re-clamping here costs
+    // one scalar min() and makes that invariant hold even if a future caller ever sets `_threshold`
+    // via a path that bypasses ResolveTintState.
+    float w   = smoothstep(min(_threshold, 0.999), 1.0, L) * (1.0 - sat);
     tinted = mix(straight, straight * _tint_color.rgb, w);
   } else if (_mode == MODE_SCREEN) {
     tinted = vec3(1.0) - (vec3(1.0) - straight) * (vec3(1.0) - _tint_color.rgb);

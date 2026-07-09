@@ -8,6 +8,7 @@
 #include "render_gl3.hpp"
 #include "base_url_file_interface.hpp"
 #include "decorator_polygon.hpp"
+#include "decorator_image_tint.hpp"
 #include "ua_stylesheet.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/StreamMemory.h>
@@ -99,6 +100,27 @@ struct Bootstrap::Impl {
   //     quanto em shutdown() abaixo) ainda satisfaz, mesmo resultado final da abordagem por
   //     valor do file_iface.
   Rml::UniquePtr<glintfx::PolygonDecoratorInstancer> polygon_instancer;
+  // EN: GLINTFX-TINT-3 -- "image-tint(<url>)" decorator instancer (ADR-0010). Same lifetime
+  //     discipline as polygon_instancer immediately above (see that field's long doc comment for
+  //     the full ordering rationale, which applies identically here: the SAME
+  //     StyleSheetSpecification/Factory initialisation-order constraint governs both) --
+  //     default-null here, allocated in init() only AFTER Rml::Initialise() succeeds (this
+  //     instancer's ctor ALSO calls Rml::StyleSheetSpecification::RegisterProperty for the three
+  //     global "image-tint-*" properties, not just EffectSpecification::RegisterProperty for its
+  //     own `src` shorthand argument -- see decorator_image_tint.cpp's ctor), and outlives
+  //     Rml::Shutdown() for the identical reason (Rml::Factory::RegisterDecoratorInstancer stores
+  //     a raw, non-owning pointer).
+  // PT: GLINTFX-TINT-3 -- instancer do decorator "image-tint(<url>)" (ADR-0010). Mesma
+  //     disciplina de lifetime de polygon_instancer logo acima (ver o doc-comment longo daquele
+  //     campo pra racional completa de ordenação, que se aplica identicamente aqui: a MESMA
+  //     restrição de ordem-de-inicialização de StyleSheetSpecification/Factory governa os dois)
+  //     -- default-nulo aqui, alocado em init() só APÓS Rml::Initialise() ter sucesso (o ctor
+  //     deste instancer TAMBÉM chama Rml::StyleSheetSpecification::RegisterProperty pras três
+  //     propriedades globais "image-tint-*", não só EffectSpecification::RegisterProperty pro
+  //     próprio argumento de shorthand `src` -- ver o ctor de decorator_image_tint.cpp), e
+  //     sobrevive ao Rml::Shutdown() pelo motivo idêntico (Rml::Factory::
+  //     RegisterDecoratorInstancer guarda um ponteiro cru, não-dono).
+  Rml::UniquePtr<glintfx::ImageTintDecoratorInstancer> tint_instancer;
   Rml::Context* ctx = nullptr;
   Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
@@ -548,6 +570,18 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     Rml::Shutdown() terminar.
   impl_->polygon_instancer = Rml::MakeUnique<glintfx::PolygonDecoratorInstancer>();
   Rml::Factory::RegisterDecoratorInstancer("polygon", impl_->polygon_instancer.get());
+
+  // EN: GLINTFX-TINT-3 -- construct + register the "image-tint" decorator instancer, same
+  //     ordering constraint as "polygon" immediately above (see impl_->tint_instancer's own doc
+  //     comment). Registered as "image-tint" so "decorator: image-tint(base.png);" resolves --
+  //     see ADR-0010 Decision (b) for why the function name is glintfx's own, not "image".
+  // PT: GLINTFX-TINT-3 -- constrói + registra o instancer do decorator "image-tint", mesma
+  //     restrição de ordenação de "polygon" logo acima (ver o próprio doc-comment de
+  //     impl_->tint_instancer). Registrado como "image-tint" para que
+  //     "decorator: image-tint(base.png);" resolva -- ver a Decisão (b) do ADR-0010 pro motivo
+  //     do nome de função ser próprio da glintfx, não "image".
+  impl_->tint_instancer = Rml::MakeUnique<glintfx::ImageTintDecoratorInstancer>();
+  Rml::Factory::RegisterDecoratorInstancer("image-tint", impl_->tint_instancer.get());
 
   // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
   //     alone to a document) so it stays reusable as a merge base for every load().

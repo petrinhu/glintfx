@@ -39,3 +39,9 @@
 - Two separate projects / Dois projetos — preserva o puro, mas o líder quis repurposar este. Rejected.
 
 Cross-ref: [[0001-syscall-layer-style]], [[0005-elf-layout]].
+
+## Addendum (2026-07-09)
+
+**EN:** [[0009-internalization-boundary]] **supersedes in part** the "no linking between layers" framing above. As internalized Layer-0 pieces land (starting with the gl3w pilot), Layer 1 statically links a `libcore.a` archive (symbols prefixed `glx_*`) exposing them — via the "hosted shell + C meat" pattern: the C++ class implementing an RmlUi interface stays ordinary hosted C++, only its algorithmic core is sovereign C from Layer 0. This ADR's core two-layer split (Layer 0 remains freestanding, zero-libc, its own build system; Layer 1 remains the C++23 deliverable) is **unchanged** — only the *mechanism* by which a finished Layer-0 artifact reaches a Layer-1 binary moves from "process boundary" to "static link boundary". See ADR-0009 for the gates, the heap-ownership rule, and why Option B (IPC) was rejected for the GL/font hot path.
+
+**PT:** O [[0009-internalization-boundary]] **substitui em parte** o enquadramento "sem link entre camadas" acima. À medida que peças internalizadas da Camada 0 são entregues (a começar pelo piloto gl3w), a Camada 1 linka estaticamente um archive `libcore.a` (símbolos prefixados `glx_*`) que as expõe — via o padrão "casca-hosted + carne-C": a classe C++ que implementa uma interface do RmlUi permanece C++ hosted comum, só seu núcleo algorítmico é C soberano da Camada 0. A separação em duas camadas deste ADR (Camada 0 permanece freestanding, zero-libc, com build system próprio; Camada 1 permanece a entrega C++23) **não muda** — só o *mecanismo* pelo qual um artefato pronto da Camada 0 chega a um binário da Camada 1 passa de "fronteira de processo" para "fronteira de link estático". Ver ADR-0009 pros gates, a regra de ownership de heap, e por que a Opção B (IPC) foi rejeitada pro hot path de GL/fonte.

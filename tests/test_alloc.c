@@ -166,20 +166,40 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT(ret == NULL);
     }
 
-    // ---- free: safe no-op ----------------------------------------------------
+    // ---- free: safe no-op with NULL, real deallocation with a live pointer --
+    // EN: SOV-ALLOC (W15): this sub-test's ORIGINAL assertion here was "touching memory after
+    //     free() must not crash" -- true under the bootstrap bump allocator's leak-by-design
+    //     free() (a documented no-op, ADR-0004's initial increment), false and actively
+    //     DANGEROUS now: this project's own harness proved it live -- with a real free-list
+    //     allocator, the first bytes of a just-freed block's payload are NOT idle memory, they
+    //     ARE the block's `free_link_t` (prev/next free-list pointers, see src/alloc.c's file
+    //     header); writing `0x99` into byte 0 there corrupts the low byte of `prev`, and the
+    //     very next malloc()/free() call that walks the free-list through this node then
+    //     dereferences a garbage pointer and SIGSEGVs (reproduced while implementing this
+    //     change, root-caused via gdb before this comment was written). This is now a DEAD
+    //     contract, replaced -- per include/alloc.h's documented UB -- rather than silently
+    //     deleted: free()d memory must never be touched again. This sub-test asserts only what
+    //     is still true: free(NULL) and free(p) on a live pointer are both safe to CALL.
+    // PT: SOV-ALLOC (W15): a asserção ORIGINAL deste subteste era "tocar memoria depois do
+    //     free() nao pode travar" -- verdade sob o free() leak-by-design do bump allocator de
+    //     bootstrap (um no-op documentado, incremento inicial da ADR-0004), falsa e ativamente
+    //     PERIGOSA agora: o proprio harness deste projeto provou isso ao vivo -- com um alocador
+    //     free-list de verdade, os primeiros bytes do payload de um bloco recem-liberado NAO
+    //     sao memoria ociosa, ELES SAO o `free_link_t` do bloco (ponteiros prev/next da
+    //     free-list, ver o cabecalho de arquivo de src/alloc.c); escrever `0x99` no byte 0 ali
+    //     corrompe o byte baixo do `prev`, e a proxima chamada malloc()/free() que percorre a
+    //     free-list por este no entao desreferencia um ponteiro-lixo e da SIGSEGV (reproduzido
+    //     ao vivo implementando esta mudanca, causa-raiz achada via gdb antes deste comentario
+    //     ser escrito). Este e' agora um contrato MORTO, substituido -- conforme a UB
+    //     documentada em include/alloc.h -- em vez de apagado em silencio: memoria liberada
+    //     nunca pode ser tocada de novo. Este subteste assere so o que ainda e' verdade:
+    //     free(NULL) e free(p) num ponteiro vivo sao os dois seguros de CHAMAR.
     {
         free(NULL);
         void* p = malloc(8);
         TEST_ASSERT(p != NULL);
         free(p);
-        // EN: Leak-by-design (ADR-0004): the memory is not reused, but touching it after
-        //     free() must not crash (it is still a valid, mapped page -- free() never
-        //     unmaps/decommits anything).
-        // PT: Leak-by-design (ADR-0004): a memoria nao e' reusada, mas toca-la depois do
-        //     free() nao pode travar (ainda e' uma pagina valida, mapeada -- free() nunca
-        //     desmapeia/descompromete nada).
-        ((unsigned char*)p)[0] = 0x99;
-        TEST_ASSERT_EQ(((unsigned char*)p)[0], (unsigned char)0x99);
+        /* Deliberately NOT touching `p` here -- see the comment above. */
     }
 
     // ---- malloc(0): this project's documented choice = NULL ------------------

@@ -4,7 +4,7 @@
 // PT: Implementação da janela GLFW — protege glfwTerminate com flag glfw_inited_ e
 //     verifica null de win_ em todo método que o desreferencia.
 #include "window_glfw.hpp"
-#include <GL/gl3w.h>
+#include "gl_loader.h"
 #include <GLFW/glfw3.h>
 namespace glintfx {
 
@@ -26,7 +26,7 @@ bool WindowGlfw::create(const char* title, int w, int h) {
   win_ = glfwCreateWindow(w, h, title, nullptr, nullptr);
   if (!win_) { glfwTerminate(); glfw_inited_ = false; return false; }
   glfwMakeContextCurrent(win_);
-  if (gl3wInit() != 0) {
+  if (glx_gl_load() != 0) {
     glfwDestroyWindow(win_); win_ = nullptr;
     glfwTerminate(); glfw_inited_ = false;
     return false;

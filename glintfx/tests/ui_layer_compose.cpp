@@ -32,8 +32,8 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
-#include "offscreen.hpp"   // EN: for GL/gl3w.h and gl3wInit() side-effect.
-                           // PT: para GL/gl3w.h e efeito colateral de gl3wInit().
+#include "offscreen.hpp"   // EN: for gl_loader.h and glx_gl_load() side-effect.
+                           // PT: para gl_loader.h e efeito colateral de glx_gl_load().
 #include <cstdio>
 #include <cstdlib>   // std::abs (int)
 #include <vector>
@@ -47,8 +47,8 @@ int main() {
     return 1;
   }
 
-  // EN: UiLayer attaches to the host's CURRENT GL context (loads gl3w here).
-  // PT: UiLayer anexa ao contexto GL CORRENTE do host (carrega gl3w aqui).
+  // EN: UiLayer attaches to the host's CURRENT GL context (loads GL function pointers here).
+  // PT: UiLayer anexa ao contexto GL CORRENTE do host (carrega os ponteiros de função GL aqui).
   glintfx::UiLayer ui({ .logical_width = 400, .logical_height = 300, .load_gl = true });
   if (!ui.ok()) {
     std::puts("FAIL: ui attach failed");

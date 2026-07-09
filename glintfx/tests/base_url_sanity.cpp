@@ -46,7 +46,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
-#include "offscreen.hpp"   // EN: includes GL/gl3w.h. PT: inclui GL/gl3w.h.
+#include "offscreen.hpp"   // EN: includes gl_loader.h. PT: inclui gl_loader.h.
 #include <cstdio>
 #include <vector>
 

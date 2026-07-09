@@ -5,9 +5,9 @@
 //     contexto GL do host. Possui SystemClock (sem GLFW) e Engine.
 // Copyright (c) 2026 Petrus Silva Costa
 
-// EN: gl3w must be included before any other OpenGL header (defines GL function pointers).
-// PT: gl3w deve ser incluído antes de qualquer outro header OpenGL (define ponteiros de função GL).
-#include <GL/gl3w.h>
+// EN: gl_loader.h must be included before any other OpenGL header (defines GL function pointers).
+// PT: gl_loader.h deve ser incluído antes de qualquer outro header OpenGL (define ponteiros de função GL).
+#include "gl_loader.h"
 
 #include <glintfx/ui_layer.hpp>
 #include "engine.hpp"
@@ -116,13 +116,15 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   impl_->h = cfg.logical_height;
 
   // EN: Load GL function pointers against the host's CURRENT context.
-  //     gl3wInit() is idempotent within one process — subsequent calls are fast no-ops.
-  //     Skip when the host has already initialised gl3w (cfg.load_gl = false).
+  //     glx_gl_load() is idempotent within one process — a repeat call just re-resolves
+  //     and overwrites the same ~344 pointers (cheap, no allocation kept around).
+  //     Skip when the host has already initialised the loader (cfg.load_gl = false).
   // PT: Carrega ponteiros de função GL contra o contexto CORRENTE do host.
-  //     gl3wInit() é idempotente dentro de um processo — chamadas subsequentes são no-ops rápidos.
-  //     Pular quando o host já inicializou o gl3w (cfg.load_gl = false).
+  //     glx_gl_load() é idempotente dentro de um processo — uma chamada repetida apenas
+  //     re-resolve e sobrescreve os mesmos ~344 ponteiros (barato, sem alocação retida).
+  //     Pular quando o host já inicializou o loader (cfg.load_gl = false).
   if (cfg.load_gl) {
-    if (gl3wInit() != 0) return;
+    if (glx_gl_load() != 0) return;
   }
 
   impl_->ok = impl_->engine.attach(&impl_->clock, impl_->w, impl_->h);

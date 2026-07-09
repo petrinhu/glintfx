@@ -11,7 +11,7 @@
 //     binding de textura 2D, draw FBO binding e colour write mask.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
-#include <GL/gl3w.h>
+#include "gl_loader.h"
 
 namespace glintfx {
 

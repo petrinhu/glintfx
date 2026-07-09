@@ -2,14 +2,14 @@
 // EN: Minimal offscreen FBO helpers for GL tests: create a plain RGBA8 FBO backed by a
 //     texture, and read its contents back as tightly-packed RGB bytes.
 //     The caller is responsible for having a current GL context (e.g. via WindowGlfw::create)
-//     and for calling gl3wInit() before using these helpers.
+//     and for calling glx_gl_load() before using these helpers.
 // PT: Helpers mínimos de FBO offscreen para testes GL: cria FBO RGBA8 com backing de textura
 //     e lê o conteúdo de volta como bytes RGB sem padding.
 //     O chamador é responsável por ter um contexto GL corrente (ex.: via WindowGlfw::create)
-//     e por chamar gl3wInit() antes de usar esses helpers.
+//     e por chamar glx_gl_load() antes de usar esses helpers.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
-#include <GL/gl3w.h>
+#include "gl_loader.h"
 #include <vector>
 
 namespace gtest_off {

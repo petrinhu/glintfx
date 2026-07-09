@@ -272,7 +272,7 @@ if(GLINTFX_BACKEND_GLFW)
   #     for the full bug/fix/oracle writeup. GLFW-only: forces a real OS-level
   #     glfwSetWindowSize() via glfwGetCurrentContext(), so it links `glfw` directly for the
   #     header/symbols (glintfx links glfw PRIVATE, not propagated to consumers -- same
-  #     rationale as golden_test linking gl3w directly below). WORKING_DIRECTORY =
+  #     rationale as golden_test linking glloader directly below). WORKING_DIRECTORY =
   #     CMAKE_BINARY_DIR (repo-wide GLFW-block convention); resize_scene.rml is copied once
   #     to CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/resize_scene.rml".
   # PT: app_resize_smoke -- teste de regressão para o App standalone não refazer o layout do
@@ -283,7 +283,7 @@ if(GLINTFX_BACKEND_GLFW)
   #     bug/fix/oráculo. Só GLFW: força um glfwSetWindowSize() real no nível do SO via
   #     glfwGetCurrentContext(), então linka `glfw` diretamente pelo header/símbolos
   #     (glintfx linka glfw PRIVATE, não propagado a consumidores -- mesma racional de
-  #     golden_test linkando gl3w diretamente abaixo). WORKING_DIRECTORY = CMAKE_BINARY_DIR
+  #     golden_test linkando glloader diretamente abaixo). WORKING_DIRECTORY = CMAKE_BINARY_DIR
   #     (convenção do bloco GLFW em todo o repo); resize_scene.rml é copiado uma vez para
   #     CMAKE_CURRENT_BINARY_DIR acima, endereçado aqui como "tests/resize_scene.rml".
   # ---------------------------------------------------------------------------
@@ -349,11 +349,11 @@ if(GLINTFX_BACKEND_GLFW)
     OFF)
 
   add_executable(golden_test golden_test.cpp)
-  # EN: capture.hpp includes GL/gl3w.h directly — link gl3w (INTERFACE target) so its include path
-  #     is available here. gl3w is a PRIVATE dep of glintfx and therefore not propagated to callers.
-  # PT: capture.hpp inclui GL/gl3w.h diretamente — linka gl3w (target INTERFACE) para que o include
-  #     path esteja disponível aqui. gl3w é dep PRIVATE da glintfx e portanto não é propagado.
-  target_link_libraries(golden_test PRIVATE glintfx gl3w)
+  # EN: capture.hpp includes gl_loader.h directly — link glloader (INTERFACE target) so its include path
+  #     is available here. glloader is a PRIVATE dep of glintfx and therefore not propagated to callers.
+  # PT: capture.hpp inclui gl_loader.h diretamente — linka glloader (target INTERFACE) para que o include
+  #     path esteja disponível aqui. glloader é dep PRIVATE da glintfx e portanto não é propagado.
+  target_link_libraries(golden_test PRIVATE glintfx glloader)
 
   # EN: Ensure the golden/ subdir exists so the first run can write the reference there.
   # PT: Garante que golden/ exista para que a 1ª execução possa escrever a referência.
@@ -586,16 +586,16 @@ if(NOT GLINTFX_BACKEND_GLFW)
     ${CMAKE_SOURCE_DIR}/src/window_glfw.cpp)
   target_include_directories(_glintfx_test_ctx PUBLIC
     ${CMAKE_SOURCE_DIR}/src)
-  # EN: gl3w provides <GL/gl3w.h> needed by window_glfw.cpp. glfw provides <GLFW/glfw3.h>.
+  # EN: glloader provides <gl_loader.h> needed by window_glfw.cpp. glfw provides <GLFW/glfw3.h>.
   #     Both are PUBLIC so the link propagates to consuming test executables.
-  # PT: gl3w fornece <GL/gl3w.h> necessário por window_glfw.cpp. glfw fornece <GLFW/glfw3.h>.
+  # PT: glloader fornece <gl_loader.h> necessário por window_glfw.cpp. glfw fornece <GLFW/glfw3.h>.
   #     Ambos são PUBLIC para propagar ao link dos executáveis de teste que consomem.
-  target_link_libraries(_glintfx_test_ctx PUBLIC glintfx glfw gl3w)
+  target_link_libraries(_glintfx_test_ctx PUBLIC glintfx glfw glloader)
   # EN: _embed_dep: used below as the single link target for all embed tests.
-  #     In OFF builds it is the test helper (which pulls glintfx + glfw + gl3w);
+  #     In OFF builds it is the test helper (which pulls glintfx + glfw + glloader);
   #     in ON builds it is glintfx directly (window_glfw already compiled in).
   # PT: _embed_dep: usado abaixo como alvo único de link para todos os testes embed.
-  #     Em builds OFF é o helper de teste (que puxa glintfx + glfw + gl3w);
+  #     Em builds OFF é o helper de teste (que puxa glintfx + glfw + glloader);
   #     em builds ON é o glintfx diretamente (window_glfw já compilado nele).
   set(_embed_dep _glintfx_test_ctx)
 else()
@@ -617,13 +617,13 @@ add_test(NAME ui_layer_attach
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
-#     Links gl3w explicitly: offscreen.hpp calls GL functions directly and gl3w is
+#     Links glloader explicitly: offscreen.hpp calls GL functions directly and glloader is
 #     a PRIVATE dep of glintfx (not propagated to callers).
 # PT: ui_layer_compose — render compose-only preserva a cor âncora do FBO do host.
-#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente e gl3w é
+#     Linka glloader explicitamente: offscreen.hpp chama funções GL diretamente e glloader é
 #     dep PRIVATE da glintfx (não propagada aos callers).
 add_executable(ui_layer_compose ui_layer_compose.cpp)
-target_link_libraries(ui_layer_compose PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(ui_layer_compose PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/min_partial.rml
                ${CMAKE_CURRENT_BINARY_DIR}/min_partial.rml COPYONLY)
 add_test(NAME ui_layer_compose
@@ -633,14 +633,31 @@ add_test(NAME ui_layer_compose
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # EN: gl_state_guard — GL state captured before and after UiLayer::render() must be identical.
-#     Links gl3w explicitly: the test creates dummy GL objects (program, VAO) directly.
+#     Links glloader explicitly: the test creates dummy GL objects (program, VAO) directly.
 # PT: gl_state_guard — estado GL capturado antes e depois de UiLayer::render() deve ser idêntico.
-#     Linka gl3w explicitamente: o teste cria objetos GL dummy (programa, VAO) diretamente.
+#     Linka glloader explicitamente: o teste cria objetos GL dummy (programa, VAO) diretamente.
 add_executable(gl_state_guard gl_state_guard.cpp)
-target_link_libraries(gl_state_guard PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(gl_state_guard PRIVATE ${_embed_dep} glloader)
 add_test(NAME gl_state_guard
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:gl_state_guard>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: gl_loader_sanity (L1.14-GLLOADER) — glx_gl_load() returns 0 and a representative
+#     sample of core function pointers (glGetString, glCreateShader, glBindFramebuffer)
+#     is resolved and callable against a real offscreen GL context. Links glloader
+#     explicitly: the test calls glx_gl_load() and raw GL functions directly.
+# PT: gl_loader_sanity (L1.14-GLLOADER) — glx_gl_load() retorna 0 e uma amostra
+#     representativa de ponteiros de função core (glGetString, glCreateShader,
+#     glBindFramebuffer) está resolvida e chamável contra um contexto GL offscreen real.
+#     Linka glloader explicitamente: o teste chama glx_gl_load() e funções GL cruas
+#     diretamente.
+add_executable(gl_loader_sanity gl_loader_sanity.cpp)
+target_link_libraries(gl_loader_sanity PRIVATE ${_embed_dep} glloader)
+add_test(NAME gl_loader_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_loader_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -663,7 +680,7 @@ add_test(NAME ui_layer_events
 #     and verifies three aggregate pixel statistics tolerant of llvmpipe threaded-tile rendering:
 #       mean_brightness > 5  (rendered something), dark_count >= 10% (body background present),
 #       bright_count >= 1%   (gradient / glow present).
-#     Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h directly and gl3w is a
+#     Links glloader explicitly: offscreen.hpp includes gl_loader.h directly and glloader is a
 #     PRIVATE dep of glintfx (not propagated to callers).
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) so embed_scene.rml and
 #     embed_scene.rcss resolve relative to the binary dir where they are copied.
@@ -672,12 +689,12 @@ add_test(NAME ui_layer_events
 #     e verifica três estatísticas de pixel agregadas tolerantes ao rendering de tiles do llvmpipe:
 #       mean_brightness > 5  (renderizou algo), dark_count >= 10% (background do body presente),
 #       bright_count >= 1%   (gradiente / glow presente).
-#     Linka gl3w explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é
+#     Linka glloader explicitamente: offscreen.hpp inclui gl_loader.h diretamente e glloader é
 #     dep PRIVATE da glintfx (não propagado aos callers).
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para que embed_scene.rml e
 #     embed_scene.rcss resolvam relativos ao dir binário onde são copiados.
 add_executable(ui_layer_sanity ui_layer_sanity.cpp)
-target_link_libraries(ui_layer_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(ui_layer_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/embed_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
@@ -693,15 +710,15 @@ add_test(NAME ui_layer_sanity
 #     set_dp_ratio() (runtime setter path). Renders a 100dp×100dp white box on
 #     a black background; at dp_ratio=2 the box covers ~4× more pixels than at
 #     dp_ratio=1. Assert bright_count(ratio=2) >= 3 * bright_count(ratio=1).
-#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+#     Links glloader explicitly: offscreen.hpp calls GL functions directly.
 # PT: dp_ratio_sanity — verifica UiLayerConfig::dp_ratio (caminho Config) e
 #     set_dp_ratio() (caminho setter runtime). Renderiza box branco 100dp×100dp em
 #     fundo preto; em dp_ratio=2 o box cobre ~4× mais pixels que em dp_ratio=1.
 #     Verifica bright_count(ratio=2) >= 3 * bright_count(ratio=1).
-#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+#     Linka glloader explicitamente: offscreen.hpp chama funções GL diretamente.
 # ---------------------------------------------------------------------------
 add_executable(dp_ratio_sanity dp_ratio_sanity.cpp)
-target_link_libraries(dp_ratio_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(dp_ratio_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/dp_ratio_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dp_ratio_scene.rcss
@@ -723,7 +740,7 @@ add_test(NAME dp_ratio_sanity
 #     Using distinct filenames (bu_scene vs embed_scene) guarantees the negative assert
 #     stays valid: embed_scene.rml lives in CWD (for ui_layer_sanity) but bu_scene.rml
 #     does not — there is no accidental resolution path.
-#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+#     Links glloader explicitly: offscreen.hpp calls GL functions directly.
 # PT: base_url_sanity — verifica set_asset_base_url() no UiLayer.
 #     Prova duas coisas:
 #       [Negativo] load("bu_scene.rml") SEM base URL falha silenciosamente porque
@@ -734,10 +751,10 @@ add_test(NAME dp_ratio_sanity
 #     Usar nomes distintos (bu_scene vs embed_scene) garante que o assert negativo
 #     seja válido: embed_scene.rml está no CWD (para ui_layer_sanity) mas bu_scene.rml
 #     não está — não há caminho de resolução acidental.
-#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+#     Linka glloader explicitamente: offscreen.hpp chama funções GL diretamente.
 # ---------------------------------------------------------------------------
 add_executable(base_url_sanity base_url_sanity.cpp)
-target_link_libraries(base_url_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(base_url_sanity PRIVATE ${_embed_dep} glloader)
 # EN: Create base_url_assets/ and copy bu_scene files ONLY there — NOT to the CWD root.
 #     The test CWD is CMAKE_CURRENT_BINARY_DIR (= build/tests/). bu_scene.rml MUST NOT
 #     exist there so the negative assert (mean_brightness < 5 without base URL) holds.
@@ -763,7 +780,7 @@ add_test(NAME base_url_sanity
 #     Scene has two <div>s WITHOUT an explicit 'display: block' rule; if they stack
 #     (block, correct) their pixel row ranges are disjoint, if they share a line box
 #     (inline, bug) the ranges overlap.
-#     Links gl3w explicitly: offscreen.hpp calls GL functions directly.
+#     Links glloader explicitly: offscreen.hpp calls GL functions directly.
 # PT: ua_stylesheet_sanity — verifica a UA-stylesheet embutida (v0.2.4 T1): defaults de
 #     'display: block' para elementos estruturais (div, p, h1..h6, ul, ol, li, section,
 #     article, header, footer, nav, main), aplicada por Bootstrap::load() a todo
@@ -771,10 +788,10 @@ add_test(NAME base_url_sanity
 #     A cena tem dois <div>s SEM regra explícita 'display: block'; se empilham (block,
 #     correto) as faixas de linha de pixel são disjuntas, se compartilham line box
 #     (inline, bug) as faixas se sobrepõem.
-#     Linka gl3w explicitamente: offscreen.hpp chama funções GL diretamente.
+#     Linka glloader explicitamente: offscreen.hpp chama funções GL diretamente.
 # ---------------------------------------------------------------------------
 add_executable(ua_stylesheet_sanity ua_stylesheet_sanity.cpp)
-target_link_libraries(ua_stylesheet_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(ua_stylesheet_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/ua_stylesheet_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ua_stylesheet_scene.rcss
@@ -878,8 +895,8 @@ add_test(NAME scroll_sanity
 #     Resize while in letterbox mode. Exercises F1 (set_click_callback) + F2
 #     (get_element_box) as deterministic oracles -- see the file header for the full
 #     assertion list. Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like
-#     the other embed tests above). Links gl3w explicitly: offscreen.hpp includes GL/gl3w.h
-#     directly and gl3w is a PRIVATE dep of glintfx (not propagated to callers).
+#     the other embed tests above). Links glloader explicitly: offscreen.hpp includes gl_loader.h
+#     directly and glloader is a PRIVATE dep of glintfx (not propagated to callers).
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
 #     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied next to
 #     min.rml at the top of this file, addressed here by bare filename).
@@ -890,15 +907,15 @@ add_test(NAME scroll_sanity
 #     de pixel, via glReadPixels), e um Resize em modo letterbox. Exercita F1
 #     (set_click_callback) + F2 (get_element_box) como oráculos determinísticos -- ver o
 #     cabeçalho do arquivo pra lista completa de asserções. Roda em AMBAS as configs (teste de
-#     embed mode, linka ${_embed_dep} como os outros testes embed acima). Linka gl3w
-#     explicitamente: offscreen.hpp inclui GL/gl3w.h diretamente e gl3w é dep PRIVATE da
+#     embed mode, linka ${_embed_dep} como os outros testes embed acima). Linka glloader
+#     explicitamente: offscreen.hpp inclui gl_loader.h diretamente e glloader é dep PRIVATE da
 #     glintfx (não propagado aos callers). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (=
 #     build/tests/) -- mesmo padrão de click_callback_sanity/element_box_sanity (par rml/rcss
 #     específico da cena, copiado junto do min.rml no topo deste arquivo, endereçado aqui por
 #     nome de arquivo simples).
 # ---------------------------------------------------------------------------
 add_executable(viewport_origin_sanity viewport_origin_sanity.cpp)
-target_link_libraries(viewport_origin_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(viewport_origin_sanity PRIVATE ${_embed_dep} glloader)
 add_test(NAME viewport_origin_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:viewport_origin_sanity>
@@ -929,7 +946,7 @@ add_test(NAME viewport_origin_sanity
 #     ua_stylesheet_sanity/dp_ratio_sanity (par rml/rcss específico da cena copiado aqui).
 # ---------------------------------------------------------------------------
 add_executable(polygon_sanity polygon_sanity.cpp)
-target_link_libraries(polygon_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(polygon_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/polygon_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_scene.rcss
@@ -960,7 +977,7 @@ add_test(NAME polygon_sanity
 #     Mesmo padrão de config-de-build/WORKING_DIRECTORY do polygon_sanity acima.
 # ---------------------------------------------------------------------------
 add_executable(polygon_gradient_sanity polygon_gradient_sanity.cpp)
-target_link_libraries(polygon_gradient_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(polygon_gradient_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_gradient_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/polygon_gradient_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polygon_gradient_scene.rcss
@@ -1004,7 +1021,7 @@ add_test(NAME polygon_gradient_sanity
 #     backend-agnósticos).
 # ---------------------------------------------------------------------------
 add_executable(image_tint_sanity image_tint_sanity.cpp)
-target_link_libraries(image_tint_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(image_tint_sanity PRIVATE ${_embed_dep} glloader)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_scene.rml
                ${CMAKE_CURRENT_BINARY_DIR}/image_tint_scene.rml COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_scene.rcss
@@ -1024,7 +1041,7 @@ add_test(NAME image_tint_sanity
 #     Engine::set_dp_ratio(0/-1/NaN/inf) ignored (layout not degenerated), set_dp_ratio(2.0) still
 #     scales; UiLayer::set_viewport(w/h<=0) no-op (both overloads), valid viewport still renders.
 #     Reuses dp_ratio_scene.rml/.rcss (copied above for dp_ratio_sanity) as a deterministic
-#     bright-pixel oracle. Runs in BOTH build configs (embed-mode, links ${_embed_dep} + gl3w for
+#     bright-pixel oracle. Runs in BOTH build configs (embed-mode, links ${_embed_dep} + glloader for
 #     the direct GL readback in offscreen.hpp). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR
 #     (= build/tests/) so dp_ratio_scene.rml resolves by bare name.
 # PT: input_hardening_sanity -- prova que os tres fixes de hardening da superficie de entrada
@@ -1034,12 +1051,12 @@ add_test(NAME image_tint_sanity
 #     degenerado), set_dp_ratio(2.0) ainda escala; UiLayer::set_viewport(w/h<=0) no-op (as duas
 #     sobrecargas), viewport valido ainda renderiza. Reusa dp_ratio_scene.rml/.rcss (copiado acima
 #     para dp_ratio_sanity) como oraculo deterministico de pixels brilhantes. Roda em AMBAS as
-#     configs (embed-mode, linka ${_embed_dep} + gl3w para o readback GL direto em offscreen.hpp).
+#     configs (embed-mode, linka ${_embed_dep} + glloader para o readback GL direto em offscreen.hpp).
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) para dp_ratio_scene.rml
 #     resolver por nome simples.
 # ---------------------------------------------------------------------------
 add_executable(input_hardening_sanity input_hardening_sanity.cpp)
-target_link_libraries(input_hardening_sanity PRIVATE ${_embed_dep} gl3w)
+target_link_libraries(input_hardening_sanity PRIVATE ${_embed_dep} glloader)
 add_test(NAME input_hardening_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:input_hardening_sanity>
@@ -1055,7 +1072,7 @@ add_test(NAME input_hardening_sanity
 #     create_data_model()-returns-false limit. Geometry-only oracle via get_element_box() (no
 #     font/pixel readback) so it renders deterministically in BOTH build configs -- same
 #     reasoning as click_callback_sanity/element_box_sanity/scroll_sanity above. Runs in BOTH
-#     build configs (links ${_embed_dep}, no gl3w needed -- get_element_box() only).
+#     build configs (links ${_embed_dep}, no glloader needed -- get_element_box() only).
 #     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as
 #     click_callback_sanity/element_box_sanity (scene-specific rml/rcss pair copied here).
 # PT: data_model_embed_sanity -- prova ponta-a-ponta do caminho embed (UiLayer) para a API de
@@ -1067,7 +1084,7 @@ add_test(NAME input_hardening_sanity
 #     get_element_box() (sem fonte/readback de pixel) então renderiza deterministicamente nas
 #     DUAS configs de build -- mesmo raciocínio de click_callback_sanity/element_box_sanity/
 #     scroll_sanity acima. Roda em AMBAS as configs de build (linka ${_embed_dep}, sem
-#     necessidade de gl3w -- só get_element_box()). WORKING_DIRECTORY =
+#     necessidade de glloader -- só get_element_box()). WORKING_DIRECTORY =
 #     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de click_callback_sanity/
 #     element_box_sanity (par rml/rcss específico da cena copiado aqui).
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@
 //           RmlUi (a real but wasted GL VAO compile the very first time a tinted element
 //           renders), and then ignored -- see ADR-0010 Decision (a)/Consequences for why this
 //           small waste is the accepted cost of staying inside RmlUi's public API surface.
-//       (2) a raw GL VAO/VBO/EBO (glintfx-owned, gl3w calls, released by hand in
+//       (2) a raw GL VAO/VBO/EBO (glintfx-owned, gl_loader.h calls, released by hand in
 //           ReleaseElementData) -- the ONLY geometry the "glintfx-tint" shader actually draws
 //           from, via Gl3RenderInterface::RenderShader's tint branch.
 //     Both resources are rebuilt only when GenerateElementData re-runs (source `src` argument
@@ -42,7 +42,7 @@
 //           real mas desperdiçada na primeira vez que um elemento tingido renderiza), e então
 //           ignorado -- ver a Decisão (a)/Consequências do ADR-0010 pra por que esse pequeno
 //           desperdício é o custo aceito de permanecer dentro da superfície pública do RmlUi.
-//       (2) uma VAO/VBO/EBO GL crua (dono glintfx, chamadas gl3w, liberada à mão em
+//       (2) uma VAO/VBO/EBO GL crua (dono glintfx, chamadas gl_loader.h, liberada à mão em
 //           ReleaseElementData) -- a ÚNICA geometria de onde o shader "glintfx-tint" de fato
 //           desenha, via o ramo de tint de Gl3RenderInterface::RenderShader.
 //     Os dois recursos só são reconstruídos quando GenerateElementData roda de novo (mudança do
@@ -54,14 +54,14 @@
 //     `@keyframes` (Decisão (c) do ADR-0010).
 // Copyright (c) 2026 Petrus Silva Costa
 
-// EN: gl3w FIRST -- defines all GL 3.x function pointers loaded at runtime (same repo-wide
-//     convention as render_gl3.cpp; this is the first *decorator* file to need it, since it owns
-//     a raw VAO/VBO/EBO -- see the file header above and ADR-0010).
-// PT: gl3w PRIMEIRO -- define todos os ponteiros de função GL 3.x carregados em tempo de execução
-//     (mesma convenção do repo inteiro que render_gl3.cpp; este é o primeiro arquivo de
-//     *decorator* a precisar dele, já que é dono de uma VAO/VBO/EBO crua -- ver o cabeçalho do
-//     arquivo acima e o ADR-0010).
-#include <GL/gl3w.h>
+// EN: gl_loader.h FIRST -- defines all GL 3.x function pointers loaded at runtime (same
+//     repo-wide convention as render_gl3.cpp; this is the first *decorator* file to need
+//     it, since it owns a raw VAO/VBO/EBO -- see the file header above and ADR-0010).
+// PT: gl_loader.h PRIMEIRO -- define todos os ponteiros de função GL 3.x carregados em tempo
+//     de execução (mesma convenção do repo inteiro que render_gl3.cpp; este é o primeiro
+//     arquivo de *decorator* a precisar dele, já que é dono de uma VAO/VBO/EBO crua -- ver
+//     o cabeçalho do arquivo acima e o ADR-0010).
+#include "gl_loader.h"
 
 #include "decorator_image_tint.hpp"
 

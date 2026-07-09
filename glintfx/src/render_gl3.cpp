@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: Implementation of RenderGl3 — wraps RmlUi's RenderInterface_GL3.
-//     gl3w must be included before any other GL header.
+//     gl_loader.h must be included before any other GL header.
 // PT: Implementação de RenderGl3 — encapsula o RenderInterface_GL3 do RmlUi.
-//     gl3w deve ser incluído antes de qualquer outro header GL.
+//     gl_loader.h deve ser incluído antes de qualquer outro header GL.
 
-// EN: gl3w FIRST — defines all GL 3.x function pointers loaded at runtime.
-// PT: gl3w PRIMEIRO — define todos os ponteiros de função GL 3.x carregados em tempo de execução.
-#include <GL/gl3w.h>
+// EN: gl_loader.h FIRST — defines all GL 3.x function pointers loaded at runtime.
+// PT: gl_loader.h PRIMEIRO — define todos os ponteiros de função GL 3.x carregados em tempo de execução.
+#include "gl_loader.h"
 
 #include "render_gl3.hpp"
 // EN: Backend header from rmlui_SOURCE_DIR/Backends (added via CMake include path).

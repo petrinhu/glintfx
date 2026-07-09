@@ -14,7 +14,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
-#include "offscreen.hpp"   // EN: includes GL/gl3w.h. PT: inclui GL/gl3w.h.
+#include "offscreen.hpp"   // EN: includes gl_loader.h. PT: inclui gl_loader.h.
 #include <cstdio>
 
 // EN: Compile a trivial pass-through shader program for use as a bound dummy.
@@ -54,8 +54,8 @@ int main() {
     return 1;
   }
 
-  // EN: UiLayer attaches (loads gl3w, initialises RmlUi).
-  // PT: UiLayer anexa (carrega gl3w, inicializa RmlUi).
+  // EN: UiLayer attaches (loads GL function pointers, initialises RmlUi).
+  // PT: UiLayer anexa (carrega os ponteiros de função GL, inicializa RmlUi).
   glintfx::UiLayer ui({ .logical_width = 400, .logical_height = 300, .load_gl = true });
   if (!ui.ok()) {
     std::puts("FAIL: ui attach failed");

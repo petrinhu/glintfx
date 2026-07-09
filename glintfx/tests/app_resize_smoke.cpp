@@ -36,7 +36,7 @@
 //     embed-mode tests (see tests/CMakeLists.txt "GL context fixture" comment); this file
 //     links the `glfw` target directly for the header/symbols (glintfx links glfw
 //     PRIVATE, so it is not propagated to consumers, same rationale as golden_test linking
-//     gl3w directly).
+//     gl_loader.c directly).
 //
 // PT: Smoke de regressão de resize do App (AUD-PUB-1, v0.5.0). Prova que App::render()
 //     refaz o layout do RmlUi quando o tamanho do framebuffer da janela GLFW muda entre
@@ -76,7 +76,7 @@
 //     pelos testes de embed mode (ver comentário "GL context fixture" em
 //     tests/CMakeLists.txt); este arquivo linka o target `glfw` diretamente pelo
 //     header/símbolos (glintfx linka glfw PRIVATE, então não é propagado a consumidores,
-//     mesma racional de golden_test linkando gl3w diretamente).
+//     mesma racional de golden_test linkando gl_loader.c diretamente).
 //
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/glintfx.hpp>

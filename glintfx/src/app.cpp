@@ -6,9 +6,9 @@
 //     Engine possui RenderGl3 + Bootstrap. SystemInterface_GLFW vive aqui pois exige
 //     GLFWwindow* na construção (disponível apenas após WindowGlfw::create()).
 // Copyright (c) 2026 Petrus Silva Costa
-// EN: gl3w for GL function pointers used in snapshot() (glReadPixels, glBindFramebuffer, etc.).
-// PT: gl3w para ponteiros de função GL usados em snapshot() (glReadPixels, glBindFramebuffer, etc.).
-#include <GL/gl3w.h>
+// EN: gl_loader.h for GL function pointers used in snapshot() (glReadPixels, glBindFramebuffer, etc.).
+// PT: gl_loader.h para ponteiros de função GL usados em snapshot() (glReadPixels, glBindFramebuffer, etc.).
+#include "gl_loader.h"
 #include <cstdio>
 #include <memory>
 #include <vector>

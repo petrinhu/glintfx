@@ -3,8 +3,8 @@
 // PT: Implementação do Engine — possui RenderGl3 + Bootstrap; provê caminhos standalone e compose.
 // Copyright (c) 2026 Petrus Silva Costa
 
-// EN: gl_state.hpp includes GL/gl3w.h — must precede any other GL/RmlUi includes.
-// PT: gl_state.hpp inclui GL/gl3w.h — deve preceder quaisquer outros includes GL/RmlUi.
+// EN: gl_state.hpp includes gl_loader.h — must precede any other GL/RmlUi includes.
+// PT: gl_state.hpp inclui gl_loader.h — deve preceder quaisquer outros includes GL/RmlUi.
 #include "gl_state.hpp"
 #include "engine.hpp"
 #include "render_gl3.hpp"

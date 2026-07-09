@@ -31,10 +31,6 @@ Bundled (vendored) third-party source files (included in this repository)
 
 These files are committed directly into the repository source tree.
 
-- gl3w (generated loader) — Public domain (Unlicense). No attribution required.
-  Files: glintfx/third_party/gl3w/src/gl3w.c
-         glintfx/third_party/gl3w/include/GL/gl3w.h
-
 - stb_image v2.30 — Public domain / MIT (dual-licensed; used here as public domain).
   No copyright notice required; included here for disclosure.
   Original author: Sean Barrett (nothings.org).
@@ -45,11 +41,24 @@ These files are committed directly into the repository source tree.
 - glcorearb.h — MIT License.
   Copyright 2013-2026 The Khronos Group Inc.
   SPDX-License-Identifier: MIT
-  File: glintfx/third_party/gl3w/include/GL/glcorearb.h
+  File: glintfx/third_party/khronos/GL/glcorearb.h
 
 - khrplatform.h — MIT License.
   Copyright (c) 2008-2018 The Khronos Group Inc.
-  File: glintfx/third_party/gl3w/include/KHR/khrplatform.h
+  File: glintfx/third_party/khronos/KHR/khrplatform.h
+
+- gl.xml (OpenGL / OpenGL-ES XML API Registry) — Apache License 2.0.
+  Copyright 2013-2026 The Khronos Group Inc.
+  SPDX-License-Identifier: Apache-2.0
+  Source: https://github.com/KhronosGroup/OpenGL-Registry
+  File: glintfx/third_party/khronos/gl.xml
+  Used for: input data to tools/gen_glloader.py (L1.14-GLLOADER), which generates
+            glintfx/src/gl_loader.h / gl_loader.c — glintfx's own MPL-2.0
+            GL 3.3 core-profile function-pointer loader, replacing the previously
+            vendored gl3w third-party loader. gl_loader.{h,c} are glintfx's own
+            source (MPL-2.0), not third-party code; they are listed here only to
+            disclose the Apache-2.0 registry data they are mechanically derived
+            from.
 
 ────────────────────────────────────────────────────────────────────────
 Bundled assets

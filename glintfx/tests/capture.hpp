@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: PPM pixel-capture helper for golden-image tests.
-//     Must be included AFTER GL/gl3w.h is initialised (App ctor does this via gl3wInit).
+//     Must be included AFTER gl_loader.h is initialised (App ctor does this via glx_gl_load).
 // PT: Helper de captura PPM para testes de golden-image.
-//     Deve ser incluído APÓS GL/gl3w.h estar inicializado (ctor do App faz via gl3wInit).
+//     Deve ser incluído APÓS gl_loader.h estar inicializado (ctor do App faz via glx_gl_load).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
-#include <GL/gl3w.h>
+#include "gl_loader.h"
 #include <cstdio>
 #include <vector>
 inline bool save_ppm(const char* path,int w,int h){

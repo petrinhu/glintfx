@@ -63,8 +63,8 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
-#include "offscreen.hpp"   // EN: includes GL/gl3w.h (gl3w already loaded by UiLayer ctor).
-                           // PT: inclui GL/gl3w.h (gl3w já carregado pelo ctor da UiLayer).
+#include "offscreen.hpp"   // EN: includes gl_loader.h (GL already loaded by UiLayer ctor).
+                           // PT: inclui gl_loader.h (GL já carregado pelo ctor da UiLayer).
 #include <cstdio>
 #include <vector>
 

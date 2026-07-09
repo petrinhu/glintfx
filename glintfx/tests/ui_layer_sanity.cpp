@@ -11,7 +11,7 @@
 //
 //     Test procedure:
 //       1. Host creates hidden 900×600 window (provides the current GL context).
-//       2. UiLayer attaches (loads gl3w, initialises RmlUi Engine in compose mode).
+//       2. UiLayer attaches (loads GL function pointers, initialises RmlUi Engine in compose mode).
 //       3. Host clears FBO 0 to black (known initial state for statistics).
 //       4. Load embed_scene.rml (dark body + linear-gradient section + glow card).
 //       5. Two warm-up frames (update + render each).
@@ -34,7 +34,7 @@
 //
 //     Procedimento:
 //       1. Host cria janela oculta 900×600 (provê o contexto GL corrente).
-//       2. UiLayer anexa (carrega gl3w, inicializa Engine do RmlUi em modo compose).
+//       2. UiLayer anexa (carrega os ponteiros de função GL, inicializa Engine do RmlUi em modo compose).
 //       3. Host limpa FBO 0 a preto (estado inicial conhecido para as estatísticas).
 //       4. Carrega embed_scene.rml (body escuro + seção linear-gradient + card glow).
 //       5. Dois frames de aquecimento (update + render em cada).
@@ -47,8 +47,8 @@
 //     Gate: os três checks passam → imprime "ui_layer_sanity: PASS", sai com 0.
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
-#include "offscreen.hpp"   // EN: includes GL/gl3w.h (gl3w already loaded by UiLayer ctor).
-                           // PT: inclui GL/gl3w.h (gl3w já carregado pelo ctor da UiLayer).
+#include "offscreen.hpp"   // EN: includes gl_loader.h (GL already loaded by UiLayer ctor).
+                           // PT: inclui gl_loader.h (GL já carregado pelo ctor da UiLayer).
 #include <cstdio>
 #include <vector>
 
@@ -67,9 +67,9 @@ int main() {
 
   // ---------------------------------------------------------------------------
   // EN: Step 2 — UiLayer attaches to the current GL context.
-  //     load_gl=true: UiLayer calls gl3wInit() (idempotent in this process).
+  //     load_gl=true: UiLayer calls glx_gl_load() (idempotent in this process).
   // PT: Passo 2 — UiLayer anexa ao contexto GL corrente.
-  //     load_gl=true: UiLayer chama gl3wInit() (idempotente neste processo).
+  //     load_gl=true: UiLayer chama glx_gl_load() (idempotente neste processo).
   // ---------------------------------------------------------------------------
   glintfx::UiLayer ui({ .logical_width = 900, .logical_height = 600, .load_gl = true });
   if (!ui.ok()) {

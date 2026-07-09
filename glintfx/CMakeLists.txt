@@ -12,9 +12,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #     slower and is meant to run as a separate/nightly job (see .github/workflows/nightly.yml
 #     and .forgejo/workflows/nightly.yml).
 #     Applied via add_compile_options/add_link_options (directory-scope, set BEFORE
-#     FetchContent_MakeAvailable(RmlUi) and add_subdirectory(third_party/gl3w) below) so the
-#     flags reach every target compiled in this build: glintfx itself, vendored gl3w/stb_image
-#     sources, the fetched RmlUi sources, and the whole tests/ suite. Prebuilt system libraries
+#     FetchContent_MakeAvailable(RmlUi) and the INTERFACE target glloader declared below)
+#     so the flags reach every target compiled in this build: glintfx itself, vendored
+#     gl_loader/stb_image sources, the fetched RmlUi sources, and the whole tests/ suite.
+#     Prebuilt system libraries
 #     linked in (GLFW, Mesa/libGL, FreeType, libstdc++) are NOT recompiled here and therefore
 #     stay uninstrumented — any noise ASan/LSan/UBSan raise against them (false leaks reported
 #     against driver-internal allocations, etc.) is filtered at runtime via
@@ -29,9 +30,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #     mais lento e é feito para rodar como job separado/noturno (ver .github/workflows/nightly.yml
 #     e .forgejo/workflows/nightly.yml).
 #     Aplicado via add_compile_options/add_link_options (escopo de diretório, definido ANTES
-#     de FetchContent_MakeAvailable(RmlUi) e add_subdirectory(third_party/gl3w) abaixo) para que
-#     as flags alcancem todo target compilado neste build: a própria glintfx, os fontes
-#     vendorizados gl3w/stb_image, os fontes fetchados do RmlUi, e toda a suíte tests/.
+#     de FetchContent_MakeAvailable(RmlUi) e da declaração do target INTERFACE glloader
+#     abaixo) para que as flags alcancem todo target compilado neste build: a própria
+#     glintfx, os fontes vendorizados gl_loader/stb_image, os fontes fetchados do RmlUi,
+#     e toda a suíte tests/.
 #     Bibliotecas de sistema pré-compiladas linkadas (GLFW, Mesa/libGL, FreeType, libstdc++)
 #     NÃO são recompiladas aqui e portanto ficam não-instrumentadas — qualquer ruído que
 #     ASan/LSan/UBSan levantem contra elas (falsos leaks reportados contra alocações internas
@@ -92,12 +94,35 @@ FetchContent_Declare(RmlUi
 
 FetchContent_MakeAvailable(RmlUi)
 
-# EN: gl3w — vendored (pre-generated) to avoid network dependency at configure time.
-#     Files generated from gl3w_gen.py + GL 4.6 spec are committed under third_party/gl3w/.
-# PT: gl3w — vendorizado (pré-gerado) para evitar dependência de rede em configure.
-#     Arquivos gerados com gl3w_gen.py + spec GL 4.6 estão em third_party/gl3w/.
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/gl3w
-                 ${CMAKE_CURRENT_BINARY_DIR}/gl3w-build)
+# EN: glloader (L1.14-GLLOADER) — glintfx's own GL 3.3 core-profile function-pointer
+#     loader, generated from the public Khronos gl.xml registry by tools/gen_glloader.py
+#     and committed under src/gl_loader.{h,c} (offline/reproducible, no network dependency
+#     at configure time). Replaces the previously vendored gl3w third-party loader.
+#     INTERFACE library (same shape the old gl3w target had): consumers get the include
+#     paths (src/ for gl_loader.h, third_party/khronos/ for the Khronos glcorearb.h/
+#     khrplatform.h headers gl_loader.h depends on) and gl_loader.c compiled in-place —
+#     each target that links glloader compiles its own copy of gl_loader.c (mirrors the
+#     old gl3w INTERFACE-library idiom so tests/ that talk to raw GL directly, e.g. via
+#     offscreen.hpp/capture.hpp, keep working unchanged beyond the rename).
+# PT: glloader (L1.14-GLLOADER) — loader próprio de ponteiros de função GL 3.3 core
+#     profile do glintfx, gerado a partir do registro público gl.xml da Khronos por
+#     tools/gen_glloader.py e commitado em src/gl_loader.{h,c} (offline/reprodutível, sem
+#     dependência de rede em configure). Substitui o loader third-party gl3w antes
+#     vendorizado.
+#     Biblioteca INTERFACE (mesmo formato que o antigo target gl3w tinha): consumidores
+#     recebem os include paths (src/ para gl_loader.h, third_party/khronos/ para os
+#     headers Khronos glcorearb.h/khrplatform.h dos quais gl_loader.h depende) e
+#     gl_loader.c compilado inline — cada target que linka glloader compila sua própria
+#     cópia de gl_loader.c (espelha o idioma de biblioteca INTERFACE do antigo gl3w para
+#     que os tests/ que falam GL cru diretamente, ex.: via offscreen.hpp/capture.hpp,
+#     continuem funcionando sem mudança além da renomeação).
+add_library(glloader INTERFACE)
+target_sources(glloader INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/gl_loader.c>)
+target_include_directories(glloader INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/khronos>)
+target_link_libraries(glloader INTERFACE OpenGL::GL ${CMAKE_DL_LIBS})
 
 # EN: RmlUi backends are not installed — compile directly from fetched source.
 # PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
@@ -156,10 +181,10 @@ target_include_directories(glintfx
     # EN: stb_image header-only library (PNG/JPG/TGA decode) — vendored under third_party/stb/.
     # PT: Biblioteca header-only stb_image (decode PNG/JPG/TGA) — vendorizada em third_party/stb/.
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
-  # EN: gl3w include path comes transitively from linking PRIVATE gl3w (INTERFACE target).
-  # PT: Include path do gl3w vem transitivamente do link PRIVATE gl3w (alvo INTERFACE).
+  # EN: glloader include path comes transitively from linking PRIVATE glloader (INTERFACE target).
+  # PT: Include path do glloader vem transitivamente do link PRIVATE glloader (alvo INTERFACE).
 target_compile_definitions(glintfx PRIVATE
-  RMLUI_GL3_CUSTOM_LOADER=<GL/gl3w.h>
+  RMLUI_GL3_CUSTOM_LOADER=<gl_loader.h>
   # EN: Disable MSAA for the render layer — required under Mesa/llvmpipe (Xvfb) where
   #     glBlitFramebuffer MSAA→non-MSAA resolve silently produces a black postprocess texture.
   #     With samples=0 the render layer uses a plain texture FBO (no MSAA renderbuffer),
@@ -171,11 +196,11 @@ target_compile_definitions(glintfx PRIVATE
   RMLUI_NUM_MSAA_SAMPLES=0
 )
 
-# EN: Core link deps (always): RmlUi, OpenGL, FreeType, gl3w.
+# EN: Core link deps (always): RmlUi, OpenGL, FreeType, glloader.
 #     glfw is only linked when the GLFW window backend is enabled.
-# PT: Deps de link principais (sempre): RmlUi, OpenGL, FreeType, gl3w.
+# PT: Deps de link principais (sempre): RmlUi, OpenGL, FreeType, glloader.
 #     glfw só é linkado quando o backend de janela GLFW está habilitado.
-target_link_libraries(glintfx PRIVATE RmlUi::Core OpenGL::GL Freetype::Freetype gl3w)
+target_link_libraries(glintfx PRIVATE RmlUi::Core OpenGL::GL Freetype::Freetype glloader)
 if(GLINTFX_BACKEND_GLFW)
   target_link_libraries(glintfx PRIVATE glfw)
 endif()
@@ -223,10 +248,10 @@ endif()
 #     find_package(glintfx) strategy (L1.8-FINDPKG):
 #       - install(EXPORT) is intentionally NOT used. CMake 4.x requires all PRIVATE
 #         transitive deps of exported targets to be in the same export set; rmlui_core
-#         and gl3w are FetchContent/vendored targets that cannot be installed as proper
-#         CMake exported targets.
-#       - gl3w is an INTERFACE library: its single source (gl3w.c) is compiled directly
-#         into libglintfx.a, so no separate archive is needed.
+#         and glloader are FetchContent/vendored targets that cannot be installed as
+#         proper CMake exported targets.
+#       - glloader is an INTERFACE library: its single source (gl_loader.c) is compiled
+#         directly into libglintfx.a, so no separate archive is needed.
 #       - rmlui_core IS a real archive (librmlui.a, 33 MB). It is co-installed under
 #         <libdir>/glintfx/ (private subdir) so it does not pollute the root lib dir
 #         and does not conflict with a consumer-side RmlUi installation.
@@ -241,10 +266,11 @@ endif()
 #     Estratégia find_package(glintfx) (L1.8-FINDPKG):
 #       - install(EXPORT) é intencionalmente OMITIDO. O CMake 4.x exige que todas
 #         as deps PRIVATE transitivas de targets exportados estejam no mesmo export
-#         set; rmlui_core e gl3w são targets FetchContent/vendorizados que não podem
-#         ser instalados como targets CMake exportados.
-#       - gl3w é uma biblioteca INTERFACE: seu único fonte (gl3w.c) é compilado
-#         diretamente em libglintfx.a, então nenhum arquivo separado é necessário.
+#         set; rmlui_core e glloader são targets FetchContent/vendorizados que não
+#         podem ser instalados como targets CMake exportados.
+#       - glloader é uma biblioteca INTERFACE: seu único fonte (gl_loader.c) é
+#         compilado diretamente em libglintfx.a, então nenhum arquivo separado é
+#         necessário.
 #       - rmlui_core É um arquivo real (librmlui.a, 33 MB). É co-instalado em
 #         <libdir>/glintfx/ (subdiretório privado) para não poluir o diretório raiz
 #         de libs e não conflitar com uma instalação de RmlUi pelo consumidor.

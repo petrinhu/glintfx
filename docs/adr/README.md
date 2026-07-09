@@ -14,3 +14,5 @@
 | [0006](0006-layered-hybrid-architecture.md) | Layered hybrid architecture / Arquitetura híbrida em camadas | Accepted |
 | [0007](0007-license-mpl-2.0.md) | License: MPL-2.0 (relicensed from AGPL) / Licença: MPL-2.0 | Accepted |
 | [0008](0008-embed-guest-mode.md) | Embed / guest mode / Modo embutido (guest) | Accepted |
+| [0009](0009-internalization-boundary.md) | Internalization boundary (phased static link) / Fronteira de internalização (link estático faseado) | Accepted |
+| [0010](0010-image-tint-luminance-key.md) | image-tint() luminance-key shader / Shader luminance-key do image-tint() | Accepted |

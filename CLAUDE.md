@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Camada 1 -- glintfx (ATIVA, é o produto):** biblioteca C++ que une RmlUi (UI HTML/CSS) ao renderer de efeitos GL3. Pasta `glintfx/`. Ver seção dedicada abaixo.
 - **Camada 0 -- `loucura_c_asm` (implementação COMPLETA, aguardando auditoria; trajetória de longo prazo):** o runtime freestanding C+ASM, zero libc, descrito no resto deste documento. Pastas `src/`, `include/` na raiz. É o **alvo de internalização** clean-room de longo prazo da Camada 1 (a "loucura" do nome do repo) -- não há pressa nem prazo.
 
-Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md) (as duas camadas não se linkam; a fronteira é o processo, não o linker).
+Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md) (as duas camadas; a fronteira era o processo) — **sucedida em parte pelo [ADR-0009](docs/adr/0009-internalization-boundary.md)** (2026-07-09, decisão do líder): o endgame de internalização adota **link estático incremental** (`libcore.a`/prefixo `glx_`, padrão "casca-hosted + carne-C via `extern C`"), estreitando pontualmente a cláusula "não se linkam" — a Camada 0 segue freestanding na própria compilação; só o `.a` cruza.
 
 ## glintfx -- o produto ativo (Camada 1)
 

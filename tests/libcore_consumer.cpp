@@ -39,6 +39,12 @@
 //            test asserts DID happen -- if it ever silently "succeeded" instead, that is exactly
 //            the "silent heap corruption" ADR-0009 warns about, and this test would FAIL loudly
 //            to surface it, never pass silently.
+//        (c) `glx_free()` on a MISALIGNED offset into a block this allocator legitimately owns
+//            (`glx_free(p + 8)`) -- SECURITY-ENGINEER FINDING (post-decb2fb review, IMPORTANT):
+//            `alloc_owns_ptr`'s original arena-bounds-only check let this slip past gate 3 and
+//            SIGSEGV inside `free()`'s header arithmetic instead of dying via the documented
+//            `sys_exit(112)`; the fix (an alignment check, include/alloc_internal.h/src/alloc.c)
+//            is proven here the same way as (a): exact exit code, forked, live-executed.
 // PT: SOV-LIBCORE (ADR-0009, FT-F0) -- o PRIMEIRO programa deste repositório que de fato
 //     exercita a `build/libcore.a` como um consumidor C++ hosted exerceria (um futuro build do
 //     glintfx é o alvo real; isto é a prova mínima). Buildado por `make libcore-test` (ver os
@@ -82,6 +88,13 @@
 //            FATO aconteceu -- se algum dia "tivesse sucesso" em silêncio, seria exatamente a
 //            "corrupção de heap silenciosa" que a ADR-0009 avisa, e este teste FALHARIA alto pra
 //            revelar isso, nunca passaria em silêncio.
+//        (c) `glx_free()` num offset DESALINHADO dentro de um bloco que este alocador possui
+//            legitimamente (`glx_free(p + 8)`) -- ACHADO DO SECURITY-ENGINEER (revisão
+//            pós-decb2fb, IMPORTANTE): a checagem original do `alloc_owns_ptr`, só-de-limites-de-
+//            arena, deixava isso escapar do gate 3 e dar SIGSEGV dentro da aritmética de header
+//            do `free()` em vez de morrer via o `sys_exit(112)` documentado; o fix (uma checagem
+//            de alinhamento, include/alloc_internal.h/src/alloc.c) é provado aqui do mesmo jeito
+//            que (a): exit code exato, via fork, executado ao vivo.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "core/core.h"
 
@@ -225,6 +238,45 @@ int main() {
         check(glibc_rejected_it,
               "glibc's free() rejects a foreign (glx_) pointer loudly (abort/non-zero exit), "
               "never silently \"succeeding\"");
+    }
+
+    // ---- 3c. Misuse: glx_free() on a MISALIGNED offset into a LEGITIMATELY-owned block --------
+    // EN: SECURITY-ENGINEER FINDING (post-decb2fb review, IMPORTANT, this case proves the fix):
+    //     `alloc_owns_ptr` (include/alloc_internal.h, src/alloc.c) originally only checked that
+    //     the computed header address fell within SOME arena's `[base, end)` bounds -- it did NOT
+    //     check that the address was actually a real block header, so `glx_free(p + 8)` on a
+    //     pointer `p` this allocator genuinely handed out would slip PAST the gate-3 boundary
+    //     check and reach `free()`'s header-arithmetic/coalescing logic with garbage
+    //     `size_and_flags`/`arena` fields -- undefined behaviour, reproduced as SIGSEGV, NOT the
+    //     documented `sys_exit(112)`. The fix adds an alignment check (every real block header's
+    //     offset from its arena's `base` is a multiple of 16 by construction); this case proves
+    //     `glx_free(p + 8)` (offset 8, NOT a multiple of 16) now dies via the documented exit
+    //     code, exactly like the direction-1 foreign-pointer misuse in case 3a above, never a
+    //     signal.
+    // PT: ACHADO DO SECURITY-ENGINEER (revisão pós-decb2fb, IMPORTANTE, este caso prova o fix): o
+    //     `alloc_owns_ptr` (include/alloc_internal.h, src/alloc.c) originalmente só checava que o
+    //     endereço de header computado caía dentro dos limites `[base, end)` de ALGUMA arena --
+    //     NÃO checava que o endereço era de fato um header de bloco real, então
+    //     `glx_free(p + 8)` num ponteiro `p` que este alocador de fato entregou escapava PELA
+    //     checagem de fronteira do gate 3 e chegava à lógica de aritmética-de-header/
+    //     coalescência do `free()` com campos `size_and_flags`/`arena` lixo -- comportamento
+    //     indefinido, reproduzido como SIGSEGV, NÃO o `sys_exit(112)` documentado. O fix
+    //     acrescenta uma checagem de alinhamento (o offset de todo header de bloco real a partir
+    //     do `base` da arena dele é múltiplo de 16 por construção); este caso prova que
+    //     `glx_free(p + 8)` (offset 8, NÃO múltiplo de 16) agora morre via o exit code
+    //     documentado, exatamente como o mau-uso de ponteiro-estrangeiro da direção 1 no caso 3a
+    //     acima, nunca um sinal.
+    {
+        int status = run_in_forked_child([] {
+            char* p = static_cast<char*>(glx_malloc(64)); // legitimately owned by glx_
+            glx_free(p + 8); // ADR-0009 gate 3 misuse: misaligned offset into an OWNED block
+            // EN/PT: unreachable if the alignment check fired as designed.
+        });
+        bool exited_with_our_code =
+            WIFEXITED(status) && WEXITSTATUS(status) == kGlxFreeForeignPtrExitCode;
+        check(exited_with_our_code,
+              "glx_free(p + 8) on a legitimately-owned-but-misaligned pointer terminates the "
+              "process via our own boundary check (exit 112), not SIGSEGV");
     }
 
     if (g_failures == 0) {

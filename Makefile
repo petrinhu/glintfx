@@ -358,12 +358,32 @@ test-mem: build
 #     program via $(RUNTIME_OBJS) -- `make build`/`make test` are 100% unaffected by anything
 #     below. `build/objcore/` is a SECOND, ARCHIVE-ONLY compilation of the SAME src/*.c files,
 #     with $(CORE_RENAME_FLAGS) applied uniformly (see src/core_api.c's file header for exactly
-#     why and how) so the colliding libc-shaped names (`malloc`/`free`/`realloc`/`memcpy`/
-#     `memset`/`memmove`/`memcmp`) never appear as bare, exported symbols in build/libcore.a.
+#     why and how).
+#
+#     SECURITY-ENGINEER FINDING (post-decb2fb review, CRITICAL, fixed here): the FIRST cut of
+#     $(CORE_RENAME_FLAGS) only covered the 7 malloc/free/realloc/mem* names -- but `wildcard
+#     src/*.c` archives EVERY src/*.c file, including str.c/conv.c/printf.c, whose libc-shaped
+#     names (`strlen`/`strcmp`/... /`atoi`/`atof`/... /`mini_printf`/`mini_vsnprintf`) were left
+#     BARE in build/libcore.a -- a hosted C++ consumer linking the archive would silently get
+#     THIS project's `strlen`/`atoi`/etc. instead of glibc's for the WHOLE process (symbol
+#     hijack), proven live. $(CORE_RENAME_FLAGS) below now covers the FULL family of libc-shaped
+#     identifiers present in src/*.c today (renamed to `glx_core_<name>_impl`, uniformly, the
+#     same mechanism as the original 7) -- chosen over the brief's alternative ("restrict
+#     CORE_C_OBJS to only what core_api.c references today") because the FreeType epic (AUD-
+#     TRANS-2) will transitively pull str/printf into the archive anyway, so the wider rename is
+#     the future-proof fix, not a narrower one that would need re-litigating per epic.
+#     `alloc_owns_ptr` (src/alloc.c, include/alloc_internal.h) is renamed too now -- it was never
+#     a colliding libc name, but it is an internal helper with no business being a bare exported
+#     symbol either; folding it into the same `glx_core_*_impl` family is simpler than a bespoke
+#     whitelist entry (see tools/check_libcore_symbols.sh). `tools/check_libcore_symbols.sh` (gate
+#     4, `make libcore-test`) enforces this exhaustively now: a POSITIVE whitelist of every symbol
+#     name this archive is allowed to export, not a blacklist of the 7 names that bit us -- ANY
+#     other defined global symbol (a str/conv/printf name added tomorrow and forgotten here, for
+#     instance) fails the build instead of silently passing.
 #     The two `.asm` runtime objects (start.o/syscall.o) are REUSED as-is from build/obj/ -- no
 #     C preprocessor touches NASM source, and neither `_start` nor `syscall1..6` collide with any
 #     libc name to begin with (see src/core_api.c's header for the full rationale on why only
-#     the C allocator/mem primitives needed renaming).
+#     the C primitives needed renaming).
 # PT: SOV-LIBCORE (ADR-0009, FT-F0): a fronteira FÍSICA que a ADR de internalização pede -- um
 #     archive estático, build/libcore.a, cujos símbolos EXPORTADOS carregam o prefixo `glx_`,
 #     seguro de linkar num consumidor C++ hosted (não-freestanding) sentado ao lado de uma
@@ -377,19 +397,48 @@ test-mem: build
 #     programa-gate tests/*.c via $(RUNTIME_OBJS) -- `make build`/`make test` ficam 100%
 #     não-afetados por qualquer coisa abaixo. `build/objcore/` é uma SEGUNDA compilação, SÓ PRO
 #     ARCHIVE, dos MESMOS src/*.c, com $(CORE_RENAME_FLAGS) aplicado uniformemente (ver o
-#     cabeçalho de arquivo do src/core_api.c pro porquê e como exatos) pra que os nomes
-#     colidentes no formato da libc (`malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/
-#     `memcmp`) nunca apareçam como símbolos crus, exportados, na build/libcore.a. Os dois
-#     objetos de runtime `.asm` (start.o/syscall.o) são REUSADOS como estão de build/obj/ --
-#     nenhum pré-processador C toca fonte NASM, e nem `_start` nem `syscall1..6` colidem com
+#     cabeçalho de arquivo do src/core_api.c pro porquê e como exatos).
+#
+#     ACHADO DO SECURITY-ENGINEER (revisão pós-decb2fb, CRÍTICO, corrigido aqui): o PRIMEIRO corte
+#     do $(CORE_RENAME_FLAGS) só cobria os 7 nomes malloc/free/realloc/mem* -- mas o `wildcard
+#     src/*.c` arquiva TODO src/*.c, inclusive str.c/conv.c/printf.c, cujos nomes no formato de
+#     libc (`strlen`/`strcmp`/... /`atoi`/`atof`/... /`mini_printf`/`mini_vsnprintf`) ficavam CRUS
+#     na build/libcore.a -- um consumidor C++ hosted linkando o archive receberia em silêncio o
+#     `strlen`/`atoi`/etc. DESTE projeto em vez do da glibc pro processo INTEIRO (sequestro de
+#     símbolo), provado ao vivo. O $(CORE_RENAME_FLAGS) abaixo agora cobre a família COMPLETA de
+#     identificadores no formato de libc presente em src/*.c hoje (renomeados pra
+#     `glx_core_<nome>_impl`, uniformemente, mesmo mecanismo dos 7 originais) -- escolhido em vez
+#     da alternativa do brief ("restringir CORE_C_OBJS só ao que o core_api.c referencia hoje")
+#     porque o épico FreeType (AUD-TRANS-2) vai puxar str/printf pro archive transitivamente de
+#     qualquer jeito, então o rename mais amplo é o fix à prova de futuro, não um mais estreito
+#     que precisaria ser relitigado por épico.
+#     O `alloc_owns_ptr` (src/alloc.c, include/alloc_internal.h) também é renomeado agora -- nunca
+#     foi um nome colidente de libc, mas é um helper interno sem motivo pra ser um símbolo cru
+#     exportado tampouco; dobrar ele na mesma família `glx_core_*_impl` é mais simples que uma
+#     entrada de whitelist sob-medida (ver tools/check_libcore_symbols.sh). O
+#     `tools/check_libcore_symbols.sh` (gate 4, `make libcore-test`) aplica isso exaustivamente
+#     agora: uma whitelist POSITIVA de todo nome de símbolo que este archive tem permissão de
+#     exportar, não uma lista negra dos 7 nomes que nos morderam -- QUALQUER outro símbolo global
+#     definido (um nome de str/conv/printf acrescentado amanhã e esquecido aqui, por exemplo)
+#     falha o build em vez de passar em silêncio.
+#     Os dois objetos de runtime `.asm` (start.o/syscall.o) são REUSADOS como estão de build/obj/
+#     -- nenhum pré-processador C toca fonte NASM, e nem `_start` nem `syscall1..6` colidem com
 #     nome nenhum de libc pra começo de conversa (ver o cabeçalho do src/core_api.c pro racional
-#     completo de por que só as primitivas C de alocador/memória precisaram de rename).
+#     completo de por que só as primitivas C precisaram de rename).
 OBJCORE := $(BUILD)/objcore
 
 CORE_RENAME_FLAGS := -Dmalloc=glx_core_malloc_impl -Dfree=glx_core_free_impl \
                       -Drealloc=glx_core_realloc_impl -Dmemcpy=glx_core_memcpy_impl \
                       -Dmemset=glx_core_memset_impl -Dmemmove=glx_core_memmove_impl \
-                      -Dmemcmp=glx_core_memcmp_impl
+                      -Dmemcmp=glx_core_memcmp_impl -Dalloc_owns_ptr=glx_core_alloc_owns_ptr_impl \
+                      -Dstrlen=glx_core_strlen_impl -Dstrcmp=glx_core_strcmp_impl \
+                      -Dstrncmp=glx_core_strncmp_impl -Dstrcpy=glx_core_strcpy_impl \
+                      -Dstrncpy=glx_core_strncpy_impl -Dstrcat=glx_core_strcat_impl \
+                      -Dstrchr=glx_core_strchr_impl -Datoi=glx_core_atoi_impl \
+                      -Datof=glx_core_atof_impl -Datou=glx_core_atou_impl \
+                      -Ditoa=glx_core_itoa_impl -Dutoa=glx_core_utoa_impl \
+                      -Dftoa=glx_core_ftoa_impl -Dmini_printf=glx_core_mini_printf_impl \
+                      -Dmini_vsnprintf=glx_core_mini_vsnprintf_impl
 
 CORE_C_OBJS   := $(patsubst src/%.c,$(OBJCORE)/%.o,$(RUNTIME_C_SRCS))
 CORE_ASM_OBJS := $(patsubst src/%.asm,$(OBJ)/%.o,$(RUNTIME_ASM_SRCS))
@@ -410,24 +459,30 @@ $(BUILD)/libcore.a: $(CORE_OBJS) | $(BUILD)
 #     C++ program -- NOT a freestanding gate program, NOT part of $(PROGRAMS)/`make test`) that
 #     links against build/libcore.a next to real libc/libstdc++, exercises correct glx_malloc/
 #     glx_free/glx_realloc/glx_memcpy/glx_memset usage AND deliberately misuses the heap-
-#     ownership boundary (a forked child process, expected to die loudly -- see that file's own
-#     header), then runs tools/check_libcore_symbols.sh (gate 4: `nm -g` proves the ONLY
-#     exported names are the glx_* front door, never a bare malloc/free/realloc/memcpy/memset).
+#     ownership boundary (forked child processes, expected to die loudly -- see that file's own
+#     header, including the alignment-misuse case 3c added by the security-engineer fix), then
+#     runs tools/check_libcore_symbols.sh (gate 4: `nm -g` against a POSITIVE whitelist proves the
+#     ONLY exported names are the glx_* front door + the renamed glx_core_*_impl internals + the
+#     expected ASM/wrapper set -- see that script's own header and $(CORE_RENAME_FLAGS)'s comment
+#     above for the CRITICAL finding this replaced the old 7-name blacklist for).
 # PT: Verificação dos gates 3/4 do SOV-LIBCORE: builda tests/libcore_consumer.cpp (um programa
 #     C++ HOSTED comum -- NÃO um programa-gate freestanding, NÃO parte de $(PROGRAMS)/`make
 #     test`) que linka contra build/libcore.a ao lado de libc/libstdc++ de verdade, exercita uso
 #     correto de glx_malloc/glx_free/glx_realloc/glx_memcpy/glx_memset E mau-usa de propósito a
-#     fronteira de ownership de heap (um processo filho via fork, esperado morrer alto -- ver o
-#     cabeçalho próprio daquele arquivo), depois roda tools/check_libcore_symbols.sh (gate 4:
-#     `nm -g` prova que os ÚNICOS nomes exportados são a porta-da-frente glx_*, nunca um
-#     malloc/free/realloc/memcpy/memset cru).
+#     fronteira de ownership de heap (processos filho via fork, esperados morrer alto -- ver o
+#     cabeçalho próprio daquele arquivo, inclusive o caso 3c de mau-uso de alinhamento acrescentado
+#     pelo fix do security-engineer), depois roda tools/check_libcore_symbols.sh (gate 4: `nm -g`
+#     contra uma whitelist POSITIVA prova que os ÚNICOS nomes exportados são a porta-da-frente
+#     glx_* + os internos renomeados glx_core_*_impl + o conjunto ASM/wrapper esperado -- ver o
+#     cabeçalho próprio daquele script e o comentário do $(CORE_RENAME_FLAGS) acima pro achado
+#     CRÍTICO que substituiu a lista negra de 7 nomes antiga por isso).
 $(BIN)/libcore_consumer: tests/libcore_consumer.cpp $(BUILD)/libcore.a | $(BIN)
 	$(CXX) $(CXXFLAGS) -o $@ tests/libcore_consumer.cpp $(BUILD)/libcore.a
 
 libcore-test: $(BIN)/libcore_consumer
 	@echo "--- libcore_consumer (hosted C++, links build/libcore.a) ---"
 	$(BIN)/libcore_consumer
-	@echo "--- tools/check_libcore_symbols.sh (ADR-0009 gate 4: nm -g, glx_* only) ---"
+	@echo "--- tools/check_libcore_symbols.sh (ADR-0009 gate 4: nm -g, positive whitelist) ---"
 	tools/check_libcore_symbols.sh
 
 clean:

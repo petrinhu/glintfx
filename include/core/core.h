@@ -17,16 +17,23 @@
 //     header for the full mechanism. `include/alloc.h`'s `malloc`/`free`/`realloc` (ADR-0004,
 //     one-way-door) and `include/mem.h`'s `memcpy`/`memset` are UNTOUCHED -- same names, same
 //     signatures, same freestanding gate-program tests as before (`make test` unaffected). What
-//     is NEW is a second, ARCHIVE-ONLY compilation of `src/alloc.c`/`src/mem.c` (via the
-//     Makefile's `libcore` target, object dir `build/objcore/`) with those five identifiers
-//     `#define`-renamed to non-colliding `glx_core_*_impl` names BEFORE the compiler ever sees
-//     them -- so the .o files that actually land in `build/libcore.a` never define a bare
-//     `malloc`/`free`/`realloc`/`memcpy`/`memset` symbol at all. `glx_malloc()` etc. below (thin
-//     wrappers in src/core_api.c, compiled the SAME way) call straight through to those renamed
-//     internals. Net effect: zero signature/behaviour change to the ADR-0004-frozen contract,
-//     zero symbol collision risk for a hosted binary that also links glibc's own
-//     malloc/free/realloc/memcpy/memset (see ADR-0009's own words: "symbol collision -- the
-//     `glx_` prefix handles that trivially").
+//     is NEW is a second, ARCHIVE-ONLY compilation of EVERY src/*.c file (via the Makefile's
+//     `libcore` target, object dir `build/objcore/`) with every libc-shaped identifier present in
+//     this codebase today -- `malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/`memcmp` from
+//     src/alloc.c/src/mem.c, `strlen`/`strcmp`/`strncmp`/`strcpy`/`strncpy`/`strcat`/`strchr` from
+//     src/str.c, `atoi`/`atof`/`atou`/`itoa`/`utoa`/`ftoa` from src/conv.c, and
+//     `mini_printf`/`mini_vsnprintf` from src/printf.c -- `#define`-renamed to non-colliding
+//     `glx_core_<name>_impl` names BEFORE the compiler ever sees them -- so the .o files that
+//     actually land in `build/libcore.a` never define a bare libc-shaped symbol at all (SECURITY-
+//     ENGINEER FINDING, post-decb2fb: the archive-a `wildcard src/*.c` pulls in EVERY src/*.c
+//     file, so a rename covering only the allocator/mem five left str/conv/printf's names bare
+//     and hijackable -- see the Makefile's `$(CORE_RENAME_FLAGS)` comment for the full story).
+//     `glx_malloc()` etc. below (thin wrappers in src/core_api.c, compiled the SAME way) call
+//     straight through to those renamed internals. Net effect: zero signature/behaviour change to
+//     the ADR-0004-frozen contract, zero symbol collision risk for a hosted binary that also
+//     links glibc's own malloc/free/realloc/memcpy/memset/strlen/atoi/etc. (see ADR-0009's own
+//     words: "symbol collision -- the `glx_` prefix handles that trivially" -- now enforced
+//     exhaustively by `tools/check_libcore_symbols.sh`'s positive whitelist, not just asserted).
 // PT: SOV-LIBCORE (ADR-0009, FT-F0) -- a superfície PÚBLICA de consumo da `build/libcore.a`, a
 //     fronteira física que o ADR de internalização pede: um archive estático cujos símbolos
 //     EXPORTADOS carregam o prefixo de namespace `glx_`, seguro de `#include`/linkar a partir de
@@ -46,16 +53,24 @@
 //     `include/alloc.h` (ADR-0004, one-way-door) e o `memcpy`/`memset` do `include/mem.h` ficam
 //     INTOCADOS -- mesmos nomes, mesmas assinaturas, mesmos testes de programa-gate freestanding
 //     de antes (`make test` não afetado). O que é NOVO é uma segunda compilação, SÓ PRO ARCHIVE,
-//     de `src/alloc.c`/`src/mem.c` (via o alvo `libcore` do Makefile, diretório de objeto
-//     `build/objcore/`) com esses cinco identificadores renomeados via `#define` pra nomes
-//     não-colidentes `glx_core_*_impl` ANTES do compilador sequer vê-los -- então os `.o` que de
-//     fato entram na `build/libcore.a` nunca definem um símbolo `malloc`/`free`/`realloc`/
-//     `memcpy`/`memset` cru. O `glx_malloc()` etc. abaixo (wrappers finos em src/core_api.c,
-//     compilados do MESMO jeito) chamam direto pra esses internos renomeados. Efeito líquido:
-//     zero mudança de assinatura/comportamento no contrato congelado pela ADR-0004, zero risco
-//     de colisão de símbolo pra um binário hosted que também linka o
-//     malloc/free/realloc/memcpy/memset PRÓPRIOS da glibc (nas palavras da própria ADR-0009:
-//     "colisão de símbolo -- o prefixo `glx_` resolve isso trivialmente").
+//     de TODO src/*.c (via o alvo `libcore` do Makefile, diretório de objeto `build/objcore/`)
+//     com todo identificador no formato de libc presente neste código-base hoje --
+//     `malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/`memcmp` do src/alloc.c/src/mem.c,
+//     `strlen`/`strcmp`/`strncmp`/`strcpy`/`strncpy`/`strcat`/`strchr` do src/str.c,
+//     `atoi`/`atof`/`atou`/`itoa`/`utoa`/`ftoa` do src/conv.c, e `mini_printf`/`mini_vsnprintf`
+//     do src/printf.c -- renomeados via `#define` pra nomes não-colidentes `glx_core_<nome>_impl`
+//     ANTES do compilador sequer vê-los -- então os `.o` que de fato entram na `build/libcore.a`
+//     nunca definem um símbolo cru no formato de libc (ACHADO DO SECURITY-ENGINEER, pós-decb2fb:
+//     o `wildcard src/*.c` do archive puxa TODO src/*.c, então um rename cobrindo só os cinco de
+//     alocador/memória deixava os nomes de str/conv/printf crus e sequestráveis -- ver o
+//     comentário do `$(CORE_RENAME_FLAGS)` no Makefile pra história completa). O `glx_malloc()`
+//     etc. abaixo (wrappers finos em src/core_api.c, compilados do MESMO jeito) chamam direto pra
+//     esses internos renomeados. Efeito líquido: zero mudança de assinatura/comportamento no
+//     contrato congelado pela ADR-0004, zero risco de colisão de símbolo pra um binário hosted
+//     que também linka o malloc/free/realloc/memcpy/memset/strlen/atoi/etc. PRÓPRIOS da glibc
+//     (nas palavras da própria ADR-0009: "colisão de símbolo -- o prefixo `glx_` resolve isso
+//     trivialmente" -- agora aplicado exaustivamente pela whitelist positiva do
+//     `tools/check_libcore_symbols.sh`, não só afirmado).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 

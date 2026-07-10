@@ -20,25 +20,33 @@
 //       call OUR OWN malloc/memcpy, already zero-libc), zero behaviour change to any existing
 //       test.
 //     - Archive build (`make libcore`, object dir `build/objcore/`): compiled with
-//       `$(CORE_RENAME_FLAGS)` (`-Dmalloc=glx_core_malloc_impl -Dfree=glx_core_free_impl
-//       -Drealloc=glx_core_realloc_impl -Dmemcpy=glx_core_memcpy_impl
-//       -Dmemset=glx_core_memset_impl -Dmemmove=glx_core_memmove_impl
-//       -Dmemcmp=glx_core_memcmp_impl`), applied UNIFORMLY to every src/*.c file that lands in
-//       `build/objcore/` -- so `src/alloc.c`'s definitions of `malloc`/`free`/`realloc` and
-//       `src/mem.c`'s definitions of `memcpy`/`memset`/`memmove`/`memcmp` are textually renamed
-//       to `glx_core_*_impl` BEFORE the compiler ever sees them (a plain object-like `#define`
-//       substitutes every occurrence of the bare identifier, including src/alloc.c's OWN
-//       internal calls to `malloc`/`free`/`memcpy` inside its `realloc()` body -- see that
-//       file's `realloc()`, it calls `malloc`/`free`/`memcpy` internally, and the rename applies
-//       there too, consistently). The calls in THIS file (`malloc(size)`, `free(ptr)`, etc.
-//       below) undergo the EXACT SAME substitution when this file itself is compiled into
+//       `$(CORE_RENAME_FLAGS)` (Makefile), applied UNIFORMLY to every src/*.c file that lands in
+//       `build/objcore/` -- so `src/alloc.c`'s definitions of `malloc`/`free`/`realloc`/
+//       `alloc_owns_ptr`, `src/mem.c`'s definitions of `memcpy`/`memset`/`memmove`/`memcmp`,
+//       `src/str.c`'s definitions of `strlen`/`strcmp`/`strncmp`/`strcpy`/`strncpy`/`strcat`/
+//       `strchr`, `src/conv.c`'s definitions of `atoi`/`atof`/`atou`/`itoa`/`utoa`/`ftoa`, and
+//       `src/printf.c`'s definitions of `mini_printf`/`mini_vsnprintf` are ALL textually renamed
+//       to `glx_core_<name>_impl` BEFORE the compiler ever sees them (a plain object-like
+//       `#define` substitutes every occurrence of the bare identifier, including a file's OWN
+//       internal calls -- e.g. src/alloc.c's `realloc()` calling `malloc`/`free`/`memcpy`
+//       internally, or src/printf.c calling `strlen`/`itoa`/`utoa`/`ftoa` internally -- the
+//       rename applies there too, consistently, since $(CORE_RENAME_FLAGS) is the SAME flag set
+//       for every TU in this build). SECURITY-ENGINEER FINDING (post-decb2fb review, CRITICAL,
+//       fixed by widening this list -- see the Makefile's $(CORE_RENAME_FLAGS) comment for the
+//       full story): the ORIGINAL 7-name list (malloc/free/realloc/mem*) left str.c/conv.c/
+//       printf.c's libc-shaped names BARE in the archive, since `wildcard src/*.c` archives
+//       every src/*.c file regardless of whether core_api.c itself calls into it -- a hosted
+//       consumer linking `libcore.a` would silently hijack glibc's own `strlen`/`atoi`/etc. for
+//       the WHOLE process. The calls in THIS file (`malloc(size)`, `free(ptr)`, etc. below)
+//       undergo the EXACT SAME substitution when this file itself is compiled into
 //       `build/objcore/core_api.o` -- so the object that actually lands in `build/libcore.a`
 //       calls `glx_core_malloc_impl` internally and NEVER references (let alone defines) a bare
-//       `malloc` symbol. Net result: `build/libcore.a`'s `alloc.o`/`mem.o` members define ONLY
-//       `glx_core_*_impl` (never `malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/`memcmp`),
-//       and `core_api.o` defines ONLY the public `glx_malloc`/`glx_free`/`glx_realloc`/
-//       `glx_memcpy`/`glx_memset` (see `tools/check_libcore_symbols.sh`, run by `make
-//       libcore-test`, which verifies exactly this with `nm -g`).
+//       `malloc` symbol. Net result: `build/libcore.a`'s `alloc.o`/`mem.o`/`str.o`/`conv.o`/
+//       `printf.o` members define ONLY `glx_core_*_impl` names (never a bare libc-shaped
+//       identifier), and `core_api.o` defines ONLY the public `glx_malloc`/`glx_free`/
+//       `glx_realloc`/`glx_memcpy`/`glx_memset` (see `tools/check_libcore_symbols.sh`, run by
+//       `make libcore-test`, which verifies this EXHAUSTIVELY with `nm -g` against a positive
+//       whitelist -- not a blacklist of the 7 names that bit us the first time).
 //
 //     WHY NOT `objcopy --localize-symbol` INSTEAD (the mechanism briefly considered and
 //     rejected): stripping `malloc`'s GLOBAL binding down to LOCAL on the archived copy of
@@ -52,10 +60,15 @@
 //     `core_api.o`'s undefined reference is to `glx_core_malloc_impl`, which `alloc.o` (archive
 //     variant) DOES export globally, so intra-archive resolution still works normally.
 //
-//     `alloc_owns_ptr` (declared in include/alloc_internal.h, defined in src/alloc.c) is NOT
-//     renamed by `$(CORE_RENAME_FLAGS)` -- it was never a colliding libc name to begin with (no
-//     libc ships a function called `alloc_owns_ptr`), so it is called here under its own,
-//     unmodified name in BOTH build variants.
+//     `alloc_owns_ptr` (declared in include/alloc_internal.h, defined in src/alloc.c) IS renamed
+//     by `$(CORE_RENAME_FLAGS)` too (`-Dalloc_owns_ptr=glx_core_alloc_owns_ptr_impl`) -- it was
+//     never a colliding libc name to begin with (no libc ships a function called
+//     `alloc_owns_ptr`), but it is an internal helper with no business being a bare, exported
+//     symbol in `build/libcore.a` either; folding it into the same `glx_core_*_impl` family is
+//     simpler than carving out a bespoke whitelist entry for one extra name (see
+//     tools/check_libcore_symbols.sh). It is called here under its own, unmodified name in the
+//     NORMAL build variant (`build/obj/`, no renaming), and under `glx_core_alloc_owns_ptr_impl`
+//     in the archive variant -- same textual-substitution mechanism as every other name above.
 // PT: SOV-LIBCORE (ADR-0009, FT-F0) -- a porta-da-frente `glx_*` declarada em
 //     include/core/core.h. Toda função aqui é um wrapper FINO (nenhuma lógica nova além da
 //     checagem de fronteira do gate 3 da ADR-0009 no `glx_free`) por cima das primitivas
@@ -78,26 +91,35 @@
 //       viajando junto -- zero dependência nova de libc (chamam nosso PRÓPRIO malloc/memcpy, já
 //       zero-libc), zero mudança de comportamento em teste nenhum existente.
 //     - Build do archive (`make libcore`, diretório de objeto `build/objcore/`): compilado com
-//       `$(CORE_RENAME_FLAGS)` (`-Dmalloc=glx_core_malloc_impl -Dfree=glx_core_free_impl
-//       -Drealloc=glx_core_realloc_impl -Dmemcpy=glx_core_memcpy_impl
-//       -Dmemset=glx_core_memset_impl -Dmemmove=glx_core_memmove_impl
-//       -Dmemcmp=glx_core_memcmp_impl`), aplicado UNIFORMEMENTE a todo src/*.c que cai em
-//       `build/objcore/` -- então as definições de `malloc`/`free`/`realloc` do src/alloc.c e de
-//       `memcpy`/`memset`/`memmove`/`memcmp` do src/mem.c são renomeadas textualmente pra
-//       `glx_core_*_impl` ANTES do compilador sequer vê-las (um `#define` simples estilo
-//       object-like substitui toda ocorrência do identificador cru, incluindo as chamadas
-//       INTERNAS do próprio src/alloc.c a `malloc`/`free`/`memcpy` dentro do corpo do
-//       `realloc()` dele -- ver aquele arquivo, `realloc()` chama `malloc`/`free`/`memcpy`
-//       internamente, e o rename se aplica ali também, de forma consistente). As chamadas NESTE
-//       arquivo (`malloc(size)`, `free(ptr)`, etc. abaixo) passam pela EXATA MESMA substituição
-//       quando este arquivo é compilado em `build/objcore/core_api.o` -- então o objeto que de
-//       fato cai na `build/libcore.a` chama `glx_core_malloc_impl` internamente e NUNCA
-//       referencia (muito menos define) um símbolo `malloc` cru. Resultado líquido: os membros
-//       `alloc.o`/`mem.o` da `build/libcore.a` definem SÓ `glx_core_*_impl` (nunca
-//       `malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/`memcmp`), e o `core_api.o` define
-//       SÓ o `glx_malloc`/`glx_free`/`glx_realloc`/`glx_memcpy`/`glx_memset` públicos (ver
-//       `tools/check_libcore_symbols.sh`, rodado pelo `make libcore-test`, que verifica
-//       exatamente isso com `nm -g`).
+//       `$(CORE_RENAME_FLAGS)` (Makefile), aplicado UNIFORMEMENTE a todo src/*.c que cai em
+//       `build/objcore/` -- então as definições de `malloc`/`free`/`realloc`/`alloc_owns_ptr` do
+//       src/alloc.c, de `memcpy`/`memset`/`memmove`/`memcmp` do src/mem.c, de
+//       `strlen`/`strcmp`/`strncmp`/`strcpy`/`strncpy`/`strcat`/`strchr` do src/str.c, de
+//       `atoi`/`atof`/`atou`/`itoa`/`utoa`/`ftoa` do src/conv.c, e de
+//       `mini_printf`/`mini_vsnprintf` do src/printf.c são TODAS renomeadas textualmente pra
+//       `glx_core_<nome>_impl` ANTES do compilador sequer vê-las (um `#define` simples estilo
+//       object-like substitui toda ocorrência do identificador cru, incluindo chamadas INTERNAS
+//       próprias de um arquivo -- ex.: o `realloc()` do src/alloc.c chamando
+//       `malloc`/`free`/`memcpy` internamente, ou o src/printf.c chamando
+//       `strlen`/`itoa`/`utoa`/`ftoa` internamente -- o rename se aplica ali também, de forma
+//       consistente, já que $(CORE_RENAME_FLAGS) é o MESMO conjunto de flag pra toda TU deste
+//       build). ACHADO DO SECURITY-ENGINEER (revisão pós-decb2fb, CRÍTICO, corrigido ampliando
+//       esta lista -- ver o comentário do $(CORE_RENAME_FLAGS) no Makefile pra história
+//       completa): a lista ORIGINAL de 7 nomes (malloc/free/realloc/mem*) deixava os nomes no
+//       formato de libc do str.c/conv.c/printf.c CRUS no archive, já que `wildcard src/*.c`
+//       arquiva todo src/*.c independente de o próprio core_api.c chamar nele -- um consumidor
+//       hosted linkando `libcore.a` sequestraria em silêncio o `strlen`/`atoi`/etc. PRÓPRIO da
+//       glibc pro processo INTEIRO. As chamadas NESTE arquivo (`malloc(size)`, `free(ptr)`, etc.
+//       abaixo) passam pela EXATA MESMA substituição quando este arquivo é compilado em
+//       `build/objcore/core_api.o` -- então o objeto que de fato cai na `build/libcore.a` chama
+//       `glx_core_malloc_impl` internamente e NUNCA referencia (muito menos define) um símbolo
+//       `malloc` cru. Resultado líquido: os membros `alloc.o`/`mem.o`/`str.o`/`conv.o`/`printf.o`
+//       da `build/libcore.a` definem SÓ nomes `glx_core_*_impl` (nunca um identificador cru no
+//       formato de libc), e o `core_api.o` define SÓ o
+//       `glx_malloc`/`glx_free`/`glx_realloc`/`glx_memcpy`/`glx_memset` públicos (ver
+//       `tools/check_libcore_symbols.sh`, rodado pelo `make libcore-test`, que verifica isso
+//       EXAUSTIVAMENTE com `nm -g` contra uma whitelist positiva -- não uma lista negra dos 7
+//       nomes que nos morderam da primeira vez).
 //
 //     POR QUE NÃO `objcopy --localize-symbol` EM VEZ DISSO (o mecanismo brevemente considerado e
 //     rejeitado): rebaixar o binding GLOBAL do `malloc` pra LOCAL na cópia archived do `alloc.o`
@@ -112,10 +134,16 @@
 //     `core_api.o` é pro `glx_core_malloc_impl`, que o `alloc.o` (variante archive) EXPORTA
 //     globalmente, então a resolução intra-archive continua funcionando normalmente.
 //
-//     O `alloc_owns_ptr` (declarado em include/alloc_internal.h, definido em src/alloc.c) NÃO é
-//     renomeado pelo `$(CORE_RENAME_FLAGS)` -- nunca foi um nome colidente de libc pra começo de
-//     conversa (nenhuma libc entrega uma função chamada `alloc_owns_ptr`), então é chamado aqui
-//     sob o próprio nome, sem modificação, nas DUAS variantes de build.
+//     O `alloc_owns_ptr` (declarado em include/alloc_internal.h, definido em src/alloc.c) TAMBÉM
+//     é renomeado pelo `$(CORE_RENAME_FLAGS)` agora (`-Dalloc_owns_ptr=glx_core_alloc_owns_ptr_impl`)
+//     -- nunca foi um nome colidente de libc pra começo de conversa (nenhuma libc entrega uma
+//     função chamada `alloc_owns_ptr`), mas é um helper interno sem motivo pra ser um símbolo
+//     cru, exportado, na `build/libcore.a` tampouco; dobrar ele na mesma família
+//     `glx_core_*_impl` é mais simples que abrir uma entrada de whitelist sob-medida pra um nome
+//     extra (ver tools/check_libcore_symbols.sh). É chamado aqui sob o próprio nome, sem
+//     modificação, na variante NORMAL de build (`build/obj/`, sem rename), e sob
+//     `glx_core_alloc_owns_ptr_impl` na variante archive -- mesmo mecanismo de substituição
+//     textual de todo outro nome acima.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "core/core.h"
 

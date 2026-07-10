@@ -699,12 +699,80 @@ void* realloc(void* ptr, size_t size) {
 //     only. Reuses the exact same header-address arithmetic `free()` already performs
 //     (`ptr - ALLOC_HEADER_SIZE`) and walks the SAME `g_arenas` registry `free()`'s coalescing
 //     logic already maintains -- no new state, no new syscalls, read-only.
+//
+//     SECURITY-ENGINEER FINDING (post-decb2fb review, IMPORTANT, fixed here): the ORIGINAL
+//     version of this function only checked `hdr` fell within SOME arena's `[base, end)` bounds
+//     -- it did NOT check that `hdr` was actually the address of a real block header (as opposed
+//     to some other byte offset INSIDE a legitimately-owned block, e.g. `glx_free(p + 8)` on a
+//     pointer `p` this allocator really did hand out). Every real block header address is
+//     16-byte-aligned RELATIVE TO its owning arena's `base` (see file header: `arena_desc_t` is
+//     itself a multiple of `ALLOC_ALIGN`, and every block's total footprint -- hence every
+//     subsequent header's offset from `base` -- is rounded up to a multiple of `ALLOC_ALIGN` by
+//     construction). The added `(hdr - a->base) % ALLOC_ALIGN == 0` check is a CHEAP,
+//     zero-new-state way to reject the large majority of "pointer with an offset into a
+//     legitimately-owned block" misuse before it ever reaches `free()`'s header-arithmetic/
+//     coalescing logic, which would otherwise misinterpret arbitrary payload bytes as
+//     `size_and_flags`/`arena` fields and corrupt the free-list or SIGSEGV instead of the
+//     documented `sys_exit(112)` (src/core_api.c's `GLX_FREE_FOREIGN_PTR_EXIT_CODE`) --
+//     `tests/libcore_consumer.cpp`'s misuse case 3c proves `glx_free(p + 8)` on a legitimately
+//     owned `p` now dies via the documented exit code, not a signal.
+//
+//     HONEST RESIDUAL LIMITATION (same "best-effort, not a formal proof" standard this file's own
+//     header already holds `alloc_owns_ptr` to for the arena-bounds check): the alignment check
+//     rejects a MISALIGNED offset into a live block (any offset that is not itself a multiple of
+//     `ALLOC_ALIGN`), but it CANNOT distinguish a real block header from a foreign/crafted pointer
+//     that happens to land on a 16-aligned offset that is NOT a real header boundary (e.g.
+//     `glx_free(p + 16)` where `p`'s block is larger than one `MIN_BLOCK_TOTAL` and offset 16
+//     lands inside the payload rather than at the start of a DIFFERENT block). Detecting that
+//     precisely would require walking every block in the owning arena from `base` and confirming
+//     `hdr` lands exactly on a header boundary -- O(number of blocks in the arena) per `free()`
+//     call, a cost/complexity trade-off this increment does not take (see this file's own header
+//     for the same CORRECTNESS-FIRST-at-bounded-cost philosophy applied to the free-list search
+//     strategy). This is a real, cheap, high-value defense-in-depth signal against the COMMON
+//     misuse shapes (a foreign pointer, or an arbitrary small offset off a legitimate one), not a
+//     cryptographic guarantee against a deliberately-crafted adversarial 16-aligned interior
+//     pointer.
 // PT: SOV-LIBCORE (gate 3 da ADR-0009) -- ver include/alloc_internal.h pro contrato completo que
 //     isto implementa. NÃO faz parte da superfície malloc/free/realloc congelada pela ADR-0004
 //     acima; só aditivo. Reusa exatamente a mesma aritmética de endereço-de-header que o
 //     `free()` já faz (`ptr - ALLOC_HEADER_SIZE`) e percorre o MESMO registro `g_arenas` que a
 //     lógica de coalescência do `free()` já mantém -- sem estado novo, sem syscall nova,
 //     somente-leitura.
+//
+//     ACHADO DO SECURITY-ENGINEER (revisão pós-decb2fb, IMPORTANTE, corrigido aqui): a versão
+//     ORIGINAL desta função só checava se `hdr` caía dentro dos limites `[base, end)` de ALGUMA
+//     arena -- NÃO checava que `hdr` era de fato o endereço de um header de bloco real (em vez de
+//     algum outro offset de byte DENTRO de um bloco legitimamente possuído, ex.: `glx_free(p + 8)`
+//     num ponteiro `p` que este alocador de fato entregou). Todo endereço de header de bloco real
+//     é alinhado a 16 bytes RELATIVO ao `base` da arena dona (ver cabeçalho do arquivo:
+//     `arena_desc_t` é ela mesma múltiplo de `ALLOC_ALIGN`, e o footprint total de todo bloco --
+//     logo o offset de todo header subsequente a partir de `base` -- é arredondado pra cima pra
+//     um múltiplo de `ALLOC_ALIGN` por construção). A checagem acrescentada
+//     `(hdr - a->base) % ALLOC_ALIGN == 0` é um jeito BARATO, sem estado novo, de rejeitar a
+//     grande maioria do mau-uso "ponteiro com um offset dentro de um bloco legitimamente
+//     possuído" antes que chegue à lógica de aritmética-de-header/coalescência do `free()`, que
+//     de outra forma interpretaria mal bytes arbitrários de payload como campos
+//     `size_and_flags`/`arena` e corromperia a free-list ou daria SIGSEGV em vez do
+//     `sys_exit(112)` documentado (`GLX_FREE_FOREIGN_PTR_EXIT_CODE` do src/core_api.c) -- o caso
+//     de mau-uso 3c do `tests/libcore_consumer.cpp` prova que `glx_free(p + 8)` num `p`
+//     legitimamente possuído agora morre via o exit code documentado, não um sinal.
+//
+//     LIMITAÇÃO RESIDUAL HONESTA (mesmo padrão "melhor esforço, não uma prova formal" que o
+//     próprio cabeçalho deste arquivo já mantém pro `alloc_owns_ptr` na checagem de limites de
+//     arena): a checagem de alinhamento rejeita um offset DESALINHADO dentro de um bloco vivo
+//     (qualquer offset que não seja ele mesmo múltiplo de `ALLOC_ALIGN`), mas NÃO consegue
+//     distinguir um header de bloco real de um ponteiro estrangeiro/forjado que por acaso caia
+//     num offset alinhado-a-16 que NÃO é um limite de header real (ex.: `glx_free(p + 16)` onde o
+//     bloco de `p` é maior que um `MIN_BLOCK_TOTAL` e o offset 16 cai dentro do payload em vez do
+//     início de um bloco DIFERENTE). Detectar isso com precisão exigiria percorrer todo bloco na
+//     arena dona a partir de `base` e confirmar que `hdr` cai exatamente num limite de header --
+//     O(número de blocos na arena) por chamada de `free()`, um trade-off custo/complexidade que
+//     este incremento não assume (ver o próprio cabeçalho deste arquivo pra mesma filosofia
+//     CORRETUDE-PRIMEIRO-a-custo-limitado aplicada à estratégia de busca da free-list). Este é um
+//     sinal de defesa em profundidade real, barato e de alto valor contra as formas COMUNS de
+//     mau-uso (um ponteiro estrangeiro, ou um offset pequeno arbitrário a partir de um legítimo),
+//     não uma garantia criptográfica contra um ponteiro interior alinhado-a-16 deliberadamente
+//     forjado por um adversário.
 int alloc_owns_ptr(const void* ptr) {
     if (ptr == NULL) {
         return 0;
@@ -712,7 +780,19 @@ int alloc_owns_ptr(const void* ptr) {
     const unsigned char* hdr = (const unsigned char*)ptr - ALLOC_HEADER_SIZE;
     for (const arena_desc_t* a = g_arenas; a != NULL; a = a->next) {
         if (hdr >= a->base && hdr < a->end) {
-            return 1;
+            // EN: Alignment gate (see the block comment above this function): a real block
+            //     header's offset from its owning arena's `base` is ALWAYS a multiple of
+            //     `ALLOC_ALIGN` -- an offset that is not rejects `ptr` as not-owned, same as
+            //     falling outside every arena's bounds.
+            // PT: Portão de alinhamento (ver o comentário de bloco acima desta função): o offset
+            //     de um header de bloco real a partir do `base` da arena dona é SEMPRE múltiplo
+            //     de `ALLOC_ALIGN` -- um offset que não é rejeita `ptr` como não-possuído, igual
+            //     a cair fora dos limites de toda arena.
+            size_t offset = (size_t)(hdr - a->base);
+            if (offset % ALLOC_ALIGN == 0) {
+                return 1;
+            }
+            return 0;
         }
     }
     return 0;

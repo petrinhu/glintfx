@@ -43,9 +43,15 @@
 //     invalidate RmlUi's cached geometry over). Font effects (PrepareFontEffects) are a pure
 //     no-op returning handle `0` -- text-shadow/outline-via-font-effect is out of scope for this
 //     ticket (RmlUi tolerates an effects handle of `0`, text still renders without the effect).
-//     Kerning (kern/GPOS) is 0 (SOV-SFNT itself does not parse those tables, by its own documented
-//     scope) and letter-spacing (TextShapingContext::letter_spacing) is honoured. No font
-//     collection (.ttc) support -- `face_index` is accepted but ignored (SOV-SFNT parses a single
+//     Kerning (L1.19-FONTENG/L1.20-FONTFLIP amadurecimento): APPLIED between every consecutive
+//     baked-glyph pair, via SOV-SFNT's `glx_sfnt_kern` (classic `kern` table, format-0 horizontal
+//     subtable only -- see include/core/sfnt.h's own SCOPE note) -- IterateGlyphs() below folds
+//     the FUnits adjustment it returns into the pen position, same font-unit->px scale as every
+//     other metric this file derives. GPOS kerning/pair-positioning is still out of scope (SOV-SFNT
+//     does not parse GPOS at all). letter-spacing (TextShapingContext::letter_spacing) is honoured
+//     independently, added AFTER the kern adjustment (both apply, they answer different questions:
+//     kern is a font-authored per-PAIR correction, letter-spacing a caller-requested UNIFORM
+//     addition). No font collection (.ttc) support -- `face_index` is accepted but ignored (SOV-SFNT parses a single
 //     sfnt directory at blob offset 0, matching its own documented scope). No 'name' table
 //     parsing -- the family-less LoadFontFace() overload (no confirmed RmlUi call site: RCSS
 //     @font-face always supplies family/style/weight explicitly, confirmed by reading the pinned
@@ -97,9 +103,17 @@
 //     1º empacotamento, então não há nada pra invalidar na geometria cacheada do RmlUi). Efeitos
 //     de fonte (PrepareFontEffects) são um no-op puro retornando handle `0` -- text-shadow/
 //     contorno via efeito-de-fonte está fora de escopo desta tarefa (o RmlUi tolera um handle de
-//     efeito `0`, o texto ainda renderiza sem o efeito). Kerning (kern/GPOS) é 0 (o próprio
-//     SOV-SFNT não parseia essas tabelas, por escopo documentado próprio) e letter-spacing
-//     (TextShapingContext::letter_spacing) é honrado. Sem suporte a coleção de fonte (.ttc) --
+//     efeito `0`, o texto ainda renderiza sem o efeito). Kerning (amadurecimento L1.19-FONTENG/
+//     L1.20-FONTFLIP): APLICADO entre todo par consecutivo de glyph empacotado, via
+//     `glx_sfnt_kern` do SOV-SFNT (tabela `kern` clássica, só subtable formato-0 horizontal --
+//     ver a própria nota de ESCOPO do include/core/sfnt.h) -- o IterateGlyphs() abaixo dobra o
+//     ajuste em FUnits que ele devolve na posição da pena, na mesma escala unidade-de-fonte->px
+//     de toda outra métrica que este arquivo deriva. Kerning via GPOS/pair-positioning segue fora
+//     de escopo (o SOV-SFNT não parseia GPOS de forma nenhuma). letter-spacing
+//     (TextShapingContext::letter_spacing) é honrado independentemente, somado DEPOIS do ajuste
+//     de kern (os dois se aplicam, respondem perguntas diferentes: kern é uma correção
+//     por-PAR autorada-pela-fonte, letter-spacing uma adição UNIFORME pedida por quem chama).
+//     Sem suporte a coleção de fonte (.ttc) --
 //     `face_index` é aceito mas ignorado (SOV-SFNT parseia um único diretório sfnt no offset 0 do
 //     blob, batendo com o próprio escopo documentado dele). Sem parsing de tabela 'name' -- a
 //     sobrecarga sem-família de LoadFontFace() (sem ponto de chamada confirmado no RmlUi: o RCSS
@@ -282,6 +296,16 @@ private:
   //     deliberadamente sem quad emitido).
   struct GlyphInfo {
     bool baked = false;
+    // EN: The glyph id SOV-SFNT resolved for this codepoint at bake time (glx_sfnt_glyph_id()
+    //     inside BakeFaceInstance()) -- stashed here so IterateGlyphs() can feed CONSECUTIVE
+    //     glyphs' gids to glx_sfnt_kern() without re-resolving cp->gid on every pen advance (the
+    //     'kern' table itself is keyed by gid, not codepoint, per OpenType spec).
+    // PT: O id de glyph que o SOV-SFNT resolveu pra este codepoint em tempo de empacotamento
+    //     (glx_sfnt_glyph_id() dentro de BakeFaceInstance()) -- guardado aqui para que
+    //     IterateGlyphs() alimente os gids de glyphs CONSECUTIVOS ao glx_sfnt_kern() sem
+    //     re-resolver cp->gid a cada avanço de pena (a própria tabela 'kern' é indexada por gid,
+    //     não codepoint, conforme a spec OpenType).
+    uint32_t gid = 0;
     int atlas_x = 0, atlas_y = 0, w = 0, h = 0;
     // EN: offset_x/offset_y (px): added to (pen_x, baseline_y) to get the quad's TOP-LEFT
     //     corner in screen space (y-down). See BakeFaceInstance()'s derivation in the .cpp.
@@ -329,6 +353,23 @@ private:
   //     `pen_x` advances past it -- `glyph_or_null` is `nullptr` for a codepoint outside this
   //     ticket's fixed bake set (see this file's header "SCOPE"). Returns the final pen
   //     position (== total advanced width in px).
+  //
+  //     KERNING (L1.19-FONTENG/L1.20-FONTFLIP amadurecimento): before `pen_x` advances past a
+  //     glyph that has a PREVIOUS baked glyph immediately before it in this same string, the
+  //     per-pair adjustment `glx_sfnt_kern(face, prev.gid, cur.gid)` (FUnits) is folded into
+  //     `pen_x` FIRST, scaled by the exact same `pixel_size / units_per_em` factor
+  //     BakeFaceInstance() already uses for advance/outline -- so kerning lands in the identical
+  //     px space as everything else this function accumulates, and (since GetStringWidth() and
+  //     GenerateString() share this one summation) the returned width and the emitted quads'
+  //     positions can never disagree over whether/how much kerning applied. No kerning is applied
+  //     around an UN-baked glyph (`glyph_or_null == nullptr`, no gid to look up) or before the
+  //     first glyph of the string (no predecessor) -- both leave the running pen exactly as
+  //     GetStringWidth()/GenerateString() already handled the no-kerning case before this
+  //     amadurecimento. Rounding: intentionally NONE mid-loop -- `pen` stays `float` for the
+  //     entire walk (kerning included) and only the FINAL total is rounded
+  //     (`std::lround`, in GetStringWidth()/GenerateString() themselves), which is exactly why
+  //     GetStringWidth()'s int return and GenerateString()'s emitted mesh extent agree to the
+  //     pixel even with kerning in the mix.
   // PT: Caminhada UTF-8 compartilhada usada TANTO por GetStringWidth() QUANTO por
   //     GenerateString() -- garante que a largura que o motor de layout do RmlUi mede (retorno
   //     de GetStringWidth) sempre bate com a largura que a mesh emitida de fato ocupa (retorno
@@ -337,6 +378,23 @@ private:
   //     `glyph_ou_null` é `nullptr` pra um codepoint fora do conjunto fixo empacotado desta
   //     tarefa (ver a seção "ESCOPO" do cabeçalho deste arquivo). Retorna a posição final da
   //     pena (== largura total avançada em px).
+  //
+  //     KERNING (amadurecimento L1.19-FONTENG/L1.20-FONTFLIP): antes de `pen_x` avançar além de
+  //     um glyph que tem um glyph empacotado ANTERIOR imediatamente antes dele nesta mesma
+  //     string, o ajuste por-par `glx_sfnt_kern(face, prev.gid, cur.gid)` (FUnits) é dobrado em
+  //     `pen_x` PRIMEIRO, escalado pelo mesmo fator exato `pixel_size / units_per_em` que
+  //     BakeFaceInstance() já usa pra avanço/outline -- então o kerning cai no mesmo espaço-px
+  //     de tudo mais que esta função acumula, e (já que GetStringWidth() e GenerateString()
+  //     compartilham esta única soma) a largura devolvida e a posição dos quads emitidos nunca
+  //     podem discordar sobre se/quanto kerning se aplicou. Nenhum kerning se aplica ao redor de
+  //     um glyph NÃO-empacotado (`glyph_ou_null == nullptr`, sem gid pra buscar) ou antes do 1º
+  //     glyph da string (sem predecessor) -- ambos deixam a pena corrente exatamente como
+  //     GetStringWidth()/GenerateString() já tratavam o caso sem-kerning antes deste
+  //     amadurecimento. Arredondamento: propositalmente NENHUM no meio do laço -- `pen`
+  //     permanece `float` durante toda a caminhada (kerning incluso) e só o total FINAL é
+  //     arredondado (`std::lround`, no próprio GetStringWidth()/GenerateString()), motivo exato
+  //     pelo qual o retorno int de GetStringWidth() e a extensão da mesh emitida de
+  //     GenerateString() concordam até o pixel mesmo com kerning na mistura.
   static float IterateGlyphs(const FaceInstance& inst, Rml::StringView string, float letter_spacing,
                               const std::function<void(float pen_x, const GlyphInfo*)>& emit);
 

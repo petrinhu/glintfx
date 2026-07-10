@@ -275,6 +275,7 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
 
   struct Baked {
     uint32_t cp = 0;
+    uint32_t gid = 0; // for glx_sfnt_kern() -- the 'kern' table is keyed by gid, not codepoint.
     int gw = 0, gh = 0;
     std::vector<uint8_t> coverage; // gw*gh coverage bytes, empty for a blank/un-rasterized glyph.
     float advance = 0.f, offset_x = 0.f, offset_y = 0.f;
@@ -295,6 +296,7 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
 
     Baked b;
     b.cp = cp;
+    b.gid = gid;
     b.advance = (float)advance_units * scale;
 
     glx_sfnt_outline outline{};
@@ -400,6 +402,7 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   for (const Baked& b : baked) {
     GlyphInfo gi{};
     gi.baked = true;
+    gi.gid = b.gid;
     gi.advance = b.advance;
     if (b.gw > 0 && b.gh > 0) {
       gi.atlas_x = b.atlas_x;
@@ -446,13 +449,47 @@ const FontEngineOwn::GlyphInfo* FontEngineOwn::FindGlyph(const FaceInstance& ins
 
 float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView string, float letter_spacing,
                                     const std::function<void(float pen_x, const GlyphInfo*)>& emit) {
+  // EN: (L1.19-FONTENG/L1.20-FONTFLIP amadurecimento) Same font-unit->px scale BakeFaceInstance()
+  //     used to derive every glyph's own `advance`/outline for this instance -- glx_sfnt_kern()
+  //     returns its adjustment in FUnits (head::units_per_em-scaled, per include/core/sfnt.h),
+  //     so it must go through the identical `pixel_size / units_per_em` factor to land in the
+  //     same px space `pen` already accumulates in. `inst.face` is guaranteed non-null here (every
+  //     FaceInstance is baked from a resolved LoadedFace* in GetFontFaceHandle()).
+  // PT: Mesma escala unidade-de-fonte->px que BakeFaceInstance() usou pra derivar o próprio
+  //     `advance`/outline de todo glyph desta instância -- glx_sfnt_kern() devolve o ajuste dele
+  //     em FUnits (escalado por head::units_per_em, conforme include/core/sfnt.h), então precisa
+  //     passar pelo mesmo fator `pixel_size / units_per_em` pra cair no mesmo espaço-px em que
+  //     `pen` já acumula. `inst.face` é garantidamente não-nulo aqui (toda FaceInstance é
+  //     empacotada a partir de uma LoadedFace* resolvida em GetFontFaceHandle()).
+  const glx_sfnt_face& sf = inst.face->sfnt;
+  const float scale = (float)inst.pixel_size / (float)sf.units_per_em;
+
   float pen = 0.f;
+  bool has_prev = false;
+  uint32_t prev_gid = 0;
   for (Rml::StringIteratorU8 it(string.begin(), string.begin(), string.end()); it; ++it) {
     const Rml::Character c = *it;
     const uint32_t cp = (uint32_t)c;
     const GlyphInfo* g = FindGlyph(inst, cp);
+
+    // EN: Kerning applies ONLY between two CONSECUTIVE baked glyphs (both have a real gid) --
+    //     folded into `pen` BEFORE `emit()` so the current glyph's own quad/measurement already
+    //     reflects the tightened (or loosened) gap to its predecessor. See this method's
+    //     doc-comment in font_engine_own.hpp for the no-rounding-mid-loop rationale.
+    // PT: Kerning se aplica SÓ entre dois glyphs CONSECUTIVOS empacotados (ambos com gid real) --
+    //     dobrado em `pen` ANTES do `emit()` pra que o próprio quad/medição do glyph atual já
+    //     reflita o vão apertado (ou afrouxado) até o predecessor. Ver o doc-comment deste método
+    //     em font_engine_own.hpp pro motivo do sem-arredondamento-no-meio-do-laço.
+    if (has_prev && g) {
+      const int16_t kern_funits = glx_sfnt_kern(&sf, prev_gid, g->gid);
+      if (kern_funits != 0) pen += (float)kern_funits * scale;
+    }
+
     emit(pen, g);
     pen += (g ? g->advance : 0.0f) + letter_spacing;
+
+    has_prev = (g != nullptr);
+    prev_gid = g ? g->gid : 0;
   }
   return pen;
 }

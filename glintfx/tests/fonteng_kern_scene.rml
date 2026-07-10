@@ -1,0 +1,77 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.19-FONTENG/L1.20-FONTFLIP kerning oracle document -- see fonteng_own_kern_sanity.cpp's
+      own file header for the full width-comparison rationale. Every element is
+      `display: inline-block` with NO padding/border/margin, so UiLayer::get_element_box(id).w
+      is exactly this content's shrink-to-fit width (the same border-box == content-box width
+      IterateGlyphs()/GetStringWidth() itself computed, no extra geometry to subtract).
+      Font src is "assets/OpenSans-Regular.ttf" -- relative to this document's WORKING_DIRECTORY
+      (CMAKE_CURRENT_BINARY_DIR = build/tests/, the repo-wide embed-test convention; see
+      tests/CMakeLists.txt's fonteng_own_embed_sanity block for where that assets/ directory is
+      copied from), matching fonteng_embed_scene.rml's own path (this test is registered in the
+      SAME if(GLINTFX_OWN_FONT_ENGINE) CMake block, same WORKING_DIRECTORY).
+        - "av"/"a"/"v": Open Sans' own 'kern' table (format-0 horizontal, read by
+          glx_sfnt_kern()) DOES kern 'A' immediately before 'V' (-82 FUnits at this font's own
+          units_per_em=2048 -- confirmed by a throwaway probe program against this exact .ttf
+          during this ticket, see fonteng_own_kern_sanity.cpp's own comment for the derived px
+          value at this scene's 48px font-size). width("AV") must therefore measure MEASURABLY
+          less than width("A")+width("V").
+        - "hh"/"h1"/"h2": 'H' immediately before 'H' has NO 'kern' table entry (kern==0, same
+          probe) -- the CONTROL pair, proving the engine does not apply a kerning adjustment
+          where none exists (only a benign +-1px rounding-carry difference is tolerated, see the
+          .cpp's own comment for why that is NOT a kerning artifact).
+  PT: Documento oráculo de kerning do L1.19-FONTENG/L1.20-FONTFLIP -- ver o cabeçalho próprio do
+      fonteng_own_kern_sanity.cpp pro racional completo de comparação de largura. Todo elemento é
+      `display: inline-block` SEM padding/borda/margem, então UiLayer::get_element_box(id).w é
+      exatamente a largura de encolher-para-caber deste conteúdo (a mesma largura
+      border-box == content-box que o próprio IterateGlyphs()/GetStringWidth() computou, sem
+      geometria extra a subtrair).
+      O src da fonte é "assets/OpenSans-Regular.ttf" -- relativo ao WORKING_DIRECTORY deste
+      documento (CMAKE_CURRENT_BINARY_DIR = build/tests/, convenção repo-wide de teste embed; ver
+      o bloco fonteng_own_embed_sanity do tests/CMakeLists.txt pra onde esse diretório assets/ é
+      copiado), batendo com o próprio caminho de fonteng_embed_scene.rml (este teste é registrado
+      no MESMO bloco CMake if(GLINTFX_OWN_FONT_ENGINE), mesmo WORKING_DIRECTORY).
+        - "av"/"a"/"v": a própria tabela 'kern' da Open Sans (formato-0 horizontal, lida pelo
+          glx_sfnt_kern()) FAZ kern de 'A' imediatamente antes de 'V' (-82 FUnits no
+          units_per_em=2048 próprio desta fonte -- confirmado por um programa-sonda descartável
+          contra este .ttf exato durante esta tarefa, ver o comentário próprio de
+          fonteng_own_kern_sanity.cpp pro valor em px derivado no font-size 48px desta cena).
+          width("AV") portanto precisa medir MENSURAVELMENTE menos que width("A")+width("V").
+        - "hh"/"h1"/"h2": 'H' imediatamente antes de 'H' NÃO tem entrada na tabela 'kern'
+          (kern==0, mesma sonda) -- o par de CONTROLE, provando que o motor não aplica ajuste de
+          kerning onde nenhum existe (só uma diferença benigna de +-1px de carregamento de
+          arredondamento é tolerada, ver o comentário próprio do .cpp pro motivo disso NÃO ser um
+          artefato de kerning).
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+  </style>
+  <title>glintfx L1.19-FONTENG/L1.20-FONTFLIP kerning sanity</title>
+</head>
+<body>
+  <span id="av">AV</span>
+  <span id="a">A</span>
+  <span id="v">V</span>
+  <span id="hh">HH</span>
+  <span id="h1">H</span>
+  <span id="h2">H</span>
+</body>
+</rml>

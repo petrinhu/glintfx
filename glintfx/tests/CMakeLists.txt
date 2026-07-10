@@ -811,6 +811,42 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_own_embed_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_own_kern_sanity (L1.19-FONTENG/L1.20-FONTFLIP, kerning-application amadurecimento)
+  #     -- NUMERIC width oracle (not visual/pixel) proving FontEngineOwn::IterateGlyphs()
+  #     actually APPLIES SOV-SFNT's glx_sfnt_kern() adjustment to the pen, via
+  #     UiLayer::get_element_box(id).w on tests/fonteng_kern_scene.rml's `display: inline-block`
+  #     spans. Same registration pattern as fonteng_own_embed_sanity right above (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep}) so it builds and runs identically whichever
+  #     way GLINTFX_BACKEND_GLFW is set -- proving the kern fold on both the GLFW-hosted-App CI
+  #     path and GusWorld's own embed-only (UiLayer, no glintfx::App) consumption path. See the
+  #     .cpp's own file header for the full derivation of both assertions (kerned pair "AV" must
+  #     measure >= 2px tighter than the sum of its parts; un-kerned control pair "HH" must match
+  #     the sum of its parts within a documented +-1px rounding-carry tolerance).
+  # PT: fonteng_own_kern_sanity (amadurecimento de aplicação-de-kerning do L1.19-FONTENG/
+  #     L1.20-FONTFLIP) -- oráculo NUMÉRICO de largura (não visual/de-pixel) provando que
+  #     FontEngineOwn::IterateGlyphs() de fato APLICA o ajuste glx_sfnt_kern() do SOV-SFNT na
+  #     pena, via UiLayer::get_element_box(id).w nos spans `display: inline-block` de
+  #     tests/fonteng_kern_scene.rml. Mesmo padrão de registro de fonteng_own_embed_sanity logo
+  #     acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep}) para buildar e rodar
+  #     identicamente com qualquer valor de GLINTFX_BACKEND_GLFW -- provando a dobra de kern
+  #     tanto no caminho de CI hospedado-por-GLFW-App quanto no próprio caminho de consumo
+  #     embed-only do GusWorld (UiLayer, sem glintfx::App). Ver o cabeçalho próprio do .cpp pra
+  #     derivação completa das duas asserções (o par com kern "AV" precisa medir >= 2px mais
+  #     apertado que a soma das partes; o par de controle sem kern "HH" precisa bater com a soma
+  #     das partes dentro de uma tolerância documentada de +-1px de carregamento de
+  #     arredondamento).
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_own_kern_sanity fonteng_own_kern_sanity.cpp)
+  target_link_libraries(fonteng_own_kern_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_kern_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_kern_scene.rml COPYONLY)
+  add_test(NAME fonteng_own_kern_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_own_kern_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

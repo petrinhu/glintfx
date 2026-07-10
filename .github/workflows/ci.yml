@@ -13,6 +13,10 @@
 #                   ua_stylesheet_sanity (8 embed)
 #       GLFW=OFF --  8 embed tests: ui_layer_attach compose gl_state_guard events sanity
 #                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
+#     PLUS `build-and-test-fonteng` -- L1.20-FONTFLIP: same 2-config backend matrix, with
+#     GLINTFX_OWN_FONT_ENGINE=ON added on top, so the own SOV-SFNT/SOV-RAST font engine
+#     (L1.19-FONTENG, default OFF, previously untested by CI) gets fonteng_own_sanity +
+#     fonteng_own_embed_sanity exercised on every push/PR too.
 #     Triggers on every push or PR that modifies glintfx/ or this workflow file.
 #     Runs on GitHub Actions free Ubuntu runners (no container needed).
 # PT: Pipeline de CI para glintfx -- builda a biblioteca e roda ambas as suites sob
@@ -24,6 +28,10 @@
 #                   ua_stylesheet_sanity (8 embed)
 #       GLFW=OFF --  8 testes embed: ui_layer_attach compose gl_state_guard events sanity
 #                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
+#     MAIS `build-and-test-fonteng` -- L1.20-FONTFLIP: mesma matrix de 2 configs de backend,
+#     com GLINTFX_OWN_FONT_ENGINE=ON somado por cima, para que o motor de fonte próprio
+#     SOV-SFNT/SOV-RAST (L1.19-FONTENG, OFF por padrão, antes sem teste no CI) tenha
+#     fonteng_own_sanity + fonteng_own_embed_sanity exercitados em todo push/PR também.
 #     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
 #     Roda em runners Ubuntu gratuitos do GitHub Actions (sem container necessario).
 name: ci
@@ -126,6 +134,95 @@ jobs:
       #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
         run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure
+
+  # EN: build-and-test-fonteng -- L1.20-FONTFLIP. Regression gate for glintfx's own SOV-SFNT/
+  #     SOV-RAST font engine (L1.19-FONTENG, FT-F3), built behind GLINTFX_OWN_FONT_ENGINE=ON.
+  #     That option defaults OFF and was previously NEVER exercised by CI -- the
+  #     fonteng_own_embed_sanity test (gated behind the option) only ran ad hoc, locally. This
+  #     job mirrors build-and-test's 2-config backend matrix (GLFW=ON / GLFW=OFF, the embed-only
+  #     mode GusWorld actually consumes) with GLINTFX_OWN_FONT_ENGINE=ON added on top, so both
+  #     fonteng_own_sanity (unconditional, engine-agnostic oracle) and fonteng_own_embed_sanity
+  #     (gated behind the option, UiLayer-path regression test, review IMPORTANT #1) actually run
+  #     and are checked on every push/PR, not just when a human remembers to flip the flag by
+  #     hand. Independent build dir + cache key (glintfx/build-fonteng-<backend>, key suffix
+  #     "fonteng") from build-and-test's own build-<backend> dirs -- both jobs FetchContent the
+  #     SAME pinned RmlUi commit (GLINTFX_OWN_FONT_ENGINE does not touch the RmlUi
+  #     FetchContent_Declare call at all, only adds glintfx's own sources on top), so this job's
+  #     cache warms on its own runs the exact same way build-and-test's does (no scratch refetch
+  #     after the first run) rather than risking a same-key/different-path collision between two
+  #     independently-scheduled matrix jobs. Requires no consumer FetchContent workaround: the
+  #     option's FATAL_ERROR guard (glintfx/CMakeLists.txt) only requires Layer 0's src/sfnt.c,
+  #     src/raster.c, include/core/{sfnt,raster}.h to be siblings of glintfx/ -- true for every
+  #     checkout of this monorepo, CI included.
+  # PT: build-and-test-fonteng -- L1.20-FONTFLIP. Gate de regressão para o motor de fonte
+  #     próprio SOV-SFNT/SOV-RAST do glintfx (L1.19-FONTENG, FT-F3), buildado atrás de
+  #     GLINTFX_OWN_FONT_ENGINE=ON. Essa option é OFF por padrão e antes NUNCA era exercitada
+  #     pelo CI -- o teste fonteng_own_embed_sanity (bloqueado atrás da option) só rodava ad hoc,
+  #     localmente. Este job espelha a matrix de 2 configs de backend do build-and-test (GLFW=ON
+  #     / GLFW=OFF, o modo embed-only que o GusWorld de fato consome) somando
+  #     GLINTFX_OWN_FONT_ENGINE=ON por cima, para que tanto fonteng_own_sanity (incondicional,
+  #     oráculo agnóstico de motor) quanto fonteng_own_embed_sanity (bloqueado atrás da option,
+  #     teste de regressão do caminho UiLayer, IMPORTANTE #1 do review) de fato rodem e sejam
+  #     checados em todo push/PR, não só quando um humano lembra de virar a flag na mão. Build
+  #     dir + chave de cache independentes (glintfx/build-fonteng-<backend>, sufixo "fonteng" na
+  #     chave) dos próprios dirs build-<backend> do build-and-test -- ambos os jobs fazem
+  #     FetchContent do MESMO commit pinado do RmlUi (GLINTFX_OWN_FONT_ENGINE não toca a chamada
+  #     FetchContent_Declare do RmlUi, só adiciona sources próprios do glintfx por cima), então o
+  #     cache deste job esquenta nas próprias execuções do mesmo jeito que o do build-and-test
+  #     (sem refetch do zero após a 1ª execução) em vez de arriscar colisão de mesma-chave/
+  #     path-diferente entre dois jobs de matrix agendados independentemente. Não exige nenhum
+  #     workaround de FetchContent do consumidor: o guard FATAL_ERROR da option
+  #     (glintfx/CMakeLists.txt) só exige que src/sfnt.c, src/raster.c,
+  #     include/core/{sfnt,raster}.h da Camada 0 sejam irmãos de glintfx/ -- verdade em todo
+  #     checkout deste monorepo, CI incluído.
+  build-and-test-fonteng:
+    name: build & test (own font engine, ubuntu-latest / GLFW=${{ matrix.backend }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
+          key: rmlui-${{ runner.os }}-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Same deps as build-and-test -- GLINTFX_OWN_FONT_ENGINE compiles Layer 0's C sources
+      #     directly (extern "C") into the glintfx target, no new system dep beyond what
+      #     build-and-test already installs.
+      # PT: Mesmas deps do build-and-test -- GLINTFX_OWN_FONT_ENGINE compila os sources C da
+      #     Camada 0 diretamente (extern "C") no alvo glintfx, sem nenhuma dep de sistema nova
+      #     além do que o build-and-test já instala.
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake clang \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libgl1-mesa-dri \
+            xvfb
+
+      - name: configure
+        run: |
+          cmake -S glintfx -B glintfx/build-fonteng-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_OWN_FONT_ENGINE=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
+
+      - name: build
+        run: cmake --build glintfx/build-fonteng-${{ matrix.backend }} -j$(nproc)
+
+      - name: test
+        run: xvfb-run -a ctest --test-dir glintfx/build-fonteng-${{ matrix.backend }} --output-on-failure
 
   # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
   #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.

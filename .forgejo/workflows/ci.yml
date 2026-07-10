@@ -13,6 +13,13 @@
 #                   ua_stylesheet_sanity (8 embed)
 #       GLFW=OFF --  8 embed tests: ui_layer_attach compose gl_state_guard events sanity
 #                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
+#     PLUS `build-and-test-fonteng` -- L1.20-FONTFLIP: same 2-config backend matrix, with
+#     GLINTFX_OWN_FONT_ENGINE=ON added on top (see that job's own header comment). Runner-
+#     budget note: this job's cost is close to build-and-test's per-leg cost (same RmlUi
+#     fetch/build, plus 2 small extra Layer-0 C translation units) -- if it is ever observed
+#     to exceed the ~10 min ceiling on codeberg-medium specifically with a cold cache, the
+#     same líder-approved fallback as the `coverage` job applies (GitHub-only, do not invent
+#     an alternative; see that job's header comment below).
 #     Triggers on every push or PR that modifies glintfx/ or this workflow file.
 #
 #     Runner note: codeberg-medium (4 CPU / 8 GB / 10 min) is the active global
@@ -34,6 +41,14 @@
 #                   ua_stylesheet_sanity (8 embed)
 #       GLFW=OFF --  8 testes embed: ui_layer_attach compose gl_state_guard events sanity
 #                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
+#     MAIS `build-and-test-fonteng` -- L1.20-FONTFLIP: mesma matrix de 2 configs de backend,
+#     com GLINTFX_OWN_FONT_ENGINE=ON somado por cima (ver o comentário de cabeçalho próprio
+#     daquele job). Nota de orçamento de runner: o custo deste job é próximo do custo por-perna
+#     do build-and-test (mesmo fetch/build do RmlUi, mais 2 unidades de tradução C pequenas da
+#     Camada 0) -- se algum dia for observado exceder o teto de ~10 min no codeberg-medium
+#     especificamente com cache frio, vale o mesmo fallback aprovado pelo líder do job
+#     `coverage` (GitHub-only, não inventar alternativa; ver o comentário de cabeçalho daquele
+#     job abaixo).
 #     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
 #
 #     Nota de runner: codeberg-medium (4 CPU / 8 GB / 10 min) e o runner global ativo
@@ -167,6 +182,72 @@ jobs:
       #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
       - name: test
         run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure
+
+  # EN: build-and-test-fonteng -- L1.20-FONTFLIP. Mirrors .github/workflows/ci.yml's job of
+  #     the same name step-for-step (same rationale: regression gate for glintfx's own
+  #     SOV-SFNT/SOV-RAST font engine, GLINTFX_OWN_FONT_ENGINE=ON, previously never exercised
+  #     by CI) -- see that file's job header comment for the full rationale (why an
+  #     independent build dir + cache key instead of reusing build-and-test's exact key, why
+  #     no extra system dep is needed, why the FATAL_ERROR sibling-sources guard is always
+  #     satisfied in this monorepo's CI checkout).
+  # PT: build-and-test-fonteng -- L1.20-FONTFLIP. Espelha passo a passo o job de mesmo nome
+  #     em .github/workflows/ci.yml (mesma racional: gate de regressão para o motor de fonte
+  #     próprio SOV-SFNT/SOV-RAST do glintfx, GLINTFX_OWN_FONT_ENGINE=ON, antes nunca
+  #     exercitado pelo CI) -- ver o comentário de cabeçalho daquele job para a racional
+  #     completa (por que build dir + chave de cache independentes em vez de reusar a chave
+  #     exata do build-and-test, por que nenhuma dep de sistema extra é necessária, por que o
+  #     guard FATAL_ERROR de sources irmãos é sempre satisfeito neste checkout de monorepo do
+  #     CI).
+  build-and-test-fonteng:
+    name: build & test (own font engine, codeberg-medium / GLFW=${{ matrix.backend }})
+    runs-on: codeberg-medium
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
+          key: rmlui-${{ runner.os }}-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Same deps as build-and-test (see that job's install-deps comment for the
+      #     per-package rationale) -- GLINTFX_OWN_FONT_ENGINE adds no new system dep.
+      # PT: Mesmas deps do build-and-test (ver o comentário de install-deps daquele job pro
+      #     racional por-pacote) -- GLINTFX_OWN_FONT_ENGINE não soma nenhuma dep de sistema
+      #     nova.
+      - name: install deps
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            cmake clang git \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libgl1-mesa-dri \
+            xvfb
+
+      - name: configure
+        run: |
+          cmake -S glintfx -B glintfx/build-fonteng-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_OWN_FONT_ENGINE=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
+
+      - name: build
+        run: cmake --build glintfx/build-fonteng-${{ matrix.backend }} -j$(nproc)
+
+      - name: test
+        run: xvfb-run -a ctest --test-dir glintfx/build-fonteng-${{ matrix.backend }} --output-on-failure
 
   # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
   #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.

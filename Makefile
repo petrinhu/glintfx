@@ -80,6 +80,57 @@ $(BIN)/%: $(OBJ)/%.o $(RUNTIME_OBJS) | $(BIN)
 $(OBJ) $(BIN):
 	mkdir -p $@
 
+# EN: SOV-SFNT (FT-F1) test fixture -- tests/test_sfnt.c needs a REAL TrueType font blob to
+#     parse (the Open Sans already used by glintfx's showcase demo, duplicated here at
+#     tests/fixtures/opensans_regular.ttf so Layer 0 does not reach across into glintfx/'s tree
+#     -- the two layers stay independently buildable/testable). Layer 0 has no `open`/`openat`
+#     syscall wrapper (out of this ticket's scope -- glx_sfnt_open is a pure blob-in parser, file
+#     I/O is the future L1.19-FONTENG C++ shell's job, see include/core/sfnt.h's file header), so
+#     the fixture cannot be `read()` off disk at runtime the normal way. Instead it is embedded
+#     at LINK TIME via the classic `ld -r -b binary` trick: this turns the raw font bytes into a
+#     relocatable object exposing `_binary_opensans_regular_ttf_start`/`_end` symbols (verified
+#     empirically for this exact GNU ld -- see task report) -- zero libc, zero syscalls, the
+#     bytes simply live in the final binary's .data the same way a `static const` array would,
+#     without needing ~1MB of generated `0x..,` source text for a 217KB binary. `cd`ing into
+#     tests/fixtures/ first (rather than passing the path directly) keeps the exported symbol
+#     name clean (`ld -b binary`'s symbol name is derived from the exact argument string --
+#     passing a path with directory components would bake `tests_fixtures_` into the symbol);
+#     $(abspath ...) is expanded by `make` BEFORE the recipe's `cd` runs, so the output path
+#     stays correct despite the working-directory change.
+# PT: Fixture de teste do SOV-SFNT (FT-F1) -- tests/test_sfnt.c precisa de um blob de fonte
+#     TrueType DE VERDADE pra parsear (a mesma Open Sans já usada pelo demo showcase do
+#     glintfx, duplicada aqui em tests/fixtures/opensans_regular.ttf pra Camada 0 não alcançar
+#     pra dentro da árvore do glintfx/ -- as duas camadas continuam buildáveis/testáveis
+#     independentemente). A Camada 0 não tem wrapper de syscall `open`/`openat` (fora do escopo
+#     desta tarefa -- glx_sfnt_open é um parser puro blob-entra, I/O de arquivo é trabalho da
+#     futura casca C++ L1.19-FONTENG, ver o cabeçalho de arquivo do include/core/sfnt.h), então
+#     a fixture não pode ser `read()`ada do disco em runtime do jeito normal. Em vez disso é
+#     embutida em TEMPO DE LINK via o truque clássico `ld -r -b binary`: isso transforma os
+#     bytes crus da fonte num objeto relocável expondo símbolos
+#     `_binary_opensans_regular_ttf_start`/`_end` (verificado empiricamente pra este `ld` GNU
+#     exato -- ver relatório da tarefa) -- zero libc, zero syscalls, os bytes simplesmente moram
+#     no .data do binário final do mesmo jeito que um array `static const` moraria, sem precisar
+#     de ~1MB de texto-fonte gerado `0x..,` pra um binário de 217KB. Entrar (`cd`) em
+#     tests/fixtures/ primeiro (em vez de passar o caminho direto) mantém o nome de símbolo
+#     exportado limpo (o nome de símbolo do `ld -b binary` é derivado da string exata do
+#     argumento -- passar um caminho com componentes de diretório assaria `tests_fixtures_` no
+#     símbolo); $(abspath ...) é expandido pelo `make` ANTES do `cd` da receita rodar, então o
+#     caminho de saída continua correto apesar da mudança de diretório de trabalho.
+$(OBJ)/opensans_ttf.o: tests/fixtures/opensans_regular.ttf | $(OBJ)
+	cd tests/fixtures && $(LD) -r -b binary -o $(abspath $(OBJ))/opensans_ttf.o opensans_regular.ttf
+
+# EN: test_sfnt needs the fixture object above IN ADDITION to $(RUNTIME_OBJS) -- an explicit,
+#     target-specific rule overrides the generic `$(BIN)/%:` pattern rule above for this ONE
+#     target (standard GNU Make precedence: an explicit rule for a target is always preferred
+#     over a pattern rule, no `%` matching is even attempted once one exists).
+# PT: O test_sfnt precisa do objeto de fixture acima ALÉM de $(RUNTIME_OBJS) -- uma regra
+#     explícita, específica do alvo, sobrepõe a regra de padrão genérica `$(BIN)/%:` acima pra
+#     este ÚNICO alvo (precedência padrão do GNU Make: uma regra explícita pra um alvo é sempre
+#     preferida sobre uma regra de padrão, nenhum casamento de `%` sequer é tentado uma vez que
+#     uma já existe).
+$(BIN)/test_sfnt: $(OBJ)/test_sfnt.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(BIN)
+	$(LD) $(LDFLAGS) -o $@ $^
+
 # EN: Runs every program and checks its exit code against the manifest tests/expected_exit.txt
 #     (lines "<name> <expected-code>"; missing entry defaults to 0). Temporary harness for this
 #     increment -- superseded by the C1 test runner (TODO.md, W6) once it exists. Stdin is

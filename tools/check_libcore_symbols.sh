@@ -74,11 +74,22 @@ status=0
 
 # EN: The public `glx_*` front door (include/core/core.h) -- REQUIRED to be present (missing one
 #     means the archive is incomplete/broken, a separate failure mode from a collision but caught
-#     by the same loop below).
+#     by the same loop below). SOV-SFNT (FT-F1, include/core/sfnt.h) adds its own front door here
+#     -- `glx_sfnt_open`/`glx_sfnt_glyph_id`/`glx_sfnt_hmetrics`/`glx_sfnt_glyph_outline` are
+#     ALREADY namespaced by construction (no `$(CORE_RENAME_FLAGS)` entry needed, unlike
+#     malloc/memcpy/str*/conv*/printf* -- see src/sfnt.c's file header), listed here explicitly
+#     (not via a `glx_sfnt_*` glob pattern) so a future accidental internal helper leaking a bare
+#     `glx_sfnt_`-prefixed symbol still fails this gate instead of silently riding along.
 # PT: A porta-da-frente pública `glx_*` (include/core/core.h) -- OBRIGATÓRIA de estar presente
 #     (faltar uma significa que o archive está incompleto/quebrado, um modo de falha separado de
-#     uma colisão mas pego pelo mesmo laço abaixo).
-required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset"
+#     uma colisão mas pego pelo mesmo laço abaixo). O SOV-SFNT (FT-F1, include/core/sfnt.h)
+#     acrescenta a própria porta-da-frente aqui -- `glx_sfnt_open`/`glx_sfnt_glyph_id`/
+#     `glx_sfnt_hmetrics`/`glx_sfnt_glyph_outline` já são namespaced por construção (nenhuma
+#     entrada em `$(CORE_RENAME_FLAGS)` necessária, diferente de malloc/memcpy/str*/conv*/printf*
+#     -- ver o cabeçalho de arquivo do src/sfnt.c), listados aqui explicitamente (não via padrão
+#     glob `glx_sfnt_*`) pra que um futuro helper interno acidental vazando um símbolo cru
+#     prefixado com `glx_sfnt_` ainda falhe este gate em vez de viajar junto em silêncio.
+required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline"
 
 # EN: Everything else this archive is allowed to export: the small ASM/wrapper set that was never
 #     libc-shaped to begin with (_start, the syscall*N* trampolines, the sys_* one-line wrappers)

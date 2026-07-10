@@ -119,8 +119,9 @@ You do not need your own RmlUi installation to consume `glintfx::glintfx`, and a
 consumer-side RmlUi (if you happen to also depend on it directly, for an unrelated reason)
 does not conflict with glintfx's private, co-installed copy.
 
-gl3w (the OpenGL loader) does **not** appear as a separate installed archive: it is a
-single-file, `INTERFACE`-library source that is compiled directly into `libglintfx.a`.
+glloader (glintfx's own GL 3.3 core-profile loader, `src/gl_loader.c`, L1.14-GLLOADER)
+does **not** appear as a separate installed archive: it is a single-file,
+`INTERFACE`-library source that is compiled directly into `libglintfx.a`.
 
 ### Related documentation
 
@@ -242,8 +243,9 @@ instalação do RmlUi para consumir `glintfx::glintfx`, e um RmlUi do lado do co
 você também depender dele diretamente, por outro motivo qualquer) não conflita com a cópia
 privada e co-instalada do glintfx.
 
-O gl3w (o loader de OpenGL) **não** aparece como um arquivo instalado separado: é um source
-de biblioteca `INTERFACE` de arquivo único, compilado diretamente dentro de `libglintfx.a`.
+O glloader (o loader GL 3.3 core profile próprio do glintfx, `src/gl_loader.c`,
+L1.14-GLLOADER) **não** aparece como um arquivo instalado separado: é um source de
+biblioteca `INTERFACE` de arquivo único, compilado diretamente dentro de `libglintfx.a`.
 
 ### Documentação relacionada
 

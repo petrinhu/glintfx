@@ -10,7 +10,7 @@ This repository hosts two independent tracks. Know which one you are in before e
 | **Layer 1: glintfx** (the released library, **active product**) | `glintfx/`, `consumer-example/` | **v0.7.0**, released, two consumption modes (`App` + `UiLayer`) | CMake |
 | **Layer 0: `loucura_c_asm`** (sovereign runtime, **implementation complete, pending audit**) | `src/`, `include/` | freestanding pipeline + syscalls + `exit`/`write`/`read` -> own test harness (`C1`) -> core libc (memory/string/int-string conversion) -> mini-printf -> bump allocator over `mmap`, zero libc, under TDD | `Makefile` (root) |
 
-Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; its implementation is now **complete** (freestanding `_start` + raw syscall wrappers + `exit`/`write`/`read` helpers, a hand-rolled test harness enabling TDD, a small core libc for memory/string/int-string-conversion, a mini-printf, and a bump allocator over `mmap`), delivered under TDD and adversarial review. Items sit at `🔍 Pending verification`, awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. It remains a **long-term internalization target** -- full clean-room internalization of RmlUi/gl3w/FreeType/GLFW is still years away. They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).
+Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active product**. Layer 0 is pure C + Assembly with **zero libc**, talking to the kernel only via syscalls; its implementation is now **complete** (freestanding `_start` + raw syscall wrappers + `exit`/`write`/`read` helpers, a hand-rolled test harness enabling TDD, a small core libc for memory/string/int-string-conversion, a mini-printf, and a bump allocator over `mmap`), delivered under TDD and adversarial review. Items sit at `🔍 Pending verification`, awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. It remains a **long-term internalization target** -- full clean-room internalization of RmlUi/FreeType/GLFW is still years away (the GL loader piece, gl3w, was internalized in L1.14-GLLOADER: glintfx now ships its own clean-room GL 3.3 core loader, `glintfx/src/gl_loader.{h,c}`, generated from the public Khronos gl.xml registry). They do **not** link to each other; the boundary is the process, not the linker. See [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md).
 
 ---
 
@@ -21,7 +21,7 @@ Layer 1 (glintfx) is C++ linking real libraries; it is the repository's **active
 System dependencies (Fedora): `glfw-devel`, `freetype-devel`, `mesa-libGL-devel`.
 
 ```sh
-# configure + build (RmlUi 6.3 fetched automatically; gl3w is vendored)
+# configure + build (RmlUi 6.3 fetched automatically; glintfx's own GL loader is vendored)
 cmake -S glintfx -B glintfx/build -DGLINTFX_BUILD_TESTS=ON
 cmake --build glintfx/build -j
 
@@ -67,11 +67,13 @@ glintfx/                 Layer 1: the C++ library (active product)
                           config.hpp.in), no third-party types
   src/                   bootstrap.cpp, window_glfw.cpp, render_gl3.cpp, app.cpp, engine.cpp,
                           ui_layer.cpp, data_binder.cpp, base_url_file_interface.hpp,
-                          stb_image_impl.cpp, gl_state.hpp, system_clock.cpp
+                          stb_image_impl.cpp, gl_state.hpp, system_clock.cpp,
+                          gl_loader.h/.c (L1.14-GLLOADER, generated -- see tools/gen_glloader.py)
   demos/showcase/        showcase.rml/.rcss + glintfx_showcase + glintfx_capture
   tests/                 ctest smokes + sanity tests (31 with GLFW=ON, 16 embed-only) + opt-in
                           golden_test (Xvfb)
-  third_party/gl3w/      vendored gl3w loader (public domain) + Khronos headers (MIT)
+  third_party/khronos/   gl.xml (Apache-2.0, input to tools/gen_glloader.py) + Khronos headers
+                          glcorearb.h/khrplatform.h (MIT)
   third_party/stb/       vendored stb_image.h (public domain / MIT) for PNG/JPG decode
   CMakeLists.txt
 consumer-example/        drop-in proof: consumes glintfx via FetchContent
@@ -124,7 +126,7 @@ A constelação bigtech (definição dos agents, RACI, pipelines de release) é 
 - **Premultiplied alpha, backbuffer opaco e composição sempre no FBO 0.** O `RenderInterface_GL3` trabalha com alpha premultiplicado (`GL_ONE, GL_ONE_MINUS_SRC_ALPHA`). No modo standalone, garanta o backbuffer **opaco** (alpha=1 no compositor) ou o compositor (Wayland/X) deixa a janela translúcida -- fix já aplicado em `window_glfw.cpp`/`render_gl3.cpp`. No embed mode, `UiLayer::render()` é **compose-only** (sem `glClear`, sem swap) e compõe **incondicionalmente sobre o FBO 0** com origem de viewport hardcoded em `(0,0)` -- um FBO custom do host ligado antes de `render()` **não** é o alvo (limitação F1 documentada no [ADR-0008](docs/adr/0008-embed-guest-mode.md) e em `docs/embed-integration.md` seções 0 e 2). Texturas decodificadas por `LoadTexture` (PNG/JPG via stb_image, v0.2.3) também passam por premultiply in-place antes do upload, pelo mesmo motivo.
 - **MSAA desligado no render layer.** `RMLUI_NUM_MSAA_SAMPLES=0` é necessário sob Mesa/llvmpipe (Xvfb): o resolve `glBlitFramebuffer` MSAA para não-MSAA produz silenciosamente textura de pós-processo preta. Ver comentário no `glintfx/CMakeLists.txt`.
 - **Card `mask` crasha no software GL.** Sob Mesa/llvmpipe o shader BlendMask dual-sampler provoca corrupção de heap (`free(): invalid next size`), bug do Mesa SW renderer e **não** do glintfx. O CI headless usa `showcase_test.rml` (sem o card mask). O card mask só roda em **GPU real**.
-- **gl3w é vendorizado e offline.** Os arquivos pré-gerados vivem em `glintfx/third_party/gl3w/` (domínio público) com headers Khronos (MIT). Não dependa de rede em tempo de configure para o gl3w; só o RmlUi é fetchado.
+- **O loader GL (`glintfx/src/gl_loader.{h,c}`) é gerado e commitado offline (L1.14-GLLOADER).** `tools/gen_glloader.py` produz os dois arquivos a partir do registro `gl.xml` da Khronos (Apache-2.0, vendorizado em `glintfx/third_party/khronos/gl.xml`) mais os headers `glcorearb.h`/`khrplatform.h` (MIT, mesmo diretório). Não dependa de rede em tempo de configure para o loader GL; só o RmlUi é fetchado. Regenerar só se o alvo de versão/profile mudar (`python3 tools/gen_glloader.py`), nunca editar `gl_loader.{h,c}` à mão.
 - **`golden_test` é flaky no llvmpipe.** O render de tiles em threads + não-associatividade de ponto flutuante geram MSE alto entre execuções idênticas. Por isso é opt-in (`-DGLINTFX_GOLDEN_TEST=ON`) e o gate padrão usa `render_sanity` (estatístico). Gere a referência em GPU real com `glintfx_capture`.
 - **`snapshot()` sai com flip vertical** (origem do `glReadPixels`). Item aberto na INBOX do `TODO.md`.
 - **Sintaxe RCSS do RmlUi 6.3 difere do CSS.** Cor primeiro em `box-shadow`/`drop-shadow`; gradiente via `decorator:`; hex `#rrggbbaa`. Ver `glintfx/demos/showcase/showcase.rcss` (fonte de verdade) e [`docs/effects.md`](docs/effects.md).

@@ -19,7 +19,7 @@ Thank you for your interest in `glintfx`. The project is currently single-author
 | System packages (Fedora) | `glfw-devel`, `freetype-devel`, `mesa-libGL-devel`. |
 | Xvfb | For headless tests (`ctest`). |
 
-RmlUi 6.3 is fetched automatically at configure time; gl3w is vendored in the repo.
+RmlUi 6.3 is fetched automatically at configure time; glintfx's own GL loader (`src/gl_loader.h`/`.c`, generated from the Khronos `gl.xml` registry) is vendored in the repo.
 
 ### Build and test
 
@@ -87,7 +87,7 @@ Obrigado pelo interesse no `glintfx`. O projeto é atualmente de autor único (P
 | Pacotes de sistema (Fedora) | `glfw-devel`, `freetype-devel`, `mesa-libGL-devel`. |
 | Xvfb | Para os testes headless (`ctest`). |
 
-RmlUi 6.3 é baixado automaticamente em tempo de configure; gl3w é vendorizado no repo.
+RmlUi 6.3 é baixado automaticamente em tempo de configure; o loader GL próprio do glintfx (`src/gl_loader.h`/`.c`, gerado a partir do registro Khronos `gl.xml`) é vendorizado no repo.
 
 ### Buildar e testar
 

@@ -36,7 +36,7 @@ You can expect an acknowledgement within a reasonable time. Coordinated disclosu
 `glintfx` is a **Linux x86-64 desktop library**, not a network service. Keep these boundaries in mind:
 
 - **In scope:** memory-safety bugs in glintfx's own code (M0-M3 facade, window/render glue), unsafe handling of `.rml`/`.rcss` or asset paths supplied to the library, and issues in the build that could compromise a consumer.
-- **Out of scope:** vulnerabilities in third-party dependencies (RmlUi, GLFW, FreeType, Mesa/libGL, gl3w) should be reported upstream; the `mask` crash under Mesa/llvmpipe is a known Mesa software-renderer bug, not a glintfx vulnerability (see the limitations in [`README.md`](README.md)).
+- **Out of scope:** vulnerabilities in third-party dependencies (RmlUi, GLFW, FreeType, Mesa/libGL) should be reported upstream; the `mask` crash under Mesa/llvmpipe is a known Mesa software-renderer bug, not a glintfx vulnerability (see the limitations in [`README.md`](README.md)). Note: `glintfx/src/gl_loader.{h,c}` (the GL 3.3 core-profile loader, L1.14-GLLOADER) is glintfx's own code, not a third-party dependency, so bugs there are **in scope**.
 
 > Loading untrusted `.rml`/`.rcss` documents runs the full RmlUi parser and the GL3 shader paths; treat untrusted UI documents with the same caution as any untrusted input.
 
@@ -73,6 +73,6 @@ Você pode esperar uma confirmação em tempo razoável. Divulgação coordenada
 O `glintfx` é uma **biblioteca desktop Linux x86-64**, não um serviço de rede. Tenha estas fronteiras em mente:
 
 - **No escopo:** bugs de memory-safety no código do próprio glintfx (fachada M0-M3, cola de janela/render), tratamento inseguro de `.rml`/`.rcss` ou caminhos de asset passados à biblioteca, e problemas no build que possam comprometer um consumidor.
-- **Fora do escopo:** vulnerabilidades em dependências de terceiros (RmlUi, GLFW, FreeType, Mesa/libGL, gl3w) devem ser reportadas upstream; o crash do `mask` sob Mesa/llvmpipe é um bug conhecido do renderer de software do Mesa, não uma vulnerabilidade do glintfx (ver as limitações no [`README.md`](README.md)).
+- **Fora do escopo:** vulnerabilidades em dependências de terceiros (RmlUi, GLFW, FreeType, Mesa/libGL) devem ser reportadas upstream; o crash do `mask` sob Mesa/llvmpipe é um bug conhecido do renderer de software do Mesa, não uma vulnerabilidade do glintfx (ver as limitações no [`README.md`](README.md)). Nota: `glintfx/src/gl_loader.{h,c}` (o loader GL 3.3 core profile, L1.14-GLLOADER) é código próprio do glintfx, não uma dependência de terceiro, então bugs ali estão **dentro do escopo**.
 
 > Carregar documentos `.rml`/`.rcss` não confiáveis executa o parser completo do RmlUi e os caminhos de shader GL3; trate documentos de UI não confiáveis com a mesma cautela de qualquer entrada não confiável.

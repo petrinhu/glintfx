@@ -39,7 +39,7 @@ Languages / Idiomas: **[English](#english)** · **[Português](#português)**
 
 ### Why it exists
 
-Getting a single effect (say, a glow) onto a UI normally means stitching together RmlUi, a GL3 renderer, an OpenGL loader (gl3w), and a window/context backend (GLFW): easily half an hour of plumbing before anything appears on screen.
+Getting a single effect (say, a glow) onto a UI normally means stitching together RmlUi, a GL3 renderer, an OpenGL loader, and a window/context backend (GLFW): easily half an hour of plumbing before anything appears on screen.
 
 `glintfx` is **batteries-included**: you add **one CMake target**, write your markup and CSS, and the effect shows up. No OpenGL, GLFW, or RmlUi types ever appear in your code; the public header (`<glintfx/glintfx.hpp>`) exposes only the `glintfx::App` facade.
 
@@ -56,7 +56,7 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 - **Letterbox viewport (`UiLayer` only):** `set_viewport(x, y, w, h, target_h)` composes the UI within a sub-region of the host's window, with a configurable origin (not just `(0, 0)`).
 - **Hardened input surface:** `load(nullptr)` returns `false` instead of crashing the host; `set_dp_ratio` rejects non-finite or non-positive values; `set_viewport` rejects non-positive width/height. All fail-safe (reject and keep previous state), never fail-open.
 - **Clean public API:** two RAII facades (`glintfx::App`, `glintfx::UiLayer`); no third-party types leak into your headers.
-- **Self-contained build:** RmlUi fetched automatically; gl3w vendored (works offline); GLFW/FreeType/OpenGL from the system. `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library with no GLFW dependency at all.
+- **Self-contained build:** RmlUi fetched automatically; glintfx's own GL loader vendored (works offline); GLFW/FreeType/OpenGL from the system. `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library with no GLFW dependency at all.
 - **Bundled showcase:** a runnable demo exercising all five effects.
 
 ### Requirements
@@ -69,7 +69,7 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 | System packages (Fedora) | `glfw-devel`, `freetype-devel`, `mesa-libGL-devel` |
 | Runtime | OpenGL 3.3 |
 
-RmlUi 6.3 is fetched at configure time; gl3w is vendored in the repo.
+RmlUi 6.3 is fetched at configure time; glintfx's own GL loader (generated from the Khronos `gl.xml` registry) is vendored in the repo.
 
 ### Compatibility
 
@@ -255,14 +255,14 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **v2 -- game UI component library:** menus, dialogue boxes, windows, font styles, and GPU effect components (Atomic Design, tokens-first), all declared in RCSS. Approved spec: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (branch `feat/v2-f2-components`).
 - **`set_focus(id)` on `UiLayer`:** programmatic focus control for hosts whose model owns selection (e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation). Tracked as `GAP-4` in `TODO.md`.
 
-**Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, gl3w, FreeType, and GLFW** (the whole userspace stack) over the course of years. This connects to **Layer 0** (the pure C/ASM runtime, its core implementation now complete and pending audit) as the base for internalization. **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
+**Long-term goal (the "loucura"):** make glintfx **independent of its third-party libraries through clean-room reimplementation**, internalizing **RmlUi, FreeType, and GLFW** (the whole userspace stack) over the course of years. One piece is already done: the GL loader (previously the third-party gl3w) was internalized in L1.14-GLLOADER, generated from the public Khronos `gl.xml` registry. This connects to **Layer 0** (the pure C/ASM runtime, its core implementation now complete and pending audit) as the base for internalization. **Irreducible boundary:** `libGL` + the GPU driver + the kernel DRM stack stay. The GPU driver is not reimplemented; accelerated graphics sovereignty stops at the syscall + driver line.
 
 ### About this repository (two layers)
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
 - **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.4.0`).
-- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Core implementation complete, pending audit:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end -> a hand-rolled test harness enabling TDD -> a small core libc (memory, string, int-to-string conversion) -> a mini-printf -> a bump allocator over `mmap`, all zero libc and delivered under TDD plus adversarial review. Items sit at `🔍 Pending verification` awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. Still a **long-term track**: internalizing glintfx's dependencies (RmlUi, gl3w, FreeType, GLFW) remains years away.
+- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Core implementation complete, pending audit:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end -> a hand-rolled test harness enabling TDD -> a small core libc (memory, string, int-to-string conversion) -> a mini-printf -> a bump allocator over `mmap`, all zero libc and delivered under TDD plus adversarial review. Items sit at `🔍 Pending verification` awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. Still a **long-term track**: internalizing glintfx's remaining dependencies (RmlUi, FreeType, GLFW) remains years away (the GL loader piece, gl3w, was already internalized in L1.14-GLLOADER).
 
 Treat glintfx as the product; Layer 0 is a separate long-term track, now implementation-complete and awaiting audit.
 
@@ -285,7 +285,7 @@ Treat glintfx as the product; Layer 0 is a separate long-term track, now impleme
 
 ### Por que existe
 
-Colocar um único efeito (digamos, um glow) numa UI normalmente significa costurar RmlUi, um renderer GL3, um loader de OpenGL (gl3w) e um backend de janela/contexto (GLFW): facilmente meia hora de encanamento antes de algo aparecer na tela.
+Colocar um único efeito (digamos, um glow) numa UI normalmente significa costurar RmlUi, um renderer GL3, um loader de OpenGL e um backend de janela/contexto (GLFW): facilmente meia hora de encanamento antes de algo aparecer na tela.
 
 `glintfx` é **batteries-included**: você adiciona **um alvo CMake**, escreve seu markup e CSS, e o efeito aparece. Nenhum tipo de OpenGL, GLFW ou RmlUi aparece no seu código; o header público (`<glintfx/glintfx.hpp>`) expõe só a fachada `glintfx::App`.
 
@@ -302,7 +302,7 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 - **Viewport letterbox (só em `UiLayer`):** `set_viewport(x, y, w, h, target_h)` compõe a UI numa sub-região da janela do host, com origem configurável (não só `(0, 0)`).
 - **Superfície de entrada hardened:** `load(nullptr)` retorna `false` em vez de derrubar o host; `set_dp_ratio` rejeita valores não-finitos ou não-positivos; `set_viewport` rejeita largura/altura não-positivas. Todos fail-safe (rejeita e mantém o estado anterior), nunca fail-open.
 - **API pública limpa:** duas fachadas RAII (`glintfx::App`, `glintfx::UiLayer`); nenhum tipo de terceiro vaza para seus headers.
-- **Build autocontido:** RmlUi baixado automaticamente; gl3w vendorizado (funciona offline); GLFW/FreeType/OpenGL do sistema. `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only sem nenhuma dependência de GLFW.
+- **Build autocontido:** RmlUi baixado automaticamente; loader GL próprio do glintfx vendorizado (funciona offline); GLFW/FreeType/OpenGL do sistema. `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only sem nenhuma dependência de GLFW.
 - **Showcase embutido:** um demo executável exercitando os cinco efeitos.
 
 ### Requisitos
@@ -315,7 +315,7 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 | Pacotes de sistema (Fedora) | `glfw-devel`, `freetype-devel`, `mesa-libGL-devel` |
 | Runtime | OpenGL 3.3 |
 
-RmlUi 6.3 é baixado em tempo de configure; gl3w é vendorizado no repo.
+RmlUi 6.3 é baixado em tempo de configure; o loader GL próprio do glintfx (gerado a partir do registro Khronos `gl.xml`) é vendorizado no repo.
 
 ### Compatibilidade
 
@@ -501,14 +501,14 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **v2 -- component library de UI de jogo:** menus, caixas de diálogo, janelas, estilos de fonte e componentes de efeito GPU (Atomic Design, tokens-first), todos declarados em RCSS. Spec aprovada: [`docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`](docs/superpowers/specs/2026-06-30-glintfx-v2-design.md) (branch `feat/v2-f2-components`).
 - **`set_focus(id)` no `UiLayer`:** controle de foco programático para hosts cujo modelo é dono da seleção (ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi). Rastreado como `GAP-4` no `TODO.md`.
 
-**Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, gl3w, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Isso se conecta à **Camada 0** (o runtime C/ASM puro, com a implementação do núcleo hoje completa e aguardando auditoria) como base de internalização. **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
+**Meta de longo prazo (a "loucura"):** tornar o glintfx **independente das suas bibliotecas de terceiros via reimplementação clean-room**, internalizando **RmlUi, FreeType e GLFW** (toda a stack userspace) ao longo de anos. Uma peça já está pronta: o loader GL (antes o gl3w de terceiro) foi internalizado no L1.14-GLLOADER, gerado a partir do registro público Khronos `gl.xml`. Isso se conecta à **Camada 0** (o runtime C/ASM puro, com a implementação do núcleo hoje completa e aguardando auditoria) como base de internalização. **Fronteira irredutível:** `libGL` + o driver de GPU + a stack DRM do kernel permanecem. O driver de GPU não é reimplementado; a soberania de gráfico acelerado para na linha do syscall + driver.
 
 ### Sobre este repositório (duas camadas)
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
 - **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.4.0`).
-- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação do núcleo completa, aguardando auditoria:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta -> um harness de teste próprio habilitando TDD -> uma libc-núcleo pequena (memória, string, conversão int↔string) -> um mini-printf -> um alocador bump via `mmap`, tudo zero libc e entregue sob TDD mais review adversarial. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. Ainda é uma trilha **de longo prazo**: internalizar as dependências do glintfx (RmlUi, gl3w, FreeType, GLFW) segue a anos de distância.
+- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação do núcleo completa, aguardando auditoria:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta -> um harness de teste próprio habilitando TDD -> uma libc-núcleo pequena (memória, string, conversão int↔string) -> um mini-printf -> um alocador bump via `mmap`, tudo zero libc e entregue sob TDD mais review adversarial. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. Ainda é uma trilha **de longo prazo**: internalizar as dependências restantes do glintfx (RmlUi, FreeType, GLFW) segue a anos de distância (a peça do loader GL, gl3w, já foi internalizada no L1.14-GLLOADER).
 
 Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada, agora com a implementação completa e aguardando auditoria.
 

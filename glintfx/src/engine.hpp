@@ -17,6 +17,7 @@
 namespace Rml { class Context; class SystemInterface; }
 #include <cstddef>
 #include <functional>
+#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/click_info.hpp>
 
 namespace glintfx {
@@ -208,6 +209,62 @@ public:
   bool clear_focus() const;
 
   // -------------------------------------------------------------------------
+  // EN: DOM read/write by id (L1.16-DOMRW, consumes AUD-PUB-6(d) -- imperative setters).
+  //     Mirrors the guard shape of the 6 pre-existing per-id methods above (get_element_box,
+  //     scroll_element_into_view, etc.): false when not ok(), no document is loaded, or id is
+  //     null/empty ("") -- AUD-TEC-5 fail-high. Forwards to Bootstrap; see there for the
+  //     RmlUi-signature-level contract (Element::SetClass/SetProperty/SetInnerRML) and the
+  //     set_text markup-escaping hardening.
+  // PT: Leitura/escrita de DOM por id (L1.16-DOMRW, consome AUD-PUB-6(d) -- setters
+  //     imperativos). Espelha o formato de guard dos 6 métodos por-id pré-existentes acima
+  //     (get_element_box, scroll_element_into_view, etc.): false quando não ok(), nenhum
+  //     documento estiver carregado, ou id for nulo/vazio ("") -- fail-high AUD-TEC-5. Encaminha
+  //     ao Bootstrap; ver lá o contrato no nível de assinatura RmlUi (Element::SetClass/
+  //     SetProperty/SetInnerRML) e o hardening de escape de markup do set_text.
+  // -------------------------------------------------------------------------
+
+  // EN: Replace an element's text content. `text` is treated as LITERAL TEXT, never markup --
+  //     `& < > "` are escaped (Rml::StringUtilities::EncodeRml) before reaching
+  //     Element::SetInnerRML, so a host CANNOT inject RML/tags through this call (the string
+  //     "<script>"/"<img onerror=...>" ends up as the literal visible text "<script>", not a
+  //     parsed element). A null `text` is treated as "" (same normalisation as
+  //     DataBinder::set_string), never rejected.
+  // PT: Substitui o conteúdo de texto de um elemento. `text` é tratado como TEXTO LITERAL,
+  //     nunca markup -- `& < > "` são escapados (Rml::StringUtilities::EncodeRml) antes de
+  //     chegar em Element::SetInnerRML, então um host NÃO CONSEGUE injetar RML/tags por esta
+  //     chamada (a string "<script>"/"<img onerror=...>" vira o texto visível literal
+  //     "<script>", não um elemento parseado). `text` nulo é tratado como "" (mesma
+  //     normalização de DataBinder::set_string), nunca rejeitado.
+  bool set_text(const char* id, const char* text) const;
+
+  // EN: Add/remove a CSS class on an element -- forwards to Rml::Element::SetClass(cls, true/
+  //     false), which returns void (unlike set_property below), so success here means only
+  //     "the guarded id/cls were valid and the element was found", not a parse outcome (there
+  //     is none to parse). `cls` null/empty is rejected (false), same AUD-TEC-5 discipline as
+  //     `id`.
+  // PT: Adiciona/remove uma classe CSS de um elemento -- encaminha a
+  //     Rml::Element::SetClass(cls, true/false), que retorna void (diferente de set_property
+  //     abaixo), então sucesso aqui significa só "o id/cls guardados eram válidos e o elemento
+  //     foi encontrado", não um resultado de parse (não há um para parsear). `cls` nulo/vazio é
+  //     rejeitado (false), mesma disciplina AUD-TEC-5 de `id`.
+  bool add_class(const char* id, const char* cls) const;
+  bool remove_class(const char* id, const char* cls) const;
+
+  // EN: Set an inline RCSS property by name -- forwards to Rml::Element::SetProperty(name,
+  //     value), which DOES return bool (a real parse outcome, unlike SetClass/SetInnerRML above)
+  //     -- an unparseable `value` for the named property (e.g. `set_property(id, "color",
+  //     "not-a-color")`) propagates RmlUi's own `false`, not a glintfx-invented one. `prop`
+  //     null/empty is rejected (false) before ever reaching RmlUi, same AUD-TEC-5 discipline as
+  //     `id`.
+  // PT: Define uma propriedade RCSS inline por nome -- encaminha a
+  //     Rml::Element::SetProperty(name, value), que DE FATO retorna bool (um resultado real de
+  //     parse, diferente de SetClass/SetInnerRML acima) -- um `value` que não parseia para a
+  //     propriedade nomeada (ex.: `set_property(id, "color", "not-a-color")`) propaga o próprio
+  //     `false` do RmlUi, não um inventado pela glintfx. `prop` nulo/vazio é rejeitado (false)
+  //     antes de sequer chegar no RmlUi, mesma disciplina AUD-TEC-5 de `id`.
+  bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.
   //     Binds are registered against the RmlUi context BEFORE LoadDocument so that
   //     data-views are compiled with the correct variable map.
@@ -242,6 +299,25 @@ public:
   void set_string(const char* key, const char* v);
   void set_bool  (const char* key, bool v);
   void set_list  (const char* key, const char* const* items, std::size_t n);
+
+  // EN: Read-back a bound cell's CURRENT value (L1.16-DOMRW, consumes AUD-PUB-6(e) -- the
+  //     data-model was write-only before this). Reflects any RmlUi-driven bidirectional write
+  //     (e.g. a user typing into a data-bound <input>), not just what the host itself last
+  //     set_* -- see DataBinder::get_number's doc-comment for the pointer-identity reasoning
+  //     that makes this true without any extra RmlUi call. Returns false (out untouched) when
+  //     not ok() or the key was never bound -- no document/load-order guard beyond that (a
+  //     bound key is readable before OR after load()).
+  // PT: Lê de volta o valor CORRENTE de uma célula ligada (L1.16-DOMRW, consome AUD-PUB-6(e) --
+  //     o data-model era write-only antes disto). Reflete qualquer escrita bidirecional dirigida
+  //     pelo RmlUi (ex.: um usuário digitando num <input> ligado ao data-model), não só o que o
+  //     próprio host definiu por último via set_* -- ver o doc-comment de DataBinder::get_number
+  //     para o raciocínio de identidade-de-ponteiro que torna isto verdade sem chamada extra ao
+  //     RmlUi. Retorna false (out intocado) quando não ok() ou a chave nunca foi ligada -- sem
+  //     guard de documento/ordem-de-load além disso (uma chave ligada é legível antes OU depois
+  //     de load()).
+  bool get_number(const char* key, double& out) const;
+  bool get_string(const char* key, std::string& out) const;
+  bool get_bool  (const char* key, bool& out) const;
 
 private:
   struct Impl;

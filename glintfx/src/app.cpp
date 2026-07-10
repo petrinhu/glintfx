@@ -11,6 +11,7 @@
 #include "gl_loader.h"
 #include <cstdio>
 #include <memory>
+#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <vector>
 
 #include <glintfx/glintfx.hpp>
@@ -354,6 +355,46 @@ bool App::set_focus(const char* id) const {
 bool App::clear_focus() const {
   if (!impl_->ok) return false;
   return impl_->engine.clear_focus();
+}
+
+// ---------------------------------------------------------------------------
+// EN: DOM read/write by id (L1.16-DOMRW) -- straight forwards to Engine.
+// PT: Leitura/escrita de DOM por id (L1.16-DOMRW) -- repasse direto ao Engine.
+// ---------------------------------------------------------------------------
+
+bool App::set_text(const char* id, const char* text) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.set_text(id, text);
+}
+
+bool App::add_class(const char* id, const char* cls) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.add_class(id, cls);
+}
+
+bool App::remove_class(const char* id, const char* cls) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.remove_class(id, cls);
+}
+
+bool App::set_property(const char* id, const char* prop, const char* value) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.set_property(id, prop, value);
+}
+
+bool App::get_number(const char* key, double& out) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_number(key, out);
+}
+
+bool App::get_string(const char* key, std::string& out) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_string(key, out);
+}
+
+bool App::get_bool(const char* key, bool& out) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.get_bool(key, out);
 }
 
 void App::run() {

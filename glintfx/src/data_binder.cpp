@@ -129,6 +129,34 @@ void DataBinder::set_bool(const char* key, bool v) {
   impl_->handle.DirtyVariable(Rml::String(key));
 }
 
+bool DataBinder::get_number(const char* key, double& out) const {
+  if (!key) return false;
+  auto it = impl_->nums.find(key);
+  if (it == impl_->nums.end()) return false;
+  out = *it->second;
+  return true;
+}
+
+bool DataBinder::get_string(const char* key, std::string& out) const {
+  if (!key) return false;
+  auto it = impl_->strs.find(key);
+  if (it == impl_->strs.end()) return false;
+  // EN: Rml::String is std::string under the pinned RmlUi build config (no custom allocator
+  //     override in this project) -- a direct copy-assign, no per-character translation needed.
+  // PT: Rml::String é std::string na config de build pinada do RmlUi (sem override de alocador
+  //     customizado neste projeto) -- copy-assign direto, sem tradução por caractere necessária.
+  out = *it->second;
+  return true;
+}
+
+bool DataBinder::get_bool(const char* key, bool& out) const {
+  if (!key) return false;
+  auto it = impl_->bools.find(key);
+  if (it == impl_->bools.end()) return false;
+  out = *it->second;
+  return true;
+}
+
 void DataBinder::set_list(const char* key, const char* const* items, std::size_t n) {
   if (!key) return;
   // EN: Guard against null items pointer when count is non-zero — would be UB in the loop.

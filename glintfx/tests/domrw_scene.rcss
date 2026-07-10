@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the DOM read/write sanity scene (domrw_scene.rml, L1.16-DOMRW). Purely
+       structural (no positioning needed -- domrw_sanity.cpp never queries geometry): #class-target
+       starts with the "base" class (authored in the .rml, not here) so remove_class has a
+       real class to remove, #prop-target starts with no inline property so set_property's
+       happy-path/invalid-parse cases have a clean baseline to diff against.
+   PT: Estilos para a cena de sanidade de leitura/escrita de DOM (domrw_scene.rml, L1.16-DOMRW).
+       Puramente estrutural (sem posicionamento necessário -- domrw_sanity.cpp nunca consulta
+       geometria): #class-target começa com a classe "base" (autorada no .rml, não aqui) para
+       que remove_class tenha uma classe real a remover, #prop-target começa sem propriedade
+       inline para que os casos de caminho-feliz/parse-inválido de set_property tenham uma
+       linha de base limpa pra comparar. */
+body { background-color: #101010; }

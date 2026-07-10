@@ -144,7 +144,9 @@
 
 **IMPORTANT correction vs. HTML-tabindex intuition** (confirmed by reading the pinned RmlUi 6.3 source -- `Source/Core/Element.cpp`, `Source/Core/StyleSheetSpecification.cpp` -- not assumed): `set_focus(id)` wraps `Rml::Element::Focus()`, which gates ONLY on the element's RCSS `focus` property (`auto`|`none`), whose **RmlUi-registered default is `auto`** -- by default EVERY element, including a plain unstyled `<div>`, accepts `set_focus()`, UNLESS explicitly authored `focus: none;`. The `tabindex`-like property in this document, `tab-index` (default `none`), controls ONLY Tab-key **traversal order** and has **zero effect** on whether `set_focus(id)` succeeds -- there is no RmlUi/glintfx equivalent of HTML's implicit "only tabindex-bearing elements are focusable" rule. A host that wants a hard "never focus this" gate must author `focus: none;` explicitly.
 
-`clear_focus()` wraps `Rml::Context::GetFocusElement()` + `Rml::Element::Blur()`. Also confirmed against the pinned source: `Rml::Context::focus` is initialised to the context's own internal root element at construction and is **never reset to null** -- `Blur()` on the currently-focused element re-parents focus **up** the tree instead. `clear_focus()` therefore cannot make "nothing focused" happen (RmlUi has no such state, much like a browser's `document.activeElement` is never `null`); its useful, achievable semantics is "move focus away from wherever it currently is" -- e.g. off a menu item the host's own model no longer considers selected. It returns `true` both when it actually moved focus and when nothing meaningful was focused to begin with (idempotent no-op).
+`clear_focus()` wraps `Rml::Context::GetFocusElement()` + `Rml::Element::Blur()`. Also confirmed against the pinned source: `Rml::Context::focus` is initialised to the context's own internal root element at construction, and `Blur()` on the currently-focused element re-parents focus **up** the tree rather than nulling it. `clear_focus()` therefore cannot itself make "nothing focused" happen via `Blur()`'s own path; its useful, achievable semantics is "move focus away from wherever it currently is" -- e.g. off a menu item the host's own model no longer considers selected. It returns `true` both when it actually moved focus and when nothing meaningful was focused to begin with (idempotent no-op).
+
+**Correction (`L1.16-DOMRW` review finding, 2026-07-09; ex-INBOX "`clear_focus`/`GetFocusElement` doc-precision vs. `OnElementDetach`"):** this section previously claimed focus is "never reset to null", full stop. That is true for `Blur()`'s own path, but **not universally true**: `Rml::Context::OnElementDetach` (`Source/Core/Context.cpp`, confirmed by reading the pinned RmlUi 6.3 source) does `if (element == focus) focus = nullptr;` whenever the **currently focused element is detached from the tree** -- e.g. via `set_text(id, ...)` replacing an element's children through `SetInnerRML`, or a `data-for` list shrinking and dropping the row that held focus (section 15 below). No compensating re-focus happens on that path. `GetFocusElement()` can therefore legitimately return `nullptr` after such a DOM mutation, in addition to the (structurally unreachable via `Blur()` alone) "nothing has ever been focused" case. glintfx's `clear_focus()` was already correct/idempotent regardless (`if (!focused) return true;`), so this correction changes **no behaviour** -- only the prose was stronger than reality.
 
 Both methods return `false` when no document is loaded, `id` is null/empty (`""`, `AUD-TEC-5` fail-high convention, `set_focus` only), or the id is not found. `clear_focus()` has no id parameter -- it operates on whatever the `Rml::Context` currently reports as focused; since focus is a context-wide, not document-scoped, concept, a host that loads more than one document into the SAME context should be aware `clear_focus()` is not scoped to only the latest-loaded one.
 
@@ -154,7 +156,9 @@ Full contract and the source citations backing the paragraphs above: `glintfx/sr
 
 **Correção IMPORTANTE vs. intuição de tabindex do HTML** (confirmado lendo o source pinado do RmlUi 6.3 -- `Source/Core/Element.cpp`, `Source/Core/StyleSheetSpecification.cpp` -- não assumido): `set_focus(id)` encapsula `Rml::Element::Focus()`, que se protege SÓ pela propriedade RCSS `focus` do elemento (`auto`|`none`), cujo **default registrado no RmlUi é `auto`** -- por padrão TODO elemento, incluindo uma `<div>` lisa sem estilo, aceita `set_focus()`, A MENOS QUE autorado explicitamente com `focus: none;`. A propriedade parecida-com-tabindex citada neste documento, `tab-index` (default `none`), controla SÓ a **ordem de travessia** por tecla Tab e tem **efeito zero** sobre o sucesso de `set_focus(id)` -- não há equivalente RmlUi/glintfx da regra implícita do HTML de "só elementos com tabindex são focáveis". Um host que quer uma guarda dura de "nunca focar isto" precisa autorar `focus: none;` explicitamente.
 
-`clear_focus()` encapsula `Rml::Context::GetFocusElement()` + `Rml::Element::Blur()`. Também confirmado contra o source pinado: `Rml::Context::focus` é inicializado com o próprio elemento raiz interno do contexto na construção e **nunca é resetado para nulo** -- `Blur()` no elemento atualmente focado reparenta o foco PRA CIMA na árvore em vez disso. `clear_focus()` portanto não consegue fazer "nada focado" acontecer (o RmlUi não tem esse estado, de forma parecida a `document.activeElement` de um browser nunca ser `null`); sua semântica útil e alcançável é "mover o foco pra longe de onde está agora" -- ex.: tirar de um item de menu que o modelo próprio do host não considera mais selecionado. Retorna `true` tanto quando de fato moveu o foco quanto quando nada significativo estava focado para começo de conversa (no-op idempotente).
+`clear_focus()` encapsula `Rml::Context::GetFocusElement()` + `Rml::Element::Blur()`. Também confirmado contra o source pinado: `Rml::Context::focus` é inicializado com o próprio elemento raiz interno do contexto na construção, e `Blur()` no elemento atualmente focado reparenta o foco PRA CIMA na árvore em vez de zerá-lo. `clear_focus()` portanto não consegue fazer "nada focado" acontecer sozinho pelo caminho do `Blur()`; sua semântica útil e alcançável é "mover o foco pra longe de onde está agora" -- ex.: tirar de um item de menu que o modelo próprio do host não considera mais selecionado. Retorna `true` tanto quando de fato moveu o foco quanto quando nada significativo estava focado para começo de conversa (no-op idempotente).
+
+**Correção (achado de review do `L1.16-DOMRW`, 2026-07-09; ex-INBOX "precisão de doc de `clear_focus`/`GetFocusElement` vs. `OnElementDetach`"):** esta seção antes afirmava que o foco "nunca é resetado para nulo", ponto final. Isso é verdade para o caminho do próprio `Blur()`, mas **não é universalmente verdade**: `Rml::Context::OnElementDetach` (`Source/Core/Context.cpp`, confirmado lendo o source pinado do RmlUi 6.3) faz `if (element == focus) focus = nullptr;` sempre que o **elemento atualmente focado é desanexado da árvore** -- ex.: via `set_text(id, ...)` substituindo os filhos de um elemento por `SetInnerRML`, ou uma lista `data-for` encolhendo e descartando a linha que segurava o foco (seção 15 abaixo). Nenhum re-foco compensatório acontece nesse caminho. `GetFocusElement()` portanto PODE legitimamente retornar `nullptr` após tal mutação de DOM, além do caso (estruturalmente inalcançável só pelo `Blur()`) de "nada jamais foi focado". O `clear_focus()` da glintfx já era correto/idempotente de qualquer forma (`if (!focused) return true;`), então esta correção não muda NENHUM comportamento -- só a prosa era mais forte que a realidade.
 
 Os dois métodos retornam `false` quando nenhum documento está carregado, `id` é nulo/vazio (`""`, convenção fail-high `AUD-TEC-5`, só em `set_focus`), ou o id não é encontrado. `clear_focus()` não tem parâmetro de id -- opera sobre o que o `Rml::Context` reporta como focado no momento; como foco é um conceito do contexto inteiro, não restrito a documento, um host que carrega mais de um documento no MESMO contexto deve estar ciente que `clear_focus()` não é restrito só ao documento carregado por último.
 
@@ -518,6 +522,86 @@ ui.set_scroll_callback([](const char* id) {
 `set_click_callback`/`set_click_info_callback` (seção 10 / seção 13) seguem intactos e continuam disparando independentemente -- `set_scroll_callback` é um canal separado, aditivo.
 
 Verificado por `scroll_sanity` (caso E: dispara com o id do elemento rolado a partir de wheel e do `set_element_scroll_top` programático, dedup num set de mesmo valor, e no-op seguro após limpar o callback; caso E5: um caso dedicado para o padrão de recursão convergente da pegadinha (b), afirmando que ela assenta num número limitado de iterações em vez de estourar a pilha -- a interação com thumb/trilho/setas da scrollbar nativa despacha o mesmo `Rml::EventId::Scroll` internamente mas não é simulada separadamente neste teste); ver `CHANGELOG.md` v0.6.0 para a descrição completa. A *aparência* RCSS da scrollbar (espessura, cor de thumb/setas, dimensionamento) é uma questão de estilização, não deste callback -- ver "How-to: estilizar barras de rolagem (scrollbars)" em `docs/effects.md`.
+
+## 15. DOM read/write by id, and data-model read-back (`L1.16-DOMRW`) / Leitura/escrita de DOM por id, e leitura de volta do data-model (`L1.16-DOMRW`)
+
+**EN:** `L1.16-DOMRW` closes the two halves of `AUD-PUB-6`'s "imperative setters" (d) and "write-only data-model" (e) gaps. Two independent, unrelated features, grouped under one item because they share the same guard shape:
+
+**(d) Imperative DOM setters by id** -- `set_text`/`add_class`/`remove_class`/`set_property`, on both `UiLayer` and `App`. Thin wrappers over `Rml::Element::SetInnerRML`/`SetClass`/`SetProperty` (verified against the pinned RmlUi 6.3 source, `Include/RmlUi/Core/Element.h`):
+
+```
+void SetClass(const String& class_name, bool activate);      // add/remove -- no bool, no parse outcome
+bool SetProperty(const String& name, const String& value);   // REAL parse outcome
+void SetInnerRML(const String& rml);                          // no bool, parses RML
+```
+
+`SetClass`/`SetInnerRML` return `void` -- there is no RmlUi-level success/failure for glintfx to propagate from them, so `add_class`/`remove_class`/`set_text` returning `true` means only "the guarded id (and class name, for add/remove) was valid and the element was found". `set_property`, by contrast, forwards RmlUi's own `SetProperty` bool **unchanged** -- an unparseable `value` for the named property (e.g. `set_property(id, "color", "not-a-color")`) returns `false`, propagated from RmlUi's own property parser, not a glintfx-invented validation.
+
+**HARD security guarantee on `set_text`:** `text` is always **literal text, never markup**. `&`, `<`, `>`, `"` are escaped via `Rml::StringUtilities::EncodeRml` -- the SAME encoder RmlUi's own `ElementText::GetRML()` uses internally to serialise text nodes back to RML, confirmed by reading the pinned source -- **before** the string ever reaches `SetInnerRML()`. A host that forwards untrusted text (chat, a player-chosen display name, any user-generated string) can **never** use `set_text` to inject RML/tags into the document: the literal string `"<b>hi</b>"` renders as the visible text `<b>hi</b>`, it does not become a bold element. Skipping this escape would be the RML-injection equivalent of building a SQL query by string concatenation -- it is not optional, and it is not configurable.
+
+Guards (`AUD-TEC-5` fail-high, same shape as `get_element_box`/`set_focus`): `false` when no document is loaded, `id` is null/empty (`""`) or not found. `add_class`/`remove_class` additionally reject a null/empty `cls` the same way. `set_property` additionally rejects a null/empty `prop` (an empty property NAME cannot resolve to any real RCSS property -- structurally invalid, distinct from an unparseable `value`, which IS forwarded to RmlUi's own parser). `text`/`value` null is normalised to `""` (same convention as the data-model's `set_string`), never rejected -- an empty text/value is a legitimate input.
+
+**(e) Data-model read-back** -- `get_number`/`get_string`/`get_bool` on both `UiLayer` and `App`, completing the data-model API that was write-only before this (`create_data_model`/`bind_*`/`set_*` only). This closes a real gap: a host could push values INTO the UI, but had no way to read back a value the UI itself -- or the user, through a bound control such as an `<input data-value>` -- wrote INTO the model (invisible two-way binding).
+
+Correct by construction, not by coincidence: `Rml::DataModelConstructor::Bind(name, ptr)` (`Include/RmlUi/Core/DataModelHandle.h`, confirmed against the pinned source) registers a `DataVariable` wrapping the **same pointer** glintfx's internal `DataBinder` stores the bound cell at (`static_cast<void*>(ptr)`). Any bidirectional RmlUi-driven write -- a data-view setter firing from user interaction -- therefore lands **directly in that cell**, not in some RmlUi-internal shadow copy. Reading the cell back through `get_*` *is* reading the model's live, current value, with no extra RmlUi call needed and no risk of staleness.
+
+Guards: `false` (`out` left untouched) when the key was never bound via the matching `bind_number`/`bind_string`/`bind_bool` -- "unknown key" and "wrong order" (calling `get_*` before the corresponding `bind_*`) collapse to the same map-lookup-miss, so there is only one failure mode to reason about, not two. **No document/`load()`-ordering guard beyond that** -- a bound key is readable both **before and after** `load()`, unlike `bind_*` itself (which must precede `load()`).
+
+`std::string` at this API boundary is a deliberate exception to the plain-C-types convention the rest of the data-model API follows (`const char*` in/out elsewhere). A `const char*` out-parameter/return here would have to point into memory glintfx owns and controls the lifetime of -- exactly the class of bug the `v0.4.1` heap-use-after-free audit finding (duplicate-key `bind_*`) was about. Returning into a caller-owned `std::string` sidesteps the lifetime question entirely.
+
+```cpp
+// C++ -- push a value in, read it back after a round trip through the UI/user
+ui.create_data_model("form");
+ui.bind_string("player_name", "");
+ui.load("name_entry.rml");   // <input data-value="player_name"/> lets the user type
+
+// ... later, on submit:
+std::string name;
+if (ui.get_string("player_name", name) && !name.empty()) {
+  start_game(name);
+}
+```
+
+Verified by `domrw_sanity` (drives `Engine` directly, same "internal oracle" precedent as `focus_sanity`/`document_reload_leak`): the escaping "bite" -- a payload containing `& < > "` round-trips through `GetInnerRML()` as the exactly-escaped string, and is proven to have created **zero** child elements (`GetNumChildren() == 1`, the sole child's tag is `"#text"`) rather than a real `<bye>` element; `add_class`/`remove_class` verified via `IsClassSet()`; `set_property`'s propagated parse failure verified via `GetProperty<float>("opacity")` staying unchanged after a rejected call; data-model `get_*` verified both before and after `load()`, and after a `set_*`/`update()` round trip.
+
+**PT:** `L1.16-DOMRW` fecha as duas metades dos gaps "setters imperativos" (d) e "data-model write-only" (e) do `AUD-PUB-6`. Duas features independentes, não relacionadas, agrupadas sob um único item por compartilharem o mesmo formato de guard:
+
+**(d) Setters imperativos de DOM por id** -- `set_text`/`add_class`/`remove_class`/`set_property`, em `UiLayer` e `App`. Wrappers finos sobre `Rml::Element::SetInnerRML`/`SetClass`/`SetProperty` (verificado contra o source pinado do RmlUi 6.3, `Include/RmlUi/Core/Element.h`):
+
+```
+void SetClass(const String& class_name, bool activate);      // add/remove -- sem bool, sem resultado de parse
+bool SetProperty(const String& name, const String& value);   // resultado REAL de parse
+void SetInnerRML(const String& rml);                          // sem bool, parseia RML
+```
+
+`SetClass`/`SetInnerRML` retornam `void` -- não há sucesso/falha em nível RmlUi para a glintfx propagar deles, então `add_class`/`remove_class`/`set_text` retornando `true` significa só "o id guardado (e o nome de classe, para add/remove) era válido e o elemento foi encontrado". `set_property`, em contraste, repassa o próprio bool de `SetProperty` do RmlUi **sem mudança** -- um `value` que não parseia para a propriedade nomeada (ex.: `set_property(id, "color", "not-a-color")`) retorna `false`, propagado do próprio parser de propriedade do RmlUi, não uma validação inventada pela glintfx.
+
+**GARANTIA FORTE de segurança em `set_text`:** `text` é sempre **texto literal, nunca markup**. `&`, `<`, `>`, `"` são escapados via `Rml::StringUtilities::EncodeRml` -- o MESMO encoder que o próprio `ElementText::GetRML()` do RmlUi usa internamente para serializar nós de texto de volta pra RML, confirmado lendo o source pinado -- **antes** da string chegar em `SetInnerRML()`. Um host que encaminha texto não confiável (chat, nome de exibição escolhido pelo jogador, qualquer string gerada por usuário) **nunca** consegue usar `set_text` para injetar RML/tags no documento: a string literal `"<b>oi</b>"` renderiza como o texto visível `<b>oi</b>`, não vira um elemento em negrito. Pular este escape seria o equivalente de injeção de RML a construir uma query SQL por concatenação de string -- não é opcional, e não é configurável.
+
+Guards (fail-high `AUD-TEC-5`, mesmo formato de `get_element_box`/`set_focus`): `false` quando nenhum documento estiver carregado, `id` for nulo/vazio (`""`) ou não encontrado. `add_class`/`remove_class` adicionalmente rejeitam um `cls` nulo/vazio do mesmo jeito. `set_property` adicionalmente rejeita um `prop` nulo/vazio (um NOME de propriedade vazio não resolve para nenhuma propriedade RCSS real -- estruturalmente inválido, distinto de um `value` que não parseia, que É encaminhado ao próprio parser do RmlUi). `text`/`value` nulo é normalizado para `""` (mesma convenção do `set_string` do data-model), nunca rejeitado -- um texto/valor vazio é entrada legítima.
+
+**(e) Leitura de volta do data-model** -- `get_number`/`get_string`/`get_bool` em `UiLayer` e `App`, completando a API de data-model que era write-only antes disto (só `create_data_model`/`bind_*`/`set_*`). Isto fecha um gap real: um host podia empurrar valores PRA DENTRO da UI, mas não tinha como ler de volta um valor que a própria UI -- ou o usuário, através de um controle ligado como um `<input data-value>` -- escreveu PRA DENTRO do modelo (two-way binding invisível).
+
+Correto por construção, não por coincidência: `Rml::DataModelConstructor::Bind(name, ptr)` (`Include/RmlUi/Core/DataModelHandle.h`, confirmado contra o source pinado) registra uma `DataVariable` envolvendo o **mesmo ponteiro** onde o `DataBinder` interno da glintfx guarda a célula ligada (`static_cast<void*>(ptr)`). Qualquer escrita bidirecional dirigida pelo RmlUi -- um setter de data-view disparando por interação do usuário -- portanto cai **direto nessa célula**, não numa cópia-sombra interna do RmlUi. Ler a célula de volta via `get_*` *é* ler o valor vivo e corrente do modelo, sem chamada extra ao RmlUi e sem risco de defasagem.
+
+Guards: `false` (`out` intocado) quando a chave nunca foi ligada pelo `bind_number`/`bind_string`/`bind_bool` correspondente -- "chave desconhecida" e "ordem errada" (chamar `get_*` antes do `bind_*` correspondente) colapsam pro mesmo miss de busca no mapa, então há só um modo de falha pra raciocinar sobre, não dois. **Sem guard de documento/ordem-de-`load()` além disso** -- uma chave ligada é legível TANTO antes QUANTO depois de `load()`, diferente do próprio `bind_*` (que deve preceder `load()`).
+
+`std::string` nesta fronteira de API é uma exceção deliberada à convenção de tipos C simples que o resto da API de data-model segue (`const char*` in/out em outro lugar). Um out-parâmetro/retorno `const char*` aqui teria que apontar para memória cujo lifetime a glintfx possui e controla -- exatamente a classe de bug do achado de auditoria de heap-use-after-free da `v0.4.1` (`bind_*` com chave duplicada). Retornar num `std::string` de propriedade do chamador evita a questão de lifetime inteiramente.
+
+```cpp
+// C++ -- empurra um valor pra dentro, lê de volta após um round trip pela UI/usuário
+ui.create_data_model("form");
+ui.bind_string("player_name", "");
+ui.load("name_entry.rml");   // <input data-value="player_name"/> deixa o usuário digitar
+
+// ... depois, no submit:
+std::string name;
+if (ui.get_string("player_name", name) && !name.empty()) {
+  start_game(name);
+}
+```
+
+Verificado por `domrw_sanity` (dirige o `Engine` diretamente, mesmo precedente de "oráculo interno" de `focus_sanity`/`document_reload_leak`): a "mordida" do escape -- um payload contendo `& < > "` faz round-trip por `GetInnerRML()` como a string exatamente escapada, e é provado ter criado **zero** elementos filhos (`GetNumChildren() == 1`, a tag do único filho é `"#text"`) em vez de um elemento `<bye>` real; `add_class`/`remove_class` verificados via `IsClassSet()`; a falha de parse propagada do `set_property` verificada via `GetProperty<float>("opacity")` permanecendo inalterada após uma chamada rejeitada; `get_*` do data-model verificado tanto antes quanto depois de `load()`, e após um round trip `set_*`/`update()`.
 
 ## See also / Veja também
 

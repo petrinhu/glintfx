@@ -10,6 +10,7 @@
 #include <memory>
 #include <cstddef>
 #include <functional>
+#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 // EN: version() moved to its own header (L1.9-VERSEMBED) so embed-only consumers that
 //     never include app.hpp still get glintfx::version(). Re-included here (transitively)
 //     so existing code that only includes app.hpp keeps compiling unchanged.
@@ -293,6 +294,71 @@ public:
   bool clear_focus() const;
 
   // -------------------------------------------------------------------------
+  // EN: DOM read/write by id (L1.16-DOMRW, consumes AUD-PUB-6(d) -- "imperative setters by
+  //     id"). Parity with UiLayer (same signatures/semantics). See UiLayer's doc-comments for
+  //     the full contract, including the RmlUi-signature-level detail (SetClass/SetProperty/
+  //     SetInnerRML) confirmed against the pinned RmlUi 6.3 source.
+  // PT: Leitura/escrita de DOM por id (L1.16-DOMRW, consome AUD-PUB-6(d) -- "setters
+  //     imperativos por id"). Paridade com UiLayer (mesmas assinaturas/semântica). Ver os
+  //     doc-comments do UiLayer para o contrato completo, incluindo o detalhe no nível de
+  //     assinatura RmlUi (SetClass/SetProperty/SetInnerRML) confirmado contra o source pinado
+  //     do RmlUi 6.3.
+  // -------------------------------------------------------------------------
+
+  // EN: Replace an element's text content. `text` is LITERAL TEXT, never markup -- `& < > "`
+  //     are escaped before reaching RmlUi's SetInnerRML, so this call can NEVER be used to
+  //     inject RML/tags into the document, even with untrusted `text` (chat, a player-chosen
+  //     display name, etc.). Null `text` is normalised to "" (never rejected). Returns false
+  //     when no document is loaded or `id` is null/empty ("")/unknown -- same AUD-TEC-5
+  //     fail-high convention as get_element_box/set_focus.
+  // PT: Substitui o conteúdo de texto de um elemento. `text` é TEXTO LITERAL, nunca markup --
+  //     `& < > "` são escapados antes de chegar no SetInnerRML do RmlUi, então esta chamada
+  //     NUNCA pode ser usada para injetar RML/tags no documento, mesmo com `text` não confiável
+  //     (chat, nome de exibição escolhido pelo jogador, etc.). `text` nulo é normalizado para ""
+  //     (nunca rejeitado). Retorna false quando nenhum documento estiver carregado ou `id` for
+  //     nulo/vazio ("")/desconhecido -- mesma convenção fail-high AUD-TEC-5 de
+  //     get_element_box/set_focus.
+  bool set_text(const char* id, const char* text) const;
+
+  // EN: Add a CSS class on an element -- wraps Rml::Element::SetClass(cls, true), which returns
+  //     void (no RmlUi-level parse outcome, unlike set_property below). Returns false when no
+  //     document is loaded, or `id`/`cls` is null/empty ("") -- AUD-TEC-5 fail-high, applied to
+  //     BOTH parameters here (an empty class name is a structurally-invalid caller input, same
+  //     as an empty id).
+  // PT: Adiciona uma classe CSS num elemento -- encapsula Rml::Element::SetClass(cls, true),
+  //     que retorna void (nenhum resultado de parse em nível RmlUi, diferente do set_property
+  //     abaixo). Retorna false quando nenhum documento estiver carregado, ou `id`/`cls` for
+  //     nulo/vazio ("") -- fail-high AUD-TEC-5, aplicado aos DOIS parâmetros aqui (um nome de
+  //     classe vazio é entrada estruturalmente inválida do chamador, igual a um id vazio).
+  bool add_class(const char* id, const char* cls) const;
+
+  // EN: Remove a CSS class from an element -- wraps Rml::Element::SetClass(cls, false). Same
+  //     `id`/`cls` null/empty guard as add_class. Removing a class the element never had is a
+  //     safe no-op inside RmlUi itself, so this still returns true in that case.
+  // PT: Remove uma classe CSS de um elemento -- encapsula Rml::Element::SetClass(cls, false).
+  //     Mesmo guard de `id`/`cls` nulo/vazio do add_class. Remover uma classe que o elemento
+  //     nunca teve é um no-op seguro dentro do próprio RmlUi, então ainda retorna true nesse
+  //     caso.
+  bool remove_class(const char* id, const char* cls) const;
+
+  // EN: Set a single inline RCSS property by name -- wraps Rml::Element::SetProperty(name,
+  //     value), which DOES return a real bool (RmlUi's own parser rejects an unparseable
+  //     `value` for the named property and this call propagates that rejection unchanged --
+  //     no separate glintfx-level validation on top). `id`/`prop` null or empty ("") is
+  //     rejected (false) before touching RmlUi -- AUD-TEC-5 fail-high. `value` null is
+  //     normalised to "" and forwarded to RmlUi's own parser (which is the sole authority on
+  //     whether an empty value is acceptable for the named property).
+  // PT: Define uma única propriedade RCSS inline por nome -- encapsula
+  //     Rml::Element::SetProperty(name, value), que DE FATO retorna um bool real (o próprio
+  //     parser do RmlUi rejeita um `value` que não parseia para a propriedade nomeada e esta
+  //     chamada propaga essa rejeição sem mudança -- nenhuma validação separada em nível
+  //     glintfx por cima). `id`/`prop` nulo ou vazio ("") é rejeitado (false) antes de tocar o
+  //     RmlUi -- fail-high AUD-TEC-5. `value` nulo é normalizado para "" e encaminhado ao
+  //     próprio parser do RmlUi (que é a única autoridade sobre se um valor vazio é aceitável
+  //     para a propriedade nomeada).
+  bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model
   //     -> bind_* -> load() -> set_*(). Engine enforces the ordering constraint
   //     (bind_* after load() returns false). No engine-specific types in this header.
@@ -351,6 +417,30 @@ public:
   // PT: Substitui a lista de strings inteira e marca a variável suja.
   //     items[0..count-1] são copiados; o chamador retém a propriedade.
   void set_list  (const char* key, const char* const* items, std::size_t count);
+
+  // EN: Read-back the CURRENT value of a bound cell (L1.16-DOMRW, consumes AUD-PUB-6(e) -- the
+  //     data-model was write-only before this: a host could push values in via set_*, but had
+  //     no way to read back a value the UI itself, or the user through a bound control (e.g. an
+  //     `<input data-value>`), wrote into the model. Reflects any such RmlUi-driven
+  //     bidirectional write, not just the host's own last set_* call -- see
+  //     glintfx/src/data_binder.hpp's get_number doc-comment for the pointer-identity reasoning
+  //     confirmed against the pinned RmlUi source. Returns false (out left untouched) when the
+  //     key was never bound; no ordering constraint versus load() beyond that (a bound key is
+  //     readable before or after load()). Parity with UiLayer::get_number/get_string/get_bool
+  //     (same signatures).
+  // PT: Lê de volta o valor CORRENTE de uma célula ligada (L1.16-DOMRW, consome AUD-PUB-6(e) --
+  //     o data-model era write-only antes disto: um host podia empurrar valores via set_*, mas
+  //     não tinha como ler de volta um valor que a própria UI, ou o usuário através de um
+  //     controle ligado (ex.: um `<input data-value>`), escreveu no modelo. Reflete qualquer
+  //     escrita bidirecional dirigida pelo RmlUi assim, não só a última chamada set_* do
+  //     próprio host -- ver o doc-comment de get_number em glintfx/src/data_binder.hpp para o
+  //     raciocínio de identidade-de-ponteiro confirmado contra o source pinado do RmlUi. Retorna
+  //     false (out intocado) quando a chave nunca foi ligada; sem restrição de ordem vs. load()
+  //     além disso (uma chave ligada é legível antes ou depois de load()). Paridade com
+  //     UiLayer::get_number/get_string/get_bool (mesmas assinaturas).
+  bool get_number(const char* key, double& out) const;
+  bool get_string(const char* key, std::string& out) const;
+  bool get_bool  (const char* key, bool& out) const;
 
   // EN: Render one frame and save the result to a PPM file before swapping buffers.
   //     This captures the composited image from the window framebuffer (FBO 0) immediately

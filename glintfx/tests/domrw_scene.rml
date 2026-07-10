@@ -1,0 +1,8 @@
+<rml>
+<head><link type="text/rcss" href="domrw_scene.rcss"/></head>
+<body>
+<div id="text-target">Original</div>
+<div id="class-target" class="base"></div>
+<div id="prop-target"></div>
+</body>
+</rml>

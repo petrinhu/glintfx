@@ -201,6 +201,35 @@ bool Engine::clear_focus() const {
 }
 
 // ---------------------------------------------------------------------------
+// EN: DOM read/write by id (L1.16-DOMRW) — straight forwards to Bootstrap; the guard/escaping
+//     logic lives there (see bootstrap.cpp), same "!ok() -> false" pattern as every other
+//     per-id method above.
+// PT: Leitura/escrita de DOM por id (L1.16-DOMRW) — repasse direto ao Bootstrap; a lógica de
+//     guard/escape mora lá (ver bootstrap.cpp), mesmo padrão "!ok() -> false" de todo outro
+//     método por-id acima.
+// ---------------------------------------------------------------------------
+
+bool Engine::set_text(const char* id, const char* text) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.set_text(id, text);
+}
+
+bool Engine::add_class(const char* id, const char* cls) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.add_class(id, cls);
+}
+
+bool Engine::remove_class(const char* id, const char* cls) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.remove_class(id, cls);
+}
+
+bool Engine::set_property(const char* id, const char* prop, const char* value) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.set_property(id, prop, value);
+}
+
+// ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
 //     create_data_model / bind_*: blocked when !ok or after load().
 //     set_*: blocked when !ok; DataBinder is a no-op when the key is unknown.
@@ -252,6 +281,21 @@ void Engine::set_bool(const char* key, bool v) {
 void Engine::set_list(const char* key, const char* const* items, std::size_t n) {
   if (!impl_->ok) return;
   impl_->data_binder.set_list(key, items, n);
+}
+
+bool Engine::get_number(const char* key, double& out) const {
+  if (!impl_->ok) return false;
+  return impl_->data_binder.get_number(key, out);
+}
+
+bool Engine::get_string(const char* key, std::string& out) const {
+  if (!impl_->ok) return false;
+  return impl_->data_binder.get_string(key, out);
+}
+
+bool Engine::get_bool(const char* key, bool& out) const {
+  if (!impl_->ok) return false;
+  return impl_->data_binder.get_bool(key, out);
 }
 
 } // namespace glintfx

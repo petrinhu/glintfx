@@ -375,7 +375,154 @@ public:
   //     NOTA: foco é propriedade do Rml::Context, não de um documento específico -- se um host
   //     algum dia carregar mais de um documento no MESMO contexto, isto limpa o que estiver
   //     focado no contexto inteiro, não restrito ao documento carregado por último (impl_->doc).
+  //
+  //     CORRECTION (L1.16-DOMRW review finding, 2026-07-09; ex-INBOX "clear_focus/
+  //     GetFocusElement doc-precision vs. OnElementDetach"): the doc-comment above (and
+  //     docs/embed-integration.md section 5) previously claimed "Rml::Context::focus is never
+  //     reset to null". That is true for Element::Blur() (re-parents focus UP the tree) but NOT
+  //     universally true: Rml::Context::OnElementDetach (Source/Core/Context.cpp, confirmed by
+  //     reading the pinned RmlUi 6.3 source) does `if (element == focus) focus = nullptr;`
+  //     whenever the CURRENTLY FOCUSED element is DETACHED from the tree -- e.g. via
+  //     set_text(id, ...) replacing an element's children through SetInnerRML, or a data-for
+  //     list shrinking and dropping the row that held focus. No compensating re-focus happens
+  //     in that path. The code here was already defensive regardless (`if (!focused) return
+  //     true;` above treats GetFocusElement()==nullptr as a legitimate, idempotent-success
+  //     state), so this correction changes NO behaviour -- only the prose was stronger than
+  //     reality. GetFocusElement() CAN legitimately return nullptr after a DOM mutation that
+  //     detaches the focused element, in addition to the "nothing has ever been focused since
+  //     Context construction" case Blur()'s reparenting never reaches on its own.
+  //     CORREÇÃO (achado de review do L1.16-DOMRW, 2026-07-09; ex-INBOX "precisão de doc de
+  //     clear_focus/GetFocusElement vs. OnElementDetach"): o doc-comment acima (e
+  //     docs/embed-integration.md seção 5) antes afirmava "Rml::Context::focus nunca é resetado
+  //     para nulo". Isso é verdade para Element::Blur() (reparenta o foco PRA CIMA na árvore)
+  //     mas NÃO é universalmente verdade: Rml::Context::OnElementDetach (Source/Core/
+  //     Context.cpp, confirmado lendo o source pinado do RmlUi 6.3) faz `if (element == focus)
+  //     focus = nullptr;` sempre que o elemento ATUALMENTE FOCADO é DESANEXADO da árvore -- ex.:
+  //     via set_text(id, ...) substituindo os filhos de um elemento por SetInnerRML, ou uma
+  //     lista data-for encolhendo e descartando a linha que segurava o foco. Nenhum re-foco
+  //     compensatório acontece nesse caminho. O código aqui já era defensivo de qualquer forma
+  //     (`if (!focused) return true;` acima trata GetFocusElement()==nullptr como um estado
+  //     legítimo, sucesso idempotente), então esta correção não muda NENHUM comportamento -- só
+  //     a prosa era mais forte que a realidade. GetFocusElement() PODE legitimamente retornar
+  //     nullptr após uma mutação de DOM que desanexa o elemento focado, além do caso "nada foi
+  //     focado desde a construção do Context" que o reparenting do Blur() sozinho nunca alcança.
   bool clear_focus() const;
+
+  // -------------------------------------------------------------------------
+  // EN: DOM read/write by id (L1.16-DOMRW, consumes AUD-PUB-6(d) -- "imperative setters by id",
+  //     the second half of the read/write pair alongside the data-model get_* on Engine/
+  //     UiLayer/App). Mirrors the guard shape of get_element_box/scroll_element_into_view/
+  //     set_focus above: `!impl_ || !impl_->doc || !id || !*id` -> false (AUD-TEC-5 fail-high).
+  //     Verified against the pinned RmlUi 6.3 source (Include/RmlUi/Core/Element.h):
+  //       void SetClass(const String& class_name, bool activate);      // add/remove, no bool
+  //       bool SetProperty(const String& name, const String& value);   // real parse outcome
+  //       void SetInnerRML(const String& rml);                          // no bool, parses RML
+  //     SetClass/SetInnerRML return void -- unlike SetProperty, there is no RmlUi-level
+  //     success/failure to propagate from them; this class's own bool return communicates only
+  //     "the guarded id (and, for set_property, prop) were valid and the element was found".
+  // PT: Leitura/escrita de DOM por id (L1.16-DOMRW, consome AUD-PUB-6(d) -- "setters
+  //     imperativos por id", a segunda metade do par leitura/escrita junto do get_* do
+  //     data-model em Engine/UiLayer/App). Espelha o formato de guard de get_element_box/
+  //     scroll_element_into_view/set_focus acima: `!impl_ || !impl_->doc || !id || !*id` ->
+  //     false (fail-high AUD-TEC-5). Verificado contra o source pinado do RmlUi 6.3
+  //     (Include/RmlUi/Core/Element.h):
+  //       void SetClass(const String& class_name, bool activate);      // add/remove, sem bool
+  //       bool SetProperty(const String& name, const String& value);   // resultado real de parse
+  //       void SetInnerRML(const String& rml);                          // sem bool, parseia RML
+  //     SetClass/SetInnerRML retornam void -- diferente de SetProperty, não há sucesso/falha em
+  //     nível RmlUi para propagar deles; o próprio retorno bool desta classe comunica só "o id
+  //     guardado (e, para set_property, prop) eram válidos e o elemento foi encontrado".
+  // -------------------------------------------------------------------------
+
+  // EN: Replace an element's text content, treating `text` as LITERAL TEXT -- NOT markup.
+  //     HARDENING (mandatory, not optional): `&`, `<`, `>`, `"` are escaped via
+  //     Rml::StringUtilities::EncodeRml(text) (confirmed in the pinned RmlUi source,
+  //     Source/Core/StringUtilities.cpp -- the SAME encoder RmlUi's own ElementText.cpp uses
+  //     internally to serialise text nodes back to RML) BEFORE the result reaches
+  //     Element::SetInnerRML(). Without this, a host that forwards untrusted text (chat, a
+  //     player-chosen display name, any user-generated string) straight into SetInnerRML would
+  //     let that string inject arbitrary RML/tags into the document -- the public promise of
+  //     this method is "set the TEXT", not "set arbitrary markup", so skipping the escape would
+  //     be an RML-injection vulnerability, structurally the same class of bug as building SQL
+  //     via string concatenation. A null `text` is normalised to "" (same convention as
+  //     DataBinder::set_string's `v ? v : ""`), never rejected -- an empty text content is a
+  //     legitimate value, not an error.
+  // PT: Substitui o conteúdo de texto de um elemento, tratando `text` como TEXTO LITERAL -- NÃO
+  //     markup. HARDENING (obrigatório, não opcional): `&`, `<`, `>`, `"` são escapados via
+  //     Rml::StringUtilities::EncodeRml(text) (confirmado no source pinado do RmlUi,
+  //     Source/Core/StringUtilities.cpp -- o MESMO encoder que o próprio ElementText.cpp do
+  //     RmlUi usa internamente para serializar nós de texto de volta pra RML) ANTES do
+  //     resultado chegar em Element::SetInnerRML(). Sem isto, um host que encaminha texto não
+  //     confiável (chat, nome de exibição escolhido pelo jogador, qualquer string gerada por
+  //     usuário) direto para SetInnerRML deixaria essa string injetar RML/tags arbitrários no
+  //     documento -- a promessa pública deste método é "definir o TEXTO", não "definir markup
+  //     arbitrário", então pular o escape seria uma vulnerabilidade de injeção de RML,
+  //     estruturalmente a mesma classe de bug que construir SQL por concatenação de string. Um
+  //     `text` nulo é normalizado para "" (mesma convenção do `v ? v : ""` de
+  //     DataBinder::set_string), nunca rejeitado -- conteúdo de texto vazio é um valor
+  //     legítimo, não um erro.
+  bool set_text(const char* id, const char* text) const;
+
+  // EN: Add ("activate") a CSS class on an element -- thin wrapper over
+  //     Rml::Element::SetClass(cls, true). `cls` null or empty ("") is rejected (false) BEFORE
+  //     touching RmlUi, same AUD-TEC-5 fail-high discipline as `id` -- an empty class name is
+  //     not a meaningful operation to forward (SetClass with an empty string is well-defined in
+  //     RmlUi but semantically pointless, and treating it as an error catches an obvious caller
+  //     bug -- e.g. a computed class string that resolved empty -- the same way the existing
+  //     id-empty guards do).
+  // PT: Adiciona ("ativa") uma classe CSS num elemento -- wrapper fino sobre
+  //     Rml::Element::SetClass(cls, true). `cls` nulo ou vazio ("") é rejeitado (false) ANTES
+  //     de tocar o RmlUi, mesma disciplina fail-high AUD-TEC-5 de `id` -- um nome de classe
+  //     vazio não é uma operação significativa a encaminhar (SetClass com string vazia é
+  //     bem-definido no RmlUi mas semanticamente inútil, e tratá-lo como erro captura um bug
+  //     óbvio do chamador -- ex.: uma string de classe computada que resolveu vazia -- do mesmo
+  //     jeito que os guards de id-vazio existentes fazem).
+  bool add_class(const char* id, const char* cls) const;
+
+  // EN: Remove ("deactivate") a CSS class from an element -- thin wrapper over
+  //     Rml::Element::SetClass(cls, false). Same `cls` null/empty guard as add_class above.
+  //     Removing a class the element never had is a safe no-op inside RmlUi itself (SetClass's
+  //     false branch is a set-difference operation), so this still returns true in that case --
+  //     the guard here only rejects a structurally-invalid `cls`, not a semantically-redundant
+  //     one.
+  // PT: Remove ("desativa") uma classe CSS de um elemento -- wrapper fino sobre
+  //     Rml::Element::SetClass(cls, false). Mesmo guard de `cls` nulo/vazio do add_class acima.
+  //     Remover uma classe que o elemento nunca teve é um no-op seguro dentro do próprio RmlUi
+  //     (o ramo false de SetClass é uma operação de diferença de conjunto), então ainda retorna
+  //     true nesse caso -- o guard aqui só rejeita um `cls` estruturalmente inválido, não um
+  //     semanticamente redundante.
+  bool remove_class(const char* id, const char* cls) const;
+
+  // EN: Set a single inline RCSS property by name -- thin wrapper over
+  //     Rml::Element::SetProperty(name, value), which (unlike SetClass/SetInnerRML above) DOES
+  //     return a real bool: RmlUi's own property parser rejects an unparseable `value` for the
+  //     named property (e.g. `set_property(id, "color", "not-a-color")`) and SetProperty
+  //     propagates that rejection as false -- this method forwards RmlUi's own bool unchanged,
+  //     it does not invent a separate glintfx-level validation pass ("propagate the false from
+  //     invalid parse", per the task brief). `prop` null or empty ("") is rejected (false)
+  //     BEFORE touching RmlUi, same AUD-TEC-5 discipline as `id`/`cls` above -- an empty
+  //     property NAME cannot resolve to any real RCSS property, so it is a structurally-invalid
+  //     caller input, distinct from an unparseable `value` (which IS forwarded to RmlUi's own
+  //     parser rather than pre-rejected here, since only RmlUi itself knows which values are
+  //     valid for which properties). `value` null is normalised to "" (same convention as
+  //     set_text/DataBinder::set_string) and forwarded as-is -- RmlUi's own parser is the
+  //     authority on whether an empty value is acceptable for the named property.
+  // PT: Define uma única propriedade RCSS inline por nome -- wrapper fino sobre
+  //     Rml::Element::SetProperty(name, value), que (diferente de SetClass/SetInnerRML acima)
+  //     DE FATO retorna um bool real: o próprio parser de propriedade do RmlUi rejeita um
+  //     `value` que não parseia para a propriedade nomeada (ex.: `set_property(id, "color",
+  //     "not-a-color")`) e SetProperty propaga essa rejeição como false -- este método repassa
+  //     o próprio bool do RmlUi sem mudança, não inventa uma passada de validação separada em
+  //     nível glintfx ("propague o false de parse inválido", conforme o brief da tarefa). `prop`
+  //     nulo ou vazio ("") é rejeitado (false) ANTES de tocar o RmlUi, mesma disciplina
+  //     AUD-TEC-5 de `id`/`cls` acima -- um NOME de propriedade vazio não resolve para nenhuma
+  //     propriedade RCSS real, então é entrada estruturalmente inválida do chamador, distinta
+  //     de um `value` que não parseia (que É encaminhado ao próprio parser do RmlUi em vez de
+  //     pré-rejeitado aqui, já que só o próprio RmlUi sabe quais valores são válidos para quais
+  //     propriedades). `value` nulo é normalizado para "" (mesma convenção de
+  //     set_text/DataBinder::set_string) e encaminhado como está -- o próprio parser do RmlUi é
+  //     a autoridade sobre se um valor vazio é aceitável para a propriedade nomeada.
+  bool set_property(const char* id, const char* prop, const char* value) const;
 
   // EN: Shutdown RmlUi and release all resources. Safe to call multiple times.
   //     Does NOT delete the SystemInterface — the caller owns it.

@@ -889,6 +889,71 @@ bool Bootstrap::clear_focus() const {
   return true;
 }
 
+bool Bootstrap::set_text(const char* id, const char* text) const {
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- same rationale as every
+  //     other per-id method in this file (get_element_box, set_focus, etc.).
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- mesma racional de todo
+  //     outro método por-id neste arquivo (get_element_box, set_focus, etc.).
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  // EN: CRITICAL hardening (see the doc-comment in bootstrap.hpp for the full rationale):
+  //     escape RML-significant characters BEFORE SetInnerRML, so `text` can never inject
+  //     markup -- only ever ends up as the literal visible text. Null text is normalised to ""
+  //     (DataBinder::set_string precedent), never rejected.
+  // PT: Hardening CRÍTICO (ver o doc-comment em bootstrap.hpp para a racional completa):
+  //     escapa caracteres significativos pra RML ANTES do SetInnerRML, então `text` nunca pode
+  //     injetar markup -- só termina como o texto visível literal. Texto nulo é normalizado
+  //     para "" (precedente de DataBinder::set_string), nunca rejeitado.
+  el->SetInnerRML(Rml::StringUtilities::EncodeRml(Rml::String(text ? text : "")));
+  return true;
+}
+
+bool Bootstrap::add_class(const char* id, const char* cls) const {
+  // EN: Guard (AUD-TEC-5): id AND cls must both be non-null/non-empty -- an empty class name
+  //     is a structurally-invalid caller input (e.g. a computed class string that resolved
+  //     empty), rejected the same way an empty id is.
+  // PT: Guard (AUD-TEC-5): id E cls devem ser não-nulos/não-vazios -- um nome de classe vazio
+  //     é entrada estruturalmente inválida do chamador (ex.: string de classe computada que
+  //     resolveu vazia), rejeitada do mesmo jeito que um id vazio.
+  if (!impl_ || !impl_->doc || !id || !*id || !cls || !*cls) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  el->SetClass(cls, /*activate=*/true);
+  return true;
+}
+
+bool Bootstrap::remove_class(const char* id, const char* cls) const {
+  // EN: Guard (AUD-TEC-5): same id/cls null-or-empty rejection as add_class above.
+  // PT: Guard (AUD-TEC-5): mesma rejeição de id/cls nulo-ou-vazio do add_class acima.
+  if (!impl_ || !impl_->doc || !id || !*id || !cls || !*cls) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  el->SetClass(cls, /*activate=*/false);
+  return true;
+}
+
+bool Bootstrap::set_property(const char* id, const char* prop, const char* value) const {
+  // EN: Guard (AUD-TEC-5): id AND prop must both be non-null/non-empty -- an empty property
+  //     NAME cannot resolve to any real RCSS property, structurally invalid caller input.
+  //     `value` is NOT guarded the same way here -- a null value is normalised to "" and
+  //     forwarded to RmlUi's own parser, which is the sole authority on whether an empty value
+  //     is acceptable for the named property (see the doc-comment in bootstrap.hpp).
+  // PT: Guard (AUD-TEC-5): id E prop devem ser não-nulos/não-vazios -- um NOME de propriedade
+  //     vazio não resolve para nenhuma propriedade RCSS real, entrada estruturalmente inválida
+  //     do chamador. `value` NÃO é guardado do mesmo jeito aqui -- um value nulo é normalizado
+  //     para "" e encaminhado ao próprio parser do RmlUi, que é a única autoridade sobre se um
+  //     valor vazio é aceitável para a propriedade nomeada (ver o doc-comment em bootstrap.hpp).
+  if (!impl_ || !impl_->doc || !id || !*id || !prop || !*prop) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  // EN: SetProperty's own bool -- a real parse outcome, propagated unchanged (no glintfx-level
+  //     re-validation on top).
+  // PT: O próprio bool de SetProperty -- um resultado real de parse, propagado sem mudança
+  //     (nenhuma revalidação em nível glintfx por cima).
+  return el->SetProperty(prop, value ? value : "");
+}
+
 void Bootstrap::set_asset_base_url(const char* url) {
   // EN: Safe before init() — file_iface is a value member of Impl, but Impl is allocated
   //     in init(); calling this before init() is a no-op. After init() the FileInterface

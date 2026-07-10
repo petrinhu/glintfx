@@ -11,6 +11,8 @@
 #pragma once
 namespace Rml { class Context; }
 #include <cstddef>
+#include <string>  // EN: std::string out-param for get_string (L1.16-DOMRW).
+                   // PT: out-param std::string de get_string (L1.16-DOMRW).
 
 namespace glintfx {
 
@@ -51,6 +53,39 @@ public:
   void set_string(const char* key, const char* v);
   void set_bool  (const char* key, bool v);
   void set_list  (const char* key, const char* const* items, std::size_t n);
+
+  // EN: Read-back getters (L1.16-DOMRW, consumes AUD-PUB-6(e) -- the data-model was write-only
+  //     before this: a host could push values in via set_*, but had no way to read back a value
+  //     the UI itself (or the user, through a bound control -- e.g. an <input data-value>) wrote
+  //     into the model. Correct: DataModelConstructor::Bind(name, ptr) (see
+  //     Include/RmlUi/Core/DataModelHandle.h in the pinned RmlUi source) registers a
+  //     DataVariable wrapping the SAME pointer this class stores the cell at
+  //     (`static_cast<void*>(ptr)`) -- any bidirectional RmlUi-driven write (a data-view setter
+  //     firing from user interaction) therefore lands directly in *our* cell, not in some
+  //     RmlUi-internal shadow copy. Reading the cell here IS reading the model's live, current
+  //     value, with no extra RmlUi call needed.
+  //     Guard: false (out left untouched) when the key was never bound (mirrors set_*'s
+  //     "no-op when key unknown" convention, but observable here since there is an out-param).
+  //     No document/load-order guard of its own -- Engine::get_* (the caller) enforces "must be
+  //     ok()"; a key that IS bound is readable at any point after bind_* succeeds, load() or not.
+  // PT: Getters de leitura de volta (L1.16-DOMRW, consome AUD-PUB-6(e) -- o data-model era
+  //     write-only antes disto: um host podia empurrar valores via set_*, mas não tinha como ler
+  //     de volta um valor que a própria UI (ou o usuário, através de um controle ligado -- ex.:
+  //     um <input data-value>) escreveu no modelo. Correto: DataModelConstructor::Bind(name, ptr)
+  //     (ver Include/RmlUi/Core/DataModelHandle.h no source pinado do RmlUi) registra uma
+  //     DataVariable envolvendo o MESMO ponteiro onde esta classe guarda a célula
+  //     (`static_cast<void*>(ptr)`) -- qualquer escrita bidirecional dirigida pelo RmlUi (um
+  //     setter de data-view disparando por interação do usuário) portanto cai direto na NOSSA
+  //     célula, não numa cópia-sombra interna do RmlUi. Ler a célula aqui É ler o valor vivo e
+  //     corrente do modelo, sem chamada extra ao RmlUi.
+  //     Guard: false (out intocado) quando a chave nunca foi ligada (espelha a convenção
+  //     "no-op quando chave desconhecida" do set_*, mas observável aqui por haver out-param).
+  //     Sem guard próprio de documento/ordem-de-load -- Engine::get_* (o chamador) enforça
+  //     "precisa ser ok()"; uma chave que ESTÁ ligada é legível a qualquer momento após bind_*
+  //     ter sucesso, com ou sem load().
+  bool get_number(const char* key, double& out) const;
+  bool get_string(const char* key, std::string& out) const;
+  bool get_bool  (const char* key, bool& out) const;
 
 private:
   struct Impl;

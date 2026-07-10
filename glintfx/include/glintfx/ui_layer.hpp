@@ -8,6 +8,7 @@
 #include <memory>
 #include <cstddef>
 #include <functional>
+#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/ui_event.hpp>
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
@@ -441,6 +442,116 @@ public:
   bool clear_focus() const;
 
   // -------------------------------------------------------------------------
+  // EN: DOM read/write by id (L1.16-DOMRW, consumes AUD-PUB-6(d) -- "imperative setters by
+  //     id", the seed logged in the INBOX section of TODO.md). Mirrors the guard shape of
+  //     get_element_box/scroll_element_into_view/set_focus above: false when no document is
+  //     loaded, or `id` is null/empty ("") -- AUD-TEC-5 fail-high. No coordinate-space
+  //     translation applies to any of these (unlike get_element_box/set_click_info_callback's
+  //     x/y) -- they operate on text/classes/properties, not geometry, so the sub-viewport
+  //     offset from set_viewport(x,y,w,h,target_h) is irrelevant here. Parity with
+  //     App::set_text/add_class/remove_class/set_property (same signatures).
+  // PT: Leitura/escrita de DOM por id (L1.16-DOMRW, consome AUD-PUB-6(d) -- "setters
+  //     imperativos por id", a semente registrada na seção INBOX do TODO.md). Espelha o
+  //     formato de guard de get_element_box/scroll_element_into_view/set_focus acima: false
+  //     quando nenhum documento estiver carregado, ou `id` for nulo/vazio ("") -- fail-high
+  //     AUD-TEC-5. Nenhuma tradução de espaço de coordenada se aplica a nenhum destes
+  //     (diferente do x/y de get_element_box/set_click_info_callback) -- operam sobre
+  //     texto/classes/propriedades, não geometria, então o offset de sub-viewport de
+  //     set_viewport(x,y,w,h,target_h) é irrelevante aqui. Paridade com
+  //     App::set_text/add_class/remove_class/set_property (mesmas assinaturas).
+  // -------------------------------------------------------------------------
+
+  // EN: Replace an element's text content by id. `text` is treated as LITERAL TEXT, NEVER
+  //     markup: `&`, `<`, `>`, `"` are escaped (`Rml::StringUtilities::EncodeRml`, the SAME
+  //     encoder RmlUi's own text-node serialisation uses internally, confirmed against the
+  //     pinned RmlUi 6.3 source) BEFORE the string reaches `Rml::Element::SetInnerRML()`. This
+  //     is a HARD guarantee, not best-effort: a host that forwards untrusted text (chat, a
+  //     player-chosen display name, any user-generated string) can NEVER use this call to
+  //     inject RML/tags into the document -- the literal string `"<b>hi</b>"` renders as the
+  //     visible text `<b>hi</b>`, it does not become a bold element. Skipping this escape would
+  //     be the RML-injection equivalent of building a SQL query by string concatenation. A null
+  //     `text` is normalised to `""` (same convention as `set_string`'s data-model sibling),
+  //     never rejected -- an empty text content is a legitimate value.
+  //     Returns `false` when no document is loaded, `id` is null/empty (`""`) or not found --
+  //     same `AUD-TEC-5` fail-high convention as `get_element_box`/`set_focus` above.
+  //     `SetInnerRML` itself returns `void` (there is no RmlUi-level parse outcome for plain
+  //     text, unlike `set_property` below), so `true` here means only "the id was valid and the
+  //     element was found", not a parse result.
+  // PT: Substitui o conteúdo de texto de um elemento por id. `text` é tratado como TEXTO
+  //     LITERAL, NUNCA markup: `&`, `<`, `>`, `"` são escapados (`Rml::StringUtilities::
+  //     EncodeRml`, o MESMO encoder que a própria serialização de nós de texto do RmlUi usa
+  //     internamente, confirmado contra o source pinado do RmlUi 6.3) ANTES da string chegar em
+  //     `Rml::Element::SetInnerRML()`. Esta é uma garantia FORTE, não best-effort: um host que
+  //     encaminha texto não confiável (chat, nome de exibição escolhido pelo jogador, qualquer
+  //     string gerada por usuário) NUNCA consegue usar esta chamada para injetar RML/tags no
+  //     documento -- a string literal `"<b>oi</b>"` renderiza como o texto visível `<b>oi</b>`,
+  //     não vira um elemento em negrito. Pular este escape seria o equivalente de injeção de
+  //     RML a construir uma query SQL por concatenação de string. Um `text` nulo é normalizado
+  //     para `""` (mesma convenção do irmão `set_string` do data-model), nunca rejeitado --
+  //     conteúdo de texto vazio é um valor legítimo.
+  //     Retorna `false` quando nenhum documento estiver carregado, `id` for nulo/vazio (`""`)
+  //     ou não encontrado -- mesma convenção fail-high `AUD-TEC-5` de `get_element_box`/
+  //     `set_focus` acima. O próprio `SetInnerRML` retorna `void` (não há resultado de parse em
+  //     nível RmlUi para texto simples, diferente do `set_property` abaixo), então `true` aqui
+  //     significa só "o id era válido e o elemento foi encontrado", não um resultado de parse.
+  bool set_text(const char* id, const char* text) const;
+
+  // EN: Add a CSS class on an element by id -- wraps `Rml::Element::SetClass(cls, true)`, which
+  //     returns `void` (no RmlUi-level parse outcome, unlike `set_property` below). Returns
+  //     `false` when no document is loaded, `id`/`cls` is null/empty (`""`) or `id` is not
+  //     found -- `AUD-TEC-5` fail-high, applied to BOTH parameters (an empty class name is a
+  //     structurally-invalid caller input -- e.g. a computed class string that resolved empty
+  //     -- rejected the same way an empty id is).
+  // PT: Adiciona uma classe CSS num elemento por id -- encapsula `Rml::Element::SetClass(cls,
+  //     true)`, que retorna `void` (nenhum resultado de parse em nível RmlUi, diferente do
+  //     `set_property` abaixo). Retorna `false` quando nenhum documento estiver carregado,
+  //     `id`/`cls` for nulo/vazio (`""`) ou `id` não for encontrado -- fail-high `AUD-TEC-5`,
+  //     aplicado aos DOIS parâmetros (um nome de classe vazio é entrada estruturalmente
+  //     inválida do chamador -- ex.: uma string de classe computada que resolveu vazia --
+  //     rejeitada do mesmo jeito que um id vazio).
+  bool add_class(const char* id, const char* cls) const;
+
+  // EN: Remove a CSS class from an element by id -- wraps `Rml::Element::SetClass(cls,
+  //     false)`. Same `id`/`cls` null/empty guard as `add_class` above. Removing a class the
+  //     element never had is a safe no-op inside RmlUi itself (`SetClass`'s `false` branch is a
+  //     set-difference operation), so this still returns `true` in that case -- the guard here
+  //     only rejects a structurally-invalid `cls`, not a semantically-redundant one.
+  // PT: Remove uma classe CSS de um elemento por id -- encapsula `Rml::Element::SetClass(cls,
+  //     false)`. Mesmo guard de `id`/`cls` nulo/vazio do `add_class` acima. Remover uma classe
+  //     que o elemento nunca teve é um no-op seguro dentro do próprio RmlUi (o ramo `false` de
+  //     `SetClass` é uma operação de diferença de conjunto), então ainda retorna `true` nesse
+  //     caso -- o guard aqui só rejeita um `cls` estruturalmente inválido, não um
+  //     semanticamente redundante.
+  bool remove_class(const char* id, const char* cls) const;
+
+  // EN: Set a single inline RCSS property by name on an element by id -- wraps
+  //     `Rml::Element::SetProperty(name, value)`, which (unlike `SetClass`/`SetInnerRML` above)
+  //     DOES return a real `bool`: RmlUi's own property parser rejects an unparseable `value`
+  //     for the named property (e.g. `set_property(id, "color", "not-a-color")`) and
+  //     `SetProperty` propagates that rejection as `false` -- this method forwards RmlUi's own
+  //     bool unchanged, it does not add a separate glintfx-level validation pass. `id`/`prop`
+  //     null or empty (`""`) is rejected (`false`) BEFORE touching RmlUi -- same `AUD-TEC-5`
+  //     discipline as `id`/`cls` above -- an empty property NAME cannot resolve to any real
+  //     RCSS property, structurally invalid, distinct from an unparseable `value` (which IS
+  //     forwarded to RmlUi's own parser rather than pre-rejected here, since only RmlUi itself
+  //     knows which values are valid for which properties). `value` null is normalised to `""`
+  //     (same convention as `set_text` above) and forwarded as-is.
+  // PT: Define uma única propriedade RCSS inline por nome num elemento por id -- encapsula
+  //     `Rml::Element::SetProperty(name, value)`, que (diferente de `SetClass`/`SetInnerRML`
+  //     acima) DE FATO retorna um `bool` real: o próprio parser de propriedade do RmlUi rejeita
+  //     um `value` que não parseia para a propriedade nomeada (ex.: `set_property(id, "color",
+  //     "not-a-color")`) e `SetProperty` propaga essa rejeição como `false` -- este método
+  //     repassa o próprio bool do RmlUi sem mudança, não adiciona uma passada de validação
+  //     separada em nível glintfx. `id`/`prop` nulo ou vazio (`""`) é rejeitado (`false`) ANTES
+  //     de tocar o RmlUi -- mesma disciplina `AUD-TEC-5` de `id`/`cls` acima -- um NOME de
+  //     propriedade vazio não resolve para nenhuma propriedade RCSS real, estruturalmente
+  //     inválido, distinto de um `value` que não parseia (que É encaminhado ao próprio parser
+  //     do RmlUi em vez de pré-rejeitado aqui, já que só o próprio RmlUi sabe quais valores são
+  //     válidos para quais propriedades). `value` nulo é normalizado para `""` (mesma convenção
+  //     do `set_text` acima) e encaminhado como está.
+  bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with App. Call order: create_data_model
   //     -> bind_* -> load() -> set_*. All methods forward to Engine; the Engine
   //     enforces the ordering constraint (bind_* after load() returns false).
@@ -504,6 +615,66 @@ public:
   // PT: Substitui a lista de strings inteira e marca a variável suja.
   //     items[0..count-1] são copiados; o chamador retém a propriedade.
   void set_list  (const char* key, const char* const* items, std::size_t count);
+
+  // EN: Read-back the CURRENT value of a bound cell by key (L1.16-DOMRW, consumes
+  //     AUD-PUB-6(e) -- the data-model was write-only before this: a host could push values in
+  //     via `set_*`, but had no way to read back a value the UI itself, or the user through a
+  //     bound control (e.g. an `<input data-value>`), wrote into the model -- "two-way binding
+  //     invisible to the host", per the roadmap item). Correct by construction, not by
+  //     coincidence: `Rml::DataModelConstructor::Bind(name, ptr)` (confirmed against
+  //     `Include/RmlUi/Core/DataModelHandle.h` in the pinned RmlUi 6.3 source) registers a
+  //     `DataVariable` wrapping the SAME pointer glintfx's internal `DataBinder` stores the
+  //     bound cell at (`static_cast<void*>(ptr)`) -- any bidirectional RmlUi-driven write (a
+  //     data-view setter firing from user interaction) lands directly in THAT cell, so reading
+  //     it here IS reading the model's live, current value, with no extra RmlUi call needed.
+  //     Returns `false` (`out` left untouched) when the key was never bound via the matching
+  //     `bind_number`/`bind_string`/`bind_bool` -- mirrors `set_*`'s "no-op when key unknown"
+  //     convention, made observable here since there is an out-param to (not) write. No
+  //     document/`load()`-ordering guard of its own beyond that -- a key that IS bound is
+  //     readable at any point after the matching `bind_*` succeeds, before or after `load()`.
+  //     `std::string` at this boundary is an intentional, deliberate exception to the
+  //     plain-C-types convention the rest of this data-model API follows (`const char*`
+  //     in/out, `bool` for `bind_bool`, `Rml::String v.s. std::string` for lists): a `const
+  //     char*` OUT-parameter/return here would have to point into memory this class owns and
+  //     controls the lifetime of (the internal `DataBinder` cell, or the temporary
+  //     `Rml::String` `SetProperty`/etc. above return by value) -- exactly the class of bug the
+  //     `v0.4.1` heap-use-after-free audit finding was about (a raw pointer into internal
+  //     storage whose lifetime the caller cannot reason about). Returning by
+  //     value/reference-out into a caller-owned `std::string` sidesteps that lifetime question
+  //     entirely -- there is no dangling-pointer failure mode to introduce. Parity with
+  //     `App::get_number`/`get_string`/`get_bool` (same signatures).
+  // PT: Lê de volta o valor CORRENTE de uma célula ligada por chave (L1.16-DOMRW, consome
+  //     AUD-PUB-6(e) -- o data-model era write-only antes disto: um host podia empurrar valores
+  //     via `set_*`, mas não tinha como ler de volta um valor que a própria UI, ou o usuário
+  //     através de um controle ligado (ex.: um `<input data-value>`), escreveu no modelo --
+  //     "two-way binding invisível ao host", conforme o item de roadmap). Correto por
+  //     construção, não por coincidência: `Rml::DataModelConstructor::Bind(name, ptr)`
+  //     (confirmado contra `Include/RmlUi/Core/DataModelHandle.h` no source pinado do RmlUi
+  //     6.3) registra uma `DataVariable` envolvendo o MESMO ponteiro onde o `DataBinder`
+  //     interno da glintfx guarda a célula ligada (`static_cast<void*>(ptr)`) -- qualquer
+  //     escrita bidirecional dirigida pelo RmlUi (um setter de data-view disparando por
+  //     interação do usuário) cai direto NESSA célula, então lê-la aqui É ler o valor vivo e
+  //     corrente do modelo, sem chamada extra ao RmlUi.
+  //     Retorna `false` (`out` intocado) quando a chave nunca foi ligada pelo `bind_number`/
+  //     `bind_string`/`bind_bool` correspondente -- espelha a convenção "no-op quando chave
+  //     desconhecida" do `set_*`, tornada observável aqui por haver um out-param a (não)
+  //     escrever. Sem guard próprio de documento/ordem-de-`load()` além disso -- uma chave que
+  //     ESTÁ ligada é legível a qualquer momento após o `bind_*` correspondente ter sucesso,
+  //     antes ou depois de `load()`.
+  //     `std::string` nesta fronteira é uma exceção intencional e deliberada à convenção de
+  //     tipos C simples que o resto desta API de data-model segue (`const char*` in/out, `bool`
+  //     para `bind_bool`): um OUT-parâmetro/retorno `const char*` aqui teria que apontar para
+  //     memória cujo lifetime esta classe possui e controla (a célula interna do `DataBinder`,
+  //     ou o `Rml::String` temporário que `SetProperty`/etc. acima retornam por valor) --
+  //     exatamente a classe de bug do achado de auditoria de heap-use-after-free da `v0.4.1`
+  //     (um ponteiro cru para storage interno cujo lifetime o chamador não consegue raciocinar
+  //     sobre). Retornar por valor/referência-out num `std::string` de propriedade do chamador
+  //     evita essa questão de lifetime inteiramente -- não há modo de falha de
+  //     ponteiro-pendurado a introduzir. Paridade com `App::get_number`/`get_string`/`get_bool`
+  //     (mesmas assinaturas).
+  bool get_number(const char* key, double& out) const;
+  bool get_string(const char* key, std::string& out) const;
+  bool get_bool  (const char* key, bool& out) const;
 
 private:
   struct Impl;

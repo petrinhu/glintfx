@@ -22,6 +22,27 @@
 #     libc-shaped to begin with), and treats ANY OTHER defined global symbol as a failure --
 #     including a str/conv/printf-shaped name someone forgets to add to
 #     `$(CORE_RENAME_FLAGS)` in the future. Fail-secure: deny by default, allow explicitly.
+#
+#     PASS 2 (SOV-SFNT review, MEDIUM, added here): the exported-symbol whitelist above only
+#     catches a collision that becomes a DEFINED global in the archive. It is BLIND to the
+#     mirror-image vector: a `.o` member IMPORTING (undefined, `nm -u`) a bare libc-shaped name
+#     that `$(CORE_RENAME_FLAGS)` never had a chance to rename because the reference was never
+#     textual in the first place -- the clang BACKEND can synthesize a call to `memset`/`memcpy`/
+#     `memmove` (e.g. lowering a large aggregate/array zero-init or a whole-struct copy) that no
+#     `-Dmemset=...` preprocessor macro ever sees. `src/sfnt.c`'s `table_slot_t kern_t = {0, 0,
+#     0};` did exactly this: `build/objcore/sfnt.o` imported a bare `U memset`, invisible to PASS
+#     1 (nothing DEFINES `memset` in this archive, so it never showed up as a collision) yet a
+#     silent time-bomb for a hosted C++ consumer -- it would resolve against glibc's real
+#     `memset` at link time, same hijack CLASS as the CRITICAL finding above, a new vector. PASS 2
+#     closes it: every UNDEFINED symbol referenced by any `.o` in the archive must be either (a)
+#     on the same whitelist as PASS 1 (the `glx_*`/`glx_core_*_impl`/ASM-wrapper names -- a
+#     cross-`.o` call from e.g. `alloc.o` to `glx_core_memcpy_impl` defined in `mem.o` is exactly
+#     how this archive is SUPPOSED to link internally), (b) DEFINED by some other `.o` in this
+#     same archive (resolved internally, not a leak), or (c) on the small `undefined_allowed`
+#     list of symbols this archive deliberately leaves for the CONSUMER to provide (`main` --
+#     `start.o`'s `_start` calling into a hosted/freestanding program's entry point is the
+#     documented contract, not a collision). Anything else -- a bare `memset`/`memcpy`/`strlen`/
+#     `malloc`/... with no internal definition -- FAILS loudly, naming the `.o` and the symbol.
 # PT: SOV-LIBCORE (ADR-0009, FT-F0) gate 4: verifica que a superfície de símbolo EXPORTADA
 #     (global, definida) da `build/libcore.a` é EXATAMENTE o que a fronteira física de
 #     internalização promete -- uma WHITELIST POSITIVA, fail-secure por construção: todo símbolo
@@ -45,6 +66,29 @@
 #     QUALQUER OUTRO símbolo global definido como falha -- inclusive um nome no formato de
 #     str/conv/printf que alguém esqueça de acrescentar ao `$(CORE_RENAME_FLAGS)` no futuro.
 #     Fail-secure: nega por padrão, permite explicitamente.
+#
+#     PASSO 2 (revisão SOV-SFNT, MÉDIO, acrescentado aqui): a whitelist de símbolo exportado
+#     acima só pega uma colisão que vira um global DEFINIDO no archive. Ela é CEGA pro vetor
+#     espelhado: um membro `.o` IMPORTANDO (indefinido, `nm -u`) um nome cru no formato de libc
+#     que o `$(CORE_RENAME_FLAGS)` nunca teve chance de renomear porque a referência nunca foi
+#     textual pra começo de conversa -- o BACKEND do clang pode sintetizar uma chamada a
+#     `memset`/`memcpy`/`memmove` (ex.: rebaixando um zero-init de agregado/array grande ou uma
+#     cópia de struct inteira) que nenhuma macro de pré-processador `-Dmemset=...` jamais vê. O
+#     `table_slot_t kern_t = {0, 0, 0};` do `src/sfnt.c` fez exatamente isso:
+#     `build/objcore/sfnt.o` importava um `U memset` cru, invisível pro PASSO 1 (nada DEFINE
+#     `memset` neste archive, então nunca apareceu como colisão) mas uma bomba-relógio silenciosa
+#     pra um consumidor C++ hosted -- resolveria contra o `memset` REAL da glibc em tempo de
+#     link, mesma CLASSE de sequestro do achado CRÍTICO acima, por um vetor novo. O PASSO 2 fecha
+#     isso: todo símbolo INDEFINIDO referenciado por qualquer `.o` do archive precisa estar (a) na
+#     mesma whitelist do PASSO 1 (os nomes `glx_*`/`glx_core_*_impl`/ASM-wrapper -- uma chamada
+#     cross-`.o` de, ex., `alloc.o` pro `glx_core_memcpy_impl` definido em `mem.o` é exatamente
+#     como este archive DEVE linkar internamente), (b) DEFINIDO por algum outro `.o` deste MESMO
+#     archive (resolvido internamente, não é vazamento), ou (c) na pequena lista
+#     `undefined_allowed` de símbolos que este archive deliberadamente deixa pro CONSUMIDOR
+#     prover (`main` -- o `_start` do `start.o` chamando o entry point de um programa
+#     hosted/freestanding é o contrato documentado, não uma colisão). Qualquer outra coisa -- um
+#     `memset`/`memcpy`/`strlen`/`malloc`/... cru sem definição interna -- FALHA alto, nomeando o
+#     `.o` e o símbolo.
 # Copyright (c) 2026 Petrus Silva Costa
 set -eu
 
@@ -167,8 +211,92 @@ for r in $required; do
   fi
 done
 
+# EN: PASS 2 (SOV-SFNT MEDIUM finding fix): IMPORTED (undefined, `nm -u`) symbol names, one per
+#     line as "<member.o><TAB><name>" -- the member name lets a failure message point at the
+#     exact `.o` to fix, the same way `nm -g --defined-only`'s member-header lines could but the
+#     `NF==3` filter above discards for `defined_names` (that pass never needed the member, this
+#     one does, so it is parsed separately with its own tiny awk state machine tracking the
+#     current "foo.o:" header line). `nm -u`'s per-symbol lines have 2 fields ("U", "<name>") --
+#     no address column for an undefined symbol -- vs. 3 for `nm -g --defined-only`'s
+#     ("<addr>", "<type>", "<name>"); member-header ("foo.o:") and blank separator lines are
+#     skipped the same way.
+# PT: PASSO 2 (fix do achado MÉDIO do SOV-SFNT): nomes de símbolo IMPORTADO (indefinido, `nm -u`),
+#     um por linha como "<membro.o><TAB><nome>" -- o nome do membro deixa uma mensagem de falha
+#     apontar pro `.o` exato a corrigir, do mesmo jeito que as linhas de cabeçalho de membro do
+#     `nm -g --defined-only` poderiam mas o filtro `NF==3` acima descarta pro `defined_names`
+#     (aquela passada nunca precisou do membro, esta precisa, então é parseada separadamente com
+#     a própria máquina de estado awk pequena rastreando a linha de cabeçalho "foo.o:" atual). As
+#     linhas por-símbolo do `nm -u` têm 2 campos ("U", "<nome>") -- sem coluna de endereço pra um
+#     símbolo indefinido -- vs. 3 do `nm -g --defined-only` ("<endereço>", "<tipo>", "<nome>");
+#     linhas de cabeçalho de membro ("foo.o:") e linhas separadoras em branco são puladas do mesmo
+#     jeito.
+undefined_pairs=$(nm -u "$LIB" | awk '
+  /^[^[:space:]].*:$/ { member = $0; sub(/:$/, "", member); next }
+  NF == 2 && $1 == "U" { print member "\t" $2 }
+')
+
+# EN: The handful of symbols this archive deliberately leaves UNRESOLVED for the CONSUMER to
+#     provide -- `main` is `start.o`'s `_start` calling into a hosted/freestanding program's
+#     entry point, the documented contract of this runtime, not a collision or a leak.
+# PT: O punhado de símbolos que este archive deliberadamente deixa NÃO RESOLVIDO pro CONSUMIDOR
+#     prover -- `main` é o `_start` do `start.o` chamando o entry point de um programa
+#     hosted/freestanding, o contrato documentado deste runtime, não uma colisão nem vazamento.
+undefined_allowed="main"
+
+is_undefined_allowed() {
+  name="$1"
+  for a in $undefined_allowed; do
+    if [ "$name" = "$a" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# EN: Deny-by-default pass, mirror image of the exported-symbol one above: every symbol a `.o`
+#     member IMPORTS must be (a) on the same `is_allowed` whitelist as an export would need (the
+#     internal `glx_*`/`glx_core_*_impl`/ASM-wrapper call graph -- this is how the archive's OWN
+#     members are SUPPOSED to call each other), (b) DEFINED by some other member of this SAME
+#     archive (resolved internally: `echo "$defined_names" | grep -qx` proves the reference never
+#     leaves the archive), or (c) on `undefined_allowed` (the consumer-provided contract). Any
+#     other undefined reference -- a bare libc-shaped name like `memset`/`memcpy`/`strlen`/
+#     `malloc` with no internal definition anywhere in the archive -- is exactly the
+#     backend-synthesized-call vector `table_slot_t kern_t = {0, 0, 0};` produced in `sfnt.o`
+#     (PASS 1 above is blind to it: nothing DEFINES `memset` here, so it never collides): FAIL,
+#     naming both the offending `.o` and the symbol.
+# PT: Passada nega-por-padrão, imagem espelhada da de símbolo exportado acima: todo símbolo que um
+#     membro `.o` IMPORTA precisa estar (a) na mesma whitelist `is_allowed` que um export
+#     precisaria (o grafo de chamada interno `glx_*`/`glx_core_*_impl`/ASM-wrapper -- é assim que
+#     os PRÓPRIOS membros do archive DEVEM se chamar), (b) DEFINIDO por algum outro membro deste
+#     MESMO archive (resolvido internamente: `echo "$defined_names" | grep -qx` prova que a
+#     referência nunca sai do archive), ou (c) em `undefined_allowed` (o contrato provido pelo
+#     consumidor). Qualquer outra referência indefinida -- um nome cru no formato de libc como
+#     `memset`/`memcpy`/`strlen`/`malloc` sem definição interna em lugar nenhum do archive -- é
+#     exatamente o vetor de chamada-sintetizada-pelo-backend que o `table_slot_t kern_t = {0, 0,
+#     0};` produziu no `sfnt.o` (o PASSO 1 acima é cego pra isso: nada DEFINE `memset` aqui, então
+#     nunca colide): FALHA, nomeando tanto o `.o` infrator quanto o símbolo.
+if [ -n "$undefined_pairs" ]; then
+  old_ifs=$IFS
+  IFS='
+'
+  for pair in $undefined_pairs; do
+    IFS=$old_ifs
+    member=${pair%%	*}
+    sym=${pair#*	}
+    if is_allowed "$sym" || is_undefined_allowed "$sym"; then
+      continue
+    fi
+    if echo "$defined_names" | grep -qx "$sym"; then
+      continue
+    fi
+    echo "COLLISION-RISK: '$member' (in $LIB) IMPORTS unresolved bare symbol '$sym' -- not in the glx_*/glx_core_*_impl/ASM-wrapper whitelist, not defined anywhere in this archive, not on the consumer-provided list. A hosted consumer would silently link this against glibc's real '$sym' (same hijack class as PASS 1's collisions, via the backend-synthesized-call vector -- see this script's file header)." >&2
+    status=1
+  done
+  IFS=$old_ifs
+fi
+
 if [ "$status" -eq 0 ]; then
-  echo "check_libcore_symbols: OK (glx_* front door present, every defined symbol matches the positive whitelist -- no bare libc-shaped name exported)"
+  echo "check_libcore_symbols: OK (glx_* front door present, every defined symbol matches the positive whitelist, every imported symbol resolves inside the archive or the consumer-provided list -- no bare libc-shaped name exported OR imported)"
 else
   echo "check_libcore_symbols: FAILED"
 fi

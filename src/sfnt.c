@@ -243,7 +243,27 @@ glx_sfnt_result glx_sfnt_open(const uint8_t* blob, size_t len, glx_sfnt_face* ou
     //     inicializado explicitamente pra `kern_t.found` nunca ser lido como memória
     //     indeterminada no ramo `!find_table(...)` (aquele ramo retorna 0 sem tocar
     //     `slot->found` -- ver o comentário do próprio `find_table` acima).
-    table_slot_t kern_t = {0, 0, 0};
+    // EN: Field-by-field assignment, NOT aggregate `= {0, 0, 0}` -- the clang backend lowers a
+    //     3-field aggregate zero-init to a synthesized (non-textual) `memset()` call in some
+    //     build configurations, which the preprocessor-macro `-Dmemset=glx_core_memset_impl`
+    //     rename ($(CORE_RENAME_FLAGS), Makefile) cannot reach (it only rewrites source-level
+    //     identifier tokens, not backend-generated calls). That left `build/objcore/sfnt.o`
+    //     importing a BARE `U memset` -- same symbol-hijack class SOV-LIBCORE closed as CRITICAL,
+    //     via a new vector (aggregate zero-init). See `tools/check_libcore_symbols.sh`'s `nm -u`
+    //     pass for the gate that now catches this class.
+    // PT: Atribuição campo-a-campo, NÃO agregado `= {0, 0, 0}` -- o backend do clang às vezes
+    //     rebaixa um zero-init de agregado de 3 campos para uma chamada `memset()` SINTETIZADA
+    //     (não-textual) em algumas configurações de build, que o rename por macro do
+    //     pré-processador `-Dmemset=glx_core_memset_impl` ($(CORE_RENAME_FLAGS), Makefile) não
+    //     alcança (ele só reescreve tokens de identificador em nível de fonte, não chamadas
+    //     geradas pelo backend). Isso deixava o `build/objcore/sfnt.o` importando um `U memset`
+    //     CRU -- mesma classe de symbol-hijack que o SOV-LIBCORE fechou como CRÍTICO, por um
+    //     vetor novo (zero-init de agregado). Ver o passo `nm -u` do
+    //     `tools/check_libcore_symbols.sh` pro gate que agora pega esta classe.
+    table_slot_t kern_t;
+    kern_t.off = 0;
+    kern_t.len = 0;
+    kern_t.found = 0;
     int kern_found = find_table(blob, len, dir_off, num_tables, "kern", &kern_t) && kern_t.found;
 
     // ---- head: unitsPerEm @18, indexToLocFormat @50 -----------------------------------------

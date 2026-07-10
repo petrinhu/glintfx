@@ -392,6 +392,54 @@ public:
   //       ui.set_element_scroll_top("list", drag_fraction * (scroll_h - client_h));
   bool set_element_scroll_top(const char* id, float scroll_top) const;
 
+  // EN: Give input focus to an element, programmatically (L1.17-FOCUS -- consumes the GAP-4
+  //     seed documented in docs/embed-integration.md section 5: hosts whose MODEL owns
+  //     selection, e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow
+  //     navigation). Wraps Rml::Element::Focus(false).
+  //     IMPORTANT: gated by the element's RCSS `focus` property (keyword `auto`|`none`), whose
+  //     RmlUi-registered default is `auto` -- i.e. by default EVERY element (including a plain
+  //     `<div>`) accepts this call, UNLESS it is explicitly authored `focus: none;`. This is
+  //     NOT the same property as `tab-index` (Tab-key traversal ORDER only, default `none`,
+  //     has zero effect on this method) -- there is no RmlUi/glintfx equivalent of HTML's
+  //     implicit "only tabindex-bearing elements are focusable" rule. See
+  //     glintfx/src/bootstrap.hpp's set_focus doc-comment for the full contract confirmed
+  //     against the pinned RmlUi 6.3 source.
+  //     Returns false when no document is loaded, id is null/empty ("") -- same AUD-TEC-5
+  //     fail-high convention as get_element_box/scroll_element_into_view -- the id is not
+  //     found, or the resolved element itself is authored `focus: none;`.
+  // PT: Dá foco de entrada a um elemento, programaticamente (L1.17-FOCUS -- consome a semente
+  //     GAP-4 documentada em docs/embed-integration.md seção 5: hosts cujo MODELO é dono da
+  //     seleção, ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas
+  //     própria do RmlUi). Encapsula Rml::Element::Focus(false).
+  //     IMPORTANTE: controlado pela propriedade RCSS `focus` do elemento (keyword
+  //     `auto`|`none`), cujo default registrado no RmlUi é `auto` -- ou seja, por padrão TODO
+  //     elemento (incluindo uma `<div>` lisa) aceita esta chamada, A MENOS QUE autorado
+  //     explicitamente com `focus: none;`. NÃO é a mesma propriedade que `tab-index` (só a
+  //     ORDEM de travessia por tecla Tab, default `none`, sem nenhum efeito neste método) --
+  //     não há equivalente RmlUi/glintfx da regra implícita do HTML de "só elementos com
+  //     tabindex são focáveis". Ver o doc-comment de set_focus em glintfx/src/bootstrap.hpp
+  //     para o contrato completo confirmado contra o source pinado do RmlUi 6.3.
+  //     Retorna false quando nenhum documento estiver carregado, id for nulo/vazio ("") --
+  //     mesma convenção fail-high AUD-TEC-5 de get_element_box/scroll_element_into_view -- o
+  //     id não for encontrado, ou o próprio elemento resolvido estiver autorado com `focus:
+  //     none;`.
+  bool set_focus(const char* id) const;
+
+  // EN: Remove input focus (L1.17-FOCUS). Wraps Rml::Context::GetFocusElement() +
+  //     Rml::Element::Blur(). Returns false when no document is loaded. Returns TRUE
+  //     (deliberate idempotent no-op) when a document IS loaded but nothing is currently
+  //     focused -- there is nothing to undo, so "cleared" already holds. See
+  //     glintfx/src/bootstrap.hpp's clear_focus doc-comment for the full contract, including
+  //     the context-wide (not document-scoped) semantics of RmlUi focus.
+  // PT: Remove o foco de entrada (L1.17-FOCUS). Encapsula Rml::Context::GetFocusElement() +
+  //     Rml::Element::Blur(). Retorna false quando nenhum documento estiver carregado. Retorna
+  //     TRUE (no-op idempotente deliberado) quando um documento ESTÁ carregado mas nada está
+  //     focado no momento -- não há nada para desfazer, então "limpo" já vale. Ver o
+  //     doc-comment de clear_focus em glintfx/src/bootstrap.hpp para o contrato completo,
+  //     incluindo a semântica de foco do RmlUi ser do contexto inteiro (não restrita ao
+  //     documento).
+  bool clear_focus() const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with App. Call order: create_data_model
   //     -> bind_* -> load() -> set_*. All methods forward to Engine; the Engine

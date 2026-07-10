@@ -1,0 +1,7 @@
+<rml>
+<head><link type="text/rcss" href="focus_scene.rcss"/></head>
+<body>
+<div id="focusable">Focusable</div>
+<div id="unfocusable">Not focusable</div>
+</body>
+</rml>

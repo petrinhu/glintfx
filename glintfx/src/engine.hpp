@@ -186,6 +186,27 @@ public:
   //     finito.
   bool set_element_scroll_top(const char* id, float scroll_top) const;
 
+  // EN: Give input focus to an element -- forwards to Bootstrap::set_focus (L1.17-FOCUS).
+  //     Returns false when not ok(), no document is loaded, the id is not found, or the
+  //     resolved element's RCSS `focus` property is `none`. See Bootstrap::set_focus's
+  //     doc-comment for the full contract, including why this is gated by the `focus`
+  //     property (default `auto`) and NOT by `tab-index`/HTML-style tabindex.
+  // PT: Dá foco de entrada a um elemento -- encaminha a Bootstrap::set_focus (L1.17-FOCUS).
+  //     Retorna false quando não ok(), nenhum documento estiver carregado, o id não for
+  //     encontrado, ou a propriedade RCSS `focus` do elemento resolvido for `none`. Ver o
+  //     doc-comment de Bootstrap::set_focus para o contrato completo, incluindo por que
+  //     isto é controlado pela propriedade `focus` (default `auto`) e NÃO por `tab-index`/
+  //     tabindex estilo HTML.
+  bool set_focus(const char* id) const;
+
+  // EN: Remove input focus -- forwards to Bootstrap::clear_focus (L1.17-FOCUS). Returns
+  //     false when not ok() or no document is loaded; returns true (idempotent) when a
+  //     document is loaded but nothing is currently focused.
+  // PT: Remove o foco de entrada -- encaminha a Bootstrap::clear_focus (L1.17-FOCUS).
+  //     Retorna false quando não ok() ou nenhum documento estiver carregado; retorna true
+  //     (idempotente) quando um documento está carregado mas nada está focado no momento.
+  bool clear_focus() const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.
   //     Binds are registered against the RmlUi context BEFORE LoadDocument so that

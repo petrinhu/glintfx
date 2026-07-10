@@ -190,6 +190,16 @@ bool Engine::set_element_scroll_top(const char* id, float scroll_top) const {
   return impl_->boot.set_element_scroll_top(id, scroll_top);
 }
 
+bool Engine::set_focus(const char* id) const {
+  if (!impl_->ok) return false;
+  return impl_->boot.set_focus(id);
+}
+
+bool Engine::clear_focus() const {
+  if (!impl_->ok) return false;
+  return impl_->boot.clear_focus();
+}
+
 // ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
 //     create_data_model / bind_*: blocked when !ok or after load().

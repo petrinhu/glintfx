@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the set_focus()/clear_focus() sanity scene (focus_scene.rml, L1.17-FOCUS).
+       #focusable is left at the RmlUi-REGISTERED DEFAULT `focus: auto;` -- no override needed.
+       #unfocusable explicitly overrides `focus: none;` -- the real, RmlUi-correct way to author
+       "this element must never be focused programmatically". Confirmed by reading the pinned
+       RmlUi 6.3 source (Source/Core/StyleSheetSpecification.cpp registers PropertyId::Focus
+       with default "auto"; Source/Core/Element.cpp's Focus() rejects only `focus: none;`):
+       there is NO RmlUi equivalent of HTML's implicit "only tabindex-bearing elements are
+       focusable" rule -- `tab-index` (also present below, `auto` on #focusable) controls ONLY
+       Tab-key traversal ORDER and has zero effect on whether Element::Focus() succeeds. Both
+       properties are authored on #focusable here to mirror how a real host would mark up a
+       genuinely interactive, Tab-reachable menu item (docs/embed-integration.md section 5) --
+       even though for THIS test's purposes only the `focus`/`focus: none` gate matters.
+   PT: Estilos para a cena de sanidade do set_focus()/clear_focus() (focus_scene.rml,
+       L1.17-FOCUS). #focusable fica no DEFAULT REGISTRADO do RmlUi `focus: auto;` -- sem
+       sobreposição necessária. #unfocusable sobrepõe explicitamente `focus: none;` -- a forma
+       real e correta no RmlUi de autorar "este elemento nunca deve ser focado
+       programaticamente". Confirmado lendo o source pinado do RmlUi 6.3
+       (Source/Core/StyleSheetSpecification.cpp registra PropertyId::Focus com default "auto";
+       Source/Core/Element.cpp's Focus() só rejeita `focus: none;`): NÃO há equivalente no
+       RmlUi da regra implícita do HTML de "só elementos com tabindex são focáveis" --
+       `tab-index` (também presente abaixo, `auto` em #focusable) controla SÓ a ORDEM de
+       travessia por tecla Tab e não tem nenhum efeito sobre o sucesso de Element::Focus().
+       As duas propriedades são autoradas em #focusable aqui para espelhar como um host real
+       marcaria um item de menu genuinamente interativo e alcançável por Tab
+       (docs/embed-integration.md seção 5) -- ainda que, para os fins DESTE teste, só a guarda
+       `focus`/`focus: none` importe. */
+#focusable {
+  tab-index: auto;
+}
+#unfocusable {
+  focus: none;
+}

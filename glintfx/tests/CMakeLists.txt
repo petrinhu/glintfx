@@ -1138,6 +1138,47 @@ add_test(NAME document_reload_leak
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: focus_sanity -- verifies Engine::set_focus()/clear_focus() (L1.17-FOCUS, consumes the
+#     GAP-4 seed from docs/embed-integration.md section 5), the exact code both
+#     glintfx::UiLayer::set_focus/clear_focus and glintfx::App::set_focus/clear_focus delegate
+#     to with zero extra logic -- so this single test covers both public consumption paths,
+#     same precedent as document_reload_leak.cpp above ("drive Engine directly for the internal
+#     oracle"). Needs Rml::Context::GetFocusElement()/Rml::Element::GetId() as the discriminating
+#     oracle (not reachable through UiLayer's public, RmlUi-type-free header), so it links
+#     RmlUi::Core explicitly, same reasoning as document_reload_leak.cpp/engine_smoke.cpp. Runs
+#     in BOTH build configs (links ${_embed_dep}, same GL-context-fixture pattern as the other
+#     embed tests above) since the tested code (bootstrap.cpp/engine.cpp) is always compiled
+#     regardless of GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (=
+#     build/tests/) -- same pattern as click_callback_sanity/element_box_sanity/scroll_sanity
+#     (scene-specific rml/rcss pair copied here, addressed by bare filename).
+# PT: focus_sanity -- verifica Engine::set_focus()/clear_focus() (L1.17-FOCUS, consome a semente
+#     GAP-4 de docs/embed-integration.md seção 5), o código EXATO para o qual
+#     glintfx::UiLayer::set_focus/clear_focus e glintfx::App::set_focus/clear_focus encaminham
+#     sem lógica extra -- então este único teste cobre os dois caminhos públicos de consumo,
+#     mesmo precedente do document_reload_leak.cpp acima ("dirige o Engine diretamente pelo
+#     oráculo interno"). Precisa de Rml::Context::GetFocusElement()/Rml::Element::GetId() como
+#     oráculo discriminante (não alcançável pelo header público do UiLayer, livre de tipos
+#     RmlUi), então linka RmlUi::Core explicitamente, mesmo raciocínio de
+#     document_reload_leak.cpp/engine_smoke.cpp. Roda em AMBAS as configs (linka ${_embed_dep},
+#     mesmo padrão de fixture de contexto GL dos outros testes embed acima) já que o código
+#     testado (bootstrap.cpp/engine.cpp) é sempre compilado independente de
+#     GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) --
+#     mesmo padrão de click_callback_sanity/element_box_sanity/scroll_sanity (par rml/rcss
+#     específico da cena copiado aqui, endereçado por nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(focus_sanity focus_sanity.cpp)
+target_link_libraries(focus_sanity PRIVATE ${_embed_dep} RmlUi::Core)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/focus_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/focus_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/focus_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/focus_scene.rcss COPYONLY)
+add_test(NAME focus_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:focus_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

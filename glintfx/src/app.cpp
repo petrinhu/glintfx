@@ -346,6 +346,16 @@ bool App::set_element_scroll_top(const char* id, float scroll_top) const {
   return impl_->engine.set_element_scroll_top(id, scroll_top);
 }
 
+bool App::set_focus(const char* id) const {
+  if (!impl_->ok) return false;
+  return impl_->engine.set_focus(id);
+}
+
+bool App::clear_focus() const {
+  if (!impl_->ok) return false;
+  return impl_->engine.clear_focus();
+}
+
 void App::run() {
   while (running()) {
     poll_events();

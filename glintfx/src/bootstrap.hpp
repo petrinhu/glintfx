@@ -297,6 +297,86 @@ public:
   //     é encontrado, ou scroll_top não é finito.
   bool set_element_scroll_top(const char* id, float scroll_top) const;
 
+  // EN: Give input focus to an element, programmatically (L1.17-FOCUS -- consumes the GAP-4
+  //     seed from docs/embed-integration.md section 5: hosts whose MODEL owns selection, e.g. a
+  //     game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation). Thin
+  //     wrapper over Rml::Element::Focus(false) -- focus_visible is always false; glintfx does
+  //     not surface the RmlUi ':focus-visible' pseudo-class distinction through this API (a host
+  //     that needs the visual affordance still gets it "for free" via real Tab-key navigation,
+  //     which DOES set focus_visible=true on its own path).
+  //     IMPORTANT -- verified by reading the pinned RmlUi 6.3 source (Source/Core/Element.cpp,
+  //     Source/Core/StyleSheetSpecification.cpp), NOT assumed from HTML tabindex semantics:
+  //     Element::Focus() gates ONLY on the element's RCSS `focus` property (Style::Focus,
+  //     keyword `auto`|`none`), whose REGISTERED DEFAULT IS `auto` -- i.e. by default EVERY
+  //     element accepts a programmatic Focus() call, including a plain unstyled `<div>`, UNLESS
+  //     the author (or a UA stylesheet) explicitly authors `focus: none;`. This is DIFFERENT
+  //     from the separate `tab-index` RCSS property (default `none`), which controls Tab-key
+  //     TRAVERSAL ORDER only (see docs/embed-integration.md section 5) and has NO effect on
+  //     this method whatsoever -- an element with the default `tab-index: none` still returns
+  //     true from set_focus() as long as its `focus` property stays at its own default `auto`.
+  //     There is no RmlUi/glintfx concept equivalent to an implicit "only tabindex-bearing
+  //     elements are focusable" rule; a host that wants a real "this element must never be
+  //     focused programmatically" gate has to author `focus: none;` explicitly on it.
+  //     Returns Element::Focus()'s own bool. Guards (same fail-high shape/AUD-TEC-5 convention
+  //     as get_element_box/scroll_element_into_view above): false when no document is loaded,
+  //     id is null or empty (""), or the id is not found. Also false when the resolved element
+  //     itself is authored `focus: none;` (RmlUi's own internal check inside Focus()).
+  // PT: Dá foco de entrada a um elemento, programaticamente (L1.17-FOCUS -- consome a semente
+  //     GAP-4 de docs/embed-integration.md seção 5: hosts cujo MODELO é dono da seleção, ex.: um
+  //     menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi).
+  //     Wrapper fino sobre Rml::Element::Focus(false) -- focus_visible é sempre false; o glintfx
+  //     não expõe a distinção da pseudo-classe ':focus-visible' do RmlUi por esta API (um host
+  //     que precisa da affordance visual ainda a ganha "de graça" via navegação real por Tab,
+  //     que DEFINE focus_visible=true no próprio caminho).
+  //     IMPORTANTE -- verificado lendo o source pinado do RmlUi 6.3 (Source/Core/Element.cpp,
+  //     Source/Core/StyleSheetSpecification.cpp), NÃO assumido a partir da semântica de tabindex
+  //     do HTML: Element::Focus() se protege SÓ pela propriedade RCSS `focus` do elemento
+  //     (Style::Focus, keyword `auto`|`none`), cujo DEFAULT REGISTRADO É `auto` -- ou seja, por
+  //     padrão TODO elemento aceita uma chamada Focus() programática, incluindo uma `<div>` lisa
+  //     sem estilo, A MENOS QUE o autor (ou uma stylesheet UA) autore explicitamente `focus:
+  //     none;`. Isto é DIFERENTE da propriedade RCSS `tab-index` separada (default `none`), que
+  //     controla só a ORDEM DE TRAVESSIA por tecla Tab (ver docs/embed-integration.md seção 5) e
+  //     não tem NENHUM efeito neste método -- um elemento com o `tab-index: none` default ainda
+  //     retorna true de set_focus() desde que sua propriedade `focus` fique no próprio default
+  //     `auto`. Não há conceito no RmlUi/glintfx equivalente a uma regra implícita de "só
+  //     elementos com tabindex são focáveis"; um host que quer uma guarda real de "este elemento
+  //     nunca deve ser focado programaticamente" precisa autorar `focus: none;` explicitamente
+  //     nele.
+  //     Retorna o próprio bool de Element::Focus(). Guards (mesmo formato fail-high/convenção
+  //     AUD-TEC-5 de get_element_box/scroll_element_into_view acima): false quando nenhum
+  //     documento estiver carregado, id for nulo ou vazio (""), ou o id não for encontrado.
+  //     Também false quando o próprio elemento resolvido está autorado com `focus: none;`
+  //     (checagem interna do próprio RmlUi dentro de Focus()).
+  bool set_focus(const char* id) const;
+
+  // EN: Remove input focus (L1.17-FOCUS). Thin wrapper over Rml::Context::GetFocusElement() +
+  //     Rml::Element::Blur() (Blur() itself returns void -- per the pinned RmlUi source it walks
+  //     up to the parent, transferring focus there as part of RmlUi's own chain-repair logic;
+  //     glintfx does not alter or observe that repair, it only triggers it).
+  //     Guards: false when no document is loaded (same "must have a document" gate as every
+  //     other Bootstrap query method above). Returns TRUE (deliberate idempotent no-op) when a
+  //     document IS loaded but NOTHING is currently focused (Context::GetFocusElement() ==
+  //     nullptr) -- there is nothing to undo, so "cleared" already holds; mirrors the general
+  //     no-op-is-success convention used elsewhere in this API (e.g. a redundant
+  //     set_scroll_callback(nullptr) is likewise not an error).
+  //     NOTE: focus is a property of the Rml::Context, not of a specific document -- if a host
+  //     ever loads more than one document into the SAME context, this clears whatever is
+  //     focused context-wide, not scoped to the latest-loaded (impl_->doc) document.
+  // PT: Remove o foco de entrada (L1.17-FOCUS). Wrapper fino sobre Rml::Context::GetFocusElement()
+  //     + Rml::Element::Blur() (o próprio Blur() retorna void -- pelo source pinado do RmlUi, ele
+  //     sobe até o pai, transferindo o foco para lá como parte da própria lógica de reparo de
+  //     cadeia do RmlUi; o glintfx não altera nem observa esse reparo, só o dispara).
+  //     Guards: false quando nenhum documento estiver carregado (mesma guarda de "precisa ter
+  //     documento" de todo outro método de consulta do Bootstrap acima). Retorna TRUE (no-op
+  //     idempotente deliberado) quando um documento ESTÁ carregado mas NADA está focado no
+  //     momento (Context::GetFocusElement() == nullptr) -- não há nada para desfazer, então
+  //     "limpo" já vale; espelha a convenção geral de no-op-é-sucesso usada em outro lugar desta
+  //     API (ex.: um set_scroll_callback(nullptr) redundante também não é erro).
+  //     NOTA: foco é propriedade do Rml::Context, não de um documento específico -- se um host
+  //     algum dia carregar mais de um documento no MESMO contexto, isto limpa o que estiver
+  //     focado no contexto inteiro, não restrito ao documento carregado por último (impl_->doc).
+  bool clear_focus() const;
+
   // EN: Shutdown RmlUi and release all resources. Safe to call multiple times.
   //     Does NOT delete the SystemInterface — the caller owns it.
   // PT: Encerra o RmlUi e libera todos os recursos. Seguro chamar múltiplas vezes.

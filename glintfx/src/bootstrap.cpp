@@ -851,6 +851,44 @@ bool Bootstrap::set_element_scroll_top(const char* id, float scroll_top) const {
   return true;
 }
 
+bool Bootstrap::set_focus(const char* id) const {
+  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
+  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
+  //     null does, not silently fall through to GetElementById("") lookups.
+  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
+  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
+  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
+  if (!impl_ || !impl_->doc || !id || !*id) return false;
+  Rml::Element* el = impl_->doc->GetElementById(id);
+  if (!el) return false;
+  // EN: Element::Focus()'s own bool -- false when the element itself is authored
+  //     `focus: none;` (see the doc-comment in bootstrap.hpp for the full `focus` vs.
+  //     `tab-index` distinction confirmed against the pinned RmlUi source).
+  // PT: O próprio bool de Element::Focus() -- false quando o próprio elemento está
+  //     autorado com `focus: none;` (ver o doc-comment em bootstrap.hpp para a distinção
+  //     completa `focus` vs. `tab-index` confirmada contra o source pinado do RmlUi).
+  return el->Focus();
+}
+
+bool Bootstrap::clear_focus() const {
+  // EN: Guard: must have a document loaded, same "must have a document" gate as every
+  //     other Bootstrap query method above -- but NOT an id guard (this method has no id
+  //     parameter; it operates on whatever the Context currently reports as focused).
+  // PT: Guard: precisa ter um documento carregado, mesma guarda de "precisa ter
+  //     documento" de todo outro método de consulta do Bootstrap acima -- mas SEM guarda
+  //     de id (este método não tem parâmetro de id; opera sobre o que o Context reporta
+  //     como focado no momento).
+  if (!impl_ || !impl_->doc) return false;
+  Rml::Element* focused = impl_->ctx ? impl_->ctx->GetFocusElement() : nullptr;
+  // EN: Idempotent no-op: nothing focused means "cleared" already holds. See the
+  //     doc-comment in bootstrap.hpp for the full rationale.
+  // PT: No-op idempotente: nada focado significa que "limpo" já vale. Ver o
+  //     doc-comment em bootstrap.hpp para a racional completa.
+  if (!focused) return true;
+  focused->Blur();
+  return true;
+}
+
 void Bootstrap::set_asset_base_url(const char* url) {
   // EN: Safe before init() — file_iface is a value member of Impl, but Impl is allocated
   //     in init(); calling this before init() is a no-op. After init() the FileInterface

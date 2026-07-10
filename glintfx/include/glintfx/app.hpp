@@ -275,6 +275,23 @@ public:
   //     incluindo a rejeição de entrada não-finita).
   bool set_element_scroll_top(const char* id, float scroll_top) const;
 
+  // EN: Give input focus to an element, programmatically. Parity with
+  //     UiLayer::set_focus (same signature/semantics, including the `focus`-property-not-
+  //     `tab-index` gating contract -- see UiLayer::set_focus's doc-comment for the full
+  //     writeup confirmed against the pinned RmlUi 6.3 source). (L1.17-FOCUS)
+  // PT: Dá foco de entrada a um elemento, programaticamente. Paridade com
+  //     UiLayer::set_focus (mesma assinatura/semântica, incluindo o contrato de controle
+  //     pela propriedade `focus` -- não `tab-index` -- ver o doc-comment de UiLayer::set_focus
+  //     para o relato completo confirmado contra o source pinado do RmlUi 6.3). (L1.17-FOCUS)
+  bool set_focus(const char* id) const;
+
+  // EN: Remove input focus. Parity with UiLayer::clear_focus (same signature/semantics,
+  //     including the idempotent-true-when-nothing-focused contract). (L1.17-FOCUS)
+  // PT: Remove o foco de entrada. Paridade com UiLayer::clear_focus (mesma
+  //     assinatura/semântica, incluindo o contrato de true-idempotente-quando-nada-focado).
+  //     (L1.17-FOCUS)
+  bool clear_focus() const;
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model
   //     -> bind_* -> load() -> set_*(). Engine enforces the ordering constraint

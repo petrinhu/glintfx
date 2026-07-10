@@ -384,6 +384,20 @@ bool UiLayer::set_element_scroll_top(const char* id, float scroll_top) const {
   return impl_->engine.set_element_scroll_top(id, scroll_top);
 }
 
+bool UiLayer::set_focus(const char* id) const {
+  if (!impl_->ok) return false;
+  // EN: Straight passthrough (L1.17-FOCUS) -- no coordinate translation applicable, same
+  //     reasoning as the scroll trio above (id-only, no x/y in either direction).
+  // PT: Repasse direto (L1.17-FOCUS) -- sem tradução de coordenada aplicável, mesma
+  //     racional do trio de rolagem acima (só-id, sem x/y em nenhuma direção).
+  return impl_->engine.set_focus(id);
+}
+
+bool UiLayer::clear_focus() const {
+  if (!impl_->ok) return false;
+  return impl_->engine.clear_focus();
+}
+
 void UiLayer::process_event(const UiEvent& ev) {
   // EN: Guard: drop events when the layer is not ready or context is gone.
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.

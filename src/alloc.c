@@ -467,12 +467,33 @@ void* malloc(size_t size) {
         return NULL;
     }
 
-    // EN: Overflow guard (see file header): reject before computing `wanted_total` if
-    //     `HEADER + size + FOOTER`, once rounded up to ALLOC_ALIGN, would wrap `size_t`.
-    // PT: Guarda de overflow (ver cabeçalho do arquivo): rejeita antes de computar
-    //     `wanted_total` se `HEADER + size + FOOTER`, uma vez arredondado pra ALLOC_ALIGN,
+    // EN: Overflow guard (see file header) -- SOV-ALLOC adversarial-review fix (CWE-190 ->
+    //     CWE-476): this is the ONE place `size` is validated, so it must cover EVERY downstream
+    //     addition, not just the first (`HEADER + size + FOOTER`, rounded up to ALLOC_ALIGN, into
+    //     `wanted_total`). `arena_mmap_size_for` later adds `ARENA_DESC_SIZE` on top of
+    //     `wanted_total` when no free block already fits -- a `size` that passed a guard missing
+    //     that term could let `ARENA_DESC_SIZE + wanted_total` wrap `size_t` into a tiny `needed`,
+    //     which then falls back to the default `ARENA_SIZE`; the freshly mmap'd arena would then
+    //     be too small to satisfy `wanted_total`, the guaranteed-to-succeed second
+    //     `free_list_find_fit` would return NULL, and `free_list_remove(NULL)` would dereference
+    //     a null free-link -- SIGSEGV instead of the documented NULL return
+    //     (repro: `malloc((size_t)-1 - 39)`). Reject up front if `HEADER + size + FOOTER +
+    //     ARENA_DESC_SIZE`, once rounded up to ALLOC_ALIGN, would wrap `size_t`.
+    // PT: Guarda de overflow (ver cabeçalho do arquivo) -- fix do review adversarial do SOV-ALLOC
+    //     (CWE-190 -> CWE-476): este é o ÚNICO lugar onde `size` é validado, então precisa cobrir
+    //     TODA soma posterior, não só a primeira (`HEADER + size + FOOTER`, arredondado pra
+    //     ALLOC_ALIGN, virando `wanted_total`). O `arena_mmap_size_for` depois soma
+    //     `ARENA_DESC_SIZE` em cima de `wanted_total` quando nenhum bloco livre já cabe -- um
+    //     `size` que passasse por uma guarda sem esse termo poderia deixar `ARENA_DESC_SIZE +
+    //     wanted_total` estourar `size_t` pra um `needed` minúsculo, que então cai no padrão
+    //     `ARENA_SIZE`; a arena recém mmap'ada ficaria pequena demais pra satisfazer
+    //     `wanted_total`, a segunda `free_list_find_fit` (dita garantida) retornaria NULL, e
+    //     `free_list_remove(NULL)` desreferenciaria um free-link nulo -- SIGSEGV em vez do NULL
+    //     documentado (repro: `malloc((size_t)-1 - 39)`). Rejeita de saída se
+    //     `HEADER + size + FOOTER + ARENA_DESC_SIZE`, uma vez arredondado pra ALLOC_ALIGN,
     //     estouraria `size_t`.
-    if (size > (size_t)-1 - ALLOC_HEADER_SIZE - ALLOC_FOOTER_SIZE - (ALLOC_ALIGN - 1)) {
+    if (size > (size_t)-1 - ALLOC_HEADER_SIZE - ALLOC_FOOTER_SIZE - ARENA_DESC_SIZE -
+                   (ALLOC_ALIGN - 1)) {
         return NULL;
     }
 
@@ -488,11 +509,22 @@ void* malloc(size_t size) {
         }
         // EN: The arena just mmap'd was formatted as one free block covering its entire
         //     usable region, sized to be AT LEAST `wanted_total` (see arena_mmap_size_for) --
-        //     this second search is therefore guaranteed to succeed.
+        //     this second search SHOULD always succeed. SOV-ALLOC adversarial-review fix
+        //     (CWE-476, defense-in-depth): never trust that invariant blindly -- an untested
+        //     future edit to `arena_mmap_size_for`/`arena_new` that reintroduces a sizing bug
+        //     must fail secure (return NULL) here, not crash on `free_list_remove(NULL)`.
         // PT: A arena que acabou de ser mmap'ada foi formatada como um bloco livre cobrindo
         //     toda sua região utilizável, dimensionada pra ser AO MENOS `wanted_total` (ver
-        //     arena_mmap_size_for) -- esta segunda busca portanto tem sucesso garantido.
+        //     arena_mmap_size_for) -- esta segunda busca DEVERIA sempre ter sucesso. Fix do
+        //     review adversarial do SOV-ALLOC (CWE-476, defesa em profundidade): nunca confiar
+        //     cegamente nesse invariante -- uma futura edição não testada em
+        //     `arena_mmap_size_for`/`arena_new` que reintroduza um bug de dimensionamento
+        //     precisa falhar de forma segura (retornar NULL) aqui, não crashar em
+        //     `free_list_remove(NULL)`.
         blk = free_list_find_fit(wanted_total);
+        if (blk == NULL) {
+            return NULL;
+        }
     }
 
     free_list_remove(blk);

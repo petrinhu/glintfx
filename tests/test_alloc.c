@@ -226,6 +226,34 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT(malloc((size_t)-1) == NULL);
     }
 
+    // ---- malloc: overflow guard must also cover arena_mmap_size_for's addition -----
+    // EN: SOV-ALLOC adversarial-review fix (CWE-190 -> CWE-476): `malloc((size_t)-1 - 39)` is
+    //     the exact repro the review captured live -- `size` too large for the FIRST guard
+    //     (`HEADER + size + FOOTER`, rounded up to ALLOC_ALIGN) to reject, but still large enough
+    //     that `arena_mmap_size_for`'s later `ARENA_DESC_SIZE + wanted_total` wrapped `size_t`
+    //     into a tiny `needed`, falling back to the default `ARENA_SIZE`; the fresh arena then
+    //     could NOT satisfy `wanted_total`, the "guaranteed to succeed" second
+    //     `free_list_find_fit` returned NULL, and `free_list_remove(NULL)` dereferenced a null
+    //     free-link -- a live SIGSEGV instead of the documented NULL. With the guard closed AND
+    //     the fail-secure NULL check on the second search, malloc must return NULL here, never
+    //     crash. Also probes `SIZE_MAX - ARENA_DESC_SIZE - 1`, a value right on the edge of the
+    //     window the widened guard closed, for the same reason.
+    // PT: Fix do review adversarial do SOV-ALLOC (CWE-190 -> CWE-476): `malloc((size_t)-1 - 39)`
+    //     e' o repro exato que o review capturou ao vivo -- `size` grande demais pra PRIMEIRA
+    //     guarda (`HEADER + size + FOOTER`, arredondado pra ALLOC_ALIGN) rejeitar, mas ainda
+    //     grande o bastante pra que a soma posterior `ARENA_DESC_SIZE + wanted_total` do
+    //     `arena_mmap_size_for` estourasse `size_t` pra um `needed` minusculo, caindo no padrao
+    //     `ARENA_SIZE`; a arena nova entao NAO conseguia satisfazer `wanted_total`, a segunda
+    //     `free_list_find_fit` (dita garantida) retornava NULL, e `free_list_remove(NULL)`
+    //     desreferenciava um free-link nulo -- um SIGSEGV ao vivo em vez do NULL documentado. Com
+    //     a guarda fechada E a checagem fail-secure de NULL na segunda busca, o malloc precisa
+    //     retornar NULL aqui, nunca crashar. Tambem sonda `SIZE_MAX - ARENA_DESC_SIZE - 1`, um
+    //     valor bem na borda da janela que a guarda alargada fechou, pelo mesmo motivo.
+    {
+        TEST_ASSERT(malloc((size_t)-1 - 39) == NULL);
+        TEST_ASSERT(malloc((size_t)-1 - sizeof(void*) * 4 - 1) == NULL);
+    }
+
     // ---- arena exhaustion: force a second mmap'd arena ------------------------
     // EN: The bootstrap arena is 1 MiB (documented in src/alloc.c). Allocate past that in
     //     large chunks to force at least one new arena `mmap`, then prove a pointer obtained

@@ -697,6 +697,54 @@ Verificado por `form_events_sanity` (dirige o `Engine` diretamente mais `Rml::Co
 - **Escopo v1, documentado -- não uma lista de defeitos:** uma instância de face de fonte empacota o atlas de glyph INTEIRO avidamente, uma vez, na 1ª vez que é resolvida, sobre um conjunto FIXO de codepoint (ASCII imprimível mais o Latin-1 Supplement acentuado pt-br: á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ e formas maiúsculas). Um codepoint fora daquele conjunto silenciosamente não tem glyph (avanço zero, sem quad -- o resto da string ainda renderiza). Sem efeitos de fonte (`text-shadow`/contorno via efeito-de-fonte), sem kerning, sem suporte a coleção de fonte `.ttc`.
 - **Teste:** `fonteng_own_sanity` (registrado incondicionalmente em `tests/CMakeLists.txt`, nos dois lados de `GLINTFX_OWN_FONT_ENGINE`) é um oráculo de estatísticas de pixel agnóstico-de-motor provando cobertura de glyph legível.
 
+## 18. Running the host under sanitizers (ASan/UBSan/LSan) / Rodando o host sob sanitizers (ASan/UBSan/LSan)
+
+**EN:** Hosts that build (or embed) glintfx with `-fsanitize=address,undefined` will observe a small, known cluster of UndefinedBehaviorSanitizer diagnostics coming from **RmlUi's own document/element teardown** -- not glintfx-authored code -- surfacing on document close/reload, including through `UiLayer`'s embed path. They are **strict UB but benign**: a "call/member-access through a pointer to an object whose derived part has already finished destructing" pattern inside `~ElementDocument()`'s recursive child teardown, and an analogous one inside `~WidgetScroll()` when a live scrollbar is torn down. In practice both only touch base-`Element` state that is still alive at that point and have never been observed to corrupt memory -- but UBSan correctly flags the pattern regardless. **They are not glintfx code:** glintfx never subclasses `Rml::Element`, `Rml::ElementDocument`, or `Rml::WidgetScroll` (grep-verified), so no glintfx bug can be masked by suppressing them.
+
+**Recommended UBSan suppressions** (already shipped and exercised by glintfx's own nightly sanitizer gate, `glintfx/tests/ubsan_suppressions.txt`):
+
+```
+vptr:ElementDocument
+vptr:*WidgetScroll.cpp*
+vptr:*RemoveEventListener*
+```
+
+- `vptr:ElementDocument` -- `Element::SetOwnerDocument` dereferences a child's `owner_document` pointer while `~ElementDocument()` is itself mid-teardown of its own children. Fires exactly once per document close/reload.
+- `vptr:*WidgetScroll.cpp*` and `vptr:*RemoveEventListener*` -- **both required together, neither alone is sufficient.** Same root cause inside `~WidgetScroll()` (only reachable once a live scrollbar actually exists, e.g. an `overflow-y: auto` container whose content overflows its box), but whether the compiler inlined the specific `RemoveEventListener` call at that site is a non-deterministic, per-build/per-run diagnostic-shape switch (file-scoped match needed when inlined, function-scoped match needed when not) -- dropping either entry leaves intermittent residual failures.
+
+Full rationale (exact pinned source lines, call chains, and the empirical evidence behind each match pattern) lives in `glintfx/tests/ubsan_suppressions.txt` -- read it before copying blindly; this section only summarizes.
+
+**How to consume:** set `UBSAN_OPTIONS=suppressions=<path>` before running the host binary. Two options, either is fine:
+1. Copy the three `vptr:...` lines into the host's own suppression file -- the same pattern GusWorld already uses for its `libasound` LSan noise -- keeping the host's sanitizer config self-contained.
+2. Point `UBSAN_OPTIONS` directly at glintfx's own file when building glintfx in-tree (`FetchContent`/`add_subdirectory`), e.g. `UBSAN_OPTIONS=suppressions=<path-to-glintfx>/glintfx/tests/ubsan_suppressions.txt`.
+
+**Leak noise (LSan) is a separate, analogous concern.** The same third-party teardown path -- RmlUi, plus FreeType/fontconfig/GTK when the GLFW backend creates a decorated window -- can leave residual leak reports at process exit that are not glintfx's to fix. `glintfx/tests/lsan_suppressions.txt` documents the tracked entries (every one scoped to a prebuilt system/vendor library, never to a `glintfx::` symbol or a file under `glintfx/src|include`). Apply the same discipline host-side via `LSAN_OPTIONS=suppressions=<path>`: never blanket-suppress a whole leak category, and never suppress by anything that could also match glintfx's own code.
+
+**Reverification:** every suppression above is tied to the pinned RmlUi commit (`RMLUI` `GIT_TAG` in `glintfx/CMakeLists.txt`, currently `2cd28864`). Re-verify (and consider reporting upstream, or retiring entries) whenever that pin is bumped -- an upstream teardown-order fix could make some of these obsolete, and a materially different RmlUi version could introduce new ones.
+
+**PT:** Hosts que buildam (ou embarcam) o glintfx com `-fsanitize=address,undefined` vão observar um pequeno cluster conhecido de diagnósticos do UndefinedBehaviorSanitizer vindos do **próprio teardown de documento/elemento do RmlUi** -- não código autoral da glintfx -- aflorando no fechar/recarregar de documento, inclusive pelo caminho embed do `UiLayer`. São **UB estrito porém benignos**: um padrão de "chamada/acesso a membro através de ponteiro para um objeto cuja parte derivada já terminou de se destruir" dentro da cascata recursiva de teardown de filhos do `~ElementDocument()`, e um análogo dentro de `~WidgetScroll()` quando uma scrollbar viva é desmontada. Na prática ambos só tocam estado da base `Element` ainda viva naquele ponto e nunca foram observados corromper memória -- mas o UBSan sinaliza o padrão corretamente de qualquer forma. **Não é código glintfx:** a glintfx nunca subclassa `Rml::Element`, `Rml::ElementDocument`, nem `Rml::WidgetScroll` (verificado por grep), então nenhum bug glintfx pode ser mascarado ao suprimi-los.
+
+**Supressões UBSan recomendadas** (já embarcadas e exercitadas pelo próprio gate noturno de sanitizer da glintfx, `glintfx/tests/ubsan_suppressions.txt`):
+
+```
+vptr:ElementDocument
+vptr:*WidgetScroll.cpp*
+vptr:*RemoveEventListener*
+```
+
+- `vptr:ElementDocument` -- `Element::SetOwnerDocument` desreferencia o ponteiro `owner_document` de um filho enquanto o próprio `~ElementDocument()` está no meio do teardown dos próprios filhos. Dispara exatamente uma vez por fechar/recarregar de documento.
+- `vptr:*WidgetScroll.cpp*` e `vptr:*RemoveEventListener*` -- **as duas necessárias juntas, nenhuma sozinha basta.** Mesma causa raiz dentro de `~WidgetScroll()` (só alcançável quando uma scrollbar viva de fato existe, ex.: um container `overflow-y: auto` cujo conteúdo transborda a caixa), mas se o compilador inlinou a chamada específica a `RemoveEventListener` naquele ponto é uma troca de forma de diagnóstico não-determinística, por-build/por-execução (match por arquivo necessário quando inlinado, match por função necessário quando não) -- omitir qualquer entrada deixa falhas residuais intermitentes.
+
+O relato completo (linhas exatas do source pinado, cadeias de chamada, e a evidência empírica por trás de cada padrão de match) está em `glintfx/tests/ubsan_suppressions.txt` -- leia antes de copiar às cegas; esta seção só resume.
+
+**Como consumir:** defina `UBSAN_OPTIONS=suppressions=<caminho>` antes de rodar o binário do host. Duas opções, ambas válidas:
+1. Copiar as três linhas `vptr:...` para o próprio arquivo de suppression do host -- o mesmo padrão que o GusWorld já usa pro ruído de LSan do `libasound` -- mantendo a config de sanitizer do host autocontida.
+2. Apontar `UBSAN_OPTIONS` diretamente pro arquivo da glintfx ao buildá-la in-tree (`FetchContent`/`add_subdirectory`), ex.: `UBSAN_OPTIONS=suppressions=<caminho-pra-glintfx>/glintfx/tests/ubsan_suppressions.txt`.
+
+**Ruído de leak (LSan) é uma preocupação separada, análoga.** O mesmo caminho de teardown de terceiro -- RmlUi, mais FreeType/fontconfig/GTK quando o backend GLFW cria uma janela decorada -- pode deixar relatórios de leak residuais na saída do processo que não são da glintfx corrigir. `glintfx/tests/lsan_suppressions.txt` documenta as entradas rastreadas (todas com escopo em biblioteca de sistema/fornecedor pré-compilada, nunca num símbolo `glintfx::` ou arquivo sob `glintfx/src|include`). Aplique a mesma disciplina do lado do host via `LSAN_OPTIONS=suppressions=<caminho>`: nunca suprima uma categoria inteira de leak de uma vez, e nunca suprima por algo que também possa casar com o próprio código da glintfx.
+
+**Reverificação:** toda supressão acima está atada ao commit pinado do RmlUi (`RMLUI` `GIT_TAG` em `glintfx/CMakeLists.txt`, atualmente `2cd28864`). Reverificar (e considerar reportar upstream, ou aposentar entradas) sempre que aquele pin for atualizado -- uma correção upstream na ordem de teardown pode tornar algumas destas obsoletas, e uma versão do RmlUi materialmente diferente pode introduzir novas.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

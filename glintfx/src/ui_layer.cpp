@@ -342,6 +342,39 @@ void UiLayer::set_scroll_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_scroll_callback(std::move(cb));
 }
 
+// EN: L1.15-FORMEV -- straight passthrough, no coordinate translation (none of these five
+//     payloads carry geometry -- id [+ value for change] only, same reasoning as
+//     set_scroll_callback's lack of offset math above). See the doc-comments in ui_layer.hpp/
+//     bootstrap.hpp for the full contract.
+// PT: L1.15-FORMEV -- repasse direto, sem tradução de coordenada (nenhum dos cinco payloads
+//     carrega geometria -- só id [+ value pro change], mesma racional da ausência de matemática
+//     de offset do set_scroll_callback acima). Ver os doc-comments em ui_layer.hpp/
+//     bootstrap.hpp para o contrato completo.
+void UiLayer::set_change_callback(std::function<void(const char*, const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_change_callback(std::move(cb));
+}
+
+void UiLayer::set_submit_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_submit_callback(std::move(cb));
+}
+
+void UiLayer::set_focus_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_focus_callback(std::move(cb));
+}
+
+void UiLayer::set_blur_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_blur_callback(std::move(cb));
+}
+
+void UiLayer::set_hover_callback(std::function<void(const char*, bool)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_hover_callback(std::move(cb));
+}
+
 ElementBox UiLayer::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

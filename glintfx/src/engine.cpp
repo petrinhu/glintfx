@@ -160,6 +160,31 @@ void Engine::set_scroll_callback(std::function<void(const char*)> cb) {
   impl_->boot.set_scroll_callback(std::move(cb));
 }
 
+void Engine::set_change_callback(std::function<void(const char*, const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_change_callback(std::move(cb));
+}
+
+void Engine::set_submit_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_submit_callback(std::move(cb));
+}
+
+void Engine::set_focus_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_focus_callback(std::move(cb));
+}
+
+void Engine::set_blur_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_blur_callback(std::move(cb));
+}
+
+void Engine::set_hover_callback(std::function<void(const char*, bool)> cb) {
+  if (!impl_->ok) return;
+  impl_->boot.set_hover_callback(std::move(cb));
+}
+
 bool Engine::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {
   if (!impl_->ok) return false;
   return impl_->boot.get_element_box(id, x, y, w, h);

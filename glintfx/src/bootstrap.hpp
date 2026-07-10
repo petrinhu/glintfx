@@ -179,6 +179,373 @@ public:
   //     alvo constante, imediato para uma escrita no-op).
   void set_scroll_callback(std::function<void(const char* id)> cb);
 
+  // -------------------------------------------------------------------------
+  // EN: Form/DOM event callbacks (L1.15-FORMEV, design doc
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Shape B chosen by the
+  //     líder). Five id-resolving observer channels for RmlUi's own Change/Submit/Focus/Blur/
+  //     Mouseover+Mouseout events, mirroring set_click_callback/set_scroll_callback's "id-only
+  //     (or id+value), verb-named method, no Rml:: type crosses this header" shape. All fire
+  //     SYNCHRONOUSLY, on the SAME call stack as whichever input/programmatic call produced
+  //     them (process_event()/set_focus()/clear_focus()) -- before that call returns, therefore
+  //     before that frame's render(). glintfx does NOT play audio itself -- these are the hooks
+  //     a host uses to trigger its own sound/UX reaction (the líder's anchor use case). A null/
+  //     empty std::function is a safe no-op (every listener below checks `!cb_ || !*cb_` before
+  //     touching the target element). No ordering constraint versus load(): each listener reads
+  //     the CURRENT callback at fire time, not at attach time.
+  //
+  //     MANDATORY reentrancy discipline (AUD-TEC-3, CHANGELOG [0.4.1]): every listener below
+  //     copies the registered std::function to a LOCAL variable BEFORE invoking it. A handler
+  //     that calls the matching set_*_callback(...) again from inside itself must not free the
+  //     std::function still executing underneath it.
+  // PT: Callbacks de evento de formulário/DOM (L1.15-FORMEV, doc de design
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Formato B escolhido
+  //     pelo líder). Cinco canais observadores que resolvem id para os próprios eventos
+  //     Change/Submit/Focus/Blur/Mouseover+Mouseout do RmlUi, espelhando o formato
+  //     "só-id (ou id+value), método nomeado por verbo, nenhum tipo Rml:: cruza este header" de
+  //     set_click_callback/set_scroll_callback. Todos disparam SINCRONAMENTE, na MESMA pilha de
+  //     chamada de qualquer input/chamada programática que os produziu
+  //     (process_event()/set_focus()/clear_focus()) -- antes dessa chamada retornar, portanto
+  //     antes do render() daquele frame. A glintfx NÃO toca áudio -- estes são os ganchos que um
+  //     host usa para disparar sua própria reação sonora/UX (o caso âncora do líder). Um
+  //     std::function nulo/vazio é um no-op seguro (todo listener abaixo checa `!cb_ || !*cb_`
+  //     antes de tocar o elemento-alvo). Sem restrição de ordem vs. load(): cada listener lê o
+  //     callback CORRENTE no momento do disparo, não no attach.
+  //
+  //     Disciplina de reentrância OBRIGATÓRIA (AUD-TEC-3, CHANGELOG [0.4.1]): todo listener
+  //     abaixo copia o std::function registrado para uma variável LOCAL ANTES de invocá-lo. Um
+  //     handler que chama o set_*_callback correspondente de novo de dentro de si mesmo não pode
+  //     liberar o std::function ainda em execução debaixo de si.
+  // -------------------------------------------------------------------------
+
+  // EN: Register a "change" callback -- fires on Rml::EventId::Change (bubble phase, same
+  //     document-root-listener pattern as click/scroll), reporting id (ancestor-walk-to-
+  //     nearest-id, same rule as click/scroll) + RmlUi's own "value" event parameter, VERBATIM,
+  //     for every control kind (text input/textarea current text; checkbox/radio "" when
+  //     unchecked/deselected, the control's `value` attribute when checked/selected;
+  //     select/dropdown and range-slider the selected/current value) -- RmlUi has already done
+  //     the "serialize by control kind" work; this method does not add a ControlKind tag.
+  //     `value` points into the Rml::Event's own parameter storage for THIS invocation only --
+  //     same LIFETIME rule as `id` (see set_click_callback's element_id doc-comment): copy
+  //     BOTH before returning from the callback if needed afterwards.
+  //     No confirmed glintfx-internal write path re-dispatches Change (RmlUi's data-value
+  //     MODEL->UI direction updates via a DataView, not by re-firing Change -- Change flows only
+  //     UI->model, via DataControllerValue) -- see set_focus_callback's WARNING below for the
+  //     cross-callback case (a change/submit handler that calls set_focus()/clear_focus()).
+  // PT: Registra um callback de "change" -- dispara em Rml::EventId::Change (fase bubble, mesmo
+  //     padrão de listener-na-raiz-do-documento de click/scroll), reportando id (subida de
+  //     ancestral até o id mais próximo, mesma regra de click/scroll) + o próprio parâmetro de
+  //     evento "value" do RmlUi, VERBATIM, para todo tipo de controle (texto/textarea o texto
+  //     atual; checkbox/radio "" quando desmarcado/desselecionado, o atributo `value` do
+  //     controle quando marcado/selecionado; select/dropdown e slider de range o valor
+  //     selecionado/atual) -- o RmlUi já fez o trabalho de "serializar por tipo de controle";
+  //     este método não adiciona uma tag ControlKind.
+  //     `value` aponta pra dentro do storage de parâmetros do próprio Rml::Event, só para ESTA
+  //     invocação -- mesma regra de LIFETIME de `id` (ver o doc-comment de element_id de
+  //     set_click_callback): copie AMBOS antes de retornar do callback se precisar depois.
+  //     Nenhum caminho de escrita interno da glintfx redispacha Change de forma confirmada (a
+  //     direção MODELO->UI do data-value do RmlUi atualiza via uma DataView, não redisparando
+  //     Change -- Change flui só UI->modelo, via DataControllerValue) -- ver o AVISO de
+  //     set_focus_callback abaixo para o caso entre-callbacks (um handler de change/submit que
+  //     chama set_focus()/clear_focus()).
+  void set_change_callback(std::function<void(const char* id, const char* value)> cb);
+
+  // EN: Register a "submit" callback -- fires on Rml::EventId::Submit (bubble phase), reporting
+  //     ONLY the id of the ancestor-or-self nearest to the dispatch target (which IS the
+  //     <form> element itself -- Rml::ElementForm::Submit() dispatches on `this`) that has a
+  //     non-empty id. v1 is deliberately id-only, NOT the full name->value Dictionary RmlUi's
+  //     own Submit event carries internally (translating that Dictionary into a plain-C shape
+  //     would need a new struct family + an N-string ownership/lifetime story with no confirmed
+  //     consumer -- anti-OE, see the design doc §4). A host that needs field values at submit
+  //     time already has them via the data-model it bound (bind_string/set_string per field) or
+  //     can read each field's CURRENT value via get_string/get_number/get_bool (L1.16-DOMRW)
+  //     from inside this callback.
+  //     Fires in the SAME synchronous call stack, same click/key event's default-action phase,
+  //     as a submit-button's own click/click_info callbacks -- clicking a type="submit" button
+  //     fires click_callback FIRST (native Click), then submit_callback (form's id) within that
+  //     same process_event() call, before it returns.
+  // PT: Registra um callback de "submit" -- dispara em Rml::EventId::Submit (fase bubble),
+  //     reportando SÓ o id do ancestral-ou-o-próprio mais próximo do alvo de despacho (que É o
+  //     próprio elemento <form> -- Rml::ElementForm::Submit() despacha em `this`) que tenha id
+  //     não-vazio. A v1 é deliberadamente só-id, NÃO o Dictionary completo nome->valor que o
+  //     próprio evento Submit do RmlUi carrega internamente (traduzir esse Dictionary pra um
+  //     formato C puro exigiria uma família de struct nova + uma história de posse/lifetime de N
+  //     strings sem consumidor confirmado -- anti-OE, ver o doc de design §4). Um host que
+  //     precisa dos valores dos campos no momento do submit já os tem via o data-model que ligou
+  //     (bind_string/set_string por campo) ou pode ler o valor CORRENTE de cada campo via
+  //     get_string/get_number/get_bool (L1.16-DOMRW) de dentro deste callback.
+  //     Dispara na MESMA pilha síncrona de chamada, mesma fase de ação-default do evento de
+  //     clique/tecla, que os próprios callbacks de click/click_info de um botão de submit --
+  //     clicar num botão type="submit" dispara click_callback PRIMEIRO (Click nativo), depois
+  //     submit_callback (id do form) dentro do MESMO process_event(), antes dele retornar.
+  void set_submit_callback(std::function<void(const char* id)> cb);
+
+  // EN: Register a "focus" callback -- fires on Rml::EventId::Focus, reporting the id of the
+  //     ancestor-or-self nearest to the element that just GAINED focus. Sources: clicking a
+  //     focusable element, Tab-navigation, or the programmatic set_focus()/clear_focus() below
+  //     (L1.17-FOCUS) -- synchronously, before those calls return.
+  //
+  //     STRUCTURAL ASYMMETRY vs. change/submit/click/scroll (design doc §4/§6): Focus/Blur do
+  //     NOT bubble (confirmed Source/Core/EventSpecification.cpp, `bubbles=false`), unlike every
+  //     other event in this family. A bubble-phase listener attached anywhere but the exact
+  //     target never sees a non-bubbling event. The fix is RmlUi's own CAPTURE phase, which
+  //     ALWAYS descends root->target regardless of the `bubbles` flag (confirmed reading
+  //     EventDispatcher::DispatchEvent: `phases_to_execute = Capture | Target | (bubbles ?
+  //     Bubble : 0)` -- Capture is unconditional) -- so THIS listener, unlike change/submit/
+  //     click/scroll, is attached to the document root with `in_capture_phase=true`, not the
+  //     bubble-phase `false` every other listener in this file uses.
+  //
+  //     MULTI-FIRE PER TRANSITION (found empirically, form_events_sanity.cpp F3, cross-verified
+  //     reading Context::OnFocusChange/SendEvents): unlike change/submit/click/scroll (exactly
+  //     one dispatch per user action, reaching this listener via normal bubbling), a SINGLE
+  //     set_focus()/programmatic-or-input-driven focus change can fire THIS callback MORE THAN
+  //     ONCE. Context::OnFocusChange builds the full ancestor chain of the OLD and NEW focus
+  //     target, then Context::SendEvents dispatches ONE INDEPENDENT Focus event PER ELEMENT
+  //     present in the new chain but absent from the old one (`std::set_difference`,
+  //     `element->DispatchEvent(...)` called per element in the difference -- NOT a single event
+  //     that bubbles). If several ancestors of the newly-focused element are ALL new to the
+  //     chain at once (e.g. the very first focus of a session, or a jump across a previously-
+  //     unfocused subtree), each of them gets dispatched Focus independently, each with ITSELF
+  //     as target, each resolved by this listener's OWN ancestor walk -- so a host may see
+  //     several focus_callback firings (each carrying that specific ancestor's own nearest id,
+  //     "" for an id-less one) for what looks like a single logical "focus moved" gesture. A
+  //     host that only cares about the DEEPEST newly-focused element should treat any non-empty
+  //     id as the signal and ignore/coalesce repeats, rather than assuming exactly one firing.
+  //     clear_focus()/Blur, by contrast, is USUALLY a clean single dispatch in the common case
+  //     (moving UP to an already-in-chain parent -- see Element::Blur()) -- but the SAME
+  //     multi-fire mechanics apply if a blur ever causes multiple ancestors to leave the chain
+  //     at once.
+  //
+  //     WARNING (recursion -- VERIFIED EMPIRICALLY by reading Context::OnFocusChange/SendEvents
+  //     in the pinned RmlUi 6.3 source, per this task's explicit instruction, NOT assumed):
+  //     set_focus()/clear_focus() called synchronously from inside this callback dispatch the
+  //     underlying Focus/Blur events on the SAME call stack (same synchronous-dispatch contract
+  //     as scroll_element_into_view/set_element_scroll_top -- see set_scroll_callback's
+  //     WARNING), which re-enters this callback. UNLIKE scroll's offset-value dedup, RmlUi's
+  //     focus dedup is by ANCESTOR-CHAIN SET DIFFERENCE: Context::OnFocusChange builds
+  //     old_chain/new_chain (the full ancestor chain of the previous and new focus target)
+  //     BEFORE any dispatch, then Context::SendEvents dispatches Blur/Focus ONLY to elements
+  //     present in one chain but absent from the other
+  //     (`std::set_difference(old_items, new_items, ...)`). ANSWER to "does Element::Focus() on
+  //     an ALREADY-focused element re-dispatch Focus?": NO -- refocusing the exact element that
+  //     is already Context::GetFocusElement() computes old_chain == new_chain (identical
+  //     ancestor chain) -> the set difference is EMPTY on both sides -> NEITHER Blur NOR Focus
+  //     is (re-)dispatched, and Element::Focus() itself returns true without ever calling
+  //     OnFocusChange's event-sending path a second meaningful time. CONSEQUENCE: a
+  //     "refocus-self" handler that calls set_focus(SAME id) from inside THAT SAME id's own
+  //     focus_callback or blur_callback is bounded, NOT an unbounded recursion -- the reentrant
+  //     call is a same-chain no-op. CAVEAT (not a free pass): because Context::focus is finally
+  //     assigned by the OUTER (original) OnFocusChange call AFTER its own Blur+Focus SendEvents
+  //     pair completes -- which runs AFTER any reentrant no-op call already returned -- a
+  //     reentrant set_focus(old_id) called from inside blur_callback(old_id) does NOT actually
+  //     keep `old_id` focused: the outer transition to the NEW target still completes and wins
+  //     the final Context::focus assignment. A naive "on_blur -> refocus self" modal-trap
+  //     handler will not stack-overflow, but will also not achieve a "stay focused" UX from a
+  //     SYNCHRONOUS call inside the callback -- deferring the refocus to the next frame (host-
+  //     side, outside this callback's call stack) is the correct pattern for a true focus trap.
+  //     set_focus()/clear_focus() calls targeting a DIFFERENT id than the one just focused/
+  //     blurred are NOT covered by this same-chain dedup (genuinely different ancestor chains ->
+  //     real Blur/Focus dispatch) and DO risk unbounded recursion under the same rules as the
+  //     scroll WARNING: a handler that keeps redirecting focus to a new, ever-different target
+  //     on every Focus/Blur never converges -> stack overflow.
+  // PT: Registra um callback de "focus" -- dispara em Rml::EventId::Focus, reportando o id do
+  //     ancestral-ou-o-próprio mais próximo do elemento que acabou de GANHAR foco. Fontes:
+  //     clicar num elemento focável, navegação por Tab, ou o set_focus()/clear_focus()
+  //     programático abaixo (L1.17-FOCUS) -- sincronamente, antes dessas chamadas retornarem.
+  //
+  //     ASSIMETRIA ESTRUTURAL vs. change/submit/click/scroll (doc de design §4/§6): Focus/Blur
+  //     NÃO borbulham (confirmado em Source/Core/EventSpecification.cpp, `bubbles=false`),
+  //     diferente de todo outro evento desta família. Um listener de fase bubble anexado em
+  //     qualquer lugar que não seja o alvo exato nunca vê um evento que não borbulha. O conserto
+  //     é a própria fase de CAPTURA do RmlUi, que SEMPRE desce raiz->alvo independente da flag
+  //     `bubbles` (confirmado lendo EventDispatcher::DispatchEvent: `phases_to_execute =
+  //     Capture | Target | (bubbles ? Bubble : 0)` -- Capture é incondicional) -- então ESTE
+  //     listener, diferente de change/submit/click/scroll, é anexado à raiz do documento com
+  //     `in_capture_phase=true`, não o `false` de fase bubble que todo outro listener deste
+  //     arquivo usa.
+  //
+  //     DISPARO MÚLTIPLO POR TRANSIÇÃO (achado empiricamente, form_events_sanity.cpp F3, cross-
+  //     verificado lendo Context::OnFocusChange/SendEvents): diferente de change/submit/
+  //     click/scroll (exatamente um despacho por ação do usuário, alcançando este listener via
+  //     borbulhamento normal), uma ÚNICA mudança de foco programática-ou-dirigida-por-input via
+  //     set_focus() PODE disparar ESTE callback MAIS DE UMA VEZ. Context::OnFocusChange constrói
+  //     a cadeia completa de ancestrais do alvo de foco ANTIGO e NOVO, e então
+  //     Context::SendEvents despacha UM evento Focus INDEPENDENTE POR ELEMENTO presente na
+  //     cadeia nova mas ausente da antiga (`std::set_difference`, `element->DispatchEvent(...)`
+  //     chamado por elemento na diferença -- NÃO um único evento que borbulha). Se vários
+  //     ancestrais do elemento recém-focado são TODOS novos na cadeia de uma vez (ex.: o
+  //     primeiríssimo foco de uma sessão, ou um salto através de uma subárvore nunca antes
+  //     focada), cada um deles recebe um Focus despachado independentemente, cada um com SI
+  //     MESMO como alvo, cada um resolvido pela PRÓPRIA subida de ancestral deste listener --
+  //     então um host pode ver vários disparos de focus_callback (cada um carregando o id mais
+  //     próximo daquele ancestral específico, "" para um sem id) para o que parece um único
+  //     gesto lógico de "foco mudou". Um host que só se importa com o elemento recém-focado MAIS
+  //     FUNDO deve tratar qualquer id não-vazio como o sinal e ignorar/coalescer repetições, em
+  //     vez de assumir exatamente um disparo. clear_focus()/Blur, em contraste, é USUALMENTE um
+  //     despacho único limpo no caso comum (subindo pro pai já presente na cadeia -- ver
+  //     Element::Blur()) -- mas a MESMA mecânica de disparo múltiplo se aplica se um blur algum
+  //     dia fizer vários ancestrais saírem da cadeia de uma vez.
+  //
+  //     AVISO (recursão -- VERIFICADO EMPIRICAMENTE lendo Context::OnFocusChange/SendEvents no
+  //     source pinado do RmlUi 6.3, conforme instrução explícita desta tarefa, NÃO assumido):
+  //     set_focus()/clear_focus() chamados sincronamente de dentro deste callback despacham os
+  //     eventos Focus/Blur subjacentes na MESMA pilha de chamada (mesmo contrato de despacho
+  //     síncrono de scroll_element_into_view/set_element_scroll_top -- ver o AVISO de
+  //     set_scroll_callback), o que reentra neste callback. DIFERENTE do dedup por valor-de-
+  //     offset do scroll, o dedup de foco do RmlUi é por DIFERENÇA DE CONJUNTO DA CADEIA DE
+  //     ANCESTRAIS: Context::OnFocusChange constrói old_chain/new_chain (a cadeia completa de
+  //     ancestrais do alvo de foco anterior e do novo) ANTES de qualquer despacho, e então
+  //     Context::SendEvents despacha Blur/Focus SÓ pros elementos presentes numa cadeia mas
+  //     ausentes na outra (`std::set_difference(old_items, new_items, ...)`). RESPOSTA a "o
+  //     Element::Focus() num elemento JÁ focado redespacha Focus?": NÃO -- refocar o elemento
+  //     exato que já É o Context::GetFocusElement() computa old_chain == new_chain (cadeia de
+  //     ancestrais idêntica) -> a diferença de conjunto é VAZIA nos dois sentidos -> NEM Blur
+  //     NEM Focus é (re)despachado, e o próprio Element::Focus() retorna true sem nunca chamar o
+  //     caminho de envio de evento do OnFocusChange uma segunda vez de forma significativa.
+  //     CONSEQUÊNCIA: um handler "refoca-a-si-mesmo" que chama set_focus(MESMO id) de dentro do
+  //     PRÓPRIO focus_callback ou blur_callback DESSE MESMO id é limitado, NÃO uma recursão sem
+  //     limite -- a chamada reentrante é um no-op de mesma-cadeia. RESSALVA (não é carta branca):
+  //     como o Context::focus é finalmente atribuído pela chamada EXTERNA (original) do
+  //     OnFocusChange APÓS seu próprio par de SendEvents de Blur+Focus terminar -- que roda
+  //     APÓS qualquer chamada reentrante no-op já ter retornado -- um set_focus(old_id)
+  //     reentrante chamado de dentro de blur_callback(old_id) NÃO consegue de fato manter
+  //     `old_id` focado: a transição externa para o NOVO alvo ainda se completa e vence a
+  //     atribuição final de Context::focus. Um handler ingênuo de "on_blur -> refoca a si mesmo"
+  //     (armadilha de modal) não estoura a pilha, mas também não alcança uma UX de "permanece
+  //     focado" a partir de uma chamada SÍNCRONA de dentro do callback -- adiar o refoco pro
+  //     próximo frame (do lado do host, fora da pilha de chamada deste callback) é o padrão
+  //     correto pra uma armadilha de foco de verdade. Chamadas de set_focus()/clear_focus()
+  //     visando um id DIFERENTE do que acabou de ser focado/desfocado NÃO são cobertas por este
+  //     dedup de mesma-cadeia (cadeias de ancestrais genuinamente diferentes -> despacho real de
+  //     Blur/Focus) e SIM correm risco de recursão sem limite sob as mesmas regras do AVISO de
+  //     scroll: um handler que fica redirecionando o foco pra um alvo novo e sempre-diferente a
+  //     cada Focus/Blur nunca converge -> stack overflow.
+  void set_focus_callback(std::function<void(const char* id)> cb);
+
+  // EN: Register a "blur" callback -- fires on Rml::EventId::Blur, reporting the id of the
+  //     ancestor-or-self nearest to the element that just LOST focus. Same capture-phase
+  //     wiring, same synchronous/reentrancy contract, and the SAME empirically-verified
+  //     same-chain-no-op dedup as set_focus_callback above -- see its WARNING for the full
+  //     writeup (applies symmetrically: refocusing/reblurring the SAME element that already
+  //     holds that state is a no-op; a DIFFERENT target each time risks unbounded recursion).
+  // PT: Registra um callback de "blur" -- dispara em Rml::EventId::Blur, reportando o id do
+  //     ancestral-ou-o-próprio mais próximo do elemento que acabou de PERDER foco. Mesma fiação
+  //     de fase-captura, mesmo contrato síncrono/de reentrância, e o MESMO dedup de no-op-de-
+  //     mesma-cadeia verificado empiricamente do set_focus_callback acima -- ver o AVISO dele
+  //     para o relato completo (aplica-se simetricamente: refocar/redesfocar o MESMO elemento
+  //     que já detém aquele estado é no-op; um alvo DIFERENTE a cada vez arrisca recursão sem
+  //     limite).
+  void set_blur_callback(std::function<void(const char* id)> cb);
+
+  // EN: Register a "hover" callback -- ONE method covering both Rml::EventId::Mouseover
+  //     (`entered=true`) and the implicit exit (`entered=false`), reporting the id of the
+  //     ancestor-or-self nearest to the element whose hover state changed. Sonoro-relevant per
+  //     the líder's explicit decision (hover/focus sound hooks included in scope).
+  //
+  //     DEDUP MACHINE (mandatory, task-specified design): internally, only ONE listener is
+  //     attached, on Rml::EventId::Mouseover (bubble phase) -- Mouseout is deliberately NOT
+  //     separately listened to. The listener owns a `std::string current_hover_id_` (OUR OWN
+  //     copy, survives across events, reset to "" on every fresh load()). On each raw Mouseover
+  //     (RmlUi fires one per element boundary crossed, including every unlabeled child inside a
+  //     labeled container -- a routine mouse move can generate several): resolve `rid` via the
+  //     same ancestor-walk-to-nearest-id as click/scroll/change/submit; if `rid == current`,
+  //     no-op (this is what kills re-firing while the cursor crosses unlabeled children of the
+  //     SAME labeled container -- e.g. hovering over child text inside a `#card` div never
+  //     re-fires as long as the resolved id stays "card"); if `rid != current`: fire
+  //     `cb(current, false)` (exit) when `current` is non-empty, THEN `cb(rid, true)` (enter)
+  //     when `rid` is non-empty, updating `current_hover_id_` to `rid` BEFORE invoking either
+  //     functor (both AUD-TEC-3 reentrancy discipline AND the exact ordering the task
+  //     specifies). Both strings passed to the callbacks are OUR OWN std::string copies (not
+  //     pointers into RmlUi storage), so both remain valid across the (up to) two calls in a
+  //     single transition -- a stricter lifetime guarantee than click/scroll/change/submit's
+  //     "valid only for this invocation" rule, though callers should not rely on it persisting
+  //     past the callback's return.
+  //
+  //     CORRECTNESS DETAIL -- RmlUi's Mouseover fan-out (found empirically,
+  //     form_events_sanity.cpp F5, cross-verified reading Context::UpdateHoverChain): RmlUi does
+  //     NOT dispatch a single Mouseover to the deepest hovered element that then bubbles up --
+  //     Context::UpdateHoverChain uses the SAME Context::SendEvents ancestor-chain-set-
+  //     difference mechanism Context::OnFocusChange uses for Focus/Blur (see
+  //     set_focus_callback's WARNING above), dispatching ONE INDEPENDENT Mouseover PER
+  //     newly-entered ancestor, in an UNSPECIFIED order. Naively resolving `rid` from
+  //     `event.GetTargetElement()` would make the dedup outcome order-dependent across these
+  //     fan-out dispatches. The internal listener instead resolves `rid` from
+  //     `Rml::Context::GetHoverElement()` (via the event target's own `GetContext()`), NOT from
+  //     the event's own target -- `hover` is confirmed assigned BEFORE any Mouseover/Mouseout
+  //     dispatch begins (`Context::UpdateHoverChain`: `hover = GetElementAtPoint(position);`
+  //     precedes `SendEvents(...)`), so every fan-out dispatch within one logical mouse move
+  //     resolves the IDENTICAL, final, deepest `rid`, making the dedup above deterministic
+  //     regardless of dispatch order. (This trick does NOT apply to focus/blur:
+  //     Context::OnFocusChange assigns `focus = new_focus` only AFTER both its Blur and Focus
+  //     SendEvents passes complete, so GetFocusElement() is stale during their entire fan-out --
+  //     see set_focus_callback's WARNING for how that case is handled instead, by accepting and
+  //     documenting the multi-fire behaviour rather than collapsing it.)
+  //
+  //     KNOWN LIMITATION (documented, not fixed -- no Mouseout listener exists to catch it): the
+  //     mouse pointer leaving the WINDOW ENTIRELY (no further UiEvent::Type::MouseMove delivered
+  //     to process_event()) produces NO further Mouseover, so a hover that was active when the
+  //     cursor left the window is never explicitly exited (`entered=false` never fires for it) --
+  //     the NEXT Mouseover once the cursor re-enters resolves the transition normally (fires an
+  //     exit for whatever was hovered before the gap, if different). A host that needs a hard
+  //     "cursor left the window" signal must derive it from its own OS-level window-focus/leave
+  //     event, glintfx has no such channel.
+  // PT: Registra um callback de "hover" -- UM método cobrindo tanto Rml::EventId::Mouseover
+  //     (`entered=true`) quanto a saída implícita (`entered=false`), reportando o id do
+  //     ancestral-ou-o-próprio mais próximo do elemento cujo estado de hover mudou. Sonoro-
+  //     relevante conforme decisão explícita do líder (ganchos de som de hover/focus inclusos
+  //     no escopo).
+  //
+  //     MÁQUINA DE DEDUP (obrigatória, design especificado na tarefa): internamente, só UM
+  //     listener é anexado, em Rml::EventId::Mouseover (fase bubble) -- Mouseout deliberadamente
+  //     NÃO é escutado separadamente. O listener possui um `std::string current_hover_id_`
+  //     (cópia NOSSA, sobrevive entre eventos, resetada para "" a cada load() novo). A cada
+  //     Mouseover cru (o RmlUi dispara um por fronteira de elemento cruzada, incluindo todo
+  //     filho sem id dentro de um container com id -- um movimento de mouse rotineiro pode gerar
+  //     vários): resolve `rid` pela mesma subida de ancestral até o id mais próximo de
+  //     click/scroll/change/submit; se `rid == current`, no-op (é isso que mata o redisparo
+  //     enquanto o cursor cruza filhos sem id do MESMO container com id -- ex.: passar sobre
+  //     texto filho dentro de uma div `#card` nunca redispara enquanto o id resolvido continuar
+  //     "card"); se `rid != current`: dispara `cb(current, false)` (saída) quando `current` é
+  //     não-vazio, DEPOIS `cb(rid, true)` (entrada) quando `rid` é não-vazio, atualizando
+  //     `current_hover_id_` para `rid` ANTES de invocar qualquer functor (tanto a disciplina de
+  //     reentrância AUD-TEC-3 quanto a ordem exata especificada na tarefa). As duas strings
+  //     passadas aos callbacks são cópias std::string NOSSAS (não ponteiros pra storage do
+  //     RmlUi), então ambas permanecem válidas pelas (até) duas chamadas de uma única transição
+  //     -- uma garantia de lifetime mais forte que a regra "válido só para esta invocação" de
+  //     click/scroll/change/submit, ainda que chamadores não devam depender dela sobrevivendo
+  //     além do retorno do callback.
+  //
+  //     DETALHE DE CORREÇÃO -- fan-out do Mouseover do RmlUi (achado empiricamente,
+  //     form_events_sanity.cpp F5, cross-verificado lendo Context::UpdateHoverChain): o RmlUi
+  //     NÃO despacha um único Mouseover pro elemento mais fundo em hover que depois borbulha --
+  //     Context::UpdateHoverChain usa o MESMO mecanismo de diferença-de-conjunto-de-cadeia-de-
+  //     ancestrais Context::SendEvents que Context::OnFocusChange usa pra Focus/Blur (ver o
+  //     AVISO de set_focus_callback acima), despachando UM Mouseover INDEPENDENTE POR ancestral
+  //     recém-entrado, numa ordem NÃO ESPECIFICADA. Resolver `rid` ingenuamente a partir de
+  //     `event.GetTargetElement()` tornaria o resultado do dedup dependente de ordem entre esses
+  //     despachos em fan-out. O listener interno resolve `rid` a partir de
+  //     `Rml::Context::GetHoverElement()` (via o próprio `GetContext()` do alvo do evento), NÃO
+  //     do alvo do próprio evento -- `hover` é confirmadamente atribuído ANTES de qualquer
+  //     despacho de Mouseover/Mouseout começar (`Context::UpdateHoverChain`: `hover =
+  //     GetElementAtPoint(position);` precede `SendEvents(...)`), então todo despacho de
+  //     fan-out dentro de um único movimento lógico de mouse resolve o `rid` IDÊNTICO, final,
+  //     mais fundo, tornando o dedup acima determinístico independente da ordem de despacho.
+  //     (Esse truque NÃO se aplica a focus/blur: Context::OnFocusChange atribui `focus =
+  //     new_focus` só APÓS as duas passadas de SendEvents de Blur e Focus terminarem, então
+  //     GetFocusElement() fica obsoleto durante todo o fan-out delas -- ver o AVISO de
+  //     set_focus_callback pra como esse caso é tratado em vez disso, aceitando e documentando
+  //     o comportamento de disparo múltiplo em vez de colapsá-lo.)
+  //
+  //     LIMITAÇÃO CONHECIDA (documentada, não corrigida -- não existe listener de Mouseout para
+  //     capturá-la): o ponteiro do mouse saindo da JANELA INTEIRA (nenhum UiEvent::Type::
+  //     MouseMove adicional entregue a process_event()) não produz NENHUM Mouseover adicional,
+  //     então um hover que estava ativo quando o cursor saiu da janela nunca é explicitamente
+  //     encerrado (`entered=false` nunca dispara pra ele) -- o PRÓXIMO Mouseover quando o cursor
+  //     reentra resolve a transição normalmente (dispara uma saída pro que estava em hover antes
+  //     do intervalo, se diferente). Um host que precisa de um sinal forte de "cursor saiu da
+  //     janela" precisa derivá-lo do próprio evento de foco/saída de janela em nível de SO da
+  //     sua plataforma; a glintfx não tem esse canal.
+  void set_hover_callback(std::function<void(const char* id, bool entered)> cb);
+
   // EN: Query the border-box geometry of an element by id, in the LATEST loaded document's
   //     own content-local space (top-left origin, y-down, offset-free -- UiLayer/App translate
   //     to window-space at the public boundary). Returns false if no document is loaded or the

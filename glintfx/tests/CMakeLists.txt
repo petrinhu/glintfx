@@ -1224,6 +1224,52 @@ add_test(NAME domrw_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: form_events_sanity -- verifies the 5 L1.15-FORMEV callbacks (Engine::set_change_callback/
+#     set_submit_callback/set_focus_callback/set_blur_callback/set_hover_callback), the exact
+#     code both glintfx::UiLayer and glintfx::App delegate to with zero extra logic -- so this
+#     single test covers both public consumption paths, same precedent as
+#     focus_sanity.cpp/domrw_sanity.cpp ("drive Engine directly for the internal oracle"). Needs
+#     Rml::Context::ProcessMouseMove/ProcessMouseButtonDown/ProcessMouseButtonUp/
+#     GetHoverElement() as the input-simulation/oracle surface (not reachable through UiLayer's
+#     public, RmlUi-type-free header, and Engine itself has no process_event() translation
+#     layer -- that is UiLayer-only), so it links RmlUi::Core explicitly, same reasoning as
+#     focus_sanity.cpp/domrw_sanity.cpp/document_reload_leak.cpp/engine_smoke.cpp. Runs in BOTH
+#     build configs (links ${_embed_dep}, same GL-context-fixture pattern as the other embed
+#     tests above) since the tested code (bootstrap.cpp/engine.cpp) is always compiled
+#     regardless of GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (=
+#     build/tests/) -- same pattern as focus_sanity/domrw_sanity/click_callback_sanity
+#     (scene-specific rml/rcss pair copied here, addressed by bare filename).
+# PT: form_events_sanity -- verifica os 5 callbacks do L1.15-FORMEV (Engine::
+#     set_change_callback/set_submit_callback/set_focus_callback/set_blur_callback/
+#     set_hover_callback), o código EXATO para o qual tanto glintfx::UiLayer quanto glintfx::App
+#     encaminham sem lógica extra -- então este único teste cobre os dois caminhos públicos de
+#     consumo, mesmo precedente de focus_sanity.cpp/domrw_sanity.cpp ("dirige o Engine
+#     diretamente pelo oráculo interno"). Precisa de Rml::Context::ProcessMouseMove/
+#     ProcessMouseButtonDown/ProcessMouseButtonUp/GetHoverElement() como superfície de
+#     simulação-de-input/oráculo (não alcançável pelo header público do UiLayer, livre de tipos
+#     RmlUi, e o próprio Engine não tem camada de tradução process_event() -- isso é exclusivo
+#     do UiLayer), então linka RmlUi::Core explicitamente, mesmo raciocínio de
+#     focus_sanity.cpp/domrw_sanity.cpp/document_reload_leak.cpp/engine_smoke.cpp. Roda em AMBAS
+#     as configs de build (linka ${_embed_dep}, mesmo padrão de fixture de contexto GL dos
+#     outros testes embed acima) já que o código testado (bootstrap.cpp/engine.cpp) é sempre
+#     compilado independente de GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de
+#     focus_sanity/domrw_sanity/click_callback_sanity (par rml/rcss específico da cena copiado
+#     aqui, endereçado por nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(form_events_sanity form_events_sanity.cpp)
+target_link_libraries(form_events_sanity PRIVATE ${_embed_dep} RmlUi::Core)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/form_events_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/form_events_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/form_events_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/form_events_scene.rcss COPYONLY)
+add_test(NAME form_events_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:form_events_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

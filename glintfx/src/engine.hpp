@@ -129,6 +129,22 @@ public:
   //     convergente).
   void set_scroll_callback(std::function<void(const char*)> cb);
 
+  // EN: Form/DOM event callbacks -- forward to Bootstrap::set_change_callback/
+  //     set_submit_callback/set_focus_callback/set_blur_callback/set_hover_callback
+  //     (L1.15-FORMEV). Straight passthrough, no translation at this layer -- see there for the
+  //     full per-event contract (id resolution, lifetime, capture-vs-bubble wiring, the
+  //     empirically-verified focus/blur recursion analysis, the hover dedup machine).
+  // PT: Callbacks de evento de formulário/DOM -- encaminham a Bootstrap::set_change_callback/
+  //     set_submit_callback/set_focus_callback/set_blur_callback/set_hover_callback
+  //     (L1.15-FORMEV). Repasse direto, sem tradução nesta camada -- ver lá o contrato completo
+  //     por evento (resolução de id, lifetime, fiação captura-vs-bubble, a análise de recursão
+  //     de focus/blur verificada empiricamente, a máquina de dedup do hover).
+  void set_change_callback(std::function<void(const char* id, const char* value)> cb);
+  void set_submit_callback(std::function<void(const char* id)> cb);
+  void set_focus_callback(std::function<void(const char* id)> cb);
+  void set_blur_callback(std::function<void(const char* id)> cb);
+  void set_hover_callback(std::function<void(const char* id, bool entered)> cb);
+
   // EN: Query the border-box geometry of an element by id -- forwards to
   //     Bootstrap::get_element_box (F2, v0.2.5). Content-local space (offset-free); UiLayer/
   //     App translate to window-space at the public boundary. Returns false when not ok(),

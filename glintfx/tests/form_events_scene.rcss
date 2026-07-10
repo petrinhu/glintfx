@@ -1,0 +1,36 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Styles for the L1.15-FORMEV sanity scene (form_events_scene.rml). #myform is left
+       position:static (default) so it does NOT become the positioning context for its
+       children -- #chk/#submit-btn's `position: absolute` coordinates resolve against the
+       initial containing block, same flat-coordinate convention as click_scene.rcss/
+       scroll_scene.rcss. #hover-a contains an id-less <span> covering its LEFT half only --
+       moving the mouse between the span (30,90) and the plain #hover-a background (80,90)
+       hits two DIFFERENT Rml::Element targets that both resolve to the SAME ancestor id
+       "hover-a", the "dente" for the hover dedup machine (no re-fire while crossing an
+       unlabeled child's boundary inside the same labeled container). #focus-outer/
+       #focus-inner is a 2-level-deep nest so set_focus("focus-inner") proves the CAPTURE-phase
+       listener attached at the document ROOT still reaches a target several levels down.
+   PT: Estilos para a cena de sanidade do L1.15-FORMEV (form_events_scene.rml). #myform fica em
+       position:static (padrão) para NÃO virar o contexto de posicionamento dos filhos --
+       as coordenadas `position: absolute` de #chk/#submit-btn resolvem contra o bloco
+       de contenção inicial, mesma convenção de coordenada plana de click_scene.rcss/
+       scroll_scene.rcss. #hover-a contém um <span> sem id cobrindo só sua METADE ESQUERDA --
+       mover o mouse entre o span (30,90) e o background puro de #hover-a (80,90) atinge DOIS
+       alvos Rml::Element DIFERENTES que ambos resolvem pro MESMO id ancestral "hover-a", o
+       "dente" da máquina de dedup do hover (sem redisparo ao cruzar a fronteira de um filho
+       sem id dentro do mesmo container com id). #focus-outer/#focus-inner é um aninhamento de
+       2 níveis para que set_focus("focus-inner") prove que o listener de fase-CAPTURA anexado
+       na RAIZ do documento ainda alcança um alvo vários níveis abaixo. */
+body { background-color: #101010; }
+form { display: block; }
+div, span, input { display: block; position: absolute; }
+
+#chk        { left: 10px; top: 10px;  width: 20px;  height: 20px; }
+#submit-btn { left: 10px; top: 40px;  width: 60px;  height: 20px; }
+
+#hover-a      { left: 10px; top: 80px;  width: 100px; height: 40px; }
+#hover-a span { left: 0px;  top: 0px;   width: 50px;  height: 40px; }
+#hover-b      { left: 10px; top: 130px; width: 100px; height: 30px; }
+
+#focus-outer { left: 10px; top: 170px; width: 100px; height: 30px; }
+#focus-inner { left: 0px;  top: 0px;   width: 100px; height: 30px; }

@@ -312,6 +312,37 @@ void App::set_scroll_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_scroll_callback(std::move(cb));
 }
 
+// EN: L1.15-FORMEV -- straight passthrough, no coordinate translation (App owns the whole
+//     window; none of these five payloads carry geometry -- see the doc-comments in app.hpp/
+//     bootstrap.hpp for the full contract).
+// PT: L1.15-FORMEV -- repasse direto, sem tradução de coordenada (o App é dono da janela
+//     inteira; nenhum dos cinco payloads carrega geometria -- ver os doc-comments em app.hpp/
+//     bootstrap.hpp para o contrato completo).
+void App::set_change_callback(std::function<void(const char*, const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_change_callback(std::move(cb));
+}
+
+void App::set_submit_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_submit_callback(std::move(cb));
+}
+
+void App::set_focus_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_focus_callback(std::move(cb));
+}
+
+void App::set_blur_callback(std::function<void(const char*)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_blur_callback(std::move(cb));
+}
+
+void App::set_hover_callback(std::function<void(const char*, bool)> cb) {
+  if (!impl_->ok) return;
+  impl_->engine.set_hover_callback(std::move(cb));
+}
+
 ElementBox App::get_element_box(const char* id) const {
   ElementBox box;
   if (!impl_->ok) return box;

@@ -1,0 +1,12 @@
+<rml>
+<head><link type="text/rcss" href="form_events_scene.rcss"/></head>
+<body>
+<form id="myform">
+  <input type="checkbox" id="chk" name="chk" value="yes"/>
+  <input type="submit" id="submit-btn" name="go" value="Go"/>
+</form>
+<div id="hover-a"><span>inner, no id</span></div>
+<div id="hover-b">B</div>
+<div id="focus-outer"><div id="focus-inner">Focusable, nested</div></div>
+</body>
+</rml>

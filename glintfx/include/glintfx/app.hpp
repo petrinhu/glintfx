@@ -221,6 +221,53 @@ public:
   //     ciclo, tipicamente em 1-2 iterações para um alvo constante).
   void set_scroll_callback(std::function<void(const char* element_id)> cb);
 
+  // EN: Form/DOM event callbacks (L1.15-FORMEV, design doc
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Shape B). Five id-
+  //     resolving observer channels for RmlUi's own Change/Submit/Focus/Blur/Mouseover+Mouseout
+  //     events -- glintfx does NOT play audio itself, these are the hooks a host uses to trigger
+  //     its own sound/UX reaction (sonoro-relevant per the líder's explicit decision to include
+  //     hover/focus). Parity with UiLayer (same signatures). See
+  //     glintfx/src/bootstrap.hpp's set_change_callback/set_submit_callback/set_focus_callback/
+  //     set_blur_callback/set_hover_callback doc-comments for the FULL per-event contract: id
+  //     resolution (same ancestor-walk as click/scroll), the change `value` payload (RmlUi's
+  //     own, per-control-kind, verbatim), the LIFETIME rule (id/value valid only for the
+  //     duration of the invocation -- copy before returning if needed after), the synchronous-
+  //     dispatch/reentrancy contract (MANDATORY copy-before-invoke, same AUD-TEC-3 discipline as
+  //     every other callback in this family), and -- critically for set_focus_callback/
+  //     set_blur_callback -- the EMPIRICALLY-VERIFIED recursion analysis (refocusing/reblurring
+  //     the SAME element that already holds that state is a same-ancestor-chain no-op per
+  //     RmlUi's own Context::OnFocusChange/SendEvents set-difference dedup, confirmed by reading
+  //     the pinned RmlUi 6.3 source -- NOT an unbounded recursion risk; a DIFFERENT target each
+  //     time IS). set_hover_callback's dedup machine (single Mouseover-only listener,
+  //     `current_hover_id_` state) and its documented limitation (no window-leave exit event)
+  //     are also detailed there.
+  // PT: Callbacks de evento de formulário/DOM (L1.15-FORMEV, doc de design
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Formato B). Cinco
+  //     canais observadores que resolvem id para os próprios eventos Change/Submit/Focus/
+  //     Blur/Mouseover+Mouseout do RmlUi -- a glintfx NÃO toca áudio, estes são os ganchos que
+  //     um host usa para disparar sua própria reação sonora/UX (sonoro-relevante conforme
+  //     decisão explícita do líder de incluir hover/focus). Paridade com UiLayer (mesmas
+  //     assinaturas). Ver os doc-comments de set_change_callback/set_submit_callback/
+  //     set_focus_callback/set_blur_callback/set_hover_callback em glintfx/src/bootstrap.hpp
+  //     para o contrato COMPLETO por evento: resolução de id (mesma subida de ancestral de
+  //     click/scroll), o payload `value` do change (o próprio do RmlUi, por tipo de controle,
+  //     verbatim), a regra de LIFETIME (id/value válidos só durante a invocação -- copiar antes
+  //     de retornar se precisar depois), o contrato de despacho síncrono/reentrância (cópia-
+  //     antes-de-invocar OBRIGATÓRIA, mesma disciplina AUD-TEC-3 de todo outro callback desta
+  //     família), e -- criticamente para set_focus_callback/set_blur_callback -- a análise de
+  //     recursão VERIFICADA EMPIRICAMENTE (refocar/redesfocar o MESMO elemento que já detém
+  //     aquele estado é um no-op de mesma-cadeia-de-ancestrais pelo dedup por diferença de
+  //     conjunto do próprio Context::OnFocusChange/SendEvents do RmlUi, confirmado lendo o
+  //     source pinado do RmlUi 6.3 -- NÃO é risco de recursão sem limite; um alvo DIFERENTE a
+  //     cada vez É). A máquina de dedup de set_hover_callback (listener único só-Mouseover,
+  //     estado `current_hover_id_`) e sua limitação documentada (nenhum evento de saída ao
+  //     deixar a janela) também estão detalhadas lá.
+  void set_change_callback(std::function<void(const char* id, const char* value)> cb);
+  void set_submit_callback(std::function<void(const char* id)> cb);
+  void set_focus_callback(std::function<void(const char* id)> cb);
+  void set_blur_callback(std::function<void(const char* id)> cb);
+  void set_hover_callback(std::function<void(const char* id, bool entered)> cb);
+
   // EN: Query the border-box geometry of an element by id. Coordinate space: window physical
   //     pixels, top-left origin, y-down -- App owns the whole window, so there is no sub-
   //     viewport offset to translate (unlike UiLayer, whose set_viewport(x,y,w,h,target_h)

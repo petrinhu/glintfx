@@ -141,6 +141,22 @@ struct Bootstrap::Impl {
   //     e o scroll_element_into_view/set_element_scroll_top programático). Vazio por padrão.
   std::function<void(const char*)> scroll_cb;
 
+  // EN: L1.15-FORMEV -- form/DOM event callbacks (design doc
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Shape B). See the
+  //     doc-comments on Bootstrap::set_change_callback/set_submit_callback/set_focus_callback/
+  //     set_blur_callback/set_hover_callback in bootstrap.hpp for the full per-event contract.
+  //     All empty by default -- a null/empty std::function is a safe listener no-op.
+  // PT: L1.15-FORMEV -- callbacks de evento de formulário/DOM (doc de design
+  //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Formato B). Ver os
+  //     doc-comments de Bootstrap::set_change_callback/set_submit_callback/set_focus_callback/
+  //     set_blur_callback/set_hover_callback em bootstrap.hpp para o contrato completo por
+  //     evento. Todos vazios por padrão -- um std::function nulo/vazio é no-op seguro no listener.
+  std::function<void(const char*, const char*)> change_cb;
+  std::function<void(const char*)> submit_cb;
+  std::function<void(const char*)> focus_cb;
+  std::function<void(const char*)> blur_cb;
+  std::function<void(const char*, bool)> hover_cb;
+
   // EN: AUD-PUB-4 gap closure (v0.5.0) -- pending "button went down here" record for the
   //     right/middle click synthesis (see ClickInfoButtonDownListener/UpListener below, and the
   //     PendingButtonDown type comment above for why this is a namespace-scope type, not a
@@ -507,6 +523,290 @@ private:
   Rml::ElementDocument* doc_;
 };
 
+// EN: Bubble-phase "change" listener attached to each loaded document's root (L1.15-FORMEV).
+//     Same id-resolution/reentrancy shape as ClickEventListener/ScrollEventListener above, plus
+//     RmlUi's own "value" event parameter forwarded verbatim -- see
+//     Bootstrap::set_change_callback's doc-comment for the full per-control-kind payload
+//     contract (already normalised by RmlUi itself, confirmed against the pinned source).
+// PT: Listener de "change" em fase bubble anexado à raiz de cada documento carregado
+//     (L1.15-FORMEV). Mesma forma de resolução de id/reentrância de ClickEventListener/
+//     ScrollEventListener acima, mais o próprio parâmetro de evento "value" do RmlUi
+//     encaminhado verbatim -- ver o doc-comment de Bootstrap::set_change_callback para o
+//     contrato completo de payload por tipo de controle (já normalizado pelo próprio RmlUi,
+//     confirmado contra o source pinado).
+class ChangeEventListener : public Rml::EventListener {
+public:
+  ChangeEventListener(std::function<void(const char*, const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    // EN: Same ancestor-walk-stops-at-doc_ rule as ClickEventListener::ProcessEvent above.
+    // PT: Mesma regra de subida-para-em-doc_ do ClickEventListener::ProcessEvent acima.
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Local Rml::String keeps the "value" parameter's storage alive for the duration of
+    //     this call (event.GetParameter<Rml::String> returns BY VALUE) -- c_str() on a
+    //     temporary would dangle the instant the full-expression ends; binding to a named
+    //     local extends its lifetime to the end of this scope, past both cb_ invocations below.
+    // PT: A Rml::String local mantém o storage do parâmetro "value" vivo pela duração desta
+    //     chamada (event.GetParameter<Rml::String> retorna POR VALOR) -- c_str() num temporário
+    //     penduraria no instante em que a expressão completa termina; vincular a uma local
+    //     nomeada estende o lifetime até o fim deste escopo, além das invocações de cb_ abaixo.
+    const Rml::String value = event.GetParameter<Rml::String>("value", "");
+    // EN: Copy the functor before invoking (AUD-TEC-3), same reentrancy guard as every other
+    //     listener in this file.
+    // PT: Copia o functor antes de invocar (AUD-TEC-3), mesma guarda de reentrância de todo
+    //     outro listener deste arquivo.
+    auto cb = *cb_;
+    if (cb) cb(id_str, value.c_str());
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*, const char*)>* cb_;
+  Rml::ElementDocument* doc_;
+};
+
+// EN: Bubble-phase "submit" listener attached to each loaded document's root (L1.15-FORMEV).
+//     The dispatch TARGET of Rml::EventId::Submit IS the <form> element itself
+//     (Rml::ElementForm::Submit() dispatches on `this`), so the ancestor walk below typically
+//     resolves the form's OWN id immediately -- id-only payload, see
+//     Bootstrap::set_submit_callback's doc-comment for the v1 scope decision (no name/value
+//     Dictionary forwarded).
+// PT: Listener de "submit" em fase bubble anexado à raiz de cada documento carregado
+//     (L1.15-FORMEV). O ALVO de despacho de Rml::EventId::Submit É o próprio elemento <form>
+//     (Rml::ElementForm::Submit() despacha em `this`), então a subida de ancestral abaixo
+//     tipicamente resolve o PRÓPRIO id do form de imediato -- payload só-id, ver o doc-comment
+//     de Bootstrap::set_submit_callback para a decisão de escopo da v1 (nenhum Dictionary
+//     nome/valor encaminhado).
+class SubmitEventListener : public Rml::EventListener {
+public:
+  SubmitEventListener(std::function<void(const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    auto cb = *cb_;
+    if (cb) cb(id_str);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*)>* cb_;
+  Rml::ElementDocument* doc_;
+};
+
+// EN: CAPTURE-phase "focus" listener attached to each loaded document's root (L1.15-FORMEV).
+//     Registered with in_capture_phase=TRUE, unlike every bubble-phase listener above --
+//     Rml::EventId::Focus does NOT bubble (EventSpecification.cpp: bubbles=false), so a
+//     bubble-phase document-root listener would never see it. RmlUi's capture phase always
+//     descends root->target regardless of the `bubbles` flag (confirmed reading
+//     EventDispatcher::DispatchEvent: `phases_to_execute = Capture | Target | (bubbles ?
+//     Bubble : 0)`), so this listener still reaches every focus target despite the
+//     document-root attachment point. See Bootstrap::set_focus_callback's doc-comment for the
+//     full empirically-verified recursion/dedup analysis.
+// PT: Listener de "focus" em fase de CAPTURA anexado à raiz de cada documento carregado
+//     (L1.15-FORMEV). Registrado com in_capture_phase=TRUE, diferente de todo listener de fase
+//     bubble acima -- Rml::EventId::Focus NÃO borbulha (EventSpecification.cpp: bubbles=false),
+//     então um listener de fase bubble na raiz do documento nunca o veria. A fase de captura do
+//     RmlUi sempre desce raiz->alvo independente da flag `bubbles` (confirmado lendo
+//     EventDispatcher::DispatchEvent: `phases_to_execute = Capture | Target | (bubbles ?
+//     Bubble : 0)`), então este listener ainda alcança todo alvo de foco apesar do ponto de
+//     anexação na raiz do documento. Ver o doc-comment de Bootstrap::set_focus_callback para a
+//     análise completa de recursão/dedup verificada empiricamente.
+class FocusEventListener : public Rml::EventListener {
+public:
+  FocusEventListener(std::function<void(const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    auto cb = *cb_;
+    if (cb) cb(id_str);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*)>* cb_;
+  Rml::ElementDocument* doc_;
+};
+
+// EN: CAPTURE-phase "blur" listener attached to each loaded document's root (L1.15-FORMEV).
+//     Same capture-phase rationale as FocusEventListener above (Rml::EventId::Blur also does
+//     NOT bubble) -- a separate class (not a shared instance with a bool flag) because it
+//     targets a DIFFERENT Impl field (blur_cb vs. focus_cb), mirroring
+//     ClickEventListener/ScrollEventListener's "one class, one cb pointer" idiom rather than
+//     ClickInfoEventListener's "one class, two instances differing by a bool" idiom (that
+//     shape exists there because both instances share ONE cb; here focus and blur are
+//     genuinely separate callbacks).
+// PT: Listener de "blur" em fase de CAPTURA anexado à raiz de cada documento carregado
+//     (L1.15-FORMEV). Mesma racional de fase-captura do FocusEventListener acima
+//     (Rml::EventId::Blur também NÃO borbulha) -- uma classe separada (não uma instância
+//     compartilhada com um flag bool) porque mira um campo DIFERENTE do Impl (blur_cb vs.
+//     focus_cb), espelhando o idioma "uma classe, um ponteiro de cb" de
+//     ClickEventListener/ScrollEventListener em vez do idioma "uma classe, duas instâncias
+//     diferindo por um bool" do ClickInfoEventListener (aquela forma existe lá porque as duas
+//     instâncias compartilham UM cb; aqui focus e blur são callbacks genuinamente separados).
+class BlurEventListener : public Rml::EventListener {
+public:
+  BlurEventListener(std::function<void(const char*)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    Rml::Element* el = event.GetTargetElement();
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    auto cb = *cb_;
+    if (cb) cb(id_str);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*)>* cb_;
+  Rml::ElementDocument* doc_;
+};
+
+// EN: Bubble-phase "hover" listener attached to each loaded document's root (L1.15-FORMEV),
+//     listening ONLY to Rml::EventId::Mouseover -- Mouseout is deliberately NOT separately
+//     listened to (see Bootstrap::set_hover_callback's doc-comment for the full dedup-machine
+//     rationale). Owns `current_hover_id_` as an INSTANCE member (not a Bootstrap::Impl field):
+//     a fresh listener instance is created per load() (same idiom as every listener above), so
+//     the dedup state is automatically reset to "" on every document reload with no extra
+//     bookkeeping.
+//
+//     CRITICAL correctness detail (found empirically, form_events_sanity.cpp F5): RmlUi's own
+//     Mouseover, like Focus/Blur, is NOT a single dispatch to the deepest hovered element that
+//     then bubbles -- Context::UpdateHoverChain calls the SAME Context::SendEvents helper
+//     Context::OnFocusChange uses (`std::set_difference` over the old/new hover ANCESTOR
+//     CHAINS, `element->DispatchEvent(Mouseover, ...)` called ONCE PER newly-entered ancestor).
+//     A single mouse move that enters several new ancestors at once (e.g. the very first hover
+//     of the whole session, or a jump across a previously-unhovered subtree) therefore fires
+//     THIS listener multiple times in a row, each with a DIFFERENT `event.GetTargetElement()`
+//     (one specific ancestor), in an UNSPECIFIED order (ElementSet iteration order, not
+//     leaf-to-root) -- resolving the id from `event.GetTargetElement()` directly would make the
+//     dedup outcome order-dependent and non-deterministic across runs. The fix: resolve the
+//     ancestor walk from `Context::GetHoverElement()` (via the target element's own
+//     `GetContext()`) INSTEAD OF `event.GetTargetElement()`. Confirmed by reading
+//     Context::UpdateHoverChain: `hover = mouse_active ? GetElementAtPoint(position) :
+//     nullptr;` is assigned BEFORE the new_hover_chain is built and BEFORE SendEvents dispatches
+//     ANY Mouseover/Mouseout -- so GetHoverElement() already reflects the FINAL, deepest hover
+//     target throughout the entire fan-out dispatch sequence, regardless of which particular
+//     ancestor a given dispatch's `event.GetTargetElement()` happens to be. Every fan-out
+//     dispatch within one logical mouse move therefore resolves the IDENTICAL `rid`, so the
+//     dedup below collapses them to AT MOST one real transition, deterministically -- this is
+//     what actually makes the "hover-a via its span vs. via its own background" test case
+//     ("cruzar filhos com id do mesmo container") stable rather than order-dependent. (This
+//     trick is NOT available for Focus/Blur: Context::OnFocusChange assigns `focus = new_focus`
+//     only AFTER both its Blur and Focus SendEvents passes complete, so GetFocusElement() is
+//     stale -- still the OLD value -- for the entire duration of a Focus/Blur fan-out dispatch;
+//     see set_focus_callback's doc-comment for how that asymmetry is handled instead.)
+// PT: Listener de "hover" em fase bubble anexado à raiz de cada documento carregado
+//     (L1.15-FORMEV), escutando SÓ Rml::EventId::Mouseover -- Mouseout deliberadamente NÃO é
+//     escutado separadamente (ver o doc-comment de Bootstrap::set_hover_callback para a
+//     racional completa da máquina de dedup). Possui `current_hover_id_` como membro de
+//     INSTÂNCIA (não um campo de Bootstrap::Impl): uma instância de listener nova é criada por
+//     load() (mesmo idioma de todo listener acima), então o estado de dedup é automaticamente
+//     resetado para "" a cada reload de documento, sem contabilidade extra.
+//
+//     Detalhe CRÍTICO de correção (achado empiricamente, form_events_sanity.cpp F5): o próprio
+//     Mouseover do RmlUi, igual a Focus/Blur, NÃO é um único despacho pro elemento mais fundo em
+//     hover que depois borbulha -- Context::UpdateHoverChain chama o MESMO helper
+//     Context::SendEvents que Context::OnFocusChange usa (`std::set_difference` sobre as CADEIAS
+//     DE ANCESTRAIS de hover antiga/nova, `element->DispatchEvent(Mouseover, ...)` chamado UMA
+//     VEZ POR ancestral recém-entrado). Um único movimento de mouse que entra em vários
+//     ancestrais novos de uma vez (ex.: o primeiríssimo hover da sessão inteira, ou um salto
+//     através de uma subárvore nunca antes em hover) portanto dispara ESTE listener várias vezes
+//     seguidas, cada vez com um `event.GetTargetElement()` DIFERENTE (um ancestral específico),
+//     numa ordem NÃO ESPECIFICADA (ordem de iteração do ElementSet, não folha-pra-raiz) --
+//     resolver o id a partir de `event.GetTargetElement()` diretamente tornaria o resultado do
+//     dedup dependente de ordem e não-determinístico entre execuções. O conserto: resolver a
+//     subida de ancestral a partir de `Context::GetHoverElement()` (via o próprio
+//     `GetContext()` do elemento-alvo) EM VEZ DE `event.GetTargetElement()`. Confirmado lendo
+//     Context::UpdateHoverChain: `hover = mouse_active ? GetElementAtPoint(position) :
+//     nullptr;` é atribuído ANTES do new_hover_chain ser construído e ANTES do SendEvents
+//     despachar QUALQUER Mouseover/Mouseout -- então GetHoverElement() já reflete o alvo de
+//     hover FINAL, mais fundo, durante toda a sequência de despacho em fan-out, independente de
+//     qual ancestral específico o `event.GetTargetElement()` de um dado despacho seja. Todo
+//     despacho de fan-out dentro de um único movimento lógico de mouse portanto resolve o MESMO
+//     `rid`, então o dedup abaixo colapsa eles pra NO MÁXIMO uma transição real,
+//     deterministicamente -- é isso que de fato torna o caso de teste "hover-a via seu span vs.
+//     via seu próprio background" ("cruzar filhos com id do mesmo container") estável em vez de
+//     dependente de ordem. (Esse truque NÃO está disponível pra Focus/Blur: Context::
+//     OnFocusChange atribui `focus = new_focus` só APÓS as duas passadas de SendEvents de Blur e
+//     Focus terminarem, então GetFocusElement() fica obsoleto -- ainda o valor ANTIGO -- durante
+//     toda a duração de um despacho em fan-out de Focus/Blur; ver o doc-comment de
+//     set_focus_callback pra como essa assimetria é tratada em vez disso.)
+class HoverEventListener : public Rml::EventListener {
+public:
+  HoverEventListener(std::function<void(const char*, bool)>* cb, Rml::ElementDocument* doc)
+      : cb_(cb), doc_(doc) {}
+
+  void ProcessEvent(Rml::Event& event) override {
+    if (!cb_ || !*cb_) return;
+    // EN: Resolve from the Context's LIVE hover element, not event.GetTargetElement() -- see
+    //     the class-level comment above for why (fan-out dispatch order-independence).
+    // PT: Resolve a partir do elemento de hover VIVO do Context, não event.GetTargetElement()
+    //     -- ver o comentário de nível de classe acima pro motivo (independência de ordem do
+    //     despacho em fan-out).
+    Rml::Element* target = event.GetTargetElement();
+    Rml::Context* target_ctx = target ? target->GetContext() : nullptr;
+    Rml::Element* el = target_ctx ? target_ctx->GetHoverElement() : target;
+    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
+    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Dedup: no state change, no-op. This is what kills re-firing while the cursor crosses
+    //     unlabeled children of the SAME labeled container (every raw Mouseover on those
+    //     children resolves, via the ancestor walk above, to the SAME container id).
+    // PT: Dedup: sem mudança de estado, no-op. É isso que mata o redisparo enquanto o cursor
+    //     cruza filhos sem id do MESMO container com id (todo Mouseover cru nesses filhos
+    //     resolve, pela subida de ancestral acima, para o MESMO id de container).
+    if (current_hover_id_ == id_str) return;
+    // EN: Capture the OLD id into our own std::string (survives the mutation below) BEFORE
+    //     updating current_hover_id_ -- current_hover_id_ itself must already hold the NEW
+    //     value BEFORE either functor is invoked (both the AUD-TEC-3 reentrancy discipline and
+    //     the exact ordering set_hover_callback's doc-comment specifies).
+    // PT: Captura o id ANTIGO na nossa própria std::string (sobrevive à mutação abaixo) ANTES
+    //     de atualizar current_hover_id_ -- o próprio current_hover_id_ já deve conter o valor
+    //     NOVO ANTES de qualquer functor ser invocado (tanto a disciplina de reentrância
+    //     AUD-TEC-3 quanto a ordem exata que o doc-comment de set_hover_callback especifica).
+    const std::string previous = current_hover_id_;
+    current_hover_id_ = id_str;
+    // EN: Copy the functor before invoking (AUD-TEC-3), same reentrancy guard as every other
+    //     listener in this file.
+    // PT: Copia o functor antes de invocar (AUD-TEC-3), mesma guarda de reentrância de todo
+    //     outro listener deste arquivo.
+    auto cb = *cb_;
+    if (!cb) return;
+    if (!previous.empty()) cb(previous.c_str(), false);
+    if (!current_hover_id_.empty()) cb(current_hover_id_.c_str(), true);
+  }
+
+  void OnDetach(Rml::Element* /*element*/) override { delete this; }
+
+private:
+  std::function<void(const char*, bool)>* cb_;
+  Rml::ElementDocument* doc_;
+  // EN: OUR OWN copy of the currently-resolved hover id -- "" means nothing (with an id) is
+  //     currently considered hovered. See the class-level comment above for why this lives
+  //     here (per-listener-instance) rather than in Bootstrap::Impl.
+  // PT: Cópia NOSSA do id de hover resolvido atualmente -- "" significa que nada (com id) é
+  //     considerado em hover no momento. Ver o comentário de nível de classe acima pro motivo
+  //     de isto morar aqui (por instância de listener) em vez de em Bootstrap::Impl.
+  std::string current_hover_id_;
+};
+
 Bootstrap::~Bootstrap() { shutdown(); }
 
 bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int h) {
@@ -742,6 +1042,24 @@ bool Bootstrap::load(const char* rml_path) {
   //     contrato completo.
   doc->AddEventListener(Rml::EventId::Scroll,
                          new ScrollEventListener(&impl_->scroll_cb, doc), false);
+  // EN: L1.15-FORMEV -- change/submit/hover are bubble-phase (in_capture_phase=false), same
+  //     pattern as every listener above. focus/blur are CAPTURE-phase (in_capture_phase=true)
+  //     -- see FocusEventListener/BlurEventListener's class comments and
+  //     Bootstrap::set_focus_callback's doc-comment for why (Focus/Blur do not bubble).
+  // PT: L1.15-FORMEV -- change/submit/hover são fase bubble (in_capture_phase=false), mesmo
+  //     padrão de todo listener acima. focus/blur são fase de CAPTURA (in_capture_phase=true)
+  //     -- ver os comentários de classe de FocusEventListener/BlurEventListener e o doc-comment
+  //     de Bootstrap::set_focus_callback pro motivo (Focus/Blur não borbulham).
+  doc->AddEventListener(Rml::EventId::Change,
+                         new ChangeEventListener(&impl_->change_cb, doc), false);
+  doc->AddEventListener(Rml::EventId::Submit,
+                         new SubmitEventListener(&impl_->submit_cb, doc), false);
+  doc->AddEventListener(Rml::EventId::Focus,
+                         new FocusEventListener(&impl_->focus_cb, doc), true);
+  doc->AddEventListener(Rml::EventId::Blur,
+                         new BlurEventListener(&impl_->blur_cb, doc), true);
+  doc->AddEventListener(Rml::EventId::Mouseover,
+                         new HoverEventListener(&impl_->hover_cb, doc), false);
   impl_->doc = doc;
   return true;
 }
@@ -758,6 +1076,26 @@ void Bootstrap::set_click_info_callback(std::function<void(const ClickInfo&)> cb
 
 void Bootstrap::set_scroll_callback(std::function<void(const char*)> cb) {
   if (impl_) impl_->scroll_cb = std::move(cb);
+}
+
+void Bootstrap::set_change_callback(std::function<void(const char*, const char*)> cb) {
+  if (impl_) impl_->change_cb = std::move(cb);
+}
+
+void Bootstrap::set_submit_callback(std::function<void(const char*)> cb) {
+  if (impl_) impl_->submit_cb = std::move(cb);
+}
+
+void Bootstrap::set_focus_callback(std::function<void(const char*)> cb) {
+  if (impl_) impl_->focus_cb = std::move(cb);
+}
+
+void Bootstrap::set_blur_callback(std::function<void(const char*)> cb) {
+  if (impl_) impl_->blur_cb = std::move(cb);
+}
+
+void Bootstrap::set_hover_callback(std::function<void(const char*, bool)> cb) {
+  if (impl_) impl_->hover_cb = std::move(cb);
 }
 
 bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {

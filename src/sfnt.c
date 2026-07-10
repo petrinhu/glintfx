@@ -219,6 +219,33 @@ glx_sfnt_result glx_sfnt_open(const uint8_t* blob, size_t len, glx_sfnt_face* ou
         return GLX_SFNT_ERR_TABLE_MISSING;
     }
 
+    // ---- kern: OPTIONAL table -- absent, or present-but-malformed, both soft-fail to "no kern" -
+    // EN: Unlike the 7 REQUIRED tables above (a missing one is `GLX_SFNT_ERR_TABLE_MISSING`),
+    //     `kern` is genuinely optional (a font missing kerning data is still a fully valid font --
+    //     see include/core/sfnt.h's `glx_sfnt_face::kern_len` doc) AND, if `find_table` itself
+    //     fails (the directory record's own `[offset, length)` does not fit the blob -- a hostile/
+    //     malformed `kern` entry), that failure is folded into "no kern" too rather than aborting
+    //     `glx_sfnt_open` entirely -- same soft-fail posture as `cmap`'s own per-record OOB
+    //     handling a few lines below in this same function (a non-critical table's bad entry
+    //     should not brick parsing of every OTHER table this font legitimately has). `kern_t` is
+    //     explicitly zero-initialized so `kern_t.found` is never read as indeterminate memory in
+    //     the `!find_table(...)` branch (that branch returns 0 without itself touching
+    //     `slot->found` -- see `find_table`'s own comment above).
+    // PT: Diferente das 7 tabelas OBRIGATÓRIAS acima (uma ausente é `GLX_SFNT_ERR_TABLE_MISSING`),
+    //     `kern` é genuinamente opcional (uma fonte sem dado de kerning ainda é uma fonte
+    //     plenamente válida -- ver o doc do `glx_sfnt_face::kern_len` do include/core/sfnt.h) E,
+    //     se o próprio `find_table` falhar (o `[offset, length)` do próprio registro de diretório
+    //     não cabe no blob -- uma entrada `kern` hostil/malformada), essa falha também é dobrada
+    //     em "sem kern" em vez de abortar o `glx_sfnt_open` inteiro -- mesma postura de falha
+    //     suave que o próprio tratamento de OOB por-registro do `cmap` algumas linhas abaixo nesta
+    //     mesma função já usa (uma entrada ruim de uma tabela não-crítica não deveria travar o
+    //     parse de toda OUTRA tabela que esta fonte legitimamente tem). `kern_t` é zero-
+    //     inicializado explicitamente pra `kern_t.found` nunca ser lido como memória
+    //     indeterminada no ramo `!find_table(...)` (aquele ramo retorna 0 sem tocar
+    //     `slot->found` -- ver o comentário do próprio `find_table` acima).
+    table_slot_t kern_t = {0, 0, 0};
+    int kern_found = find_table(blob, len, dir_off, num_tables, "kern", &kern_t) && kern_t.found;
+
     // ---- head: unitsPerEm @18, indexToLocFormat @50 -----------------------------------------
     uint16_t units_per_em;
     int16_t index_to_loc_format;
@@ -338,6 +365,14 @@ glx_sfnt_result glx_sfnt_open(const uint8_t* blob, size_t len, glx_sfnt_face* ou
     out->glyf_len = glyf_t.len;
     out->cmap_subtable_off = best_off;
     out->cmap_format = best_format;
+    // EN: `kern_len == 0` is the sentinel `glx_sfnt_kern` checks for "no kern table" -- see this
+    //     function's own `kern_t`/`kern_found` comment above and include/core/sfnt.h's
+    //     `glx_sfnt_face::kern_len` doc.
+    // PT: `kern_len == 0` é o sentinela que o `glx_sfnt_kern` checa pra "sem tabela kern" -- ver o
+    //     comentário próprio `kern_t`/`kern_found` desta função acima e o doc do
+    //     `glx_sfnt_face::kern_len` do include/core/sfnt.h.
+    out->kern_off = kern_found ? kern_t.off : 0;
+    out->kern_len = kern_found ? kern_t.len : 0;
     return GLX_SFNT_OK;
 }
 
@@ -1034,4 +1069,191 @@ glx_sfnt_result glx_sfnt_glyph_outline(const glx_sfnt_face* face, uint32_t gid,
     out->x_max = x_max;
     out->y_max = y_max;
     return GLX_SFNT_OK;
+}
+
+// ============================================================================================
+// EN: glx_sfnt_kern -- 'kern' table, classic (`version == 0`) format-0, horizontal subtable pair
+//     lookup. Public API contract, oracle values, and the discovered real-world "subtable length
+//     field overflows for Open Sans' own 18694-pair subtable" quirk are all documented on this
+//     function's own declaration in include/core/sfnt.h -- this comment block only adds the
+//     LOCAL "how" (byte layout, the specific bounds-check shape chosen and why), not re-derived
+//     "why"/scope that already lives there.
+// PT: glx_sfnt_kern -- lookup de par na subtable clássica (`version == 0`) formato-0, horizontal,
+//     da tabela `kern`. O contrato de API pública, os valores de oráculo, e a peculiaridade real
+//     descoberta ("o campo de tamanho da subtable transborda pra subtable de 18694 pares da
+//     própria Open Sans") estão todos documentados na declaração própria desta função no
+//     include/core/sfnt.h -- este bloco de comentário só acrescenta o "como" LOCAL (layout de
+//     byte, a forma exata de checagem de limite escolhida e por quê), não o "porquê"/escopo
+//     já re-derivado que mora lá.
+// ============================================================================================
+
+int16_t glx_sfnt_kern(const glx_sfnt_face* face, uint32_t left_gid, uint32_t right_gid) {
+    if (face == NULL || face->kern_len == 0) return 0; // no kern table -- a valid, common case
+
+    // EN: The wire pair fields (`left`/`right` below) are `uint16_t` -- a gid above `0xFFFF`
+    //     could never be stored in one, so it can never match any real pair; short-circuiting
+    //     here also sidesteps any risk of a `(uint16_t)left_gid` truncation later in this
+    //     function accidentally matching an unrelated small gid.
+    // PT: Os campos de par no fio (`left`/`right` abaixo) são `uint16_t` -- um gid acima de
+    //     `0xFFFF` nunca poderia estar guardado num, então nunca pode casar par nenhum de
+    //     verdade; o curto-circuito aqui também evita qualquer risco de um truncamento
+    //     `(uint16_t)left_gid` mais adiante nesta função casar por acidente um gid pequeno
+    //     não-relacionado.
+    if (left_gid > 0xFFFFu || right_gid > 0xFFFFu) return 0;
+
+    const uint8_t* blob = face->blob;
+    size_t len = face->len;
+    size_t kern_off = face->kern_off;
+    // EN: Safe to compute directly (no overflow-guard needed the way `bounds_ok`'s callers guard
+    //     `off + need`): `kern_off`/`kern_len` were already proven `kern_off + kern_len <= len`
+    //     by `find_table`'s own `bounds_ok` call inside `glx_sfnt_open` -- both are therefore
+    //     already small, blob-bounded `size_t`s, nowhere near `SIZE_MAX`.
+    // PT: Seguro de computar direto (sem precisar da guarda-contra-overflow que os chamadores do
+    //     `bounds_ok` fazem pra `off + need`): `kern_off`/`kern_len` já foram provados
+    //     `kern_off + kern_len <= len` pelo próprio `bounds_ok` do `find_table` dentro do
+    //     `glx_sfnt_open` -- ambos já são, portanto, `size_t`s pequenos, limitados pelo blob,
+    //     longe de `SIZE_MAX`.
+    size_t kern_end = kern_off + face->kern_len;
+
+    // ---- kern table header: version(2) nTables(2) -------------------------------------------
+    // EN: The Microsoft "extended" kern header is a DIFFERENT shape entirely (a `uint32` version
+    //     whose top 16 bits read `0x0001`, followed by a `uint32` table count) -- reading its
+    //     first 2 bytes as this classic header's `version` field yields exactly `0x0001`, which
+    //     this check rejects, fail-clean, without ever misinterpreting one more byte of an
+    //     unsupported header shape as if it were the classic one (see this function's own doc
+    //     comment in include/core/sfnt.h for the full MS-variant rationale).
+    // PT: O header `kern` "estendido" da Microsoft é um formato inteiramente DIFERENTE (uma
+    //     `version` `uint32` cujos 16 bits de cima leem `0x0001`, seguida de uma contagem de
+    //     tabela `uint32`) -- ler os primeiros 2 bytes dela como o campo `version` deste header
+    //     clássico resulta exatamente em `0x0001`, que esta checagem rejeita, de forma limpa,
+    //     sem nunca reinterpretar mais nenhum byte de um formato de header não suportado como se
+    //     fosse o clássico (ver o comentário de doc próprio desta função no include/core/sfnt.h
+    //     pro racional completo da variante MS).
+    uint16_t kern_version;
+    if (!rd_u16(blob, len, kern_off, &kern_version)) return 0;
+    if (kern_version != 0) return 0;
+
+    uint16_t num_subtables;
+    if (!rd_u16(blob, len, kern_off + 2, &num_subtables)) return 0;
+
+    // EN: `cursor` walks the classic kern header's subtable array, one subtable at a time --
+    //     bounded by `num_subtables` (a `uint16_t`, at most 65535 iterations) AND by `kern_end`
+    //     (checked after every skip below), so this loop is provably finite even against a
+    //     hostile `num_subtables`/chain of skipped subtables.
+    // PT: `cursor` percorre o array de subtable do header clássico de kern, uma subtable de cada
+    //     vez -- limitado por `num_subtables` (um `uint16_t`, no máximo 65535 iterações) E por
+    //     `kern_end` (checado depois de todo pulo abaixo), então este laço é provadamente finito
+    //     mesmo contra um `num_subtables`/cadeia de subtable pulada hostil.
+    size_t cursor = kern_off + 4;
+    for (uint16_t i = 0; i < num_subtables; i++) {
+        // ---- subtable header: version(2) length(2) coverage(2) ------------------------------
+        if (!bounds_ok(kern_end, cursor, 6)) return 0;
+        uint16_t sub_length, coverage;
+        if (!rd_u16(blob, len, cursor + 2, &sub_length)) return 0;
+        if (!rd_u16(blob, len, cursor + 4, &coverage)) return 0;
+
+        // EN: Apple's own kern `coverage` field layout: bits 0-7 are flags (bit0 = horizontal),
+        //     bits 8-15 are the subtable FORMAT -- `coverage >> 8` recovers it directly.
+        // PT: O layout do próprio campo `coverage` de kern da Apple: bits 0-7 são flags (bit0 =
+        //     horizontal), bits 8-15 são o FORMATO da subtable -- `coverage >> 8` recupera ele
+        //     direto.
+        uint16_t format = (uint16_t)(coverage >> 8);
+        int horizontal = coverage & 0x0001;
+
+        if (format == 0 && horizontal) {
+            // ---- format 0: nPairs(2) searchRange(2) entrySelector(2) rangeShift(2), pairs... --
+            size_t f0_off = cursor + 6;
+            uint16_t n_pairs;
+            if (!rd_u16(blob, len, f0_off, &n_pairs)) return 0;
+            size_t pairs_off = f0_off + 8;
+
+            // EN: Bounds-check the pair array against the OUTER `kern` TABLE's own
+            //     `[kern_off, kern_end)` span -- deliberately NOT against this subtable's own
+            //     `sub_length` field (read above, otherwise unused from here on): Open Sans' own
+            //     real format-0 subtable has 18694 pairs (`18694*6 + 14 == 112178` total bytes)
+            //     but its `length` FIELD -- a `uint16_t`, 16 bits, max representable value 65535
+            //     -- declares `46642` (`112178 mod 65536 == 46642`, confirmed byte-for-byte
+            //     against the live font file). Bounding against `sub_length` here would REJECT
+            //     Open Sans' own legitimate kern data outright; bounding against `kern_end`
+            //     instead (the outer table's own length, already proven to fit `blob` by
+            //     `find_table`'s `bounds_ok` in `glx_sfnt_open`) accepts it correctly while still
+            //     catching a genuinely LYING `n_pairs` (any count whose `*6` byte span does not
+            //     fit before `kern_end`) with the exact same `bounds_ok` primitive every other
+            //     bounds check in this file uses -- `bounds_ok(kern_end, pairs_off, need)` reads
+            //     naturally here because `bounds_ok`'s own two parameters are just "exclusive
+            //     upper bound" and "offset/size to fit within it", and `kern_end` IS exactly that
+            //     upper bound for everything inside this `kern` table.
+            // PT: Checa limite do array de par contra o vão `[kern_off, kern_end)` da PRÓPRIA
+            //     tabela `kern` externa -- deliberadamente NÃO contra o PRÓPRIO campo
+            //     `sub_length` desta subtable (lido acima, sem outro uso daqui em diante): a
+            //     própria subtable formato-0 real da Open Sans tem 18694 pares
+            //     (`18694*6 + 14 == 112178` bytes totais) mas o CAMPO `length` dela -- um
+            //     `uint16_t`, 16 bits, valor máximo representável 65535 -- declara `46642`
+            //     (`112178 mod 65536 == 46642`, confirmado byte-a-byte contra o arquivo de fonte
+            //     ao vivo). Checar limite contra `sub_length` aqui REJEITARIA de vez o dado de
+            //     kern legítimo da própria Open Sans; checar contra `kern_end` em vez disso (o
+            //     próprio tamanho da tabela externa, já provado caber em `blob` pelo
+            //     `bounds_ok` do `find_table` no `glx_sfnt_open`) aceita corretamente enquanto
+            //     ainda pega um `n_pairs` genuinamente MENTIROSO (qualquer contagem cujo vão de
+            //     byte `*6` não caiba antes de `kern_end`) com a mesma primitiva `bounds_ok`
+            //     exata que toda outra checagem de limite deste arquivo usa --
+            //     `bounds_ok(kern_end, pairs_off, need)` lê-se naturalmente aqui porque os
+            //     próprios dois parâmetros do `bounds_ok` são só "limite superior exclusivo" e
+            //     "offset/tamanho pra caber dentro dele", e `kern_end` É exatamente esse limite
+            //     superior pra tudo dentro desta tabela `kern`.
+            size_t need = (size_t)n_pairs * 6u;
+            if (!bounds_ok(kern_end, pairs_off, need)) return 0;
+
+            // EN: Pairs are spec-REQUIRED to be sorted by `(left<<16 | right)` (confirmed live
+            //     against Open Sans' own 18694 pairs, cross-checked independently with
+            //     `fontTools`) -- a binary search would be the throughput-optimal choice, but
+            //     this scan does not rely on that ordering (same correctness-first,
+            //     no-sortedness-assumption stance `find_table`/`cmap_lookup_format4` above
+            //     already take): an unsorted/hostile table simply yields "no match" safely
+            //     instead of a wrong-but-early-terminated one. Bounded by `n_pairs`
+            //     (`uint16_t`, at most 65535) -- finite regardless.
+            // PT: Pares são EXIGIDOS pela spec de estarem ordenados por `(left<<16 | right)`
+            //     (confirmado ao vivo contra os próprios 18694 pares da Open Sans, cruzado
+            //     independentemente com `fontTools`) -- uma busca binária seria a escolha
+            //     ótima de vazão, mas esta varredura não depende dessa ordenação (mesma postura
+            //     correção-primeiro, sem-suposição-de-ordenação que `find_table`/
+            //     `cmap_lookup_format4` acima já tomam): uma tabela desordenada/hostil
+            //     simplesmente resulta em "sem match" com segurança em vez de um match
+            //     errado-mas-terminado-cedo. Limitado por `n_pairs` (`uint16_t`, no máximo
+            //     65535) -- finito de qualquer jeito.
+            for (uint16_t p = 0; p < n_pairs; p++) {
+                size_t po = pairs_off + (size_t)p * 6u;
+                uint16_t l, r;
+                if (!rd_u16(blob, len, po, &l)) return 0;
+                if (!rd_u16(blob, len, po + 2, &r)) return 0;
+                if (l == (uint16_t)left_gid && r == (uint16_t)right_gid) {
+                    int16_t v;
+                    if (!rd_i16(blob, len, po + 4, &v)) return 0;
+                    return v;
+                }
+            }
+            return 0; // no matching pair in this subtable -- ordinary "these glyphs do not kern"
+        }
+
+        // EN: Not the subtable we want (wrong format, or vertical-only) -- skip to the next one
+        //     using ITS OWN declared `sub_length` (the standard way to walk a `kern` subtable
+        //     array per spec). This is the ONE place this function still trusts a subtable's own
+        //     `length` field -- safe here specifically because we are not reading pairs FROM this
+        //     subtable, only skipping PAST it; a `sub_length` of `0` would stall `cursor` forever
+        //     (rejected explicitly), and `cursor` overshooting `kern_end` after the skip is
+        //     caught immediately below, both fail-clean.
+        // PT: Não é a subtable que queremos (formato errado, ou só-vertical) -- pula pra próxima
+        //     usando o PRÓPRIO `sub_length` declarado dela (o jeito padrão de percorrer um array
+        //     de subtable `kern` conforme a spec). Este é o ÚNICO lugar onde esta função ainda
+        //     confia no PRÓPRIO campo `length` de uma subtable -- seguro aqui especificamente
+        //     porque não estamos lendo pares DESTA subtable, só pulando POR CIMA dela; um
+        //     `sub_length` de `0` travaria o `cursor` pra sempre (rejeitado explicitamente), e o
+        //     `cursor` ultrapassando `kern_end` depois do pulo é pego logo abaixo, ambos de forma
+        //     limpa.
+        if (sub_length == 0) return 0;
+        cursor += sub_length;
+        if (cursor > kern_end) return 0;
+    }
+
+    return 0; // exhausted every subtable without finding a usable format-0 horizontal one
 }

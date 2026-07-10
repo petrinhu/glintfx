@@ -12,7 +12,12 @@
 //     against below (unitsPerEm, numGlyphs, ascender/descender/lineGap, numHMetrics, the
 //     cmap('A'/'i'/'M'/'H'/'á')->gid mappings, hmtx advance/lsb per glyph, H's/`.notdef`'s
 //     simple-glyph contour/point/bbox data, `á`'s composite structure -- 2 components, `a`+`acute`,
-//     BOTH with a plain xy offset and NO scale) was independently derived with `fontTools`
+//     BOTH with a plain xy offset and NO scale -- and, added for `glx_sfnt_kern`'s own suite
+//     below, the `kern` format-0 pair values for `'A'+'V'`/`'T'+'.'`/`'V'+'a'`/`'A'+'T'`/`'T'+'A'`,
+//     each cross-checked TWICE independently -- once via `fontTools`'s own decoded
+//     `kernTables[0].kernTable` dict, once via a from-scratch Python `struct` walk of the raw
+//     format-0 pair bytes against the public spec, both agreeing) was independently derived with
+//     `fontTools`
 //     (https://github.com/fonttools/fonttools, MIT-licensed, a Python OpenType library -- NOT
 //     FreeType, unrelated codebase) via `TTFont(...)`'s public table-accessor API, and separately
 //     cross-checked by manually walking the RAW BYTES with Python's `struct` module against the
@@ -867,6 +872,109 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(points[0].y, (short)0);
         TEST_ASSERT_EQ(points[1].x, (short)32767); // INT16_MAX -- saturated, NOT the -2 wrap
         TEST_ASSERT_EQ(points[1].y, (short)0);
+    }
+
+    // ============================================================================================
+    // ---- glx_sfnt_kern: 'kern' format-0 horizontal subtable pair lookup (real Open Sans) --------
+    //
+    //      ORACLE (per this file's header's "só p/ gerar os esperados, nunca código"): every pair
+    //      value below was independently derived TWICE against the live font file, both cross-
+    //      checking each other -- (1) `fontTools.ttLib.TTFont(...)['kern'].kernTables[0].kernTable`,
+    //      a dict keyed by (glyphName1, glyphName2), and (2) a from-scratch Python `struct` walk of
+    //      the RAW format-0 pair array (`left(u16) right(u16) value(i16)`, per the public spec),
+    //      resolving glyph names via `TTFont.getGlyphOrder()`/`getBestCmap()` purely to LABEL gids
+    //      for readability, not to derive the kern values themselves. Both methods agreed on every
+    //      value below. `fontTools` is MIT-licensed, unrelated to FreeType -- used only to generate
+    //      these expected numbers, no code read from it (see include/core/sfnt.h's file header for
+    //      the clean-room statement this ticket's CLEAN-ROOM constraint requires).
+    //
+    //      Open Sans' own `kern` table (confirmed by both the real-font `glx_sfnt_open` assertions
+    //      above and this independent derivation): ONE subtable, classic `version == 0` header,
+    //      format 0, horizontal (`coverage == 0x0001`), 18694 pairs, sorted by `(left<<16|right)`.
+    //      Its subtable-local `length` FIELD declares `46642` -- a 16-bit overflow of the true
+    //      `112178`-byte subtable size (`112178 mod 65536 == 46642`), confirmed by both oracle
+    //      methods (`fontTools` itself warns "'kern' subtable longer than defined" while still
+    //      correctly parsing all 18694 pairs) -- this is exactly the real-world quirk `glx_sfnt_
+    //      kern`'s own doc comment (include/core/sfnt.h) and implementation comment (src/sfnt.c)
+    //      document at length: bounds-checking against this field would wrongly REJECT Open Sans'
+    //      own legitimate kern data.
+    //
+    //      Pairs used below (glyph -> gid, from this file's existing cmap-lookup assertions/
+    //      comments above): 'A'=36, 'V'=57, 'T'=55, '.'=17 (period), 'a'=68 (also 'á' composite's
+    //      own base component, gid 163 is unrelated -- plain 'a' is a separate, simple glyph).
+    // ============================================================================================
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 36 /* A */, 57 /* V */), (short)-82);
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 55 /* T */, 17 /* period */), (short)-123);
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 57 /* V */, 68 /* a */), (short)-41);
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 36 /* A */, 55 /* T */), (short)-143);
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 55 /* T */, 36 /* A */), (short)-143);
+    // EN: 'A'+'A' -- confirmed absent from the oracle's own pair dict (`kernTable.get(('A','A'))
+    //     is None`) -- the ordinary "these two glyphs do not kern" case, must return 0, not a
+    //     crash/garbage value.
+    // PT: 'A'+'A' -- confirmado ausente do próprio dicionário de par do oráculo
+    //     (`kernTable.get(('A','A')) is None`) -- o caso comum "esses dois glyphs não fazem
+    //     kern", precisa retornar 0, não um valor lixo/crash.
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 36 /* A */, 36 /* A */), (short)0);
+    // EN: gid above 0xFFFF -- can never match a wire (uint16) pair field, must return 0 cleanly.
+    // PT: gid acima de 0xFFFF -- nunca consegue casar um campo de par no fio (uint16), precisa
+    //     retornar 0 de forma limpa.
+    TEST_ASSERT_EQ(glx_sfnt_kern(&face, 0x10000u, 57), (short)0);
+    TEST_ASSERT_EQ(glx_sfnt_kern(NULL, 36, 57), (short)0);
+
+    // ============================================================================================
+    // ---- glx_sfnt_kern: font genuinely WITHOUT a 'kern' table (kSyntheticFontF12) ---------------
+    // ============================================================================================
+    {
+        glx_sfnt_face face_no_kern;
+        glx_sfnt_result r =
+            glx_sfnt_open(kSyntheticFontF12, sizeof(kSyntheticFontF12), &face_no_kern);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        // EN: 7-table synthetic font, `kern` is not one of them -- `kern_len` must be 0 and every
+        //     lookup must resolve to 0, never a stale/garbage read.
+        // PT: fonte sintética de 7 tabelas, `kern` não é uma delas -- `kern_len` precisa ser 0 e
+        //     toda busca precisa resolver pra 0, nunca uma leitura obsoleta/lixo.
+        TEST_ASSERT_EQ(face_no_kern.kern_len, (size_t)0);
+        TEST_ASSERT_EQ(glx_sfnt_kern(&face_no_kern, 0, 1), (short)0);
+    }
+
+    // ============================================================================================
+    // ---- HOSTILE: glx_sfnt_kern -- lying nPairs (real Open Sans, byte-patched) -------------------
+    //      The format-0 subtable's own `nPairs` field (at file offset 87370 -- `kern` table found
+    //      at file offset 87360 per the Makefile-embedded fixture's directory, `+4` for the kern
+    //      header, `+6` for the subtable's own version/length/coverage, i.e. absolute byte
+    //      87360+4+6=87370, independently confirmed via Python `struct` against the same file this
+    //      whole suite embeds) is patched from the real `18694` to `0xFFFF` (65535) -- a byte span
+    //      of `65535*6=393210` bytes that does NOT fit before `kern_end` (this subtable's true
+    //      pair-array budget is `112164` bytes). Must resolve to a clean `0`, never an
+    //      out-of-bounds read.
+    // ============================================================================================
+    {
+        memcpy(g_patch_buf, real_blob, real_len);
+        patch_u16_be(g_patch_buf, 87370, 0xFFFFu);
+        glx_sfnt_face face_bad_kern;
+        glx_sfnt_result r = glx_sfnt_open(g_patch_buf, real_len, &face_bad_kern);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK); // glx_sfnt_open itself still succeeds -- kern is optional
+        TEST_ASSERT_EQ(glx_sfnt_kern(&face_bad_kern, 36 /* A */, 57 /* V */), (short)0);
+        memcpy(g_patch_buf, real_blob, real_len);
+    }
+
+    // ============================================================================================
+    // ---- HOSTILE: glx_sfnt_kern -- Microsoft "extended" kern header (real Open Sans, patched) ---
+    //      The kern table's own `version` field (the first 2 bytes of the table, absolute file
+    //      offset 87360) is patched from `0x0000` to `0x0001` -- the exact first-two-bytes shape
+    //      the Microsoft "extended" kern header variant uses (a totally different header this
+    //      function's scope deliberately excludes, see include/core/sfnt.h). Must be detected and
+    //      skipped cleanly (never misread the rest of the bytes as if they were the classic
+    //      shape), resolving to 0.
+    // ============================================================================================
+    {
+        memcpy(g_patch_buf, real_blob, real_len);
+        patch_u16_be(g_patch_buf, 87360, 0x0001u);
+        glx_sfnt_face face_ms_kern;
+        glx_sfnt_result r = glx_sfnt_open(g_patch_buf, real_len, &face_ms_kern);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(glx_sfnt_kern(&face_ms_kern, 36 /* A */, 57 /* V */), (short)0);
+        memcpy(g_patch_buf, real_blob, real_len);
     }
 
     TEST_PASS();

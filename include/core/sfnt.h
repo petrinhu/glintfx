@@ -45,13 +45,23 @@
 //     format-4-only, BMP; format 12 is exercised by a hand-built synthetic fixture in
 //     `tests/test_sfnt.c` -- see that file), `loca`/`glyf` (quadratic outlines, INCLUDING
 //     composite glyphs with a translate + optional 2x2/scale transform -- required for the pt-br
-//     accented glyphs `á`/`ç`/`ã`, all composites in Open Sans). Deliberately OUT of scope (YAGNI,
-//     same anti-over-engineering discipline this whole codebase applies): CFF/OTF outlines
-//     (PostScript cubics -- `sfntVersion == 'OTTO'` is rejected with `GLX_SFNT_ERR_BAD_VERSION`),
-//     `kern`/`GPOS` kerning, hinting bytecode (`glyf`'s `instructions` are parsed-past, never
-//     interpreted -- SOV-RAST, the next piece, rasterizes UN-hinted outlines, same trade-off
-//     `stb_truetype` makes), composite ARGS_ARE_XY_VALUES==0 (point-matching component
-//     positioning, a rare mode no glyph in Open Sans uses -- `GLX_SFNT_ERR_UNSUPPORTED`).
+//     accented glyphs `á`/`ç`/`ã`, all composites in Open Sans), `kern` FORMAT 0, HORIZONTAL
+//     SUBTABLE ONLY (`glx_sfnt_kern` -- the classic Apple/Microsoft-classic `version == 0` header;
+//     Open Sans ships exactly one such subtable, 18694 pairs, and is this feature's own oracle --
+//     see `tests/test_sfnt.c`'s ORACLE METHOD section). SOV-SFNT amadurecimento pro L1.20 ticket
+//     (kerning, glintfx's text-layout consumer). Deliberately OUT of scope (YAGNI, same
+//     anti-over-engineering discipline this whole codebase applies): CFF/OTF outlines (PostScript
+//     cubics -- `sfntVersion == 'OTTO'` is rejected with `GLX_SFNT_ERR_BAD_VERSION`), `GPOS`
+//     (the MODERN, lookup-table-based kerning/positioning mechanism -- Open Sans ships BOTH `kern`
+//     AND `GPOS`; this parser only ever reads the older, simpler `kern`), the Microsoft "extended"
+//     `kern` header variant (a whole different header shape, `version` read as `0x0001` in `glx_
+//     sfnt_kern`'s own first-two-bytes probe -- detected and skipped cleanly, see that function's
+//     own doc comment below), `kern` subtable formats 1/2/3 and non-horizontal subtables (skipped
+//     cleanly by `glx_sfnt_kern`, their bytes never read as pairs), hinting bytecode (`glyf`'s
+//     `instructions` are parsed-past, never interpreted -- SOV-RAST, the next piece, rasterizes
+//     UN-hinted outlines, same trade-off `stb_truetype` makes), composite ARGS_ARE_XY_VALUES==0
+//     (point-matching component positioning, a rare mode no glyph in Open Sans uses --
+//     `GLX_SFNT_ERR_UNSUPPORTED`).
 //
 //     HARDENING POSTURE (this is a FILE FORMAT PARSER -- the canonical hostile-input attack
 //     surface): every multi-byte read anywhere in this file goes through `rd_u8`/`rd_i8`/`rd_u16`/
@@ -118,14 +128,25 @@
 //     própria Open Sans é só-formato-4, BMP; o formato 12 é exercitado por uma fixture sintética
 //     feita à mão em `tests/test_sfnt.c` -- ver aquele arquivo), `loca`/`glyf` (outlines
 //     quadráticos, INCLUINDO glyphs compostos com translação + transformação opcional 2x2/escala
-//     -- necessário pros glyphs acentuados pt-br `á`/`ç`/`ã`, todos compostos na Open Sans). Fora
-//     de escopo de propósito (YAGNI, mesma disciplina anti over-engineering deste código-base
-//     inteiro): outlines CFF/OTF (cúbicas PostScript -- `sfntVersion == 'OTTO'` é rejeitado com
-//     `GLX_SFNT_ERR_BAD_VERSION`), kerning `kern`/`GPOS`, bytecode de hinting (as `instructions`
-//     do `glyf` são só puladas na leitura, nunca interpretadas -- o SOV-RAST, a próxima peça,
-//     rasteriza outlines SEM hinting, mesma troca que o `stb_truetype` faz), componente composto
-//     com ARGS_ARE_XY_VALUES==0 (posicionamento por casamento de ponto, um modo raro que nenhum
-//     glyph na Open Sans usa -- `GLX_SFNT_ERR_UNSUPPORTED`).
+//     -- necessário pros glyphs acentuados pt-br `á`/`ç`/`ã`, todos compostos na Open Sans), `kern`
+//     FORMATO 0, SÓ SUBTABLE HORIZONTAL (`glx_sfnt_kern` -- o header clássico Apple/Microsoft-
+//     clássico `version == 0`; a Open Sans embarca exatamente uma dessas subtables, 18694 pares, e
+//     é o próprio oráculo deste recurso -- ver a seção MÉTODO DO ORÁCULO do `tests/test_sfnt.c`).
+//     Amadurecimento SOV-SFNT pro ticket L1.20 (kerning, o consumidor de layout-de-texto do
+//     glintfx). Fora de escopo de propósito (YAGNI, mesma disciplina anti over-engineering deste
+//     código-base inteiro): outlines CFF/OTF (cúbicas PostScript -- `sfntVersion == 'OTTO'` é
+//     rejeitado com `GLX_SFNT_ERR_BAD_VERSION`), `GPOS` (o mecanismo MODERNO de
+//     kerning/posicionamento baseado em lookup-table -- a Open Sans embarca TANTO `kern` QUANTO
+//     `GPOS`; este parser só lê o `kern` mais antigo e simples), a variante de header `kern`
+//     "estendida" da Microsoft (um formato de header inteiramente diferente, `version` lido como
+//     `0x0001` na própria sondagem de primeiros-2-bytes do `glx_sfnt_kern` -- detectada e pulada
+//     de forma limpa, ver o comentário de doc próprio daquela função abaixo), formatos 1/2/3 de
+//     subtable `kern` e subtables não-horizontais (puladas de forma limpa pelo `glx_sfnt_kern`,
+//     bytes deles nunca lidos como pares), bytecode de hinting (as `instructions` do `glyf` são
+//     só puladas na leitura, nunca interpretadas -- o SOV-RAST, a próxima peça, rasteriza outlines
+//     SEM hinting, mesma troca que o `stb_truetype` faz), componente composto com
+//     ARGS_ARE_XY_VALUES==0 (posicionamento por casamento de ponto, um modo raro que nenhum glyph
+//     na Open Sans usa -- `GLX_SFNT_ERR_UNSUPPORTED`).
 //
 //     POSTURA DE HARDENING (isto É um PARSER DE FORMATO DE ARQUIVO -- a superfície canônica de
 //     input hostil): toda leitura multi-byte em qualquer lugar deste arquivo passa por
@@ -313,6 +334,32 @@ typedef struct {
     //     sempre retorna `0` (`.notdef`).
     size_t cmap_subtable_off;
     uint16_t cmap_format;
+
+    // EN: Absolute byte offset/length of the `kern` table WITHIN `blob`, already validated by
+    //     `glx_sfnt_open` to fit within `[blob, blob+len)` (same `find_table`/`bounds_ok`
+    //     machinery as `hmtx_off`/`loca_off`/`glyf_off` above) -- `kern_len == 0` means "no `kern`
+    //     table" (the table is OPTIONAL, unlike `head`/`maxp`/.../`glyf`; a font missing it is
+    //     still a fully valid `glx_sfnt_open` success, `glx_sfnt_kern` then always returns `0`,
+    //     same "absent feature, not an error" posture as `cmap_format == 0`). A `kern` directory
+    //     record present but with a hostile/malformed `[offset, length)` (fails `find_table`'s own
+    //     `bounds_ok`) is ALSO folded into `kern_len == 0` here -- `glx_sfnt_open` does not fail
+    //     the whole font over a non-critical, optional table's bad directory entry (soft-fail,
+    //     same posture `cmap`'s own per-record OOB handling already uses in this file, see
+    //     src/sfnt.c's `glx_sfnt_open`).
+    // PT: Offset/tamanho de byte absoluto da tabela `kern` DENTRO de `blob`, já validado pelo
+    //     `glx_sfnt_open` pra caber em `[blob, blob+len)` (mesma maquinaria `find_table`/
+    //     `bounds_ok` de `hmtx_off`/`loca_off`/`glyf_off` acima) -- `kern_len == 0` significa "sem
+    //     tabela `kern`" (a tabela é OPCIONAL, diferente de `head`/`maxp`/.../`glyf`; uma fonte sem
+    //     ela ainda é um sucesso `glx_sfnt_open` plenamente válido, o `glx_sfnt_kern` então sempre
+    //     retorna `0`, mesma postura de "recurso ausente, não é erro" do `cmap_format == 0`). Um
+    //     registro de diretório `kern` presente mas com `[offset, length)` hostil/malformado
+    //     (falha o próprio `bounds_ok` do `find_table`) TAMBÉM é dobrado em `kern_len == 0` aqui --
+    //     o `glx_sfnt_open` não falha a fonte inteira por causa de uma entrada de diretório ruim
+    //     de uma tabela opcional, não-crítica (falha suave, mesma postura que o próprio tratamento
+    //     de OOB por-registro do `cmap` já usa neste arquivo, ver o `glx_sfnt_open` do
+    //     src/sfnt.c).
+    size_t kern_off;
+    size_t kern_len;
 } glx_sfnt_face;
 
 // EN: Parses the SFNT table directory + `head`/`maxp`/`hhea`/`hmtx`-size/`loca`-size/`cmap`
@@ -449,6 +496,85 @@ glx_sfnt_result glx_sfnt_glyph_outline(const glx_sfnt_face* face, uint32_t gid,
                                         glx_sfnt_point* points_out, uint16_t points_capacity,
                                         uint16_t* contour_ends_out, uint16_t contours_capacity,
                                         glx_sfnt_outline* out);
+
+// EN: Looks up the kerning adjustment (font units, `head::units_per_em`-scaled, same space as
+//     `hmtx`'s advance widths) between `left_gid` immediately followed by `right_gid`, from
+//     `face`'s `kern` table's format-0, horizontal subtable ONLY (see this header's SCOPE note).
+//     Returns `0` -- meaning "no adjustment", the neutral/safe value a caller can always add to an
+//     advance width unconditionally -- for every one of: `face == NULL`; no `kern` table at all
+//     (`face->kern_len == 0`, a perfectly valid font, see `glx_sfnt_face::kern_len`'s own doc);
+//     the `kern` table's header is not the classic `version == 0` shape this function supports
+//     (e.g. the Microsoft "extended" `kern`, `version == 0x0001...` -- detected from the table's
+//     own first two bytes and skipped cleanly, never misread as if it were the classic shape);
+//     `left_gid`/`right_gid` above `0xFFFF` (the wire pair fields are `uint16_t`, so no pair could
+//     ever match one); every subtable in the table is format != 0 or non-horizontal (skipped, per
+//     spec, using each skipped subtable's OWN declared `length` to find the next one); the pair
+//     `(left_gid, right_gid)` simply has no entry in whichever format-0 horizontal subtable IS
+//     found (the ordinary "these two glyphs do not kern" case, by far the most common
+//     non-`0` -- I mean non-adjustment -- outcome even for glyph pairs that DO kern against other
+//     neighbours). A found pair's `value` (a font-design-unit adjustment, per spec typically
+//     NEGATIVE -- it usually tightens two glyphs closer together, e.g. `'A'` immediately before
+//     `'V'`) is returned as-is, no scaling/rounding (the caller decides how to fold it into an
+//     advance width, same "raw font units out" contract `glx_sfnt_hmetrics` already uses).
+//
+//     HARDENING: every multi-byte field this function reads goes through the same bounds-checked
+//     `rd_u16`/`rd_i16` primitives every other function in this file uses (src/sfnt.c). The pair
+//     array's own bound is checked against the `kern` TABLE's own `[kern_off, kern_off+kern_len)`
+//     span (not the format-0 subtable's OWN declared `length` field) -- deliberately: Open Sans'
+//     own real `kern` subtable (18694 pairs) is a live, non-hostile, spec-legitimate example of a
+//     subtable whose `length` field (16 bits, so it can only represent up to 65535 bytes)
+//     OVERFLOWS for a subtable this large (`112178 mod 65536 == 46642`, the exact value Open Sans'
+//     own file declares) -- trusting that field here would silently REJECT Open Sans' own real
+//     kerning data as "too short to hold its own claimed pair count", not merely mishandle a
+//     hostile font (see this function's implementation in src/sfnt.c for the byte-for-byte
+//     derivation this comment summarizes). A LYING `nPairs` (the hostile case) is still caught
+//     exactly the same way: it is bounds-checked against the same, honest `[kern_off,
+//     kern_off+kern_len)` span, which the table directory itself already proved fits within
+//     `blob` at `glx_sfnt_open` time. A malformed/truncated subtable, an out-of-range subtable
+//     count, or a self-consistent-but-nonsensical `nPairs` all resolve to a clean `0` return, never
+//     an out-of-bounds read (see `include/core/sfnt.h`'s file header, HARDENING POSTURE).
+// PT: Busca o ajuste de kerning (unidades de fonte, escaladas por `head::units_per_em`, mesmo
+//     espaço das larguras de avanço do `hmtx`) entre `left_gid` imediatamente seguido de
+//     `right_gid`, na subtable formato-0, horizontal SÓ, da tabela `kern` de `face` (ver a nota de
+//     ESCOPO deste header). Retorna `0` -- significando "sem ajuste", o valor neutro/seguro que
+//     quem chama sempre pode somar a uma largura de avanço incondicionalmente -- pra cada um de:
+//     `face == NULL`; nenhuma tabela `kern` (`face->kern_len == 0`, uma fonte perfeitamente
+//     válida, ver o doc próprio do `glx_sfnt_face::kern_len`); o header da tabela `kern` não é o
+//     formato clássico `version == 0` que esta função suporta (ex.: o `kern` "estendido" da
+//     Microsoft, `version == 0x0001...` -- detectado pelos próprios 2 primeiros bytes da tabela e
+//     pulado de forma limpa, nunca lido errado como se fosse o formato clássico);
+//     `left_gid`/`right_gid` acima de `0xFFFF` (os campos de par no fio são `uint16_t`, então
+//     nenhum par algum dia poderia casar um); toda subtable na tabela é formato != 0 ou
+//     não-horizontal (pulada, conforme a spec, usando o PRÓPRIO `length` declarado de cada
+//     subtable pulada pra achar a próxima); o par `(left_gid, right_gid)` simplesmente não tem
+//     entrada em qual subtable formato-0 horizontal FOR encontrada (o caso comum "esses dois
+//     glyphs não fazem kern", de longe o resultado não-`0` -- quero dizer, sem-ajuste -- mais comum
+//     mesmo pra pares de glyph que FAZEM kern contra outros vizinhos). O `value` de um par
+//     encontrado (um ajuste em unidade-de-desenho-de-fonte, pela spec tipicamente NEGATIVO -- ele
+//     geralmente aperta dois glyphs mais perto um do outro, ex.: `'A'` imediatamente antes de
+//     `'V'`) é retornado como está, sem escala/arredondamento (quem chama decide como dobrar isso
+//     numa largura de avanço, mesmo contrato de "unidade de fonte crua pra fora" que o
+//     `glx_sfnt_hmetrics` já usa).
+//
+//     HARDENING: todo campo multi-byte que esta função lê passa pelas mesmas primitivas
+//     `rd_u16`/`rd_i16` com checagem de limite que toda outra função deste arquivo usa
+//     (src/sfnt.c). O próprio limite do array de par é checado contra o vão
+//     `[kern_off, kern_off+kern_len)` da PRÓPRIA tabela `kern` (não contra o PRÓPRIO campo
+//     `length` declarado da subtable formato-0) -- de propósito: a própria subtable `kern` real
+//     da Open Sans (18694 pares) é um exemplo AO VIVO, não-hostil, espec-legítimo, de uma subtable
+//     cujo campo `length` (16 bits, então só consegue representar até 65535 bytes) TRANSBORDA pra
+//     uma subtable deste tamanho (`112178 mod 65536 == 46642`, o valor exato que o próprio arquivo
+//     da Open Sans declara) -- confiar nesse campo aqui REJEITARIA em silêncio o próprio dado de
+//     kerning real da Open Sans como "curto demais pra caber a própria contagem de par que
+//     alega", não meramente maltrataria uma fonte hostil (ver a implementação desta função no
+//     src/sfnt.c pra derivação byte-a-byte que este comentário resume). Um `nPairs` MENTIROSO (o
+//     caso hostil) ainda é pego exatamente do mesmo jeito: é checado de limite contra o mesmo vão
+//     honesto `[kern_off, kern_off+kern_len)`, que o próprio diretório de tabela já provou caber
+//     dentro de `blob` em tempo de `glx_sfnt_open`. Uma subtable malformada/truncada, uma
+//     contagem de subtable fora de faixa, ou um `nPairs` auto-consistente-mas-sem-sentido todos
+//     resolvem pra um retorno `0` limpo, nunca uma leitura fora de limite (ver o cabeçalho de
+//     arquivo do `include/core/sfnt.h`, POSTURA DE HARDENING).
+int16_t glx_sfnt_kern(const glx_sfnt_face* face, uint32_t left_gid, uint32_t right_gid);
 
 #ifdef __cplusplus
 }

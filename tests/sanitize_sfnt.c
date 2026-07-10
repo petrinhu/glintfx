@@ -321,6 +321,54 @@ int main(void) {
                 // INVALID_ARG: gid out of range.
                 r = glx_sfnt_glyph_outline(&face, 999999, points, 64, contour_ends, 8, &out);
                 CHECK(r == GLX_SFNT_ERR_INVALID_ARG, "outline(oob gid) != INVALID_ARG");
+
+                // EN: glx_sfnt_kern -- 'kern' format-0 horizontal pair lookup, real Open Sans
+                // (18694 pairs, one subtable whose own `length` FIELD overflows its 16-bit width
+                // -- see include/core/sfnt.h's/src/sfnt.c's own glx_sfnt_kern doc for the full
+                // derivation). Oracle values: same as tests/test_sfnt.c's own kern section (see
+                // that file's comment for the fontTools + struct double-derivation).
+                // PT: glx_sfnt_kern -- lookup de par formato-0 horizontal do 'kern', Open Sans
+                // real (18694 pares, uma subtable cujo PRÓPRIO campo `length` transborda a
+                // própria largura de 16 bits -- ver o doc próprio do glx_sfnt_kern no
+                // include/core/sfnt.h/src/sfnt.c pra derivação completa). Valores de oráculo:
+                // mesmos da própria seção kern do tests/test_sfnt.c (ver o comentário daquele
+                // arquivo pra dupla-derivação fontTools + struct).
+                CHECK(glx_sfnt_kern(&face, 36 /* A */, 57 /* V */) == -82, "kern(A,V) mismatch");
+                CHECK(glx_sfnt_kern(&face, 55 /* T */, 17 /* period */) == -123, "kern(T,.) mismatch");
+                CHECK(glx_sfnt_kern(&face, 57 /* V */, 68 /* a */) == -41, "kern(V,a) mismatch");
+                CHECK(glx_sfnt_kern(&face, 36 /* A */, 36 /* A */) == 0, "kern(A,A) != 0 (no pair)");
+                CHECK(glx_sfnt_kern(NULL, 36, 57) == 0, "kern(NULL face) != 0");
+            }
+
+            // EN: HOSTILE: byte-patched copy of the real Open Sans blob -- the format-0 subtable's
+            // own `nPairs` field (absolute file offset 87370, see tests/test_sfnt.c's own hostile
+            // kern test for the byte-offset derivation) patched to `0xFFFF`, a byte span that does
+            // NOT fit before this kern table's own end. Under ASan, any stray OOB read this lying
+            // count might have caused would abort the process; a CLEAN pass (0 return, sanitizers
+            // silent) is the actual proof `glx_sfnt_kern` bounds-checks it correctly.
+            // PT: HOSTIL: cópia remendada por byte do blob real da Open Sans -- o PRÓPRIO campo
+            // `nPairs` da subtable formato-0 (offset de arquivo absoluto 87370, ver o próprio
+            // teste hostil de kern do tests/test_sfnt.c pra derivação do offset de byte)
+            // remendado pra `0xFFFF`, um vão de byte que NÃO cabe antes do próprio fim desta
+            // tabela kern. Sob ASan, qualquer leitura OOB perdida que essa contagem mentirosa
+            // pudesse causar abortaria o processo; um passe LIMPO (retorno 0, sanitizers calados)
+            // é a prova de fato que o glx_sfnt_kern checa o limite dela corretamente.
+            if (blob != NULL && len > 87372) {
+                unsigned char* patched = (unsigned char*)malloc(len);
+                CHECK(patched != NULL, "malloc(patched kern blob) failed");
+                if (patched != NULL) {
+                    for (size_t i = 0; i < len; i++) patched[i] = blob[i];
+                    patched[87370] = 0xFF;
+                    patched[87371] = 0xFF;
+                    glx_sfnt_face face_bad_kern;
+                    glx_sfnt_result r = glx_sfnt_open(patched, len, &face_bad_kern);
+                    CHECK(r == GLX_SFNT_OK, "glx_sfnt_open(patched lying-nPairs) != OK");
+                    if (r == GLX_SFNT_OK) {
+                        CHECK(glx_sfnt_kern(&face_bad_kern, 36, 57) == 0,
+                              "kern(patched lying nPairs) != 0");
+                    }
+                    free(patched);
+                }
             }
             free(blob);
         }

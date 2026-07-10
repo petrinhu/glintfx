@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: D3 -- see include/conv.h for the contract. Digit-at-a-time implementations, same
 //     philosophy as D1 (mem.c)/D2 (str.c): correctness and auditability first, no
-//     table-driven/SIMD tricks.
+//     table-driven/SIMD tricks. (SOV-FCONV, appended later: `ftoa`/`atof`, double<->string --
+//     own dedicated file-header block further down, right before their code.)
 //
 //     utoa's core loop generates digits LEAST-significant-first (the only way division/modulo
 //     by `base` can produce them), writing them into `buf` in that (backwards) order, then
@@ -271,4 +272,440 @@ unsigned atou(const char* s) {
     }
 
     return magnitude;
+}
+
+// ================================================================================================
+// SOV-FCONV: float<->string (double only). See include/conv.h for the full contract; this block
+// covers the IMPLEMENTATION-level gotchas the header does not (buffer layout, bit-pattern
+// constants, the two internal DoS-defensive iteration caps).
+//
+// EN: `unsigned long` is used as the 64-bit bit-punning type throughout (never a named `uint64_t`
+//     -- this codebase has no `<stdint.h>`-equivalent typedef for it; `types.h` documents x86-64
+//     Linux as LP64, so `unsigned long` IS 8 bytes here, same basis as `types.h`'s own
+//     `uintptr_t`). All double<->bits reinterpretation goes through a `union { double d; unsigned
+//     long u; }` (type-punning via a union member, not a pointer cast) -- this is the
+//     standard-sanctioned way to reinterpret an object's representation in C (a pointer-cast
+//     `*(unsigned long*)&value` would be a strict-aliasing violation, UB).
+// PT: `unsigned long` e' usado como o tipo de bit-punning de 64 bits em todo este bloco (nunca um
+//     `uint64_t` nomeado -- este codebase nao tem um typedef equivalente a `<stdint.h>` pra isso;
+//     o `types.h` documenta x86-64 Linux como LP64, entao `unsigned long` TEM 8 bytes aqui, mesma
+//     base do proprio `uintptr_t` do `types.h`). Toda reinterpretacao double<->bits passa por uma
+//     `union { double d; unsigned long u; }` (type-punning via membro de union, nao cast de
+//     ponteiro) -- e' o jeito sancionado pelo padrao de reinterpretar a representacao de um objeto
+//     em C (um cast de ponteiro `*(unsigned long*)&value` seria violacao de strict-aliasing, UB).
+
+#define FCONV_SIGN_MASK 0x8000000000000000UL
+#define FCONV_EXP_MASK  0x7FF0000000000000UL
+#define FCONV_MANT_MASK 0x000FFFFFFFFFFFFFUL
+#define FCONV_EXP_SHIFT 52
+
+#define FCONV_POS_INF_BITS 0x7FF0000000000000UL
+#define FCONV_NEG_INF_BITS 0xFFF0000000000000UL
+#define FCONV_NAN_BITS      0x7FF8000000000000UL // quiet NaN, unsigned
+
+// EN: DoS-defensive caps for atof (see include/conv.h's atof doc-comment): both are FAR beyond
+//     any exponent a legitimate finite/denormal double could need (usable double decimal exponent
+//     range is roughly [-324, 308]), so neither cap ever changes the result for real input -- they
+//     only bound worst-case work for a hostile string like "1e999999999" or a fractional part with
+//     millions of digits.
+// PT: Limites defensivos anti-DoS pro atof (ver o doc-comment do atof em include/conv.h): os dois
+//     estao BEM alem de qualquer expoente que um double finito/denormal legitimo precisaria (a
+//     faixa util de expoente decimal de um double e' aproximadamente [-324, 308]), entao nenhum
+//     dos dois muda o resultado pra input real -- so limitam o trabalho de pior-caso pra uma
+//     string hostil tipo "1e999999999" ou uma parte fracionaria com milhoes de digitos.
+#define FCONV_MAX_FRAC_DIGITS 400
+#define FCONV_MAX_SCALE_ITER  400
+#define FCONV_MAX_EXP_MAG     1000000
+
+static unsigned long fconv_bits(double d) {
+    union { double d; unsigned long u; } v;
+    v.d = d;
+    return v.u;
+}
+
+static double fconv_from_bits(unsigned long u) {
+    union { unsigned long u; double d; } v;
+    v.u = u;
+    return v.d;
+}
+
+// EN: Truncates `x` toward zero (like C's `trunc()`, hand-rolled -- no libm). Works for any sign
+//     (never called with negative input in this file, but kept general/correct regardless).
+//     Pure bit manipulation on the IEEE-754 binary64 layout: for `|x| < 1.0` the answer is a
+//     SIGNED zero (sign bit copied from `x`, everything else cleared) -- this is what makes
+//     `dbl_trunc(-0.0) == -0.0` and, combined with unary negation elsewhere in this file,
+//     preserves the `-0.0` sign end to end. For `|x| >= 2^52` there are no fractional MANTISSA
+//     bits to clear (a double's 52-bit mantissa cannot represent a fraction at that magnitude), so
+//     `x` is already integral and is returned unchanged. Otherwise, exactly the low
+//     `(52 - unbiased_exponent)` mantissa bits are cleared -- this NEVER touches the sign or
+//     exponent bits (both live above bit 52), so the sign-preservation above holds regardless of
+//     which branch is taken.
+// PT: Trunca `x` em direcao a zero (como o `trunc()` de C, feito a mao -- sem libm). Funciona pra
+//     qualquer sinal (nunca chamado com input negativo neste arquivo, mas mantido
+//     geral/correto mesmo assim). Manipulacao pura de bits sobre o layout IEEE-754 binary64: pra
+//     `|x| < 1.0` a resposta e' um zero COM SINAL (bit de sinal copiado de `x`, resto zerado) --
+//     e' isso que faz `dbl_trunc(-0.0) == -0.0` e, combinado com negacao unaria em outro ponto
+//     deste arquivo, preserva o sinal de `-0.0` ponta a ponta. Pra `|x| >= 2^52` nao ha bits
+//     fracionarios de MANTISSA pra limpar (a mantissa de 52 bits de um double nao consegue
+//     representar uma fracao nessa magnitude), entao `x` ja e' integral e e' retornado sem
+//     mudanca. Fora isso, exatamente os `(52 - expoente_nao_enviesado)` bits baixos da mantissa
+//     sao zerados -- isso NUNCA toca os bits de sinal ou expoente (ambos moram acima do bit 52),
+//     entao a preservacao de sinal acima vale independente de qual branch e' tomado.
+static double dbl_trunc(double x) {
+    unsigned long bits = fconv_bits(x);
+    unsigned long sign = bits & FCONV_SIGN_MASK;
+    long exp = (long)((bits & FCONV_EXP_MASK) >> FCONV_EXP_SHIFT) - 1023L;
+
+    if (exp < 0) {
+        // |x| < 1.0 (also covers subnormals and +-0.0) -- truncates to a SIGNED zero.
+        return fconv_from_bits(sign);
+    }
+    if (exp >= 52) {
+        // No fractional mantissa bits exist at this magnitude (also covers Inf/NaN, though
+        // dbl_trunc is never invoked on those in this file's call sites).
+        return x;
+    }
+    unsigned long frac_mask = (1UL << (unsigned)(52 - exp)) - 1UL;
+    return fconv_from_bits(bits & ~frac_mask);
+}
+
+char* ftoa(double value, char* buf, unsigned precision) {
+    unsigned long bits = fconv_bits(value);
+    unsigned long sign_bit = (bits & FCONV_SIGN_MASK) ? 1UL : 0UL;
+    unsigned long exp_field = bits & FCONV_EXP_MASK;
+    unsigned long mant_field = bits & FCONV_MANT_MASK;
+
+    char* p = buf;
+
+    // EN: Infinity/NaN classification -- our own bit-pattern check, never libm's isinf/isnan.
+    // PT: Classificacao de Infinito/NaN -- nossa propria checagem de padrao-de-bits, nunca o
+    //     isinf/isnan da libm.
+    if (exp_field == FCONV_EXP_MASK) {
+        if (mant_field == 0UL) {
+            if (sign_bit) {
+                *p++ = '-';
+            }
+            *p++ = 'i';
+            *p++ = 'n';
+            *p++ = 'f';
+        } else {
+            // NaN -- sign not represented on output, see include/conv.h doc-comment.
+            *p++ = 'n';
+            *p++ = 'a';
+            *p++ = 'n';
+        }
+        *p = '\0';
+        return buf;
+    }
+
+    if (precision > CONV_FTOA_MAX_PRECISION) {
+        precision = CONV_FTOA_MAX_PRECISION; // documented clamp, see include/conv.h
+    }
+
+    // EN: `av` is the ABSOLUTE VALUE of `value`, obtained via unary negation (never `0.0 - value`,
+    //     which would give the WRONG answer for value==-0.0: `0.0 - (-0.0) == 0.0`, correct by
+    //     luck there, but `0.0 - (+0.0) == 0.0` too, and more importantly `-x` is the operation
+    //     IEEE-754/C actually guarantees flips exactly the sign bit for every input including
+    //     zero/Inf/NaN -- `0.0 - x` is a SUBTRACTION with its own rounding rules, not a guaranteed
+    //     sign flip). Sign is written from `sign_bit` (the bit pattern), never from `value < 0.0`
+    //     (false for both +0.0 and -0.0).
+    // PT: `av` e' o VALOR ABSOLUTO de `value`, obtido via negacao unaria (nunca `0.0 - value`, que
+    //     daria a resposta ERRADA pra value==-0.0: `0.0 - (-0.0) == 0.0`, correto por sorte ali,
+    //     mas `0.0 - (+0.0) == 0.0` tambem, e mais importante `-x` e' a operacao que
+    //     IEEE-754/C de fato garante que inverte exatamente o bit de sinal pra todo input incluindo
+    //     zero/Inf/NaN -- `0.0 - x` e' uma SUBTRACAO com suas proprias regras de arredondamento,
+    //     nao uma inversao de sinal garantida). Sinal e' escrito a partir de `sign_bit` (o padrao
+    //     de bits), nunca de `value < 0.0` (falso pros dois +0.0 e -0.0).
+    double av = value;
+    if (sign_bit) {
+        av = -av;
+        *p++ = '-';
+    }
+
+    double ip = dbl_trunc(av);
+    double frac = av - ip;
+
+    // ---- integer part digits, least-significant-first (mirrors utoa's shape) -----------------
+    unsigned char idigits[CONV_FTOA_MAX_INT_DIGITS + 1u];
+    size_t n_int = 0;
+    if (ip == 0.0) {
+        idigits[n_int++] = 0;
+    } else {
+        while (ip != 0.0 && n_int < CONV_FTOA_MAX_INT_DIGITS) {
+            double q = dbl_trunc(ip / 10.0);
+            double d = ip - q * 10.0;
+            // EN: THE mandated guard -- validate/clamp the double BEFORE any cast to an integer
+            //     type. Mathematically `d` is always in [0,9], but this defends against any
+            //     residual floating-point rounding pushing it a hair outside that range (e.g.
+            //     -epsilon or 9+epsilon) -- without this clamp, such a value cast to
+            //     `unsigned char` would be undefined behaviour (a double outside the target
+            //     integer type's representable range is UB to cast, per the task's own mandate).
+            // PT: A guarda MANDATADA -- validar/limitar o double ANTES de qualquer cast pra tipo
+            //     inteiro. Matematicamente `d` esta sempre em [0,9], mas isso defende contra
+            //     algum arredondamento residual de ponto flutuante empurrando ele um pouco pra
+            //     fora dessa faixa (ex.: -epsilon ou 9+epsilon) -- sem essa limitacao, um valor
+            //     assim convertido pra `unsigned char` seria comportamento indefinido (um double
+            //     fora da faixa representavel do tipo inteiro alvo e' UB pra converter, conforme
+            //     o proprio mandato da tarefa).
+            if (d < 0.0) {
+                d = 0.0;
+            } else if (d > 9.0) {
+                d = 9.0;
+            }
+            idigits[n_int++] = (unsigned char)d;
+            ip = q;
+        }
+    }
+
+    // ---- fractional digits + one extra ROUNDING GUARD digit ----------------------------------
+    unsigned char fdigits[CONV_FTOA_MAX_PRECISION + 1u];
+    for (unsigned k = 0; k <= precision; k++) {
+        frac *= 10.0;
+        double d = dbl_trunc(frac);
+        if (d < 0.0) { // same validate-before-cast guard as above
+            d = 0.0;
+        } else if (d > 9.0) {
+            d = 9.0;
+        }
+        fdigits[k] = (unsigned char)d;
+        frac -= d;
+    }
+
+    // ---- round HALF-AWAY-FROM-ZERO using the guard digit, propagate carry --------------------
+    int carry = (fdigits[precision] >= 5) ? 1 : 0;
+    for (long k = (long)precision - 1; k >= 0 && carry; k--) {
+        unsigned char nv = (unsigned char)(fdigits[k] + 1u);
+        if (nv == 10u) {
+            fdigits[k] = 0;
+            carry = 1;
+        } else {
+            fdigits[k] = nv;
+            carry = 0;
+        }
+    }
+    if (carry) {
+        for (size_t k = 0; k < n_int && carry; k++) {
+            unsigned char nv = (unsigned char)(idigits[k] + 1u);
+            if (nv == 10u) {
+                idigits[k] = 0;
+                carry = 1;
+            } else {
+                idigits[k] = nv;
+                carry = 0;
+            }
+        }
+        if (carry && n_int < CONV_FTOA_MAX_INT_DIGITS + 1u) {
+            // EN: All existing integer digits rolled over (e.g. "9.9995" at precision 3) -- one
+            //     new most-significant digit ('1') is appended at the END of this
+            //     least-significant-first array; after the MSD-first write loop below, it
+            //     correctly becomes the FIRST character printed.
+            // PT: Todos os digitos inteiros existentes deram carry (ex.: "9.9995" na precisao 3)
+            //     -- um novo digito mais-significativo ('1') e' anexado no FIM deste array
+            //     menos-significativo-primeiro; depois do laco de escrita
+            //     mais-significativo-primeiro abaixo, ele corretamente vira o PRIMEIRO caractere
+            //     impresso.
+            idigits[n_int++] = 1;
+        }
+    }
+
+    // ---- write integer digits MSD-first -------------------------------------------------------
+    for (size_t k = n_int; k > 0; k--) {
+        *p++ = (char)('0' + idigits[k - 1]);
+    }
+
+    // ---- write fractional digits (no '.' at all when precision == 0, matches C's "%.0f") ------
+    if (precision > 0) {
+        *p++ = '.';
+        for (unsigned k = 0; k < precision; k++) {
+            *p++ = (char)('0' + fdigits[k]);
+        }
+    }
+
+    *p = '\0';
+    return buf;
+}
+
+// EN: Case-insensitive literal match: does `s[i..]` start with `lit` (a NUL-terminated, all-
+//     lowercase literal), comparing case-insensitively? Returns the number of characters matched
+//     (== `strlen(lit)`) on success, 0 on the first mismatch (including running into `s`'s own
+//     NUL terminator early, which simply fails to match any non-NUL `lit` character and returns 0
+//     -- no out-of-bounds read: reading exactly `s`'s NUL byte is always safe, and this function
+//     never reads past the position where it detects a mismatch or reaches the NUL).
+// PT: Casamento de literal case-insensitivo: `s[i..]` comeca com `lit` (um literal terminado em
+//     NUL, todo minusculo), comparando sem diferenciar maiusculas/minusculas? Retorna o numero de
+//     caracteres casados (== `strlen(lit)`) em sucesso, 0 no primeiro descasamento (inclusive
+//     esbarrar no proprio NUL terminador de `s` cedo, que simplesmente falha em casar qualquer
+//     caractere nao-NUL de `lit` e retorna 0 -- sem leitura fora dos limites: ler exatamente o
+//     byte NUL de `s` e' sempre seguro, e essa funcao nunca le alem da posicao onde detecta um
+//     descasamento ou alcanca o NUL).
+static int fconv_ci_match(const char* s, size_t i, const char* lit) {
+    size_t n = 0;
+    while (lit[n] != '\0') {
+        char c = s[i + n];
+        char lc = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+        if (lc != lit[n]) {
+            return 0;
+        }
+        n++;
+    }
+    return (int)n;
+}
+
+double atof(const char* s) {
+    size_t i = 0;
+    // EN: Same whitespace set as atoi/atou.
+    // PT: Mesmo conjunto de whitespace do atoi/atou.
+    while (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\v' || s[i] == '\f' ||
+           s[i] == '\r') {
+        i++;
+    }
+
+    int neg = 0;
+    if (s[i] == '+') {
+        i++;
+    } else if (s[i] == '-') {
+        neg = 1;
+        i++;
+    }
+
+    // EN: "inf" / "infinity", case-insensitive -- and "nan", case-insensitive. Neither branch
+    //     advances `i` after the match: `atof` never reports a "chars consumed" position back to
+    //     the caller (same contract as `atoi`/`atou`), so tracking it further would be dead code
+    //     (correctly flagged by `check-static`'s cppcheck pass in an earlier revision of this
+    //     function -- fixed by simply not writing to `i` here at all). This is also WHY "infinity"
+    //     needs no dedicated extra check beyond matching the "inf" prefix: the remaining "inity"
+    //     is just trailing garbage that is silently ignored (same "12abc" -> 12 philosophy as
+    //     `atoi`), which already produces the exact same return value either way.
+    // PT: "inf" / "infinity", case-insensitivo -- e "nan", case-insensitivo. Nenhum dos dois
+    //     branches avanca `i` depois do casamento: `atof` nunca reporta uma posicao de
+    //     "caracteres consumidos" de volta pro chamador (mesmo contrato do `atoi`/`atou`), entao
+    //     continuar rastreando isso seria codigo morto (corretamente sinalizado pela passada de
+    //     cppcheck do `check-static` numa revisao anterior desta funcao -- corrigido simplesmente
+    //     nao escrevendo em `i` aqui). Isso tambem e' o PORQUE de "infinity" nao precisar de
+    //     nenhuma checagem extra dedicada alem de casar o prefixo "inf": o "inity" restante e'
+    //     so' lixo final silenciosamente ignorado (mesma filosofia "12abc" -> 12 do `atoi`), que
+    //     ja produz exatamente o mesmo valor de retorno de qualquer jeito.
+    if (fconv_ci_match(s, i, "inf")) {
+        return fconv_from_bits(neg ? FCONV_NEG_INF_BITS : FCONV_POS_INF_BITS);
+    }
+    if (fconv_ci_match(s, i, "nan")) {
+        unsigned long nan_bits = FCONV_NAN_BITS | (neg ? FCONV_SIGN_MASK : 0UL);
+        return fconv_from_bits(nan_bits);
+    }
+
+    // ---- decimal digits (integer part) ------------------------------------------------------
+    double mantissa = 0.0;
+    int any_digits = 0;
+    while (s[i] >= '0' && s[i] <= '9') {
+        mantissa = mantissa * 10.0 + (double)(s[i] - '0');
+        i++;
+        any_digits = 1;
+    }
+
+    // ---- optional '.' + fractional digits (capped, see FCONV_MAX_FRAC_DIGITS above) ---------
+    int frac_digits = 0;
+    if (s[i] == '.') {
+        i++;
+        while (s[i] >= '0' && s[i] <= '9') {
+            if (frac_digits < FCONV_MAX_FRAC_DIGITS) {
+                mantissa = mantissa * 10.0 + (double)(s[i] - '0');
+                frac_digits++;
+            }
+            // EN: Digits beyond the cap are still CONSUMED (they are syntactically part of the
+            //     number) but no longer accumulated -- see include/conv.h doc-comment.
+            // PT: Digitos alem do limite ainda sao CONSUMIDOS (sao sintaticamente parte do
+            //     numero) mas nao mais acumulados -- ver doc-comment em include/conv.h.
+            i++;
+            any_digits = 1;
+        }
+    }
+
+    if (!any_digits) {
+        // EN: No digits anywhere -- "", ".", "e5" (no mantissa before 'e'), "--1" (second sign
+        //     is not part of a valid number, so the digit scan never even starts) all land here.
+        //     ALWAYS +0.0, regardless of any sign character consumed -- see doc-comment.
+        // PT: Nenhum digito em lugar nenhum -- "", ".", "e5" (sem mantissa antes do 'e'), "--1"
+        //     (segundo sinal nao faz parte de um numero valido, entao a varredura de digito nem
+        //     comeca) todos caem aqui. SEMPRE +0.0, independente de qualquer caractere de sinal
+        //     consumido -- ver doc-comment.
+        return 0.0;
+    }
+
+    // ---- optional [eE][+-]digits exponent -----------------------------------------------------
+    int explicit_exp = 0;
+    if (s[i] == 'e' || s[i] == 'E') {
+        size_t j = i + 1;
+        int exp_neg = 0;
+        if (s[j] == '+') {
+            j++;
+        } else if (s[j] == '-') {
+            exp_neg = 1;
+            j++;
+        }
+        if (s[j] >= '0' && s[j] <= '9') {
+            int exp_mag = 0;
+            while (s[j] >= '0' && s[j] <= '9') {
+                int d = s[j] - '0';
+                // EN: Saturating accumulation (same shape as atoi/atou's technique) -- caps well
+                //     beyond FCONV_MAX_SCALE_ITER so the later scale loop's own cap is always
+                //     what actually binds, this just keeps `exp_mag` itself from overflowing
+                //     `int` for a pathologically long digit run.
+                // PT: Acumulacao saturante (mesma forma da tecnica do atoi/atou) -- limita bem
+                //     alem do FCONV_MAX_SCALE_ITER entao o proprio limite do laco de escala mais
+                //     adiante e' sempre o que de fato vale, isso so evita que o `exp_mag` em si
+                //     estoure `int` pra uma sequencia de digitos patologicamente longa.
+                if (exp_mag > (FCONV_MAX_EXP_MAG - d) / 10) {
+                    exp_mag = FCONV_MAX_EXP_MAG;
+                } else {
+                    exp_mag = exp_mag * 10 + d;
+                }
+                j++;
+            }
+            explicit_exp = exp_neg ? -exp_mag : exp_mag;
+            // EN: `i` is intentionally NOT updated to `j` here -- nothing past this point in the
+            //     function ever reads `i` again (same "atof does not report a consumed-length
+            //     position" reasoning as the inf/nan branches above; `explicit_exp`, already
+            //     captured, is the only thing that mattered from this scan).
+            // PT: `i` deliberadamente NAO e' atualizado pra `j` aqui -- nada dali em diante na
+            //     funcao le `i` de novo (mesmo raciocinio "atof nao reporta uma posicao de
+            //     comprimento-consumido" dos branches de inf/nan acima; `explicit_exp`, ja
+            //     capturado, e' a unica coisa que importava dessa varredura).
+        }
+        // EN: else: a lone trailing 'e'/'E' with no exponent digits is simply never matched by
+        //     the `if` above -- it is trailing garbage after the already-valid mantissa (see
+        //     include/conv.h: `atof("1e")` -> `1.0`).
+        // PT: senao: um 'e'/'E' final sozinho sem digitos de expoente simplesmente nunca e'
+        //     casado pelo `if` acima -- e' lixo final depois da mantissa ja valida (ver
+        //     include/conv.h: `atof("1e")` -> `1.0`).
+    }
+
+    int total_exp = explicit_exp - frac_digits;
+
+    if (neg) {
+        // EN: Unary negation, same "-0.0 from +0.0" correctness reasoning as ftoa's `av`.
+        // PT: Negacao unaria, mesmo raciocinio de corretude "-0.0 a partir de +0.0" do `av` do
+        //     ftoa.
+        mantissa = -mantissa;
+    }
+
+    // ---- scale by 10^total_exp, bounded iteration count (DoS-defensive, see macros above) ----
+    if (total_exp > 0) {
+        unsigned n_iter = (unsigned)total_exp;
+        if (n_iter > FCONV_MAX_SCALE_ITER) {
+            n_iter = FCONV_MAX_SCALE_ITER;
+        }
+        for (unsigned k = 0; k < n_iter; k++) {
+            mantissa *= 10.0; // overflows to +-Infinity NATURALLY via IEEE-754, no branch needed
+        }
+    } else if (total_exp < 0) {
+        unsigned n_iter = (unsigned)(-total_exp);
+        if (n_iter > FCONV_MAX_SCALE_ITER) {
+            n_iter = FCONV_MAX_SCALE_ITER;
+        }
+        for (unsigned k = 0; k < n_iter; k++) {
+            mantissa /= 10.0; // underflows to a signed 0.0/denormal NATURALLY, gradual underflow
+        }
+    }
+
+    return mantissa;
 }

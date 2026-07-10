@@ -3,9 +3,10 @@
 //     (`<stdarg.h>` boundary, testability split, buffer/flush design). This file holds the
 //     shared formatting CORE (`mini_format_core`, static/internal) plus two thin "sink"
 //     adapters that each `mini_vsnprintf`/`mini_printf` plug into it -- the conversion logic
-//     (`%d %u %x %s %c %%` + unknown-directive fallback) is written EXACTLY ONCE and reused by
+//     (`%d %u %x %s %c %f %%` + unknown-directive fallback) is written EXACTLY ONCE and reused by
 //     both public entry points, so there is no risk of the two functions' formatting drifting
-//     apart.
+//     apart. (`%f`, SOV-FCONV, appended later -- see its own `case 'f'` block below for the
+//     rationale; `%g` is NOT implemented, see that block and TODO.md.)
 //
 //     THE SINK ABSTRACTION: `mini_sink_fn` is a function pointer `(ctx, data, n) -> void` that
 //     receives one RUN of output bytes at a time (a literal-text run between `%` directives, or
@@ -161,6 +162,42 @@ static void mini_format_core(mini_sink_fn sink, void* ctx, size_t* out_len, cons
                 utoa(v, digits, 16);
                 size_t n = strlen(digits);
                 sink(ctx, digits, n);
+                len += n;
+                fmt++;
+                break;
+            }
+            case 'f': {
+                // EN: SOV-FCONV addition. `double` is unaffected by default argument promotion
+                //     the way `float` WOULD be (a `float` argument passed through `...` is
+                //     already promoted to `double` before this function ever sees it -- the
+                //     promotion happens at the CALL SITE, per C's variadic rules) -- so
+                //     `va_arg(ap, double)` is correct for both a literal `double` argument and a
+                //     `float` one. Fixed default precision only (CONV_FTOA_DEFAULT_PRECISION,
+                //     6) -- no width/precision/flags modifiers, same YAGNI stance as every other
+                //     conversion in this function (see file header). `%g` is NOT implemented:
+                //     it would require scientific-notation (`%e`-style) formatting to pick
+                //     between fixed/exponential by magnitude, which `ftoa` does not provide (it
+                //     is fixed-point ONLY) -- registered as a follow-up in TODO.md rather than
+                //     built here, per this task's explicit scope ("so' se sair de graca").
+                // PT: Adicao do SOV-FCONV. `double` nao e' afetado pela promocao de argumento
+                //     padrao do jeito que um `float` SERIA (um argumento `float` passado por
+                //     `...` ja e' promovido a `double` antes desta funcao sequer ve-lo -- a
+                //     promocao acontece no PONTO DE CHAMADA, pelas regras variadicas de C) --
+                //     entao `va_arg(ap, double)` e' correto tanto pra um argumento `double`
+                //     literal quanto um `float`. So precisao padrao fixa
+                //     (CONV_FTOA_DEFAULT_PRECISION, 6) -- sem modificadores de
+                //     largura/precisao/flags, mesma postura YAGNI de toda outra conversao desta
+                //     funcao (ver cabecalho do arquivo). `%g` NAO e' implementado: exigiria
+                //     formatacao em notacao cientifica (estilo `%e`) pra escolher entre
+                //     fixo/exponencial pela magnitude, o que o `ftoa` nao oferece (e' SO'
+                //     ponto-fixo) -- registrado como item de seguimento no TODO.md em vez de
+                //     construido aqui, conforme o escopo explicito desta tarefa ("so' se sair de
+                //     graca").
+                double v = va_arg(ap, double);
+                char fbuf[CONV_FTOA_BUF_MIN];
+                ftoa(v, fbuf, CONV_FTOA_DEFAULT_PRECISION);
+                size_t n = strlen(fbuf);
+                sink(ctx, fbuf, n);
                 len += n;
                 fmt++;
                 break;

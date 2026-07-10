@@ -111,6 +111,34 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(strcmp(buf, "ffffffff"), 0);
     }
 
+    // ---- %f (SOV-FCONV) ----------------------------------------------------------------
+    // EN: Default precision only (6, D3's `CONV_FTOA_DEFAULT_PRECISION`) -- no width/precision
+    //     modifiers, same YAGNI stance as every other conversion here. Just plumbing checks (the
+    //     conversion LOGIC itself -- rounding, signed zero, Infinity/NaN, DBL_MAX -- is D3's own
+    //     responsibility and is exhaustively covered by tests/test_conv.c; this file only proves
+    //     `%f` reads `va_arg(ap, double)` correctly and reuses `ftoa` faithfully through the sink).
+    // PT: So a precisao padrao (6, `CONV_FTOA_DEFAULT_PRECISION` do D3) -- sem modificadores de
+    //     largura/precisao, mesma postura YAGNI de toda outra conversao aqui. So checagens de
+    //     canalizacao (a LOGICA de conversao em si -- arredondamento, zero com sinal,
+    //     Infinito/NaN, DBL_MAX -- e' responsabilidade propria do D3 e e' coberta exaustivamente
+    //     por tests/test_conv.c; este arquivo so prova que o `%f` le `va_arg(ap, double)`
+    //     corretamente e reusa o `ftoa` fielmente atraves do sink).
+    {
+        char buf[64];
+        fmt_into(buf, sizeof(buf), "%f", 3.5);
+        TEST_ASSERT_EQ(strcmp(buf, "3.500000"), 0);
+    }
+    {
+        char buf[64];
+        fmt_into(buf, sizeof(buf), "%f", -1.0);
+        TEST_ASSERT_EQ(strcmp(buf, "-1.000000"), 0);
+    }
+    {
+        char buf[64];
+        fmt_into(buf, sizeof(buf), "x=%d y=%f", 7, 0.5);
+        TEST_ASSERT_EQ(strcmp(buf, "x=7 y=0.500000"), 0); // mixed with %d, same as %s's own case
+    }
+
     // ---- %s --------------------------------------------------------------------------
     // EN: Normal string, empty string, and this project's documented `NULL` behaviour --
     //     prints "(null)" rather than crashing (no libc, no segfault-avoiding guard otherwise).

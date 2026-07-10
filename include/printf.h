@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: E2 -- the sovereign runtime's own minimal `printf` (no libc, no `<stdio.h>`). Named
 //     `printf.h` (not `stdio.h`): same "replace what it provides, not the header name"
-//     convention as D3's `conv.h`. Supports exactly `%d %u %x %s %c %%` -- no width/precision/
+//     convention as D3's `conv.h`. Supports exactly `%d %u %x %s %c %f %%` -- no width/precision/
 //     flags/length modifiers (YAGNI, same philosophy as D3's "only base 10/16" call: nothing in
-//     this codebase needs more yet; extend when a real need appears).
+//     this codebase needs more yet; extend when a real need appears). `%f` (SOV-FCONV, added
+//     later) is built directly on D3's `ftoa` at its DEFAULT precision (6) -- see conv.h. `%g` is
+//     deliberately NOT implemented: it would need scientific-notation formatting `ftoa` does not
+//     provide (fixed-point only); registered as a TODO.md follow-up rather than built here.
 //
 //     THE `<stdarg.h>` BOUNDARY DECISION: a variadic function's `...` can only be walked via
 //     `va_list`/`va_start`/`va_arg`/`va_end`, which are COMPILER BUILTINS (`__builtin_va_*` under
@@ -89,7 +92,9 @@
 //     decimal, reads `va_arg(ap, int)`), `%u`/`%x` (unsigned decimal/lowercase-hex, read
 //     `va_arg(ap, unsigned)`), `%s` (C-string, reads `va_arg(ap, const char*)`; `NULL` prints
 //     the literal "(null)"), `%c` (one char, reads `va_arg(ap, int)` -- NOT `char`, see file
-//     header's default-argument-promotion note), `%%` (one literal `%`). An unknown directive
+//     header's default-argument-promotion note), `%f` (fixed-point `double`, reads `va_arg(ap,
+//     double)`, always at D3's `CONV_FTOA_DEFAULT_PRECISION` -- see conv.h's `ftoa` doc-comment
+//     for special-value/rounding behaviour), `%%` (one literal `%`). An unknown directive
 //     (e.g. `%z`) prints the `%` and the following character literally and consumes no
 //     variadic argument. A lone trailing `%` at the very end of `fmt` prints a literal `%`.
 // PT: Formata `fmt` + `ap` em `buf` (que deve ter espaco pra `cap` bytes). Escreve no maximo
@@ -103,7 +108,10 @@
 //     `%u`/`%x` (decimal/hex-minusculo sem sinal, leem `va_arg(ap, unsigned)`), `%s` (C-string,
 //     le `va_arg(ap, const char*)`; `NULL` imprime o literal "(null)"), `%c` (um char, le
 //     `va_arg(ap, int)` -- NAO `char`, ver nota de promocao-de-argumento-padrao no cabecalho do
-//     arquivo), `%%` (um `%` literal). Uma diretiva desconhecida (ex.: `%z`) imprime o `%` e o
+//     arquivo), `%f` (`double` de ponto fixo, le `va_arg(ap, double)`, sempre na
+//     `CONV_FTOA_DEFAULT_PRECISION` do D3 -- ver o doc-comment do `ftoa` em conv.h pro
+//     comportamento de valor-especial/arredondamento), `%%` (um `%` literal). Uma diretiva
+//     desconhecida (ex.: `%z`) imprime o `%` e o
 //     caractere seguinte literalmente e nao consome argumento variadico nenhum. Um `%` sozinho
 //     no fim de `fmt` imprime um `%` literal.
 int mini_vsnprintf(char* buf, size_t cap, const char* fmt, va_list ap);

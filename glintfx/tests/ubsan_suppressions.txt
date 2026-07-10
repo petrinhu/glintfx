@@ -18,200 +18,31 @@
 #     entrada aqui DEVE ser um achado documentado e rastreado — nunca um
 #     silenciamento genérico de categoria inteira de check, e nunca algo que
 #     também possa casar com código autoral da glintfx.
-
-# EN: vptr:ElementDocument — RmlUi (pinned commit 2cd28864, fetched via
-#     FetchContent, third-party, NOT glintfx code) reads through an
-#     ElementDocument* whose ElementDocument-derived part has already finished
-#     destructing, during its own teardown chain:
-#       Element::SetOwnerDocument (Source/Core/Element.cpp:2128)
-#         owner_document->GetContext()   <- vptr check fires here
-#       called from Element::SetParent (Element.cpp:2190)
-#       called from ~Element() (Element.cpp:108), itself invoked from
-#       ~ElementDocument() while releasing that very document's own children
-#       (Context::ReleaseUnloadedDocuments, Context.cpp:1567).
-#     i.e. a child element's owner_document pointer aliases the document
-#     object that is mid-self-destruction: ~ElementDocument() (derived part)
-#     has already run, so at the point Element::SetOwnerDocument dereferences
-#     it, the live dynamic type is only the base Element subobject, not
-#     ElementDocument — a real, strict-UB, textbook "call through a pointer to
-#     the derived type of an object whose derived part is already destroyed"
-#     pattern. In practice GetContext() only touches base-Element state that
-#     is still alive, so it is not observed to corrupt memory or misbehave —
-#     but it is technically UB and correctly flagged.
-#     100% reproducible: every embed test that loads then releases a document
-#     (8/8 embed tests + all GLFW-backend tests that load a document) hits it
-#     exactly once at teardown. Verified NOT reachable through any
-#     glintfx-authored Element/ElementDocument subclass (grep confirms glintfx
-#     never subclasses Rml::Element / Rml::ElementDocument) — this suppression
-#     cannot mask a glintfx bug.
-#     Reported upstream candidate / local fix candidate: TESTES.md TST-L1-MEM
-#     QA report (this gate's first run, 2026-07-02). NOT patched in-tree:
-#     RmlUi is a pinned FetchContent source, patching it here would silently
-#     fork the pin without going through the normal
-#     bump-the-GIT_TAG-and-review path. Re-verify (and consider raising
-#     upstream / bumping the pin) whenever RMLUI GIT_TAG in CMakeLists.txt
-#     changes.
-# PT: vptr:ElementDocument — o RmlUi (commit pinado 2cd28864, fetchado via
-#     FetchContent, terceiro, NÃO código glintfx) lê através de um
-#     ElementDocument* cuja parte derivada ElementDocument já terminou de ser
-#     destruída, durante a própria cadeia de teardown dele:
-#       Element::SetOwnerDocument (Source/Core/Element.cpp:2128)
-#         owner_document->GetContext()   <- o check de vptr dispara aqui
-#       chamado por Element::SetParent (Element.cpp:2190)
-#       chamado por ~Element() (Element.cpp:108), por sua vez invocado por
-#       ~ElementDocument() ao liberar os próprios filhos daquele documento
-#       (Context::ReleaseUnloadedDocuments, Context.cpp:1567).
-#     ou seja, o ponteiro owner_document de um elemento-filho aponta para o
-#     próprio objeto documento que está no meio da auto-destruição:
-#     ~ElementDocument() (parte derivada) já rodou, então no ponto em que
-#     Element::SetOwnerDocument o desreferencia, o tipo dinâmico vivo é só o
-#     subobjeto base Element, não ElementDocument — um padrão real, de UB
-#     estrito, livro-texto de "chamada através de ponteiro para o tipo
-#     derivado de um objeto cuja parte derivada já foi destruída". Na
-#     prática GetContext() só toca estado da base Element ainda viva, então
-#     não se observa corrupção de memória ou mau comportamento — mas é UB
-#     tecnicamente e corretamente sinalizado.
-#     100% reprodutível: todo teste embed que carrega e depois libera um
-#     documento (8/8 testes embed + todos os testes de backend GLFW que
-#     carregam documento) dispara exatamente uma vez no teardown. Verificado
-#     NÃO alcançável através de nenhuma subclasse Element/ElementDocument
-#     autoral da glintfx (grep confirma que a glintfx nunca subclassa
-#     Rml::Element / Rml::ElementDocument) — esta suppression não pode
-#     mascarar um bug da glintfx.
-#     Candidato a reporte upstream / candidato a fix local: relatório de QA
-#     do TST-L1-MEM (1ª execução deste gate, 2026-07-02). NÃO corrigido
-#     in-tree: RmlUi é fonte FetchContent pinado, corrigi-lo aqui faria um
-#     fork silencioso do pin sem passar pelo caminho normal de
-#     bump-do-GIT_TAG-e-review. Reverificar (e considerar reportar upstream /
-#     atualizar o pin) sempre que o GIT_TAG do RMLUI em CMakeLists.txt mudar.
-vptr:ElementDocument
-
-# EN: vptr:*WidgetScroll.cpp* + vptr:*RemoveEventListener* (TWO entries, both required
-#     together — see the matching-mechanism note at the end) — RmlUi (same pinned commit,
-#     third-party, NOT glintfx code) hits an analogous teardown-order UB pattern inside its
-#     OWN internal scrollbar widget, Rml::WidgetScroll, first exercised by scroll_sanity.cpp
-#     (GLINTFX-SCROLL-1, v0.4.0) — it is the first scene/test in the whole suite whose
-#     overflow-y:auto content actually overflows enough to instantiate a live scrollbar
-#     (30 x 30px items in a 100px-tall container, scroll_scene.rcss).
-#     ~WidgetScroll() (Source/Core/WidgetScroll.cpp:44-60) calls RemoveEventListener on up to
-#     4 Element* it holds to its own generated child elements (the scrollbar "thumb" `bar`,
-#     `track`, and the two `arrows[0]/arrows[1]`) -- by the time the destructor runs, those
-#     children's own Element parts may already be mid-destruction in the same recursive
-#     teardown cascade (Context::ReleaseUnloadedDocuments -> ~ElementDocument() ->
-#     recursive ~Element(), Context.cpp:1567 -- the SAME cascade documented in the
-#     vptr:ElementDocument entry above, just touching different internal Element*s). Same
-#     root-cause category as that entry: "virtual call / member access through a pointer to
-#     an object whose derived part is already destroyed", strict UB, not observed to corrupt
-#     memory in practice (RemoveEventListener only touches base-Element listener-list state
-#     that is still alive at that point).
-#     TWO distinct diagnostic shapes were observed for this SAME root cause, depending on
-#     whether the specific RemoveEventListener call got inlined into ~WidgetScroll() by the
-#     compiler (a per-call-site, compile-time-fixed decision -- WHICH of the 4
-#     bar/track/arrows[0]/arrows[1] pointers is corrupted enough to actually trip the check
-#     is runtime-memory-layout-dependent, hence non-deterministic across process runs, which
-#     of the two shapes appears first under halt_on_error=1 also varies run-to-run --
-#     verified by both direct binary reruns AND `member call` vs `member access` diagnostic
-#     wording in the two variants below):
-#       (a) INLINED: reported directly at the call site, e.g.
-#           "WidgetScroll.cpp:47:27: runtime error: member call on address ... which does
-#           not point to an object of type 'Element' / note: object has invalid vptr" --
-#           the enclosing function symbol IS ~WidgetScroll() itself (inlining absorbed
-#           RemoveEventListener's body), so type-name suppression (vptr:Element) does NOT
-#           match (verified empirically: `vptr:Element` alone, and even wildcarded
-#           `vptr:*Element*`, left this diagnostic unsuppressed -- "invalid vptr" checks
-#           with no recoverable dynamic type apparently do not match on the STATIC
-#           TypeDescriptor name the way the vptr:ElementDocument entry above does for its
-#           mismatched-but-valid-vptr case). File-scoped matching DOES work here:
-#           `vptr:*WidgetScroll.cpp*`.
-#       (b) NOT inlined: reported inside the callee body, e.g.
-#           "Element.cpp:1254:2: runtime error: member access within address ... which does
-#           not point to an object of type 'Element' / note: object has invalid vptr", stack
-#           frame #0 = Rml::Element::RemoveEventListener(...), frame #1 =
-#           Rml::WidgetScroll::~WidgetScroll() at WidgetScroll.cpp -- a plain
-#           `vptr:*WidgetScroll.cpp*` file match does NOT catch this (the diagnostic's OWN
-#           reported file is Element.cpp, a large, heavily-shared file across all of RmlUi,
-#           too broad to suppress wholesale). Function-scoped matching DOES work here and
-#           is precise (Element::RemoveEventListener is not called by any glintfx code --
-#           grep confirms): `vptr:*RemoveEventListener*`.
-#     Both patterns are needed TOGETHER because which shape appears is non-deterministic
-#     (verified: 10/10 clean direct-binary reruns with both entries present combined with
-#     the pre-existing LSAN_OPTIONS/ASAN_OPTIONS from this gate; single-pattern attempts
-#     each left 1-2 residual failures across repeated runs).
-#     Verified NOT reachable through any glintfx-authored Element/WidgetScroll/
-#     ElementScroll subclass, and glintfx never calls RemoveEventListener itself (grep
-#     confirms both) -- neither suppression can mask a glintfx bug. Newly discovered, not
-#     newly introduced: this is a LATENT upstream teardown-order UB that was simply never
-#     exercised before scroll_sanity.cpp, because no earlier test/demo scene authored an
-#     overflow-y:auto (or overflow-x) container whose content actually overflows its box
-#     enough for RmlUi to materialise a live WidgetScroll.
-#     Reported upstream candidate / local fix candidate: GLINTFX-SCROLL-1 implementation
-#     notes (v0.4.0, 2026-07-07). NOT patched in-tree — same pinned-FetchContent rationale
-#     as the entry above; re-verify whenever RMLUI GIT_TAG changes.
-# PT: vptr:*WidgetScroll.cpp* + vptr:*RemoveEventListener* (DUAS entradas, ambas
-#     necessárias juntas — ver a nota do mecanismo de match no fim) — o RmlUi (mesmo commit
-#     pinado, terceiro, NÃO código glintfx) atinge um padrão análogo de UB de ordem-de-
-#     teardown dentro do PRÓPRIO widget interno de scrollbar, Rml::WidgetScroll, exercitado
-#     pela primeira vez por scroll_sanity.cpp (GLINTFX-SCROLL-1, v0.4.0) — é a primeira
-#     cena/teste de toda a suíte cujo conteúdo overflow-y:auto de fato transborda o
-#     suficiente para instanciar uma scrollbar viva (30 itens de 30px num container de 100px
-#     de altura, scroll_scene.rcss).
-#     ~WidgetScroll() (Source/Core/WidgetScroll.cpp:44-60) chama RemoveEventListener em até
-#     4 Element* que guarda para os próprios elementos-filho gerados (o "thumb" `bar` da
-#     scrollbar, `track`, e os dois `arrows[0]/arrows[1]`) — no momento em que o destrutor
-#     roda, a parte Element daqueles filhos já pode estar no meio da própria destruição na
-#     mesma cascata recursiva de teardown (Context::ReleaseUnloadedDocuments ->
-#     ~ElementDocument() -> cascata recursiva de ~Element(), Context.cpp:1567 — a MESMA
-#     cascata documentada na entrada vptr:ElementDocument acima, só que tocando Element*s
-#     internos diferentes). Mesma categoria de causa raiz daquela entrada: "chamada
-#     virtual/acesso a membro através de ponteiro para um objeto cuja parte derivada já foi
-#     destruída", UB estrito, não observado corromper memória na prática
-#     (RemoveEventListener só toca estado de lista-de-listener da base Element, ainda viva
-#     naquele ponto).
-#     DUAS formas distintas de diagnóstico foram observadas para essa MESMA causa raiz,
-#     dependendo de a chamada específica a RemoveEventListener ter sido inlinada em
-#     ~WidgetScroll() pelo compilador (decisão fixada em compile-time, por-call-site — QUAL
-#     dos 4 ponteiros bar/track/arrows[0]/arrows[1] está corrompido o suficiente pra
-#     realmente disparar o check depende do layout de memória em runtime, portanto não-
-#     determinístico entre execuções do processo; qual das duas formas aparece primeiro sob
-#     halt_on_error=1 também varia execução a execução — verificado tanto por reexecuções
-#     diretas do binário quanto pela redação "member call" vs "member access" das duas
-#     variantes abaixo):
-#       (a) INLINADA: reportada diretamente no call site, ex.:
-#           "WidgetScroll.cpp:47:27: runtime error: member call on address ... which does
-#           not point to an object of type 'Element' / note: object has invalid vptr" — o
-#           símbolo de função envolvente É o próprio ~WidgetScroll() (inlining absorveu o
-#           corpo de RemoveEventListener), então suppression por nome de tipo
-#           (vptr:Element) NÃO casa (verificado empiricamente: `vptr:Element` sozinho, e até
-#           `vptr:*Element*` com wildcard, deixaram este diagnóstico não-suprimido — checks
-#           de "invalid vptr" sem tipo dinâmico recuperável aparentemente não casam pelo nome
-#           do TypeDescriptor ESTÁTICO do jeito que a entrada vptr:ElementDocument acima faz
-#           para o caso dela de vptr válido-mas-incompatível). Match por arquivo FUNCIONA
-#           aqui: `vptr:*WidgetScroll.cpp*`.
-#       (b) NÃO inlinada: reportada dentro do corpo do callee, ex.:
-#           "Element.cpp:1254:2: runtime error: member access within address ... which does
-#           not point to an object of type 'Element' / note: object has invalid vptr",
-#           quadro de pilha #0 = Rml::Element::RemoveEventListener(...), quadro #1 =
-#           Rml::WidgetScroll::~WidgetScroll() em WidgetScroll.cpp — um match simples de
-#           arquivo `vptr:*WidgetScroll.cpp*` NÃO pega este caso (o arquivo reportado pelo
-#           próprio diagnóstico é Element.cpp, um arquivo grande e muito compartilhado em
-#           todo o RmlUi, amplo demais pra suprimir por completo). Match por função FUNCIONA
-#           aqui e é preciso (Element::RemoveEventListener não é chamado por nenhum código
-#           glintfx — grep confirma): `vptr:*RemoveEventListener*`.
-#     As duas entradas são necessárias JUNTAS porque qual forma aparece é não-
-#     determinístico (verificado: 10/10 reexecuções diretas limpas do binário com as duas
-#     entradas presentes, combinadas com o LSAN_OPTIONS/ASAN_OPTIONS pré-existente deste
-#     gate; tentativas com um único padrão isolado deixaram 1-2 falhas residuais ao longo de
-#     execuções repetidas).
-#     Verificado NÃO alcançável através de nenhuma subclasse Element/WidgetScroll/
-#     ElementScroll autoral da glintfx, e a glintfx nunca chama RemoveEventListener ela
-#     mesma (grep confirma os dois) — nenhuma das duas suppressions pode mascarar um bug da
-#     glintfx. Recém-descoberto, não recém-introduzido: é uma UB LATENTE de ordem-de-
-#     teardown do upstream que simplesmente nunca havia sido exercitada antes do
-#     scroll_sanity.cpp, porque nenhuma cena/demo anterior autorava um container
-#     overflow-y:auto (ou overflow-x) cujo conteúdo de fato transbordasse a caixa o
-#     suficiente para o RmlUi materializar um WidgetScroll vivo.
-#     Candidato a reporte upstream / candidato a fix local: notas de implementação do
-#     GLINTFX-SCROLL-1 (v0.4.0, 2026-07-07). NÃO corrigido in-tree — mesma racional de
-#     FetchContent pinado da entrada acima; reverificar sempre que o RMLUI GIT_TAG mudar.
-vptr:*WidgetScroll.cpp*
-vptr:*RemoveEventListener*
+#
+# EN: 2026-07-10 — this file is currently EMPTY of entries (below this header). The 3
+#     teardown-order findings previously listed here (`vptr:ElementDocument`,
+#     `vptr:*WidgetScroll.cpp*`, `vptr:*RemoveEventListener*`) are now fixed at the root
+#     cause by a tracked, explicit source patch applied to the fetched RmlUi via
+#     PATCH_COMMAND — see glintfx/patches/rmlui-2cd28864-teardown-ub.patch and
+#     glintfx/patches/README.md for the full writeup, and glintfx/CMakeLists.txt's
+#     FetchContent_Declare(RmlUi ...) block for the patch application mechanism. They are
+#     NOT suppressed anymore, they are corrected. The discipline this file exists to enforce
+#     (every entry documented, tracked, scoped) is unchanged even at zero entries — any NEW
+#     vptr/UBSan finding must still be gated through this same process (fix-at-root preferred
+#     over suppression; if suppression is genuinely the only option, it must be as narrowly
+#     scoped and as thoroughly documented as the 3 removed entries were, see git history/
+#     git blame on this file for their full text).
+# PT: 2026-07-10 — este arquivo está atualmente VAZIO de entradas (abaixo deste header). Os
+#     3 achados de ordem-de-teardown antes listados aqui (`vptr:ElementDocument`,
+#     `vptr:*WidgetScroll.cpp*`, `vptr:*RemoveEventListener*`) agora são corrigidos na causa
+#     raiz por um patch de fonte explícito e rastreado aplicado ao RmlUi fetchado via
+#     PATCH_COMMAND — ver glintfx/patches/rmlui-2cd28864-teardown-ub.patch e
+#     glintfx/patches/README.md para o relato completo, e o bloco
+#     FetchContent_Declare(RmlUi ...) de glintfx/CMakeLists.txt para o mecanismo de aplicação
+#     do patch. Eles NÃO estão mais suprimidos, estão corrigidos. A disciplina que este
+#     arquivo existe para impor (toda entrada documentada, rastreada, com escopo) continua
+#     igual mesmo com zero entradas — todo achado NOVO de vptr/UBSan ainda deve passar pelo
+#     mesmo processo (corrigir-na-raiz preferido sobre suprimir; se suprimir for genuinamente
+#     a única opção, deve ter o mesmo escopo estreito e a mesma documentação completa que as
+#     3 entradas removidas tiveram; ver o histórico git/git blame deste arquivo pro texto
+#     completo delas).

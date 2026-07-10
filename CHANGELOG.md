@@ -12,6 +12,48 @@
 
 ### Added / Adicionado
 
+- **EN:** `glintfx/patches/rmlui-2cd28864-teardown-ub.patch` -- the 2 RmlUi teardown-order UBs
+  documented in the entry right below (`vptr:ElementDocument`, `vptr:*WidgetScroll.cpp*` +
+  `vptr:*RemoveEventListener*`) are now fixed AT THE ROOT in our own build via an explicit,
+  tracked source patch applied to the fetched RmlUi source through `FetchContent_Declare`'s
+  `PATCH_COMMAND` (`glintfx/CMakeLists.txt`), instead of being suppressed at the symptom. This
+  is not a silent fork of the pinned commit: the patch is a committed file, reviewed, and
+  meant to be temporary (reported/submitted upstream, dropped once mikke89/RmlUi carries an
+  equivalent fix and the pin is bumped past it) -- see `glintfx/patches/README.md` for the
+  full writeup of both fixes. `PATCH_COMMAND` is idempotent by design (`git apply --reverse
+  --check` probes whether the patch is already applied before attempting a forward `git
+  apply`), verified safe across repeated reconfigures. The 3 corresponding suppression
+  entries in `glintfx/tests/ubsan_suppressions.txt` are REMOVED (the file now documents why it
+  is empty rather than suppressing anything) -- validated under `GLINTFX_SANITIZE=ON`
+  (ASan+UBSan): zero `vptr:*` findings for these 3 patterns across the full suite (both
+  `GLINTFX_BACKEND_GLFW=ON`/`OFF`), where previously the suppressions were required for a
+  clean run. **Gotcha for existing local build directories:** CMake `FetchContent` only
+  populates (and therefore only patches) a dependency ONCE per build directory -- a stale
+  `build*/_deps/rmlui-src` fetched before this patch existed will NOT be retroactively
+  patched by a routine reconfigure; delete the build directory (or at least its
+  `_deps/rmlui-*` subdirectories) to force a fresh, patched populate.
+  **PT:** `glintfx/patches/rmlui-2cd28864-teardown-ub.patch` -- os 2 UBs de ordem-de-teardown
+  do RmlUi documentados na entrada logo abaixo (`vptr:ElementDocument`,
+  `vptr:*WidgetScroll.cpp*` + `vptr:*RemoveEventListener*`) agora são corrigidos NA RAIZ no
+  nosso próprio build via um patch de fonte explícito e rastreado, aplicado ao source fetchado
+  do RmlUi através do `PATCH_COMMAND` do `FetchContent_Declare` (`glintfx/CMakeLists.txt`), em
+  vez de suprimidos no sintoma. Isto não é um fork silencioso do commit pinado: o patch é um
+  arquivo commitado, revisado, e pensado para ser temporário (reportado/submetido ao upstream,
+  removido assim que o mikke89/RmlUi carregar uma correção equivalente e o pin avançar para
+  além dela) -- ver `glintfx/patches/README.md` para o relato completo das duas correções. O
+  `PATCH_COMMAND` é idempotente por design (`git apply --reverse --check` sonda se o patch já
+  está aplicado antes de tentar um `git apply` pra frente), validado seguro em reconfigurações
+  repetidas. As 3 entradas de suppression correspondentes em
+  `glintfx/tests/ubsan_suppressions.txt` são REMOVIDAS (o arquivo agora documenta por que está
+  vazio em vez de suprimir qualquer coisa) -- validado sob `GLINTFX_SANITIZE=ON` (ASan+UBSan):
+  zero achados `vptr:*` para estes 3 padrões em toda a suíte (`GLINTFX_BACKEND_GLFW=ON` e
+  `OFF`), onde antes as suppressions eram necessárias para uma execução limpa. **Gotcha para
+  diretórios de build locais já existentes:** o `FetchContent` do CMake só popula (e portanto
+  só patcheia) uma dependência UMA VEZ por diretório de build -- um `build*/_deps/rmlui-src`
+  obsoleto, fetchado antes deste patch existir, NÃO é retroativamente patcheado por uma
+  reconfiguração de rotina; apague o diretório de build (ou ao menos as subpastas
+  `_deps/rmlui-*` dele) para forçar um populate novo e patcheado.
+
 - **EN:** Doc-only: `docs/embed-integration.md` section 18, "Running the host under sanitizers (ASan/UBSan/LSan)", answering a real triage request from the GusWorld consumer, which hit the same RmlUi teardown-order UBs (`vptr:ElementDocument`, `vptr:*WidgetScroll.cpp*` + `vptr:*RemoveEventListener*`) when running its host under `-fsanitize=address,undefined`. Summarizes the rationale already tracked in `glintfx/tests/ubsan_suppressions.txt`/`lsan_suppressions.txt` (both unchanged) and shows how a host consumes them via `UBSAN_OPTIONS`/`LSAN_OPTIONS=suppressions=<path>`. No code or suppression-file change.
   **PT:** Só doc: seção 18 de `docs/embed-integration.md`, "Rodando o host sob sanitizers (ASan/UBSan/LSan)", respondendo a um pedido real de triagem do consumidor GusWorld, que topou nos mesmos UBs de ordem-de-teardown do RmlUi (`vptr:ElementDocument`, `vptr:*WidgetScroll.cpp*` + `vptr:*RemoveEventListener*`) ao rodar o próprio host sob `-fsanitize=address,undefined`. Resume o racional já rastreado em `glintfx/tests/ubsan_suppressions.txt`/`lsan_suppressions.txt` (ambos intocados) e mostra como um host os consome via `UBSAN_OPTIONS`/`LSAN_OPTIONS=suppressions=<caminho>`. Nenhuma mudança de código ou de arquivo de suppression.
 

@@ -259,9 +259,47 @@ endif()
 set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(RMLUI_FONT_ENGINE "freetype" CACHE STRING "" FORCE)
+
+# EN: PATCH_COMMAND — applies patches/rmlui-2cd28864-teardown-ub.patch (tracked, reviewed
+#     source patch fixing 2 genuine teardown-order UBs in RmlUi itself; see
+#     glintfx/patches/README.md for the full writeup) explicitly and visibly to the fetched
+#     RmlUi source, instead of silently forking the pin or leaving the UBs suppressed at the
+#     symptom (see the now-emptied glintfx/tests/ubsan_suppressions.txt).
+#
+#     IDEMPOTENCY (non-negotiable — PATCH_COMMAND re-runs on every re-populate, e.g. a clean
+#     reconfigure that still finds the source already checked out at _deps/rmlui-src): a bare
+#     `git apply <patch>` would fail the SECOND time with "patch does not apply" because the
+#     tree already carries the change. The command below is a two-step probe instead of a
+#     one-shot apply: `git apply --reverse --check` asks "would REVERSING this patch succeed
+#     cleanly?" — that is only true if the patch is ALREADY applied. If the probe succeeds
+#     (patch already in), skip. If the probe fails (patch not in yet), apply it forward. Both
+#     branches exit 0, so CMake never sees a failing PATCH_COMMAND on a routine reconfigure.
+#     `sh -c "... || ..."` is required (not a bare multi-token COMMAND list) because CMake
+#     does not interpret shell operators like `||` on its own — only a real shell does; this
+#     repo's build is Linux-only (CLAUDE.md "Ambiente"), so `sh` is guaranteed present.
+# PT: PATCH_COMMAND — aplica patches/rmlui-2cd28864-teardown-ub.patch (patch de fonte
+#     rastreado e revisado que corrige 2 UBs genuínos de ordem-de-teardown no próprio RmlUi;
+#     ver glintfx/patches/README.md para o relato completo) de forma explícita e visível ao
+#     source fetchado do RmlUi, em vez de fazer fork silencioso do pin ou deixar os UBs
+#     suprimidos no sintoma (ver o agora-esvaziado glintfx/tests/ubsan_suppressions.txt).
+#
+#     IDEMPOTÊNCIA (não-negociável — o PATCH_COMMAND roda de novo a cada re-populate, ex.:
+#     uma reconfiguração limpa que ainda encontra o source já feito checkout em
+#     _deps/rmlui-src): um `git apply <patch>` cru falharia na SEGUNDA vez com "patch does
+#     not apply" porque a árvore já carrega a mudança. O comando abaixo é uma sonda em duas
+#     etapas em vez de um apply único: `git apply --reverse --check` pergunta "REVERTER este
+#     patch teria sucesso de forma limpa?" — isso só é verdade se o patch JÁ está aplicado.
+#     Se a sonda tem sucesso (patch já dentro), pula. Se a sonda falha (patch ainda não
+#     dentro), aplica pra frente. Os dois ramos saem com 0, então o CMake nunca vê um
+#     PATCH_COMMAND falhando numa reconfiguração de rotina. `sh -c "... || ..."` é necessário
+#     (não uma lista de COMMAND multi-token crua) porque o CMake não interpreta operadores de
+#     shell como `||` sozinho — só um shell de verdade faz isso; o build deste repositório é
+#     Linux-only (CLAUDE.md "Ambiente"), então `sh` está garantidamente presente.
+set(_glintfx_rmlui_patch ${CMAKE_CURRENT_SOURCE_DIR}/patches/rmlui-2cd28864-teardown-ub.patch)
 FetchContent_Declare(RmlUi
   GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
-  GIT_TAG 2cd28864ae25ed345b70598751703a5433b12356)
+  GIT_TAG 2cd28864ae25ed345b70598751703a5433b12356
+  PATCH_COMMAND sh -c "git apply --reverse --check '${_glintfx_rmlui_patch}' >/dev/null 2>&1 || git apply '${_glintfx_rmlui_patch}'")
 
 FetchContent_MakeAvailable(RmlUi)
 

@@ -1,0 +1,89 @@
+diff --git a/Include/RmlUi/Core/Element.h b/Include/RmlUi/Core/Element.h
+index 31f10b74..c07dcbf6 100644
+--- a/Include/RmlUi/Core/Element.h
++++ b/Include/RmlUi/Core/Element.h
+@@ -787,6 +787,7 @@ private:
+ 	ElementMeta* meta;
+ 
+ 	friend class Rml::Context;
++	friend class Rml::ElementDocument;
+ 	friend class Rml::ElementStyle;
+ 	friend class Rml::ContainerBox;
+ 	friend class Rml::InlineLevelBox;
+diff --git a/Source/Core/Element.cpp b/Source/Core/Element.cpp
+index d9d3cbbb..99e0543f 100644
+--- a/Source/Core/Element.cpp
++++ b/Source/Core/Element.cpp
+@@ -108,10 +108,22 @@ Element::~Element()
+ 		child->SetParent(nullptr);
+ 	}
+ 
++	// Release meta -- which may own a live WidgetScroll (Source/Core/WidgetScroll.cpp)
++	// holding raw Element* pointers into this element's own `children` list (its
++	// generated, non-DOM scrollbar track/bar/arrows elements) -- BEFORE children.clear()
++	// below destroys those very children. ~WidgetScroll() calls RemoveEventListener() on
++	// them; if meta were released after children.clear() (as it was previously), those
++	// pointers would already reference destructed Element objects: a genuine use of an
++	// already-destroyed sibling element, reported by UBSan as
++	// vptr:*WidgetScroll.cpp*/vptr:*RemoveEventListener* ("member call on address ...
++	// does not point to an object of type 'Element' / object has invalid vptr").
++	// The children loop above only detaches (SetParent(nullptr)); it does not destroy
++	// anything, so moving this line earlier does not change what state `children` is in
++	// by the time it runs.
++	ElementMetaPool::element_meta_pool->pool.DestroyAndDeallocate(meta);
++
+ 	children.clear();
+ 	num_non_dom_children = 0;
+-
+-	ElementMetaPool::element_meta_pool->pool.DestroyAndDeallocate(meta);
+ }
+ 
+ void Element::Update(float dp_ratio, Vector2f vp_dimensions)
+diff --git a/Source/Core/ElementDocument.cpp b/Source/Core/ElementDocument.cpp
+index 48dbe1c9..19e6da9f 100644
+--- a/Source/Core/ElementDocument.cpp
++++ b/Source/Core/ElementDocument.cpp
+@@ -137,7 +137,42 @@ ElementDocument::ElementDocument(const String& tag) : Element(tag)
+ 	SetProperty(PropertyId::Position, Property(Style::Position::Absolute));
+ }
+ 
+-ElementDocument::~ElementDocument() = default;
++ElementDocument::~ElementDocument()
++{
++	// Detach all descendants from this document while it is still a fully-alive
++	// ElementDocument (derived part not yet destroyed). Element::~Element() (the base
++	// destructor that runs right after this function's body returns) tears down
++	// `children` by calling child->SetParent(nullptr) for each one, which recurses into
++	// Element::SetOwnerDocument(nullptr). That function dereferences
++	// owner_document->GetContext() -- and owner_document, for every descendant, points
++	// at *this* ElementDocument object. If we let that recursion discover
++	// owner_document != nullptr on its own, it fires only once ~Element() (the base
++	// subobject) is already running, i.e. after this destructor body has completed and
++	// the ElementDocument-derived part (including the `context` member declared in this
++	// class, which is what GetContext() actually reads) has already gone out of scope:
++	// a use of a pointer to a derived object whose derived part has been destroyed
++	// (strict UB, reported by UBSan as vptr:ElementDocument on every document teardown).
++	//
++	// Calling SetOwnerDocument(nullptr) here instead, one call per direct child, is safe
++	// because `this` is still a completely valid ElementDocument at this point, and it
++	// pre-empts the problem: SetOwnerDocument already walks the whole subtree itself (it
++	// recurses into `child->SetOwnerDocument(document)` for every descendant), so a
++	// single call per direct child clears owner_document for the entire subtree in one
++	// pass. Once owner_document is nullptr, the later child->SetOwnerDocument(nullptr)
++	// calls made from the base ~Element() teardown become no-ops (see the
++	// `owner_document != this && owner_document != document` guard in
++	// Element::SetOwnerDocument), so they never dereference this document again.
++	//
++	// `children` is private to Element, so we can't iterate it directly from here; walk
++	// it through the public GetChild()/GetNumChildren(true) accessors instead (same
++	// vector, same order, non-DOM children included -- matches what Element::~Element()
++	// itself iterates over).
++	for (int i = 0; i < GetNumChildren(true); i++)
++	{
++		if (Element* child = GetChild(i))
++			child->SetOwnerDocument(nullptr);
++	}
++}
+ 
+ void ElementDocument::ProcessHeader(const DocumentHeader* document_header)
+ {

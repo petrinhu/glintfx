@@ -18,6 +18,10 @@ out.ppm
 core
 core.*
 vgcore.*
+# but NOT the include/core/ source dir (libcore.a public surface, ADR-0009) --
+# the bare `core` pattern above would otherwise swallow it
+!include/core/
+!include/core/**
 
 # Editores / IDE
 *~

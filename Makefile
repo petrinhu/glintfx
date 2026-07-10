@@ -14,14 +14,29 @@
 #     automaticamente.
 # Copyright (c) 2026 Petrus Silva Costa
 
-CC := clang
-AS := nasm
-LD := ld
+CC  := clang
+AS  := nasm
+LD  := ld
+AR  := ar
+CXX := clang++
 
 CFLAGS  := -std=c23 -ffreestanding -nostdlib -fno-pic -fno-stack-protector \
            -fno-builtin -fno-asynchronous-unwind-tables -m64 -Wall -Wextra -Iinclude
 ASFLAGS := -f elf64 -Iinclude/
 LDFLAGS := -nostdlib -static -no-pie -e _start
+
+# EN: SOV-LIBCORE (ADR-0009, FT-F0) -- HOSTED C++ flags for tests/libcore_consumer.cpp, the
+#     ordinary g++/clang++ program that links build/libcore.a next to a normal libc/libstdc++
+#     (the opposite of every other flag block on this page: no -ffreestanding, no -nostdlib --
+#     this is deliberately a REAL hosted build, proving libcore.a is consumable from one). See
+#     src/core_api.c's file header for the archive-side rename mechanism this build proves out.
+# PT: SOV-LIBCORE (ADR-0009, FT-F0) -- flags C++ HOSTED pro tests/libcore_consumer.cpp, o
+#     programa g++/clang++ comum que linka a build/libcore.a ao lado de uma libc/libstdc++
+#     normal (o oposto de todo outro bloco de flag desta página: sem -ffreestanding, sem
+#     -nostdlib -- este é deliberadamente um build hosted DE VERDADE, provando que a
+#     libcore.a é consumível a partir de um). Ver o cabeçalho de arquivo do src/core_api.c pro
+#     mecanismo de rename do lado do archive que este build prova.
+CXXFLAGS := -std=c++17 -Wall -Wextra -Iinclude
 
 BUILD := build
 OBJ   := $(BUILD)/obj
@@ -46,7 +61,7 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 PROGRAM_SRCS := $(wildcard tests/*.c)
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test test-negative check-static test-mem clean run
+.PHONY: build test test-negative check-static test-mem clean run libcore libcore-test
 
 build: $(PROGRAMS)
 
@@ -329,6 +344,91 @@ test-mem: build
 	@echo "--- valgrind memcheck: test_mem (D1 memcpy/memset/memmove/memcmp primitives) ---"
 	valgrind --error-exitcode=97 --leak-check=full $(BIN)/test_mem < /dev/null
 	@echo "test-mem: OK (no gross memory corruption under valgrind; see Makefile comment above for the documented malloc-hook-tracking limitation of this freestanding target -- real invariant coverage is tests/test_alloc.c's alignment/non-overlap asserts, exercised by 'make test')"
+
+# EN: SOV-LIBCORE (ADR-0009, FT-F0): the PHYSICAL boundary the internalization ADR calls for --
+#     a static archive, build/libcore.a, whose EXPORTED symbols carry the `glx_` prefix, safe to
+#     link into a hosted (non-freestanding) C++ consumer sitting next to a normal libc/libstdc++.
+#     See include/core/core.h (the public surface) and src/core_api.c (the rename mechanism that
+#     makes this safe) for the full design. `L1.14-GLLOADER` did NOT exercise this archive (the
+#     gl3w-piloto lived entirely inside glintfx) -- this is the first piece to actually prove the
+#     `.a` + `glx_` + hosted-consumption pattern end to end.
+#
+#     TWO OBJECT TREES, ONE SOURCE TREE: `build/obj/` (the existing freestanding tree, unchanged)
+#     keeps building every src/*.c file the NORMAL way (no renaming) for every tests/*.c gate
+#     program via $(RUNTIME_OBJS) -- `make build`/`make test` are 100% unaffected by anything
+#     below. `build/objcore/` is a SECOND, ARCHIVE-ONLY compilation of the SAME src/*.c files,
+#     with $(CORE_RENAME_FLAGS) applied uniformly (see src/core_api.c's file header for exactly
+#     why and how) so the colliding libc-shaped names (`malloc`/`free`/`realloc`/`memcpy`/
+#     `memset`/`memmove`/`memcmp`) never appear as bare, exported symbols in build/libcore.a.
+#     The two `.asm` runtime objects (start.o/syscall.o) are REUSED as-is from build/obj/ -- no
+#     C preprocessor touches NASM source, and neither `_start` nor `syscall1..6` collide with any
+#     libc name to begin with (see src/core_api.c's header for the full rationale on why only
+#     the C allocator/mem primitives needed renaming).
+# PT: SOV-LIBCORE (ADR-0009, FT-F0): a fronteira FÍSICA que a ADR de internalização pede -- um
+#     archive estático, build/libcore.a, cujos símbolos EXPORTADOS carregam o prefixo `glx_`,
+#     seguro de linkar num consumidor C++ hosted (não-freestanding) sentado ao lado de uma
+#     libc/libstdc++ normal. Ver include/core/core.h (a superfície pública) e src/core_api.c (o
+#     mecanismo de rename que torna isso seguro) pro desenho completo. O `L1.14-GLLOADER` NÃO
+#     exercitou este archive (o gl3w-piloto morava inteiramente dentro do glintfx) -- esta é a
+#     primeira peça a de fato provar o padrão `.a` + `glx_` + consumo-hosted de ponta a ponta.
+#
+#     DUAS ÁRVORES DE OBJETO, UMA ÁRVORE DE FONTE: `build/obj/` (a árvore freestanding existente,
+#     intocada) continua compilando todo src/*.c do jeito NORMAL (sem rename) pra todo
+#     programa-gate tests/*.c via $(RUNTIME_OBJS) -- `make build`/`make test` ficam 100%
+#     não-afetados por qualquer coisa abaixo. `build/objcore/` é uma SEGUNDA compilação, SÓ PRO
+#     ARCHIVE, dos MESMOS src/*.c, com $(CORE_RENAME_FLAGS) aplicado uniformemente (ver o
+#     cabeçalho de arquivo do src/core_api.c pro porquê e como exatos) pra que os nomes
+#     colidentes no formato da libc (`malloc`/`free`/`realloc`/`memcpy`/`memset`/`memmove`/
+#     `memcmp`) nunca apareçam como símbolos crus, exportados, na build/libcore.a. Os dois
+#     objetos de runtime `.asm` (start.o/syscall.o) são REUSADOS como estão de build/obj/ --
+#     nenhum pré-processador C toca fonte NASM, e nem `_start` nem `syscall1..6` colidem com
+#     nome nenhum de libc pra começo de conversa (ver o cabeçalho do src/core_api.c pro racional
+#     completo de por que só as primitivas C de alocador/memória precisaram de rename).
+OBJCORE := $(BUILD)/objcore
+
+CORE_RENAME_FLAGS := -Dmalloc=glx_core_malloc_impl -Dfree=glx_core_free_impl \
+                      -Drealloc=glx_core_realloc_impl -Dmemcpy=glx_core_memcpy_impl \
+                      -Dmemset=glx_core_memset_impl -Dmemmove=glx_core_memmove_impl \
+                      -Dmemcmp=glx_core_memcmp_impl
+
+CORE_C_OBJS   := $(patsubst src/%.c,$(OBJCORE)/%.o,$(RUNTIME_C_SRCS))
+CORE_ASM_OBJS := $(patsubst src/%.asm,$(OBJ)/%.o,$(RUNTIME_ASM_SRCS))
+CORE_OBJS     := $(CORE_C_OBJS) $(CORE_ASM_OBJS)
+
+$(OBJCORE)/%.o: src/%.c | $(OBJCORE)
+	$(CC) $(CFLAGS) $(CORE_RENAME_FLAGS) -c $< -o $@
+
+$(OBJCORE):
+	mkdir -p $@
+
+libcore: $(BUILD)/libcore.a
+
+$(BUILD)/libcore.a: $(CORE_OBJS) | $(BUILD)
+	$(AR) rcs $@ $(CORE_OBJS)
+
+# EN: SOV-LIBCORE gate 3/4 verification: builds tests/libcore_consumer.cpp (a HOSTED, ordinary
+#     C++ program -- NOT a freestanding gate program, NOT part of $(PROGRAMS)/`make test`) that
+#     links against build/libcore.a next to real libc/libstdc++, exercises correct glx_malloc/
+#     glx_free/glx_realloc/glx_memcpy/glx_memset usage AND deliberately misuses the heap-
+#     ownership boundary (a forked child process, expected to die loudly -- see that file's own
+#     header), then runs tools/check_libcore_symbols.sh (gate 4: `nm -g` proves the ONLY
+#     exported names are the glx_* front door, never a bare malloc/free/realloc/memcpy/memset).
+# PT: Verificação dos gates 3/4 do SOV-LIBCORE: builda tests/libcore_consumer.cpp (um programa
+#     C++ HOSTED comum -- NÃO um programa-gate freestanding, NÃO parte de $(PROGRAMS)/`make
+#     test`) que linka contra build/libcore.a ao lado de libc/libstdc++ de verdade, exercita uso
+#     correto de glx_malloc/glx_free/glx_realloc/glx_memcpy/glx_memset E mau-usa de propósito a
+#     fronteira de ownership de heap (um processo filho via fork, esperado morrer alto -- ver o
+#     cabeçalho próprio daquele arquivo), depois roda tools/check_libcore_symbols.sh (gate 4:
+#     `nm -g` prova que os ÚNICOS nomes exportados são a porta-da-frente glx_*, nunca um
+#     malloc/free/realloc/memcpy/memset cru).
+$(BIN)/libcore_consumer: tests/libcore_consumer.cpp $(BUILD)/libcore.a | $(BIN)
+	$(CXX) $(CXXFLAGS) -o $@ tests/libcore_consumer.cpp $(BUILD)/libcore.a
+
+libcore-test: $(BIN)/libcore_consumer
+	@echo "--- libcore_consumer (hosted C++, links build/libcore.a) ---"
+	$(BIN)/libcore_consumer
+	@echo "--- tools/check_libcore_symbols.sh (ADR-0009 gate 4: nm -g, glx_* only) ---"
+	tools/check_libcore_symbols.sh
 
 clean:
 	rm -rf $(BUILD)

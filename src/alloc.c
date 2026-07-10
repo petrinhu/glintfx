@@ -203,6 +203,7 @@
 //     overflow).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "alloc.h"
+#include "alloc_internal.h"
 #include "mem.h"
 #include "mmap.h"
 #include "sys_mmap.h"
@@ -691,4 +692,28 @@ void* realloc(void* ptr, size_t size) {
     memcpy(new_ptr, ptr, copy_size);
     free(ptr);
     return new_ptr;
+}
+
+// EN: SOV-LIBCORE (ADR-0009 gate 3) -- see include/alloc_internal.h for the full contract this
+//     implements. NOT part of the ADR-0004-frozen malloc/free/realloc surface above; additive
+//     only. Reuses the exact same header-address arithmetic `free()` already performs
+//     (`ptr - ALLOC_HEADER_SIZE`) and walks the SAME `g_arenas` registry `free()`'s coalescing
+//     logic already maintains -- no new state, no new syscalls, read-only.
+// PT: SOV-LIBCORE (gate 3 da ADR-0009) -- ver include/alloc_internal.h pro contrato completo que
+//     isto implementa. NÃO faz parte da superfície malloc/free/realloc congelada pela ADR-0004
+//     acima; só aditivo. Reusa exatamente a mesma aritmética de endereço-de-header que o
+//     `free()` já faz (`ptr - ALLOC_HEADER_SIZE`) e percorre o MESMO registro `g_arenas` que a
+//     lógica de coalescência do `free()` já mantém -- sem estado novo, sem syscall nova,
+//     somente-leitura.
+int alloc_owns_ptr(const void* ptr) {
+    if (ptr == NULL) {
+        return 0;
+    }
+    const unsigned char* hdr = (const unsigned char*)ptr - ALLOC_HEADER_SIZE;
+    for (const arena_desc_t* a = g_arenas; a != NULL; a = a->next) {
+        if (hdr >= a->base && hdr < a->end) {
+            return 1;
+        }
+    }
+    return 0;
 }

@@ -182,6 +182,71 @@ option(GLINTFX_BACKEND_GLFW
   "GLFW window backend + standalone glintfx::App (OFF = embed-only, no GLFW in lib)"
   ON)
 
+# EN: GLINTFX_OWN_FONT_ENGINE (L1.19-FONTENG, FT-F3, ADR-0009 "hosted shell + C meat") — the
+#     A/B gate between RmlUi's own FreeType-backed default font engine (OFF, default) and
+#     glintfx's own SOV-SFNT/SOV-RAST font engine (ON, src/font_engine_own.{hpp,cpp}).
+#
+#     RUNTIME switch, not a RmlUi-rebuild switch: RMLUI_FONT_ENGINE stays "freetype" below
+#     regardless of this option (do NOT change that to "none") -- Rml::SetFontEngineInterface()
+#     overrides RmlUi's registered engine at runtime, in Bootstrap::init() (src/bootstrap.cpp),
+#     guarded by `#if GLINTFX_OWN_FONT_ENGINE` (glintfx/include/glintfx/config.hpp.in). This is
+#     what lets A/B testing happen without rebuilding the ~200-translation-unit RmlUi
+#     FetchContent dependency for each side of the comparison.
+#
+#     ADR-0009 link pattern: this option compiles src/font_engine_own.cpp (the hosted C++
+#     "shell") PLUS Layer 0's own src/sfnt.c and src/raster.c (the sovereign C "meat",
+#     `extern "C"`-linked in directly as glintfx sources -- no separate libcore.a archive for
+#     this ticket; see the FATAL_ERROR guard below for why that is the simplest correct link
+#     for THIS repo's monorepo layout, and font_engine_own.hpp's own file header for the full
+#     ADR-0009 rationale). Requires Layer 0's src/sfnt.c, src/raster.c, include/core/sfnt.h,
+#     include/core/raster.h to be siblings of this glintfx/ directory -- true when building
+#     inside the loucura_c_asm monorepo (this repo), NOT guaranteed for a consumer that
+#     FetchContent's only the glintfx/ subtree in isolation. Default OFF keeps glintfx fully
+#     drop-in/inert for every existing consumer (e.g. GusWorld) with zero behaviour change.
+# PT: GLINTFX_OWN_FONT_ENGINE (L1.19-FONTENG, FT-F3, ADR-0009 "casca-hosted + carne-C") — o
+#     gate A/B entre o motor de fonte default do próprio RmlUi, apoiado em FreeType (OFF,
+#     padrão), e o motor de fonte próprio do glintfx, SOV-SFNT/SOV-RAST (ON,
+#     src/font_engine_own.{hpp,cpp}).
+#
+#     Chave de RUNTIME, não uma chave de rebuild do RmlUi: RMLUI_FONT_ENGINE continua
+#     "freetype" abaixo independente desta option (NÃO trocar para "none") --
+#     Rml::SetFontEngineInterface() sobrepõe o motor registrado do RmlUi em runtime, no
+#     Bootstrap::init() (src/bootstrap.cpp), protegido por `#if GLINTFX_OWN_FONT_ENGINE`
+#     (glintfx/include/glintfx/config.hpp.in). É isso que permite o teste A/B acontecer sem
+#     rebuildar a dependência FetchContent do RmlUi (~200 unidades de tradução) pra cada lado
+#     da comparação.
+#
+#     Padrão de link da ADR-0009: esta option compila src/font_engine_own.cpp (a "casca" C++
+#     hosted) MAIS os próprios src/sfnt.c e src/raster.c da Camada 0 (a "carne" C soberana,
+#     linkada via `extern "C"` diretamente como sources do glintfx -- sem archive libcore.a
+#     separado pra esta tarefa; ver o guard FATAL_ERROR abaixo pro motivo de este ser o link
+#     correto mais simples pro layout de monorepo DESTE repositório, e o próprio cabeçalho de
+#     arquivo de font_engine_own.hpp pra racional completa da ADR-0009). Exige que os próprios
+#     src/sfnt.c, src/raster.c, include/core/sfnt.h, include/core/raster.h da Camada 0 sejam
+#     irmãos deste diretório glintfx/ -- verdade ao buildar dentro do monorepo loucura_c_asm
+#     (este repositório), NÃO garantido para um consumidor que faz FetchContent só da subárvore
+#     glintfx/ isolada. Padrão OFF mantém o glintfx totalmente drop-in/inerte para todo
+#     consumidor existente (ex.: GusWorld), zero mudança de comportamento.
+option(GLINTFX_OWN_FONT_ENGINE
+  "Use glintfx's own SOV-SFNT/SOV-RAST font engine instead of RmlUi's FreeType default (A/B via Rml::SetFontEngineInterface() at runtime, no RmlUi rebuild, L1.19-FONTENG)"
+  OFF)
+
+if(GLINTFX_OWN_FONT_ENGINE)
+  set(_glx_core_src_dir ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  set(_glx_core_include_dir ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+  if(NOT EXISTS ${_glx_core_src_dir}/sfnt.c OR NOT EXISTS ${_glx_core_src_dir}/raster.c
+     OR NOT EXISTS ${_glx_core_include_dir}/core/sfnt.h OR NOT EXISTS ${_glx_core_include_dir}/core/raster.h)
+    message(FATAL_ERROR
+      "glintfx: GLINTFX_OWN_FONT_ENGINE=ON requires building glintfx from inside the "
+      "loucura_c_asm monorepo -- Layer 0's src/sfnt.c, src/raster.c, include/core/sfnt.h, "
+      "include/core/raster.h must be siblings of this glintfx/ directory (ADR-0009's "
+      "'hosted shell + C meat' link pattern). Not found at ${_glx_core_src_dir} / "
+      "${_glx_core_include_dir} -- if glintfx was fetched/vendored standalone (e.g. a "
+      "consumer's FetchContent pointed only at the glintfx/ subtree in isolation), "
+      "GLINTFX_OWN_FONT_ENGINE is not available there; leave it OFF (the default).")
+  endif()
+endif()
+
 # Deps de sistema — OpenGL e FreeType sempre presentes; GLFW só no backend ON.
 # System deps — OpenGL and FreeType are always present; GLFW only when the backend is ON.
 find_package(OpenGL REQUIRED)
@@ -277,6 +342,25 @@ if(GLINTFX_BACKEND_GLFW)
     ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
 endif()
 
+# EN: L1.19-FONTENG (FT-F3) — the "hosted shell" (src/font_engine_own.cpp) plus Layer 0's own
+#     sovereign C "meat" (${_glx_core_src_dir}/sfnt.c, raster.c), compiled directly as glintfx
+#     sources per ADR-0009's "hosted shell + C meat" pattern -- always core (not GLFW-only), so
+#     the own font engine is available in embed-only builds too. Only added when
+#     GLINTFX_OWN_FONT_ENGINE=ON (the FATAL_ERROR guard above already proved the sibling
+#     Layer-0 sources exist by this point).
+# PT: L1.19-FONTENG (FT-F3) — a "casca hosted" (src/font_engine_own.cpp) mais a própria
+#     "carne" C soberana da Camada 0 (${_glx_core_src_dir}/sfnt.c, raster.c), compiladas
+#     diretamente como sources do glintfx conforme o padrão "casca-hosted + carne-C" da
+#     ADR-0009 -- sempre core (não só-GLFW), para que o motor de fonte próprio esteja
+#     disponível também em builds embed-only. Só adicionado quando GLINTFX_OWN_FONT_ENGINE=ON
+#     (o guard FATAL_ERROR acima já provou que os sources irmãos da Camada 0 existem até aqui).
+if(GLINTFX_OWN_FONT_ENGINE)
+  list(APPEND _glintfx_sources
+    src/font_engine_own.cpp
+    ${_glx_core_src_dir}/sfnt.c
+    ${_glx_core_src_dir}/raster.c)
+endif()
+
 add_library(glintfx STATIC ${_glintfx_sources})
 target_include_directories(glintfx
   PUBLIC
@@ -289,6 +373,76 @@ target_include_directories(glintfx
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
   # EN: glloader include path comes transitively from linking PRIVATE glloader (INTERFACE target).
   # PT: Include path do glloader vem transitivamente do link PRIVATE glloader (alvo INTERFACE).
+
+# EN: L1.19-FONTENG (FT-F3) — Layer 0's include/ root (needed so font_engine_own.hpp's
+#     `#include "core/sfnt.h"` / `"core/raster.h"` resolve, matching those headers' own
+#     documented consumption contract -- see include/core/sfnt.h's file header, "meant to be
+#     consumable from a future HOSTED C++ shell the same way glx_malloc/glx_sfnt_open already
+#     are"). Applied via set_source_files_properties(... INCLUDE_DIRECTORIES ...) to ONLY the
+#     3 files that need it (font_engine_own.cpp, sfnt.c, raster.c), NOT target-wide
+#     target_include_directories() -- deliberately, found the hard way: Layer 0's own
+#     include/limits.h (D3's minimal freestanding <limits.h>-equivalent, only INT_MAX/INT_MIN/
+#     UINT_MAX -- see that file's own header) SHADOWS the system <limits.h> for angle-bracket
+#     `#include <limits.h>` lookups in every OTHER translation unit of this target once
+#     include/ is on the search path (glibc's real <limits.h> defines SHRT_MAX/SHRT_MIN too;
+#     Layer 0's does not, by design -- it only implements what Layer 0 itself needs). This
+#     broke src/stb_image_impl.cpp's vendored stb_image.h (`#include <limits.h>` at line ~591,
+#     unconditional) with "use of undeclared identifier 'SHRT_MAX'" the first time this was
+#     wired target-wide -- an unrelated translation unit that has nothing to do with
+#     L1.19-FONTENG, collateral damage from a too-broad include path. Scoping the path to only
+#     the 3 files that actually need it (none of which include <limits.h> or any other
+#     standard-library header name Layer 0's include/ root happens to also provide -- confirmed
+#     by grepping their own #include lists) eliminates the collision entirely rather than
+#     fighting compiler include-search-order semantics (-isystem does not reliably sort AFTER
+#     the compiler's own implicit /usr/include for this purpose).
+# PT: L1.19-FONTENG (FT-F3) — a raiz include/ da Camada 0 (necessária para que os
+#     `#include "core/sfnt.h"` / `"core/raster.h"` do font_engine_own.hpp resolvam, batendo com
+#     o próprio contrato de consumo documentado daqueles headers -- ver o cabeçalho de arquivo
+#     do include/core/sfnt.h, "pensado pra ser consumível de uma futura casca C++ HOSTED do
+#     mesmo jeito que glx_malloc/glx_sfnt_open já são"). Aplicada via
+#     set_source_files_properties(... INCLUDE_DIRECTORIES ...) SÓ nos 3 arquivos que precisam
+#     dela (font_engine_own.cpp, sfnt.c, raster.c), NÃO via target_include_directories() de
+#     escopo de alvo inteiro -- deliberadamente, descoberto na marra: o próprio
+#     include/limits.h da Camada 0 (o equivalente freestanding mínimo do D3 a <limits.h>, só
+#     INT_MAX/INT_MIN/UINT_MAX -- ver o cabeçalho próprio daquele arquivo) SOMBREIA o
+#     <limits.h> de sistema pra buscas `#include <limits.h>` de colchete angular em toda OUTRA
+#     unidade de tradução deste alvo uma vez que include/ entra no path de busca (o <limits.h>
+#     real da glibc também define SHRT_MAX/SHRT_MIN; o da Camada 0 não, por design -- só
+#     implementa o que a própria Camada 0 precisa). Isso quebrou o stb_image.h vendorizado do
+#     src/stb_image_impl.cpp (`#include <limits.h>` na linha ~591, incondicional) com "use of
+#     undeclared identifier 'SHRT_MAX'" na 1ª vez que isto foi conectado de escopo de alvo
+#     inteiro -- uma unidade de tradução não relacionada, que não tem nada a ver com
+#     L1.19-FONTENG, dano colateral de um include path amplo demais. Restringir o path só aos
+#     3 arquivos que de fato precisam dele (nenhum dos quais inclui <limits.h> ou qualquer
+#     outro nome de header de biblioteca padrão que a raiz include/ da Camada 0 por acaso
+#     também forneça -- confirmado grepando as próprias listas de #include deles) elimina a
+#     colisão inteiramente em vez de brigar com a semântica de ordem-de-busca-de-include do
+#     compilador (-isystem não ordena de forma confiável DEPOIS do /usr/include implícito do
+#     próprio compilador pra este propósito).
+if(GLINTFX_OWN_FONT_ENGINE)
+  # EN: src/bootstrap.cpp is included here too -- it `#include "font_engine_own.hpp"` itself
+  #     (guarded by `#if GLINTFX_OWN_FONT_ENGINE`, src/bootstrap.cpp) to hold/register the
+  #     glintfx::FontEngineOwn instance; that header transitively needs "core/sfnt.h" /
+  #     "core/raster.h" resolvable from bootstrap.cpp's own translation unit too. Still confirmed
+  #     collision-free: bootstrap.cpp's OWN #include list (grep-checked) never names <limits.h>
+  #     or any other standard-library header name Layer 0's include/ root also happens to
+  #     provide.
+  # PT: src/bootstrap.cpp também entra aqui -- ele próprio faz `#include "font_engine_own.hpp"`
+  #     (protegido por `#if GLINTFX_OWN_FONT_ENGINE`, src/bootstrap.cpp) para guardar/registrar
+  #     a instância de glintfx::FontEngineOwn; aquele header precisa transitivamente de
+  #     "core/sfnt.h" / "core/raster.h" resolvíveis também a partir da própria unidade de
+  #     tradução do bootstrap.cpp. Ainda confirmado livre de colisão: a PRÓPRIA lista de
+  #     #include do bootstrap.cpp (checada via grep) nunca nomeia <limits.h> nem nenhum outro
+  #     nome de header de biblioteca padrão que a raiz include/ da Camada 0 por acaso também
+  #     forneça.
+  set_source_files_properties(
+    src/bootstrap.cpp
+    src/font_engine_own.cpp
+    ${_glx_core_src_dir}/sfnt.c
+    ${_glx_core_src_dir}/raster.c
+    PROPERTIES INCLUDE_DIRECTORIES ${_glx_core_include_dir})
+endif()
+
 target_compile_definitions(glintfx PRIVATE
   RMLUI_GL3_CUSTOM_LOADER=<gl_loader.h>
   # EN: Disable MSAA for the render layer — required under Mesa/llvmpipe (Xvfb) where

@@ -10,6 +10,17 @@
 #include "decorator_polygon.hpp"
 #include "decorator_image_tint.hpp"
 #include "ua_stylesheet.hpp"
+#include <glintfx/config.hpp>
+#if GLINTFX_OWN_FONT_ENGINE
+// EN: L1.19-FONTENG (FT-F3) A/B gate -- only pulled in (and only pulls in Layer 0's
+//     include/core/sfnt.h + raster.h, transitively) when GLINTFX_OWN_FONT_ENGINE=ON. See
+//     font_engine_own.hpp's own file header for the full design/clean-room writeup.
+// PT: Gate A/B do L1.19-FONTENG (FT-F3) -- só puxado (e só puxa transitivamente o
+//     include/core/sfnt.h + raster.h da Camada 0) quando GLINTFX_OWN_FONT_ENGINE=ON. Ver o
+//     próprio cabeçalho de arquivo de font_engine_own.hpp pro relato completo de
+//     design/clean-room.
+#include "font_engine_own.hpp"
+#endif
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/StreamMemory.h>
 #include <cmath>   // EN: std::isfinite (set_element_scroll_top input hardening).
@@ -177,6 +188,31 @@ struct Bootstrap::Impl {
   //     down que nunca recebeu seu up pareado antes de um reload de documento não bata
   //     acidentalmente com um id não relacionado no documento NOVO.
   PendingButtonDown pending_button_down[3];
+
+#if GLINTFX_OWN_FONT_ENGINE
+  // EN: L1.19-FONTENG (FT-F3) -- glintfx's own SOV-SFNT/SOV-RAST font engine (A/B gate,
+  //     GLINTFX_OWN_FONT_ENGINE=ON). Same by-value, constructed-eagerly-before-Initialise()
+  //     lifetime discipline as file_iface above (NOT the allocate-after-Initialise() pattern
+  //     polygon_instancer/tint_instancer use -- FontEngineOwn's constructor touches no
+  //     StyleSheetSpecification/Factory registry, it is completely inert until RmlUi actually
+  //     calls LoadFontFace/GetFontFaceHandle on it, so there is no ordering hazard here).
+  //     Registered via Rml::SetFontEngineInterface(&font_engine_own) in init() BEFORE
+  //     Rml::Initialise() (see below) -- must outlive Rml::Shutdown() for the identical reason
+  //     file_iface must (RmlUi keeps the raw pointer for the whole session); satisfied the same
+  //     way (impl_ is only ever deleted AFTER Rml::Shutdown() completes).
+  // PT: L1.19-FONTENG (FT-F3) -- motor de fonte próprio do glintfx, SOV-SFNT/SOV-RAST (gate
+  //     A/B, GLINTFX_OWN_FONT_ENGINE=ON). Mesma disciplina de lifetime por-valor,
+  //     construído-avidamente-antes-do-Initialise() do file_iface acima (NÃO o padrão
+  //     alocar-após-Initialise() que polygon_instancer/tint_instancer usam -- o construtor do
+  //     FontEngineOwn não toca nenhum registro de StyleSheetSpecification/Factory, é
+  //     completamente inerte até o RmlUi de fato chamar LoadFontFace/GetFontFaceHandle nele,
+  //     então não há risco de ordenação aqui). Registrado via
+  //     Rml::SetFontEngineInterface(&font_engine_own) em init() ANTES do Rml::Initialise() (ver
+  //     abaixo) -- precisa sobreviver ao Rml::Shutdown() pelo motivo idêntico do file_iface
+  //     (o RmlUi guarda o ponteiro cru pela sessão inteira); satisfeito do mesmo jeito (impl_
+  //     só é deletado APÓS o Rml::Shutdown() terminar).
+  glintfx::FontEngineOwn font_engine_own;
+#endif
 };
 
 // EN: Bubble-phase "click" listener attached to each loaded document's root (F1, v0.2.5).
@@ -815,6 +851,24 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   impl_ = new Impl();
   Rml::SetSystemInterface(system);
   Rml::SetRenderInterface(render.iface());
+#if GLINTFX_OWN_FONT_ENGINE
+  // EN: L1.19-FONTENG A/B gate -- install BEFORE Rml::Initialise() so our engine is the ACTIVE
+  //     one from the very first font load inside this session (RmlUi resolves the registered
+  //     FontEngineInterface lazily, on first use, but installing early removes any doubt).
+  //     RMLUI_FONT_ENGINE=freetype remains the CMake-time default for the fetched RmlUi build
+  //     (glintfx/CMakeLists.txt) either way -- Rml::SetFontEngineInterface() overrides it at
+  //     RUNTIME, so switching this A/B needs no RmlUi rebuild, only reconfiguring/relinking
+  //     glintfx itself with a different CMake option.
+  // PT: Gate A/B do L1.19-FONTENG -- instala ANTES do Rml::Initialise() para que nosso motor
+  //     seja o ATIVO desde o 1º carregamento de fonte dentro desta sessão (o RmlUi resolve a
+  //     FontEngineInterface registrada preguiçosamente, no 1º uso, mas instalar cedo remove
+  //     qualquer dúvida). RMLUI_FONT_ENGINE=freetype continua o padrão em tempo de CMake pro
+  //     build fetchado do RmlUi (glintfx/CMakeLists.txt) de qualquer forma --
+  //     Rml::SetFontEngineInterface() o sobrepõe em RUNTIME, então trocar este A/B não exige
+  //     rebuild do RmlUi, só reconfigurar/relinkar o próprio glintfx com uma option de CMake
+  //     diferente.
+  Rml::SetFontEngineInterface(&impl_->font_engine_own);
+#endif
   // EN: Install our FileInterface BEFORE Rml::Initialise(). It is owned by Impl and lives
   //     until shutdown(). When base_url is empty (the default) its behaviour is identical to
   //     RmlUi's built-in default — no functional change for existing callers.
@@ -1305,6 +1359,24 @@ void Bootstrap::set_asset_base_url(const char* url) {
 void Bootstrap::shutdown() {
   if (!impl_) return;
   if (impl_->initialised) {
+#if GLINTFX_OWN_FONT_ENGINE
+    // EN: L1.19-FONTENG -- release our own cached CallbackTexture GPU resources EXPLICITLY,
+    //     BEFORE Rml::Shutdown() runs. See FontEngineOwn::Shutdown()'s own doc-comment
+    //     (font_engine_own.hpp/.cpp) for why this cannot be left to RmlUi's own internal
+    //     `font_interface->Shutdown()` hook alone -- Rml::Shutdown() destroys every Context's
+    //     RenderManager (`core_data->contexts.clear()`) BEFORE that hook fires, which is too
+    //     late (found the hard way: "Leaking CallbackTexture detected..." RMLUI_ERROR +
+    //     shutdown crash without this explicit early call).
+    // PT: L1.19-FONTENG -- libera os próprios recursos GPU CallbackTexture cacheados
+    //     EXPLICITAMENTE, ANTES do Rml::Shutdown() rodar. Ver o doc-comment próprio do
+    //     FontEngineOwn::Shutdown() (font_engine_own.hpp/.cpp) pro motivo disto não poder ser
+    //     deixado só pro hook interno `font_interface->Shutdown()` do próprio RmlUi -- o
+    //     Rml::Shutdown() destrói o RenderManager de todo Context
+    //     (`core_data->contexts.clear()`) ANTES daquele hook disparar, o que é tarde demais
+    //     (achado na marra: RMLUI_ERROR "Leaking CallbackTexture detected..." + crash no
+    //     shutdown sem esta chamada explícita antecipada).
+    impl_->font_engine_own.Shutdown();
+#endif
     // EN: Rml::Shutdown() releases all contexts, documents and font resources.
     //     Caller is responsible for deleting the SystemInterface after this point.
     // PT: Rml::Shutdown() libera todos os contextos, documentos e recursos de fonte.

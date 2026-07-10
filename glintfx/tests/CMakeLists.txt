@@ -327,6 +327,41 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: fonteng_own_sanity (L1.19-FONTENG, FT-F3) — minimal, engine-agnostic visual oracle:
+  #     renders tests/fonteng_scene.rml (3 static text lines, incl. pt-br-accented Latin-1
+  #     Supplement) and checks coarse pixel statistics prove legible GLYPHS rendered (not
+  #     nothing, not a filled block), each line's own band included. Runs UNCONDITIONALLY
+  #     (not gated behind GLINTFX_OWN_FONT_ENGINE) -- the oracle is deliberately symmetric:
+  #     it must pass whichever font engine is active (RmlUi's FreeType default, OFF; or
+  #     glintfx's own SOV-SFNT/SOV-RAST engine, ON), proving the A/B gate is truly a drop-in
+  #     swap. See fonteng_own_sanity.cpp's own header for the full check-by-check rationale.
+  #     Reuses tests/assets/OpenSans-Regular.ttf, already copied by the showcase block above.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention, "tests/" prefix).
+  # PT: fonteng_own_sanity (L1.19-FONTENG, FT-F3) — oráculo visual mínimo, agnóstico de motor:
+  #     renderiza tests/fonteng_scene.rml (3 linhas de texto estático, incl. Latin-1
+  #     Supplement acentuado pt-br) e checa estatísticas grosseiras de pixel que provam GLYPHS
+  #     legíveis renderizados (nem nada, nem um bloco preenchido), com a banda de cada linha
+  #     incluída. Roda INCONDICIONALMENTE (não bloqueado atrás de GLINTFX_OWN_FONT_ENGINE) --
+  #     o oráculo é deliberadamente simétrico: precisa passar com qualquer motor de fonte
+  #     ativo (default FreeType do RmlUi, OFF; ou o motor próprio SOV-SFNT/SOV-RAST do
+  #     glintfx, ON), provando que o gate A/B é de fato uma troca drop-in. Ver o cabeçalho
+  #     próprio de fonteng_own_sanity.cpp pra racional completa cheque-a-cheque. Reusa
+  #     tests/assets/OpenSans-Regular.ttf, já copiado pelo bloco showcase acima.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do bloco GLFW em todo o repo, prefixo
+  #     "tests/").
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_scene.rml COPYONLY)
+
+  add_executable(fonteng_own_sanity fonteng_own_sanity.cpp)
+  target_link_libraries(fonteng_own_sanity PRIVATE glintfx)
+  add_test(NAME fonteng_own_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_own_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
   #     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
   #     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000

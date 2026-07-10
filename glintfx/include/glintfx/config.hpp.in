@@ -18,6 +18,22 @@
 //     Use esta macro para guardar código que depende da fachada App standalone.
 #cmakedefine01 GLINTFX_BACKEND_GLFW
 
+// EN: 1  when glintfx's own SOV-SFNT/SOV-RAST font engine (L1.19-FONTENG) is installed via
+//        Rml::SetFontEngineInterface() BEFORE Rml::Initialise() -- see
+//        glintfx/CMakeLists.txt's GLINTFX_OWN_FONT_ENGINE option and src/bootstrap.cpp's
+//        Bootstrap::init(). RmlUi's own RMLUI_FONT_ENGINE=freetype build option is left
+//        untouched either way (CMakeLists.txt) -- this is a RUNTIME A/B switch, not a
+//        RmlUi-rebuild switch.
+//     0  (default) RmlUi's own FreeType-backed default font engine is used, unchanged.
+// PT: 1  quando o motor de fonte próprio do glintfx (SOV-SFNT/SOV-RAST, L1.19-FONTENG) é
+//        instalado via Rml::SetFontEngineInterface() ANTES do Rml::Initialise() -- ver a
+//        option GLINTFX_OWN_FONT_ENGINE do glintfx/CMakeLists.txt e o Bootstrap::init() do
+//        src/bootstrap.cpp. A option de build RMLUI_FONT_ENGINE=freetype do próprio RmlUi
+//        permanece intocada de qualquer forma (CMakeLists.txt) -- isto é uma chave A/B de
+//        RUNTIME, não uma chave de rebuild do RmlUi.
+//     0  (padrão) o motor de fonte default do RmlUi, apoiado em FreeType, é usado, inalterado.
+#cmakedefine01 GLINTFX_OWN_FONT_ENGINE
+
 // EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
 //     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
 // PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()

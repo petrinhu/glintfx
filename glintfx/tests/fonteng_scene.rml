@@ -1,0 +1,45 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.19-FONTENG (FT-F3) minimal visual oracle document -- static text (no data-model,
+      unlike scalar.rml/log.rml) so the test isolates the font engine's own pipeline
+      (LoadFontFace via @font-face -> GetFontFaceHandle -> GenerateString) from the
+      data-binding machinery. Mixes ascender/descender-heavy glyphs ("AGWQjpqy") with the
+      pt-br-accented Latin-1 Supplement set this ticket's BAKE_SET covers
+      (á/ç/ã/õ/é/í/ó/ú/ñ + uppercase) -- see src/font_engine_own.cpp's BuildBakeSet().
+      Dark background + large bright text maximises signal-to-noise for the pixel-count
+      oracle in fonteng_own_sanity.cpp (same convention as scalar.rml/log.rml).
+  PT: Documento oráculo visual mínimo do L1.19-FONTENG (FT-F3) -- texto estático (sem
+      data-model, diferente de scalar.rml/log.rml) para que o teste isole o pipeline
+      próprio do motor de fonte (LoadFontFace via @font-face -> GetFontFaceHandle ->
+      GenerateString) da maquinaria de data-binding. Mistura glyphs carregados de
+      ascendente/descendente ("AGWQjpqy") com o conjunto Latin-1 Supplement acentuado
+      pt-br que o BAKE_SET desta tarefa cobre (á/ç/ã/õ/é/í/ó/ú/ñ + maiúsculas) -- ver
+      BuildBakeSet() em src/font_engine_own.cpp. Fundo escuro + texto claro grande
+      maximiza a razão sinal/ruído para o oráculo de contagem de pixel em
+      fonteng_own_sanity.cpp (mesma convenção de scalar.rml/log.rml).
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "tests/assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    p { display: block; }
+  </style>
+  <title>glintfx L1.19-FONTENG sanity</title>
+</head>
+<body>
+  <p id="line1">AGWQjpqy</p>
+  <p id="line2">acao ceu izq oru nao</p>
+  <p id="line3">áçãõéíóúñ ÁÇÃÕÉÍÓÚÑ</p>
+</body>
+</rml>

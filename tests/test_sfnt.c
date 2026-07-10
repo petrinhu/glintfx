@@ -262,6 +262,91 @@ static const unsigned char kSyntheticFontCompositeSaturate[300] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+// EN: Synthetic font D -- review-adversarial regression fixture (SOV-SFNT dominoed re-review,
+//     2nd IMPORTANT fix, sibling of the CRITICAL fix `kSyntheticFontCompositeSaturate` above
+//     regression-tests): 1 glyph (gid 0), a SIMPLE glyph, 1 contour, 2 points, BOTH points
+//     encoded with flag `0x21` (`ON_CURVE_POINT | Y_IS_SAME_OR_POSITIVE`, neither
+//     `X_SHORT_VECTOR` nor `Y_SHORT_VECTOR` set) -- per spec this means each point's `y` delta is
+//     `0` (no bytes consumed) and each point's `x` delta is a FULL signed `int16` read from the
+//     stream. Both x-deltas here are `+32767` (`0x7FFF`, itself an ORDINARY, perfectly in-range
+//     `int16_t` value -- this is not a truncated/malformed delta): `parse_simple_glyph`'s running
+//     accumulator (`x_acc`, an `int32_t`) is `0 -> 32767 -> 65534` -- `32767` fits `int16_t` fine
+//     (point 0, unremarkable), `65534` does NOT (`INT16_MAX == 32767`) -- this is the EXACT
+//     reviewer repro from the dominoed re-review: the un-clamped `(int16_t)x_acc` cast at point 1
+//     is well-defined-but-corrupting IMPLEMENTATION-DEFINED narrowing (C 6.3.1.3p3, NOT undefined
+//     behaviour -- this is why `make sanitize-sfnt`/ASan/UBSan do NOT catch this class, only a
+//     VALUE assertion does), silently two's-complement-wrapping `65534` down to `-2` while
+//     `glx_sfnt_glyph_outline` still returns `GLX_SFNT_OK`. NEITHER the individual delta bytes
+//     nor the point count are a malformed/hostile INPUT by themselves -- `+32767` is a perfectly
+//     ordinary single delta, two of them in a row is unremarkable wire data -- the out-of-range
+//     value only appears as the ARITHMETIC RESULT of accumulating otherwise-valid deltas, which
+//     is exactly why this needed a saturating-cast fix (see `saturate_i32_to_i16` in src/sfnt.c)
+//     rather than being catchable as a `GLX_SFNT_ERR_BAD_GLYPH` input-validation failure anywhere
+//     upstream -- same shape, same fix philosophy, as the CRITICAL composite-transform bug this
+//     sibling fixture regression-tests.
+//
+//     ORACLE CROSS-CHECK (per this file's header's "só p/ gerar os esperados, nunca código"):
+//     built byte-by-byte from the public OpenType `glyf` simple-glyph spec (see the field-by-field
+//     layout comments in `parse_simple_glyph`, `src/sfnt.c`), then independently round-tripped
+//     through `fontTools.ttLib.TTFont` / `fontTools.ttLib.tables._g_l_y_f` (which decodes deltas
+//     into an unbounded Python int, no int16 narrowing at all) -- it reports this glyph's TWO
+//     points as coordinates `(32767, 0)` and `(65534, 0)`, confirming `65534` is the mathematically
+//     correct pre-narrowing sum the spec's delta-encoding demands, i.e. confirming the SATURATED
+//     `32767` (not the wrapped `-2`) is the correct post-fix `int16_t` value for point 1.
+// PT: Fonte sintética D -- fixture de regressão do review adversarial (varredura-dominó do
+//     re-review do SOV-SFNT, 2º fix do IMPORTANTE, irmão da fixture do fix do CRÍTICO
+//     `kSyntheticFontCompositeSaturate` acima que ela regride): 1 glyph (gid 0), um glyph SIMPLES,
+//     1 contorno, 2 pontos, AMBOS os pontos codificados com flag `0x21`
+//     (`ON_CURVE_POINT | Y_IS_SAME_OR_POSITIVE`, nem `X_SHORT_VECTOR` nem `Y_SHORT_VECTOR`
+//     marcados) -- pela spec isso significa que o delta `y` de cada ponto é `0` (nenhum byte
+//     consumido) e o delta `x` de cada ponto é um `int16` com sinal COMPLETO lido do stream. Os
+//     dois deltas-x aqui são `+32767` (`0x7FFF`, em si um valor `int16_t` ORDINÁRIO, perfeitamente
+//     dentro de faixa -- isto não é um delta truncado/malformado): o acumulador corrido do
+//     `parse_simple_glyph` (`x_acc`, um `int32_t`) é `0 -> 32767 -> 65534` -- `32767` cabe em
+//     `int16_t` numa boa (ponto 0, comum), `65534` NÃO cabe (`INT16_MAX == 32767`) -- este é o
+//     repro EXATO do revisor da varredura-dominó do re-review: o cast `(int16_t)x_acc` sem clamp
+//     no ponto 1 é estreitamento definido-pela-implementação bem-definido-mas-corruptor (C
+//     6.3.1.3p3, NÃO comportamento indefinido -- por isso o `make sanitize-sfnt`/ASan/UBSan NÃO
+//     pegam essa classe, só uma asserção de VALOR pega), dando wrap dois-complemento silencioso de
+//     `65534` pra `-2` enquanto o `glx_sfnt_glyph_outline` ainda retorna `GLX_SFNT_OK`. NEM os
+//     bytes de delta individuais NEM a contagem de pontos são um INPUT malformado/hostil por si só
+//     -- `+32767` é um delta único perfeitamente comum, dois deles em sequência é dado de fio sem
+//     nada de notável -- o valor fora de faixa só aparece como RESULTADO ARITMÉTICO de acumular
+//     deltas de outra forma válidos, exatamente por isso precisou de um fix de cast saturante (ver
+//     `saturate_i32_to_i16` no src/sfnt.c) em vez de ser pegável como uma falha de
+//     validação-de-input `GLX_SFNT_ERR_BAD_GLYPH` em algum lugar upstream -- mesma forma, mesma
+//     filosofia de fix, do bug CRÍTICO de transformação-composta que esta fixture irmã regride.
+//
+//     CRUZAMENTO DE ORÁCULO (conforme o "só p/ gerar os esperados, nunca código" do cabeçalho
+//     deste arquivo): construída byte a byte a partir da spec pública OpenType de glyph-simples
+//     `glyf` (ver os comentários de layout campo-a-campo do `parse_simple_glyph`, `src/sfnt.c`),
+//     depois cruzada independentemente fazendo o caminho de volta pelo `fontTools.ttLib.TTFont` /
+//     `fontTools.ttLib.tables._g_l_y_f` (que decodifica deltas num int Python sem limite, nenhum
+//     estreitamento int16 nenhum) -- ele reporta os DOIS pontos deste glyph como coordenadas
+//     `(32767, 0)` e `(65534, 0)`, confirmando que `65534` é a soma pré-estreitamento
+//     matematicamente correta que a codificação-por-delta da spec exige, ou seja, confirmando que
+//     o `32767` SATURADO (não o `-2` com wrap) é o valor `int16_t` pós-fix correto pro ponto 1.
+static const unsigned char kSyntheticFontSimpleDeltaOverflow[284] = {
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x6d, 0x61, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x24, 0x67, 0x6c, 0x79, 0x66,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa0, 0x00, 0x00, 0x00, 0x14, 0x68, 0x65, 0x61, 0x64,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb4, 0x00, 0x00, 0x00, 0x36, 0x68, 0x68, 0x65, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xea, 0x00, 0x00, 0x00, 0x24, 0x68, 0x6d, 0x74, 0x78,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x0e, 0x00, 0x00, 0x00, 0x04, 0x6c, 0x6f, 0x63, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x12, 0x00, 0x00, 0x00, 0x04, 0x6d, 0x61, 0x78, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x16, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0x01, 0x00, 0x00,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x21, 0x21,
+    0x7f, 0xff, 0x7f, 0xff, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x5f, 0x0f, 0x3c, 0xf5, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0x20,
+    0xff, 0x38, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0xe8,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x50, 0x00, 0x00, 0x01
+};
+
 // EN: Scratch buffer for the byte-patch hostile tests against the REAL 217360-byte Open Sans
 //     fixture (BAD_VERSION, a lying `numGlyphs`, an out-of-blob table offset, a malformed
 //     `cmap`) -- static storage duration (.bss), not the stack (217KB would be an unreasonable
@@ -728,6 +813,60 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(points[0].x, (short)32767); // INT16_MAX -- saturated, not UB garbage
         TEST_ASSERT_EQ(points[0].y, (short)0);      // unaffected axis: ordinary round, no clamp
         TEST_ASSERT_EQ(points[0].on_curve, (unsigned char)1);
+    }
+
+    // ============================================================================================
+    // ---- REGRESSION: simple-glyph delta accumulator saturates instead of silently wrapping
+    //      (kSyntheticFontSimpleDeltaOverflow, SOV-SFNT dominoed re-review IMPORTANT fix) --------
+    // ============================================================================================
+    {
+        glx_sfnt_face face_e;
+        glx_sfnt_result r = glx_sfnt_open(kSyntheticFontSimpleDeltaOverflow,
+                                           sizeof(kSyntheticFontSimpleDeltaOverflow), &face_e);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(face_e.num_glyphs, (unsigned short)1);
+
+        // EN: gid 0 -- a simple glyph, 1 contour, 2 points, x-deltas `+32767` then `+32767`.
+        //     Point 0's accumulated x (`32767`) is ordinary, in-range -- confirms the fixture's
+        //     first delta alone is unremarkable. Point 1's accumulated x (`32767 + 32767 =
+        //     65534`) is OUT of `int16_t` range: pre-fix, the un-clamped `(int16_t)x_acc` cast
+        //     two's-complement-wrapped this down to `-2` (`fontTools`' independent, unbounded-int
+        //     decode of these same delta bytes confirms `65534` is the spec-correct pre-narrowing
+        //     sum -- see this fixture's declaration comment above for the full oracle cross-check)
+        //     while still returning `GLX_SFNT_OK` -- silent wrong geometry, no crash, and (unlike
+        //     the CRITICAL float-cast UB fix) NOT catchable by ASan/UBSan at all, since
+        //     `int32_t -> int16_t` narrowing of an out-of-range value is well-defined,
+        //     implementation-defined behaviour (C 6.3.1.3p3), not UB -- this test's VALUE
+        //     assertion is the ONLY gate that catches this class. Post-fix, `saturate_i32_to_i16`
+        //     SATURATES: `x == INT16_MAX (32767)`, not `-2`. `y` (both points' deltas are `0`,
+        //     `Y_IS_SAME_OR_POSITIVE`, no accumulation ever leaves range) stays an ordinary `0`,
+        //     proving the fix does NOT clamp values that were already in range.
+        // PT: gid 0 -- um glyph simples, 1 contorno, 2 pontos, deltas-x `+32767` depois `+32767`.
+        //     O x acumulado do ponto 0 (`32767`) é comum, dentro de faixa -- confirma que o
+        //     primeiro delta da fixture sozinho não tem nada de notável. O x acumulado do ponto 1
+        //     (`32767 + 32767 = 65534`) está FORA da faixa `int16_t`: pré-fix, o cast
+        //     `(int16_t)x_acc` sem clamp dava wrap dois-complemento disso pra `-2` (a decodificação
+        //     independente, com int sem limite, do `fontTools` sobre esses mesmos bytes de delta
+        //     confirma que `65534` é a soma pré-estreitamento correta pela spec -- ver o
+        //     comentário de declaração desta fixture acima pro cruzamento de oráculo completo)
+        //     enquanto ainda retornava `GLX_SFNT_OK` -- geometria errada silenciosa, sem crash, e
+        //     (ao contrário do fix do CRÍTICO de UB de cast float) NÃO pegável por ASan/UBSan de
+        //     jeito nenhum, já que estreitamento `int32_t -> int16_t` de um valor fora de faixa é
+        //     comportamento bem-definido, definido-pela-implementação (C 6.3.1.3p3), não UB --
+        //     a asserção de VALOR deste teste é o ÚNICO gate que pega essa classe. Pós-fix, o
+        //     `saturate_i32_to_i16` SATURA: `x == INT16_MAX (32767)`, não `-2`. `y` (o delta dos
+        //     dois pontos é `0`, `Y_IS_SAME_OR_POSITIVE`, a acumulação nunca sai de faixa) fica um
+        //     `0` comum, provando que o fix NÃO satura valores que já estavam em faixa.
+        glx_sfnt_point points[4];
+        unsigned short contour_ends[2];
+        glx_sfnt_outline out;
+        r = glx_sfnt_glyph_outline(&face_e, 0, points, 4, contour_ends, 2, &out);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(out.num_points, (unsigned short)2);
+        TEST_ASSERT_EQ(points[0].x, (short)32767); // ordinary, in-range, not saturated
+        TEST_ASSERT_EQ(points[0].y, (short)0);
+        TEST_ASSERT_EQ(points[1].x, (short)32767); // INT16_MAX -- saturated, NOT the -2 wrap
+        TEST_ASSERT_EQ(points[1].y, (short)0);
     }
 
     TEST_PASS();

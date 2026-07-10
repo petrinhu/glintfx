@@ -611,11 +611,109 @@ static int loca_read(const glx_sfnt_face* face, uint32_t gid, size_t* off_out) {
 //     `<stdint.h>` cabe folgadamente numa mantissa de 24 bits) significa que o ÚNICO valor que
 //     algum dia chega no `(int16_t)` é ou um daqueles dois limites exatos ou um valor já
 //     arredondado dentro de faixa -- nunca um valor que o padrão deixa indefinido.
+// EN: CONTRACT -- `v` must be finite (never Inf/NaN) at every call site this file has TODAY
+//     (`apply_component_transform`'s `fx`/`fy`: F2Dot14 scale factors are always finite by
+//     construction -- `rd_f2dot14` divides a bounded `int16_t` by a compile-time constant -- and
+//     `x_in`/`y_in` are `int16_t`, `dx`/`dy` are `int8_t`/`int16_t` widened to `int32_t`, so the
+//     multiply-accumulate below can never produce Inf/NaN from THESE inputs). Review-adversarial
+//     IMPORTANT fix (SOV-SFNT dominoed re-review, sibling of the CRITICAL saturation fix above):
+//     this helper did not GUARD or DOCUMENT that precondition -- if `v` were ever NaN, BOTH
+//     `r >= (float)INT16_MAX` and `r <= (float)INT16_MIN` evaluate `false` (every comparison
+//     against NaN is `false`, IEEE 754), falling through to `(int16_t)r` with `r` still NaN,
+//     which is undefined behaviour (C 6.3.1.4) -- the exact same UB class the CRITICAL fix closed
+//     for out-of-range FINITE values, reopened for the NaN case specifically. Unreachable from
+//     today's call sites, but latent: a future call site (or a future widening of the F2Dot14/
+//     dx/dy input types) could pass NaN without any compiler warning. The guard below is defense
+//     in depth, consistent with this helper's existing "saturate, never UB" contract -- NaN has no
+//     ordering-based "nearest in-range value" the way a too-large finite float does, so it
+//     saturates to `0` (the origin, a degenerate-but-safe coordinate) rather than picking either
+//     bound arbitrarily. `v != v` is the portable NaN test (works with `-ffreestanding`, no
+//     `<math.h>`/`isnan` -- NaN is the only float value that never compares equal to itself).
+// PT: CONTRATO -- `v` precisa ser finito (nunca Inf/NaN) em todo ponto de chamada que este
+//     arquivo tem HOJE (`fx`/`fy` do `apply_component_transform`: fatores de escala F2Dot14 são
+//     sempre finitos por construção -- `rd_f2dot14` divide um `int16_t` limitado por uma
+//     constante de tempo de compilação -- e `x_in`/`y_in` são `int16_t`, `dx`/`dy` são
+//     `int8_t`/`int16_t` alargados pra `int32_t`, então o multiply-accumulate abaixo nunca
+//     consegue produzir Inf/NaN a partir DESSAS entradas). Fix do IMPORTANTE do review
+//     adversarial (varredura-dominó do re-review do SOV-SFNT, irmão do fix do CRÍTICO acima):
+//     este helper não GUARDAVA nem DOCUMENTAVA essa precondição -- se `v` algum dia fosse NaN,
+//     TANTO `r >= (float)INT16_MAX` QUANTO `r <= (float)INT16_MIN` avaliam `false` (toda
+//     comparação contra NaN é `false`, IEEE 754), caindo no `(int16_t)r` com `r` ainda NaN, o que
+//     é comportamento indefinido (C 6.3.1.4) -- exatamente a mesma classe de UB que o fix do
+//     CRÍTICO fechou pros valores FINITOS fora de faixa, reaberta especificamente pro caso NaN.
+//     Inalcançável pelos pontos de chamada de hoje, mas latente: um futuro ponto de chamada (ou
+//     um futuro alargamento dos tipos de entrada F2Dot14/dx/dy) poderia passar NaN sem warning
+//     nenhum do compilador. A guarda abaixo é defense in depth, consistente com o contrato já
+//     existente deste helper de "satura, nunca UB" -- NaN não tem um "valor em-faixa mais
+//     próximo" baseado em ordenação como um float finito grande demais tem, então satura pra `0`
+//     (a origem, uma coordenada degenerada-mas-segura) em vez de escolher um dos dois limites
+//     arbitrariamente. `v != v` é o teste de NaN portável (funciona com `-ffreestanding`, sem
+//     `<math.h>`/`isnan` -- NaN é o único valor float que nunca se compara igual a si mesmo).
 static int16_t round_and_saturate_i16(float v) {
+    if (v != v) return 0; // NaN guard -- see CONTRACT comment above
     float r = (v >= 0.0f) ? v + 0.5f : v - 0.5f;
     if (r >= (float)INT16_MAX) return INT16_MAX;
     if (r <= (float)INT16_MIN) return INT16_MIN;
     return (int16_t)r;
+}
+
+// EN: SATURATES `v` into `[INT16_MIN, INT16_MAX]` before casting to `int16_t` -- the int32->int16
+//     twin of `round_and_saturate_i16` above (that one saturates a FLOAT rounding result; this one
+//     saturates an INTEGER accumulator, no rounding involved, so it is not shared code -- an
+//     unconditional `(int16_t)v` cast on an out-of-range `int32_t` is NOT undefined behaviour in
+//     C -- narrowing a signed integer to a narrower signed type when the value does not fit is
+//     IMPLEMENTATION-DEFINED (C 6.3.1.3p3), not UB -- but "implementation-defined" here still means
+//     SILENT, VALUE-CORRUPTING truncation/wraparound on every mainstream two's-complement target
+//     (including this codebase's own x86-64/clang), and critically: ASan/UBSan do NOT flag
+//     implementation-defined narrowing the way they flag UB, so this class of bug is invisible to
+//     `make sanitize-sfnt` and needs a VALUE assertion in `tests/test_sfnt.c` instead (see that
+//     file's `kSyntheticFontSimpleDeltaOverflow` regression). Review-adversarial IMPORTANT fix
+//     (SOV-SFNT dominoed re-review, 2nd sibling of the CRITICAL fix above): `parse_simple_glyph`'s
+//     `x_acc`/`y_acc` are `int32_t` running sums of delta-encoded `xCoordinates`/`yCoordinates`
+//     (each individual delta fits `int16_t`, but nothing bounds the RUNNING SUM -- a `glyf` simple
+//     glyph is free to walk far from the origin one small step at a time, same "spec-legitimate,
+//     not just hostile-input" shape as the CRITICAL composite-transform fix), and the un-clamped
+//     `(int16_t)x_acc`/`(int16_t)y_acc` casts silently wrapped the sum modulo 65536 whenever it
+//     left `[-32768, 32767]` -- reviewer's live repro: two successive `+32767` x-deltas sum to
+//     `65534` (in range for `int32_t`, provably correct per the OpenType delta-encoding spec, cross-
+//     checked against `fontTools`), and the pre-fix cast produced `-2` (two's-complement wrap),
+//     while `glx_sfnt_glyph_outline` still returned `GLX_SFNT_OK` -- silent wrong geometry, no
+//     crash, no sanitizer finding. Same choice as the CRITICAL fix: SATURATE, do not reject the
+//     glyph -- an out-of-range running sum is a degenerate OUTPUT (a point drawn absurdly far from
+//     the glyph's own origin), not a malformed INPUT (every individual delta byte/word read here
+//     was perfectly well-formed), so clamping keeps the rest of the SAME glyph's points usable.
+// PT: SATURA `v` em `[INT16_MIN, INT16_MAX]` antes de converter pra `int16_t` -- o gêmeo
+//     int32->int16 do `round_and_saturate_i16` acima (aquele satura um resultado de arredondamento
+//     de FLOAT; este satura um acumulador INTEIRO, sem arredondamento envolvido, por isso não é
+//     código compartilhado -- um cast `(int16_t)v` incondicional sobre um `int32_t` fora de faixa
+//     NÃO é comportamento indefinido em C -- estreitar um inteiro com sinal pra um tipo com sinal
+//     mais estreito quando o valor não cabe é DEFINIDO-PELA-IMPLEMENTAÇÃO (C 6.3.1.3p3), não UB --
+//     mas "definido-pela-implementação" aqui ainda significa truncamento/wraparound SILENCIOSO e
+//     CORRUPTOR-DE-VALOR em todo alvo dois-complemento mainstream (inclusive o próprio x86-64/
+//     clang deste código-base), e criticamente: ASan/UBSan NÃO sinalizam estreitamento definido-
+//     pela-implementação do jeito que sinalizam UB, então essa classe de bug é invisível pro `make
+//     sanitize-sfnt` e precisa de uma asserção de VALOR no `tests/test_sfnt.c` em vez disso (ver a
+//     regressão `kSyntheticFontSimpleDeltaOverflow` daquele arquivo). Fix do IMPORTANTE do review
+//     adversarial (varredura-dominó do re-review do SOV-SFNT, 2º irmão do fix do CRÍTICO acima):
+//     `x_acc`/`y_acc` do `parse_simple_glyph` são somas corridas `int32_t` de
+//     `xCoordinates`/`yCoordinates` codificados por delta (cada delta individual cabe em
+//     `int16_t`, mas nada limita a SOMA CORRIDA -- um glyph simples `glyf` é livre pra caminhar
+//     longe da origem um passo pequeno de cada vez, a mesma forma "espec-legítima, não só input-
+//     hostil" do fix do CRÍTICO de transformação-composta), e os casts sem clamp
+//     `(int16_t)x_acc`/`(int16_t)y_acc` davam wrap silencioso da soma módulo 65536 sempre que ela
+//     saía de `[-32768, 32767]` -- repro ao vivo do revisor: dois deltas-x sucessivos `+32767`
+//     somam `65534` (dentro de faixa pra `int32_t`, comprovadamente correto conforme a spec de
+//     codificação-por-delta do OpenType, cruzado contra `fontTools`), e o cast pré-fix produzia
+//     `-2` (wrap dois-complemento), enquanto o `glx_sfnt_glyph_outline` ainda retornava
+//     `GLX_SFNT_OK` -- geometria errada silenciosa, sem crash, sem achado de sanitizer. Mesma
+//     escolha do fix do CRÍTICO: SATURAR, não rejeitar o glyph -- uma soma corrida fora de faixa é
+//     uma SAÍDA degenerada (um ponto desenhado absurdamente longe da própria origem do glyph), não
+//     um INPUT malformado (todo byte/word de delta individual lido aqui era perfeitamente
+//     bem-formado), então o clamp mantém o resto dos pontos do MESMO glyph utilizável.
+static int16_t saturate_i32_to_i16(int32_t v) {
+    if (v > INT16_MAX) return INT16_MAX;
+    if (v < INT16_MIN) return INT16_MIN;
+    return (int16_t)v;
 }
 
 static void apply_component_transform(float a, float b, float c, float d, int32_t dx, int32_t dy,
@@ -727,7 +825,7 @@ static glx_sfnt_result parse_simple_glyph(const uint8_t* blob, size_t len, size_
             dx = d;
         } // else: X_IS_SAME_OR_POSITIVE with no short vector => delta 0, no bytes consumed
         x_acc += dx;
-        points_out[i].x = (int16_t)x_acc;
+        points_out[i].x = saturate_i32_to_i16(x_acc); // IMPORTANT fix: was an un-clamped narrowing cast
     }
 
     // ---- yCoordinates[numPoints], same shape, flag bits 2 (short) / 5 (same-or-positive) ------
@@ -747,7 +845,7 @@ static glx_sfnt_result parse_simple_glyph(const uint8_t* blob, size_t len, size_
             dy = d;
         }
         y_acc += dy;
-        points_out[i].y = (int16_t)y_acc;
+        points_out[i].y = saturate_i32_to_i16(y_acc); // IMPORTANT fix: was an un-clamped narrowing cast
     }
 
     // ---- finalize: reduce the scratch raw-flag byte down to the real on_curve bit --------------

@@ -41,6 +41,18 @@
 //     not just "the assertions still pass" (they did even with the bug, see above), but "ASan/
 //     UBSan, watching every read/cast, found nothing to say."
 //
+//     SCOPE CAVEAT (review-adversarial dominoed re-review, IMPORTANT finding -- do not read a
+//     clean sanitizer run as "no corruption of any kind"): this gate's silence covers exactly two
+//     classes -- memory-safety (ASan: OOB read/write, use-after-free, etc.) and UNDEFINED
+//     behaviour (UBSan: signed overflow, shift UB, and the float->int16 out-of-range cast this
+//     file was built to catch). It does NOT, and structurally CANNOT, catch silent
+//     `int32_t -> int16_t` narrowing/wraparound of an out-of-range value -- that cast is
+//     IMPLEMENTATION-DEFINED behaviour (C 6.3.1.3p3), not UB, so ASan/UBSan have nothing to flag
+//     even when the resulting value is wrong (see `saturate_i32_to_i16`'s fix in `src/sfnt.c`,
+//     and the delta-accumulator regression this class needed). That class of bug is caught
+//     ONLY by an explicit VALUE assertion against the correct number (`tests/test_sfnt.c`'s
+//     `kSyntheticFontSimpleDeltaOverflow` case), never by sanitizer silence alone.
+//
 //     FUTURE REUSE: this Makefile target (`make sanitize-sfnt`) is deliberately NAMED for the
 //     `src/sfnt.c` translation unit specifically, not the whole `src/` tree -- SOV-RAST (the next
 //     piece, the un-hinted quadratic-curve rasterizer that will consume this parser's point
@@ -90,6 +102,20 @@
 //     que o fix CRÍTICO desta tarefa eliminou o UB -- não só "as asserções ainda passam" (passavam
 //     mesmo com o bug, ver acima), mas "ASan/UBSan, vigiando toda leitura/cast, não acharam nada
 //     pra dizer."
+//
+//     RESSALVA DE ESCOPO (varredura-dominó do review adversarial, achado IMPORTANTE -- não leia
+//     uma execução limpa de sanitizer como "sem corrupção de nenhum tipo"): o silêncio deste gate
+//     cobre exatamente duas classes -- segurança-de-memória (ASan: leitura/escrita fora de limite,
+//     use-after-free, etc.) e comportamento INDEFINIDO (UBSan: overflow com sinal, UB de shift, e
+//     o cast float->int16 fora de faixa que este arquivo foi construído pra pegar). Ele NÃO pega,
+//     e ESTRUTURALMENTE NÃO CONSEGUE pegar, estreitamento/wraparound silencioso
+//     `int32_t -> int16_t` de um valor fora de faixa -- esse cast é comportamento
+//     DEFINIDO-PELA-IMPLEMENTAÇÃO (C 6.3.1.3p3), não UB, então ASan/UBSan não têm nada pra
+//     sinalizar mesmo quando o valor resultante está errado (ver o fix do `saturate_i32_to_i16`
+//     no `src/sfnt.c`, e a regressão de acumulador-de-delta que essa classe precisou). Essa classe
+//     de bug só é pega por uma asserção de VALOR explícita contra o número correto (o caso
+//     `kSyntheticFontSimpleDeltaOverflow` do `tests/test_sfnt.c`), nunca só pelo silêncio do
+//     sanitizer.
 //
 //     REUSO FUTURO: este alvo de Makefile (`make sanitize-sfnt`) é deliberadamente NOMEADO pra
 //     unidade de tradução `src/sfnt.c` especificamente, não a árvore `src/` inteira -- o SOV-RAST

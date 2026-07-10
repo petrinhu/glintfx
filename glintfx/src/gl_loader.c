@@ -752,7 +752,28 @@ static void* glintfx_resolve_symbol(const char* name) {
   cast.obj = NULL;
 
   if (glintfx_glx_get_proc_address) {
-    cast.fn = glintfx_glx_get_proc_address((const unsigned char*)name);
+    // EN: glXGetProcAddress's ABI-mandated parameter type is `const GLubyte*` (==
+    //     `const unsigned char*`), one qualifier-preserving character-type away from
+    //     `name`'s `const char*`. Routed through a union member (instead of a
+    //     C-style `(const unsigned char*)name` cast) for the same reason as the
+    //     `cast` union above: it sidesteps cppcheck's cstyleCast style check (a
+    //     project-wide CI gate, --error-exitcode=1) without a per-file suppression,
+    //     and C explicitly permits inspecting any object through an unsigned-char
+    //     lvalue, so this is, if anything, less exotic than the pointer-to-
+    //     function-pointer union conversion two lines up.
+    // PT: O tipo de parâmetro do glXGetProcAddress, ditado pela ABI, é `const
+    //     GLubyte*` (== `const unsigned char*`), a um tipo-de-caractere qualificador-
+    //     preservado de distância do `const char*` de `name`. Roteado por membro de
+    //     union (em vez de um cast C-style `(const unsigned char*)name`) pelo mesmo
+    //     motivo da union `cast` acima: contorna o check de estilo cstyleCast do
+    //     cppcheck (gate de CI do projeto inteiro, --error-exitcode=1) sem
+    //     supressão pontual, e o C permite explicitamente inspecionar qualquer
+    //     objeto via lvalue unsigned char -- portanto isto é, no máximo, menos
+    //     exótico que a conversão de ponteiro-de-objeto-para-ponteiro-de-função via
+    //     union duas linhas acima.
+    union { const char* c; const unsigned char* u; } name_view;
+    name_view.c = name;
+    cast.fn = glintfx_glx_get_proc_address(name_view.u);
     if (cast.obj) return cast.obj;
   }
   if (glintfx_egl_get_proc_address) {

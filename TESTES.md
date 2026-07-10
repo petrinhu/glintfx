@@ -16,6 +16,8 @@ Manual de testes do projeto. Stack: C + Assembly puros, freestanding, sem libc, 
 | TST-STATIC | Análise estática | Bugs sem executar: UB, uso indevido, dead code | `clang --analyze` / `scan-build`; cppcheck em modo freestanding |
 | TST-MEM | Memória (alocador) | Leak, double-free, alinhamento, escrita fora de bloco no nosso `malloc` | Testes dedicados do alocador + `valgrind` no binário estático quando viável; checagem de invariantes do bump/free-list |
 | TST-SFNT-SAN | Sanitizer (ASan/UBSan) via harness HOSTED-companion | Só a UNIDADE DE TRADUÇÃO `src/sfnt.c` (parser de input **hostil por natureza** — o gatilho de "Fora de escopo" abaixo virou aplicável) sob `-fsanitize=address,undefined` — achou em produção o CRÍTICO de UB float→int16 (review adversarial do SOV-SFNT) que `make test`'s freestanding, não-sanitizado, não conseguia ver | `make sanitize-sfnt`: compila o MESMO `src/sfnt.c` (sem `#ifdef`, sem cópia) contra libc normal via um programa `tests/sanitize_sfnt.c` **hosted** dedicado, fora de `$(PROGRAMS)`/`make test` — ver "TST-SFNT-SAN" abaixo |
+| TST-RAST-SAN | Sanitizer (ASan/UBSan) via harness HOSTED-companion | `src/raster.c` (SOV-RAST, FT-F2 — o reuso do padrão hosted-companion que a linha TST-SFNT-SAN já previa por nome: "SOV-RAST ... deve crescer um sanitize-rast irmão na mesma forma"), linkado junto com `src/sfnt.c` pro cenário de glyph real. Foco: a aritmética de ponteiro/índice pesada do rasterizador (`accum_row_segment`/`accum_column`, indexação do buffer `scratch`) — a classe de bug que um oráculo analítico com tolerância (TST-RAST em `tests/test_raster.c`) poderia mascarar como "imprecisão de flattening" em vez de corrupção de memória real | `make sanitize-raster`: compila `src/raster.c`+`src/sfnt.c` (sem `#ifdef`, sem cópia) contra libc normal via `tests/sanitize_raster.c` **hosted** dedicado, fora de `$(PROGRAMS)`/`make test` |
+| TST-RAST | Funcional / oráculo analítico (freestanding, C1) | `glx_rasterize_outline` (SOV-RAST, FT-F2): cobertura AA por área com sinal + winding não-zero, sobre retângulo/triângulo/curva-quadrática/glyph real 'O' — **golden pixel-exato PROIBIDO** (flaky); todo valor esperado é derivado à mão (teorema de Green pra área de curva quadrática, geometria elementar pro retângulo/triângulo) | `tests/test_raster.c`, rodado dentro de `make test`; ver o cabeçalho do próprio arquivo pra cada derivação |
 
 ### Comandos (W11)
 
@@ -28,6 +30,7 @@ make check-static    # TST-STATIC: cppcheck (src/) + clang --analyze (src/) + ch
                       # check_syscall_nums_sync.sh (drift entre syscall_nums.h/.inc)
 make test-mem        # TST-MEM: valgrind memcheck em test_alloc + test_mem
 make sanitize-sfnt   # TST-SFNT-SAN: ASan+UBSan sobre src/sfnt.c via harness hosted-companion
+make sanitize-raster # TST-RAST-SAN: ASan+UBSan sobre src/raster.c (+src/sfnt.c) via harness hosted-companion
 ```
 
 **TST-INT — golden files.** Três manifestos irmãos em `tests/` (`expected_exit.txt`,
@@ -73,9 +76,9 @@ compilado com `-fsanitize=address,undefined -fno-sanitize-recover=all`. Achou o 
 nunca teria pego (o cast trunca em silêncio sob build normal, sem sinal/crash). Prova negativa
 verificada manualmente: revertendo o fix, `sanitize-sfnt` aborta com
 `runtime error: 40000.5 is outside the range of representable values of type 'short'` no exato
-`src/sfnt.c:apply_component_transform` — com o fix, roda limpo. **Reuso futuro**: `SOV-RAST` (o
-próximo parser/consumidor não-confiável, o rasterizador) deve crescer um `sanitize-rast` irmão na
-mesma forma, per o brief que criou este alvo.
+`src/sfnt.c:apply_component_transform` — com o fix, roda limpo. **Reuso já concretizado**:
+`SOV-RAST` (FT-F2, o rasterizador) cresceu o `sanitize-raster` irmão previsto aqui, mesma forma
+hosted-companion (`tests/sanitize_raster.c`, alvo `TST-RAST-SAN` na tabela acima).
 
 ## Fora de escopo (projeto base — por enquanto)
 

@@ -71,10 +71,11 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 #     rodado pelo próprio alvo dedicado `sanitize-sfnt` abaixo em vez disso (mesmo padrão que o
 #     `tests/libcore_consumer.cpp` já usa, só que via exclusão baseada em extensão lá em vez de um
 #     filter-out explícito).
-PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c,$(wildcard tests/*.c))
+PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c tests/sanitize_raster.c,$(wildcard tests/*.c))
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test test-negative check-static test-mem clean run libcore libcore-test sanitize-sfnt
+.PHONY: build test test-negative check-static test-mem clean run libcore libcore-test sanitize-sfnt \
+        sanitize-raster
 
 build: $(PROGRAMS)
 
@@ -142,6 +143,19 @@ $(OBJ)/opensans_ttf.o: tests/fixtures/opensans_regular.ttf | $(OBJ)
 #     preferida sobre uma regra de padrão, nenhum casamento de `%` sequer é tentado uma vez que
 #     uma já existe).
 $(BIN)/test_sfnt: $(OBJ)/test_sfnt.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(BIN)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+# EN: SOV-RAST (FT-F2) test_raster needs the SAME embedded Open Sans fixture object as test_sfnt
+#     above (glx_sfnt_glyph_id/glx_sfnt_glyph_outline feed the real 'O' glyph into
+#     glx_rasterize_outline for TST-RAST's non-zero-winding/curve-flattening proof, see
+#     tests/test_raster.c's own header) -- same explicit-rule-overrides-pattern-rule precedence
+#     note as test_sfnt's own comment above.
+# PT: O test_raster do SOV-RAST (FT-F2) precisa do MESMO objeto de fixture Open Sans embutido que
+#     o test_sfnt acima (glx_sfnt_glyph_id/glx_sfnt_glyph_outline alimentam o glyph 'O' real pro
+#     glx_rasterize_outline pra prova de winding-não-zero/flattening-de-curva do TST-RAST, ver o
+#     cabeçalho próprio do tests/test_raster.c) -- mesma nota de precedência
+#     regra-explícita-sobrepõe-regra-de-padrão do próprio comentário do test_sfnt acima.
+$(BIN)/test_raster: $(OBJ)/test_raster.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(BIN)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 # EN: Runs every program and checks its exit code against the manifest tests/expected_exit.txt
@@ -576,6 +590,30 @@ SANITIZE_SFNT_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,undef
 sanitize-sfnt: | $(BIN)
 	$(CC) $(SANITIZE_SFNT_FLAGS) -o $(BIN)/sanitize_sfnt tests/sanitize_sfnt.c src/sfnt.c
 	$(BIN)/sanitize_sfnt
+
+# EN: SOV-RAST (FT-F2) sanitizer gate -- TESTES.md's TST-SFNT-SAN entry named this exact reuse in
+#     advance ("SOV-RAST ... deve crescer um sanitize-rast irmão na mesma forma"): the same
+#     hosted-companion pattern as `sanitize-sfnt` above, this time over `src/raster.c` (this
+#     ticket's brief calls a rasterizer's pointer/index arithmetic out by name as an especially
+#     valuable sanitizer target) -- `src/sfnt.c` is linked alongside it so the real-glyph scenario
+#     (`tests/sanitize_raster.c`'s own header, item 6) exercises the FULL parser+flattening+
+#     rasterization pipeline under ASan/UBSan, not just the synthetic shapes. Same flag rationale
+#     as SANITIZE_SFNT_FLAGS (`-O1`, not `-O0` -- the documented ASan/UBSan sweet spot).
+# PT: Portão sanitizer do SOV-RAST (FT-F2) -- a entrada TST-SFNT-SAN do TESTES.md já nomeou esse
+#     reuso exato de antemão ("SOV-RAST ... deve crescer um sanitize-rast irmão na mesma forma"):
+#     o mesmo padrão hosted-companion do `sanitize-sfnt` acima, desta vez sobre o `src/raster.c`
+#     (o brief desta tarefa nomeia por nome a aritmética de ponteiro/índice de um rasterizador
+#     como um alvo de sanitizer especialmente valioso) -- o `src/sfnt.c` é linkado junto pra que o
+#     cenário de glyph real (cabeçalho próprio do tests/sanitize_raster.c, item 6) exercite o
+#     pipeline COMPLETO parser+flattening+rasterização sob ASan/UBSan, não só as formas
+#     sintéticas. Mesmo racional de flag do SANITIZE_SFNT_FLAGS (`-O1`, não `-O0` -- o ponto-doce
+#     documentado de ASan/UBSan).
+SANITIZE_RASTER_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,undefined \
+                         -fno-sanitize-recover=all -g -O1
+
+sanitize-raster: | $(BIN)
+	$(CC) $(SANITIZE_RASTER_FLAGS) -o $(BIN)/sanitize_raster tests/sanitize_raster.c src/raster.c src/sfnt.c
+	$(BIN)/sanitize_raster
 
 clean:
 	rm -rf $(BUILD)

@@ -89,7 +89,20 @@ status=0
 #     -- ver o cabeçalho de arquivo do src/sfnt.c), listados aqui explicitamente (não via padrão
 #     glob `glx_sfnt_*`) pra que um futuro helper interno acidental vazando um símbolo cru
 #     prefixado com `glx_sfnt_` ainda falhe este gate em vez de viajar junto em silêncio.
-required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline"
+# EN: SOV-RAST (FT-F2) adds its own front door here -- `glx_rasterize_outline`/
+#     `glx_raster_scratch_floats` are ALREADY namespaced by construction (no `$(CORE_RENAME_FLAGS)`
+#     entry needed, same reasoning as SOV-SFNT's own `glx_sfnt_*` names above -- see
+#     src/raster.c's file header), listed explicitly (not via a `glx_raster_*`/`glx_rasterize_*`
+#     glob) so a future accidental internal helper leaking a bare-prefixed symbol still fails this
+#     gate instead of silently riding along.
+# PT: O SOV-RAST (FT-F2) acrescenta a própria porta-da-frente aqui -- `glx_rasterize_outline`/
+#     `glx_raster_scratch_floats` já são namespaced por construção (nenhuma entrada em
+#     `$(CORE_RENAME_FLAGS)` necessária, mesmo raciocínio dos próprios nomes `glx_sfnt_*` do
+#     SOV-SFNT acima -- ver o cabeçalho de arquivo do src/raster.c), listados explicitamente (não
+#     via um glob `glx_raster_*`/`glx_rasterize_*`) pra que um futuro helper interno acidental
+#     vazando um símbolo cru com o mesmo prefixo ainda falhe este gate em vez de viajar junto em
+#     silêncio.
+required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline glx_rasterize_outline glx_raster_scratch_floats"
 
 # EN: Everything else this archive is allowed to export: the small ASM/wrapper set that was never
 #     libc-shaped to begin with (_start, the syscall*N* trampolines, the sys_* one-line wrappers)

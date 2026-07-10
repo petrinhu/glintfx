@@ -60,10 +60,10 @@ staying green, which is the point of removing the suppressions rather than just 
 in place alongside the fix).
 
 **Pinned against:** RmlUi commit `2cd28864ae25ed345b70598751703a5433b12356` (the `GIT_TAG` in
-`glintfx/CMakeLists.txt` at the time this patch was written). **Status:** not yet reported
-upstream (mikke89/RmlUi), reporting/submitting upstream is the intended next step; this
-patch should be dropped from this repo once upstream carries an equivalent fix and the pinned
-`GIT_TAG` is bumped past it.
+`glintfx/CMakeLists.txt` at the time this patch was written). **Status:** reported upstream at
+[mikke89/RmlUi#968](https://github.com/mikke89/RmlUi/issues/968) (2026-07-10, with this patch
+proposed as the fix); this patch should be dropped from this repo once upstream carries an
+equivalent fix and the pinned `GIT_TAG` is bumped past it.
 
 **PT:** Corrige 2 achados distintos e genuínos de undefined behavior na própria ordem de
 teardown de elemento/documento do RmlUi, ambos capturados por `GLINTFX_SANITIZE=ON` (UBSan) e
@@ -99,7 +99,7 @@ em vez de continuar verde silenciosamente, que é o motivo de remover as suppres
 de só deixá-las junto com a correção).
 
 **Pinado contra:** commit `2cd28864ae25ed345b70598751703a5433b12356` do RmlUi (o `GIT_TAG` em
-`glintfx/CMakeLists.txt` no momento em que este patch foi escrito). **Status:** ainda não
-reportado ao upstream (mikke89/RmlUi), reportar/submeter ao upstream é o próximo passo
-pretendido; este patch deve ser removido deste repositório assim que o upstream carregar uma
-correção equivalente e o `GIT_TAG` pinado avançar para além dela.
+`glintfx/CMakeLists.txt` no momento em que este patch foi escrito). **Status:** reportado ao
+upstream em [mikke89/RmlUi#968](https://github.com/mikke89/RmlUi/issues/968) (2026-07-10, com
+este patch proposto como a correção); este patch deve ser removido deste repositório assim que
+o upstream carregar uma correção equivalente e o `GIT_TAG` pinado avançar para além dela.

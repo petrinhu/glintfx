@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.7.0](https://img.shields.io/badge/Version-0.7.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.8.0](https://img.shields.io/badge/Version-0.8.0-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -54,9 +54,10 @@ Getting a single effect (say, a glow) onto a UI normally means stitching togethe
 - **Click callback (hit-test):** `set_click_callback(std::function<void(const char* id)>)` on both `App` and `UiLayer` reports the id of the clicked element (bubbling up to the nearest ancestor with an id, `""` if none) -- lets a host react to UI clicks without owning RmlUi's event system.
 - **Element geometry query:** `get_element_box(const char* id)` returns the border-box geometry (`x, y, w, h`, window-space physical pixels) of any element by id -- useful for a host that needs to align its own overlays with UI elements.
 - **Letterbox viewport (`UiLayer` only):** `set_viewport(x, y, w, h, target_h)` composes the UI within a sub-region of the host's window, with a configurable origin (not just `(0, 0)`).
+- **Programmatic focus control:** `set_focus(const char* id)`/`clear_focus()` on both `App` and `UiLayer`, for hosts whose model owns selection (e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation).
 - **Hardened input surface:** `load(nullptr)` returns `false` instead of crashing the host; `set_dp_ratio` rejects non-finite or non-positive values; `set_viewport` rejects non-positive width/height. All fail-safe (reject and keep previous state), never fail-open.
 - **Clean public API:** two RAII facades (`glintfx::App`, `glintfx::UiLayer`); no third-party types leak into your headers.
-- **Self-contained build:** RmlUi fetched automatically; glintfx's own GL loader vendored (works offline); GLFW/FreeType/OpenGL from the system. `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library with no GLFW dependency at all.
+- **Self-contained build, own clean-room GL loader:** RmlUi fetched automatically; the third-party `gl3w` OpenGL loader is gone, replaced by glintfx's own clean-room GL 3.3 core-profile loader (`glintfx/src/gl_loader.{h,c}`), generated from the public Khronos `gl.xml` registry (works offline); GLFW/FreeType/OpenGL from the system. `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library with no GLFW dependency at all.
 - **Bundled showcase:** a runnable demo exercising all five effects.
 
 ### Requirements
@@ -236,9 +237,9 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.7.0** (stable, tagged), 2026-07-09. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
+> **Current release: v0.8.0** (stable, tagged), 2026-07-09. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
 
-**Delivered (v0.2.x-v0.4.0):**
+**Delivered (v0.2.x-v0.8.0):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** the `UiLayer` facade **attaches to a host-owned GL context** (game / engine) instead of creating its own window -- compose-only render, injected events, full GL state save/restore (`GlStateGuard`). Enables using glintfx **inside** a game without owning the window. First consumer: GusWorld / GusEngine (SDL3). The standalone `App` stays intact for UI-only apps. Integration contract: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Optional GLFW backend, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library (`UiLayer` only) with no GLFW dependency, for SDL3/X11 hosts.
@@ -249,7 +250,8 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **`polygon()` decorator and API input hardening, v0.3.0:** `decorator: polygon(sides, color[, rotation])`, a solid-color regular-N-gon shape primitive (`sides` clamped to `[3, 1024]`, fail-high on invalid input; glow and clip-path reuse `drop-shadow`/`mask-image` with zero new API) -- a reusable building block for hexagonal, triangular, or octagonal UI accents (badges, gauges, corner decorations) without a custom decorator. Plus hardening of the public API surface: `load(nullptr)` now returns `false` instead of crashing the host, `set_dp_ratio`/`set_viewport` reject non-finite or non-positive values, and `version()` is fixed to report the actual tag (it had been stuck reporting `"0.2.4"` since v0.2.5). See [`docs/effects.md`](docs/effects.md).
 - **Gradient polygon fill and two memory-safety fixes, v0.3.1:** `polygon()`'s fill argument now also accepts `radial-gradient(...)`/`linear-gradient(...)` (a real per-pixel color ramp via RmlUi's own gradient shader, not a faceted approximation) -- useful for metallic, glassy, or radially-lit polygon accents that a flat color can't sell. Plus two bugs found via audit: `load()` used to leak the previously loaded document and leave it rendering as a visible "ghost" underneath the new one on every reload; `bind_number`/`bind_string`/`bind_bool`/`bind_list` used to trigger a heap-use-after-free when called twice with the same key before `load()`.
 - **Scrolling in embed mode, v0.4.0:** mouse-wheel forwarding (`UiEvent::Type::MouseWheel`, scrolls the HOVERED element's closest scrollable ancestor, same convention as `Rml::Context::ProcessMouseWheel`) plus five programmatic scroll methods on `UiLayer`/`App` -- `scroll_element_into_view`, `get/set_element_scroll_top`, `get_element_scroll_height`, `get_element_client_height` (the full scroll-metrics trio, for custom scrollbar UIs). See [`docs/embed-integration.md`](docs/embed-integration.md). Both are now guarded, fail-safe. See [`CHANGELOG.md`](CHANGELOG.md).
-- **`set_focus(id)`/`clear_focus()` on `UiLayer` and `App` (unreleased, `L1.17-FOCUS`):** programmatic focus control for hosts whose model owns selection (e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation) -- closes the `GAP-4` item tracked in `TODO.md`. Gated by the element's RCSS `focus` property (default `auto`, not by `tab-index`/HTML-style tabindex -- see [`docs/embed-integration.md`](docs/embed-integration.md) section 5 for the full contract, confirmed against the pinned RmlUi 6.3 source).
+- **Own clean-room GL loader, v0.8.0 (`L1.14-GLLOADER`):** the third-party `gl3w` OpenGL loader is gone, replaced by glintfx's own clean-room GL 3.3 core-profile function-pointer loader (`glintfx/src/gl_loader.{h,c}`, 344 commands), generated by `tools/gen_glloader.py` from the public Khronos `gl.xml` API registry. First milestone of the long-term internalization track. See [`CHANGELOG.md`](CHANGELOG.md).
+- **`set_focus(id)`/`clear_focus()` on `UiLayer` and `App`, v0.8.0 (`L1.17-FOCUS`):** programmatic focus control for hosts whose model owns selection (e.g. a game menu driven by data-binding rather than RmlUi's own Tab/arrow navigation) -- closes the `GAP-4` item tracked in `TODO.md`. Gated by the element's RCSS `focus` property (default `auto`, not by `tab-index`/HTML-style tabindex -- see [`docs/embed-integration.md`](docs/embed-integration.md) section 5 for the full contract, confirmed against the pinned RmlUi 6.3 source).
 
 **Planned (paused, not yet started):**
 
@@ -261,7 +263,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
-- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.4.0`).
+- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.8.0`).
 - **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Core implementation complete, pending audit:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end -> a hand-rolled test harness enabling TDD -> a small core libc (memory, string, int-to-string conversion) -> a mini-printf -> a bump allocator over `mmap`, all zero libc and delivered under TDD plus adversarial review. Items sit at `🔍 Pending verification` awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. Still a **long-term track**: internalizing glintfx's remaining dependencies (RmlUi, FreeType, GLFW) remains years away (the GL loader piece, gl3w, was already internalized in L1.14-GLLOADER).
 
 Treat glintfx as the product; Layer 0 is a separate long-term track, now implementation-complete and awaiting audit.
@@ -300,9 +302,10 @@ Colocar um único efeito (digamos, um glow) numa UI normalmente significa costur
 - **Callback de clique (hit-test):** `set_click_callback(std::function<void(const char* id)>)` em `App` e `UiLayer` reporta o id do elemento clicado (sobe até o ancestral mais próximo com id, `""` se nenhum) -- permite a um host reagir a cliques na UI sem ser dono do sistema de eventos do RmlUi.
 - **Consulta de geometria de elemento:** `get_element_box(const char* id)` retorna a geometria border-box (`x, y, w, h`, pixels físicos espaço-janela) de qualquer elemento por id -- útil para um host alinhar seus próprios overlays com elementos da UI.
 - **Viewport letterbox (só em `UiLayer`):** `set_viewport(x, y, w, h, target_h)` compõe a UI numa sub-região da janela do host, com origem configurável (não só `(0, 0)`).
+- **Controle de foco programático:** `set_focus(const char* id)`/`clear_focus()` em `App` e `UiLayer`, para hosts cujo modelo é dono da seleção (ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi).
 - **Superfície de entrada hardened:** `load(nullptr)` retorna `false` em vez de derrubar o host; `set_dp_ratio` rejeita valores não-finitos ou não-positivos; `set_viewport` rejeita largura/altura não-positivas. Todos fail-safe (rejeita e mantém o estado anterior), nunca fail-open.
 - **API pública limpa:** duas fachadas RAII (`glintfx::App`, `glintfx::UiLayer`); nenhum tipo de terceiro vaza para seus headers.
-- **Build autocontido:** RmlUi baixado automaticamente; loader GL próprio do glintfx vendorizado (funciona offline); GLFW/FreeType/OpenGL do sistema. `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only sem nenhuma dependência de GLFW.
+- **Build autocontido, loader GL próprio clean-room:** RmlUi baixado automaticamente; o loader OpenGL de terceiro `gl3w` saiu, substituído pelo loader próprio clean-room GL 3.3 core-profile do glintfx (`glintfx/src/gl_loader.{h,c}`), gerado a partir do registro público Khronos `gl.xml` (funciona offline); GLFW/FreeType/OpenGL do sistema. `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only sem nenhuma dependência de GLFW.
 - **Showcase embutido:** um demo executável exercitando os cinco efeitos.
 
 ### Requisitos
@@ -482,9 +485,9 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.7.0** (estável, taggeada), 2026-07-09. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
+> **Lançamento atual: v0.8.0** (estável, taggeada), 2026-07-09. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
 
-**Entregue (v0.2.x-v0.4.0):**
+**Entregue (v0.2.x-v0.8.0):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** a fachada `UiLayer` **anexa ao contexto GL de um host** (jogo / engine) em vez de criar a própria janela -- render compose-only, eventos injetados, save/restore completo do estado GL (`GlStateGuard`). Permite usar o glintfx **dentro** de um jogo sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). O `App` standalone permanece intacto para apps só-de-UI. Contrato de integração: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Backend GLFW opcional, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only (só `UiLayer`) sem dependência de GLFW, para hosts SDL3/X11.
@@ -495,7 +498,8 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Decorator `polygon()` e hardening de entrada da API, v0.3.0:** `decorator: polygon(lados, cor[, rotação])`, uma shape primitive de N-ágono regular de cor sólida (`lados` limitado a `[3, 1024]`, fail-high em input inválido; glow e clip-path reusam `drop-shadow`/`mask-image` sem API nova) -- um bloco reutilizável para acentos de UI hexagonais, triangulares ou octogonais (selos, medidores, decorações de canto) sem precisar de um decorator customizado. Mais hardening da superfície pública: `load(nullptr)` agora retorna `false` em vez de derrubar o host, `set_dp_ratio`/`set_viewport` rejeitam valores não-finitos ou não-positivos, e `version()` foi corrigido para reportar a tag real (estava travado em `"0.2.4"` desde a v0.2.5). Ver [`docs/effects.md`](docs/effects.md).
 - **Preenchimento em gradiente no polygon() e dois fixes de segurança de memória, v0.3.1:** o argumento de preenchimento do `polygon()` agora também aceita `radial-gradient(...)`/`linear-gradient(...)` (rampa de cor real por-pixel via o próprio shader de gradiente do RmlUi, não uma aproximação facetada) -- útil para acentos de polígono metálicos, vítreos ou com luz radial, que uma cor lisa não entrega. Mais dois bugs achados via auditoria: `load()` vazava o documento carregado anteriormente e o deixava renderizando como um "fantasma" visível por baixo do novo a cada reload; `bind_number`/`bind_string`/`bind_bool`/`bind_list` disparava um heap-use-after-free quando chamado duas vezes com a mesma chave antes do `load()`. Ambos agora têm guard, fail-safe. Ver [`CHANGELOG.md`](CHANGELOG.md).
 - **Rolagem em embed mode, v0.4.0:** encaminhamento de roda do mouse (`UiEvent::Type::MouseWheel`, rola o ancestral rolável mais próximo do elemento em HOVER, mesma convenção do `Rml::Context::ProcessMouseWheel`) mais cinco métodos de scroll programático em `UiLayer`/`App` -- `scroll_element_into_view`, `get/set_element_scroll_top`, `get_element_scroll_height`, `get_element_client_height` (o trio completo de métricas de rolagem, para UIs de scrollbar customizadas). Ver [`docs/embed-integration.md`](docs/embed-integration.md).
-- **`set_focus(id)`/`clear_focus()` em `UiLayer` e `App` (não lançado, `L1.17-FOCUS`):** controle de foco programático para hosts cujo modelo é dono da seleção (ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi) -- fecha o item `GAP-4` rastreado no `TODO.md`. Controlado pela propriedade RCSS `focus` do elemento (default `auto`, não por `tab-index`/tabindex estilo HTML -- ver [`docs/embed-integration.md`](docs/embed-integration.md) seção 5 para o contrato completo, confirmado contra o source pinado do RmlUi 6.3).
+- **Loader GL próprio clean-room, v0.8.0 (`L1.14-GLLOADER`):** o loader OpenGL de terceiro `gl3w` saiu, substituído pelo loader próprio clean-room de ponteiros de função GL 3.3 core profile do glintfx (`glintfx/src/gl_loader.{h,c}`, 344 comandos), gerado pelo `tools/gen_glloader.py` a partir do registro público de API `gl.xml` da Khronos. 1º marco da trilha de internalização de longo prazo. Ver [`CHANGELOG.md`](CHANGELOG.md).
+- **`set_focus(id)`/`clear_focus()` em `UiLayer` e `App`, v0.8.0 (`L1.17-FOCUS`):** controle de foco programático para hosts cujo modelo é dono da seleção (ex.: um menu de jogo dirigido por data-binding em vez da navegação Tab/setas própria do RmlUi) -- fecha o item `GAP-4` rastreado no `TODO.md`. Controlado pela propriedade RCSS `focus` do elemento (default `auto`, não por `tab-index`/tabindex estilo HTML -- ver [`docs/embed-integration.md`](docs/embed-integration.md) seção 5 para o contrato completo, confirmado contra o source pinado do RmlUi 6.3).
 
 **Planejado (pausado, ainda não iniciado):**
 
@@ -507,7 +511,7 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
-- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.4.0`).
+- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.8.0`).
 - **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação do núcleo completa, aguardando auditoria:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta -> um harness de teste próprio habilitando TDD -> uma libc-núcleo pequena (memória, string, conversão int↔string) -> um mini-printf -> um alocador bump via `mmap`, tudo zero libc e entregue sob TDD mais review adversarial. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. Ainda é uma trilha **de longo prazo**: internalizar as dependências restantes do glintfx (RmlUi, FreeType, GLFW) segue a anos de distância (a peça do loader GL, gl3w, já foi internalizada no L1.14-GLLOADER).
 
 Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada, agora com a implementação completa e aguardando auditoria.

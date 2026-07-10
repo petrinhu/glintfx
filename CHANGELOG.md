@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] - 2026-07-09 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.8.0)
+
 **EN:** **Minor** release -- new public API (`set_focus`/`clear_focus`, `L1.17-FOCUS`) plus an internal GL loader clean-room swap (`L1.14-GLLOADER`). No existing signature changed; drop-in from a consumer's point of view.
 **PT:** Release **minor** -- API pública nova (`set_focus`/`clear_focus`, `L1.17-FOCUS`) mais uma troca clean-room interna do loader GL (`L1.14-GLLOADER`). Nenhuma assinatura existente mudou; drop-in do ponto de vista de um consumidor.
 

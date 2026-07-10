@@ -109,6 +109,35 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
+// EN: Pulled in UNCONDITIONALLY, first, outside any guard -- this is where the
+//     GLINTFX_OWN_FONT_ENGINE macro itself (`#cmakedefine01`, always literally 0 or 1, never
+//     undefined) comes from. Needed so THIS header can self-guard below regardless of who
+//     #includes it or in which CMake config -- see the `#if GLINTFX_OWN_FONT_ENGINE` block
+//     right after: in an GLINTFX_OWN_FONT_ENGINE=OFF build (the default), this header must be a
+//     harmless, empty-of-Layer-0-dependencies no-op, because clang-tidy's CI lint pass globs
+//     EVERY glintfx/src/*.cpp file unconditionally (glintfx/CMakeLists.txt's own
+//     `if(GLINTFX_OWN_FONT_ENGINE)` only gates whether font_engine_own.cpp is ADDED TO THE BUILD
+//     TARGET -- it does not stop a filesystem glob like `clang-tidy .../src/*.cpp` from finding
+//     and parsing the file anyway, at which point THIS header, still #included by that .cpp
+//     unconditionally, must not go hunting for "core/raster.h"/"core/sfnt.h" on an include path
+//     that set_source_files_properties() never wired in for that config).
+// PT: Trazido INCONDICIONALMENTE, primeiro, fora de qualquer guard -- é daqui que vem a própria
+//     macro GLINTFX_OWN_FONT_ENGINE (`#cmakedefine01`, sempre literalmente 0 ou 1, nunca
+//     indefinida). Necessário para que ESTE header consiga se auto-proteger abaixo
+//     independentemente de quem o #inclui ou em qual config do CMake -- ver o bloco
+//     `#if GLINTFX_OWN_FONT_ENGINE` logo a seguir: numa build GLINTFX_OWN_FONT_ENGINE=OFF (o
+//     padrão), este header precisa ser um no-op inofensivo, sem dependências da Camada 0, porque
+//     o passe de lint do CI via clang-tidy varre TODO arquivo glintfx/src/*.cpp
+//     incondicionalmente (o próprio `if(GLINTFX_OWN_FONT_ENGINE)` do glintfx/CMakeLists.txt só
+//     controla se font_engine_own.cpp é ADICIONADO AO ALVO DE BUILD -- não impede um glob de
+//     sistema de arquivos como `clang-tidy .../src/*.cpp` de achar e parsear o arquivo do mesmo
+//     jeito, ponto em que ESTE header, ainda #incluído por aquele .cpp incondicionalmente, não
+//     pode sair caçando "core/raster.h"/"core/sfnt.h" num include path que o
+//     set_source_files_properties() nunca conectou pra aquela config).
+#include <glintfx/config.hpp>
+
+#if GLINTFX_OWN_FONT_ENGINE
+
 #include <RmlUi/Core/CallbackTexture.h>
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/FileInterface.h>
@@ -125,15 +154,16 @@
 // EN: Layer 0's sovereign C, `extern "C"`-linked in per ADR-0009's "hosted shell + C meat"
 //     pattern -- the actual SFNT parsing / outline rasterization algorithms live here, NOT in
 //     this file. `include/core/` is added to this translation unit's include path only when
-//     GLINTFX_OWN_FONT_ENGINE=ON (glintfx/CMakeLists.txt) -- this header is therefore only ever
-//     #included by glintfx source files themselves guarded by `#if GLINTFX_OWN_FONT_ENGINE`
-//     (see src/bootstrap.cpp), never unconditionally.
+//     GLINTFX_OWN_FONT_ENGINE=ON (glintfx/CMakeLists.txt) -- reachable at this point precisely
+//     BECAUSE the `#if GLINTFX_OWN_FONT_ENGINE` guard above already proved this build wired that
+//     include path in (see glintfx/CMakeLists.txt's set_source_files_properties() call).
 // PT: C soberano da Camada 0, linkado via `extern "C"` conforme o padrão "casca-hosted + carne-C"
 //     da ADR-0009 -- os algoritmos reais de parsing SFNT/rasterização de outline moram aqui, NÃO
 //     neste arquivo. `include/core/` só é adicionado ao include path desta unidade de tradução
-//     quando GLINTFX_OWN_FONT_ENGINE=ON (glintfx/CMakeLists.txt) -- este header portanto só é
-//     #incluído por arquivos-fonte do próprio glintfx protegidos por
-//     `#if GLINTFX_OWN_FONT_ENGINE` (ver src/bootstrap.cpp), nunca incondicionalmente.
+//     quando GLINTFX_OWN_FONT_ENGINE=ON (glintfx/CMakeLists.txt) -- alcançável neste ponto
+//     precisamente PORQUE o guard `#if GLINTFX_OWN_FONT_ENGINE` acima já provou que esta build
+//     conectou aquele include path (ver a chamada set_source_files_properties() do
+//     glintfx/CMakeLists.txt).
 extern "C" {
 #include "core/raster.h"
 #include "core/sfnt.h"
@@ -315,3 +345,5 @@ private:
 };
 
 } // namespace glintfx
+
+#endif // GLINTFX_OWN_FONT_ENGINE

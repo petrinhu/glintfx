@@ -7,6 +7,29 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "font_engine_own.hpp"
 
+// EN: font_engine_own.hpp (above) pulls in "glintfx/config.hpp" unconditionally, first thing,
+//     outside any guard -- GLINTFX_OWN_FONT_ENGINE is therefore always defined (0 or 1, never
+//     undefined, `#cmakedefine01`) by this point. When OFF, everything below -- the entire body
+//     of this translation unit -- compiles away to nothing: this .cpp exists ONLY to implement
+//     the glintfx::FontEngineOwn class the header declares under its OWN `#if
+//     GLINTFX_OWN_FONT_ENGINE` guard, so there is nothing left to define when that class itself
+//     is not declared. This keeps the file self-guarding regardless of who globs/compiles it
+//     (see the .hpp's own top-of-file comment for why that matters to clang-tidy's CI lint pass,
+//     which globs every glintfx/src/*.cpp file unconditionally, independent of
+//     glintfx/CMakeLists.txt's `if(GLINTFX_OWN_FONT_ENGINE)` build-target gate).
+// PT: font_engine_own.hpp (acima) traz "glintfx/config.hpp" incondicionalmente, primeira coisa,
+//     fora de qualquer guard -- GLINTFX_OWN_FONT_ENGINE portanto está sempre definida (0 ou 1,
+//     nunca indefinida, `#cmakedefine01`) neste ponto. Quando OFF, tudo abaixo -- o corpo
+//     inteiro desta unidade de tradução -- compila pra nada: este .cpp existe SÓ para implementar
+//     a classe glintfx::FontEngineOwn que o header declara sob o PRÓPRIO guard `#if
+//     GLINTFX_OWN_FONT_ENGINE`, então não sobra nada pra definir quando aquela classe em si não
+//     é declarada. Isso mantém o arquivo auto-protegido independente de quem o globa/compila
+//     (ver o comentário de topo-de-arquivo do próprio .hpp pro motivo disso importar pro passe
+//     de lint do CI via clang-tidy, que varre todo arquivo glintfx/src/*.cpp
+//     incondicionalmente, independente do gate de alvo-de-build `if(GLINTFX_OWN_FONT_ENGINE)`
+//     do glintfx/CMakeLists.txt).
+#if GLINTFX_OWN_FONT_ENGINE
+
 #include <algorithm>
 #include <cmath>
 
@@ -594,3 +617,5 @@ int FontEngineOwn::GetVersion(Rml::FontFaceHandle handle) {
 }
 
 } // namespace glintfx
+
+#endif // GLINTFX_OWN_FONT_ENGINE

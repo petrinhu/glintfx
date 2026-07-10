@@ -15,10 +15,12 @@
 //           actually shaped GLYPHS, not a solid rectangle (catches the "renders a filled box
 //           instead of text" regression class -- e.g. a coverage-atlas blit bug that always
 //           writes 255 instead of the real per-pixel coverage byte).
-//       (3) EACH of the 3 text lines' own horizontal band has SOME ink -- proves all three
-//           lines rendered, not just the first (line 3 is the pt-br-accented one -- this
-//           specifically exercises BuildBakeSet()'s accented codepoints, not just plain
-//           ASCII, per this ticket's own scope).
+//       (3) EACH of the 3 text lines' own band -- the REAL bounding box returned by
+//           App::get_element_box(id) for that <p>'s id (NOT an h/3 equal-thirds approximation;
+//           see the review-finding comment at check 3's assertion site below) -- has SOME ink.
+//           Proves all three lines rendered, not just the first (line 3 is the pt-br-accented
+//           one -- this specifically exercises BuildBakeSet()'s accented codepoints, not just
+//           plain ASCII, per this ticket's own scope).
 //
 //     This test is NOT gated behind GLINTFX_OWN_FONT_ENGINE -- it runs identically whichever
 //     font engine is active (RmlUi's FreeType default, OFF/default; or glintfx's own
@@ -45,10 +47,13 @@
 //           regressão "renderiza uma caixa preenchida em vez de texto" -- ex.: um bug de
 //           blit do atlas de cobertura que sempre escreve 255 em vez do byte de cobertura
 //           real por-pixel).
-//       (3) CADA uma das 3 linhas de texto tem SUA PRÓPRIA banda horizontal com ALGUMA tinta
-//           -- prova que as três linhas renderizaram, não só a 1ª (a linha 3 é a acentuada
-//           pt-br -- isto exercita especificamente os codepoints acentuados do
-//           BuildBakeSet(), não só ASCII puro, conforme o próprio escopo desta tarefa).
+//       (3) CADA uma das 3 linhas de texto tem, na SUA PRÓPRIA banda -- a bounding box REAL
+//           retornada por App::get_element_box(id) do <p> correspondente (NÃO uma aproximação
+//           de terços iguais h/3; ver o comentário de achado-de-review no local da asserção do
+//           check 3 abaixo) -- ALGUMA tinta. Prova que as três linhas renderizaram, não só a 1ª
+//           (a linha 3 é a acentuada pt-br -- isto exercita especificamente os codepoints
+//           acentuados do BuildBakeSet(), não só ASCII puro, conforme o próprio escopo desta
+//           tarefa).
 //
 //     Este teste NÃO é bloqueado atrás de GLINTFX_OWN_FONT_ENGINE -- roda identicamente com
 //     qualquer motor de fonte ativo (default FreeType do RmlUi, OFF/padrão; ou o motor
@@ -59,6 +64,7 @@
 //     lados renderizam texto legível, sem precisar de duas asserções diferentes por lado.
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/glintfx.hpp>
+#include <cmath>
 #include <cstdio>
 #include <vector>
 
@@ -86,6 +92,35 @@ static size_t count_bright_rows(const std::vector<unsigned char>& px, int w, int
         }
     }
     return count;
+}
+
+// EN: [Review IMPORTANT #2, 2026-07-10] Row band derived from a REAL element bounding box
+//     (App::get_element_box(id)), clamped to the captured frame's [0, frame_h) bounds --
+//     replaces the previous h/3 equal-thirds approximation, which did not match the actual
+//     3-line layout (line 3's ink body sat mostly in the geometric-middle third, with only its
+//     descender tail reaching the h/3-assumed bottom third -- bright_line3 was measured at just
+//     106 px, i.e. the check was accidentally passing on tail-only ink, NOT the accented body it
+//     claimed to prove). A bug that corrupted the BODY of accented glyphs while leaving
+//     descender tails intact would have passed silently under the old h/3 bands; deriving the
+//     band from the element's own layout box closes that gap.
+// PT: [IMPORTANTE #2 do review, 2026-07-10] Banda de linha derivada de uma bounding box REAL de
+//     elemento (App::get_element_box(id)), recortada aos limites [0, frame_h) do frame
+//     capturado -- substitui a aproximação anterior de terços iguais h/3, que não batia com o
+//     layout real de 3 linhas (o corpo de tinta da linha 3 ficava majoritariamente no terço
+//     geométrico do MEIO, só sua cauda de descendente alcançava o terço inferior assumido por
+//     h/3 -- bright_line3 media apenas 106 px, ou seja o check passava por acidente com tinta
+//     só-de-cauda, NÃO o corpo acentuado que alegava provar). Um bug que corrompesse o CORPO de
+//     glyphs acentuados mantendo as caudas de descendente intactas passaria em silêncio sob as
+//     bandas h/3 antigas; derivar a banda da própria caixa de layout do elemento fecha essa
+//     brecha.
+struct Band { int begin; int end; };
+static Band clamp_band(float y, float box_h, int frame_h) {
+    int begin = (int)std::floor(y);
+    int end   = (int)std::ceil(y + box_h);
+    if (begin < 0) begin = 0;
+    if (end > frame_h) end = frame_h;
+    if (end < begin) end = begin;
+    return {begin, end};
 }
 
 int main() {
@@ -126,21 +161,38 @@ int main() {
     const size_t bright_total = count_bright_rows(px, w, 0, h);
     const double bright_pct = 100.0 * (double)bright_total / (double)total;
 
-    // EN: Each of the 3 <p> lines occupies roughly one third of the (margin-adjusted) body
-    //     height -- split the frame into 3 equal horizontal bands as an approximation (no
-    //     exact per-line layout query needed; the oracle only needs "some ink somewhere in
-    //     this third", not pixel-exact bounds).
-    // PT: Cada uma das 3 linhas <p> ocupa aproximadamente um terço da altura do body (ajustado
-    //     por margem) -- divide o frame em 3 bandas horizontais iguais como aproximação (sem
-    //     necessidade de query exata de layout por-linha; o oráculo só precisa de "alguma
-    //     tinta em algum lugar deste terço", não limites pixel-exatos).
-    const int band_h = h / 3;
-    const size_t bright_line1 = count_bright_rows(px, w, 0, band_h);
-    const size_t bright_line2 = count_bright_rows(px, w, band_h, 2 * band_h);
-    const size_t bright_line3 = count_bright_rows(px, w, 2 * band_h, h);
+    // EN: [Review IMPORTANT #2] Each of the 3 <p> lines' band is its OWN real bounding box from
+    //     App::get_element_box(id) (line1/line2/line3, ids already present in
+    //     fonteng_scene.rml) -- see clamp_band()'s doc-comment above for why this replaced the
+    //     previous h/3 equal-thirds approximation.
+    // PT: [IMPORTANTE #2 do review] A banda de cada uma das 3 linhas <p> é sua PRÓPRIA bounding
+    //     box real de App::get_element_box(id) (line1/line2/line3, ids já presentes em
+    //     fonteng_scene.rml) -- ver o doc-comment de clamp_band() acima pro motivo desta troca
+    //     em relação à aproximação anterior de terços iguais h/3.
+    const glintfx::ElementBox box1 = app.get_element_box("line1");
+    const glintfx::ElementBox box2 = app.get_element_box("line2");
+    const glintfx::ElementBox box3 = app.get_element_box("line3");
+    if (!box1.found || !box2.found || !box3.found) {
+        fprintf(stderr,
+            "fonteng_own_sanity FAIL [0] get_element_box found=(%d,%d,%d) -- expected all true "
+            "(line1/line2/line3 ids missing from fonteng_scene.rml?)\n",
+            box1.found, box2.found, box3.found);
+        return 1;
+    }
 
-    printf("fonteng_own_sanity: %dx%d  bright_total=%zu (%.2f%%)  line1=%zu line2=%zu line3=%zu\n", w,
-           h, bright_total, bright_pct, bright_line1, bright_line2, bright_line3);
+    const Band band1 = clamp_band(box1.y, box1.h, h);
+    const Band band2 = clamp_band(box2.y, box2.h, h);
+    const Band band3 = clamp_band(box3.y, box3.h, h);
+
+    const size_t bright_line1 = count_bright_rows(px, w, band1.begin, band1.end);
+    const size_t bright_line2 = count_bright_rows(px, w, band2.begin, band2.end);
+    const size_t bright_line3 = count_bright_rows(px, w, band3.begin, band3.end);
+
+    printf("fonteng_own_sanity: %dx%d  bright_total=%zu (%.2f%%)  "
+           "line1=[%d,%d)=%zu line2=[%d,%d)=%zu line3=[%d,%d)=%zu\n",
+           w, h, bright_total, bright_pct,
+           band1.begin, band1.end, bright_line1, band2.begin, band2.end, bright_line2,
+           band3.begin, band3.end, bright_line3);
 
     int failures = 0;
 

@@ -1,0 +1,52 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.19-FONTENG (FT-F3) embed-mode visual oracle document -- review IMPORTANT #1's UiLayer
+      analogue of fonteng_scene.rml. Same 3-line text mix (ascender/descender-heavy ASCII,
+      lowercase ASCII, and the pt-br-accented Latin-1 Supplement set the BAKE_SET covers -- see
+      src/font_engine_own.cpp's BuildBakeSet()), each <p> keeping its id so
+      fonteng_own_embed_sanity.cpp can derive its own real per-line band via
+      UiLayer::get_element_box(id) instead of an h/3 approximation (review IMPORTANT #2,
+      applied to this scene from the start).
+      Font src is "assets/OpenSans-Regular.ttf" -- relative to this document's
+      WORKING_DIRECTORY (CMAKE_CURRENT_BINARY_DIR = build/tests/, the repo-wide embed-test
+      convention; see tests/CMakeLists.txt's fonteng_own_embed_sanity block for where that
+      assets/ directory is copied from) -- NOT fonteng_scene.rml's "tests/"-prefixed path,
+      which only resolves under the GLFW block's WORKING_DIRECTORY=CMAKE_BINARY_DIR convention.
+  PT: Documento oráculo visual do modo embed do L1.19-FONTENG (FT-F3) -- análogo UiLayer do
+      IMPORTANTE #1 do review para fonteng_scene.rml. Mesma mistura de 3 linhas de texto (ASCII
+      carregado de ascendente/descendente, ASCII minúsculo, e o conjunto Latin-1 Supplement
+      acentuado pt-br que o BAKE_SET cobre -- ver BuildBakeSet() em src/font_engine_own.cpp),
+      cada <p> mantendo seu id para que fonteng_own_embed_sanity.cpp derive sua própria banda
+      real por-linha via UiLayer::get_element_box(id) em vez de uma aproximação h/3
+      (IMPORTANTE #2 do review, aplicado a esta cena desde o início).
+      O src da fonte é "assets/OpenSans-Regular.ttf" -- relativo ao WORKING_DIRECTORY deste
+      documento (CMAKE_CURRENT_BINARY_DIR = build/tests/, convenção repo-wide de teste embed;
+      ver o bloco fonteng_own_embed_sanity do tests/CMakeLists.txt pra onde esse diretório
+      assets/ é copiado) -- NÃO o path com prefixo "tests/" de fonteng_scene.rml, que só
+      resolve sob a convenção WORKING_DIRECTORY=CMAKE_BINARY_DIR do bloco GLFW.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    p { display: block; }
+  </style>
+  <title>glintfx L1.19-FONTENG embed sanity</title>
+</head>
+<body>
+  <p id="line1">AGWQjpqy</p>
+  <p id="line2">acao ceu izq oru nao</p>
+  <p id="line3">áçãõéíóúñ ÁÇÃÕÉÍÓÚÑ</p>
+</body>
+</rml>

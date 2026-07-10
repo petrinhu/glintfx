@@ -741,6 +741,79 @@ add_test(NAME ui_layer_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: fonteng_own_embed_sanity (L1.19-FONTENG, FT-F3, review IMPORTANT #1) -- the UiLayer/
+#     embed-mode analogue of fonteng_own_sanity (GLFW-only, glintfx::App path, registered inside
+#     if(GLINTFX_BACKEND_GLFW) far above). GusWorld -- the ONLY real consumer of glintfx --
+#     attaches via UiLayer in an embed-only build (GLINTFX_BACKEND_GLFW=OFF); before this test
+#     NOTHING in the tracked suite exercised the font engine's glyph-rasterisation pipeline
+#     (LoadFontFace -> GetFontFaceHandle -> GenerateString) on that specific path (reviewer's ad
+#     hoc probe confirmed it works, but ad hoc probes are not CI regression protection).
+#     Registered here (OUTSIDE if(GLINTFX_BACKEND_GLFW), AFTER ${_embed_dep} is defined above by
+#     the "Embed-mode tests" section) so it builds and runs in BOTH configs: GLFW=ON (glintfx
+#     already contains window_glfw.cpp) and embed-only GLFW=OFF (the _glintfx_test_ctx helper
+#     provides the GL-context test fixture, same as every other embed test in this file).
+#     Gated behind GLINTFX_OWN_FONT_ENGINE (unlike fonteng_own_sanity, which is deliberately
+#     engine-agnostic and unconditional): this test's whole purpose is proving glintfx's own
+#     SOV-SFNT/SOV-RAST engine specifically THROUGH the UiLayer path -- a FreeType-through-
+#     UiLayer variant is out of this ticket's scope.
+#     Font asset: demos/showcase/assets/ (contains OpenSans-Regular.ttf) is copied to
+#     ${CMAKE_CURRENT_BINARY_DIR} (= build/tests/) HERE, unconditionally with respect to
+#     GLINTFX_BACKEND_GLFW, whenever GLINTFX_OWN_FONT_ENGINE=ON -- review finding: until this
+#     block, ONLY the showcase file(COPY) inside if(GLINTFX_BACKEND_GLFW) (line ~308 above) ever
+#     placed that font in the build tree, so an embed-only build (GLFW=OFF) never had it
+#     available. file(COPY) is idempotent, so when GLFW=ON this simply re-copies the same
+#     already-present files (no conflict with the showcase block above).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- repo-wide embed-test
+#     convention (same as ui_layer_sanity/dp_ratio_sanity/data_model_embed_sanity below/above);
+#     fonteng_embed_scene.rml's @font-face src is "assets/OpenSans-Regular.ttf", relative to
+#     that same directory. Links glloader explicitly: the test calls glReadPixels/glClear/
+#     glBindFramebuffer directly (same rationale as ui_layer_sanity above).
+# PT: fonteng_own_embed_sanity (L1.19-FONTENG, FT-F3, IMPORTANTE #1 do review) -- o análogo em
+#     modo UiLayer/embed do fonteng_own_sanity (só-GLFW, caminho glintfx::App, registrado dentro
+#     de if(GLINTFX_BACKEND_GLFW) bem acima). O GusWorld -- ÚNICO consumidor real do glintfx --
+#     anexa via UiLayer num build embed-only (GLINTFX_BACKEND_GLFW=OFF); antes deste teste NADA
+#     na suíte rastreada exercitava o pipeline de rasterização de glyph do motor de fonte
+#     (LoadFontFace -> GetFontFaceHandle -> GenerateString) nesse caminho específico (a sonda ad
+#     hoc do reviewer confirmou que funciona, mas sondas ad hoc não são proteção de regressão de
+#     CI).
+#     Registrado aqui (FORA de if(GLINTFX_BACKEND_GLFW), DEPOIS de ${_embed_dep} ser definido
+#     acima pela seção "Embed-mode tests") para buildar e rodar nas DUAS configs: GLFW=ON
+#     (glintfx já contém window_glfw.cpp) e embed-only GLFW=OFF (o helper _glintfx_test_ctx
+#     provê o fixture de contexto GL, mesmo padrão de todo outro teste embed deste arquivo).
+#     Bloqueado atrás de GLINTFX_OWN_FONT_ENGINE (diferente de fonteng_own_sanity, que é
+#     deliberadamente agnóstico de motor e incondicional): o propósito inteiro deste teste é
+#     provar especificamente o motor próprio SOV-SFNT/SOV-RAST do glintfx ATRAVÉS do caminho
+#     UiLayer -- uma variante FreeType-via-UiLayer é fora do escopo desta tarefa.
+#     Asset de fonte: demos/showcase/assets/ (contém OpenSans-Regular.ttf) é copiado para
+#     ${CMAKE_CURRENT_BINARY_DIR} (= build/tests/) AQUI, incondicional em relação a
+#     GLINTFX_BACKEND_GLFW, sempre que GLINTFX_OWN_FONT_ENGINE=ON -- achado do review: até este
+#     bloco, SÓ o file(COPY) do showcase dentro de if(GLINTFX_BACKEND_GLFW) (linha ~308 acima)
+#     colocava essa fonte na árvore de build, então um build embed-only (GLFW=OFF) nunca a tinha
+#     disponível. file(COPY) é idempotente, então com GLFW=ON isto apenas recopia os mesmos
+#     arquivos já presentes (sem conflito com o bloco showcase acima).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- convenção repo-wide de
+#     teste embed (mesma de ui_layer_sanity/dp_ratio_sanity/data_model_embed_sanity abaixo/
+#     acima); o src de @font-face do fonteng_embed_scene.rml é "assets/OpenSans-Regular.ttf",
+#     relativo a esse mesmo diretório. Linka glloader explicitamente: o teste chama
+#     glReadPixels/glClear/glBindFramebuffer diretamente (mesmo racional de ui_layer_sanity
+#     acima).
+# ---------------------------------------------------------------------------
+if(GLINTFX_OWN_FONT_ENGINE)
+  file(COPY ${CMAKE_SOURCE_DIR}/demos/showcase/assets
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+  add_executable(fonteng_own_embed_sanity fonteng_own_embed_sanity.cpp)
+  target_link_libraries(fonteng_own_embed_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_embed_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_embed_scene.rml COPYONLY)
+  add_test(NAME fonteng_own_embed_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_own_embed_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: dp_ratio_sanity — verifies UiLayerConfig::dp_ratio (Config path) and
 #     set_dp_ratio() (runtime setter path). Renders a 100dp×100dp white box on
 #     a black background; at dp_ratio=2 the box covers ~4× more pixels than at

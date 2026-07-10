@@ -91,6 +91,60 @@ jobs:
       # PT: act-latest: default oficial do Codeberg, compat actions/setup-* e nektos/act.
       #     node:*-bookworm QUEBRA actions/setup-python (codeberg/community#1718).
       image: ghcr.io/catthehacker/ubuntu:act-latest
+    env:
+      # EN: Workaround for a known libstdc++14 + clang incompatibility that broke the
+      #     GitHub-side sibling job (and every other job below that runs
+      #     `cmake --build`) on 2026-07-10 (GitHub CI run 29112917463): libstdc++'s
+      #     <bits/atomic_wait.h> uses the SYS_futex syscall-number macro without
+      #     including <sys/syscall.h> itself -- gcc's own headers pull that header in
+      #     transitively elsewhere, clang's driver does not. A from-scratch build of
+      #     RmlUi with clang++ (FreeTypeInterface.cpp includes <atomic>) against the
+      #     container's libstdc++14 then fails with "use of undeclared identifier
+      #     'SYS_futex'". `-include sys/syscall.h` forces every translation unit to see
+      #     the declaration first -- purely additive, no behavioural change (does NOT
+      #     disable/replace the futex codepath the way -D_GLIBCXX_HAVE_LINUX_FUTEX=0
+      #     would; it just supplies the missing declaration for a macro libstdc++
+      #     already unconditionally uses).
+      #     This is a CXXFLAGS env var (not -DCMAKE_CXX_FLAGS on the cmake command
+      #     line) so CMake's initial-cache population picks it up on EVERY fresh
+      #     configure -- the RmlUi FetchContent build shares this job's
+      #     CMAKE_CXX_FLAGS cache entry, no separate wiring needed.
+      #     It only ever surfaced as a cache-miss failure: jobs restoring a warm _deps
+      #     cache below never actually recompile RmlUi and so never hit this, masking
+      #     the bug until the next cache expiry/key change -- applied to every job that
+      #     runs `cmake --build` (compiles RmlUi from source), not just the job that
+      #     first exposed it via a brand-new cache key. Mirrored from
+      #     .github/workflows/ci.yml so this remote does not carry the same
+      #     bomba-relógio even though the failure was only observed on GitHub so far
+      #     (act-latest's libstdc++ is the same class of "recent enough to lack the
+      #     upstream fix" version).
+      # PT: Workaround para uma incompatibilidade conhecida libstdc++14 + clang que
+      #     quebrou o job irmão do lado GitHub (e todo outro job abaixo que roda
+      #     `cmake --build`) em 2026-07-10 (run de CI do GitHub 29112917463): o
+      #     <bits/atomic_wait.h> do libstdc++ usa a macro de número de syscall
+      #     SYS_futex sem incluir <sys/syscall.h> ele mesmo -- os próprios headers do
+      #     gcc puxam esse header transitivamente em outro lugar, o driver do clang
+      #     não. Um build do RmlUi do zero com clang++ (FreeTypeInterface.cpp inclui
+      #     <atomic>) contra o libstdc++14 do container então falha com "use of
+      #     undeclared identifier 'SYS_futex'". `-include sys/syscall.h` força toda
+      #     unidade de tradução a ver a declaração primeiro -- puramente aditivo, sem
+      #     mudança de comportamento (NÃO desliga/substitui o caminho de código do
+      #     futex como -D_GLIBCXX_HAVE_LINUX_FUTEX=0 faria; só supre a declaração
+      #     faltante para uma macro que o libstdc++ já usa incondicionalmente).
+      #     É uma env var CXXFLAGS (não -DCMAKE_CXX_FLAGS na linha de comando do
+      #     cmake) para a população de cache inicial do CMake pegar em TODO configure
+      #     novo -- o build FetchContent do RmlUi compartilha esta mesma entrada de
+      #     cache CMAKE_CXX_FLAGS deste job, sem fiação separada necessária.
+      #     Só apareceu como falha de cache-miss: jobs restaurando um cache _deps
+      #     quente abaixo nunca recompilam o RmlUi de fato e por isso nunca batem
+      #     nisso, mascarando o bug até a próxima expiração/mudança de chave de cache
+      #     -- aplicado a todo job que roda `cmake --build` (compila o RmlUi do
+      #     fonte), não só o job que expôs primeiro via uma chave de cache zero-nova.
+      #     Espelhado de .github/workflows/ci.yml para este remoto não carregar a
+      #     mesma bomba-relógio mesmo a falha tendo sido observada só no GitHub até
+      #     agora (o libstdc++ do act-latest é a mesma classe de versão "recente o
+      #     bastante pra faltar o fix upstream").
+      CXXFLAGS: "-include sys/syscall.h"
     strategy:
       # EN: Run both configs even if one fails -- independent build configurations.
       # PT: Rodar ambas mesmo se uma falhar -- configuracoes de build independentes.
@@ -203,6 +257,13 @@ jobs:
     runs-on: codeberg-medium
     container:
       image: ghcr.io/catthehacker/ubuntu:act-latest
+    env:
+      # EN: SYS_futex / libstdc++14+clang RmlUi-from-scratch workaround -- see
+      #     build-and-test job's own `env:` comment above for the full rationale.
+      # PT: Workaround SYS_futex / libstdc++14+clang para o RmlUi buildado do zero --
+      #     ver o comentário `env:` do próprio job build-and-test acima para a
+      #     racional completa.
+      CXXFLAGS: "-include sys/syscall.h"
     strategy:
       fail-fast: false
       matrix:
@@ -432,6 +493,19 @@ jobs:
     runs-on: codeberg-medium
     container:
       image: ghcr.io/catthehacker/ubuntu:act-latest
+    env:
+      # EN: SYS_futex / libstdc++14+clang RmlUi-from-scratch workaround -- see
+      #     build-and-test job's own `env:` comment above for the full rationale.
+      #     tools/coverage_report.sh's `cmake -S ... -B ...` call does not pass
+      #     -DCMAKE_CXX_FLAGS itself, so CMake's initial-cache population picks this
+      #     env var up on every fresh configure -- no change to the script needed.
+      # PT: Workaround SYS_futex / libstdc++14+clang para o RmlUi buildado do zero --
+      #     ver o comentário `env:` do próprio job build-and-test acima para a
+      #     racional completa. A chamada `cmake -S ... -B ...` de
+      #     tools/coverage_report.sh não passa -DCMAKE_CXX_FLAGS por si só, então a
+      #     população de cache inicial do CMake pega esta env var em todo configure
+      #     novo -- nenhuma mudança no script necessária.
+      CXXFLAGS: "-include sys/syscall.h"
     steps:
       - name: checkout
         uses: actions/checkout@v4

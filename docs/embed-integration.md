@@ -699,9 +699,44 @@ Verificado por `form_events_sanity` (dirige o `Engine` diretamente mais `Rml::Co
 
 ## 18. Running the host under sanitizers (ASan/UBSan/LSan) / Rodando o host sob sanitizers (ASan/UBSan/LSan)
 
-**EN:** Hosts that build (or embed) glintfx with `-fsanitize=address,undefined` will observe a small, known cluster of UndefinedBehaviorSanitizer diagnostics coming from **RmlUi's own document/element teardown** -- not glintfx-authored code -- surfacing on document close/reload, including through `UiLayer`'s embed path. They are **strict UB but benign**: a "call/member-access through a pointer to an object whose derived part has already finished destructing" pattern inside `~ElementDocument()`'s recursive child teardown, and an analogous one inside `~WidgetScroll()` when a live scrollbar is torn down. In practice both only touch base-`Element` state that is still alive at that point and have never been observed to corrupt memory -- but UBSan correctly flags the pattern regardless. **They are not glintfx code:** glintfx never subclasses `Rml::Element`, `Rml::ElementDocument`, or `Rml::WidgetScroll` (grep-verified), so no glintfx bug can be masked by suppressing them.
+**EN:** glintfx ships a small, tracked source patch for RmlUi
+(`glintfx/patches/rmlui-2cd28864-teardown-ub.patch`, applied automatically via CMake
+`PATCH_COMMAND` when RmlUi is fetched through `FetchContent` -- see the `FetchContent_Declare(RmlUi ...)`
+block in `glintfx/CMakeLists.txt` and the full writeup in `glintfx/patches/README.md`) that fixes,
+**at the root**, two genuine undefined-behavior findings in **RmlUi's own document/element teardown
+order** -- not glintfx-authored code (glintfx never subclasses `Rml::Element`, `Rml::ElementDocument`,
+or `Rml::WidgetScroll`, grep-verified). Both used to surface under `-fsanitize=address,undefined` on
+every document close/reload, including through `UiLayer`'s embed path:
 
-**Recommended UBSan suppressions** (already shipped and exercised by glintfx's own nightly sanitizer gate, `glintfx/tests/ubsan_suppressions.txt`):
+1. **`vptr:ElementDocument`** -- a "call through a pointer whose derived part has already finished
+   destructing" pattern inside `~ElementDocument()`'s recursive child teardown.
+2. **`vptr:*WidgetScroll.cpp*` / `vptr:*RemoveEventListener*`** -- the same root-cause pattern inside
+   `~WidgetScroll()` when a live scrollbar is torn down.
+
+**As of this patch, hosts that build glintfx from source (`FetchContent`/`add_subdirectory`, the
+recommended integration path) no longer need to suppress these three `vptr:*` patterns.** The 3
+suppression entries that used to live in `glintfx/tests/ubsan_suppressions.txt` have been **removed**
+for exactly this reason: with the patch applied, if the fix ever regressed (e.g. a future RmlUi
+`GIT_TAG` bump the patch no longer applies cleanly to), the sanitizer gate now fails loudly instead of
+staying silently green behind a stale suppression. glintfx's own nightly sanitizer gate exercises the
+patched, suppression-free build directly.
+
+### When the old suppressions still apply / Quando as supressões antigas ainda se aplicam
+
+**EN:** Two situations put a host back in the pre-patch state, where the UBs can still surface:
+
+1. **The host supplies its own copy/pin of RmlUi** -- a `find_package(RmlUi)` install, a distro
+   package, or a `FetchContent` pin the host declares and fetches itself -- instead of consuming
+   glintfx's own patched copy. The patch never touches an RmlUi tree glintfx did not fetch.
+2. **The host links a glintfx version older than this patch** (any release before it landed).
+   Upgrading glintfx is the direct fix.
+
+In either case, the following 3 lines are kept here as a **historical/fallback reference** -- copy
+them into the host's own UBSan suppression file, the same pattern GusWorld already uses for its
+`libasound` LSan noise, **or** apply the patch itself to the host's own RmlUi copy (see
+`glintfx/patches/README.md` for the exact `.patch` file, the pinned commit it targets (`2cd28864`),
+and the full technical writeup: exact source lines, call chains, and the empirical validation --
+full suite green under UBSan with the suppressions removed):
 
 ```
 vptr:ElementDocument
@@ -709,22 +744,76 @@ vptr:*WidgetScroll.cpp*
 vptr:*RemoveEventListener*
 ```
 
-- `vptr:ElementDocument` -- `Element::SetOwnerDocument` dereferences a child's `owner_document` pointer while `~ElementDocument()` is itself mid-teardown of its own children. Fires exactly once per document close/reload.
-- `vptr:*WidgetScroll.cpp*` and `vptr:*RemoveEventListener*` -- **both required together, neither alone is sufficient.** Same root cause inside `~WidgetScroll()` (only reachable once a live scrollbar actually exists, e.g. an `overflow-y: auto` container whose content overflows its box), but whether the compiler inlined the specific `RemoveEventListener` call at that site is a non-deterministic, per-build/per-run diagnostic-shape switch (file-scoped match needed when inlined, function-scoped match needed when not) -- dropping either entry leaves intermittent residual failures.
+- `vptr:ElementDocument` -- `Element::SetOwnerDocument` dereferences a child's `owner_document`
+  pointer while `~ElementDocument()` is itself mid-teardown of its own children. Fires exactly once
+  per document close/reload.
+- `vptr:*WidgetScroll.cpp*` and `vptr:*RemoveEventListener*` -- **both required together, neither
+  alone is sufficient.** Only reachable once a live scrollbar actually exists (e.g. an
+  `overflow-y: auto` container whose content overflows its box); whether the compiler inlined the
+  specific `RemoveEventListener` call at that site is a non-deterministic, per-build/per-run
+  diagnostic-shape switch (file-scoped match needed when inlined, function-scoped match needed when
+  not) -- dropping either entry leaves intermittent residual failures.
 
-Full rationale (exact pinned source lines, call chains, and the empirical evidence behind each match pattern) lives in `glintfx/tests/ubsan_suppressions.txt` -- read it before copying blindly; this section only summarizes.
+Set `UBSAN_OPTIONS=suppressions=<path>` before running the host binary, pointing at the host's own
+suppression file (self-contained config), or directly at `<path-to-glintfx>/glintfx/tests/ubsan_suppressions.txt`
+if building glintfx in-tree pre-patch.
 
-**How to consume:** set `UBSAN_OPTIONS=suppressions=<path>` before running the host binary. Two options, either is fine:
-1. Copy the three `vptr:...` lines into the host's own suppression file -- the same pattern GusWorld already uses for its `libasound` LSan noise -- keeping the host's sanitizer config self-contained.
-2. Point `UBSAN_OPTIONS` directly at glintfx's own file when building glintfx in-tree (`FetchContent`/`add_subdirectory`), e.g. `UBSAN_OPTIONS=suppressions=<path-to-glintfx>/glintfx/tests/ubsan_suppressions.txt`.
+**Upstream status:** this patch has not yet been submitted to RmlUi (mikke89/RmlUi) as of this
+writing; doing so, and retiring the patch from this repo once an equivalent fix lands upstream and
+the pinned `GIT_TAG` is bumped past it, is the intended next step (tracked in
+`glintfx/patches/README.md`).
 
-**Leak noise (LSan) is a separate, analogous concern.** The same third-party teardown path -- RmlUi, plus FreeType/fontconfig/GTK when the GLFW backend creates a decorated window -- can leave residual leak reports at process exit that are not glintfx's to fix. `glintfx/tests/lsan_suppressions.txt` documents the tracked entries (every one scoped to a prebuilt system/vendor library, never to a `glintfx::` symbol or a file under `glintfx/src|include`). Apply the same discipline host-side via `LSAN_OPTIONS=suppressions=<path>`: never blanket-suppress a whole leak category, and never suppress by anything that could also match glintfx's own code.
+**Leak noise (LSan) is a separate, unrelated concern, not covered by this patch.** The same
+third-party teardown path -- RmlUi, plus FreeType/fontconfig/GTK when the GLFW backend creates a
+decorated window -- can leave residual leak reports at process exit that are not glintfx's to fix.
+`glintfx/tests/lsan_suppressions.txt` documents the tracked entries (every one scoped to a prebuilt
+system/vendor library, never to a `glintfx::` symbol or a file under `glintfx/src|include`). Apply the
+same discipline host-side via `LSAN_OPTIONS=suppressions=<path>`: never blanket-suppress a whole leak
+category, and never suppress by anything that could also match glintfx's own code.
 
-**Reverification:** every suppression above is tied to the pinned RmlUi commit (`RMLUI` `GIT_TAG` in `glintfx/CMakeLists.txt`, currently `2cd28864`). Re-verify (and consider reporting upstream, or retiring entries) whenever that pin is bumped -- an upstream teardown-order fix could make some of these obsolete, and a materially different RmlUi version could introduce new ones.
+**Reverification:** the fallback UBSan suppressions above and every LSan entry are tied to the pinned
+RmlUi commit (`RMLUI` `GIT_TAG` in `glintfx/CMakeLists.txt`, currently `2cd28864`). Re-verify whenever
+that pin is bumped -- an upstream teardown-order fix (see "Upstream status" above) could retire the
+patch itself, and a materially different RmlUi version could introduce new, unrelated findings.
 
-**PT:** Hosts que buildam (ou embarcam) o glintfx com `-fsanitize=address,undefined` vão observar um pequeno cluster conhecido de diagnósticos do UndefinedBehaviorSanitizer vindos do **próprio teardown de documento/elemento do RmlUi** -- não código autoral da glintfx -- aflorando no fechar/recarregar de documento, inclusive pelo caminho embed do `UiLayer`. São **UB estrito porém benignos**: um padrão de "chamada/acesso a membro através de ponteiro para um objeto cuja parte derivada já terminou de se destruir" dentro da cascata recursiva de teardown de filhos do `~ElementDocument()`, e um análogo dentro de `~WidgetScroll()` quando uma scrollbar viva é desmontada. Na prática ambos só tocam estado da base `Element` ainda viva naquele ponto e nunca foram observados corromper memória -- mas o UBSan sinaliza o padrão corretamente de qualquer forma. **Não é código glintfx:** a glintfx nunca subclassa `Rml::Element`, `Rml::ElementDocument`, nem `Rml::WidgetScroll` (verificado por grep), então nenhum bug glintfx pode ser mascarado ao suprimi-los.
+**PT:** o glintfx embarca um pequeno patch de fonte rastreado para o RmlUi
+(`glintfx/patches/rmlui-2cd28864-teardown-ub.patch`, aplicado automaticamente via `PATCH_COMMAND` do
+CMake quando o RmlUi é fetchado via `FetchContent` -- ver o bloco `FetchContent_Declare(RmlUi ...)` em
+`glintfx/CMakeLists.txt` e o relato completo em `glintfx/patches/README.md`) que corrige, **na raiz**,
+dois achados genuínos de undefined behavior na **própria ordem de teardown de documento/elemento do
+RmlUi** -- não código autoral da glintfx (a glintfx nunca subclassa `Rml::Element`,
+`Rml::ElementDocument`, nem `Rml::WidgetScroll`, verificado por grep). Ambos aflaravam sob
+`-fsanitize=address,undefined` em todo fechar/recarregar de documento, inclusive pelo caminho embed do
+`UiLayer`:
 
-**Supressões UBSan recomendadas** (já embarcadas e exercitadas pelo próprio gate noturno de sanitizer da glintfx, `glintfx/tests/ubsan_suppressions.txt`):
+1. **`vptr:ElementDocument`** -- um padrão de "chamada através de ponteiro cuja parte derivada já
+   terminou de se destruir" dentro da cascata recursiva de teardown de filhos do `~ElementDocument()`.
+2. **`vptr:*WidgetScroll.cpp*` / `vptr:*RemoveEventListener*`** -- o mesmo padrão de causa raiz dentro
+   de `~WidgetScroll()` quando uma scrollbar viva é desmontada.
+
+**A partir deste patch, hosts que buildam o glintfx do fonte (`FetchContent`/`add_subdirectory`, o
+caminho de integração recomendado) não precisam mais suprimir estes três padrões `vptr:*`.** As 3
+entradas de supressão que antes viviam em `glintfx/tests/ubsan_suppressions.txt` foram **removidas**
+exatamente por isso: com o patch aplicado, se a correção algum dia regredir (ex.: um futuro bump de
+`GIT_TAG` do RmlUi ao qual o patch deixe de aplicar de forma limpa), o gate de sanitizer agora falha
+ruidosamente em vez de continuar verde silenciosamente atrás de uma supressão obsoleta. O próprio gate
+noturno de sanitizer da glintfx exercita diretamente o build patcheado e sem supressões.
+
+**PT:** duas situações colocam um host de volta no estado pré-patch, onde os UBs ainda podem aflorar:
+
+1. **O host fornece a própria cópia/pin do RmlUi** -- uma instalação via `find_package(RmlUi)`, um
+   pacote da distro, ou um pin de `FetchContent` que o próprio host declara e fetcha -- em vez de
+   consumir a cópia já patcheada da glintfx. O patch nunca toca numa árvore do RmlUi que a glintfx não
+   fetchou.
+2. **O host linka uma versão da glintfx anterior a este patch** (qualquer release antes dele existir).
+   Atualizar a glintfx é a correção direta.
+
+Em qualquer um dos dois casos, as 3 linhas abaixo ficam aqui como **referência histórica/fallback** --
+copie-as para o próprio arquivo de supressão UBSan do host, o mesmo padrão que o GusWorld já usa pro
+ruído de LSan do `libasound`, **ou** aplique o próprio patch na cópia do RmlUi do host (ver
+`glintfx/patches/README.md` pro arquivo `.patch` exato, o commit pinado alvo (`2cd28864`), e o relato
+técnico completo: linhas exatas do source, cadeias de chamada, e a validação empírica -- suíte
+completa verde sob UBSan com as supressões removidas):
 
 ```
 vptr:ElementDocument
@@ -732,18 +821,39 @@ vptr:*WidgetScroll.cpp*
 vptr:*RemoveEventListener*
 ```
 
-- `vptr:ElementDocument` -- `Element::SetOwnerDocument` desreferencia o ponteiro `owner_document` de um filho enquanto o próprio `~ElementDocument()` está no meio do teardown dos próprios filhos. Dispara exatamente uma vez por fechar/recarregar de documento.
-- `vptr:*WidgetScroll.cpp*` e `vptr:*RemoveEventListener*` -- **as duas necessárias juntas, nenhuma sozinha basta.** Mesma causa raiz dentro de `~WidgetScroll()` (só alcançável quando uma scrollbar viva de fato existe, ex.: um container `overflow-y: auto` cujo conteúdo transborda a caixa), mas se o compilador inlinou a chamada específica a `RemoveEventListener` naquele ponto é uma troca de forma de diagnóstico não-determinística, por-build/por-execução (match por arquivo necessário quando inlinado, match por função necessário quando não) -- omitir qualquer entrada deixa falhas residuais intermitentes.
+- `vptr:ElementDocument` -- `Element::SetOwnerDocument` desreferencia o ponteiro `owner_document` de
+  um filho enquanto o próprio `~ElementDocument()` está no meio do teardown dos próprios filhos.
+  Dispara exatamente uma vez por fechar/recarregar de documento.
+- `vptr:*WidgetScroll.cpp*` e `vptr:*RemoveEventListener*` -- **as duas necessárias juntas, nenhuma
+  sozinha basta.** Só alcançável quando uma scrollbar viva de fato existe (ex.: um container
+  `overflow-y: auto` cujo conteúdo transborda a caixa); se o compilador inlinou a chamada específica a
+  `RemoveEventListener` naquele ponto é uma troca de forma de diagnóstico não-determinística,
+  por-build/por-execução (match por arquivo necessário quando inlinado, match por função necessário
+  quando não) -- omitir qualquer entrada deixa falhas residuais intermitentes.
 
-O relato completo (linhas exatas do source pinado, cadeias de chamada, e a evidência empírica por trás de cada padrão de match) está em `glintfx/tests/ubsan_suppressions.txt` -- leia antes de copiar às cegas; esta seção só resume.
+Defina `UBSAN_OPTIONS=suppressions=<caminho>` antes de rodar o binário do host, apontando pro próprio
+arquivo de supressão do host (config autocontida), ou diretamente pra
+`<caminho-pra-glintfx>/glintfx/tests/ubsan_suppressions.txt` se buildar a glintfx in-tree pré-patch.
 
-**Como consumir:** defina `UBSAN_OPTIONS=suppressions=<caminho>` antes de rodar o binário do host. Duas opções, ambas válidas:
-1. Copiar as três linhas `vptr:...` para o próprio arquivo de suppression do host -- o mesmo padrão que o GusWorld já usa pro ruído de LSan do `libasound` -- mantendo a config de sanitizer do host autocontida.
-2. Apontar `UBSAN_OPTIONS` diretamente pro arquivo da glintfx ao buildá-la in-tree (`FetchContent`/`add_subdirectory`), ex.: `UBSAN_OPTIONS=suppressions=<caminho-pra-glintfx>/glintfx/tests/ubsan_suppressions.txt`.
+**Status upstream:** este patch ainda não foi submetido ao RmlUi (mikke89/RmlUi) no momento desta
+escrita; fazer isso, e aposentar o patch deste repositório assim que uma correção equivalente chegar
+no upstream e o `GIT_TAG` pinado avançar para além dela, é o próximo passo pretendido (rastreado em
+`glintfx/patches/README.md`).
 
-**Ruído de leak (LSan) é uma preocupação separada, análoga.** O mesmo caminho de teardown de terceiro -- RmlUi, mais FreeType/fontconfig/GTK quando o backend GLFW cria uma janela decorada -- pode deixar relatórios de leak residuais na saída do processo que não são da glintfx corrigir. `glintfx/tests/lsan_suppressions.txt` documenta as entradas rastreadas (todas com escopo em biblioteca de sistema/fornecedor pré-compilada, nunca num símbolo `glintfx::` ou arquivo sob `glintfx/src|include`). Aplique a mesma disciplina do lado do host via `LSAN_OPTIONS=suppressions=<caminho>`: nunca suprima uma categoria inteira de leak de uma vez, e nunca suprima por algo que também possa casar com o próprio código da glintfx.
+**Ruído de leak (LSan) é uma preocupação separada e não relacionada, não coberta por este patch.** O
+mesmo caminho de teardown de terceiro -- RmlUi, mais FreeType/fontconfig/GTK quando o backend GLFW
+cria uma janela decorada -- pode deixar relatórios de leak residuais na saída do processo que não são
+da glintfx corrigir. `glintfx/tests/lsan_suppressions.txt` documenta as entradas rastreadas (todas com
+escopo em biblioteca de sistema/fornecedor pré-compilada, nunca num símbolo `glintfx::` ou arquivo sob
+`glintfx/src|include`). Aplique a mesma disciplina do lado do host via
+`LSAN_OPTIONS=suppressions=<caminho>`: nunca suprima uma categoria inteira de leak de uma vez, e nunca
+suprima por algo que também possa casar com o próprio código da glintfx.
 
-**Reverificação:** toda supressão acima está atada ao commit pinado do RmlUi (`RMLUI` `GIT_TAG` em `glintfx/CMakeLists.txt`, atualmente `2cd28864`). Reverificar (e considerar reportar upstream, ou aposentar entradas) sempre que aquele pin for atualizado -- uma correção upstream na ordem de teardown pode tornar algumas destas obsoletas, e uma versão do RmlUi materialmente diferente pode introduzir novas.
+**Reverificação:** as supressões UBSan de fallback acima e cada entrada de LSan estão atadas ao commit
+pinado do RmlUi (`RMLUI` `GIT_TAG` em `glintfx/CMakeLists.txt`, atualmente `2cd28864`). Reverificar
+sempre que aquele pin for atualizado -- uma correção upstream na ordem de teardown (ver "Status
+upstream" acima) pode aposentar o próprio patch, e uma versão do RmlUi materialmente diferente pode
+introduzir achados novos e não relacionados.
 
 ## See also / Veja também
 

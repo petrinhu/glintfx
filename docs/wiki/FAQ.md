@@ -23,6 +23,9 @@ MPL-2.0 (Mozilla Public License 2.0) for the whole repository. See [`LICENSE`](h
 **I found a mistake in the docs or the wiki. What do I do?**
 Open an issue on [Codeberg](https://codeberg.org/petrinhu/glintfx/issues) or [GitHub](https://github.com/petrinhu/glintfx/issues) describing what you read and what actually happened.
 
+**I see UBSan warnings from RmlUi (`vptr:ElementDocument`, `WidgetScroll`) when I run my host under sanitizers. Is that a glintfx bug?**
+No -- and if you build glintfx from source (`FetchContent`/`add_subdirectory`), you should not see them at all anymore: glintfx ships a small, tracked patch (`glintfx/patches/`) that fixes two genuine RmlUi teardown-order bugs at the root, reported upstream as a contribution back to RmlUi. If you still see them, you are likely linking your own separate copy of RmlUi, or an older glintfx release; see [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) section 18 for the full explanation and the fallback suppressions.
+
 ---
 
 ## Português
@@ -47,3 +50,6 @@ MPL-2.0 (Mozilla Public License 2.0) pro repositório inteiro. Ver [`LICENSE`](h
 
 **Achei um erro na documentação ou na wiki. O que eu faço?**
 Abra uma issue no [Codeberg](https://codeberg.org/petrinhu/glintfx/issues) ou [GitHub](https://github.com/petrinhu/glintfx/issues) descrevendo o que você leu e o que de fato aconteceu.
+
+**Vejo avisos de UBSan vindos do RmlUi (`vptr:ElementDocument`, `WidgetScroll`) quando rodo meu host sob sanitizers. Isso é um bug do glintfx?**
+Não -- e se você builda o glintfx do fonte (`FetchContent`/`add_subdirectory`), você não deveria mais ver isso: o glintfx embarca um pequeno patch rastreado (`glintfx/patches/`) que corrige dois bugs genuínos de ordem-de-teardown do RmlUi na raiz, reportado ao upstream como contribuição de volta ao RmlUi. Se ainda assim você vê os avisos, provavelmente está linkando sua própria cópia separada do RmlUi, ou uma release mais antiga do glintfx; ver [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) seção 18 pra explicação completa e as supressões de fallback.

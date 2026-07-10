@@ -85,6 +85,8 @@ RmlUi 6.3 is fetched at configure time; glintfx's own GL loader (generated from 
 | CMake | **>= 3.16** | Enforced by `cmake_minimum_required` in `glintfx/CMakeLists.txt`. |
 | OS / Architecture | **Linux x86-64 only** | No Windows/macOS/ARM support; see [Known limitations](#known-limitations). |
 
+> glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License) -- our thanks to mikke89 and the RmlUi contributors. When we find and fix a genuine bug in RmlUi itself, we track it as an explicit source patch applied automatically at `FetchContent` time (`glintfx/patches/`, see `glintfx/patches/README.md`), and aim to report it back upstream; see [`docs/embed-integration.md`](docs/embed-integration.md) section 18 and [`NOTICE`](NOTICE) for the current example (a document/element teardown UB fix).
+
 ### Quick start
 
 **1. Consume `glintfx` via CMake FetchContent.** In your `CMakeLists.txt`:
@@ -341,6 +343,8 @@ RmlUi 6.3 é baixado em tempo de configure; o loader GL próprio do glintfx (ger
 | Compilador | **clang** (piso C++17, alvo C++23) | O `glintfx/CMakeLists.txt` não pina nem exige uma versão mínima de clang (sem checagem de `CMAKE_CXX_COMPILER`). **GCC não é declarado/documentado oficialmente como suportado** -- porém, o próprio CI deste repositório (`.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`) instala e builda a biblioteca com `g++` em todo push/PR, então builds com GCC são exercitados na prática mesmo sem ser um contrato documentado. Se você depender de GCC, trate como não-verificado a montante desta tabela e reporte problemas de build. |
 | CMake | **>= 3.16** | Exigido por `cmake_minimum_required` em `glintfx/CMakeLists.txt`. |
 | SO / Arquitetura | **Somente Linux x86-64** | Sem suporte a Windows/macOS/ARM; ver [Limitações conhecidas](#limitações-conhecidas). |
+
+> O glintfx é construído sobre o [RmlUi](https://github.com/mikke89/RmlUi) (licença MIT) -- nosso agradecimento ao mikke89 e aos contribuidores do RmlUi. Quando encontramos e corrigimos um bug genuíno no próprio RmlUi, rastreamos como um patch de fonte explícito aplicado automaticamente em tempo de `FetchContent` (`glintfx/patches/`, ver `glintfx/patches/README.md`), e buscamos reportá-lo de volta ao upstream; ver [`docs/embed-integration.md`](docs/embed-integration.md) seção 18 e [`NOTICE`](NOTICE) pro exemplo atual (uma correção de UB de teardown de documento/elemento).
 
 ### Quick start
 

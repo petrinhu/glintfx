@@ -26,6 +26,10 @@ Two ways to consume it:
 
 glintfx currently depends on three real, mature third-party libraries: RmlUi, GLFW, and FreeType. The project's long-term (multi-year, no-deadline) ambition is to replace pieces of that dependency stack with clean-room reimplementations built on [Layer 0](Layer-0-Core). One piece has already made that journey: glintfx's own OpenGL function-pointer loader, previously the third-party `gl3w`, is now generated in-house from the public Khronos `gl.xml` registry. See ADR-0009 for the exact boundary of what will and will not be internalized.
 
+### Credit / crediting RmlUi
+
+glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License), the HTML/CSS-style UI engine glintfx wraps and drives from `.rcss` -- our thanks to mikke89 and the RmlUi contributors for a mature, well-documented project to build on. When we find and fix a genuine bug in RmlUi itself, we track the fix as an explicit, reviewed source patch applied automatically at `FetchContent` time (`glintfx/patches/`, see `glintfx/patches/README.md`), and aim to report/submit it back upstream. Current example: `rmlui-2cd28864-teardown-ub.patch` fixes two undefined-behavior findings in RmlUi's own document/element teardown order (see [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) section 18 and the [`NOTICE`](https://codeberg.org/petrinhu/glintfx/src/branch/main/NOTICE) file). Every such patch is meant to be temporary: retired once the equivalent fix lands upstream.
+
 ---
 
 ## Português
@@ -53,3 +57,7 @@ Dois jeitos de consumir:
 ### O ângulo de longo prazo
 
 O glintfx hoje depende de três bibliotecas reais e maduras de terceiros: RmlUi, GLFW e FreeType. A ambição de longo prazo do projeto (anos, sem prazo) é substituir pedaços dessa pilha de dependências por reimplementações clean-room construídas sobre a [Camada 0](Layer-0-Core). Uma peça já fez essa jornada: o loader próprio de ponteiros de função OpenGL do glintfx, antes o `gl3w` de terceiro, agora é gerado internamente a partir do registro público Khronos `gl.xml`. Ver ADR-0009 pra fronteira exata do que será e não será internalizado.
+
+### Crédito ao RmlUi
+
+O glintfx é construído sobre o [RmlUi](https://github.com/mikke89/RmlUi) (licença MIT), o motor de UI estilo HTML/CSS que o glintfx embrulha e comanda a partir de `.rcss` -- nosso agradecimento ao mikke89 e aos contribuidores do RmlUi por um projeto maduro e bem documentado sobre o qual construir. Quando encontramos e corrigimos um bug genuíno no próprio RmlUi, rastreamos a correção como um patch de fonte explícito e revisado, aplicado automaticamente em tempo de `FetchContent` (`glintfx/patches/`, ver `glintfx/patches/README.md`), e buscamos reportá-lo/submetê-lo de volta ao upstream. Exemplo atual: o `rmlui-2cd28864-teardown-ub.patch` corrige dois achados de undefined behavior na própria ordem de teardown de documento/elemento do RmlUi (ver [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) seção 18 e o arquivo [`NOTICE`](https://codeberg.org/petrinhu/glintfx/src/branch/main/NOTICE)). Todo patch assim é pensado para ser temporário: aposentado assim que a correção equivalente chegar no upstream.

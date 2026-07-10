@@ -73,3 +73,35 @@ Bundled assets
 Full license texts of these dependencies are available in their respective
 upstream repositories. Any future in-project reimplementation of their
 functionality is done clean-room (from understanding, without copying source).
+
+────────────────────────────────────────────────────────────────────────
+Acknowledgment / Agradecimento
+────────────────────────────────────────────────────────────────────────
+
+EN: glintfx is built on top of RmlUi (https://github.com/mikke89/RmlUi,
+MIT License) -- the HTML/CSS-style UI engine and layout core this library
+wraps and drives from `.rcss`. Our thanks to mikke89 and the RmlUi
+contributors for a mature, well-documented project to build on. Where we
+find and fix a genuine bug in RmlUi itself, we track the fix as an
+explicit, reviewed source patch (see `glintfx/patches/README.md`) and aim
+to report/submit it back upstream -- e.g. `rmlui-2cd28864-teardown-ub.patch`,
+which fixes two undefined-behavior findings in RmlUi's own document/element
+teardown order (see `docs/embed-integration.md` section 18 for the
+consumer-facing writeup, and `glintfx/patches/README.md` for the technical
+detail). Any such patch is meant to be temporary: retired from this
+repository once the equivalent fix lands upstream.
+
+PT: o glintfx é construído sobre o RmlUi (https://github.com/mikke89/RmlUi,
+licença MIT) -- o motor de UI estilo HTML/CSS e o núcleo de layout que esta
+biblioteca embrulha e comanda a partir de `.rcss`. Nosso agradecimento ao
+mikke89 e aos contribuidores do RmlUi por um projeto maduro e bem
+documentado sobre o qual construir. Quando encontramos e corrigimos um bug
+genuíno no próprio RmlUi, rastreamos a correção como um patch de fonte
+explícito e revisado (ver `glintfx/patches/README.md`) e buscamos
+reportá-lo/submetê-lo de volta ao upstream -- ex.: o
+`rmlui-2cd28864-teardown-ub.patch`, que corrige dois achados de undefined
+behavior na própria ordem de teardown de documento/elemento do RmlUi (ver
+`docs/embed-integration.md` seção 18 para o relato voltado ao consumidor, e
+`glintfx/patches/README.md` para o detalhe técnico). Todo patch assim é
+pensado para ser temporário: aposentado deste repositório assim que a
+correção equivalente chegar no upstream.

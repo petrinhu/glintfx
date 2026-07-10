@@ -13,6 +13,7 @@
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
 [![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
 [![CI (Codeberg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://codeberg.org/petrinhu/glintfx/raw/branch/main/glintfx/coverage-badge.json)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
 
 <sub>**EN:** the `C`/`Assembly` badges describe this **repository** as a whole -- it also hosts `loucura_c_asm` ("Layer 0"), a separate, unreleased, zero-libc C+ASM runtime that does **not** link into glintfx (glintfx itself is pure C++; see [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md)). The `API: pre-1.0` badge reflects [Semantic Versioning](https://semver.org/)'s pre-1.0.0 clause: the public API may still change between minor versions.</sub>
 <sub>**PT:** os badges `C`/`Assembly` descrevem este **repositório** como um todo -- ele também hospeda o `loucura_c_asm` ("Camada 0"), um runtime C+ASM zero-libc separado e ainda não lançado, que **não** linka no glintfx (o glintfx em si é C++ puro; ver [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md)). O badge `API: pre-1.0` reflete a cláusula pré-1.0.0 do [Versionamento Semântico](https://semver.org/): a API pública ainda pode mudar entre versões minor.</sub>
@@ -172,6 +173,10 @@ cmake --build glintfx/build
 # run the showcase (all five effects)
 ./glintfx/build/demos/showcase/glintfx_showcase
 ```
+
+### Testing & coverage
+
+Run the full test suite with `ctest --test-dir glintfx/build`. For a local self-hosted code-coverage report (Clang/llvm-cov, no third-party uploader), run `tools/coverage_report.sh` from the repo root -- it builds an instrumented config, runs the suite, and writes an HTML report to `glintfx/build-cov/coverage-html/index.html`. See [`TESTES.md`](TESTES.md#tst-l1-cov) for the CI gate and floor policy.
 
 ### Effects (RCSS syntax)
 
@@ -422,6 +427,10 @@ cmake --build glintfx/build
 # rodar o showcase (os cinco efeitos)
 ./glintfx/build/demos/showcase/glintfx_showcase
 ```
+
+### Testes & cobertura
+
+Rode a suíte completa com `ctest --test-dir glintfx/build`. Para um relatório local de cobertura de código self-hosted (Clang/llvm-cov, sem uploader de terceiro), rode `tools/coverage_report.sh` a partir da raiz do repo -- ele builda uma config instrumentada, roda a suíte, e escreve um relatório HTML em `glintfx/build-cov/coverage-html/index.html`. Ver [`TESTES.md`](TESTES.md#tst-l1-cov) para o gate de CI e a política de piso.
 
 ### Efeitos (sintaxe RCSS)
 

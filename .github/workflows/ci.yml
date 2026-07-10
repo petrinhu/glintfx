@@ -303,3 +303,84 @@ jobs:
       #     ver a ressalva de cobertura no comentario de cabecalho do job).
       - name: TST-L1-DEPS -- grype
         run: grype dir:. --fail-on high
+
+  # EN: coverage -- L1.18-COVCI / TST-L1-COV. Self-hosted code coverage (líder's
+  #     2026-07-04 decision: llvm-cov, NOT Codecov or any third-party uploader -- zero
+  #     data leaves this runner). This job is a THIN WRAPPER around
+  #     tools/coverage_report.sh (the local-first "gêmeo local" the CI calls, per
+  #     CLAUDE.md global preference) -- the script does configure+build (GLINTFX_COVERAGE=ON,
+  #     Clang-only, GLINTFX_BUILD_DEMOS=OFF -- see glintfx/CMakeLists.txt), runs the
+  #     GLFW=ON suite under Xvfb with LLVM_PROFILE_FILE set, merges .profraw ->
+  #     .profdata, and generates both the HTML report and the machine-readable summary.
+  #     --floor 75: gate, not report-only. 75 = (83.8% measured locally 2026-07-10,
+  #     rounded DOWN to the nearest multiple of 5 = 80) - 5pp headroom, so ordinary
+  #     coverage fluctuation from new code landing between floor recalibrations does not
+  #     flip this gate red on its own (see TESTES.md TST-L1-COV for the recalibration
+  #     policy). This job intentionally does NOT pass --update-badge: the committed
+  #     glintfx/coverage-badge.json is a LOCAL/human artifact (`tools/coverage_report.sh
+  #     --update-badge`, committed by a person) -- CI only validates the % against the
+  #     floor and uploads the HTML report; it never writes/commits/pushes the badge JSON
+  #     back to the repo (TODO.md L1.18-COVCI, "CI NÃO commita/pusha o JSON do badge").
+  #     Independent of build-and-test/lint-and-scan (own build-cov dir, own cache key);
+  #     runs in parallel.
+  # PT: coverage -- L1.18-COVCI / TST-L1-COV. Cobertura de código self-hosted (decisão
+  #     do líder de 2026-07-04: llvm-cov, NÃO Codecov nem nenhum uploader de terceiro --
+  #     zero dado sai deste runner). Este job é um WRAPPER FINO em torno de
+  #     tools/coverage_report.sh (o "gêmeo local" local-first que o CI chama, conforme
+  #     preferência do CLAUDE.md global) -- o script faz configure+build
+  #     (GLINTFX_COVERAGE=ON, só Clang, GLINTFX_BUILD_DEMOS=OFF -- ver
+  #     glintfx/CMakeLists.txt), roda a suíte GLFW=ON sob Xvfb com LLVM_PROFILE_FILE
+  #     definido, mescla .profraw -> .profdata, e gera tanto o relatório HTML quanto o
+  #     resumo legível por máquina. --floor 75: gate, não só-relatório. 75 = (83.8%
+  #     medido localmente em 2026-07-10, arredondado PRA BAIXO ao múltiplo de 5 mais
+  #     próximo = 80) - 5pp de folga, para que a flutuação normal de cobertura de código
+  #     novo pousando entre recalibrações do piso não vire este gate vermelho sozinha
+  #     (ver TESTES.md TST-L1-COV para a política de recalibração). Este job
+  #     deliberadamente NÃO passa --update-badge: o glintfx/coverage-badge.json
+  #     commitado é um artefato LOCAL/humano (`tools/coverage_report.sh
+  #     --update-badge`, commitado por uma pessoa) -- o CI só valida a % contra o piso e
+  #     sobe o relatório HTML; nunca escreve/commita/pusha o JSON do badge de volta pro
+  #     repo (TODO.md L1.18-COVCI, "CI NÃO commita/pusha o JSON do badge"). Independente
+  #     de build-and-test/lint-and-scan (build-cov próprio, chave de cache própria);
+  #     roda em paralelo.
+  coverage:
+    name: coverage (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-cov/_deps
+          key: rmlui-${{ runner.os }}-cov-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: llvm: ships llvm-cov/llvm-profdata (possibly version-suffixed, e.g.
+      #     llvm-cov-18 -- tools/coverage_report.sh's resolve_llvm_tool() handles that).
+      # PT: llvm: traz llvm-cov/llvm-profdata (possivelmente com sufixo de versão, ex.:
+      #     llvm-cov-18 -- resolve_llvm_tool() em tools/coverage_report.sh lida com isso).
+      - name: install deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake clang llvm \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libgl1-mesa-dri \
+            xvfb
+
+      # EN: tools/coverage_report.sh wraps its own ctest invocation in `xvfb-run -a`
+      #     internally (matches every other ctest call in this repo's CI) -- no outer
+      #     xvfb-run needed here.
+      # PT: tools/coverage_report.sh já envolve sua própria invocação de ctest em
+      #     `xvfb-run -a` internamente (casa com toda outra chamada de ctest neste CI
+      #     do repo) -- nenhum xvfb-run externo necessário aqui.
+      - name: coverage (build + test + report, floor gate)
+        run: ./tools/coverage_report.sh --build-dir glintfx/build-cov --floor 75
+
+      - name: upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: glintfx/build-cov/coverage-html
+          retention-days: 30

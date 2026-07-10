@@ -1315,3 +1315,44 @@ if(GLINTFX_SANITIZE)
   set_tests_properties(${_glintfx_all_tests} PROPERTIES ENVIRONMENT
     "LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan_suppressions.txt;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:suppressions=${CMAKE_CURRENT_SOURCE_DIR}/ubsan_suppressions.txt")
 endif()
+
+# ---------------------------------------------------------------------------
+# EN: GLINTFX_COVERAGE (L1.18-COVCI, TST-L1-COV) -- instrument every executable/
+#     static-library target defined in THIS directory (every test binary above, plus
+#     the embed-only _glintfx_test_ctx GL-context helper) with Clang source-based
+#     coverage flags. Applied here (end of file, after every add_executable() above,
+#     both the GLINTFX_BACKEND_GLFW branch and the embed-mode branch) via a single loop
+#     over this DIRECTORY's BUILDSYSTEM_TARGETS property -- mirrors the GLINTFX_SANITIZE
+#     DIRECTORY-property idiom immediately above (same rationale: no individual
+#     add_executable() block above needs to be touched to add/remove this gate).
+#     Restricted to EXECUTABLE and STATIC_LIBRARY target types: INTERFACE libraries
+#     (glloader) have no object file of their own to instrument -- their single source
+#     is compiled inline into whichever target links them, which is already covered by
+#     this same loop. No-op when GLINTFX_COVERAGE=OFF (glintfx_instrument_coverage()
+#     itself is a no-op then; see CMakeLists.txt top-level for the function + full
+#     per-target-vs-directory-wide rationale, including why RmlUi/_deps must NOT be
+#     instrumented).
+# PT: GLINTFX_COVERAGE (L1.18-COVCI, TST-L1-COV) -- instrumenta todo alvo executável/
+#     biblioteca estática definido NESTE diretório (todo binário de teste acima, mais o
+#     helper de contexto GL _glintfx_test_ctx do embed-only) com as flags de cobertura
+#     source-based do Clang. Aplicado aqui (fim do arquivo, após todo add_executable()
+#     acima, tanto o ramo GLINTFX_BACKEND_GLFW quanto o ramo embed mode) via um único
+#     loop sobre a propriedade BUILDSYSTEM_TARGETS deste DIRECTORY -- espelha o idioma
+#     de DIRECTORY property do GLINTFX_SANITIZE logo acima (mesma racional: nenhum bloco
+#     add_executable() individual acima precisa ser tocado pra adicionar/remover este
+#     gate). Restrito a tipos de alvo EXECUTABLE e STATIC_LIBRARY: bibliotecas INTERFACE
+#     (glloader) não têm objeto próprio pra instrumentar -- seu único source é compilado
+#     inline em qualquer alvo que as linka, já coberto por este mesmo loop. No-op com
+#     GLINTFX_COVERAGE=OFF (a própria glintfx_instrument_coverage() já é no-op nesse
+#     caso; ver CMakeLists.txt top-level para a função + a racional completa
+#     por-alvo-vs-diretório, incluindo por que RmlUi/_deps NÃO devem ser instrumentados).
+# ---------------------------------------------------------------------------
+if(GLINTFX_COVERAGE)
+  get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(_glintfx_cov_target ${_glintfx_test_targets})
+    get_target_property(_glintfx_cov_target_type ${_glintfx_cov_target} TYPE)
+    if(_glintfx_cov_target_type STREQUAL "EXECUTABLE" OR _glintfx_cov_target_type STREQUAL "STATIC_LIBRARY")
+      glintfx_instrument_coverage(${_glintfx_cov_target})
+    endif()
+  endforeach()
+endif()

@@ -297,3 +297,89 @@ jobs:
       #     acionavel).
       - name: TST-L1-DEPS -- grype
         run: grype dir:. --fail-on high
+
+  # EN: coverage -- L1.18-COVCI / TST-L1-COV. Mirrors .github/workflows/ci.yml's
+  #     `coverage` job step-for-step -- see that file for the full rationale (self-hosted
+  #     llvm-cov per the líder's 2026-07-04 decision; tools/coverage_report.sh as the
+  #     local-first "gêmeo local" the CI wraps; the --floor 75 recalibration policy;
+  #     why --update-badge is never passed from CI).
+  #
+  #     ARMADILHA (Forgejo/Gitea): actions/upload-artifact@v4 does NOT work against
+  #     Forgejo's artifact backend (confirmed project convention, see this task's
+  #     instructions) -- @v3 is used here, unlike the @v4 used on the GitHub side.
+  #
+  #     Runner-budget note: codeberg-medium has a ~10 min hard ceiling (see
+  #     .forgejo/workflows/ci.yml's build-and-test job header comment). This job's cost
+  #     is roughly build-and-test's GLFW=ON leg (RmlUi fetch + build + 38-test suite)
+  #     PLUS the llvm-cov post-processing pass over 38 instrumented binaries -- measured
+  #     locally at ~2026-07-10: build+test ~135 s alone on a warm _deps cache, well
+  #     under budget, but a COLD cache (first run, or cache-key miss) adds the full RmlUi
+  #     clone+build on top, same as every other job here. If this job is ever observed to
+  #     exceed the ~10 min ceiling on Codeberg specifically, the líder-approved fallback
+  #     (do not invent an alternative) is: GitHub-only coverage (drop this job, keep
+  #     .github/workflows/ci.yml's), a note left in this file's header explaining why,
+  #     and a TODO.md INBOX entry recording the finding -- NOT silently retrying,
+  #     shrinking the suite, or splitting into a matrix without the líder's sign-off.
+  # PT: coverage -- L1.18-COVCI / TST-L1-COV. Espelha o job `coverage` de
+  #     .github/workflows/ci.yml passo a passo -- ver aquele arquivo para a racional
+  #     completa (llvm-cov self-hosted conforme decisão do líder de 2026-07-04;
+  #     tools/coverage_report.sh como o "gêmeo local" local-first que o CI envolve; a
+  #     política de recalibração do --floor 75; por que --update-badge nunca é passado
+  #     a partir do CI).
+  #
+  #     ARMADILHA (Forgejo/Gitea): actions/upload-artifact@v4 NÃO funciona contra o
+  #     backend de artifact do Forgejo (convenção confirmada do projeto, ver as
+  #     instruções desta task) -- @v3 é usado aqui, diferente do @v4 usado do lado
+  #     GitHub.
+  #
+  #     Nota de orçamento de runner: codeberg-medium tem teto duro de ~10 min (ver o
+  #     comentário de cabeçalho do job build-and-test de .forgejo/workflows/ci.yml). O
+  #     custo deste job é aproximadamente a perna GLFW=ON do build-and-test (fetch +
+  #     build do RmlUi + suíte de 38 testes) MAIS o passe de pós-processamento do
+  #     llvm-cov sobre 38 binários instrumentados -- medido localmente em ~2026-07-10:
+  #     build+test ~135 s sozinho com cache _deps quente, bem dentro do orçamento, mas
+  #     um cache FRIO (1ª execução, ou miss de chave de cache) soma o clone+build
+  #     completo do RmlUi por cima, igual a todo outro job aqui. Se este job for
+  #     observado exceder o teto de ~10 min no Codeberg especificamente, o fallback
+  #     aprovado pelo líder (não inventar alternativa) é: cobertura GitHub-only (remover
+  #     este job, manter o de .github/workflows/ci.yml), uma nota deixada no cabeçalho
+  #     deste arquivo explicando o motivo, e um registro na INBOX do TODO.md com o
+  #     achado -- NÃO retentar silenciosamente, encolher a suíte, ou dividir numa matrix
+  #     sem aval do líder.
+  coverage:
+    name: coverage (codeberg-medium)
+    runs-on: codeberg-medium
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-cov/_deps
+          key: rmlui-${{ runner.os }}-cov-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      - name: install deps
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            cmake clang llvm git \
+            libglfw3-dev libfreetype-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libgl1-mesa-dri \
+            xvfb
+
+      # EN: tools/coverage_report.sh wraps its own ctest invocation in `xvfb-run -a`
+      #     internally -- no outer xvfb-run needed here.
+      # PT: tools/coverage_report.sh já envolve sua própria invocação de ctest em
+      #     `xvfb-run -a` internamente -- nenhum xvfb-run externo necessário aqui.
+      - name: coverage (build + test + report, floor gate)
+        run: ./tools/coverage_report.sh --build-dir glintfx/build-cov --floor 75
+
+      - name: upload coverage HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-html
+          path: glintfx/build-cov/coverage-html

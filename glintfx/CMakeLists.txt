@@ -56,6 +56,112 @@ if(GLINTFX_SANITIZE)
   add_link_options(${_glintfx_sanitize_flags})
 endif()
 
+# EN: GLINTFX_COVERAGE (L1.18-COVCI, TODO.md LW10) -- Clang source-based code coverage
+#     (llvm-cov), self-hosted per the líder's 2026-07-04 decision (NOT Codecov or any
+#     third-party service -- zero data leaves the repo/CI runner). OFF by default: an
+#     instrumented build never pollutes the normal/dev/PR-hot build; it is meant to run
+#     as its own CI job (see the `coverage` job in .github/workflows/ci.yml and
+#     .forgejo/workflows/ci.yml) or via tools/coverage_report.sh locally.
+#
+#     Clang-only, hard gate: this project's CI has built glintfx with clang since v0.5.0
+#     (README.md declares "Compiler: clang"), and Clang's source-based coverage
+#     (-fprofile-instr-generate -fcoverage-mapping + llvm-profdata/llvm-cov) is a
+#     different, incompatible instrumentation model from GCC's --coverage/gcov. No
+#     gcov/lcov fallback path is implemented -- GLINTFX_COVERAGE=ON with a non-Clang
+#     compiler is a hard configure-time error, not a silent no-op or a degraded mode.
+#
+#     Deliberately NOT applied via directory-wide add_compile_options/add_link_options
+#     (unlike GLINTFX_SANITIZE above, which intentionally instruments RmlUi too --
+#     memory-safety bugs in linked third-party code are still our problem at runtime).
+#     Coverage is a *report of our own authored code*, so instrumentation is applied
+#     per-target via the glintfx_instrument_coverage() function below, called explicitly
+#     on the glintfx library target (right after add_library() further down this file)
+#     and, from a single loop, on every test/demo-helper target defined in tests/
+#     (tests/CMakeLists.txt, end of file). This keeps ~200 RmlUi (FetchContent) and
+#     glloader (INTERFACE) translation units uninstrumented -- instrumenting RmlUi would
+#     balloon .profraw size and build time for a signal that is out of scope (RmlUi is
+#     third-party; tools/coverage_report.sh's -ignore-filename-regex mirrors this same
+#     scope boundary on the reporting side).
+#
+#     Consequence for demos: an instrumented glintfx static library's object files
+#     reference the Clang profiling runtime's symbols (__llvm_profile_*). Any executable
+#     that links glintfx WITHOUT itself passing -fprofile-instr-generate at link time
+#     (e.g. the showcase demo, if GLINTFX_BUILD_DEMOS=ON) will fail to link with
+#     undefined-reference errors. The coverage CI job and tools/coverage_report.sh both
+#     configure with -DGLINTFX_BUILD_DEMOS=OFF for this reason -- if a future job needs
+#     both, either instrument the demo target too (call glintfx_instrument_coverage on
+#     it) or keep demos OFF in that build.
+# PT: GLINTFX_COVERAGE (L1.18-COVCI, TODO.md LW10) -- cobertura de código source-based
+#     do Clang (llvm-cov), self-hosted conforme decisão do líder de 2026-07-04 (NÃO
+#     Codecov nem nenhum serviço de terceiro -- zero dado sai do repo/runner de CI). OFF
+#     por padrão: um build instrumentado nunca polui o build normal/dev/CI quente de PR;
+#     é feito para rodar como job próprio de CI (ver o job `coverage` em
+#     .github/workflows/ci.yml e .forgejo/workflows/ci.yml) ou via
+#     tools/coverage_report.sh localmente.
+#
+#     Só Clang, gate duro: o CI deste projeto builda a glintfx com clang desde a v0.5.0
+#     (README.md declara "Compiler: clang"), e a cobertura source-based do Clang
+#     (-fprofile-instr-generate -fcoverage-mapping + llvm-profdata/llvm-cov) é um modelo
+#     de instrumentação diferente e incompatível do --coverage/gcov do GCC. Nenhum
+#     caminho de fallback gcov/lcov é implementado -- GLINTFX_COVERAGE=ON com compilador
+#     não-Clang é erro duro em tempo de configure, não um no-op silencioso nem um modo
+#     degradado.
+#
+#     Deliberadamente NÃO aplicado via add_compile_options/add_link_options de escopo de
+#     diretório (diferente do GLINTFX_SANITIZE acima, que instrumenta o RmlUi de
+#     propósito -- bug de memory-safety em código de terceiro linkado ainda é problema
+#     nosso em runtime). Cobertura é um *relatório do nosso próprio código autoral*,
+#     então a instrumentação é aplicada por-alvo via a função glintfx_instrument_coverage()
+#     abaixo, chamada explicitamente no alvo da biblioteca glintfx (logo após
+#     add_library() mais adiante neste arquivo) e, a partir de um único loop, em todo
+#     alvo de teste/helper de demo definido em tests/ (tests/CMakeLists.txt, fim do
+#     arquivo). Isso mantém as ~200 unidades de tradução do RmlUi (FetchContent) e do
+#     glloader (INTERFACE) não-instrumentadas -- instrumentar o RmlUi infuncionaria o
+#     tamanho do .profraw e o tempo de build por um sinal fora de escopo (RmlUi é
+#     terceiro; o -ignore-filename-regex do tools/coverage_report.sh espelha essa mesma
+#     fronteira de escopo do lado do relatório).
+#
+#     Consequência para os demos: os arquivos-objeto de uma biblioteca glintfx
+#     instrumentada referenciam símbolos do runtime de profiling do Clang
+#     (__llvm_profile_*). Qualquer executável que linke glintfx SEM ele mesmo passar
+#     -fprofile-instr-generate no link (ex.: o demo showcase, se GLINTFX_BUILD_DEMOS=ON)
+#     falhará o link com erros de referência indefinida. Tanto o job de CI de cobertura
+#     quanto o tools/coverage_report.sh configuram com -DGLINTFX_BUILD_DEMOS=OFF por
+#     este motivo -- se um job futuro precisar dos dois, ou instrumenta o alvo do demo
+#     também (chamando glintfx_instrument_coverage nele) ou mantém demos OFF nesse build.
+option(GLINTFX_COVERAGE
+  "Instrument glintfx + its test suite with Clang source-based code coverage (llvm-cov, L1.18-COVCI)"
+  OFF)
+if(GLINTFX_COVERAGE)
+  if(NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+    message(FATAL_ERROR
+      "glintfx: GLINTFX_COVERAGE=ON requires Clang (pass -DCMAKE_C_COMPILER=clang "
+      "-DCMAKE_CXX_COMPILER=clang++) -- the coverage toolchain is Clang source-based "
+      "coverage (llvm-cov/llvm-profdata). There is no gcov/lcov fallback; "
+      "CMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} CMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}.")
+  endif()
+endif()
+
+# EN: glintfx_instrument_coverage(<target>) -- applies Clang source-based coverage flags
+#     (compile: -fprofile-instr-generate -fcoverage-mapping; link: -fprofile-instr-generate)
+#     to a single target, PRIVATE scope so the flags never leak to consumers via usage
+#     requirements (an external FetchContent/find_package consumer must never be forced
+#     to link the profiling runtime just because glintfx's own CI built a coverage
+#     variant). No-op when GLINTFX_COVERAGE=OFF -- safe to call unconditionally.
+# PT: glintfx_instrument_coverage(<alvo>) -- aplica as flags de cobertura source-based do
+#     Clang (compile: -fprofile-instr-generate -fcoverage-mapping; link:
+#     -fprofile-instr-generate) a um único alvo, escopo PRIVATE para que as flags nunca
+#     vazem a consumidores via usage requirements (um consumidor externo via
+#     FetchContent/find_package nunca deve ser forçado a linkar o runtime de profiling só
+#     porque o CI da própria glintfx buildou uma variante de cobertura). No-op com
+#     GLINTFX_COVERAGE=OFF -- seguro chamar incondicionalmente.
+function(glintfx_instrument_coverage target)
+  if(GLINTFX_COVERAGE)
+    target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    target_link_options(${target} PRIVATE -fprofile-instr-generate)
+  endif()
+endfunction()
+
 include(FetchContent)
 
 # EN: GLFW window backend option.
@@ -206,6 +312,14 @@ if(GLINTFX_BACKEND_GLFW)
 endif()
 target_compile_features(glintfx PUBLIC cxx_std_17)
 
+# EN: L1.18-COVCI -- instrument the glintfx library itself (no-op when GLINTFX_COVERAGE=OFF).
+#     See the GLINTFX_COVERAGE option block above for the full rationale (per-target, not
+#     directory-wide; why RmlUi/_deps stay uninstrumented; the demos/GLINTFX_BUILD_DEMOS caveat).
+# PT: L1.18-COVCI -- instrumenta a própria biblioteca glintfx (no-op com GLINTFX_COVERAGE=OFF).
+#     Ver o bloco da option GLINTFX_COVERAGE acima para a racional completa (por-alvo, não
+#     de diretório; por que RmlUi/_deps ficam não-instrumentados; a ressalva de demos/GLINTFX_BUILD_DEMOS).
+glintfx_instrument_coverage(glintfx)
+
 # EN: Alias so FetchContent consumers can write target_link_libraries(... glintfx::glintfx).
 #     Placed here (before DEMOS/TESTS subdirs) so the alias is always available regardless
 #     of whether demos or tests are enabled.
@@ -232,6 +346,14 @@ option(GLINTFX_BUILD_TESTS "Build tests" ${_glintfx_top})
 # PT: Demos exigem o backend de janela GLFW (o showcase usa glintfx::App).
 if(GLINTFX_BUILD_DEMOS)
   if(GLINTFX_BACKEND_GLFW)
+    if(GLINTFX_COVERAGE)
+      message(WARNING
+        "glintfx: GLINTFX_COVERAGE=ON with GLINTFX_BUILD_DEMOS=ON -- the showcase demo "
+        "links the instrumented glintfx library but is not itself instrumented and will "
+        "fail to link (undefined reference to __llvm_profile_* symbols). Configure with "
+        "-DGLINTFX_BUILD_DEMOS=OFF for coverage builds (see the GLINTFX_COVERAGE option "
+        "block above).")
+    endif()
     add_subdirectory(demos/showcase)
   else()
     message(STATUS "glintfx: GLINTFX_BUILD_DEMOS=ON but GLINTFX_BACKEND_GLFW=OFF — demos skipped (require App/GLFW).")

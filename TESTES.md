@@ -15,6 +15,7 @@ Manual de testes do projeto. Stack: C + Assembly puros, freestanding, sem libc, 
 | TST-INT | Integração / E2E | Cada binário/demo builda, roda e produz exit code + stdout esperados | Script que compila, executa e compara saída/`$?` (golden files) |
 | TST-STATIC | Análise estática | Bugs sem executar: UB, uso indevido, dead code | `clang --analyze` / `scan-build`; cppcheck em modo freestanding |
 | TST-MEM | Memória (alocador) | Leak, double-free, alinhamento, escrita fora de bloco no nosso `malloc` | Testes dedicados do alocador + `valgrind` no binário estático quando viável; checagem de invariantes do bump/free-list |
+| TST-SFNT-SAN | Sanitizer (ASan/UBSan) via harness HOSTED-companion | Só a UNIDADE DE TRADUÇÃO `src/sfnt.c` (parser de input **hostil por natureza** — o gatilho de "Fora de escopo" abaixo virou aplicável) sob `-fsanitize=address,undefined` — achou em produção o CRÍTICO de UB float→int16 (review adversarial do SOV-SFNT) que `make test`'s freestanding, não-sanitizado, não conseguia ver | `make sanitize-sfnt`: compila o MESMO `src/sfnt.c` (sem `#ifdef`, sem cópia) contra libc normal via um programa `tests/sanitize_sfnt.c` **hosted** dedicado, fora de `$(PROGRAMS)`/`make test` — ver "TST-SFNT-SAN" abaixo |
 
 ### Comandos (W11)
 
@@ -26,6 +27,7 @@ make test-negative   # AUD-C0-5.3: verifica o caminho de FALHA do harness (TEST_
 make check-static    # TST-STATIC: cppcheck (src/) + clang --analyze (src/) + check_spdx.sh +
                       # check_syscall_nums_sync.sh (drift entre syscall_nums.h/.inc)
 make test-mem        # TST-MEM: valgrind memcheck em test_alloc + test_mem
+make sanitize-sfnt   # TST-SFNT-SAN: ASan+UBSan sobre src/sfnt.c via harness hosted-companion
 ```
 
 **TST-INT — golden files.** Três manifestos irmãos em `tests/` (`expected_exit.txt`,
@@ -55,10 +57,35 @@ alinhamento de 16B e não-sobreposição entre blocos (padrão de byte único po
 já exercitado por `make test` e agora também sob `make test-mem`. Detalhe completo no comentário
 do alvo `test-mem` no `Makefile`.
 
+**TST-SFNT-SAN — o gatilho da linha "Fora de escopo" abaixo disparou; padrão hosted-companion.**
+`SOV-SFNT` (`src/sfnt.c`) é o primeiro **parser de input hostil por natureza** (formato de arquivo
+de fonte, superfície de ataque clássica) da Camada 0 — exatamente o gatilho que este manual já
+previa pra tirar sanitizers de "fora de escopo". Mas ASan/UBSan continuam impossíveis de rodar
+sobre um binário `-ffreestanding -nostdlib` de verdade (exigem runtime próprio, ver a linha
+abaixo). A saída **não foi** dar `-ffreestanding` uma exceção nem inventar um runtime de
+sanitizer do zero — foi notar que `src/sfnt.c` **não usa nenhum símbolo freestanding-interno**
+(só `<stdint.h>`/`<stddef.h>`, ver `include/core/sfnt.h`, "NO DYNAMIC ALLOCATION"), então a MESMA
+unidade de tradução compila igualzinha num programa **HOSTED comum** (libc normal). Esse é o
+padrão **hosted-companion**: `tests/sanitize_sfnt.c` (fora de `$(PROGRAMS)`/`make test`, mesmo
+precedente de `tests/libcore_consumer.cpp`) linka `src/sfnt.c` sem `#ifdef`/sem cópia contra libc,
+compilado com `-fsanitize=address,undefined -fno-sanitize-recover=all`. Achou o CRÍTICO real
+(float→int16 UB no `apply_component_transform`, review adversarial do SOV-SFNT) que `make test`
+nunca teria pego (o cast trunca em silêncio sob build normal, sem sinal/crash). Prova negativa
+verificada manualmente: revertendo o fix, `sanitize-sfnt` aborta com
+`runtime error: 40000.5 is outside the range of representable values of type 'short'` no exato
+`src/sfnt.c:apply_component_transform` — com o fix, roda limpo. **Reuso futuro**: `SOV-RAST` (o
+próximo parser/consumidor não-confiável, o rasterizador) deve crescer um `sanitize-rast` irmão na
+mesma forma, per o brief que criou este alvo.
+
 ## Fora de escopo (projeto base — por enquanto)
 
-- Sanitizers (ASan/UBSan) exigem runtime próprio em freestanding — reavaliar se virar necessário.
-- Fuzzing — considerar quando houver parser de input não-confiável (gatilho de re-roteamento do porte).
+- Sanitizers (ASan/UBSan) sobre o BINÁRIO freestanding-de-verdade (`-ffreestanding -nostdlib`,
+  `$(PROGRAMS)`/`make test`) continuam fora de escopo — exigem runtime próprio que não temos.
+  Onde o gatilho abaixo dispara (parser de input não-confiável) e a unidade de tradução em
+  questão não usa símbolo freestanding-interno nenhum, o padrão **hosted-companion** (ver
+  TST-SFNT-SAN acima) contorna a limitação sem exigir esse runtime — não é uma exceção à regra,
+  é uma segunda rota que só existe quando a TU é hosted-compilável como está.
+- Fuzzing — considerar quando houver parser de input não-confiável (gatilho de re-roteamento do porte). `SOV-SFNT` já dispara o gatilho; ainda não fuzzado (INBOX).
 
 ## Definition of Done de teste
 

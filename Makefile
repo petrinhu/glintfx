@@ -58,10 +58,23 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 #     todo objeto de runtime acima em build/bin/<name>. Footgun conhecido (aceito, YAGNI):
 #     um arquivo em src/ e outro em tests/ com o MESMO nome-base colidiriam em
 #     build/obj/<name>.o -- nao duplicar nomes-base entre as duas pastas.
-PROGRAM_SRCS := $(wildcard tests/*.c)
+# EN: `tests/sanitize_sfnt.c` is EXCLUDED from this wildcard on purpose -- unlike every other
+#     tests/*.c file, it is a plain HOSTED (libc-linked) program, not a freestanding gate
+#     program (see that file's own header) -- it would fail to link against $(RUNTIME_OBJS)
+#     (`-nostdlib`, no libc `fopen`/`fprintf`/etc.) if swept in here. Built/run by its own
+#     dedicated `sanitize-sfnt` target below instead (same pattern `tests/libcore_consumer.cpp`
+#     already uses, just via extension-based exclusion there instead of an explicit filter-out).
+# PT: `tests/sanitize_sfnt.c` é EXCLUÍDO deste wildcard de propósito -- diferente de todo outro
+#     tests/*.c, é um programa HOSTED comum (linkado com libc), não um programa-gate freestanding
+#     (ver o cabeçalho próprio daquele arquivo) -- falharia ao linkar contra $(RUNTIME_OBJS)
+#     (`-nostdlib`, sem `fopen`/`fprintf`/etc. da libc) se fosse varrido aqui pra dentro. Buildado/
+#     rodado pelo próprio alvo dedicado `sanitize-sfnt` abaixo em vez disso (mesmo padrão que o
+#     `tests/libcore_consumer.cpp` já usa, só que via exclusão baseada em extensão lá em vez de um
+#     filter-out explícito).
+PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c,$(wildcard tests/*.c))
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
-.PHONY: build test test-negative check-static test-mem clean run libcore libcore-test
+.PHONY: build test test-negative check-static test-mem clean run libcore libcore-test sanitize-sfnt
 
 build: $(PROGRAMS)
 
@@ -535,6 +548,34 @@ libcore-test: $(BIN)/libcore_consumer
 	$(BIN)/libcore_consumer
 	@echo "--- tools/check_libcore_symbols.sh (ADR-0009 gate 4: nm -g, positive whitelist) ---"
 	tools/check_libcore_symbols.sh
+
+# EN: SOV-SFNT (FT-F1) review-adversarial DEFENSE-IN-DEPTH target: `tests/sanitize_sfnt.c` is a
+#     plain HOSTED (NOT freestanding) C program -- links `src/sfnt.c` (UNCHANGED, no #ifdef, the
+#     exact same TU `make build`/`make test` already compile freestanding) against ordinary
+#     libc, so it and only it can be built with `-fsanitize=address,undefined`. This is what
+#     caught the CRITICAL float->int16 UB in `apply_component_transform` (composite glyph
+#     transform) that `make test`'s freestanding, non-sanitized harness could not see -- see that
+#     file's own header for the full rationale, and TESTES.md for this target's place in the
+#     overall test manual. `-O1` (not `-O0`): UBSan's out-of-range-float-to-int check needs the
+#     cast to actually execute as written, and `-O1` is the documented sweet spot for ASan/UBSan
+#     (fast enough for a CI gate, does not optimize away the very code path being sanitized).
+# PT: Alvo de DEFESA-EM-PROFUNDIDADE do review adversarial do SOV-SFNT (FT-F1):
+#     `tests/sanitize_sfnt.c` é um programa C HOSTED comum (NÃO freestanding) -- linka o
+#     `src/sfnt.c` (INALTERADO, sem #ifdef, a mesma TU exata que `make build`/`make test` já
+#     compilam freestanding) contra a libc normal, então ele, e só ele, pode ser buildado com
+#     `-fsanitize=address,undefined`. Foi isso que pegou o UB CRÍTICO de float->int16 no
+#     `apply_component_transform` (transformação de glyph composto) que o harness freestanding
+#     não-sanitizado do `make test` não conseguia ver -- ver o cabeçalho próprio daquele arquivo
+#     pro racional completo, e TESTES.md pro lugar deste alvo no manual de teste geral. `-O1` (não
+#     `-O0`): a checagem de float-fora-de-faixa-pra-int do UBSan precisa que o cast de fato
+#     execute como escrito, e `-O1` é o ponto-doce documentado pra ASan/UBSan (rápido o bastante
+#     pra um gate de CI, não otimiza pra fora o próprio caminho de código sendo sanitizado).
+SANITIZE_SFNT_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,undefined \
+                       -fno-sanitize-recover=all -g -O1
+
+sanitize-sfnt: | $(BIN)
+	$(CC) $(SANITIZE_SFNT_FLAGS) -o $(BIN)/sanitize_sfnt tests/sanitize_sfnt.c src/sfnt.c
+	$(BIN)/sanitize_sfnt
 
 clean:
 	rm -rf $(BUILD)

@@ -141,8 +141,30 @@ static int find_table(const uint8_t* blob, size_t len, size_t dir_off, uint16_t 
                        const char tag[4], table_slot_t* slot) {
     for (uint16_t i = 0; i < num_tables; i++) {
         size_t rec_off = dir_off + (size_t)i * 16;
-        if (blob[rec_off] != (uint8_t)tag[0] || blob[rec_off + 1] != (uint8_t)tag[1] ||
-            blob[rec_off + 2] != (uint8_t)tag[2] || blob[rec_off + 3] != (uint8_t)tag[3]) {
+        // EN: Review-adversarial COSMETIC fix (SOV-SFNT review): these 4 tag bytes are safe
+        //     TODAY (the caller, `glx_sfnt_open`, already proved
+        //     `dir_off + num_tables*16 <= len` before this loop ever runs, so `rec_off..+3` is
+        //     always in-bounds for every `i < num_tables`) but were direct `blob[...]` reads
+        //     with no bounds check of their OWN -- fragile if this function is ever reused/
+        //     refactored with a looser caller invariant. Routed through `rd_u8` (the same
+        //     bounds-checked primitive every other read in this file uses) so the invariant is
+        //     enforced HERE too, not just trusted from the caller.
+        // PT: Fix do COSMÉTICO do review adversarial (review do SOV-SFNT): esses 4 bytes de tag
+        //     são seguros HOJE (quem chama, `glx_sfnt_open`, já provou
+        //     `dir_off + num_tables*16 <= len` antes deste laço rodar, então `rec_off..+3` está
+        //     sempre dentro de limite pra todo `i < num_tables`) mas eram leituras `blob[...]`
+        //     diretas sem checagem de limite PRÓPRIA -- frágil se esta função algum dia for
+        //     reusada/refatorada com um invariante mais frouxo de quem chama. Roteado por
+        //     `rd_u8` (a mesma primitiva com checagem de limite que toda outra leitura deste
+        //     arquivo usa) pra o invariante ser reforçado AQUI também, não só confiado de quem
+        //     chama.
+        uint8_t t0, t1, t2, t3;
+        if (!rd_u8(blob, len, rec_off, &t0) || !rd_u8(blob, len, rec_off + 1, &t1) ||
+            !rd_u8(blob, len, rec_off + 2, &t2) || !rd_u8(blob, len, rec_off + 3, &t3)) {
+            return 0;
+        }
+        if (t0 != (uint8_t)tag[0] || t1 != (uint8_t)tag[1] || t2 != (uint8_t)tag[2] ||
+            t3 != (uint8_t)tag[3]) {
             continue;
         }
         uint32_t off32, len32;
@@ -539,13 +561,70 @@ static int loca_read(const glx_sfnt_face* face, uint32_t gid, size_t* off_out) {
 //     pode usar uma; `float` é usado pro multiply-accumulate (já uma primitiva estabelecida e
 //     testada neste código-base -- `ftoa`/`atof` do src/conv.c, SOV-FCONV -- não uma pergunta
 //     nova de "float é seguro aqui").
+// EN: Rounds `v` to the nearest integer (the same "round half away from zero" shape the two call
+//     sites used inline before this fix) and SATURATES the result into `[INT16_MIN, INT16_MAX]`
+//     before ever casting to `int16_t` -- review-adversarial CRITICAL fix (SOV-SFNT review):
+//     `(int16_t)(fx +/- 0.5f)` with NO range check is undefined behaviour (C 6.3.1.4) whenever
+//     the rounded value falls outside int16 range, and this is NOT a hostile-input-only
+//     scenario -- a spec-legitimate composite (translate-only, no scale, exactly the shape Open
+//     Sans' own accented glyphs use) whose child glyph + `dx`/`dy` sum lands outside int16 hits
+//     it too (reviewer's repro: a simple glyph point at x=20000 plus a composite `dx=20000`
+//     computes `fx=40000.5`, casting that to `int16_t` is UB and produced silent garbage,
+//     `-25536`, while still returning `GLX_SFNT_OK`). `WE_HAVE_A_SCALE`/2x2 with an F2Dot14 factor
+//     up to ~2x reaches the same range from smaller inputs.
+//
+//     CHOICE -- saturate, don't reject as `GLX_SFNT_ERR_BAD_GLYPH`: a font whose OWN declared
+//     `glyf` point range is well within int16 (int16 is literally the wire type for
+//     `xCoordinates`/`yCoordinates`, see `parse_simple_glyph`) can still, after a LEGITIMATE
+//     transform, produce an out-of-range composite coordinate -- that is a degenerate output
+//     (a glyph drawn absurdly far from the origin), not a malformed INPUT; rejecting the whole
+//     glyph would punish a real font for a corner case that never affects Open Sans (whose only
+//     composites are the identity-2x2 translate-only accents this ticket cares about) while
+//     saturating keeps every other point/contour of the SAME glyph usable. Saturating through an
+//     intermediate comparison against `(float)INT16_MIN`/`(float)INT16_MAX` (both exactly
+//     representable in `float`, `<stdint.h>` int16 range comfortably fits a 24-bit mantissa) means
+//     the ONLY value ever hand to `(int16_t)` is either one of those two exact bounds or an
+//     already-in-range rounded value -- never a value the standard leaves undefined.
+// PT: Arredonda `v` pro inteiro mais próximo (a mesma forma "arredonda a metade pra longe de
+//     zero" que os dois pontos de chamada usavam inline antes deste fix) e SATURA o resultado em
+//     `[INT16_MIN, INT16_MAX]` antes de qualquer cast pra `int16_t` -- fix do CRÍTICO do review
+//     adversarial (review do SOV-SFNT): `(int16_t)(fx +/- 0.5f)` SEM checagem de faixa é
+//     comportamento indefinido (C 6.3.1.4) sempre que o valor arredondado cai fora da faixa
+//     int16, e isto NÃO é um cenário só-de-input-hostil -- um composto espec-legítimo (só
+//     translação, sem escala, exatamente a forma que os próprios glyphs acentuados da Open Sans
+//     usam) cujo glyph filho + soma de `dx`/`dy` caia fora do int16 também dispara (repro do
+//     revisor: um glyph simples com ponto em x=20000 mais um composto `dx=20000` computa
+//     `fx=40000.5`, converter isso pra `int16_t` é UB e produzia lixo silencioso, `-25536`,
+//     enquanto ainda retornava `GLX_SFNT_OK`). `WE_HAVE_A_SCALE`/2x2 com um fator F2Dot14 até
+//     ~2x alcança a mesma faixa a partir de entradas menores.
+//
+//     ESCOLHA -- saturar, não rejeitar como `GLX_SFNT_ERR_BAD_GLYPH`: uma fonte cuja PRÓPRIA
+//     faixa declarada de ponto `glyf` está bem dentro do int16 (int16 é literalmente o tipo de
+//     fio de `xCoordinates`/`yCoordinates`, ver `parse_simple_glyph`) ainda pode, depois de uma
+//     transformação LEGÍTIMA, produzir uma coordenada composta fora de faixa -- isso é uma saída
+//     degenerada (um glyph desenhado absurdamente longe da origem), não um INPUT malformado;
+//     rejeitar o glyph inteiro puniria uma fonte real por um caso de borda que nunca afeta a Open
+//     Sans (cujos únicos compostos são os acentos translação-só de 2x2 identidade com que esta
+//     tarefa se importa) enquanto saturar mantém todo outro ponto/contorno do MESMO glyph
+//     utilizável. Saturar através de uma comparação intermediária contra `(float)INT16_MIN`/
+//     `(float)INT16_MAX` (ambos exatamente representáveis em `float`, a faixa int16 do
+//     `<stdint.h>` cabe folgadamente numa mantissa de 24 bits) significa que o ÚNICO valor que
+//     algum dia chega no `(int16_t)` é ou um daqueles dois limites exatos ou um valor já
+//     arredondado dentro de faixa -- nunca um valor que o padrão deixa indefinido.
+static int16_t round_and_saturate_i16(float v) {
+    float r = (v >= 0.0f) ? v + 0.5f : v - 0.5f;
+    if (r >= (float)INT16_MAX) return INT16_MAX;
+    if (r <= (float)INT16_MIN) return INT16_MIN;
+    return (int16_t)r;
+}
+
 static void apply_component_transform(float a, float b, float c, float d, int32_t dx, int32_t dy,
                                        int16_t x_in, int16_t y_in, int16_t* x_out,
                                        int16_t* y_out) {
     float fx = a * (float)x_in + c * (float)y_in + (float)dx;
     float fy = b * (float)x_in + d * (float)y_in + (float)dy;
-    *x_out = (int16_t)(fx >= 0.0f ? fx + 0.5f : fx - 0.5f);
-    *y_out = (int16_t)(fy >= 0.0f ? fy + 0.5f : fy - 0.5f);
+    *x_out = round_and_saturate_i16(fx);
+    *y_out = round_and_saturate_i16(fy);
 }
 
 // EN: Reads one F2Dot14 fixed-point value (a signed 16-bit integer, 2 integer bits + 14

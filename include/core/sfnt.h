@@ -54,8 +54,8 @@
 //     positioning, a rare mode no glyph in Open Sans uses -- `GLX_SFNT_ERR_UNSUPPORTED`).
 //
 //     HARDENING POSTURE (this is a FILE FORMAT PARSER -- the canonical hostile-input attack
-//     surface): every multi-byte read anywhere in this file goes through `rd_u8`/`rd_u16`/
-//     `rd_i16`/`rd_u32`/`rd_i32` (src/sfnt.c), which bounds-check `offset + size <= blob_len`
+//     surface): every multi-byte read anywhere in this file goes through `rd_u8`/`rd_i8`/`rd_u16`/
+//     `rd_i16`/`rd_u32` (src/sfnt.c), which bounds-check `offset + size <= blob_len`
 //     WITHOUT ever computing `offset + size` directly (that addition could itself overflow a
 //     hostile `size_t offset` near `SIZE_MAX` -- the check is always the overflow-safe
 //     `offset > len || size > len - offset` shape, `offset <= len` established first). A failed
@@ -129,7 +129,7 @@
 //
 //     POSTURA DE HARDENING (isto É um PARSER DE FORMATO DE ARQUIVO -- a superfície canônica de
 //     input hostil): toda leitura multi-byte em qualquer lugar deste arquivo passa por
-//     `rd_u8`/`rd_u16`/`rd_i16`/`rd_u32`/`rd_i32` (src/sfnt.c), que checam limite de
+//     `rd_u8`/`rd_i8`/`rd_u16`/`rd_i16`/`rd_u32` (src/sfnt.c), que checam limite de
 //     `offset + size <= blob_len` SEM nunca computar `offset + size` diretamente (essa soma
 //     poderia ela mesma estourar um `size_t offset` hostil perto de `SIZE_MAX` -- a checagem é
 //     sempre no formato seguro-contra-overflow `offset > len || size > len - offset`, com

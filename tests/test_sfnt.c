@@ -207,6 +207,61 @@ static const unsigned char kSyntheticFontSelfRefComposite[276] = {
     0x00, 0x00, 0x00, 0x00
 };
 
+// EN: Synthetic font C -- review-adversarial regression fixture (SOV-SFNT review, CRITICAL fix):
+//     2 glyphs. gid 0 is a SIMPLE glyph, one on-curve point at `(20000, 0)` -- a value well
+//     within `int16_t` range (`int16_t` is the wire type `xCoordinates` is defined in terms of,
+//     see `parse_simple_glyph`), i.e. an ORDINARY, non-hostile point. gid 1 is a COMPOSITE glyph
+//     with a SINGLE component: `ARG_1_AND_2_ARE_WORDS|ARGS_ARE_XY_VALUES` (a plain xy translate,
+//     no scale -- the identity-2x2 shape Open Sans' own `á`/`ç`/`ã` composites use, see the
+//     `kSyntheticFontF12`/real-font composite tests above), referencing gid 0, `dx=20000, dy=0`.
+//     `20000 + 20000 = 40000` -- OUTSIDE `int16_t` range (`[-32768, 32767]`) -- this is the EXACT
+//     reviewer repro from the SOV-SFNT review: `apply_component_transform`'s old
+//     `(int16_t)(fx +/- 0.5f)` cast, with NO range check, was undefined behaviour (C 6.3.1.4)
+//     here, silently producing `-25536` while still returning `GLX_SFNT_OK`. NEITHER glyph is a
+//     malformed/hostile INPUT by itself -- `20000` fits `int16_t` fine as a raw point, `dx=20000`
+//     fits `int16_t` fine as a raw composite argument -- the out-of-range value only appears as
+//     the ARITHMETIC RESULT of a spec-legitimate transform, which is exactly why this needed a
+//     saturating cast fix (see `round_and_saturate_i16` in src/sfnt.c) rather than being catchable
+//     as a `GLX_SFNT_ERR_BAD_GLYPH` input-validation failure anywhere upstream.
+// PT: Fonte sintética C -- fixture de regressão do review adversarial (review do SOV-SFNT, fix do
+//     CRÍTICO): 2 glyphs. gid 0 é um glyph SIMPLES, um ponto on-curve em `(20000, 0)` -- um valor
+//     bem dentro da faixa `int16_t` (`int16_t` é o tipo de fio em que `xCoordinates` é definido,
+//     ver `parse_simple_glyph`), ou seja, um ponto ORDINÁRIO, não-hostil. gid 1 é um glyph
+//     COMPOSTO com UM ÚNICO componente: `ARG_1_AND_2_ARE_WORDS|ARGS_ARE_XY_VALUES` (uma translação
+//     xy pura, sem escala -- a forma 2x2 identidade que os próprios compostos `á`/`ç`/`ã` da Open
+//     Sans usam, ver os testes de composto da `kSyntheticFontF12`/fonte real acima), referenciando
+//     o gid 0, `dx=20000, dy=0`. `20000 + 20000 = 40000` -- FORA da faixa `int16_t`
+//     (`[-32768, 32767]`) -- este é o repro EXATO do revisor do review do SOV-SFNT: o cast antigo
+//     `(int16_t)(fx +/- 0.5f)` do `apply_component_transform`, SEM checagem de faixa, era
+//     comportamento indefinido (C 6.3.1.4) aqui, produzindo silenciosamente `-25536` enquanto
+//     ainda retornava `GLX_SFNT_OK`. NENHUM dos dois glyphs é um INPUT malformado/hostil por si só
+//     -- `20000` cabe em `int16_t` numa boa como ponto cru, `dx=20000` cabe em `int16_t` numa boa
+//     como argumento composto cru -- o valor fora de faixa só aparece como RESULTADO ARITMÉTICO de
+//     uma transformação espec-legítima, exatamente por isso precisou de um fix de cast saturante
+//     (ver `round_and_saturate_i16` no src/sfnt.c) em vez de ser pegável como uma falha de
+//     validação-de-input `GLX_SFNT_ERR_BAD_GLYPH` em algum lugar upstream.
+static const unsigned char kSyntheticFontCompositeSaturate[300] = {
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x6d, 0x61, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x04, 0x67, 0x6c, 0x79, 0x66,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x24, 0x68, 0x65, 0x61, 0x64,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa4, 0x00, 0x00, 0x00, 0x36, 0x68, 0x68, 0x65, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xda, 0x00, 0x00, 0x00, 0x24, 0x68, 0x6d, 0x74, 0x78,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0x00, 0x00, 0x00, 0x08, 0x6c, 0x6f, 0x63, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00, 0x00, 0x06, 0x6d, 0x61, 0x78, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x01, 0x4e, 0x20, 0x00, 0x00, 0x4e, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x4e,
+    0x20, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
+    0x4e, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x5f, 0x0f, 0x3c, 0xf5, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64,
+    0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x12, 0x00, 0x01, 0x00, 0x00,
+    0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 // EN: Scratch buffer for the byte-patch hostile tests against the REAL 217360-byte Open Sans
 //     fixture (BAD_VERSION, a lying `numGlyphs`, an out-of-blob table offset, a malformed
 //     `cmap`) -- static storage duration (.bss), not the stack (217KB would be an unreasonable
@@ -617,6 +672,62 @@ int main(int argc, char** argv, char** envp) {
         glx_sfnt_outline out;
         r = glx_sfnt_glyph_outline(&face_c, 0, points, 8, contour_ends, 4, &out);
         TEST_ASSERT_EQ(r, GLX_SFNT_ERR_TOO_DEEP);
+    }
+
+    // ============================================================================================
+    // ---- REGRESSION: composite transform saturates instead of UB (kSyntheticFontCompositeSaturate,
+    //      SOV-SFNT review CRITICAL fix) --------------------------------------------------------
+    // ============================================================================================
+    {
+        glx_sfnt_face face_d;
+        glx_sfnt_result r = glx_sfnt_open(kSyntheticFontCompositeSaturate,
+                                           sizeof(kSyntheticFontCompositeSaturate), &face_d);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(face_d.num_glyphs, (unsigned short)2);
+
+        // EN: gid 0 alone -- an ORDINARY simple glyph, single on-curve point at (20000, 0), well
+        //     within int16 range. Not the interesting case, but confirms the fixture's base glyph
+        //     is itself unremarkable before composing it.
+        // PT: gid 0 sozinho -- um glyph simples ORDINÁRIO, único ponto on-curve em (20000, 0),
+        //     bem dentro da faixa int16. Não é o caso interessante, mas confirma que o glyph base
+        //     da fixture é em si mesmo comum antes de compô-lo.
+        glx_sfnt_point points[4];
+        unsigned short contour_ends[2];
+        glx_sfnt_outline out;
+        r = glx_sfnt_glyph_outline(&face_d, 0, points, 4, contour_ends, 2, &out);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(out.num_points, (unsigned short)1);
+        TEST_ASSERT_EQ(points[0].x, (short)20000);
+        TEST_ASSERT_EQ(points[0].y, (short)0);
+
+        // EN: gid 1 -- the composite: translates gid 0's point by dx=20000, dy=0. Pre-fix,
+        //     `fx = 40000.0f`, `(int16_t)(fx + 0.5f)` was UB and this codebase's own build
+        //     (clang, `-fsanitize=undefined` when the sanitizer target below is used) observed it
+        //     concretely resolve to `-25536` (`(int32_t)40000` truncated to 16 bits, two's
+        //     complement) while still returning `GLX_SFNT_OK` -- silent data corruption, not a
+        //     crash, which is exactly why this class of bug is dangerous. Post-fix,
+        //     `round_and_saturate_i16` SATURATES: `x == INT16_MAX (32767)`, well-defined, no UB,
+        //     `GLX_SFNT_OK` still (this is a valid, if degenerate, glyph -- see src/sfnt.c's
+        //     `apply_component_transform` comment for why saturation, not `BAD_GLYPH`, was
+        //     chosen). `y` (dy=0, no overflow) stays an ordinary rounded `0`, proving the fix does
+        //     NOT clamp values that were already in range.
+        // PT: gid 1 -- o composto: translada o ponto do gid 0 por dx=20000, dy=0. Pré-fix,
+        //     `fx = 40000.0f`, `(int16_t)(fx + 0.5f)` era UB e o próprio build deste código-base
+        //     (clang, `-fsanitize=undefined` quando o alvo sanitizer abaixo é usado) observou
+        //     concretamente resolver pra `-25536` (`(int32_t)40000` truncado pra 16 bits,
+        //     complemento de dois) enquanto ainda retornava `GLX_SFNT_OK` -- corrupção de dado
+        //     silenciosa, não um crash, exatamente por isso essa classe de bug é perigosa.
+        //     Pós-fix, `round_and_saturate_i16` SATURA: `x == INT16_MAX (32767)`, bem-definido,
+        //     sem UB, `GLX_SFNT_OK` ainda (este é um glyph válido, se degenerado -- ver o
+        //     comentário do `apply_component_transform` do src/sfnt.c pro porquê de saturação, e
+        //     não `BAD_GLYPH`, ter sido escolhida). `y` (dy=0, sem overflow) fica um `0`
+        //     arredondado comum, provando que o fix NÃO satura valores que já estavam em faixa.
+        r = glx_sfnt_glyph_outline(&face_d, 1, points, 4, contour_ends, 2, &out);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(out.num_points, (unsigned short)1);
+        TEST_ASSERT_EQ(points[0].x, (short)32767); // INT16_MAX -- saturated, not UB garbage
+        TEST_ASSERT_EQ(points[0].y, (short)0);      // unaffected axis: ordinary round, no clamp
+        TEST_ASSERT_EQ(points[0].on_curve, (unsigned char)1);
     }
 
     TEST_PASS();

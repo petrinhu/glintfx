@@ -1,0 +1,78 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP (FT-F4) VISUAL sharpness comparison document -- driven by
+      tests/fonteng_ab_visual.cpp, which loads this SAME document twice in one process (once with
+      glintfx's own SOV-SFNT/SOV-RAST engine, once with RmlUi's built-in FreeType engine, selected
+      at runtime via the own_font_engine_ab_bypass() hook) and, within each engine session, renders
+      it at TWO dp_ratios (1.0 = low-DPI, the critical case; 2.0 = HiDPI). It then glReadPixels each
+      frame and crops each line's ink region for a side-by-side, magnified own-vs-FreeType image.
+      This is a DIAGNOSTIC harness that produces IMAGES for a human perceptual call -- NOT a pass/
+      fail gate (that is fonteng_ab_compare.cpp's numeric job).
+      font-size is authored in `dp` (density-independent pixels) on purpose: 1 dp = dp_ratio
+      physical pixels, so set_dp_ratio(1.0) makes "13dp" rasterise at 13 PHYSICAL px (the small,
+      few-pixels-per-glyph regime where grayscale-AA quality is most visible) and set_dp_ratio(2.0)
+      makes the SAME "13dp" rasterise at 26 physical px (HiDPI). The own engine bakes a distinct
+      atlas at each resulting pixel size, so this genuinely exercises the rasteriser at each body
+      size on both a low-DPI and a HiDPI screen.
+      The phrase deliberately mixes ASCII caps/lowercase, punctuation, digits, an em-dash, and
+      pt-br composite accents. NOTE (honest, not a bug to hide): the own engine's v1 MVP BAKE_SET
+      (printable ASCII + á à â ã ç é ê í ó ô õ ú ü ñ and uppercase) does NOT contain `î` (U+00EE) or
+      the em-dash `—` (U+2014), so those two glyphs are BLANK in the own engine and present in
+      FreeType. That gap is a real, current property of the MVP scope (a coverage axis, separate
+      from the sharpness question) and is left visible on purpose.
+      Font src is "assets/OpenSans-Regular.ttf" -- relative to the harness's WORKING_DIRECTORY
+      (build/tests/, where the assets/ dir is copied by the fonteng_own_embed_sanity CMake block).
+  PT: Documento de comparação VISUAL de nitidez do L1.20-FONTFLIP (FT-F4) -- dirigido por
+      tests/fonteng_ab_visual.cpp, que carrega este MESMO documento duas vezes num processo (uma
+      com o motor próprio SOV-SFNT/SOV-RAST do glintfx, uma com o motor FreeType embutido do RmlUi,
+      selecionado em runtime via o hook own_font_engine_ab_bypass()) e, dentro de cada sessão de
+      motor, o renderiza em DOIS dp_ratios (1.0 = baixa-DPI, o caso crítico; 2.0 = HiDPI). Depois
+      faz glReadPixels de cada frame e recorta a região de tinta de cada linha para uma imagem
+      próprio-vs-FreeType lado-a-lado, ampliada. É um harness de DIAGNÓSTICO que produz IMAGENS para
+      uma decisão perceptual humana -- NÃO um gate passa/falha (esse é o trabalho numérico do
+      fonteng_ab_compare.cpp).
+      O font-size é autorado em `dp` (pixels independentes de densidade) de propósito: 1 dp =
+      dp_ratio pixels físicos, então set_dp_ratio(1.0) faz "13dp" rasterizar em 13 px FÍSICOS (o
+      regime pequeno, de poucos-pixels-por-glyph, onde a qualidade do AA grayscale é mais visível) e
+      set_dp_ratio(2.0) faz o MESMO "13dp" rasterizar em 26 px físicos (HiDPI). O motor próprio
+      empacota um atlas distinto em cada tamanho-em-px resultante, então isto exercita de fato o
+      rasterizador em cada tamanho de corpo tanto numa tela de baixa DPI quanto HiDPI.
+      A frase mistura de propósito maiúsculas/minúsculas ASCII, pontuação, dígitos, um em-dash, e
+      acentos compostos pt-br. NOTA (honesta, não um bug a esconder): o BAKE_SET MVP v1 do motor
+      próprio (ASCII imprimível + á à â ã ç é ê í ó ô õ ú ü ñ e maiúsculas) NÃO contém `î` (U+00EE)
+      nem o em-dash `—` (U+2014), então esses dois glyphs ficam EM BRANCO no motor próprio e
+      presentes no FreeType. Essa lacuna é uma propriedade real e atual do escopo MVP (um eixo de
+      cobertura, separado da questão de nitidez) e é deixada visível de propósito.
+      O src da fonte é "assets/OpenSans-Regular.ttf" -- relativo ao WORKING_DIRECTORY do harness
+      (build/tests/, onde o dir assets/ é copiado pelo bloco CMake fonteng_own_embed_sanity).
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      margin: 8dp;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    div.row { display: block; }
+    span.p {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+  </style>
+  <title>glintfx L1.20-FONTFLIP visual sharpness compare</title>
+</head>
+<body>
+  <div class="row"><span class="p" id="s11" style="font-size: 11dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+  <div class="row"><span class="p" id="s13" style="font-size: 13dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+  <div class="row"><span class="p" id="s16" style="font-size: 16dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+  <div class="row"><span class="p" id="s24" style="font-size: 24dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+</body>
+</rml>

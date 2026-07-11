@@ -28,11 +28,15 @@
 //     SCOPE (v1, MVP -- an autonomous, documented scope decision made while implementing this
 //     ticket, not a request for a design review): a font FACE INSTANCE (one family/style/weight/
 //     pixel-size combination) BAKES its ENTIRE glyph atlas EAGERLY, ONCE, the first time
-//     GetFontFaceHandle() resolves it -- a FIXED codepoint set (printable ASCII U+0020..U+007E
-//     plus the pt-br-accented Latin-1 Supplement codepoints á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ and their
-//     uppercase forms, see BuildBakeSet() in the .cpp). There is NO lazy/incremental atlas growth
-//     after that: a codepoint outside the baked set silently has no glyph (advance 0, no quad --
-//     the string still measures/renders, just missing that one character). This was chosen over
+//     GetFontFaceHandle() resolves it -- a FIXED codepoint set (printable ASCII U+0020..U+007E,
+//     the full printable Latin-1 Supplement U+00A0..U+00FF -- which covers Western-European accents
+//     incl. the pt-br set á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + uppercase, the previously-missing î, and
+//     the Latin-1 symbols -- plus common typographic punctuation em/en-dash, curved quotes,
+//     ellipsis and bullet; widened for general-purpose distribution in sub-phase 2.1, see
+//     BuildBakeSet() in the .cpp for the exact bands). There is NO lazy/incremental atlas growth
+//     after that: a codepoint outside the baked set (or one the face itself lacks -- gid 0/.notdef,
+//     skipped, never baked as a tofu box) silently has no glyph (advance 0, no quad -- the string
+//     still measures/renders, just missing that one character). This was chosen over
 //     lazy-bake-on-demand specifically because GetFontFaceHandle() (where a face instance is
 //     first resolved) is NOT passed a Rml::RenderManager& (only GenerateString() is) -- eager
 //     CPU-side baking needs no RenderManager at all, so it happens synchronously in
@@ -88,11 +92,15 @@
 //     tarefa, não um pedido de revisão de design): uma INSTÂNCIA de face de fonte (uma combinação
 //     família/estilo/peso/tamanho-em-px) empacota o atlas de glyph INTEIRO AVIDAMENTE, UMA VEZ, na
 //     primeira vez que GetFontFaceHandle() a resolve -- um conjunto FIXO de codepoint (ASCII
-//     imprimível U+0020..U+007E mais os codepoints do Latin-1 Supplement acentuados pt-br
-//     á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ e suas formas maiúsculas, ver BuildBakeSet() no .cpp). NÃO há
-//     crescimento de atlas preguiçoso/incremental depois disso: um codepoint fora do conjunto
-//     empacotado silenciosamente não tem glyph (avanço 0, sem quad -- a string ainda mede/
-//     renderiza, só falta aquele caractere). Isso foi escolhido em vez de empacotamento
+//     imprimível U+0020..U+007E, o Latin-1 Supplement imprimível completo U+00A0..U+00FF -- que
+//     cobre acentos da Europa Ocidental incl. o conjunto pt-br á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ +
+//     maiúsculas, o î que faltava, e os símbolos Latin-1 -- mais pontuação tipográfica comum
+//     em/en-dash, aspas curvas, reticências e bullet; ampliado pra distribuição geral na sub-fase
+//     2.1, ver BuildBakeSet() no .cpp pras faixas exatas). NÃO há crescimento de atlas preguiçoso/
+//     incremental depois disso: um codepoint fora do conjunto empacotado (ou um que a própria face
+//     não tenha -- gid 0/.notdef, pulado, nunca empacotado como caixa tofu) silenciosamente não tem
+//     glyph (avanço 0, sem quad -- a string ainda mede/renderiza, só falta aquele caractere). Isso
+//     foi escolhido em vez de empacotamento
 //     preguiçoso-sob-demanda especificamente porque GetFontFaceHandle() (onde uma instância de
 //     face é resolvida pela 1ª vez) NÃO recebe um Rml::RenderManager& (só GenerateString()
 //     recebe) -- o empacotamento CPU-side ávido não precisa de RenderManager nenhum, então

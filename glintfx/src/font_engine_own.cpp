@@ -56,29 +56,71 @@ bool& own_font_engine_ab_bypass() {
 
 namespace {
 
-// EN: The v1 fixed bake set (see font_engine_own.hpp's "SCOPE" section): printable ASCII plus
-//     the pt-br-accented Latin-1 Supplement codepoints (lower+upper). A plain function (not a
-//     file-scope static container) so it has no static-init-order concerns and is trivially
-//     re-callable from BakeFaceInstance() without exposing a mutable global.
-// PT: O conjunto fixo empacotado da v1 (ver a seção "ESCOPO" de font_engine_own.hpp): ASCII
-//     imprimível mais os codepoints do Latin-1 Supplement acentuados pt-br (minúsculo+
-//     maiúsculo). Uma função simples (não um container static de escopo de arquivo) para não
-//     ter preocupação de ordem de inicialização estática e ser trivialmente re-chamável a
-//     partir de BakeFaceInstance() sem expor um global mutável.
+// EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
+//     FIXED set -- this ticket (L1.20-FONTFLIP sub-phase 2.1) only WIDENED it for general-purpose
+//     distribution (the product ships worldwide, not just pt-br), it did NOT change the eager
+//     fixed-set architecture (lazy/on-demand bake is a separately-decided future sub-phase). Three
+//     bands, all deduped by construction (no codepoint appears twice):
+//       1. Printable ASCII                U+0020..U+007E (95 cp) -- unchanged.
+//       2. Latin-1 Supplement printable   U+00A0..U+00FF (96 cp) -- SUPERSETS the old hand-picked
+//          pt-br list (á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + uppercase all live in U+00C0..U+00FF), so
+//          nothing regresses; it also picks up the previously-MISSING î (U+00EE) plus the full
+//          Western-European accent coverage and the Latin-1 symbols (© ° ± × ÷ µ ¿ ¡ £ ¢ ¥ § ...).
+//          U+00A0 is the non-breaking space; U+00AD is the soft hyphen -- both harmless (a glyph
+//          the face lacks bakes to nothing, see the gid==0 guard in BakeFaceInstance()).
+//       3. Common typographic punctuation (General Punctuation block) that the previously-fixed
+//          Latin-1-only set silently dropped: em-dash/en-dash, the curved single+double quotes
+//          (the last of which doubles as the typographic apostrophe U+2019), the horizontal
+//          ellipsis, and the bullet. These were the other half of the "î and — vanish" report.
+//     A codepoint the FACE does not actually contain (glyph id 0 / .notdef) is skipped in
+//     BakeFaceInstance() rather than baked, so listing a codepoint here that Open Sans happens to
+//     lack degrades cleanly (no .notdef box polluting the atlas) -- listing is a request, not a
+//     guarantee the face satisfies it.
+//     A plain function (not a file-scope static container) so it has no static-init-order concerns
+//     and is trivially re-callable from BakeFaceInstance() without exposing a mutable global.
+// PT: O conjunto fixo empacotado (ver a seção "ESCOPO" de font_engine_own.hpp). Continua um
+//     conjunto ÁVIDO, único, FIXO -- esta tarefa (sub-fase 2.1 do L1.20-FONTFLIP) só o AMPLIOU pra
+//     distribuição geral (o produto vai pro mundo, não só pt-br), NÃO mudou a arquitetura de
+//     conjunto-fixo-ávido (bake preguiçoso/sob-demanda é uma sub-fase futura decidida à parte).
+//     Três faixas, todas sem duplicata por construção (nenhum codepoint aparece duas vezes):
+//       1. ASCII imprimível              U+0020..U+007E (95 cp) -- inalterado.
+//       2. Latin-1 Supplement imprimível U+00A0..U+00FF (96 cp) -- SUPERCONJUNTO da antiga lista
+//          pt-br escolhida a dedo (á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + maiúsculas todos vivem em
+//          U+00C0..U+00FF), então nada regride; também apanha o î (U+00EE) que FALTAVA mais a
+//          cobertura completa de acentos da Europa Ocidental e os símbolos Latin-1
+//          (© ° ± × ÷ µ ¿ ¡ £ ¢ ¥ § ...). U+00A0 é o espaço não-quebrável; U+00AD é o hífen suave
+//          -- ambos inofensivos (um glyph que a face não tem empacota pra nada, ver a guarda
+//          gid==0 em BakeFaceInstance()).
+//       3. Pontuação tipográfica comum (bloco General Punctuation) que o conjunto fixo antigo
+//          só-Latin-1 largava em silêncio: em-dash/en-dash, as aspas curvas simples+duplas (a
+//          última das quais também é o apóstrofo tipográfico U+2019), as reticências horizontais e
+//          o bullet. Eram a outra metade do relato "î e — somem".
+//     Um codepoint que a FACE de fato não contém (glyph id 0 / .notdef) é pulado em
+//     BakeFaceInstance() em vez de empacotado, então listar aqui um codepoint que a Open Sans por
+//     acaso não tenha degrada limpo (sem caixa .notdef poluindo o atlas) -- listar é um pedido,
+//     não garantia de que a face o satisfaça.
+//     Uma função simples (não um container static de escopo de arquivo) para não ter preocupação
+//     de ordem de inicialização estática e ser trivialmente re-chamável a partir de
+//     BakeFaceInstance() sem expor um global mutável.
 std::vector<uint32_t> BuildBakeSet() {
   std::vector<uint32_t> set;
-  set.reserve(96 + 32);
+  set.reserve(95 + 96 + 12);
+  // 1. Printable ASCII / ASCII imprimível.
   for (uint32_t cp = 0x20; cp <= 0x7E; ++cp) set.push_back(cp);
-  static const uint32_t kExtra[] = {
-      0xE1, 0xE0, 0xE2, 0xE3, 0xC1, 0xC0, 0xC2, 0xC3, // á à â ã Á À Â Ã
-      0xE7, 0xC7,                                     // ç Ç
-      0xE9, 0xEA, 0xC9, 0xCA,                          // é ê É Ê
-      0xED, 0xCD,                                     // í Í
-      0xF3, 0xF4, 0xF5, 0xD3, 0xD4, 0xD5,              // ó ô õ Ó Ô Õ
-      0xFA, 0xFC, 0xDA, 0xDC,                          // ú ü Ú Ü
-      0xF1, 0xD1,                                     // ñ Ñ
+  // 2. Latin-1 Supplement printable / Latin-1 Supplement imprimível (includes all old pt-br + î).
+  for (uint32_t cp = 0xA0; cp <= 0xFF; ++cp) set.push_back(cp);
+  // 3. Common typographic punctuation / Pontuação tipográfica comum.
+  static const uint32_t kTypographic[] = {
+      0x2013, // – en-dash
+      0x2014, // — em-dash
+      0x2018, // ' left single quote
+      0x2019, // ' right single quote / typographic apostrophe
+      0x201C, // " left double quote
+      0x201D, // " right double quote
+      0x2022, // • bullet
+      0x2026, // … horizontal ellipsis
   };
-  for (uint32_t cp : kExtra) set.push_back(cp);
+  for (uint32_t cp : kTypographic) set.push_back(cp);
   return set;
 }
 
@@ -268,9 +310,10 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   //     x_height is refined below to the RASTERIZED 'x' glyph's own bbox height when 'x' bakes
   //     successfully (more accurate than the ascent*0.5 placeholder -- SOV-SFNT does not expose
   //     the OS/2 table's sxHeight field, out of its own documented scope).
-  //     has_ellipsis is deliberately false: U+2026 is not in this ticket's fixed bake set (see
-  //     this file's header "SCOPE") -- RmlUi falls back to its own "..." three-dot construction
-  //     for text-overflow:ellipsis, which is not exercised by this ticket's acceptance test.
+  //     has_ellipsis starts false and is flipped true below ONLY if U+2026 actually rasterises for
+  //     this face (it is now in the widened bake set, sub-phase 2.1) -- gating on the real bake,
+  //     not mere set membership, keeps it honest for a face that happens to lack the glyph (then
+  //     RmlUi falls back to its own "..." three-dot construction for text-overflow:ellipsis).
   // PT: Derivação de FontMetrics a partir de head/hhea (unidades de fonte) escaladas pro
   //     tamanho-em-px desta instância. `descender` é negativo na própria convenção do TrueType
   //     (abaixo da linha de base); FontMetrics::descent quer uma distância POSITIVA abaixo da
@@ -308,6 +351,29 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
 
   for (uint32_t cp : BuildBakeSet()) {
     const uint32_t gid = glx_sfnt_glyph_id(&sf, cp);
+
+    // EN: gid 0 is .notdef -- glx_sfnt_glyph_id() returns it for any codepoint the face's cmap
+    //     does not map (include/core/sfnt.h's documented convention). With the widened bake set
+    //     (Latin-1 Supplement + typographic punctuation) some listed codepoints may legitimately
+    //     be absent from a given face, so skip them here rather than baking .notdef's own box
+    //     outline under a real codepoint -- that would pollute the atlas with a visible tofu box
+    //     and make FindGlyph() return a bogus quad for a character the font never had. Skipping
+    //     leaves the codepoint out of inst.glyphs entirely: FindGlyph() returns nullptr, the
+    //     string still measures/renders, that one character is simply blank (advance 0, no quad) --
+    //     the exact "codepoint outside the baked set" degradation the header's SCOPE promises. cp 0
+    //     is never in BuildBakeSet(), so this never wrongly drops a real glyph mapped to gid 0.
+    // PT: gid 0 é .notdef -- glx_sfnt_glyph_id() o retorna pra qualquer codepoint que o cmap da
+    //     face não mapeia (convenção documentada de include/core/sfnt.h). Com o conjunto ampliado
+    //     (Latin-1 Supplement + pontuação tipográfica) alguns codepoints listados podem
+    //     legitimamente faltar numa dada face, então pula-os aqui em vez de empacotar o próprio
+    //     outline de caixa do .notdef sob um codepoint real -- isso poluiria o atlas com uma caixa
+    //     tofu visível e faria o FindGlyph() devolver um quad espúrio pra um caractere que a fonte
+    //     nunca teve. Pular deixa o codepoint totalmente fora de inst.glyphs: FindGlyph() devolve
+    //     nullptr, a string ainda mede/renderiza, aquele caractere só fica em branco (avanço 0, sem
+    //     quad) -- exatamente a degradação "codepoint fora do conjunto empacotado" que o SCOPE do
+    //     header promete. cp 0 nunca está em BuildBakeSet(), então isto nunca larga por engano um
+    //     glyph real mapeado a gid 0.
+    if (gid == 0) continue;
 
     uint16_t advance_units = 0;
     int16_t lsb = 0;
@@ -379,6 +445,9 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
             b.offset_x = fx_min - kPad;
             b.offset_y = -(fy_max + kPad);
             if (cp == 0x78) inst.metrics.x_height = fy_max - fy_min; // 'x' baked -- refine x_height.
+            // EN: U+2026 rasterised for this face -- RmlUi may use the native ellipsis glyph.
+            // PT: U+2026 rasterizou pra esta face -- o RmlUi pode usar o glyph nativo de reticências.
+            if (cp == 0x2026) inst.metrics.has_ellipsis = true;
           }
         }
       }
@@ -389,8 +458,12 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
 
   // EN: Shelf-pack pass -- fixed-width shelves (grown to fit the widest single glyph, if any
   //     exceeds the 512px default), rows advance downward as a shelf fills. Deterministic,
-  //     single-pass, good enough for this ticket's ~120-glyph fixed set (no need for a
-  //     general-purpose bin packer here).
+  //     single-pass, good enough for this ticket's fixed set (~199 codepoints after the sub-phase
+  //     2.1 widening -- printable ASCII + full Latin-1 Supplement + typographic punctuation, minus
+  //     any the face lacks; no need for a general-purpose bin packer here). Only the atlas HEIGHT
+  //     grows to fit the extra shelves (pen_y accumulates downward, atlas_h derived below); the
+  //     512px shelf WIDTH is untouched -- no single Open Sans glyph at any UI size approaches it,
+  //     so the initial texture size did NOT need to grow for the larger set.
   // PT: Passe de empacotamento em prateleiras -- prateleiras de largura fixa (cresce pra caber
   //     o glyph mais largo, se algum exceder o padrão de 512px), linhas avançam pra baixo à
   //     medida que uma prateleira enche. Determinístico, passe único, suficiente pro conjunto

@@ -238,6 +238,27 @@ jobs:
     runs-on: docker
     container:
       image: localhost/glintfx-ci:f42
+    # EN: SYS_futex workaround IS needed here after all. The Onda-1 local probe that
+    #     concluded "Fedora 42 doesn't need it" was MISLEADING -- CI run #51 (fonteng,
+    #     BOTH configs) failed with clang++ hitting "use of undeclared identifier
+    #     'SYS_futex'" in libstdc++15's <bits/atomic_wait.h> (GCC 15 header, Fedora 42).
+    #     The bug is CLANG-SPECIFIC (gcc pulls <sys/syscall.h> transitively, clang does
+    #     not) -- which is exactly why the gcc `sanitize` jobs above are unaffected and
+    #     PASS, while these clang `fonteng` jobs need the flag. Identical to the same env
+    #     in .forgejo/workflows/ci.yml; purely additive (supplies a missing declaration,
+    #     changes no behaviour). The file-header note above claiming this image doesn't
+    #     need it is superseded by this finding.
+    # PT: O workaround SYS_futex É necessário aqui. A sonda local da Onda 1 que concluiu
+    #     "o Fedora 42 não precisa" ENGANOU -- o run #51 do CI (fonteng, AS 2 configs)
+    #     falhou com clang++ batendo em "use of undeclared identifier 'SYS_futex'" no
+    #     <bits/atomic_wait.h> do libstdc++15 (header do GCC 15, Fedora 42). O bug é
+    #     ESPECÍFICO DO CLANG (gcc puxa <sys/syscall.h> transitivo, clang não) -- é por
+    #     isso que os jobs gcc `sanitize` acima não são afetados e PASSAM, enquanto estes
+    #     jobs clang `fonteng` precisam da flag. Idêntico ao mesmo env em
+    #     .forgejo/workflows/ci.yml; puramente aditivo. A nota do cabeçalho do arquivo
+    #     acima que afirma que esta imagem não precisa fica superada por este achado.
+    env:
+      CXXFLAGS: "-include sys/syscall.h"
     strategy:
       fail-fast: false
       matrix:

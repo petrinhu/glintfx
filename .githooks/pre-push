@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MPL-2.0
+# EN: git pre-push hook (TST-L1-PRECI). Runs tools/preci.sh in fast mode before any
+#     `git push` -- the local gate "before it becomes visible on a remote" (líder's
+#     2026-07-10 decision: pre-push, not pre-commit, because the glintfx suite is too
+#     slow (~2min warm) for the fast small-commit loop; pushing is the right checkpoint
+#     for "this is about to be visible"). A non-zero exit here ABORTS the push.
+#
+#     This hook is OPT-IN, not installed by default (git only looks in .git/hooks/ out
+#     of the box). Activate it once per clone with:
+#
+#       git config core.hooksPath .githooks
+#
+#     To bypass for one push (e.g. an emergency, or a push that touches neither layer):
+#       git push --no-verify
+#     Use sparingly -- this is the gate, not a formality.
+#
+# PT: hook git pre-push (TST-L1-PRECI). Roda tools/preci.sh em modo rápido antes de
+#     qualquer `git push` -- o gate local "antes de ficar visível num remoto" (decisão
+#     do líder de 2026-07-10: pre-push, não pre-commit, porque a suíte glintfx é lenta
+#     demais (~2min warm) pro loop rápido de commits pequenos; o push é o checkpoint
+#     certo para "isso está prestes a ficar visível"). Uma saída não-zero aqui ABORTA
+#     o push.
+#
+#     Este hook é OPT-IN, não é instalado por padrão (o git só olha .git/hooks/ de
+#     fábrica). Ative uma vez por clone com:
+#
+#       git config core.hooksPath .githooks
+#
+#     Para pular num push específico (ex.: emergência, ou um push que não toca nenhuma
+#     das camadas):
+#       git push --no-verify
+#     Usar com moderação -- isto é o gate, não uma formalidade.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+exec "${REPO_ROOT}/tools/preci.sh"

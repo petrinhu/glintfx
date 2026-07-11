@@ -180,6 +180,8 @@ cmake --build glintfx/build
 
 Run the full test suite with `ctest --test-dir glintfx/build`. For a local self-hosted code-coverage report (Clang/llvm-cov, no third-party uploader), run `tools/coverage_report.sh` from the repo root -- it builds an instrumented config, runs the suite, and writes an HTML report to `glintfx/build-cov/coverage-html/index.html`. See [`TESTES.md`](TESTES.md#tst-l1-cov) for the CI gate and floor policy.
 
+**Local pre-push gate.** Run `git config core.hooksPath .githooks` once per clone to activate `tools/preci.sh` (TST-L1-PRECI) as a `git push` gate: it detects which layer(s) you touched and runs just that build+test (fast, day-to-day); `tools/preci.sh --full` additionally runs both glintfx configs plus the encapsulation and secret-scan checks, for occasional manual runs. See [`TESTES.md`](TESTES.md#tst-l1-preci).
+
 ### Effects (RCSS syntax)
 
 Effects are **data-driven**: you declare them in `.rcss`. RmlUi 6.3 syntax differs from standard CSS in a few places. Most notably, **color comes first** in shadows, and **gradients use `decorator:`**, not `background:`.
@@ -438,6 +440,8 @@ cmake --build glintfx/build
 ### Testes & cobertura
 
 Rode a suíte completa com `ctest --test-dir glintfx/build`. Para um relatório local de cobertura de código self-hosted (Clang/llvm-cov, sem uploader de terceiro), rode `tools/coverage_report.sh` a partir da raiz do repo -- ele builda uma config instrumentada, roda a suíte, e escreve um relatório HTML em `glintfx/build-cov/coverage-html/index.html`. Ver [`TESTES.md`](TESTES.md#tst-l1-cov) para o gate de CI e a política de piso.
+
+**Gate local pré-push.** Rode `git config core.hooksPath .githooks` uma vez por clone para ativar `tools/preci.sh` (TST-L1-PRECI) como gate do `git push`: ele detecta qual(is) camada(s) você tocou e roda só aquele build+teste (rápido, dia a dia); `tools/preci.sh --full` roda adicionalmente as duas configs do glintfx mais os checks de encapsulamento e secret-scan, para rodadas manuais ocasionais. Ver [`TESTES.md`](TESTES.md#tst-l1-preci).
 
 ### Efeitos (sintaxe RCSS)
 

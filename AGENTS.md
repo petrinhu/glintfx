@@ -49,6 +49,10 @@ cmake -S glintfx -B glintfx/build -DGLINTFX_GOLDEN_TEST=ON   # real GPU only
 
 To verify drop-in consumption end to end, build `consumer-example/`, which pulls glintfx via `FetchContent` (`SOURCE_DIR`) and links `glintfx::glintfx` with no GL/GLFW/RmlUi references.
 
+### Local gate before pushing (opt-in pre-push hook)
+
+`tools/preci.sh` (TST-L1-PRECI) mirrors the fast day-to-day slice of CI **before** code becomes visible on a remote. Activate once per clone with `git config core.hooksPath .githooks`; `.githooks/pre-push` then runs it in fast mode on every `git push` and aborts the push on any failure. Fast mode detects which layer(s) were actually touched (`origin/main...HEAD` union the working tree) and runs only the matching build+test -- Layer 0 (`make build && make test`) and/or Layer 1 (`glintfx/build-preci`, `GLFW=ON` config, `ctest` under Xvfb). `tools/preci.sh --full` runs the wide net (both glintfx configs, sequentially -- one build in memory at a time -- plus `check_encapsulation.sh` and `gitleaks` if installed) for occasional manual runs, e.g. before tagging a release. See [`TESTES.md`](TESTES.md#tst-l1-preci).
+
 ### Conventions
 
 - **SPDX header in every code file.** First line: `SPDX-License-Identifier: MPL-2.0` (comment style per language: `//` for C/C++, `;` for NASM, `#` for CMake/Makefile/shell). Do **not** put SPDX in `.md` docs.
@@ -116,6 +120,7 @@ A constelação bigtech (definição dos agents, RACI, pipelines de release) é 
 ### Ponteiros essenciais
 
 - [`CLAUDE.md`](CLAUDE.md): convenções do projeto, idioma, autoridade do líder, ambiente (toolchain Fedora 44), glintfx como produto ativo.
+- Gate local pre-push: `git config core.hooksPath .githooks` ativa `tools/preci.sh` via `.githooks/pre-push` (TST-L1-PRECI) -- ver seção "Local gate before pushing" acima e [`TESTES.md`](TESTES.md#tst-l1-preci).
 - [`docs/embed-integration.md`](docs/embed-integration.md): contrato de integração do `UiLayer` para hosts (fonte de verdade para frame lifecycle, GL state, dp_ratio, base URL, data model, texturas) -- leia antes de mexer no caminho embed.
 - [`TODO.md`](TODO.md): tabela de pendências (ondas, IDs, pré-requisitos) das duas camadas, a **INBOX** (descobertas não priorizadas) e o escopo planejado da **v2** (component library / Atomic Design, spec em `docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`, branch `feat/v2-f2-components`, pausada).
 - **Sistema de memória:** memórias tipadas em `~/.claude/projects/<slug>/memory/` (índice em `MEMORY.md`), autocarregadas por sessão. Não duplicar o que o repo já registra; registrar só o não óbvio.

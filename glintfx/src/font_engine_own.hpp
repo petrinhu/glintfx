@@ -402,6 +402,48 @@ private:
   std::vector<std::unique_ptr<FaceInstance>> instances_;
 };
 
+// EN: A/B TEST HOOK (L1.20-FONTFLIP, FT-F4) -- a single process-global toggle read exactly once
+//     per session, by Bootstrap::init() (src/bootstrap.cpp), guarded there by the same
+//     `#if GLINTFX_OWN_FONT_ENGINE` this declaration lives under. When it returns `true`,
+//     Bootstrap::init() SKIPS the `Rml::SetFontEngineInterface(&font_engine_own)` call, leaving
+//     RmlUi's global `font_interface` pointer null at Rml::Initialise() time -- which makes
+//     RmlUi fall back to its built-in FreeType default engine (confirmed reading the pinned
+//     RmlUi Source/Core/Core.cpp: Initialise() creates a FontEngineInterfaceDefault only when no
+//     interface was set, and Shutdown() resets font_interface back to null, so a subsequent
+//     init/shutdown cycle in the SAME process cleanly re-selects whichever engine the toggle
+//     asks for). This is the ONE mechanism that lets tests/fonteng_ab_compare.cpp measure the
+//     SAME scene through BOTH engines in a SINGLE GLINTFX_OWN_FONT_ENGINE=ON build (no second
+//     build, no RmlUi rebuild -- see that file's own header for the full A/B rationale).
+//
+//     NOT part of glintfx's PUBLIC API: declared only in this src-internal header, and even here
+//     only when GLINTFX_OWN_FONT_ENGINE=ON (a build that is OFF by the shipping default, per
+//     glintfx/CMakeLists.txt). Default value: `false` -- the own engine is installed as usual,
+//     so a normal ON build behaves EXACTLY as before this hook existed; only a test that
+//     explicitly flips it observes any difference. Returns a reference to a function-local
+//     `static bool` (no static-init-order concern, single-threaded test use only).
+// PT: HOOK DE TESTE A/B (L1.20-FONTFLIP, FT-F4) -- um único toggle process-global lido
+//     exatamente uma vez por sessão, pelo Bootstrap::init() (src/bootstrap.cpp), protegido lá
+//     pelo mesmo `#if GLINTFX_OWN_FONT_ENGINE` sob o qual esta declaração vive. Quando retorna
+//     `true`, o Bootstrap::init() PULA a chamada `Rml::SetFontEngineInterface(&font_engine_own)`,
+//     deixando o ponteiro global `font_interface` do RmlUi nulo no momento do Rml::Initialise()
+//     -- o que faz o RmlUi cair no seu motor FreeType default embutido (confirmado lendo o
+//     Source/Core/Core.cpp pinado do RmlUi: o Initialise() cria um FontEngineInterfaceDefault só
+//     quando nenhuma interface foi setada, e o Shutdown() reseta font_interface de volta pra
+//     nulo, então um ciclo init/shutdown seguinte no MESMO processo re-seleciona limpo qualquer
+//     motor que o toggle pedir). É o ÚNICO mecanismo que permite ao tests/fonteng_ab_compare.cpp
+//     medir a MESMA cena através dos DOIS motores num ÚNICO build GLINTFX_OWN_FONT_ENGINE=ON (sem
+//     segundo build, sem rebuild do RmlUi -- ver o cabeçalho próprio daquele arquivo pro racional
+//     A/B completo).
+//
+//     NÃO faz parte da API PÚBLICA do glintfx: declarado só neste header src-interno, e mesmo
+//     aqui só quando GLINTFX_OWN_FONT_ENGINE=ON (um build que é OFF pelo padrão de release, ver
+//     glintfx/CMakeLists.txt). Valor default: `false` -- o motor próprio é instalado como de
+//     costume, então um build ON normal se comporta EXATAMENTE como antes deste hook existir; só
+//     um teste que explicitamente o vira observa alguma diferença. Retorna uma referência a um
+//     `static bool` local de função (sem preocupação de ordem de init estática, uso só em teste
+//     single-thread).
+bool& own_font_engine_ab_bypass();
+
 } // namespace glintfx
 
 #endif // GLINTFX_OWN_FONT_ENGINE

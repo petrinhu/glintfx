@@ -847,6 +847,49 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_own_kern_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_ab_compare (L1.20-FONTFLIP, FT-F4) -- the A/B SAFETY NET for "the flip": renders
+  #     the SAME document (fonteng_ab_scene.rml) through BOTH the own SOV-SFNT/SOV-RAST engine and
+  #     RmlUi's FreeType engine, in ONE GLINTFX_OWN_FONT_ENGINE=ON build, and compares per-span
+  #     advance width + ink coverage numerically -- flagging GROSS divergence (missing glyph,
+  #     2x-wrong advance, broken pt-br composite-accent outline) before the own engine becomes the
+  #     default. Runtime engine selection is via the src-internal own_font_engine_ab_bypass() hook
+  #     (font_engine_own.hpp), read once per session by Bootstrap::init(). Same registration
+  #     pattern as fonteng_own_kern_sanity / fonteng_own_embed_sanity right above (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) so it builds and runs identically
+  #     with GLINTFX_BACKEND_GLFW ON or OFF -- exercising the A/B on both the GLFW-hosted-App CI
+  #     path and GusWorld's own embed-only (UiLayer) consumption path. The assets/ font dir is
+  #     already copied to CMAKE_CURRENT_BINARY_DIR by the fonteng_own_embed_sanity block above; the
+  #     scene's @font-face src ("assets/OpenSans-Regular.ttf") resolves against the shared
+  #     WORKING_DIRECTORY (= build/tests/). See fonteng_ab_compare.cpp's own header for the full
+  #     metric/tolerance derivation.
+  # PT: fonteng_ab_compare (L1.20-FONTFLIP, FT-F4) -- a REDE DE SEGURANÇA A/B para "o flip":
+  #     renderiza o MESMO documento (fonteng_ab_scene.rml) através TANTO do motor próprio
+  #     SOV-SFNT/SOV-RAST QUANTO do motor FreeType do RmlUi, num único build
+  #     GLINTFX_OWN_FONT_ENGINE=ON, e compara largura de avanço + cobertura de tinta por-span
+  #     numericamente -- flagrando divergência GROSSEIRA (glyph faltando, avanço 2x errado, outline
+  #     de acento composto pt-br quebrado) antes de o motor próprio virar o default. A seleção de
+  #     motor em runtime é via o hook src-interno own_font_engine_ab_bypass() (font_engine_own.hpp),
+  #     lido uma vez por sessão pelo Bootstrap::init(). Mesmo padrão de registro de
+  #     fonteng_own_kern_sanity / fonteng_own_embed_sanity logo acima (FORA de
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) para buildar e rodar identicamente
+  #     com GLINTFX_BACKEND_GLFW ON ou OFF -- exercitando o A/B tanto no caminho de CI
+  #     hospedado-por-GLFW-App quanto no próprio caminho de consumo embed-only (UiLayer) do
+  #     GusWorld. O dir de fonte assets/ já é copiado pra CMAKE_CURRENT_BINARY_DIR pelo bloco
+  #     fonteng_own_embed_sanity acima; o src de @font-face da cena ("assets/OpenSans-Regular.ttf")
+  #     resolve contra o WORKING_DIRECTORY compartilhado (= build/tests/). Ver o cabeçalho próprio
+  #     de fonteng_ab_compare.cpp pra derivação completa de métrica/tolerância.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_ab_compare fonteng_ab_compare.cpp)
+  target_link_libraries(fonteng_ab_compare PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_ab_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_ab_scene.rml COPYONLY)
+  add_test(NAME fonteng_ab_compare
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_ab_compare>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

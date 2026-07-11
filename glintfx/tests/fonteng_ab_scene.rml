@@ -1,0 +1,72 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP (FT-F4) A/B comparison document -- driven by tests/fonteng_ab_compare.cpp,
+      which loads this SAME document twice in one process (once with glintfx's own SOV-SFNT/
+      SOV-RAST engine, once with RmlUi's built-in FreeType engine, selected at runtime via the
+      own_font_engine_ab_bypass() hook) and compares per-span metrics numerically. Every element
+      is `display: inline-block` with ZERO padding/border/margin and white-space:nowrap, so
+      UiLayer::get_element_box(id).w is exactly the string's shrink-to-fit advance width and
+      get_element_box(id) gives the true ink bounding box for per-span ink-coverage counting.
+      Black background + white text so a pixel is "ink" iff a glyph covers it.
+      Every accented codepoint below is inside FontEngineOwn's fixed BAKE_SET (see
+      src/font_engine_own.cpp's BuildBakeSet(): á à â ã ç é ê í ó ô õ ú ü ñ + uppercase) so the
+      own engine is never unfairly blank for an out-of-set glyph -- an A/B divergence here means a
+      REAL defect (missing/short advance, or a broken composite-accent outline), not merely a
+      codepoint this ticket's MVP scope never baked.
+      Font src is "assets/OpenSans-Regular.ttf" -- relative to the test's WORKING_DIRECTORY
+      (CMAKE_CURRENT_BINARY_DIR = build/tests/, the repo-wide embed-test convention; the assets/
+      dir is copied there by the fonteng_own_embed_sanity CMake block).
+  PT: Documento de comparação A/B do L1.20-FONTFLIP (FT-F4) -- dirigido por
+      tests/fonteng_ab_compare.cpp, que carrega este MESMO documento duas vezes num processo (uma
+      com o motor próprio SOV-SFNT/SOV-RAST do glintfx, uma com o motor FreeType embutido do
+      RmlUi, selecionado em runtime via o hook own_font_engine_ab_bypass()) e compara métricas
+      por-span numericamente. Todo elemento é `display: inline-block` com ZERO padding/borda/
+      margem e white-space:nowrap, então UiLayer::get_element_box(id).w é exatamente a largura de
+      avanço de encolher-para-caber da string e get_element_box(id) dá a bounding box real de
+      tinta pra contagem de cobertura por-span. Fundo preto + texto branco para um pixel ser
+      "tinta" sse-e-somente-se um glyph o cobre.
+      Todo codepoint acentuado abaixo está dentro do BAKE_SET fixo do FontEngineOwn (ver
+      BuildBakeSet() em src/font_engine_own.cpp: á à â ã ç é ê í ó ô õ ú ü ñ + maiúsculas) para o
+      motor próprio nunca ficar injustamente em branco por um glyph fora-do-conjunto -- uma
+      divergência A/B aqui significa um defeito REAL (avanço faltando/curto, ou um outline de
+      acento composto quebrado), não meramente um codepoint que o escopo MVP desta tarefa nunca
+      empacotou.
+      O src da fonte é "assets/OpenSans-Regular.ttf" -- relativo ao WORKING_DIRECTORY do teste
+      (CMAKE_CURRENT_BINARY_DIR = build/tests/, convenção repo-wide de teste embed; o dir assets/
+      é copiado pra lá pelo bloco CMake fonteng_own_embed_sanity).
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    /* EN: forces each span onto its own line so ink bands never overlap horizontally.
+       PT: força cada span na própria linha para as bandas de tinta nunca se sobreporem. */
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP A/B compare</title>
+</head>
+<body>
+  <span id="ascii_caps">AGWQ</span><br/>
+  <span id="ascii_low">handgloves</span><br/>
+  <span id="accent_low">áãçéêõ</span><br/>
+  <span id="accent_up">ÁÃÇÉÊÕ</span><br/>
+  <span id="word_coracao">coração</span><br/>
+  <span id="word_acao">ação</span>
+</body>
+</rml>

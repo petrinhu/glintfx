@@ -867,7 +867,24 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     Rml::SetFontEngineInterface() o sobrepõe em RUNTIME, então trocar este A/B não exige
   //     rebuild do RmlUi, só reconfigurar/relinkar o próprio glintfx com uma option de CMake
   //     diferente.
-  Rml::SetFontEngineInterface(&impl_->font_engine_own);
+  //
+  //     A/B TEST BYPASS (L1.20-FONTFLIP, FT-F4): own_font_engine_ab_bypass() is a src-internal,
+  //     test-only toggle (default false -- see its doc-comment in font_engine_own.hpp). When a
+  //     test sets it true, this install is SKIPPED, so RmlUi's global font_interface stays null
+  //     and Rml::Initialise() (called just below) falls back to its built-in FreeType default
+  //     engine -- the ONE runtime switch that lets tests/fonteng_ab_compare.cpp measure the same
+  //     scene through BOTH engines in a single ON build. A normal ON build never flips it, so the
+  //     own engine is installed exactly as before.
+  //     BYPASS DE TESTE A/B (L1.20-FONTFLIP, FT-F4): own_font_engine_ab_bypass() é um toggle
+  //     src-interno, só-de-teste (default false -- ver seu doc-comment em font_engine_own.hpp).
+  //     Quando um teste o seta true, esta instalação é PULADA, então o font_interface global do
+  //     RmlUi fica nulo e o Rml::Initialise() (chamado logo abaixo) cai no motor FreeType default
+  //     embutido -- o ÚNICO switch de runtime que deixa o tests/fonteng_ab_compare.cpp medir a
+  //     mesma cena através dos DOIS motores num único build ON. Um build ON normal nunca o vira,
+  //     então o motor próprio é instalado exatamente como antes.
+  if (!glintfx::own_font_engine_ab_bypass()) {
+    Rml::SetFontEngineInterface(&impl_->font_engine_own);
+  }
 #endif
   // EN: Install our FileInterface BEFORE Rml::Initialise(). It is owned by Impl and lives
   //     until shutdown(). When base_url is empty (the default) its behaviour is identical to

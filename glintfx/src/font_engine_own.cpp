@@ -35,6 +35,25 @@
 
 namespace glintfx {
 
+// EN: A/B TEST HOOK storage (L1.20-FONTFLIP, FT-F4). See the long doc-comment on this function's
+//     declaration in font_engine_own.hpp for the full contract. Function-local static so the
+//     `false` default is established on first use with no static-init-order dependency; a
+//     reference is returned so a test can flip it (`glintfx::own_font_engine_ab_bypass() = true;`)
+//     before constructing the App/UiLayer whose Bootstrap::init() will read it. Lives in this
+//     translation unit (compiled ONLY when GLINTFX_OWN_FONT_ENGINE=ON) so it never adds a symbol
+//     to a default OFF build.
+// PT: Armazenamento do HOOK DE TESTE A/B (L1.20-FONTFLIP, FT-F4). Ver o doc-comment longo na
+//     declaração desta função em font_engine_own.hpp pro contrato completo. static local de
+//     função para o default `false` ser estabelecido no primeiro uso sem dependência de ordem de
+//     init estática; uma referência é retornada para um teste poder virá-lo
+//     (`glintfx::own_font_engine_ab_bypass() = true;`) antes de construir o App/UiLayer cujo
+//     Bootstrap::init() o lerá. Vive nesta unidade de tradução (compilada SÓ quando
+//     GLINTFX_OWN_FONT_ENGINE=ON) para nunca adicionar um símbolo a um build OFF padrão.
+bool& own_font_engine_ab_bypass() {
+  static bool bypass = false;
+  return bypass;
+}
+
 namespace {
 
 // EN: The v1 fixed bake set (see font_engine_own.hpp's "SCOPE" section): printable ASCII plus

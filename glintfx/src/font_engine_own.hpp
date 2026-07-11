@@ -500,6 +500,61 @@ bool& own_font_engine_ab_bypass();
 //     ordem de init estática, uso só em teste single-thread).
 bool& own_font_engine_hint_bypass();
 
+// EN: STEM-DARKENING ENABLE HOOK (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) -- a third src-internal,
+//     process-global toggle, sibling to the two above but orthogonal again, and OPT-IN (default
+//     `false`, unlike the two `_bypass` siblings whose default IS the applied behaviour). It does
+//     NOT choose the engine (ab_bypass) nor whether Y grid-fitting runs (hint_bypass); it chooses
+//     whether the OWN engine applies its per-texel COVERAGE-CURVE stem darkening at atlas-blit time.
+//     Read once PER BAKED INSTANCE inside BakeFaceInstance() (font_engine_own.cpp): when it returns
+//     `true`, a size-dependent gamma curve `c' = c^γ` (γ<1) is applied to every coverage byte as it
+//     is written into the RGBA atlas (fading to identity by ~24px); when `false` (the DEFAULT and
+//     the SHIPPING behaviour), the LUT is the identity map -- raw coverage, byte-identical to the
+//     pre-1.5 blit.
+//
+//     ⚠ OPTIONAL MACHINERY, OFF BY DEFAULT -- líder-gated decision (sub-phase 1.5). The cheap
+//     coverage-curve darkening was measured (fonteng_ab_visual's measure_oracle()) and DID NOT close
+//     the stem-sharpness gap to FreeType -- it is a STRUCTURAL/GEOMETRIC limitation, not a tuning
+//     one: a thin vertical stem whose coverage splits ~0.5/0.5 across two pixel columns can only be
+//     consolidated into one crisp near-white column by X-AXIS STEM GRID-FITTING (snapping the stem
+//     to a column), which a per-coverage curve cannot synthesise. Darkening only adds WEIGHT: it
+//     measured `vstem_edge` slightly WORSE (fills the inter-stem valleys with grey haze, flattening
+//     the column gradient the metric rewards) while pushing `total_ink` +15-25% at 11-13px, past
+//     FreeType's own weight. It is therefore kept as OPT-IN machinery (this hook, + the 4-variant
+//     A/B in fonteng_ab_visual.cpp's "own_yhint_dark" leg) rather than shipped on. The residual
+//     stem-sharpness gap is left to the X-AXIS STEM GRID-FIT (a future, líder-gated sub-phase).
+//
+//     Only meaningful while the own engine is installed (ab_bypass==false) -- inert with FreeType
+//     (it does its own darkening). Returns a reference to a function-local `static bool` (no
+//     static-init-order concern, single-threaded test use).
+// PT: HOOK DE ENABLE DO STEM-DARKENING (L1.20-FONTFLIP, FT-F4, sub-fase 1.5) -- um terceiro toggle
+//     src-interno, process-global, irmão dos dois acima mas de novo ortogonal, e OPT-IN (default
+//     `false`, diferente dos dois irmãos `_bypass` cujo default É o comportamento aplicado). Ele NÃO
+//     escolhe o motor (ab_bypass) nem se o grid-fitting Y roda (hint_bypass); escolhe se o motor
+//     PRÓPRIO aplica seu stem-darkening por CURVA-DE-COBERTURA por-texel no blit do atlas. Lido uma
+//     vez POR INSTÂNCIA empacotada dentro de BakeFaceInstance() (font_engine_own.cpp): quando
+//     retorna `true`, uma curva de gamma dependente de tamanho `c' = c^γ` (γ<1) é aplicada a cada
+//     byte de cobertura ao ser escrito no atlas RGBA (decaindo pra identidade até ~24px); quando
+//     `false` (o DEFAULT e o comportamento de release), a LUT é o mapa identidade -- cobertura crua,
+//     byte-idêntica ao blit pré-1.5.
+//
+//     ⚠ MAQUINARIA OPCIONAL, OFF POR PADRÃO -- decisão do líder (sub-fase 1.5). O darkening barato
+//     por curva-de-cobertura foi medido (measure_oracle() do fonteng_ab_visual) e NÃO fechou o gap
+//     de nitidez de haste pro FreeType -- é uma limitação ESTRUTURAL/GEOMÉTRICA, não de calibragem:
+//     uma haste vertical fina cuja cobertura se divide ~0.5/0.5 entre duas colunas de pixel só
+//     consolida numa única coluna nítida quase-branca via GRID-FITTING DE HASTE NO EIXO X (snapando
+//     a haste numa coluna), o que uma curva por-cobertura não consegue sintetizar. O darkening só
+//     adiciona PESO: mediu `vstem_edge` levemente PIOR (preenche os vales entre hastes com névoa
+//     cinza, achatando o gradiente de coluna que a métrica premia) enquanto empurra o `total_ink`
+//     +15-25% em 11-13px, além do próprio peso do FreeType. É por isso mantido como maquinaria
+//     OPT-IN (este hook, + o A/B de 4 variantes na perna "own_yhint_dark" do fonteng_ab_visual.cpp)
+//     em vez de shippado ligado. O gap residual de nitidez de haste fica pro GRID-FIT DE HASTE NO
+//     EIXO X (uma sub-fase futura, decidida pelo líder).
+//
+//     Só faz sentido enquanto o motor próprio está instalado (ab_bypass==false) -- inerte com o
+//     FreeType (ele faz o próprio darkening). Retorna uma referência a um `static bool` local de
+//     função (sem preocupação de ordem de init estática, uso só em teste single-thread).
+bool& own_font_engine_darken_enable();
+
 } // namespace glintfx
 
 #endif // GLINTFX_OWN_FONT_ENGINE

@@ -72,6 +72,25 @@ bool& own_font_engine_hint_bypass() {
   return bypass;
 }
 
+// EN: STEM-DARKENING ENABLE storage (L1.20-FONTFLIP, FT-F4, sub-phase 1.5). See the long doc-comment
+//     on this function's declaration in font_engine_own.hpp for the full contract AND the measured
+//     negative result. OPT-IN: default `false` == "raw coverage, NO darkening", the shipping
+//     behaviour (the coverage curve did not close the stem-sharpness gap -- see the header). A test
+//     flips it to `true` to measure the darkened path (the "own_yhint_dark" A/B leg). Same
+//     function-local-static pattern as the two hooks above; only the default polarity differs
+//     (opt-in, not opt-out), which is why this one is named `_enable`, not `_bypass`.
+// PT: Armazenamento do ENABLE de STEM-DARKENING (L1.20-FONTFLIP, FT-F4, sub-fase 1.5). Ver o
+//     doc-comment longo na declaração desta função em font_engine_own.hpp pro contrato completo E o
+//     resultado negativo medido. OPT-IN: default `false` == "cobertura crua, SEM darkening", o
+//     comportamento de release (a curva de cobertura não fechou o gap de nitidez de haste -- ver o
+//     header). Um teste o vira pra `true` pra medir o caminho escurecido (a perna A/B
+//     "own_yhint_dark"). Mesmo padrão static-local-de-função dos dois hooks acima; só a polaridade
+//     do default difere (opt-in, não opt-out), motivo de este se chamar `_enable`, não `_bypass`.
+bool& own_font_engine_darken_enable() {
+  static bool enable = false;
+  return enable;
+}
+
 namespace {
 
 // EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
@@ -157,6 +176,90 @@ std::vector<uint32_t> BuildBakeSet() {
 //     consistente com o design de empacotamento ávido, único, de conjunto fixo desta tarefa.
 constexpr uint16_t kMaxOutlinePoints = 768;
 constexpr uint16_t kMaxOutlineContours = 48;
+
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) STEM-DARKENING gamma for a given pixel size.
+//     WHY: grayscale-AA coverage c in [0,1] is the fraction of a pixel the glyph covers. The GL3
+//     renderer composites white text with a straight (GL_ONE, GL_ONE_MINUS_SRC_ALPHA) blend using c
+//     as alpha WITHOUT an sRGB/linear framebuffer, so the blend happens in the display-encoded
+//     (~gamma 2.2) space. A gamma-CORRECT composite would linearise, blend, re-encode -- and a thin
+//     vertical stem whose coverage is split ~0.5/0.5 across two columns then emits MORE apparent
+//     light than the naive 0.5 blend, because encode(0.5*white_linear) > 0.5*encode(white). Skipping
+//     that step is the classic "AA text too thin/light" defect -- precisely our vstem_edge deficit
+//     vs FreeType (which stem-darkens AND composites gamma-correct). CHEAP FIX: a per-texel coverage
+//     curve c' = c^gamma with gamma<1, applied at atlas-blit time (BakeFaceInstance()). For
+//     c in (0,1), c^gamma > c, so midtone edge/stem coverage gains opacity while the endpoints c=0
+//     and c=1 are FIXED (background stays clean, glyph interiors stay solid -- letters cannot bleed
+//     into each other, the over-darkening failure the brief warns about). This is the standard
+//     "gamma correction for text" / stem-darkening approximation; it thickens ALL AA edges slightly
+//     (not only vertical stems -- a true geometric stem-darkening would need the Layer-0 rasteriser,
+//     deliberately NOT reopened this sub-phase). SIZE FADE: FreeType's stem darkening vanishes as
+//     glyphs grow (a fixed em-space darkening becomes negligible at large ppem); we mirror that --
+//     gamma ramps LINEARLY from kGammaMin at/below kPxLo back to 1.0 (identity) at/above kPxHi, so
+//     24px+ body text is untouched and only the 11..16px small-body regime (where the deficit lives)
+//     is darkened. Constants tuned against fonteng_ab_visual's measure_oracle() vstem_edge (see the
+//     session report): kGammaMin=0.72 lifts a 0.5/0.5 split stem to ~0.61/0.61 -- a visible stem
+//     gain without hazing the sparse AA fringe or pushing total_ink toward a filled block.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.5) Gamma de STEM-DARKENING pra um dado tamanho-em-px.
+//     PORQUÊ: a cobertura grayscale-AA c em [0,1] é a fração do pixel que o glyph cobre. O
+//     renderizador GL3 compõe texto branco com um blend direto (GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
+//     usando c como alpha SEM um framebuffer sRGB/linear, então o blend acontece no espaço
+//     display-encoded (~gamma 2.2). Um composite gamma-CORRETO linearizaria, blendaria, re-
+//     codificaria -- e uma haste vertical fina cuja cobertura se divide ~0.5/0.5 em duas colunas
+//     então emite MAIS luz aparente que o blend ingênuo de 0.5, porque encode(0.5*branco_linear) >
+//     0.5*encode(branco). Pular esse passo é o defeito clássico "texto AA fino/claro demais" --
+//     exatamente nosso déficit de vstem_edge vs FreeType (que faz stem-darkening E compõe gamma-
+//     correto). FIX BARATO: uma curva de cobertura por-texel c' = c^gamma com gamma<1, aplicada no
+//     blit do atlas (BakeFaceInstance()). Pra c em (0,1), c^gamma > c, então a cobertura de meia-
+//     tinta de borda/haste ganha opacidade enquanto os extremos c=0 e c=1 ficam FIXOS (fundo limpo,
+//     interiores de glyph sólidos -- letras não podem se fundir, a falha de over-darkening que o
+//     brief alerta). É a aproximação padrão "correção de gamma pra texto" / stem-darkening; engorda
+//     TODAS as arestas AA levemente (não só hastes verticais -- um stem-darkening geométrico de
+//     verdade precisaria do rasterizador da Camada 0, deliberadamente NÃO reaberto nesta sub-fase).
+//     FADE POR TAMANHO: o stem-darkening do FreeType some quando os glyphs crescem (um darkening
+//     fixo em espaço-em torna-se desprezível em ppem grande); espelhamos isso -- gamma rampa
+//     LINEARMENTE de kGammaMin em/abaixo de kPxLo de volta pra 1.0 (identidade) em/acima de kPxHi,
+//     então texto de corpo 24px+ fica intocado e só o regime de corpo pequeno 11..16px (onde o
+//     déficit vive) é escurecido. Constantes calibradas contra o vstem_edge do measure_oracle() do
+//     fonteng_ab_visual (ver o relatório da sessão): kGammaMin=0.72 eleva uma haste dividida 0.5/0.5
+//     pra ~0.61/0.61 -- um ganho de haste visível sem embaçar a franja AA esparsa nem empurrar o
+//     total_ink pra um bloco cheio.
+float DarkenGamma(int px) {
+  constexpr float kGammaMin = 0.72f; // strongest darkening, at/below kPxLo.
+  constexpr int   kPxLo = 11;        // small-body regime -- full darkening.
+  constexpr int   kPxHi = 24;        // >= this: identity (no darkening) -- large text untouched.
+  if (px <= kPxLo) return kGammaMin;
+  if (px >= kPxHi) return 1.0f;
+  const float t = (float)(px - kPxLo) / (float)(kPxHi - kPxLo);
+  return kGammaMin + t * (1.0f - kGammaMin);
+}
+
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) Builds the 256-entry coverage remap LUT applied to
+//     every atlas texel in BakeFaceInstance() -- computed ONCE per baked instance (not per texel),
+//     so the per-pixel blit cost is a single array lookup. `enabled==false` (the darken-bypass leg,
+//     or any size >= kPxHi where DarkenGamma()==1) yields the IDENTITY map, so the blit is a
+//     byte-for-byte copy exactly as before sub-phase 1.5 -- zero behavioural change on that path.
+//     Otherwise fills lut[i] = round(255 * (i/255)^gamma), which fixes lut[0]=0 and lut[255]=255 by
+//     construction (endpoints never move -- see DarkenGamma()'s note on why letters cannot merge).
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.5) Constrói a LUT de remapeamento de cobertura de 256
+//     entradas aplicada a todo texel do atlas em BakeFaceInstance() -- computada UMA vez por
+//     instância empacotada (não por texel), então o custo por-pixel do blit é uma única consulta de
+//     array. `enabled==false` (a perna de darken-bypass, ou qualquer tamanho >= kPxHi onde
+//     DarkenGamma()==1) devolve o mapa IDENTIDADE, então o blit é uma cópia byte-a-byte exatamente
+//     como antes da sub-fase 1.5 -- zero mudança de comportamento nesse caminho. Senão preenche
+//     lut[i] = round(255 * (i/255)^gamma), que fixa lut[0]=0 e lut[255]=255 por construção (os
+//     extremos nunca se movem -- ver a nota de DarkenGamma() sobre por que letras não podem fundir).
+void BuildCoverageLut(uint8_t lut[256], int px, bool enabled) {
+  const float g = enabled ? DarkenGamma(px) : 1.0f;
+  if (g >= 0.999f) {
+    for (int i = 0; i < 256; ++i) lut[i] = (uint8_t)i;
+    return;
+  }
+  for (int i = 0; i < 256; ++i) {
+    const float c = (float)i / 255.0f;
+    const int v = (int)std::lround((double)std::pow(c, g) * 255.0);
+    lut[i] = (uint8_t)std::clamp(v, 0, 255);
+  }
+}
 
 // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.3) The FONT-UNIT y_max (topmost outline point) of the
 //     glyph the face maps `cp` to, used to MEASURE the x-height / cap-height reference lines from
@@ -638,6 +741,25 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   inst.atlas_h = atlas_h;
   inst.atlas_rgba.assign((size_t)atlas_w * (size_t)atlas_h * 4, 0);
 
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) Stem-darkening coverage LUT for THIS instance's
+  //     pixel size -- built ONCE here, applied per-texel in the blit below (a single array lookup
+  //     per pixel). OPT-IN, OFF by default: own_font_engine_darken_enable() must be flipped `true`
+  //     (only the fonteng_ab_visual "own_yhint_dark" A/B leg does) to apply the curve; otherwise
+  //     the LUT is the identity map and the blit is byte-identical to the pre-1.5 path. The
+  //     darkening is optional machinery -- measured NOT to close the stem-sharpness gap to FreeType
+  //     (structural: only X-axis stem grid-fit consolidates a 0.5/0.5-split stem into a crisp
+  //     column; a coverage curve only adds weight). See this function's/the hook's header.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.5) LUT de cobertura de stem-darkening pro tamanho-em-px
+  //     DESTA instância -- construída UMA vez aqui, aplicada por-texel no blit abaixo (uma consulta
+  //     de array por pixel). OPT-IN, OFF por padrão: own_font_engine_darken_enable() precisa ser
+  //     virado `true` (só a perna A/B "own_yhint_dark" do fonteng_ab_visual o faz) pra aplicar a
+  //     curva; senão a LUT é o mapa identidade e o blit é byte-idêntico ao caminho pré-1.5. O
+  //     darkening é maquinaria opcional -- medido como NÃO fechando o gap de nitidez de haste pro
+  //     FreeType (estrutural: só o grid-fit de haste no eixo X consolida uma haste dividida 0.5/0.5
+  //     numa coluna nítida; uma curva de cobertura só adiciona peso). Ver o header desta função/hook.
+  uint8_t cov_lut[256];
+  BuildCoverageLut(cov_lut, inst.pixel_size, own_font_engine_darken_enable());
+
   for (const Baked& b : baked) {
     GlyphInfo gi{};
     gi.baked = true;
@@ -669,7 +791,13 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
         const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
         uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * atlas_w + (size_t)b.atlas_x) * 4];
         for (int x = 0; x < b.gw; ++x) {
-          const uint8_t cov = src_row[x];
+          // EN: (sub-phase 1.5) coverage -> darkened coverage via the per-instance LUT (identity
+          //     when darkening is bypassed or the size is >= kPxHi). Still (cov,cov,cov,cov)
+          //     premultiplied-white -- the darkening only reshapes the coverage byte, not the trick.
+          // PT: (sub-fase 1.5) cobertura -> cobertura escurecida via a LUT por-instância (identidade
+          //     quando o darkening é pulado ou o tamanho é >= kPxHi). Continua (cov,cov,cov,cov)
+          //     branco-premultiplicado -- o darkening só remodela o byte de cobertura, não o truque.
+          const uint8_t cov = cov_lut[src_row[x]];
           dst_row[x * 4 + 0] = cov;
           dst_row[x * 4 + 1] = cov;
           dst_row[x * 4 + 2] = cov;

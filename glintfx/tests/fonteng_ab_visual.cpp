@@ -101,6 +101,17 @@ bool& own_font_engine_ab_bypass();
 //     forward-declarado localmente, do own_font_engine_ab_bypass() acima (ver font_engine_own.hpp).
 //     `true` faz o motor PRÓPRIO pular seu grid-fitting vertical (a perna A/B "próprio, sem hint").
 bool& own_font_engine_hint_bypass();
+// EN: (L1.20-FONTFLIP sub-phase 1.5) Stem-darkening enable hook -- same src-internal, forward-
+//     declared-locally contract as the two above (see font_engine_own.hpp). OPT-IN: `true` makes the
+//     OWN engine apply its coverage-curve stem darkening (the "own_yhint_dark" leg); `false` (the
+//     DEFAULT, shipping behaviour) leaves raw coverage (the "own_yhint" baseline). OFF by default
+//     because the darkening was measured NOT to close the stem-sharpness gap to FreeType.
+// PT: (L1.20-FONTFLIP sub-fase 1.5) Hook de enable do stem-darkening -- mesmo contrato src-interno,
+//     forward-declarado localmente, dos dois acima (ver font_engine_own.hpp). OPT-IN: `true` faz o
+//     motor PRÓPRIO aplicar seu stem-darkening por curva-de-cobertura (a perna "own_yhint_dark");
+//     `false` (o DEFAULT, comportamento de release) deixa cobertura crua (a baseline "own_yhint").
+//     OFF por padrão porque o darkening foi medido como NÃO fechando o gap de nitidez pro FreeType.
+bool& own_font_engine_darken_enable();
 }
 
 namespace {
@@ -161,15 +172,21 @@ void flip_to_top_down(std::vector<unsigned char>& px, int w, int h) {
 //     em out[dp_index]. Retorna 0 no sucesso. A UiLayer é destruída no retorno, resetando o
 //     font_interface do RmlUi para a próxima sessão re-selecionar seu motor limpo (ver o cabeçalho
 //     de fonteng_ab_compare.cpp).
-int capture_engine(bool ab_bypass, bool hint_bypass, const char* label, Capture out[kNDp]) {
-  // EN: (sub-phase 1.4) ab_bypass selects the ENGINE (false -> own, true -> FreeType); hint_bypass
-  //     selects, WITHIN the own engine, whether Y grid-fitting runs (false -> hinted, true -> raw).
-  //     Both are set before the UiLayer ctor triggers Bootstrap::init(), which reads them.
-  // PT: (sub-fase 1.4) ab_bypass seleciona o MOTOR (false -> próprio, true -> FreeType);
+int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, const char* label,
+                   Capture out[kNDp]) {
+  // EN: (sub-phase 1.4/1.5) ab_bypass selects the ENGINE (false -> own, true -> FreeType);
+  //     hint_bypass selects, WITHIN the own engine, whether Y grid-fitting runs (false -> hinted,
+  //     true -> raw); darken_enable selects whether the own engine's coverage-curve stem darkening
+  //     runs (true -> darkened, false -> raw coverage; OPT-IN, OFF by default). All three are set
+  //     before the UiLayer ctor triggers Bootstrap::init()/the first bake, which read them.
+  // PT: (sub-fase 1.4/1.5) ab_bypass seleciona o MOTOR (false -> próprio, true -> FreeType);
   //     hint_bypass seleciona, DENTRO do motor próprio, se o grid-fitting Y roda (false -> hintado,
-  //     true -> cru). Ambos setados antes do ctor da UiLayer disparar o Bootstrap::init(), que os lê.
+  //     true -> cru); darken_enable seleciona se o stem-darkening por curva-de-cobertura do motor
+  //     próprio roda (true -> escurecido, false -> cobertura crua; OPT-IN, OFF por padrão). Os três
+  //     setados antes do ctor da UiLayer disparar o Bootstrap::init()/o primeiro bake, que os lêem.
   glintfx::own_font_engine_ab_bypass() = ab_bypass;
   glintfx::own_font_engine_hint_bypass() = hint_bypass;
+  glintfx::own_font_engine_darken_enable() = darken_enable;
 
   glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
   if (!ui.ok()) {
@@ -246,6 +263,30 @@ Rect union_rect3(const glintfx::ElementBox& a, const glintfx::ElementBox& b,
   const float y0 = std::min({a.y, b.y, c.y});
   const float x1 = std::max({a.x + a.w, b.x + b.w, c.x + c.w});
   const float y1 = std::max({a.y + a.h, b.y + b.h, c.y + c.h});
+  Rect r;
+  r.x0 = std::max(0, static_cast<int>(std::floor(x0)) - pad);
+  r.y0 = std::max(0, static_cast<int>(std::floor(y0)) - pad);
+  r.x1 = std::min(W, static_cast<int>(std::ceil(x1)) + pad);
+  r.y1 = std::min(H, static_cast<int>(std::ceil(y1)) + pad);
+  if (r.x1 <= r.x0) r.x1 = std::min(W, r.x0 + 1);
+  if (r.y1 <= r.y0) r.y1 = std::min(H, r.y0 + 1);
+  return r;
+}
+
+// EN: (L1.20-FONTFLIP sub-phase 1.5) Union of FOUR element boxes (own_nohint, own_yhint,
+//     own_yhint_dark, ft) -- the SAME crop rectangle for all four variants, so their side-by-side
+//     crops align pixel-for-pixel and none is cut tighter than the others (the honesty guarantee,
+//     now four-way).
+// PT: (L1.20-FONTFLIP sub-fase 1.5) União de QUATRO element boxes (own_nohint, own_yhint,
+//     own_yhint_dark, ft) -- o MESMO retângulo de recorte pra as quatro variantes, pra seus recortes
+//     lado-a-lado alinharem pixel-a-pixel e nenhum ser cortado mais apertado que os outros (a
+//     garantia de honestidade, agora a quatro).
+Rect union_rect4(const glintfx::ElementBox& a, const glintfx::ElementBox& b,
+                 const glintfx::ElementBox& c, const glintfx::ElementBox& d, int pad) {
+  const float x0 = std::min({a.x, b.x, c.x, d.x});
+  const float y0 = std::min({a.y, b.y, c.y, d.y});
+  const float x1 = std::max({a.x + a.w, b.x + b.w, c.x + c.w, d.x + d.w});
+  const float y1 = std::max({a.y + a.h, b.y + b.h, c.y + c.h, d.y + d.h});
   Rect r;
   r.x0 = std::max(0, static_cast<int>(std::floor(x0)) - pad);
   r.y0 = std::max(0, static_cast<int>(std::floor(y0)) - pad);
@@ -415,30 +456,42 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // EN: THREE sessions, run sequentially, sharing ONE GLFW context (only RmlUi re-initialises
-  //     between them -- same clean re-init as fonteng_ab_compare.cpp):
-  //       (a) own_nohint  -- own engine, Y grid-fitting OFF (ab_bypass=false, hint_bypass=true)
-  //       (b) own_yhint   -- own engine, Y grid-fitting ON  (ab_bypass=false, hint_bypass=false)  [default]
-  //       (c) ft          -- RmlUi's built-in FreeType       (ab_bypass=true)
-  //     A future "own Y+X" leg (vertical stems too) would slot in here as a 4th variant, gated by a
-  //     stem-hint toggle -- deliberately NOT implemented this sub-phase (líder-gated).
-  // PT: TRÊS sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi re-inicializa entre
-  //     elas -- mesma re-init limpa do fonteng_ab_compare.cpp):
-  //       (a) own_nohint  -- motor próprio, grid-fitting Y DESLIGADO (ab_bypass=false, hint_bypass=true)
-  //       (b) own_yhint   -- motor próprio, grid-fitting Y LIGADO   (ab_bypass=false, hint_bypass=false) [default]
-  //       (c) ft          -- FreeType embutido do RmlUi            (ab_bypass=true)
-  //     Uma futura perna "own Y+X" (hastes verticais também) entraria aqui como 4ª variante, atrás
-  //     de um toggle de stem-hint -- deliberadamente NÃO implementada nesta sub-fase (do líder).
-  Capture own_nohint[kNDp], own_yhint[kNDp], ft[kNDp];
-  if (int rc = capture_engine(false, true,  "own_nohint", own_nohint)) return rc;
-  if (int rc = capture_engine(false, false, "own_yhint",  own_yhint))  return rc;
-  if (int rc = capture_engine(true,  false, "freetype",   ft))         return rc;
-  glintfx::own_font_engine_ab_bypass()   = false; // EN: restore defaults. PT: restaura defaults.
-  glintfx::own_font_engine_hint_bypass() = false;
+  // EN: FOUR sessions, run sequentially, sharing ONE GLFW context (only RmlUi re-initialises
+  //     between them -- same clean re-init as fonteng_ab_compare.cpp). Each triple below is
+  //     (ab_bypass, hint_bypass, darken_enable):
+  //       (a) own_nohint      -- own, Y-hint OFF, darken OFF   (false, true,  false)
+  //       (b) own_yhint       -- own, Y-hint ON,  darken OFF   (false, false, false)  [DEFAULT / shipping]
+  //       (c) own_yhint_dark  -- own, Y-hint ON,  darken ON    (false, false, true)   [opt-in darkening]
+  //       (d) ft              -- RmlUi's built-in FreeType     (true,  -,     -)       [reference]
+  //     (b) vs (c) isolates sub-phase 1.5's OPT-IN stem darkening (same Y-hinting, coverage curve
+  //     the only difference); (c) vs (d) is the honest "did the cheap darkening close the vstem_edge
+  //     gap to FreeType?" comparison -- it did NOT (darkening measured vstem_edge worse + total_ink
+  //     up, a structural limit, hence it ships OFF). A future "own Y+X" stem grid-fit (the real fix)
+  //     would slot in as a 5th variant, líder-gated -- NOT this sub-phase.
+  // PT: QUATRO sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi re-inicializa entre
+  //     elas -- mesma re-init limpa do fonteng_ab_compare.cpp). Cada tripla abaixo é
+  //     (ab_bypass, hint_bypass, darken_enable):
+  //       (a) own_nohint      -- próprio, Y-hint OFF, darken OFF   (false, true,  false)
+  //       (b) own_yhint       -- próprio, Y-hint ON,  darken OFF   (false, false, false)  [DEFAULT / release]
+  //       (c) own_yhint_dark  -- próprio, Y-hint ON,  darken ON    (false, false, true)   [darkening opt-in]
+  //       (d) ft              -- FreeType embutido do RmlUi        (true,  -,     -)       [referência]
+  //     (b) vs (c) isola o stem-darkening OPT-IN da sub-fase 1.5 (mesmo Y-hint, a curva de cobertura
+  //     a única diferença); (c) vs (d) é a comparação honesta "o darkening barato fechou o gap de
+  //     vstem_edge pro FreeType?" -- NÃO fechou (darkening mediu vstem_edge pior + total_ink acima,
+  //     um limite estrutural, por isso sai OFF). Um futuro grid-fit de haste "own Y+X" (o fix real)
+  //     entraria como 5ª variante, do líder -- NÃO nesta sub-fase.
+  Capture own_nohint[kNDp], own_yhint[kNDp], own_yhint_dark[kNDp], ft[kNDp];
+  if (int rc = capture_engine(false, true,  false, "own_nohint",     own_nohint))     return rc;
+  if (int rc = capture_engine(false, false, false, "own_yhint",      own_yhint))      return rc;
+  if (int rc = capture_engine(false, false, true,  "own_yhint_dark", own_yhint_dark)) return rc;
+  if (int rc = capture_engine(true,  false, false, "freetype",       ft))             return rc;
+  glintfx::own_font_engine_ab_bypass()     = false; // EN: restore defaults. PT: restaura defaults.
+  glintfx::own_font_engine_hint_bypass()   = false;
+  glintfx::own_font_engine_darken_enable() = false;
 
   std::printf("fonteng_ab_visual: %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
-  std::printf("  %-12s %5s %5s   %11s %11s %11s\n",
-              "triple", "dp", "px", "ink_nohint", "ink_yhint", "ink_ft");
+  std::printf("  %-12s %5s %5s   %10s %10s %10s %10s\n",
+              "quad", "dp", "px", "ink_nohint", "ink_yhint", "ink_dark", "ink_ft");
 
   int written = 0, missing = 0;
   for (int d = 0; d < kNDp; ++d) {
@@ -446,30 +499,34 @@ int main(int argc, char** argv) {
     for (int s = 0; s < kNSizes; ++s) {
       const glintfx::ElementBox& bn = own_nohint[d].box[s];
       const glintfx::ElementBox& by = own_yhint[d].box[s];
+      const glintfx::ElementBox& bd = own_yhint_dark[d].box[s];
       const glintfx::ElementBox& bf = ft[d].box[s];
-      if (!bn.found || !by.found || !bf.found) {
-        std::fprintf(stderr, "fonteng_ab_visual WARN: box not found dp=%d %s (nohint=%d yhint=%d ft=%d)\n",
-                     dp_tag, kSizes[s].id, bn.found, by.found, bf.found);
+      if (!bn.found || !by.found || !bd.found || !bf.found) {
+        std::fprintf(stderr,
+                     "fonteng_ab_visual WARN: box not found dp=%d %s (nohint=%d yhint=%d dark=%d ft=%d)\n",
+                     dp_tag, kSizes[s].id, bn.found, by.found, bd.found, bf.found);
         ++missing;
         continue;
       }
-      const Rect r = union_rect3(bn, by, bf, /*pad=*/2);
+      const Rect r = union_rect4(bn, by, bd, bf, /*pad=*/2);
       const int phys_px = kSizes[s].dp * dp_tag;   // authored dp -> physical px at this dp_ratio.
 
-      char pn[512], py[512], pf[512];
-      std::snprintf(pn, sizeof pn, "%s/own_nohint_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(py, sizeof py, "%s/own_yhint_dp%d_s%02d.ppm",  outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pf, sizeof pf, "%s/ft_dp%d_s%02d.ppm",         outdir.c_str(), dp_tag, kSizes[s].dp);
+      char pn[512], py[512], pd[512], pf[512];
+      std::snprintf(pn, sizeof pn, "%s/own_nohint_dp%d_s%02d.ppm",     outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(py, sizeof py, "%s/own_yhint_dp%d_s%02d.ppm",      outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pd, sizeof pd, "%s/own_yhint_dark_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pf, sizeof pf, "%s/ft_dp%d_s%02d.ppm",             outdir.c_str(), dp_tag, kSizes[s].dp);
 
-      const bool ok1 = write_ppm(pn, own_nohint[d].px, r);
-      const bool ok2 = write_ppm(py, own_yhint[d].px,  r);
-      const bool ok3 = write_ppm(pf, ft[d].px,         r);
-      if (ok1 && ok2 && ok3) written += 3;
+      const bool ok1 = write_ppm(pn, own_nohint[d].px,     r);
+      const bool ok2 = write_ppm(py, own_yhint[d].px,      r);
+      const bool ok3 = write_ppm(pd, own_yhint_dark[d].px, r);
+      const bool ok4 = write_ppm(pf, ft[d].px,             r);
+      if (ok1 && ok2 && ok3 && ok4) written += 4;
 
-      std::printf("  dp%d_s%02d      %5.1f %5d   %11ld %11ld %11ld\n",
+      std::printf("  dp%d_s%02d      %5.1f %5d   %10ld %10ld %10ld %10ld\n",
                   dp_tag, kSizes[s].dp, kDpRatios[d], phys_px,
                   count_ink(own_nohint[d].px, r), count_ink(own_yhint[d].px, r),
-                  count_ink(ft[d].px, r));
+                  count_ink(own_yhint_dark[d].px, r), count_ink(ft[d].px, r));
     }
   }
 
@@ -488,29 +545,35 @@ int main(int argc, char** argv) {
   //     ganho do Y-hint), enquanto vstem_edge_energy e total_ink ficam ~iguais (sem regressão no
   //     eixo X de um transform só-Y). O FreeType é mostrado como barra de referência.
   std::printf("\nfonteng_ab_visual ORACLE (dp=1.0, all body sizes):\n");
-  std::printf("  the Y-hint win: xedge_ramp should DROP and xedge_body should RISE own_nohint->own_yhint\n");
-  std::printf("  (biggest at s16, where Open Sans' x-height lands ~0.44px off-grid); vstem_edge &\n");
-  std::printf("  total_ink are X-axis/regression sentinels (must stay ~equal nohint vs yhint).\n");
-  std::printf("  %-6s %-11s %10s %11s %10s %10s\n",
+  std::printf("  sub-phase 1.5 proof: vstem_edge should RISE own_yhint -> own_yhint_dark, toward\n");
+  std::printf("  freetype (the stem-darkening win, biggest at 11-16px). total_ink rises modestly with\n");
+  std::printf("  it (darkening adds coverage) -- a RUNAWAY total_ink or letters merging would mean\n");
+  std::printf("  over-darkening. xedge_ramp/xedge_body remain the Y-hint (x-height) sentinels.\n");
+  std::printf("  %-6s %-14s %10s %11s %10s %10s\n",
               "size", "variant", "total_ink", "vstem_edge", "xedge_ramp", "xedge_body");
   const int dp1 = 0; // kDpRatios[0] == 1.0
   for (int s = 0; s < kNSizes; ++s) {
     const glintfx::ElementBox& bn = own_nohint[dp1].box[s];
     const glintfx::ElementBox& by = own_yhint[dp1].box[s];
+    const glintfx::ElementBox& bd = own_yhint_dark[dp1].box[s];
     const glintfx::ElementBox& bf = ft[dp1].box[s];
-    if (!bn.found || !by.found || !bf.found) continue;
+    if (!bn.found || !by.found || !bd.found || !bf.found) continue;
     const Rect rn = union_rect(bn, bn, /*pad=*/2);
     const Rect ry = union_rect(by, by, /*pad=*/2);
+    const Rect rd = union_rect(bd, bd, /*pad=*/2);
     const Rect rf = union_rect(bf, bf, /*pad=*/2);
-    const Oracle on = measure_oracle(own_nohint[dp1].px, rn);
-    const Oracle oy = measure_oracle(own_yhint[dp1].px,  ry);
-    const Oracle of = measure_oracle(ft[dp1].px,         rf);
+    const Oracle on = measure_oracle(own_nohint[dp1].px,     rn);
+    const Oracle oy = measure_oracle(own_yhint[dp1].px,      ry);
+    const Oracle od = measure_oracle(own_yhint_dark[dp1].px, rd);
+    const Oracle of = measure_oracle(ft[dp1].px,             rf);
     const char* nm = kSizes[s].id;
-    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "own_nohint",
+    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_nohint",
                 on.total_ink, on.vstem_edge_energy, on.x_edge_ramp_rows, on.x_edge_body_frac);
-    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint",
+    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint",
                 oy.total_ink, oy.vstem_edge_energy, oy.x_edge_ramp_rows, oy.x_edge_body_frac);
-    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "freetype",
+    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint_dark",
+                od.total_ink, od.vstem_edge_energy, od.x_edge_ramp_rows, od.x_edge_body_frac);
+    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "freetype",
                 of.total_ink, of.vstem_edge_energy, of.x_edge_ramp_rows, of.x_edge_body_frac);
   }
 

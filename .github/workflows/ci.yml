@@ -17,7 +17,20 @@
 #     GLINTFX_OWN_FONT_ENGINE=ON added on top, so the own SOV-SFNT/SOV-RAST font engine
 #     (L1.19-FONTENG, default OFF, previously untested by CI) gets fonteng_own_sanity +
 #     fonteng_own_embed_sanity exercised on every push/PR too.
-#     Triggers on every push or PR that modifies glintfx/ or this workflow file.
+#     Triggers (Onda 2, canonical CI policy, decision (i)=A): push to `main` (paths-
+#     filtered to glintfx/ or this workflow file) + push of a `v*` tag (unconditional,
+#     no paths filter -- see rationale below) + PR targeting `main` (paths-filtered).
+#     A push to any OTHER branch (feature branch) does NOT trigger this heavy gate --
+#     this repo is trunk-based (commits land directly on `main`, no long-lived feature
+#     branches), so scoping to `push: branches: [main]` still fires the gate on every
+#     real commit that reaches trunk; PR-only would mean this workflow never runs in
+#     the actual day-to-day flow. Tags are combined with `paths` in the SAME `push:`
+#     block (not a separate trigger) because GitHub Actions cannot diff a brand-new ref
+#     against a prior state, so path filters always match (i.e. the gate always runs)
+#     on a freshly-pushed tag regardless of which paths it touches -- exactly the
+#     "always run on release tag" behaviour wanted here. `nightly.yml` (GitHub cron)
+#     and `core-ci.yml` (Layer 0, light) are UNTOUCHED by this policy -- nightly stays
+#     the safety net, core-ci is out of scope (not glintfx).
 #     Runs on GitHub Actions free Ubuntu runners (no container needed).
 # PT: Pipeline de CI para glintfx -- builda a biblioteca e roda ambas as suites sob
 #     Xvfb / Mesa llvmpipe (GL software) via matrix de 2 configs:
@@ -32,16 +45,34 @@
 #     com GLINTFX_OWN_FONT_ENGINE=ON somado por cima, para que o motor de fonte próprio
 #     SOV-SFNT/SOV-RAST (L1.19-FONTENG, OFF por padrão, antes sem teste no CI) tenha
 #     fonteng_own_sanity + fonteng_own_embed_sanity exercitados em todo push/PR também.
-#     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
+#     Triggers (Onda 2, política canônica de CI, decisão (i)=A): push na `main`
+#     (filtrado por paths a glintfx/ ou este workflow) + push de tag `v*`
+#     (incondicional, sem filtro de paths -- ver racional abaixo) + PR mirando a `main`
+#     (filtrado por paths). Push em QUALQUER OUTRA branch (branch de feature) NÃO
+#     dispara este gate pesado -- este repo é trunk-based (commits vão direto pra
+#     `main`, sem branch de feature de vida longa), então restringir a
+#     `push: branches: [main]` ainda dispara o gate em todo commit real que chega na
+#     trunk; PR-only significaria este workflow nunca rodar no fluxo real do dia a dia.
+#     Tags são combinadas com `paths` no MESMO bloco `push:` (não um trigger separado)
+#     porque o GitHub Actions não consegue calcular diff de uma ref recém-criada contra
+#     um estado anterior, então o filtro de paths sempre casa (ou seja, o gate sempre
+#     roda) numa tag recém-empurrada, independente de quais paths ela toca -- exatamente
+#     o comportamento "sempre roda em tag de release" desejado aqui. `nightly.yml`
+#     (cron do GitHub) e `core-ci.yml` (Camada 0, leve) ficam INTOCADOS por esta
+#     política -- o nightly continua como rede de segurança, o core-ci está fora do
+#     escopo (não é glintfx).
 #     Roda em runners Ubuntu gratuitos do GitHub Actions (sem container necessario).
 name: ci
 
 on:
   push:
+    branches: ["main"]
+    tags: ["v*"]
     paths:
       - "glintfx/**"
       - ".github/workflows/ci.yml"
   pull_request:
+    branches: ["main"]
     paths:
       - "glintfx/**"
       - ".github/workflows/ci.yml"

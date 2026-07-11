@@ -235,7 +235,9 @@ if(GLINTFX_OWN_FONT_ENGINE)
   set(_glx_core_src_dir ${CMAKE_CURRENT_SOURCE_DIR}/../src)
   set(_glx_core_include_dir ${CMAKE_CURRENT_SOURCE_DIR}/../include)
   if(NOT EXISTS ${_glx_core_src_dir}/sfnt.c OR NOT EXISTS ${_glx_core_src_dir}/raster.c
-     OR NOT EXISTS ${_glx_core_include_dir}/core/sfnt.h OR NOT EXISTS ${_glx_core_include_dir}/core/raster.h)
+     OR NOT EXISTS ${_glx_core_src_dir}/hint.c
+     OR NOT EXISTS ${_glx_core_include_dir}/core/sfnt.h OR NOT EXISTS ${_glx_core_include_dir}/core/raster.h
+     OR NOT EXISTS ${_glx_core_include_dir}/core/hint.h)
     message(FATAL_ERROR
       "glintfx: GLINTFX_OWN_FONT_ENGINE=ON requires building glintfx from inside the "
       "loucura_c_asm monorepo -- Layer 0's src/sfnt.c, src/raster.c, include/core/sfnt.h, "
@@ -396,7 +398,8 @@ if(GLINTFX_OWN_FONT_ENGINE)
   list(APPEND _glintfx_sources
     src/font_engine_own.cpp
     ${_glx_core_src_dir}/sfnt.c
-    ${_glx_core_src_dir}/raster.c)
+    ${_glx_core_src_dir}/raster.c
+    ${_glx_core_src_dir}/hint.c)  # EN/PT: SOV-HINT (L1.20-FONTFLIP FT-F4) Y grid-fitter, wired in sub-phase 1.4.
 endif()
 
 add_library(glintfx STATIC ${_glintfx_sources})
@@ -478,6 +481,7 @@ if(GLINTFX_OWN_FONT_ENGINE)
     src/font_engine_own.cpp
     ${_glx_core_src_dir}/sfnt.c
     ${_glx_core_src_dir}/raster.c
+    ${_glx_core_src_dir}/hint.c
     PROPERTIES INCLUDE_DIRECTORIES ${_glx_core_include_dir})
 endif()
 

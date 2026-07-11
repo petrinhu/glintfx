@@ -187,6 +187,7 @@
 //     conectou aquele include path (ver a chamada set_source_files_properties() do
 //     glintfx/CMakeLists.txt).
 extern "C" {
+#include "core/hint.h"
 #include "core/raster.h"
 #include "core/sfnt.h"
 }
@@ -291,6 +292,24 @@ private:
     Rml::Style::FontStyle style = Rml::Style::FontStyle::Normal;
     Rml::Style::FontWeight weight = Rml::Style::FontWeight::Normal;
     bool fallback_face = false;
+    // EN: Vertical (Y-axis) grid-fitting zones for THIS face, in FONT UNITS -- derived ONCE by
+    //     DeriveHintZones() in RegisterFace() (baseline/ascender/descender straight from
+    //     head/hhea, x_height/cap_height measured from the 'x'/'H' glyph outlines' own y_max) and
+    //     handed to glx_hint_outline() (Layer 0 SOV-HINT) for every glyph BakeFaceInstance()
+    //     rasterises for this face. `axis_flags` carries GLX_HINT_AXIS_Y (Y grid-fitting on); a
+    //     face whose glyph outlines could not be measured still gets a valid, fraction-of-em
+    //     fallback (never a crash) -- see DeriveHintZones() in the .cpp. The X axis is NOT hinted
+    //     this sub-phase (vertical stems untouched -- a future, líder-gated sub-phase).
+    // PT: Zonas de grid-fitting vertical (eixo Y) desta face, em UNIDADES DE FONTE -- derivadas UMA
+    //     vez por DeriveHintZones() em RegisterFace() (baseline/ascender/descender direto de
+    //     head/hhea, x_height/cap_height medidos do próprio y_max dos outlines dos glyphs 'x'/'H')
+    //     e passadas ao glx_hint_outline() (SOV-HINT da Camada 0) pra todo glyph que
+    //     BakeFaceInstance() rasteriza pra esta face. `axis_flags` carrega GLX_HINT_AXIS_Y
+    //     (grid-fitting Y ligado); uma face cujos outlines de glyph não puderam ser medidos ainda
+    //     recebe um fallback válido de fração-de-em (nunca um crash) -- ver DeriveHintZones() no
+    //     .cpp. O eixo X NÃO é hintado nesta sub-fase (hastes verticais intocadas -- uma sub-fase
+    //     futura, decidida pelo líder).
+    glx_hint_zones hint_zones{};
   };
 
   // EN: One BAKED glyph within a FaceInstance's atlas. `baked == false` (the default, used as
@@ -451,6 +470,35 @@ private:
 //     `static bool` local de função (sem preocupação de ordem de init estática, uso só em teste
 //     single-thread).
 bool& own_font_engine_ab_bypass();
+
+// EN: Y-HINT BYPASS HOOK (L1.20-FONTFLIP, FT-F4, sub-phase 1.4) -- a second src-internal,
+//     process-global toggle, sibling to own_font_engine_ab_bypass() above but orthogonal in
+//     meaning. It does NOT choose the engine (that is ab_bypass's job); it chooses whether the
+//     OWN engine applies its vertical (Y-axis) grid-fitting. Read once PER GLYPH inside
+//     BakeFaceInstance() (font_engine_own.cpp): when it returns `false` (the DEFAULT -- Y hinting
+//     is the mature, shipping behaviour of the own engine), glx_hint_outline() snaps each glyph's
+//     outline Y to the face's zones before rasterisation; when `true`, that call is SKIPPED and
+//     the own engine rasterises the raw, un-hinted outline (the "own, no hint" A/B leg). Only
+//     meaningful while the own engine is installed (ab_bypass == false) -- with FreeType installed
+//     it is inert (FreeType does its own hinting, this hook never reaches it). Default `false`, so
+//     a normal ON build ships WITH Y hinting; only a test that explicitly flips it (e.g.
+//     fonteng_ab_visual.cpp's "own_nohint" leg) observes the un-hinted path. Returns a reference
+//     to a function-local `static bool` (no static-init-order concern, single-threaded test use).
+// PT: HOOK DE BYPASS DO Y-HINT (L1.20-FONTFLIP, FT-F4, sub-fase 1.4) -- um segundo toggle
+//     src-interno, process-global, irmão do own_font_engine_ab_bypass() acima mas ortogonal em
+//     significado. Ele NÃO escolhe o motor (isso é trabalho do ab_bypass); escolhe se o motor
+//     PRÓPRIO aplica seu grid-fitting vertical (eixo Y). Lido uma vez POR GLYPH dentro de
+//     BakeFaceInstance() (font_engine_own.cpp): quando retorna `false` (o DEFAULT -- o hinting Y é
+//     o comportamento maduro, de release, do motor próprio), o glx_hint_outline() snapa o Y do
+//     outline de cada glyph nas zonas da face antes da rasterização; quando `true`, essa chamada é
+//     PULADA e o motor próprio rasteriza o outline cru, sem hint (a perna A/B "próprio, sem
+//     hint"). Só faz sentido enquanto o motor próprio está instalado (ab_bypass == false) -- com o
+//     FreeType instalado é inerte (o FreeType faz seu próprio hinting, este hook nunca o alcança).
+//     Default `false`, então um build ON normal já sai COM hinting Y; só um teste que
+//     explicitamente o vira (ex.: a perna "own_nohint" do fonteng_ab_visual.cpp) observa o caminho
+//     sem-hint. Retorna uma referência a um `static bool` local de função (sem preocupação de
+//     ordem de init estática, uso só em teste single-thread).
+bool& own_font_engine_hint_bypass();
 
 } // namespace glintfx
 

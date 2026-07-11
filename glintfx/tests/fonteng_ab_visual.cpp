@@ -94,6 +94,13 @@
 //     e font_engine_own.hpp para o contrato completo.
 namespace glintfx {
 bool& own_font_engine_ab_bypass();
+// EN: (L1.20-FONTFLIP sub-phase 1.4) Y-hint bypass hook -- same src-internal, forward-declared-
+//     locally contract as own_font_engine_ab_bypass() above (see font_engine_own.hpp). `true`
+//     makes the OWN engine skip its vertical grid-fitting (the "own, no hint" A/B leg).
+// PT: (L1.20-FONTFLIP sub-fase 1.4) Hook de bypass do Y-hint -- mesmo contrato src-interno,
+//     forward-declarado localmente, do own_font_engine_ab_bypass() acima (ver font_engine_own.hpp).
+//     `true` faz o motor PRÓPRIO pular seu grid-fitting vertical (a perna A/B "próprio, sem hint").
+bool& own_font_engine_hint_bypass();
 }
 
 namespace {
@@ -154,8 +161,15 @@ void flip_to_top_down(std::vector<unsigned char>& px, int w, int h) {
 //     em out[dp_index]. Retorna 0 no sucesso. A UiLayer é destruída no retorno, resetando o
 //     font_interface do RmlUi para a próxima sessão re-selecionar seu motor limpo (ver o cabeçalho
 //     de fonteng_ab_compare.cpp).
-int capture_engine(bool bypass, const char* label, Capture out[kNDp]) {
-  glintfx::own_font_engine_ab_bypass() = bypass;
+int capture_engine(bool ab_bypass, bool hint_bypass, const char* label, Capture out[kNDp]) {
+  // EN: (sub-phase 1.4) ab_bypass selects the ENGINE (false -> own, true -> FreeType); hint_bypass
+  //     selects, WITHIN the own engine, whether Y grid-fitting runs (false -> hinted, true -> raw).
+  //     Both are set before the UiLayer ctor triggers Bootstrap::init(), which reads them.
+  // PT: (sub-fase 1.4) ab_bypass seleciona o MOTOR (false -> próprio, true -> FreeType);
+  //     hint_bypass seleciona, DENTRO do motor próprio, se o grid-fitting Y roda (false -> hintado,
+  //     true -> cru). Ambos setados antes do ctor da UiLayer disparar o Bootstrap::init(), que os lê.
+  glintfx::own_font_engine_ab_bypass() = ab_bypass;
+  glintfx::own_font_engine_hint_bypass() = hint_bypass;
 
   glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
   if (!ui.ok()) {
@@ -219,6 +233,29 @@ Rect union_rect(const glintfx::ElementBox& a, const glintfx::ElementBox& b, int 
   return r;
 }
 
+// EN: Union of THREE element boxes (own_nohint, own_yhint, ft) -- the SAME crop rectangle for all
+//     three variants, so their side-by-side crops align pixel-for-pixel and none is cut tighter than
+//     the others (the honesty guarantee, now three-way). Built by folding union_rect over the boxes.
+// PT: União de TRÊS element boxes (own_nohint, own_yhint, ft) -- o MESMO retângulo de recorte pra as
+//     três variantes, pra seus recortes lado-a-lado alinharem pixel-a-pixel e nenhum ser cortado
+//     mais apertado que os outros (a garantia de honestidade, agora a três). Construída dobrando o
+//     union_rect sobre as boxes.
+Rect union_rect3(const glintfx::ElementBox& a, const glintfx::ElementBox& b,
+                 const glintfx::ElementBox& c, int pad) {
+  const float x0 = std::min({a.x, b.x, c.x});
+  const float y0 = std::min({a.y, b.y, c.y});
+  const float x1 = std::max({a.x + a.w, b.x + b.w, c.x + c.w});
+  const float y1 = std::max({a.y + a.h, b.y + b.h, c.y + c.h});
+  Rect r;
+  r.x0 = std::max(0, static_cast<int>(std::floor(x0)) - pad);
+  r.y0 = std::max(0, static_cast<int>(std::floor(y0)) - pad);
+  r.x1 = std::min(W, static_cast<int>(std::ceil(x1)) + pad);
+  r.y1 = std::min(H, static_cast<int>(std::ceil(y1)) + pad);
+  if (r.x1 <= r.x0) r.x1 = std::min(W, r.x0 + 1);
+  if (r.y1 <= r.y0) r.y1 = std::min(H, r.y0 + 1);
+  return r;
+}
+
 // EN: Writes the sub-rectangle `r` of the top-down RGB frame `src` (W wide) as a binary PPM (P6).
 //     Returns true on success. No library, no dependency -- a P6 header line plus raw RGB rows.
 // PT: Grava o sub-retângulo `r` do frame RGB top-down `src` (largura W) como PPM binário (P6).
@@ -254,6 +291,119 @@ long count_ink(const std::vector<unsigned char>& px, const Rect& r) {
   return n;
 }
 
+// EN: ORACLE (L1.20-FONTFLIP FT-F4 sub-phase 1.4) -- MEASURABLE proof, printed to the console, that
+//     Y grid-fitting concentrates the x-height top edge onto one pixel row WITHOUT hurting vertical
+//     stems. The text is white (#ffffff) grayscale-AA on black, so the RED channel value (0..255) IS
+//     each pixel's ink coverage. Two 1-D profiles over the crop drive every number below:
+//       row_cov[y]  = sum over columns of coverage on scanline y  (drives the Y-axis / x-height metric)
+//       col_cov[x]  = sum over rows    of coverage in column x     (drives the X-axis / stem metric)
+// PT: ORÁCULO (L1.20-FONTFLIP FT-F4 sub-fase 1.4) -- prova MENSURÁVEL, impressa no console, de que o
+//     grid-fitting Y concentra a aresta superior da altura-x numa linha de pixel SEM piorar as
+//     hastes verticais. O texto é branco (#ffffff) grayscale-AA sobre preto, então o valor do canal
+//     VERMELHO (0..255) É a cobertura de tinta de cada pixel. Dois perfis 1-D sobre o recorte
+//     dirigem cada número abaixo: row_cov[y] (soma por-coluna, dirige a métrica Y/altura-x) e
+//     col_cov[x] (soma por-linha, dirige a métrica X/haste).
+struct Oracle {
+  double vstem_edge_energy = 0.0; // EN: X-axis crispness (regression sentinel). PT: nitidez X (sentinela).
+  int    x_edge_ramp_rows = 0;    // EN: transition rows at the x-height top edge -- FEWER == crisper.
+  double x_edge_body_frac = 0.0;  // EN: fraction of the caps->x-height jump captured in the first body row.
+  long   total_ink = 0;           // EN: coverage>100 pixel count (regression sentinel). PT: sentinela.
+};
+
+Oracle measure_oracle(const std::vector<unsigned char>& px, const Rect& r) {
+  Oracle o;
+  const int rw = r.x1 - r.x0, rh = r.y1 - r.y0;
+  if (rw <= 2 || rh <= 3) return o;
+
+  std::vector<double> row_cov(static_cast<size_t>(rh), 0.0);
+  std::vector<double> col_cov(static_cast<size_t>(rw), 0.0);
+  for (int y = 0; y < rh; ++y)
+    for (int x = 0; x < rw; ++x) {
+      const size_t i = (static_cast<size_t>(r.y0 + y) * W + (r.x0 + x)) * 3;
+      const double cov = px[i]; // red channel == coverage for white-on-black.
+      row_cov[y] += cov;
+      col_cov[x] += cov;
+      o.total_ink += (px[i] > 100) ? 1 : 0;
+    }
+
+  // EN: X-AXIS STEM CRISPNESS (regression sentinel). Total absolute column-to-column gradient,
+  //     normalised by total ink: crisp vertical stems produce steep col_cov steps (ink on/off within
+  //     one column), so higher == crisper vertical edges. Y grid-fitting NEVER touches X, so this
+  //     must stay ~equal between own_nohint and own_yhint -- a drop would flag an unexpected X-axis
+  //     regression. (No lone 'l'/'I' exists in the scene phrase, so this whole-line column-gradient
+  //     is the faithful global proxy for the brief's "per-column ink of a vertical stem".)
+  // PT: NITIDEZ DE HASTE NO EIXO X (sentinela de regressão). Gradiente absoluto coluna-a-coluna
+  //     total, normalizado pela tinta total: hastes verticais nítidas produzem degraus col_cov
+  //     íngremes (tinta liga/desliga dentro de uma coluna), então maior == arestas verticais mais
+  //     nítidas. O grid-fitting Y NUNCA toca X, então isto deve ficar ~igual entre own_nohint e
+  //     own_yhint -- uma queda flagraria uma regressão X inesperada. (Não há 'l'/'I' isolado na
+  //     frase da cena, então este gradiente-de-coluna da linha inteira é o proxy global fiel do
+  //     "cobertura por-coluna de uma haste vertical" do brief.)
+  double grad = 0.0, tot = 0.0;
+  for (int x = 0; x < rw; ++x) tot += col_cov[x];
+  for (int x = 1; x < rw; ++x) grad += std::fabs(col_cov[x] - col_cov[x - 1]);
+  o.vstem_edge_energy = (tot > 0.0) ? grad / tot : 0.0;
+
+  // EN: Y-AXIS x-HEIGHT ZONE ALIGNMENT (the grid-fitting win). ALL x-height letters share one
+  //     font-unit x-height, so at a given size they ALL land on the SAME sub-pixel Y whether hinted
+  //     or not -- the hint's job is to make that shared x-height top edge sit ON a pixel row (crisp,
+  //     coverage in ~1 row) instead of straddling two (blurry, coverage split ~50/50). So the
+  //     measurable is the SHARPNESS of the single x-height top edge, not scatter between letters.
+  //     Find the x-height BODY top `yb`: scanning top-down, the first row whose coverage first
+  //     exceeds 0.55*plateau AND whose next row is still high (>0.5*plateau) -- i.e. the row where
+  //     the x-height bodies (o,c,a,e,n,v,s,...) turn on, on top of the sparser caps/accents ink
+  //     above. Two numbers gauge its crispness:
+  //       x_edge_ramp_rows = how many of the rows in [yb-4, yb] sit in the transition band
+  //                          (0.25*plateau .. 0.85*plateau) -- a grid-aligned edge ramps in FEWER
+  //                          rows (ideally 1-2); a mid-pixel edge smears across more.
+  //       x_edge_body_frac = (row_cov[yb] - row_cov[yb-1]) / (plateau - row_cov[yb-1]) -- the
+  //                          fraction of the caps->x-height jump captured in the FIRST body row;
+  //                          HIGHER == the edge lands on that row crisply.
+  //     HONEST CAVEAT (a graphics-programmer note, not hidden): the win scales with how far the
+  //     x-height would otherwise land from a pixel boundary at THIS size -- Open Sans' x-height is
+  //     ~0.535*px, so it already nearly aligns at 11/13px (tiny gain) and lands worst near 16px
+  //     (~0.44px off -> the clearest gain). The metric reflects that size dependence rather than
+  //     hiding it.
+  // PT: ALINHAMENTO DE ZONA da altura-x no EIXO Y (o ganho do grid-fitting). TODAS as letras de
+  //     altura-x compartilham uma altura-x em unidade-de-fonte, então num dado tamanho TODAS caem no
+  //     MESMO sub-pixel Y, com ou sem hint -- o trabalho do hint é fazer essa aresta superior
+  //     compartilhada pousar SOBRE uma linha de pixel (nítida, cobertura em ~1 linha) em vez de
+  //     montar em duas (borrada, cobertura dividida ~50/50). Então o mensurável é a NITIDEZ da única
+  //     aresta superior da altura-x, não dispersão entre letras. Acha o topo do CORPO da altura-x
+  //     `yb`: varrendo de cima, a primeira linha cuja cobertura excede 0.55*plateau E cuja próxima
+  //     linha ainda é alta (>0.5*plateau) -- i.e. a linha onde os corpos de altura-x turnam on, em
+  //     cima da tinta mais esparsa de maiúsculas/acentos acima. Dois números medem sua nitidez:
+  //       x_edge_ramp_rows = quantas das linhas em [yb-4, yb] ficam na banda de transição
+  //                          (0.25*plateau .. 0.85*plateau) -- uma aresta grid-alinhada rampa em
+  //                          MENOS linhas (idealmente 1-2); uma aresta mid-pixel borra em mais.
+  //       x_edge_body_frac = (row_cov[yb] - row_cov[yb-1]) / (plateau - row_cov[yb-1]) -- a fração
+  //                          do salto maiúsculas->altura-x capturada na PRIMEIRA linha de corpo;
+  //                          MAIOR == a aresta pousa naquela linha nitidamente.
+  //     RESSALVA HONESTA (nota de graphics-programmer, não escondida): o ganho escala com o quão
+  //     longe a altura-x pousaria de uma fronteira de pixel NESTE tamanho -- a altura-x da Open Sans
+  //     é ~0.535*px, então já quase alinha em 11/13px (ganho minúsculo) e pousa pior perto de 16px
+  //     (~0.44px fora -> o ganho mais claro). A métrica reflete essa dependência de tamanho em vez
+  //     de escondê-la.
+  double plateau = 0.0;
+  for (int y = 0; y < rh; ++y) plateau = std::max(plateau, row_cov[y]);
+  if (plateau <= 0.0) return o;
+
+  int yb = -1;
+  for (int y = 1; y < rh; ++y) {
+    if (row_cov[y] > 0.55 * plateau && row_cov[std::min(y + 1, rh - 1)] > 0.5 * plateau) { yb = y; break; }
+  }
+  if (yb >= 1) {
+    const double pre = row_cov[yb - 1];
+    const double lo = 0.25 * plateau, hi = 0.85 * plateau;
+    int ramp = 0;
+    for (int y = std::max(0, yb - 4); y <= yb; ++y)
+      if (row_cov[y] > lo && row_cov[y] < hi) ++ramp;
+    o.x_edge_ramp_rows = ramp;
+    o.x_edge_body_frac = (plateau > pre) ? (row_cov[yb] - pre) / (plateau - pre) : 0.0;
+  }
+  return o;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -265,50 +415,106 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // EN: Session 1 -- own engine; Session 2 -- FreeType. Same clean sequential re-init as
-  //     fonteng_ab_compare.cpp (shared GLFW context, only RmlUi re-initialised between sessions).
-  // PT: Sessão 1 -- motor próprio; Sessão 2 -- FreeType. Mesma re-init sequencial limpa do
-  //     fonteng_ab_compare.cpp (contexto GLFW compartilhado, só o RmlUi re-inicializado entre
-  //     sessões).
-  Capture own[kNDp], ft[kNDp];
-  if (int rc = capture_engine(false, "own", own)) return rc;
-  if (int rc = capture_engine(true,  "freetype", ft)) return rc;
-  glintfx::own_font_engine_ab_bypass() = false;   // EN: restore default. PT: restaura default.
+  // EN: THREE sessions, run sequentially, sharing ONE GLFW context (only RmlUi re-initialises
+  //     between them -- same clean re-init as fonteng_ab_compare.cpp):
+  //       (a) own_nohint  -- own engine, Y grid-fitting OFF (ab_bypass=false, hint_bypass=true)
+  //       (b) own_yhint   -- own engine, Y grid-fitting ON  (ab_bypass=false, hint_bypass=false)  [default]
+  //       (c) ft          -- RmlUi's built-in FreeType       (ab_bypass=true)
+  //     A future "own Y+X" leg (vertical stems too) would slot in here as a 4th variant, gated by a
+  //     stem-hint toggle -- deliberately NOT implemented this sub-phase (líder-gated).
+  // PT: TRÊS sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi re-inicializa entre
+  //     elas -- mesma re-init limpa do fonteng_ab_compare.cpp):
+  //       (a) own_nohint  -- motor próprio, grid-fitting Y DESLIGADO (ab_bypass=false, hint_bypass=true)
+  //       (b) own_yhint   -- motor próprio, grid-fitting Y LIGADO   (ab_bypass=false, hint_bypass=false) [default]
+  //       (c) ft          -- FreeType embutido do RmlUi            (ab_bypass=true)
+  //     Uma futura perna "own Y+X" (hastes verticais também) entraria aqui como 4ª variante, atrás
+  //     de um toggle de stem-hint -- deliberadamente NÃO implementada nesta sub-fase (do líder).
+  Capture own_nohint[kNDp], own_yhint[kNDp], ft[kNDp];
+  if (int rc = capture_engine(false, true,  "own_nohint", own_nohint)) return rc;
+  if (int rc = capture_engine(false, false, "own_yhint",  own_yhint))  return rc;
+  if (int rc = capture_engine(true,  false, "freetype",   ft))         return rc;
+  glintfx::own_font_engine_ab_bypass()   = false; // EN: restore defaults. PT: restaura defaults.
+  glintfx::own_font_engine_hint_bypass() = false;
 
   std::printf("fonteng_ab_visual: %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
-  std::printf("  %-16s %5s %5s   %10s %10s\n", "file-pair", "dp", "px", "ink_own", "ink_ft");
+  std::printf("  %-12s %5s %5s   %11s %11s %11s\n",
+              "triple", "dp", "px", "ink_nohint", "ink_yhint", "ink_ft");
 
   int written = 0, missing = 0;
   for (int d = 0; d < kNDp; ++d) {
     const int dp_tag = static_cast<int>(kDpRatios[d]);              // 1 or 2
     for (int s = 0; s < kNSizes; ++s) {
-      const glintfx::ElementBox& bo = own[d].box[s];
+      const glintfx::ElementBox& bn = own_nohint[d].box[s];
+      const glintfx::ElementBox& by = own_yhint[d].box[s];
       const glintfx::ElementBox& bf = ft[d].box[s];
-      if (!bo.found || !bf.found) {
-        std::fprintf(stderr, "fonteng_ab_visual WARN: box not found dp=%d %s (own=%d ft=%d)\n",
-                     dp_tag, kSizes[s].id, bo.found, bf.found);
+      if (!bn.found || !by.found || !bf.found) {
+        std::fprintf(stderr, "fonteng_ab_visual WARN: box not found dp=%d %s (nohint=%d yhint=%d ft=%d)\n",
+                     dp_tag, kSizes[s].id, bn.found, by.found, bf.found);
         ++missing;
         continue;
       }
-      const Rect r = union_rect(bo, bf, /*pad=*/2);
+      const Rect r = union_rect3(bn, by, bf, /*pad=*/2);
       const int phys_px = kSizes[s].dp * dp_tag;   // authored dp -> physical px at this dp_ratio.
 
-      char pown[512], pft[512];
-      std::snprintf(pown, sizeof pown, "%s/own_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pft,  sizeof pft,  "%s/ft_dp%d_s%02d.ppm",  outdir.c_str(), dp_tag, kSizes[s].dp);
+      char pn[512], py[512], pf[512];
+      std::snprintf(pn, sizeof pn, "%s/own_nohint_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(py, sizeof py, "%s/own_yhint_dp%d_s%02d.ppm",  outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pf, sizeof pf, "%s/ft_dp%d_s%02d.ppm",         outdir.c_str(), dp_tag, kSizes[s].dp);
 
-      const bool ok1 = write_ppm(pown, own[d].px, r);
-      const bool ok2 = write_ppm(pft,  ft[d].px,  r);
-      if (ok1 && ok2) written += 2;
+      const bool ok1 = write_ppm(pn, own_nohint[d].px, r);
+      const bool ok2 = write_ppm(py, own_yhint[d].px,  r);
+      const bool ok3 = write_ppm(pf, ft[d].px,         r);
+      if (ok1 && ok2 && ok3) written += 3;
 
-      std::printf("  dp%d_s%02d          %5.1f %5d   %10ld %10ld\n",
+      std::printf("  dp%d_s%02d      %5.1f %5d   %11ld %11ld %11ld\n",
                   dp_tag, kSizes[s].dp, kDpRatios[d], phys_px,
-                  count_ink(own[d].px, r), count_ink(ft[d].px, r));
-      (void)phys_px;
+                  count_ink(own_nohint[d].px, r), count_ink(own_yhint[d].px, r),
+                  count_ink(ft[d].px, r));
     }
   }
 
-  std::printf("fonteng_ab_visual: wrote %d PPM(s), %d line(s) with a missing box\n",
+  // EN: NUMERIC ORACLE -- printed for the SMALL body sizes at dp=1.0 (the low-DPI, few-px-per-glyph
+  //     regime where grid-fitting matters most). Each variant is measured on its OWN element-box
+  //     crop (padded), so the profiles are independent of the others' horizontal extent. The proof
+  //     the líder asked for: x_edge_1row_frac / x_edge_max_delta should RISE own_nohint -> own_yhint
+  //     (the x-height top edge concentrating onto one pixel row -- the Y-hint win), while
+  //     vstem_edge_energy and total_ink stay ~equal (no X-axis regression from a Y-only transform).
+  //     FreeType is shown as the reference bar.
+  // PT: ORÁCULO NUMÉRICO -- impresso pros tamanhos de corpo PEQUENOS em dp=1.0 (o regime baixa-DPI,
+  //     poucos-px-por-glyph, onde o grid-fitting mais importa). Cada variante é medida no recorte da
+  //     PRÓPRIA element-box (com folga), então os perfis independem da extensão horizontal dos
+  //     outros. A prova que o líder pediu: x_edge_1row_frac / x_edge_max_delta devem SUBIR
+  //     own_nohint -> own_yhint (a aresta superior da altura-x concentrando numa linha de pixel -- o
+  //     ganho do Y-hint), enquanto vstem_edge_energy e total_ink ficam ~iguais (sem regressão no
+  //     eixo X de um transform só-Y). O FreeType é mostrado como barra de referência.
+  std::printf("\nfonteng_ab_visual ORACLE (dp=1.0, all body sizes):\n");
+  std::printf("  the Y-hint win: xedge_ramp should DROP and xedge_body should RISE own_nohint->own_yhint\n");
+  std::printf("  (biggest at s16, where Open Sans' x-height lands ~0.44px off-grid); vstem_edge &\n");
+  std::printf("  total_ink are X-axis/regression sentinels (must stay ~equal nohint vs yhint).\n");
+  std::printf("  %-6s %-11s %10s %11s %10s %10s\n",
+              "size", "variant", "total_ink", "vstem_edge", "xedge_ramp", "xedge_body");
+  const int dp1 = 0; // kDpRatios[0] == 1.0
+  for (int s = 0; s < kNSizes; ++s) {
+    const glintfx::ElementBox& bn = own_nohint[dp1].box[s];
+    const glintfx::ElementBox& by = own_yhint[dp1].box[s];
+    const glintfx::ElementBox& bf = ft[dp1].box[s];
+    if (!bn.found || !by.found || !bf.found) continue;
+    const Rect rn = union_rect(bn, bn, /*pad=*/2);
+    const Rect ry = union_rect(by, by, /*pad=*/2);
+    const Rect rf = union_rect(bf, bf, /*pad=*/2);
+    const Oracle on = measure_oracle(own_nohint[dp1].px, rn);
+    const Oracle oy = measure_oracle(own_yhint[dp1].px,  ry);
+    const Oracle of = measure_oracle(ft[dp1].px,         rf);
+    const char* nm = kSizes[s].id;
+    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "own_nohint",
+                on.total_ink, on.vstem_edge_energy, on.x_edge_ramp_rows, on.x_edge_body_frac);
+    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint",
+                oy.total_ink, oy.vstem_edge_energy, oy.x_edge_ramp_rows, oy.x_edge_body_frac);
+    std::printf("  %-6s %-11s %10ld %11.4f %10d %10.4f\n", nm, "freetype",
+                of.total_ink, of.vstem_edge_energy, of.x_edge_ramp_rows, of.x_edge_body_frac);
+  }
+
+  std::printf("\nfonteng_ab_visual: wrote %d PPM(s), %d line(s) with a missing box\n",
               written, missing);
   // EN: Not a pass/fail gate -- succeed as long as SOME crops were written (a totally empty run
   //     means a context/fixture failure worth a non-zero exit).

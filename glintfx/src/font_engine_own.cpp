@@ -54,6 +54,24 @@ bool& own_font_engine_ab_bypass() {
   return bypass;
 }
 
+// EN: Y-HINT BYPASS storage (L1.20-FONTFLIP, FT-F4, sub-phase 1.4). See the long doc-comment on
+//     this function's declaration in font_engine_own.hpp for the full contract. Same
+//     function-local-static pattern as own_font_engine_ab_bypass() above (default `false` on first
+//     use, no static-init-order dependency, reference returned so a test can flip it). Default
+//     `false` == "apply Y grid-fitting", so a normal ON build ships WITH hinting; a test flips it
+//     to `true` to measure the raw, un-hinted own-engine path (the "own_nohint" A/B leg).
+// PT: Armazenamento do BYPASS do Y-HINT (L1.20-FONTFLIP, FT-F4, sub-fase 1.4). Ver o doc-comment
+//     longo na declaração desta função em font_engine_own.hpp pro contrato completo. Mesmo padrão
+//     static-local-de-função do own_font_engine_ab_bypass() acima (default `false` no primeiro
+//     uso, sem dependência de ordem de init estática, referência retornada pra um teste poder
+//     virá-lo). Default `false` == "aplica grid-fitting Y", então um build ON normal já sai COM
+//     hinting; um teste o vira pra `true` pra medir o caminho cru, sem-hint, do motor próprio (a
+//     perna A/B "own_nohint").
+bool& own_font_engine_hint_bypass() {
+  static bool bypass = false;
+  return bypass;
+}
+
 namespace {
 
 // EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
@@ -140,6 +158,81 @@ std::vector<uint32_t> BuildBakeSet() {
 constexpr uint16_t kMaxOutlinePoints = 768;
 constexpr uint16_t kMaxOutlineContours = 48;
 
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.3) The FONT-UNIT y_max (topmost outline point) of the
+//     glyph the face maps `cp` to, used to MEASURE the x-height / cap-height reference lines from
+//     the real font rather than guessing them. Sets `*ok=true` and returns the measured y_max only
+//     when the codepoint is present in the face (gid != 0) AND its outline fetches cleanly AND has
+//     at least one real point; otherwise `*ok=false` (the caller falls back to a fraction-of-em
+//     estimate). Never allocates beyond two stack-scoped buffers, never crashes on a hostile face
+//     (every failure is a clean `*ok=false`) -- it only READS through the same bounds-checked
+//     SOV-SFNT API BakeFaceInstance() already uses. `y_max` comes straight from the glyf record
+//     header (SOV-SFNT does not recompute it), exactly the value the zones must be expressed in.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.3) O y_max EM UNIDADES DE FONTE (ponto mais alto do
+//     outline) do glyph que a face mapeia pra `cp`, usado pra MEDIR as linhas de referência de
+//     altura-x / altura-de-maiúscula da fonte real em vez de adivinhá-las. Define `*ok=true` e
+//     retorna o y_max medido só quando o codepoint está presente na face (gid != 0) E seu outline
+//     lê limpo E tem ao menos um ponto real; senão `*ok=false` (quem chama cai pra uma estimativa
+//     de fração-de-em). Nunca aloca além de dois buffers de escopo de pilha, nunca crasha numa
+//     face hostil (toda falha é um `*ok=false` limpo) -- só LÊ pela mesma API SOV-SFNT com
+//     checagem de limite que o BakeFaceInstance() já usa. `y_max` vem direto do cabeçalho do
+//     registro glyf (o SOV-SFNT não o recomputa), exatamente o valor em que as zonas devem ser
+//     expressas.
+int16_t GlyphYMax(const glx_sfnt_face& sf, uint32_t cp, bool& ok) {
+  ok = false;
+  const uint32_t gid = glx_sfnt_glyph_id(&sf, cp);
+  if (gid == 0) return 0;
+  std::vector<glx_sfnt_point> points(kMaxOutlinePoints);
+  std::vector<uint16_t> contour_ends(kMaxOutlineContours);
+  glx_sfnt_outline o{};
+  if (glx_sfnt_glyph_outline(&sf, gid, points.data(), (uint16_t)points.size(), contour_ends.data(),
+                             (uint16_t)contour_ends.size(), &o) != GLX_SFNT_OK)
+    return 0;
+  if (o.num_points == 0 || o.num_contours == 0) return 0;
+  ok = true;
+  return o.y_max;
+}
+
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.3) Derives THIS face's vertical grid-fitting zones ONCE
+//     (called from RegisterFace() right after glx_sfnt_open()). baseline is 0 (TrueType's own
+//     origin), ascender/descender come straight from hhea (glx_sfnt_face), and x_height/cap_height
+//     are MEASURED from the real 'x'/'H' glyph outlines' own y_max (falling back to 'o'/'O', then
+//     to a fraction-of-ascender estimate if the face lacks those glyphs -- degrade, never crash,
+//     per this sub-phase's brief). axis_flags carries GLX_HINT_AXIS_Y so glx_hint_outline() grid-
+//     fits the Y axis; X is deliberately left un-hinted this sub-phase. Zones need NOT be sorted or
+//     distinct -- glx_hint_outline() sorts and de-dups them internally (see include/core/hint.h).
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.3) Deriva UMA vez as zonas de grid-fitting vertical desta
+//     face (chamada de RegisterFace() logo após glx_sfnt_open()). baseline é 0 (a própria origem
+//     do TrueType), ascender/descender vêm direto do hhea (glx_sfnt_face), e x_height/cap_height
+//     são MEDIDOS do próprio y_max dos outlines reais dos glyphs 'x'/'H' (caindo pra 'o'/'O',
+//     depois pra uma estimativa de fração-do-ascender se a face não tiver esses glyphs -- degrada,
+//     nunca crasha, conforme o brief desta sub-fase). axis_flags carrega GLX_HINT_AXIS_Y para o
+//     glx_hint_outline() grid-fitar o eixo Y; o X é deliberadamente deixado sem-hint nesta
+//     sub-fase. As zonas NÃO precisam estar ordenadas nem distintas -- o glx_hint_outline() as
+//     ordena e de-duplica internamente (ver include/core/hint.h).
+glx_hint_zones DeriveHintZones(const glx_sfnt_face& sf) {
+  glx_hint_zones z{};
+  z.baseline = 0;
+  z.ascender = sf.ascender;
+  z.descender = sf.descender;
+
+  bool ok = false;
+  int16_t v = GlyphYMax(sf, 0x78, ok);          // 'x'
+  if (!ok) v = GlyphYMax(sf, 0x6F, ok);         // 'o' (rounded-overshoot but close enough)
+  // EN: Fallback: ~half the ascender is a reasonable x-height when the face lacks 'x'/'o'.
+  // PT: Fallback: ~metade do ascender é uma altura-x razoável quando a face não tem 'x'/'o'.
+  z.x_height = ok ? v : (int16_t)((int)sf.ascender / 2);
+
+  ok = false;
+  v = GlyphYMax(sf, 0x48, ok);                  // 'H'
+  if (!ok) v = GlyphYMax(sf, 0x4F, ok);         // 'O'
+  // EN: Fallback: ~0.72 of the ascender is a typical cap-height when the face lacks 'H'/'O'.
+  // PT: Fallback: ~0.72 do ascender é uma altura-de-maiúscula típica quando a face não tem 'H'/'O'.
+  z.cap_height = ok ? v : (int16_t)((int)sf.ascender * 72 / 100);
+
+  z.axis_flags = GLX_HINT_AXIS_Y;
+  return z;
+}
+
 } // namespace
 
 void FontEngineOwn::Shutdown() {
@@ -194,6 +287,17 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   lf->blob = std::move(blob);
   if (glx_sfnt_open(lf->blob.data(), lf->blob.size(), &lf->sfnt) != GLX_SFNT_OK) return false;
   if (lf->sfnt.units_per_em == 0) return false; // guards the scale-factor division in BakeFaceInstance().
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.3) Derive the Y grid-fitting zones ONCE, here, so every
+  //     BakeFaceInstance() of this face (at any pixel size) reuses them -- x_height/cap_height are
+  //     measured from the real 'x'/'H' outlines (see DeriveHintZones()). Cheap (a handful of glyph
+  //     outline reads, once per loaded FILE), never per-glyph or per-instance.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.3) Deriva as zonas de grid-fitting Y UMA vez, aqui, pra
+  //     todo BakeFaceInstance() desta face (em qualquer tamanho-em-px) reusá-las -- x_height/
+  //     cap_height são medidos dos outlines reais de 'x'/'H' (ver DeriveHintZones()). Barato (um
+  //     punhado de leituras de outline de glyph, uma vez por ARQUIVO carregado), nunca por-glyph
+  //     nem por-instância.
+  lf->hint_zones = DeriveHintZones(lf->sfnt);
 
   lf->family = family;
   lf->style = style;
@@ -398,6 +502,49 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
     //     "empacotado, tamanho-zero": ainda tem um avanço válido, deliberadamente não emite
     //     quad (ver o próprio doc-comment de GlyphInfo no header pra essa distinção exata).
     if (r == GLX_SFNT_OK && outline.num_points > 0 && outline.num_contours > 0) {
+      // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.4) VERTICAL (Y-axis) GRID-FITTING -- the step that
+      //     makes this ticket real. glx_hint_outline() (Layer 0 SOV-HINT) nudges each point's Y
+      //     IN PLACE so the face's zones (baseline / x-height / cap-height / ascender / descender)
+      //     land on whole device pixels; X is untouched. It is fed the SAME device scale
+      //     (scale_num, scale_den) = (pixel_size*64, units_per_em) the rasteriser below consumes,
+      //     so the alignment survives the rasteriser's own re-scale of the (now hinted) font-unit
+      //     points by construction (see include/core/hint.h's COORDINATE SPACES note). CRUCIALLY
+      //     the glyph BBOX below is still read from `outline` (the glyf-header x_min/y_max, NOT
+      //     recomputed from the hinted points): the sub-pixel correction the hint applies and the
+      //     sub-pixel origin/offset the bbox implies CANCEL algebraically at composition time
+      //     (origin_y places y_max at row kPad, the quad's offset_y subtracts the same y_max, so a
+      //     zone snapped to a whole pixel above the baseline lands on a whole screen pixel WHEN the
+      //     baseline itself is integer-aligned) -- the whole point of writing the correction back
+      //     into font units rather than moving the bitmap. kPad (1px) absorbs the <=0.5px extremal
+      //     shift a snap can introduce, so no glyph clips. ON by DEFAULT (the mature behaviour);
+      //     own_font_engine_hint_bypass() flips it off for the A/B "own, no hint" leg.
+      //     GLX_HINT_NOOP (nothing to fit / already fitted) leaves `points` byte-for-byte
+      //     unchanged -- a clean, non-error outcome we neither check nor need to.
+      // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.4) GRID-FITTING VERTICAL (eixo Y) -- o passo que
+      //     torna esta tarefa real. glx_hint_outline() (SOV-HINT da Camada 0) empurra o Y de cada
+      //     ponto IN PLACE pra que as zonas da face (baseline / altura-x / altura-de-maiúscula /
+      //     ascender / descender) caiam em pixels device inteiros; o X é intocado. Recebe a MESMA
+      //     escala device (scale_num, scale_den) = (pixel_size*64, units_per_em) que o rasterizador
+      //     abaixo consome, então o alinhamento sobrevive ao re-escale que o próprio rasterizador
+      //     faz dos pontos (agora hintados) em unidade-de-fonte, por construção (ver a nota
+      //     ESPAÇOS DE COORDENADA do include/core/hint.h). CRUCIALMENTE a BBOX do glyph abaixo
+      //     ainda é lida de `outline` (o x_min/y_max do cabeçalho glyf, NÃO recomputada dos pontos
+      //     hintados): a correção sub-pixel que o hint aplica e o origin/offset sub-pixel que a
+      //     bbox implica se CANCELAM algebricamente no momento da composição (origin_y põe y_max na
+      //     linha kPad, o offset_y do quad subtrai o mesmo y_max, então uma zona snapada a um pixel
+      //     inteiro acima da baseline cai num pixel inteiro de tela QUANDO a própria baseline está
+      //     alinhada a inteiro) -- exatamente o motivo de escrever a correção de volta em unidade
+      //     de fonte em vez de mover o bitmap. O kPad (1px) absorve o deslocamento extremal de
+      //     <=0.5px que um snap pode introduzir, então nenhum glyph corta. LIGADO por PADRÃO (o
+      //     comportamento maduro); own_font_engine_hint_bypass() o desliga pra a perna A/B "próprio,
+      //     sem hint". GLX_HINT_NOOP (nada a fitar / já fitado) deixa `points` byte-a-byte intacto
+      //     -- um resultado limpo, sem erro, que nem checamos nem precisamos.
+      if (!own_font_engine_hint_bypass()) {
+        const int32_t hint_scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
+        glx_hint_outline(points.data(), outline.num_points, sf.units_per_em, hint_scale_num,
+                         (int32_t)sf.units_per_em, &inst.face->hint_zones);
+      }
+
       const float fx_min = (float)outline.x_min * scale;
       const float fx_max = (float)outline.x_max * scale;
       const float fy_min = (float)outline.y_min * scale;

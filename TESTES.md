@@ -100,11 +100,12 @@ Um item de implementação só vira `✅ Concluído` depois que os `TST-*` da su
 
 A glintfx é um sub-projeto C++/OpenGL (pasta `glintfx/`) com stack completamente diferente: usa RmlUi, OpenGL 3, GLFW e FreeType. O harness dela é **ctest** (CMake CTest), e os testes rodam sob **Xvfb** (display virtual) via `xvfb-run -a`.
 
-**Pipeline de CI automatizado (item L1.2-CI):**
-- **GitHub Actions:** `.github/workflows/ci.yml` — runners gratuitos `ubuntu-latest`; gate principal.
-- **Codeberg (Forgejo Actions):** `.forgejo/workflows/ci.yml` — soberania; mesma sintaxe, requer runners habilitados em Settings → Actions.
+**Pipeline de CI automatizado (item L1.2-CI):** três superfícies sob a política canônica **`github > claudio > codeberg`** (basta UM verde) — detalhe operacional completo em [`AGENTS.md`](AGENTS.md#política-de-ci-ordem-de-gate-e-o-que-roda-onde).
+- **GitHub Actions:** `.github/workflows/ci.yml` (`ubuntu-latest`) — **gate primário**: matriz `GLINTFX_BACKEND_GLFW` ON/OFF + `lint-and-scan` (`TST-L1-STATIC/SECRETS/DEPS`) + `coverage` (`TST-L1-COV`). Dispara em push para `main`, tags `v*` e PR.
+- **`claudio` (runner self-hosted local):** `.forgejo/workflows/heavy.yml` (`runs-on: docker`, `container: fedora:42`) — **gates pesados bloqueantes**: `sanitize` (ASan/UBSan) + `fonteng` (`GLINTFX_OWN_FONT_ENGINE=ON`). Dispara em PR→`main`, tags e dispatch manual.
+- **Codeberg (Forgejo Actions):** `.forgejo/workflows/ci.yml` (`codeberg-medium`) — **paridade mínima, não bloqueia** (poda da Onda 3, 2026-07-11): um único job GLFW=ON em push para `main`. Um job em `waiting` nunca segura release.
 
-Ambos disparam em todo push/PR que toca `glintfx/**`. A validação real ocorre no primeiro push ao remote correspondente.
+Gate LOCAL espelhando o CI antes do push: `tools/preci.sh` via `.githooks/pre-push` (`TST-L1-PRECI`, ver subseção abaixo).
 
 ### Suíte de CI automatizada (default — `ctest` sem flags extras)
 
@@ -222,12 +223,12 @@ Nenhum item é big-bang. Sequência recomendada, do maior valor/menor custo ao m
 
 #### TST-L1-COV
 
-Gate de cobertura no CI (job `coverage`, `.github/workflows/ci.yml` + `.forgejo/workflows/ci.yml`), config única GLFW=ON (superconjunto da suíte embed-only), demos OFF (biblioteca instrumentada não linka com um demo não-instrumentado — ver comentário `GLINTFX_COVERAGE` em `glintfx/CMakeLists.txt`).
+Gate de cobertura no CI (job `coverage`, **`.github/workflows/ci.yml` — GitHub-only desde a Onda 3, 2026-07-11**; o job foi removido do `.forgejo/workflows/ci.yml` na poda a paridade mínima), config única GLFW=ON (superconjunto da suíte embed-only), demos OFF (biblioteca instrumentada não linka com um demo não-instrumentado — ver comentário `GLINTFX_COVERAGE` em `glintfx/CMakeLists.txt`).
 
 - **Piso, não meta aspiracional.** `--floor N` falha duro o job se a % de cobertura de linha cair abaixo de `N`. Piso atual: **75%** — medido localmente em 2026-07-10 (83.8% de linha), arredondado **para baixo** ao múltiplo de 5 mais próximo (80), menos 5pp de folga (75). A folga existe para que a flutuação normal de código novo pousando entre recalibrações não vire o gate vermelho sozinha; não é licença para deixar a cobertura cair sem justificativa.
-- **Recalibração.** Quando a cobertura medida subir de forma sustentada, o piso deve subir junto (mesma fórmula: arredondar para baixo ao múltiplo de 5, menos 5pp) — um piso desatualizado que fica muito abaixo da realidade não protege nada. Recalibrar via `tools/coverage_report.sh` local + atualizar o valor em ambos os workflows no mesmo commit.
+- **Recalibração.** Quando a cobertura medida subir de forma sustentada, o piso deve subir junto (mesma fórmula: arredondar para baixo ao múltiplo de 5, menos 5pp) — um piso desatualizado que fica muito abaixo da realidade não protege nada. Recalibrar via `tools/coverage_report.sh` local + atualizar o valor `--floor` em `.github/workflows/ci.yml` no mesmo commit (job GitHub-only desde a Onda 3 — não há mais um segundo workflow rodando cobertura).
 - **Badge vs. gate são desacoplados.** `glintfx/coverage-badge.json` (o número mostrado no README) só é atualizado **localmente/por humano** via `tools/coverage_report.sh --update-badge` — o job de CI só **valida** a % contra `--floor` e sobe o relatório HTML como artifact; nunca escreve/commita/pusha o JSON do badge de volta ao repo.
-- **Fallback aprovado se o job estourar o teto do runner (codeberg-medium, ~10 min):** cobertura GitHub-only (job removido do lado Forgejo, comentário no cabeçalho do workflow explicando, achado registrado na INBOX do `TODO.md`) — não inventar alternativa (matrix, suíte reduzida, retry silencioso) sem aval do líder.
+- **Cobertura é GitHub-only desde a Onda 3 (2026-07-11).** O job foi removido do `.forgejo/workflows/ci.yml` na poda a paridade mínima — redução de escopo da política canônica `github > claudio > codeberg`, o mesmo destino que este bullet já antecipava como fallback caso o job estourasse o teto do runner `codeberg-medium` (~10 min). O cabeçalho de `.forgejo/workflows/ci.yml` documenta a remoção. Não inventar alternativa (matrix, suíte reduzida, retry silencioso) sem aval do líder.
 
 #### TST-L1-PRECI
 

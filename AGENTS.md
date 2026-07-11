@@ -53,6 +53,19 @@ To verify drop-in consumption end to end, build `consumer-example/`, which pulls
 
 `tools/preci.sh` (TST-L1-PRECI) mirrors the fast day-to-day slice of CI **before** code becomes visible on a remote. Activate once per clone with `git config core.hooksPath .githooks`; `.githooks/pre-push` then runs it in fast mode on every `git push` and aborts the push on any failure. Fast mode detects which layer(s) were actually touched (`origin/main...HEAD` union the working tree) and runs only the matching build+test -- Layer 0 (`make build && make test`) and/or Layer 1 (`glintfx/build-preci`, `GLFW=ON` config, `ctest` under Xvfb). `tools/preci.sh --full` runs the wide net (both glintfx configs, sequentially -- one build in memory at a time -- plus `check_encapsulation.sh` and `gitleaks` if installed) for occasional manual runs, e.g. before tagging a release. See [`TESTES.md`](TESTES.md#tst-l1-preci).
 
+### CI policy: gate order and where each check runs
+
+Three CI surfaces exist; this repo has **no way to aggregate them cross-platform** (GitHub Actions and Forgejo Actions do not share a status API), so the gate order below is an **operational convention the orchestrator enforces by hand**, not a config setting.
+
+**Gate order: `github` > `claudio` (self-hosted, local) > `codeberg` -- one green is enough.**
+
+- **`github`** (`.github/workflows/ci.yml`, `ubuntu-latest`) is the **primary gate**. Runs on push to `main`, on tags, and on PRs; matrix over `GLINTFX_BACKEND_GLFW` (ON/OFF). A green run here is sufficient to merge or tag.
+- **`claudio`** (`.forgejo/workflows/heavy.yml`, `runs-on: docker`, `container: fedora:42`) is the **local self-hosted Forgejo runner**. It carries the **heavy, blocking gates** -- ASan (`sanitize`) and the own-font-engine build (`fonteng`) -- on PR-to-`main`, tags, and manual dispatch. Reproduce a `claudio` failure locally in the same `fedora:42` container (`tools/ci/Containerfile.f42`) **before** iterating by push; this caught two real class-of-bug misses that only reproduced in that base image (missing `libasan`/`libubsan`, and a `SYS_futex` gap under clang's sanitizer runtime).
+- **`codeberg-medium`** (`.forgejo/workflows/ci.yml`) now carries a **single minimal-parity job only** -- it does **not** block. A job stuck in `waiting` on Codeberg's shared runner queue never holds up a merge, tag, or release: `github` or `claudio` green is enough by itself.
+- **Nightly ASan** (`.github/workflows/nightly.yml`, GitHub cron) stays as a **safety net**, independent of the blocking PR/tag gate. The Forgejo-side nightly (`nightly.forgejo`) was removed -- `claudio`'s `sanitize` job now covers that ground synchronously, on every PR/tag rather than once a day.
+
+Practical rule for agents: reproduce first (`tools/ci/Containerfile.f42` for anything that fails only on `claudio`), iterate locally, and only then push. Do not chase a `waiting` Codeberg job when `github` or `claudio` is already green.
+
 ### Conventions
 
 - **SPDX header in every code file.** First line: `SPDX-License-Identifier: MPL-2.0` (comment style per language: `//` for C/C++, `;` for NASM, `#` for CMake/Makefile/shell). Do **not** put SPDX in `.md` docs.
@@ -125,6 +138,19 @@ A constelação bigtech (definição dos agents, RACI, pipelines de release) é 
 - [`TODO.md`](TODO.md): tabela de pendências (ondas, IDs, pré-requisitos) das duas camadas, a **INBOX** (descobertas não priorizadas) e o escopo planejado da **v2** (component library / Atomic Design, spec em `docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`, branch `feat/v2-f2-components`, pausada).
 - **Sistema de memória:** memórias tipadas em `~/.claude/projects/<slug>/memory/` (índice em `MEMORY.md`), autocarregadas por sessão. Não duplicar o que o repo já registra; registrar só o não óbvio.
 - [`docs/adr/`](docs/adr/README.md): decisões de arquitetura (imutáveis quando `Accepted`; para mudar, escrever novo ADR que substitua). ADR-0006 (camadas), ADR-0007 (licença), ADR-0008 (embed/guest mode).
+
+### Política de CI: ordem de gate e o que roda onde
+
+Existem três superfícies de CI; este repo **não tem como agregá-las cross-plataforma** (GitHub Actions e Forgejo Actions não compartilham API de status), então a ordem abaixo é uma **convenção operacional que o orquestrador aplica manualmente**, não uma config.
+
+**Ordem de gate: `github` > `claudio` (self-hosted local) > `codeberg` -- basta UM verde.**
+
+- **`github`** (`.github/workflows/ci.yml`, `ubuntu-latest`) é o **gate primário**. Roda em push para `main`, em tags e em PRs; matriz sobre `GLINTFX_BACKEND_GLFW` (ON/OFF). Um run verde aqui já basta pra merge ou tag.
+- **`claudio`** (`.forgejo/workflows/heavy.yml`, `runs-on: docker`, `container: fedora:42`) é o **runner self-hosted local do Forgejo**. Carrega os **gates pesados e bloqueantes** -- ASan (`sanitize`) e o build do motor de fonte próprio (`fonteng`) -- em PR→`main`, tag e dispatch manual. Reproduza uma falha do `claudio` localmente no mesmo container `fedora:42` (`tools/ci/Containerfile.f42`) **antes** de iterar por push; a política já pegou dois achados assim, que só reproduziam nessa imagem-base (`libasan`/`libubsan` faltando, e um gap de `SYS_futex` sob o runtime de sanitizer do clang).
+- **`codeberg-medium`** (`.forgejo/workflows/ci.yml`) ficou só com **um job de paridade mínima** -- não bloqueia. Um job preso em `waiting` na fila do runner compartilhado do Codeberg NUNCA segura merge, tag ou release: `github` ou `claudio` verde já basta sozinho.
+- **Nightly ASan** (`.github/workflows/nightly.yml`, cron do GitHub) permanece como **rede de segurança**, independente do gate bloqueante de PR/tag. O nightly do lado Forgejo (`nightly.forgejo`) foi removido -- o job `sanitize` do `claudio` já cobre esse terreno de forma síncrona, em todo PR/tag em vez de uma vez por dia.
+
+Regra prática para agents: reproduza primeiro (`tools/ci/Containerfile.f42` para qualquer coisa que só falhe no `claudio`), itere localmente, e só então empurre. Não persiga um job `waiting` no Codeberg quando `github` ou `claudio` já estão verdes.
 
 ### Gotchas críticos (RmlUi / GL3 / embed mode): leia antes de mexer no renderer
 

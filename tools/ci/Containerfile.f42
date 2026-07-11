@@ -1,0 +1,161 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: CI image for the self-hosted `claudio` Forgejo runner (see
+#     .forgejo/workflows/heavy.yml, TODO.md CI policy canônica). Two reasons this image
+#     is built and versioned locally instead of pulling a stock distro image at job
+#     time:
+#       1. Speed -- `claudio` is a single always-on machine (not an elastic pool like
+#          codeberg-medium); a pre-baked image with every dep already installed turns
+#          a ~5 min "apt/dnf install" step into a docker pull-from-local-cache no-op
+#          (see build_image.sh -- rebuild only when this file or the dep list changes).
+#       2. Node.js is MANDATORY, not optional -- Forgejo's `actions/checkout@v4` runs
+#          as a JavaScript action inside the job container and requires a Node.js
+#          runtime to execute at all (this is the exact bug this image exists to avoid:
+#          a bare `fedora:42` base has no Node, and `actions/checkout` silently fails/
+#          hangs without it -- there is no clang/cmake substitute for this requirement).
+#     Base is fedora:42 to match the líder's ratified canonical CI policy (memória
+#     feedback_ci_policy_canonica) -- NOT ubuntu/act-latest (that image is reserved for
+#     the codeberg-medium jobs in .forgejo/workflows/ci.yml/nightly.yml; this one is
+#     exclusively for the `claudio` self-hosted runner's heavy jobs).
+#
+# PT: Imagem de CI para o runner self-hosted `claudio` do Forgejo (ver
+#     .forgejo/workflows/heavy.yml, política canônica de CI do TODO.md). Dois motivos
+#     para esta imagem ser buildada e versionada localmente em vez de puxar uma imagem
+#     de distro crua na hora do job:
+#       1. Velocidade -- `claudio` é uma única máquina sempre ligada (não um pool
+#          elástico como o codeberg-medium); uma imagem pré-assada com toda dep já
+#          instalada transforma um passo "apt/dnf install" de ~5 min num pull local em
+#          cache, sem custo (ver build_image.sh -- rebuild só quando este arquivo ou a
+#          lista de deps muda).
+#       2. Node.js é OBRIGATÓRIO, não opcional -- o `actions/checkout@v4` do Forgejo
+#          roda como uma JavaScript action dentro do container do job e precisa de um
+#          runtime Node.js pra sequer executar (este é exatamente o bug que esta imagem
+#          existe pra evitar: uma base `fedora:42` crua não tem Node, e o
+#          `actions/checkout` falha/trava em silêncio sem ele -- não há substituto
+#          clang/cmake para este requisito).
+#     Base é fedora:42 para casar com a política canônica de CI ratificada pelo líder
+#     (memória feedback_ci_policy_canonica) -- NÃO ubuntu/act-latest (aquela imagem é
+#     reservada para os jobs codeberg-medium em .forgejo/workflows/ci.yml/nightly.yml;
+#     esta é exclusiva para os jobs pesados do runner self-hosted `claudio`).
+
+FROM fedora:42
+
+# EN: Single dnf transaction -- fewer layers, faster rebuild-from-cache when only the
+#     package list below changes (dnf metadata refresh is the slow part, not the
+#     install itself). `dnf clean all` keeps the image lean (no persistent metadata
+#     cache needed inside the image -- rebuilds always start from a fresh `dnf update`
+#     metadata pull anyway).
+#       - nodejs             : REQUIRED by actions/checkout@v4 (see header above).
+#       - git                : required by actions/checkout AND by CMake FetchContent
+#                               to clone RmlUi.
+#       - clang               : README.md's declared C/C++ compiler (glintfx + Layer 0).
+#       - cmake, make        : glintfx build system.
+#       - nasm               : Layer 0 (loucura_c_asm) assembler.
+#       - glfw-devel         : glintfx App backend + embed-mode test-only GL fixture.
+#       - freetype-devel     : RmlUi's font backend (RMLUI_FONT_ENGINE=freetype).
+#       - mesa-libGL-devel   : OpenGL headers/libs (CMake FindOpenGL).
+#       - mesa-libEGL-devel  : EGL headers/libs (FindOpenGL EGL component).
+#       - mesa-dri-drivers   : llvmpipe -- Mesa software GL renderer, needed under Xvfb
+#                               (no real GPU on `claudio`'s container).
+#       - libxkbcommon-devel : GLFW's XKB keyboard-layout header dependency.
+#       - xorg-x11-server-Xvfb : virtual X display + xvfb-run, used by
+#                               tests/run_xvfb.cmake and .forgejo/workflows/*.yml.
+#       - llvm               : llvm-cov/llvm-profdata (tools/coverage_report.sh) and a
+#                               matching sanitizer runtime for clang's ASan/UBSan.
+#       - valgrind           : available for ad-hoc memory debugging on the heavy
+#                               runner (not wired into a CI gate by this Onda 1 change).
+#       - cppcheck           : static analysis (mirrors codeberg-medium's lint-and-scan
+#                               job so the same tool is available locally on claudio).
+#       - libasan, libubsan  : REQUIRED, found the hard way (Onda 1 validation, política
+#                               (e), live reproduction inside this exact image before
+#                               these 2 lines were added). Fedora 42's `gcc` package
+#                               pulls in the compiler-time symlinks
+#                               (/usr/lib/gcc/x86_64-redhat-linux/15/lib{a,ub}san.so) but
+#                               NOT the runtime .so's the linker actually needs
+#                               (/usr/lib64/libasan.so.8.0.0,
+#                               /usr/lib64/libubsan.so.1.0.0) -- those ship in the
+#                               separate `libasan`/`libubsan` subpackages. Without them,
+#                               linking ANY `-fsanitize=address,undefined` binary (the
+#                               `sanitize` job in heavy.yml, which mirrors nightly.yml's
+#                               un-pinned default-compiler == gcc build) fails at link
+#                               time with "ld: cannot find <path>: No such file or
+#                               directory" -- first for libasan.so.8, then (once that was
+#                               added) for libubsan.so.1: GCC 15 does NOT combine the
+#                               UBSan runtime into libasan the way LSan is combined into
+#                               it (LeakSanitizer genuinely needs no separate package --
+#                               only ASan and UBSan do). Both packages required together.
+# PT: - libasan, libubsan  : OBRIGATÓRIOS, achados na marra (validação Onda 1, política
+#                               (e), reprodução ao vivo dentro desta mesma imagem antes
+#                               destas 2 linhas serem adicionadas). O pacote `gcc` do
+#                               Fedora 42 traz os symlinks de tempo-de-compilação
+#                               (/usr/lib/gcc/x86_64-redhat-linux/15/lib{a,ub}san.so) mas
+#                               NÃO os .so de runtime que o linker de fato precisa
+#                               (/usr/lib64/libasan.so.8.0.0,
+#                               /usr/lib64/libubsan.so.1.0.0) -- esses vêm nos subpacotes
+#                               separados `libasan`/`libubsan`. Sem eles, linkar QUALQUER
+#                               binário `-fsanitize=address,undefined` (o job `sanitize`
+#                               do heavy.yml, que espelha o build de compilador default
+#                               == gcc não-fixado do nightly.yml) falha no link com "ld:
+#                               cannot find <path>: No such file or directory" -- primeiro
+#                               por libasan.so.8, depois (uma vez esse adicionado) por
+#                               libubsan.so.1: o GCC 15 NÃO combina o runtime do UBSan
+#                               dentro do libasan como faz com o LSan (o LeakSanitizer de
+#                               fato não precisa de pacote separado -- só ASan e UBSan
+#                               precisam). Os dois pacotes são necessários juntos.
+# PT: Uma única transação dnf -- menos camadas, rebuild-a-partir-do-cache mais rápido
+#     quando só a lista de pacotes abaixo muda (o refresh de metadata do dnf é a parte
+#     lenta, não a instalação em si). `dnf clean all` mantém a imagem enxuta (nenhum
+#     cache de metadata persistente necessário dentro da imagem -- rebuilds sempre
+#     partem de um `dnf update` de metadata fresco de qualquer forma).
+#       - nodejs             : OBRIGATÓRIO pelo actions/checkout@v4 (ver cabeçalho acima).
+#       - git                : necessário pelo actions/checkout E pelo CMake
+#                               FetchContent para clonar o RmlUi.
+#       - clang               : compilador C/C++ declarado no README.md (glintfx +
+#                               Camada 0).
+#       - cmake, make        : sistema de build do glintfx.
+#       - nasm               : assembler da Camada 0 (loucura_c_asm).
+#       - glfw-devel         : backend App do glintfx + fixture GL só-de-teste do modo
+#                               embed.
+#       - freetype-devel     : backend de fonte do RmlUi (RMLUI_FONT_ENGINE=freetype).
+#       - mesa-libGL-devel   : headers/libs OpenGL (FindOpenGL do CMake).
+#       - mesa-libEGL-devel  : headers/libs EGL (componente EGL do FindOpenGL).
+#       - mesa-dri-drivers   : llvmpipe -- renderer software GL do Mesa, necessário sob
+#                               Xvfb (sem GPU real no container do `claudio`).
+#       - libxkbcommon-devel : dependência de header de layout de teclado XKB do GLFW.
+#       - xorg-x11-server-Xvfb : display X virtual + xvfb-run, usado por
+#                               tests/run_xvfb.cmake e .forgejo/workflows/*.yml.
+#       - llvm               : llvm-cov/llvm-profdata (tools/coverage_report.sh) e um
+#                               runtime de sanitizer compatível com o ASan/UBSan do clang.
+#       - valgrind           : disponível para debug de memória ad-hoc no runner
+#                               pesado (não conectado a um gate de CI nesta mudança da
+#                               Onda 1).
+#       - cppcheck           : análise estática (espelha o job lint-and-scan do
+#                               codeberg-medium para a mesma ferramenta estar disponível
+#                               localmente no claudio).
+RUN dnf -y update && \
+    dnf -y install \
+        nodejs \
+        git \
+        clang \
+        cmake \
+        make \
+        nasm \
+        glfw-devel \
+        freetype-devel \
+        mesa-libGL-devel \
+        mesa-libEGL-devel \
+        mesa-dri-drivers \
+        libxkbcommon-devel \
+        xorg-x11-server-Xvfb \
+        llvm \
+        valgrind \
+        cppcheck \
+        libasan \
+        libubsan \
+    && dnf clean all
+
+# EN: Sanity marker only (not consumed by any workflow) -- lets a human confirm the
+#     right image landed via `docker run --rm localhost/glintfx-ci:f42 cat /etc/glintfx-ci-image`.
+# PT: Apenas marcador de sanidade (não consumido por nenhum workflow) -- permite um
+#     humano confirmar que a imagem certa chegou via
+#     `docker run --rm localhost/glintfx-ci:f42 cat /etc/glintfx-ci-image`.
+RUN echo "glintfx-ci:f42 (fedora:42, built for the claudio self-hosted runner)" > /etc/glintfx-ci-image

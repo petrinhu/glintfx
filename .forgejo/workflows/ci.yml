@@ -1,72 +1,104 @@
 # SPDX-License-Identifier: MPL-2.0
-# EN: CI pipeline for glintfx on Codeberg (Forgejo Actions) -- builds the library and
-#     runs both test suites under Xvfb / Mesa llvmpipe via a 2-config matrix, PLUS a
-#     parallel `lint-and-scan` job with 3 CI-now, sempre-verde gates (TESTES.md
-#     "Camada 1", TODO.md LW-TST): TST-L1-STATIC (clang-tidy + cppcheck + the
-#     tools/check_encapsulation.sh third-party-leak gate), TST-L1-SECRETS (gitleaks,
-#     history + working tree), TST-L1-DEPS (grype dir scan). See job comments below
-#     for tool choice rationale and the exact severity thresholds.
-#       GLFW=ON  -- 18 tests: window_smoke render_smoke engine_smoke app_smoke
-#                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
-#                   data_model_list texture_png_alpha (10 GLFW-only) + ui_layer_attach
-#                   compose gl_state_guard events sanity dp_ratio_sanity base_url_sanity
-#                   ua_stylesheet_sanity (8 embed)
-#       GLFW=OFF --  8 embed tests: ui_layer_attach compose gl_state_guard events sanity
-#                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
-#     PLUS `build-and-test-fonteng` -- L1.20-FONTFLIP: same 2-config backend matrix, with
-#     GLINTFX_OWN_FONT_ENGINE=ON added on top (see that job's own header comment). Runner-
-#     budget note: this job's cost is close to build-and-test's per-leg cost (same RmlUi
-#     fetch/build, plus 2 small extra Layer-0 C translation units) -- if it is ever observed
-#     to exceed the ~10 min ceiling on codeberg-medium specifically with a cold cache, the
-#     same líder-approved fallback as the `coverage` job applies (GitHub-only, do not invent
-#     an alternative; see that job's header comment below).
-#     Triggers on every push or PR that modifies glintfx/ or this workflow file.
+# EN: Minimal-parity CI for glintfx on Codeberg (Forgejo Actions). Onda 3 of the CI
+#     restructuring (política canônica de CI ratificada pelo líder, memória
+#     feedback_ci_policy_canonica): this file was DELIBERATELY SHRUNK from a full
+#     2-config matrix + lint-and-scan + coverage down to ONE job, ONE leg
+#     (GLFW=ON), on `push` to `main` only. It exists purely as a voluntary
+#     "it still builds on Codeberg" signal for the Codeberg mirror -- it is NOT a
+#     release gate and NOT the primary CI. codeberg-medium is a shared, queued
+#     runner (jobs can sit in `waiting` for minutes); that queueing is normal and
+#     never blocks a release.
 #
-#     Runner note: codeberg-medium (4 CPU / 8 GB / 10 min) is the active global
-#     runner as of 2026-06-13. Runner state oscillates -- reconfirm at
-#     codeberg.org/actions/meta before the first push. If a job sits in `waiting`
-#     for minutes, that is queue congestion (not a YAML error) -- wait, or switch
-#     to codeberg-medium-lazy (up to 24 h window).
+#     Where the real gates live now (see .forgejo/workflows/heavy.yml's own header
+#     for the full rationale of each):
+#       - GitHub Actions (.github/workflows/ci.yml + nightly.yml) is the PRIMARY
+#         gate: full 2-config matrix (GLFW=ON/OFF), lint-and-scan (TST-L1-STATIC/
+#         SECRETS/DEPS), coverage (TST-L1-COV, 75% floor), and the nightly
+#         ASan/LSan/UBSan cron -- runs on every push/PR regardless of Codeberg's
+#         runner availability.
+#       - `claudio` (.forgejo/workflows/heavy.yml, self-hosted Forgejo runner) is
+#         the DEPTH gate: the same ASan/LSan/UBSan sanitize job PROMOTED to a
+#         blocking PR->main + tag check, plus the `fonteng`
+#         (GLINTFX_OWN_FONT_ENGINE=ON) regression job.
+#     Ratified convention: **github > claudio > codeberg** in gate authority. A
+#     job stuck `waiting` on codeberg-medium is NEVER a reason to hold a release
+#     or a merge -- only GitHub and/or claudio going red are.
 #
-#     Container: ghcr.io/catthehacker/ubuntu:act-latest is the current Codeberg
-#     default (compat nektos/act + GitHub Actions). Codeberg global runners do NOT
-#     have language stacks pre-installed -- all deps are installed in `install deps`.
+#     What was removed from this file in Onda 3 (and why -- not silently
+#     dropped, these had explicit líder-ratified homes elsewhere):
+#       - `build-and-test-fonteng` (L1.20-FONTFLIP) -- now lives in
+#         .forgejo/workflows/heavy.yml's `fonteng` job (claudio), which also
+#         carries the CXXFLAGS SYS_futex clang workaround this job below still
+#         needs for its own single leg.
+#       - `lint-and-scan` (TST-L1-STATIC/SECRETS/DEPS) -- GitHub-only per the
+#         líder's ratified decision; .github/workflows/ci.yml's lint-and-scan job
+#         is the sole gate now, no Codeberg twin.
+#       - `coverage` (TST-L1-COV/L1.18-COVCI) -- GitHub-only per the líder's
+#         ratified decision (same fallback that job's own header comment had
+#         already anticipated for a runner-budget overrun; here applied instead
+#         for scope reduction). glintfx/coverage-badge.json is still committed to
+#         the repo (generated by the GitHub job) so the README `Coverage` badge,
+#         which reads the raw file straight off the Codeberg git blob, keeps
+#         working with no CI running on Codeberg at all for it.
 #
-# PT: Pipeline de CI para glintfx no Codeberg (Forgejo Actions) -- builda a biblioteca e
-#     roda ambas as suites sob Xvfb / Mesa llvmpipe via matrix de 2 configs:
-#       GLFW=ON  -- 18 testes: window_smoke render_smoke engine_smoke app_smoke
-#                   app_dp_ratio_smoke render_sanity data_model_smoke data_model_scalar
-#                   data_model_list texture_png_alpha (10 so-GLFW) + ui_layer_attach
-#                   compose gl_state_guard events sanity dp_ratio_sanity base_url_sanity
-#                   ua_stylesheet_sanity (8 embed)
-#       GLFW=OFF --  8 testes embed: ui_layer_attach compose gl_state_guard events sanity
-#                   dp_ratio_sanity base_url_sanity ua_stylesheet_sanity
-#     MAIS `build-and-test-fonteng` -- L1.20-FONTFLIP: mesma matrix de 2 configs de backend,
-#     com GLINTFX_OWN_FONT_ENGINE=ON somado por cima (ver o comentário de cabeçalho próprio
-#     daquele job). Nota de orçamento de runner: o custo deste job é próximo do custo por-perna
-#     do build-and-test (mesmo fetch/build do RmlUi, mais 2 unidades de tradução C pequenas da
-#     Camada 0) -- se algum dia for observado exceder o teto de ~10 min no codeberg-medium
-#     especificamente com cache frio, vale o mesmo fallback aprovado pelo líder do job
-#     `coverage` (GitHub-only, não inventar alternativa; ver o comentário de cabeçalho daquele
-#     job abaixo).
-#     Disparado em todo push ou PR que modifica glintfx/ ou este workflow.
+#     GLFW=OFF leg: also dropped from this file -- it is still exercised by
+#     GitHub's full matrix and by claudio's `heavy.yml` sanitize/fonteng jobs.
+#     Losing the OFF leg here only removes a REDUNDANT third confirmation, not a
+#     unique one.
 #
-#     Nota de runner: codeberg-medium (4 CPU / 8 GB / 10 min) e o runner global ativo
-#     em 2026-06-13. Estado oscila -- reconfirmar em codeberg.org/actions/meta antes do
-#     1o push. Job em `waiting` por minutos = fila (nao erro de YAML) -- esperar ou
-#     trocar para codeberg-medium-lazy (janela de ate 24 h).
+# PT: CI de paridade-mínima para o glintfx no Codeberg (Forgejo Actions). Onda 3
+#     da reestruturação de CI (política canônica de CI ratificada pelo líder,
+#     memória feedback_ci_policy_canonica): este arquivo foi DELIBERADAMENTE
+#     ENCOLHIDO de uma matrix de 2 configs + lint-and-scan + coverage para UM
+#     job, UMA perna (GLFW=ON), em `push` para `main` apenas. Ele existe
+#     puramente como um sinal voluntário de "ainda builda no Codeberg" para o
+#     mirror do Codeberg -- NÃO é gate de release e NÃO é o CI primário.
+#     codeberg-medium é um runner compartilhado e enfileirado (jobs podem ficar
+#     em `waiting` por minutos); esse enfileiramento é normal e nunca segura uma
+#     release.
 #
-#     Container: ghcr.io/catthehacker/ubuntu:act-latest e o default atual do Codeberg.
-#     Runners globais NAO tem stacks pre-instaladas -- todas as deps sao instaladas em
-#     `install deps`.
+#     Onde os gates de verdade vivem agora (ver o cabeçalho de
+#     .forgejo/workflows/heavy.yml para a racional completa de cada um):
+#       - GitHub Actions (.github/workflows/ci.yml + nightly.yml) é o gate
+#         PRIMÁRIO: matrix completa de 2 configs (GLFW=ON/OFF), lint-and-scan
+#         (TST-L1-STATIC/SECRETS/DEPS), coverage (TST-L1-COV, piso 75%) e o cron
+#         noturno ASan/LSan/UBSan -- roda em todo push/PR independente da
+#         disponibilidade de runner do Codeberg.
+#       - `claudio` (.forgejo/workflows/heavy.yml, runner self-hosted do Forgejo)
+#         é o gate de PROFUNDIDADE: o mesmo job sanitize ASan/LSan/UBSan
+#         PROMOVIDO a checagem bloqueante de PR->main + tag, mais o job de
+#         regressão `fonteng` (GLINTFX_OWN_FONT_ENGINE=ON).
+#     Convenção ratificada: **github > claudio > codeberg** em autoridade de
+#     gate. Um job preso em `waiting` no codeberg-medium NUNCA é motivo para
+#     segurar uma release ou um merge -- só GitHub e/ou claudio ficarem vermelhos
+#     são.
+#
+#     O que foi removido deste arquivo na Onda 3 (e por quê -- não descartado em
+#     silêncio, cada um tinha um destino explícito ratificado pelo líder):
+#       - `build-and-test-fonteng` (L1.20-FONTFLIP) -- agora vive no job
+#         `fonteng` de .forgejo/workflows/heavy.yml (claudio), que também carrega
+#         o workaround CXXFLAGS SYS_futex do clang que o job abaixo ainda precisa
+#         para a sua própria perna única.
+#       - `lint-and-scan` (TST-L1-STATIC/SECRETS/DEPS) -- GitHub-only conforme
+#         decisão ratificada pelo líder; o job lint-and-scan de
+#         .github/workflows/ci.yml é o único gate agora, sem gêmeo no Codeberg.
+#       - `coverage` (TST-L1-COV/L1.18-COVCI) -- GitHub-only conforme decisão
+#         ratificada pelo líder (o mesmo fallback que o comentário de cabeçalho
+#         daquele job já antecipava para estouro de orçamento de runner; aqui
+#         aplicado por redução de escopo). O glintfx/coverage-badge.json continua
+#         commitado no repo (gerado pelo job do GitHub), então o badge `Coverage`
+#         do README, que lê o arquivo raw direto do blob git do Codeberg, segue
+#         funcionando sem nenhum CI rodando no Codeberg para ele.
+#
+#     Perna GLFW=OFF: também removida deste arquivo -- continua exercitada pela
+#     matrix completa do GitHub e pelos jobs sanitize/fonteng do `heavy.yml` no
+#     claudio. Perder a perna OFF aqui só remove uma terceira confirmação
+#     REDUNDANTE, não uma única.
 name: ci
 
 on:
   push:
-    paths:
-      - "glintfx/**"
-      - ".forgejo/workflows/ci.yml"
-  pull_request:
+    branches: [main]
     paths:
       - "glintfx/**"
       - ".forgejo/workflows/ci.yml"
@@ -79,7 +111,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: build & test (codeberg-medium / GLFW=${{ matrix.backend }})
+    name: build & test (codeberg-medium / GLFW=ON, minimal parity)
     # EN: codeberg-medium: 4 CPU / 8 GB / 10 min -- the stable global runner.
     #     Do NOT use 'ubuntu-latest' (GitHub label) or 'docker' (claudio, offline).
     # PT: codeberg-medium: 4 CPU / 8 GB / 10 min -- runner global estavel.
@@ -92,112 +124,37 @@ jobs:
       #     node:*-bookworm QUEBRA actions/setup-python (codeberg/community#1718).
       image: ghcr.io/catthehacker/ubuntu:act-latest
     env:
-      # EN: Workaround for a known libstdc++14 + clang incompatibility that broke the
-      #     GitHub-side sibling job (and every other job below that runs
-      #     `cmake --build`) on 2026-07-10 (GitHub CI run 29112917463): libstdc++'s
-      #     <bits/atomic_wait.h> uses the SYS_futex syscall-number macro without
-      #     including <sys/syscall.h> itself -- gcc's own headers pull that header in
-      #     transitively elsewhere, clang's driver does not. A from-scratch build of
-      #     RmlUi with clang++ (FreeTypeInterface.cpp includes <atomic>) against the
-      #     container's libstdc++14 then fails with "use of undeclared identifier
-      #     'SYS_futex'". `-include sys/syscall.h` forces every translation unit to see
-      #     the declaration first -- purely additive, no behavioural change (does NOT
-      #     disable/replace the futex codepath the way -D_GLIBCXX_HAVE_LINUX_FUTEX=0
-      #     would; it just supplies the missing declaration for a macro libstdc++
-      #     already unconditionally uses).
-      #     This is a CXXFLAGS env var (not -DCMAKE_CXX_FLAGS on the cmake command
-      #     line) so CMake's initial-cache population picks it up on EVERY fresh
-      #     configure -- the RmlUi FetchContent build shares this job's
-      #     CMAKE_CXX_FLAGS cache entry, no separate wiring needed.
-      #     It only ever surfaced as a cache-miss failure: jobs restoring a warm _deps
-      #     cache below never actually recompile RmlUi and so never hit this, masking
-      #     the bug until the next cache expiry/key change -- applied to every job that
-      #     runs `cmake --build` (compiles RmlUi from source), not just the job that
-      #     first exposed it via a brand-new cache key. Mirrored from
-      #     .github/workflows/ci.yml so this remote does not carry the same
-      #     bomba-relógio even though the failure was only observed on GitHub so far
-      #     (act-latest's libstdc++ is the same class of "recent enough to lack the
-      #     upstream fix" version).
-      # PT: Workaround para uma incompatibilidade conhecida libstdc++14 + clang que
-      #     quebrou o job irmão do lado GitHub (e todo outro job abaixo que roda
-      #     `cmake --build`) em 2026-07-10 (run de CI do GitHub 29112917463): o
-      #     <bits/atomic_wait.h> do libstdc++ usa a macro de número de syscall
-      #     SYS_futex sem incluir <sys/syscall.h> ele mesmo -- os próprios headers do
-      #     gcc puxam esse header transitivamente em outro lugar, o driver do clang
-      #     não. Um build do RmlUi do zero com clang++ (FreeTypeInterface.cpp inclui
-      #     <atomic>) contra o libstdc++14 do container então falha com "use of
-      #     undeclared identifier 'SYS_futex'". `-include sys/syscall.h` força toda
-      #     unidade de tradução a ver a declaração primeiro -- puramente aditivo, sem
-      #     mudança de comportamento (NÃO desliga/substitui o caminho de código do
-      #     futex como -D_GLIBCXX_HAVE_LINUX_FUTEX=0 faria; só supre a declaração
-      #     faltante para uma macro que o libstdc++ já usa incondicionalmente).
-      #     É uma env var CXXFLAGS (não -DCMAKE_CXX_FLAGS na linha de comando do
-      #     cmake) para a população de cache inicial do CMake pegar em TODO configure
-      #     novo -- o build FetchContent do RmlUi compartilha esta mesma entrada de
-      #     cache CMAKE_CXX_FLAGS deste job, sem fiação separada necessária.
-      #     Só apareceu como falha de cache-miss: jobs restaurando um cache _deps
-      #     quente abaixo nunca recompilam o RmlUi de fato e por isso nunca batem
-      #     nisso, mascarando o bug até a próxima expiração/mudança de chave de cache
-      #     -- aplicado a todo job que roda `cmake --build` (compila o RmlUi do
-      #     fonte), não só o job que expôs primeiro via uma chave de cache zero-nova.
-      #     Espelhado de .github/workflows/ci.yml para este remoto não carregar a
-      #     mesma bomba-relógio mesmo a falha tendo sido observada só no GitHub até
-      #     agora (o libstdc++ do act-latest é a mesma classe de versão "recente o
-      #     bastante pra faltar o fix upstream").
+      # EN: Workaround for a known libstdc++14 + clang incompatibility -- see
+      #     .forgejo/workflows/heavy.yml's file-header comment (SYS_futex section)
+      #     for the full bug rationale, or .github/workflows/ci.yml's build-and-test
+      #     job for the original write-up. Purely additive (supplies a missing
+      #     declaration, no behavioural change); still needed here because this job
+      #     builds RmlUi from scratch with clang++ on ubuntu act-latest's older
+      #     libstdc++14.
+      # PT: Workaround para uma incompatibilidade conhecida libstdc++14 + clang --
+      #     ver o comentário de cabeçalho de .forgejo/workflows/heavy.yml (seção
+      #     SYS_futex) para a racional completa do bug, ou o job build-and-test de
+      #     .github/workflows/ci.yml para o registro original. Puramente aditivo
+      #     (supre uma declaração faltante, sem mudança de comportamento); ainda
+      #     necessário aqui porque este job builda o RmlUi do zero com clang++ no
+      #     libstdc++14 mais antigo do ubuntu act-latest.
       CXXFLAGS: "-include sys/syscall.h"
-    strategy:
-      # EN: Run both configs even if one fails -- independent build configurations.
-      # PT: Rodar ambas mesmo se uma falhar -- configuracoes de build independentes.
-      fail-fast: false
-      matrix:
-        # EN: ON  = full build (App + UiLayer + GLFW backend); runs 18 tests.
-        #     OFF = embed-only (UiLayer only, no GLFW in lib); runs 8 embed tests.
-        #           GLFW is still needed as a test-only dep (GL context fixture).
-        # PT: ON  = build completo (App + UiLayer + backend GLFW); roda 18 testes.
-        #     OFF = embed-only (so UiLayer, sem GLFW na lib); roda 8 testes embed.
-        #           GLFW ainda e necessario como dep so-de-teste (fixture de contexto GL).
-        backend: [ON, OFF]
-
     steps:
       - name: checkout
         uses: actions/checkout@v4
 
-      # EN: Cache the FetchContent clone of RmlUi. Each config uses its own build dir
-      #     (build-ON / build-OFF) so cache paths and keys are separate per backend.
-      # PT: Cache do clone FetchContent do RmlUi. Cada config usa seu proprio build dir
-      #     (build-ON / build-OFF) por isso paths e chaves de cache sao separados.
       - name: cache rmlui (fetchcontent)
         uses: actions/cache@v4
         with:
-          path: glintfx/build-${{ matrix.backend }}/_deps
-          key: rmlui-${{ runner.os }}-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+          path: glintfx/build/_deps
+          key: rmlui-${{ runner.os }}-glfwON-${{ hashFiles('glintfx/CMakeLists.txt') }}
 
       # EN: Install all build and runtime deps. The container (act-latest) ships
       #     git, curl, and build-essential, but NOT the graphics/GL stacks.
       #     Commands run as root inside the container -- no sudo needed.
-      #     - git: required by CMake FetchContent to clone RmlUi.
-      #     - clang: README.md declares "Compiler: clang" -- build-and-test must
-      #       actually build the lib with clang, not just lint it (lint-and-scan
-      #       already runs clang-tidy but never compiles the lib itself with clang).
-      #     - libglfw3-dev: installed for BOTH configs -- in GLFW=OFF mode the embed
-      #       tests use a hidden GLFW window as a test-only GL context fixture.
-      #     - libgl1-mesa-dev / libegl1-mesa-dev: OpenGL + EGL headers (FindOpenGL).
-      #     - libxkbcommon-dev: GLFW XKB keyboard-layout header.
-      #     - libgl1-mesa-dri: llvmpipe -- Mesa software GL renderer (Xvfb GL backend).
-      #     - xvfb: virtual X display + xvfb-run used by tests/run_xvfb.cmake.
       # PT: Instala todas as deps de build e runtime. O container (act-latest) inclui
       #     git, curl e build-essential, mas NAO as stacks de GL/graficos.
       #     Comandos rodam como root dentro do container -- sem sudo necessario.
-      #     - git: necessario para FetchContent clonar o RmlUi.
-      #     - clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
-      #       de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
-      #       clang-tidy mas nunca compila a lib em si com clang).
-      #     - libglfw3-dev: instalado em AMBAS as configs -- no modo GLFW=OFF os testes
-      #       embed usam janela GLFW oculta como fixture de contexto GL so-de-teste.
-      #     - libgl1-mesa-dev / libegl1-mesa-dev: headers OpenGL + EGL (FindOpenGL).
-      #     - libxkbcommon-dev: header XKB do GLFW para layout de teclado.
-      #     - libgl1-mesa-dri: llvmpipe -- renderer software GL do Mesa (backend GL Xvfb).
-      #     - xvfb: display virtual X + xvfb-run usado por tests/run_xvfb.cmake.
       - name: install deps
         run: |
           apt-get update -q
@@ -208,333 +165,23 @@ jobs:
             libgl1-mesa-dri \
             xvfb
 
-      # EN: Configure with the matrix backend flag. Demos OFF -- showcase requires App/GLFW.
-      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER pinned to clang/clang++ -- aligns the
-      #     build with README.md's declared toolchain (was silently defaulting to g++).
-      # PT: Configura com a flag de backend da matrix. Demos OFF -- showcase requer App/GLFW.
-      #     CMAKE_C_COMPILER/CMAKE_CXX_COMPILER fixados em clang/clang++ -- alinha o
-      #     build ao toolchain declarado no README.md (estava caindo em g++ em silencio).
+      # EN: CMAKE_C_COMPILER/CMAKE_CXX_COMPILER pinned to clang/clang++ -- aligns
+      #     the build with README.md's declared toolchain.
+      # PT: CMAKE_C_COMPILER/CMAKE_CXX_COMPILER fixados em clang/clang++ -- alinha
+      #     o build ao toolchain declarado no README.md.
       - name: configure
         run: |
-          cmake -S glintfx -B glintfx/build-${{ matrix.backend }} \
-            -DGLINTFX_BUILD_TESTS=ON \
-            -DGLINTFX_BUILD_DEMOS=OFF \
-            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++
-
-      - name: build
-        run: cmake --build glintfx/build-${{ matrix.backend }} -j$(nproc)
-
-      # EN: Run the test suite for this config under Xvfb (Mesa llvmpipe).
-      #     GLFW=ON  runs 18 tests (10 GLFW-backend + 8 embed).
-      #     GLFW=OFF runs  8 tests (8 embed only; GLFW/App tests excluded by CMake).
-      #     run_xvfb.cmake calls xvfb-run -a per test; outer -a sets DISPLAY for ctest.
-      # PT: Roda a suite de testes para esta config sob Xvfb (Mesa llvmpipe).
-      #     GLFW=ON  roda 18 testes (10 backend GLFW + 8 embed).
-      #     GLFW=OFF roda  8 testes (8 embed apenas; testes GLFW/App excluidos pelo CMake).
-      #     run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
-      - name: test
-        run: xvfb-run -a ctest --test-dir glintfx/build-${{ matrix.backend }} --output-on-failure
-
-  # EN: build-and-test-fonteng -- L1.20-FONTFLIP. Mirrors .github/workflows/ci.yml's job of
-  #     the same name step-for-step (same rationale: regression gate for glintfx's own
-  #     SOV-SFNT/SOV-RAST font engine, GLINTFX_OWN_FONT_ENGINE=ON, previously never exercised
-  #     by CI) -- see that file's job header comment for the full rationale (why an
-  #     independent build dir + cache key instead of reusing build-and-test's exact key, why
-  #     no extra system dep is needed, why the FATAL_ERROR sibling-sources guard is always
-  #     satisfied in this monorepo's CI checkout).
-  # PT: build-and-test-fonteng -- L1.20-FONTFLIP. Espelha passo a passo o job de mesmo nome
-  #     em .github/workflows/ci.yml (mesma racional: gate de regressão para o motor de fonte
-  #     próprio SOV-SFNT/SOV-RAST do glintfx, GLINTFX_OWN_FONT_ENGINE=ON, antes nunca
-  #     exercitado pelo CI) -- ver o comentário de cabeçalho daquele job para a racional
-  #     completa (por que build dir + chave de cache independentes em vez de reusar a chave
-  #     exata do build-and-test, por que nenhuma dep de sistema extra é necessária, por que o
-  #     guard FATAL_ERROR de sources irmãos é sempre satisfeito neste checkout de monorepo do
-  #     CI).
-  build-and-test-fonteng:
-    name: build & test (own font engine, codeberg-medium / GLFW=${{ matrix.backend }})
-    runs-on: codeberg-medium
-    container:
-      image: ghcr.io/catthehacker/ubuntu:act-latest
-    env:
-      # EN: SYS_futex / libstdc++14+clang RmlUi-from-scratch workaround -- see
-      #     build-and-test job's own `env:` comment above for the full rationale.
-      # PT: Workaround SYS_futex / libstdc++14+clang para o RmlUi buildado do zero --
-      #     ver o comentário `env:` do próprio job build-and-test acima para a
-      #     racional completa.
-      CXXFLAGS: "-include sys/syscall.h"
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [ON, OFF]
-
-    steps:
-      - name: checkout
-        uses: actions/checkout@v4
-
-      - name: cache rmlui (fetchcontent)
-        uses: actions/cache@v4
-        with:
-          path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
-          key: rmlui-${{ runner.os }}-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
-
-      # EN: Same deps as build-and-test (see that job's install-deps comment for the
-      #     per-package rationale) -- GLINTFX_OWN_FONT_ENGINE adds no new system dep.
-      # PT: Mesmas deps do build-and-test (ver o comentário de install-deps daquele job pro
-      #     racional por-pacote) -- GLINTFX_OWN_FONT_ENGINE não soma nenhuma dep de sistema
-      #     nova.
-      - name: install deps
-        run: |
-          apt-get update -q
-          apt-get install -y --no-install-recommends \
-            cmake clang git \
-            libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
-            libgl1-mesa-dri \
-            xvfb
-
-      - name: configure
-        run: |
-          cmake -S glintfx -B glintfx/build-fonteng-${{ matrix.backend }} \
-            -DGLINTFX_BUILD_TESTS=ON \
-            -DGLINTFX_BUILD_DEMOS=OFF \
-            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
-            -DGLINTFX_OWN_FONT_ENGINE=ON \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++
-
-      - name: build
-        run: cmake --build glintfx/build-fonteng-${{ matrix.backend }} -j$(nproc)
-
-      - name: test
-        run: xvfb-run -a ctest --test-dir glintfx/build-fonteng-${{ matrix.backend }} --output-on-failure
-
-  # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
-  #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.
-  #     Mirrors .github/workflows/ci.yml lint-and-scan job step-for-step so both
-  #     remotes have equivalent coverage -- see that file for the full tool-choice
-  #     rationale (clang-tidy+cppcheck / gitleaks / grype, pinned-tarball installs,
-  #     --fail-on high, the grype coverage caveat for vendored C++ headers).
-  # PT: lint-and-scan -- 3 gates CI-now, sempre-verde (TESTES.md "Camada 1", TODO.md
-  #     LW-TST). Independente do build-and-test (sem matrix, sem ctest); roda em
-  #     paralelo. Espelha o job lint-and-scan de .github/workflows/ci.yml passo a
-  #     passo para os 2 remotos terem cobertura equivalente -- ver aquele arquivo para
-  #     a justificativa completa de escolha de ferramenta (clang-tidy+cppcheck /
-  #     gitleaks / grype, instalacao via tarball fixado, --fail-on high, a ressalva de
-  #     cobertura do grype para headers C++ vendorizados).
-  lint-and-scan:
-    name: lint & scan (codeberg-medium)
-    runs-on: codeberg-medium
-    container:
-      image: ghcr.io/catthehacker/ubuntu:act-latest
-    env:
-      GITLEAKS_VERSION: "8.30.0"
-      GRYPE_VERSION: "0.112.0"
-    steps:
-      - name: checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # EN: full history for gitleaks. PT: historico completo para o gitleaks.
-
-      - name: cache rmlui (fetchcontent)
-        uses: actions/cache@v4
-        with:
-          path: glintfx/build-lint/_deps
-          key: rmlui-${{ runner.os }}-lint-${{ hashFiles('glintfx/CMakeLists.txt') }}
-
-      - name: install deps
-        run: |
-          apt-get update -q
-          apt-get install -y --no-install-recommends \
-            cmake g++ git clang-tidy cppcheck curl \
-            libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
-            libgl1-mesa-dri
-
-      # EN: Configure-only (no `cmake --build`) -- see the equivalent step in
-      #     .github/workflows/ci.yml for why this is enough for clang-tidy/cppcheck.
-      # PT: So configure (sem `cmake --build`) -- ver o passo equivalente em
-      #     .github/workflows/ci.yml para o motivo disso ser suficiente pro
-      #     clang-tidy/cppcheck.
-      - name: configure (compile_commands.json only)
-        run: |
-          cmake -S glintfx -B glintfx/build-lint \
+          cmake -S glintfx -B glintfx/build \
             -DGLINTFX_BUILD_TESTS=ON \
             -DGLINTFX_BUILD_DEMOS=OFF \
             -DGLINTFX_BACKEND_GLFW=ON \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
 
-      # EN: TST-L1-STATIC (1/3) -- encapsulation gate.
-      # PT: TST-L1-STATIC (1/3) -- gate de encapsulamento.
-      - name: TST-L1-STATIC -- encapsulation gate
-        run: ./tools/check_encapsulation.sh glintfx/include/glintfx
+      - name: build
+        run: cmake --build glintfx/build -j$(nproc)
 
-      # EN: TST-L1-STATIC (2/3) -- clang-tidy (checks + WarningsAsErrors policy in
-      #     glintfx/.clang-tidy).
-      # PT: TST-L1-STATIC (2/3) -- clang-tidy (checks + politica de WarningsAsErrors em
-      #     glintfx/.clang-tidy).
-      - name: TST-L1-STATIC -- clang-tidy
-        run: clang-tidy -p glintfx/build-lint glintfx/src/*.cpp
-
-      # EN: TST-L1-STATIC (3/3) -- cppcheck, restricted to our own src/, vendored/
-      #     fetched code suppressed. --file-filter is '*glintfx/src/*' (leading bare
-      #     '*', NOT '*/glintfx/src/*'): with a RELATIVE --project path (as used here),
-      #     cppcheck 2.13 (this container's apt version) matches file entries as plain
-      #     relative paths with no leading '/' (e.g. "glintfx/src/foo.cpp"), so a filter
-      #     requiring a literal '/' right before "glintfx" never matches and cppcheck
-      #     exits with "could not find any files matching the filter" -- reproduced and
-      #     confirmed locally against both cppcheck 2.13 (container) and 2.21 (host).
-      # PT: TST-L1-STATIC (3/3) -- cppcheck, restrito ao nosso proprio src/, codigo
-      #     vendorizado/fetchado suprimido. --file-filter e '*glintfx/src/*' (asterisco
-      #     nu no inicio, NAO '*/glintfx/src/*'): com --project RELATIVO (como aqui), o
-      #     cppcheck 2.13 (versao apt deste container) casa as entradas de arquivo como
-      #     caminho relativo puro sem '/' no inicio (ex.: "glintfx/src/foo.cpp"), entao
-      #     um filtro que exige um '/' literal antes de "glintfx" nunca casa e o
-      #     cppcheck sai com "could not find any files matching the filter" --
-      #     reproduzido e confirmado localmente contra cppcheck 2.13 (container) e 2.21
-      #     (host).
-      - name: TST-L1-STATIC -- cppcheck
-        run: |
-          cppcheck --enable=warning,style,performance,portability \
-            --std=c++20 --language=c++ --platform=unix64 \
-            --project=glintfx/build-lint/compile_commands.json \
-            --file-filter='*glintfx/src/*' \
-            --suppress=missingIncludeSystem \
-            --suppress='*:*/third_party/*' \
-            --suppress='*:*/_deps/*' \
-            --error-exitcode=1
-
-      # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) -- same
-      #     approach as the GitHub workflow, works unmodified whether the container
-      #     runs as root (Forgejo/act-latest) or as a regular user.
-      # PT: Instalado em $HOME/.local/bin (adicionado ao PATH via GITHUB_PATH) -- mesma
-      #     abordagem do workflow GitHub, funciona sem alteracao rodando como root
-      #     (Forgejo/act-latest) ou como usuario comum.
-      - name: install gitleaks
-        run: |
-          mkdir -p "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          curl -sSfL -o /tmp/gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar -xzf /tmp/gitleaks.tar.gz -C "$HOME/.local/bin" gitleaks
-          "$HOME/.local/bin/gitleaks" version
-
-      # EN: TST-L1-SECRETS -- history + working tree.
-      # PT: TST-L1-SECRETS -- historico + working tree.
-      - name: TST-L1-SECRETS -- gitleaks
-        run: gitleaks detect --source . --redact -v
-
-      - name: install grype
-        run: |
-          mkdir -p "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          curl -sSfL -o /tmp/grype.tar.gz \
-            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
-          tar -xzf /tmp/grype.tar.gz -C "$HOME/.local/bin" grype
-          "$HOME/.local/bin/grype" version
-
-      # EN: TST-L1-DEPS -- repo-tree scan, --fail-on high (actionable-alert threshold).
-      # PT: TST-L1-DEPS -- scan da arvore do repo, --fail-on high (limiar de alerta
-      #     acionavel).
-      - name: TST-L1-DEPS -- grype
-        run: grype dir:. --fail-on high
-
-  # EN: coverage -- L1.18-COVCI / TST-L1-COV. Mirrors .github/workflows/ci.yml's
-  #     `coverage` job step-for-step -- see that file for the full rationale (self-hosted
-  #     llvm-cov per the líder's 2026-07-04 decision; tools/coverage_report.sh as the
-  #     local-first "gêmeo local" the CI wraps; the --floor 75 recalibration policy;
-  #     why --update-badge is never passed from CI).
-  #
-  #     ARMADILHA (Forgejo/Gitea): actions/upload-artifact@v4 does NOT work against
-  #     Forgejo's artifact backend (confirmed project convention, see this task's
-  #     instructions) -- @v3 is used here, unlike the @v4 used on the GitHub side.
-  #
-  #     Runner-budget note: codeberg-medium has a ~10 min hard ceiling (see
-  #     .forgejo/workflows/ci.yml's build-and-test job header comment). This job's cost
-  #     is roughly build-and-test's GLFW=ON leg (RmlUi fetch + build + 38-test suite)
-  #     PLUS the llvm-cov post-processing pass over 38 instrumented binaries -- measured
-  #     locally at ~2026-07-10: build+test ~135 s alone on a warm _deps cache, well
-  #     under budget, but a COLD cache (first run, or cache-key miss) adds the full RmlUi
-  #     clone+build on top, same as every other job here. If this job is ever observed to
-  #     exceed the ~10 min ceiling on Codeberg specifically, the líder-approved fallback
-  #     (do not invent an alternative) is: GitHub-only coverage (drop this job, keep
-  #     .github/workflows/ci.yml's), a note left in this file's header explaining why,
-  #     and a TODO.md INBOX entry recording the finding -- NOT silently retrying,
-  #     shrinking the suite, or splitting into a matrix without the líder's sign-off.
-  # PT: coverage -- L1.18-COVCI / TST-L1-COV. Espelha o job `coverage` de
-  #     .github/workflows/ci.yml passo a passo -- ver aquele arquivo para a racional
-  #     completa (llvm-cov self-hosted conforme decisão do líder de 2026-07-04;
-  #     tools/coverage_report.sh como o "gêmeo local" local-first que o CI envolve; a
-  #     política de recalibração do --floor 75; por que --update-badge nunca é passado
-  #     a partir do CI).
-  #
-  #     ARMADILHA (Forgejo/Gitea): actions/upload-artifact@v4 NÃO funciona contra o
-  #     backend de artifact do Forgejo (convenção confirmada do projeto, ver as
-  #     instruções desta task) -- @v3 é usado aqui, diferente do @v4 usado do lado
-  #     GitHub.
-  #
-  #     Nota de orçamento de runner: codeberg-medium tem teto duro de ~10 min (ver o
-  #     comentário de cabeçalho do job build-and-test de .forgejo/workflows/ci.yml). O
-  #     custo deste job é aproximadamente a perna GLFW=ON do build-and-test (fetch +
-  #     build do RmlUi + suíte de 38 testes) MAIS o passe de pós-processamento do
-  #     llvm-cov sobre 38 binários instrumentados -- medido localmente em ~2026-07-10:
-  #     build+test ~135 s sozinho com cache _deps quente, bem dentro do orçamento, mas
-  #     um cache FRIO (1ª execução, ou miss de chave de cache) soma o clone+build
-  #     completo do RmlUi por cima, igual a todo outro job aqui. Se este job for
-  #     observado exceder o teto de ~10 min no Codeberg especificamente, o fallback
-  #     aprovado pelo líder (não inventar alternativa) é: cobertura GitHub-only (remover
-  #     este job, manter o de .github/workflows/ci.yml), uma nota deixada no cabeçalho
-  #     deste arquivo explicando o motivo, e um registro na INBOX do TODO.md com o
-  #     achado -- NÃO retentar silenciosamente, encolher a suíte, ou dividir numa matrix
-  #     sem aval do líder.
-  coverage:
-    name: coverage (codeberg-medium)
-    runs-on: codeberg-medium
-    container:
-      image: ghcr.io/catthehacker/ubuntu:act-latest
-    env:
-      # EN: SYS_futex / libstdc++14+clang RmlUi-from-scratch workaround -- see
-      #     build-and-test job's own `env:` comment above for the full rationale.
-      #     tools/coverage_report.sh's `cmake -S ... -B ...` call does not pass
-      #     -DCMAKE_CXX_FLAGS itself, so CMake's initial-cache population picks this
-      #     env var up on every fresh configure -- no change to the script needed.
-      # PT: Workaround SYS_futex / libstdc++14+clang para o RmlUi buildado do zero --
-      #     ver o comentário `env:` do próprio job build-and-test acima para a
-      #     racional completa. A chamada `cmake -S ... -B ...` de
-      #     tools/coverage_report.sh não passa -DCMAKE_CXX_FLAGS por si só, então a
-      #     população de cache inicial do CMake pega esta env var em todo configure
-      #     novo -- nenhuma mudança no script necessária.
-      CXXFLAGS: "-include sys/syscall.h"
-    steps:
-      - name: checkout
-        uses: actions/checkout@v4
-
-      - name: cache rmlui (fetchcontent)
-        uses: actions/cache@v4
-        with:
-          path: glintfx/build-cov/_deps
-          key: rmlui-${{ runner.os }}-cov-${{ hashFiles('glintfx/CMakeLists.txt') }}
-
-      - name: install deps
-        run: |
-          apt-get update -q
-          apt-get install -y --no-install-recommends \
-            cmake clang llvm git \
-            libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
-            libgl1-mesa-dri \
-            xvfb
-
-      # EN: tools/coverage_report.sh wraps its own ctest invocation in `xvfb-run -a`
-      #     internally -- no outer xvfb-run needed here.
-      # PT: tools/coverage_report.sh já envolve sua própria invocação de ctest em
-      #     `xvfb-run -a` internamente -- nenhum xvfb-run externo necessário aqui.
-      - name: coverage (build + test + report, floor gate)
-        run: ./tools/coverage_report.sh --build-dir glintfx/build-cov --floor 75
-
-      - name: upload coverage HTML report
-        uses: actions/upload-artifact@v3
-        with:
-          name: coverage-html
-          path: glintfx/build-cov/coverage-html
+      # EN: run_xvfb.cmake calls xvfb-run -a per test; outer -a sets DISPLAY for ctest.
+      # PT: run_xvfb.cmake chama xvfb-run -a por teste; o -a externo define DISPLAY para o ctest.
+      - name: test
+        run: xvfb-run -a ctest --test-dir glintfx/build --output-on-failure

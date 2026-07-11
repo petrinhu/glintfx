@@ -1,14 +1,19 @@
 # SPDX-License-Identifier: MPL-2.0
 # EN: Heavy CI gates for glintfx on the self-hosted `claudio` Forgejo runner (política
 #     canônica de CI ratificada pelo líder, memória feedback_ci_policy_canonica --
-#     Onda 1, ADITIVA: does not remove/replace .forgejo/workflows/ci.yml or nightly.yml,
-#     which keep running on codeberg-medium unchanged). Two jobs:
-#       - `sanitize`  -- the same ASan/LSan/UBSan memory-safety gate as
-#         .forgejo/workflows/nightly.yml's `sanitize` job, PROMOTED from a nightly-only
-#         cron check to a PR->main + tag gate (the líder's ratified decision: the
-#         nightly cron on GitHub remains as a redundant safety net -- see
-#         .github/workflows/nightly.yml -- this job does NOT replace it, it adds an
-#         earlier, blocking checkpoint).
+#     Onda 1, ADITIVA at the time it landed). UPDATED Onda 3 (2026-07-11): this job's
+#     `sanitize` gate now REPLACES .forgejo/workflows/nightly.yml as the PR/tag ASan
+#     gate on Codeberg's side -- that file was deleted (it is fully subsumed by this
+#     one, promoted from cron to a blocking check). The GitHub-side nightly cron
+#     (.github/workflows/nightly.yml) stays intact and unchanged as the redundant
+#     safety net; .forgejo/workflows/ci.yml also stays, but shrunk to minimal parity
+#     (see that file's own header). Two jobs:
+#       - `sanitize`  -- the ASan/LSan/UBSan memory-safety gate (same flags the
+#         deleted .forgejo/workflows/nightly.yml used), a PR->main + tag gate (the
+#         líder's ratified decision: the nightly cron on GitHub remains as a
+#         redundant safety net -- see .github/workflows/nightly.yml -- this job does
+#         NOT replace that GitHub cron, only the now-deleted Forgejo-side nightly
+#         file).
 #       - `fonteng`   -- ported step-for-step from .forgejo/workflows/ci.yml's
 #         `build-and-test-fonteng` job (L1.20-FONTFLIP regression gate for glintfx's own
 #         font engine, GLINTFX_OWN_FONT_ENGINE=ON).
@@ -18,10 +23,11 @@
 #     forgejo-runner.service already active as a system service -- this workflow does
 #     NOT register/reconfigure the runner). `claudio` is a SINGLE always-on machine, not
 #     an elastic pool: it can be offline/busy/rebooting outside the líder's control.
-#     Policy: a green run on EITHER remote is enough -- GitHub's nightly cron
-#     (.github/workflows/nightly.yml) is the primary safety net; if `claudio` is
-#     unreachable when a PR/tag needs this gate, that is an operational finding to
-#     surface to the líder, not a reason to silently relax the gate here.
+#     Policy: a green run on EITHER remote is enough (github > claudio > codeberg in
+#     gate authority) -- GitHub's nightly cron (.github/workflows/nightly.yml) is the
+#     primary safety net; if `claudio` is unreachable when a PR/tag needs this gate,
+#     that is an operational finding to surface to the líder, not a reason to
+#     silently relax the gate here.
 #
 #     Container: `container: image: localhost/glintfx-ci:f42` -- built by
 #     tools/ci/build_image.sh from tools/ci/Containerfile.f42 (fedora:42 base + every
@@ -34,23 +40,24 @@
 #     Containerfile.f42 changes, this workflow does not build it.
 #
 #     SYS_futex / libstdc+++clang workaround: .forgejo/workflows/ci.yml's
-#     `build-and-test` and `build-and-test-fonteng` jobs (ubuntu act-latest,
-#     libstdc++14) need `CXXFLAGS: "-include sys/syscall.h"` to build RmlUi from
-#     scratch with clang++ (see that file's `env:` comment for the full bug rationale).
-#     REPRODUCED AND VERIFIED on THIS image (política (e), 2026-07-10, live run inside
-#     localhost/glintfx-ci:f42): a from-scratch RmlUi build with
-#     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ and NO CXXFLAGS workaround
-#     compiled cleanly (FreeTypeInterface.cpp's <atomic> include, the exact translation
-#     unit that trips the bug on ubuntu act-latest, built without error). Fedora 42
-#     ships clang 20.1.8 against GCC 15.2.1's libstdc++ (`<bits/atomic_wait.h>` already
-#     includes <sys/syscall.h> transitively in this newer libstdc++) -- the bug class is
-#     specific to the OLDER libstdc++14 on ubuntu act-latest, not present here. The
-#     `fonteng` job below therefore does NOT carry the workaround; if a future Fedora
-#     base bump or an RmlUi version bump ever reintroduces the failure ("use of
-#     undeclared identifier 'SYS_futex'"), re-add the identical `CXXFLAGS:
-#     "-include sys/syscall.h"` env var used in ci.yml -- it is purely additive
-#     (supplies a missing declaration, changes no sanitizer/futex behaviour) and safe to
-#     bring back.
+#     `build-and-test` job (ubuntu act-latest, libstdc++14) needs
+#     `CXXFLAGS: "-include sys/syscall.h"` to build RmlUi from scratch with clang++
+#     (see that file's `env:` comment for the full bug rationale). CORRECTED
+#     2026-07-10 (this note previously claimed Fedora 42 did NOT need the same
+#     workaround -- that was WRONG, disproven by a live CI failure): live run #51
+#     (`fonteng`, both GLFW configs) failed on THIS image
+#     (localhost/glintfx-ci:f42) with clang++ hitting "use of undeclared
+#     identifier 'SYS_futex'" in libstdc++15's `<bits/atomic_wait.h>` (GCC 15
+#     header, Fedora 42) while building RmlUi from scratch. The bug is
+#     CLANG-SPECIFIC (gcc's own headers pull `<sys/syscall.h>` in transitively
+#     elsewhere; clang's driver does not) -- which is exactly why the gcc
+#     `sanitize` job below is unaffected, while the clang `fonteng` job needs the
+#     flag. Fixed in commit `6225ae9`: the `fonteng` job below now carries
+#     `CXXFLAGS: "-include sys/syscall.h"` in its own `env:` block (identical to
+#     ci.yml's), and run #53 confirmed green with it. DO NOT remove that `env:`
+#     block from the `fonteng` job -- it is the fix, not a leftover. The
+#     `sanitize` job (gcc, no clang involved) never needed and still does not
+#     need this workaround.
 #
 #     ASan runtime packages: Fedora 42's `gcc` package does NOT pull in the runtime
 #     libasan.so.8/libubsan.so.1 shared objects the linker needs for
@@ -64,15 +71,20 @@
 #
 # PT: Gates pesados de CI para o glintfx no runner self-hosted `claudio` do Forgejo
 #     (política canônica de CI ratificada pelo líder, memória
-#     feedback_ci_policy_canonica -- Onda 1, ADITIVA: não remove/substitui
-#     .forgejo/workflows/ci.yml nem nightly.yml, que continuam rodando no
-#     codeberg-medium sem alteração). Dois jobs:
-#       - `sanitize`  -- o mesmo gate de memory-safety ASan/LSan/UBSan do job `sanitize`
-#         de .forgejo/workflows/nightly.yml, PROMOVIDO de checagem só-noturna (cron) para
-#         gate de PR->main + tag (decisão ratificada pelo líder: o cron noturno no
-#         GitHub permanece como rede de segurança redundante -- ver
-#         .github/workflows/nightly.yml -- este job NÃO o substitui, soma um checkpoint
-#         mais cedo e bloqueante).
+#     feedback_ci_policy_canonica -- Onda 1, ADITIVA quando chegou). ATUALIZADO na
+#     Onda 3 (2026-07-11): o gate `sanitize` deste job agora SUBSTITUI
+#     .forgejo/workflows/nightly.yml como gate ASan de PR/tag do lado Codeberg --
+#     aquele arquivo foi deletado (fica totalmente subsumido por este, promovido de
+#     cron para checagem bloqueante). O cron noturno do lado GitHub
+#     (.github/workflows/nightly.yml) permanece intacto e inalterado como rede de
+#     segurança redundante; .forgejo/workflows/ci.yml também permanece, mas encolhido
+#     a paridade mínima (ver o cabeçalho daquele arquivo). Dois jobs:
+#       - `sanitize`  -- o gate de memory-safety ASan/LSan/UBSan (mesmas flags que o
+#         .forgejo/workflows/nightly.yml deletado usava), gate de PR->main + tag
+#         (decisão ratificada pelo líder: o cron noturno no GitHub permanece como
+#         rede de segurança redundante -- ver .github/workflows/nightly.yml -- este
+#         job NÃO substitui aquele cron do GitHub, só o arquivo nightly do lado
+#         Forgejo, agora deletado).
 #       - `fonteng`   -- portado passo a passo do job `build-and-test-fonteng` de
 #         .forgejo/workflows/ci.yml (gate de regressão L1.20-FONTFLIP do motor de fonte
 #         próprio do glintfx, GLINTFX_OWN_FONT_ENGINE=ON).
@@ -83,10 +95,10 @@
 #     sistema -- este workflow NÃO registra/reconfigura o runner). `claudio` é uma ÚNICA
 #     máquina sempre ligada, não um pool elástico: pode estar offline/ocupada/reiniciando
 #     fora do controle do líder. Política: um run verde em QUALQUER dos 2 remotos basta
-#     -- o cron noturno do GitHub (.github/workflows/nightly.yml) é a rede de segurança
-#     primária; se o `claudio` estiver inalcançável quando um PR/tag precisar deste gate,
-#     isso é um achado operacional a reportar ao líder, não motivo para relaxar o gate em
-#     silêncio aqui.
+#     (github > claudio > codeberg em autoridade de gate) -- o cron noturno do GitHub
+#     (.github/workflows/nightly.yml) é a rede de segurança primária; se o `claudio`
+#     estiver inalcançável quando um PR/tag precisar deste gate, isso é um achado
+#     operacional a reportar ao líder, não motivo para relaxar o gate em silêncio aqui.
 #
 #     Container: `container: image: localhost/glintfx-ci:f42` -- buildado por
 #     tools/ci/build_image.sh a partir de tools/ci/Containerfile.f42 (base fedora:42 +
@@ -98,24 +110,24 @@
 #     precisa ser (re)buildada com tools/ci/build_image.sh no próprio `claudio` sempre
 #     que Containerfile.f42 mudar, este workflow não a builda.
 #
-#     Workaround SYS_futex / libstdc+++clang: os jobs `build-and-test` e
-#     `build-and-test-fonteng` de .forgejo/workflows/ci.yml (ubuntu act-latest,
-#     libstdc++14) precisam de `CXXFLAGS: "-include sys/syscall.h"` para buildar o
-#     RmlUi do zero com clang++ (ver o comentário `env:` daquele arquivo para o racional
-#     completo do bug). REPRODUZIDO E VERIFICADO NESTA imagem (política (e), 2026-07-10,
-#     execução ao vivo dentro de localhost/glintfx-ci:f42): um build do RmlUi do zero
-#     com -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ e SEM o workaround
-#     CXXFLAGS compilou limpo (o include <atomic> de FreeTypeInterface.cpp, a exata
-#     unidade de tradução que dispara o bug no ubuntu act-latest, buildou sem erro). O
-#     Fedora 42 traz clang 20.1.8 contra o libstdc++ do GCC 15.2.1 (o
-#     `<bits/atomic_wait.h>` já inclui <sys/syscall.h> transitivamente nesse libstdc++
-#     mais novo) -- a classe do bug é específica do libstdc++14 MAIS ANTIGO do ubuntu
-#     act-latest, não presente aqui. O job `fonteng` abaixo portanto NÃO carrega o
-#     workaround; se um bump futuro da base Fedora ou uma versão nova do RmlUi
-#     reintroduzir a falha ("use of undeclared identifier 'SYS_futex'"), reintroduzir o
-#     mesmo `CXXFLAGS: "-include sys/syscall.h"` usado em ci.yml -- é puramente aditivo
-#     (supre uma declaração faltante, não muda comportamento de sanitizer/futex) e seguro
-#     de trazer de volta.
+#     Workaround SYS_futex / libstdc+++clang: o job `build-and-test` de
+#     .forgejo/workflows/ci.yml (ubuntu act-latest, libstdc++14) precisa de
+#     `CXXFLAGS: "-include sys/syscall.h"` para buildar o RmlUi do zero com clang++
+#     (ver o comentário `env:` daquele arquivo para o racional completo do bug).
+#     CORRIGIDO em 2026-07-10 (esta nota antes afirmava que o Fedora 42 NÃO precisava
+#     do mesmo workaround -- estava ERRADA, desmentida por uma falha real de CI): o
+#     run #51 ao vivo (`fonteng`, AS 2 configs) falhou NESTA imagem
+#     (localhost/glintfx-ci:f42) com o clang++ batendo em "use of undeclared
+#     identifier 'SYS_futex'" no `<bits/atomic_wait.h>` do libstdc++15 (header do GCC
+#     15, Fedora 42) ao buildar o RmlUi do zero. O bug é ESPECÍFICO DO CLANG (os
+#     próprios headers do gcc puxam `<sys/syscall.h>` transitivamente em outro lugar;
+#     o driver do clang não) -- é exatamente por isso que o job `sanitize` (gcc)
+#     abaixo não é afetado, enquanto o job `fonteng` (clang) precisa da flag.
+#     Corrigido no commit `6225ae9`: o job `fonteng` abaixo agora carrega
+#     `CXXFLAGS: "-include sys/syscall.h"` no seu próprio bloco `env:` (idêntico ao
+#     de ci.yml), e o run #53 confirmou verde com ele. NÃO remover esse bloco `env:`
+#     do job `fonteng` -- é o fix, não sobra de código. O job `sanitize` (gcc, sem
+#     clang envolvido) nunca precisou e continua não precisando deste workaround.
 #
 #     Pacotes de runtime do ASan: o pacote `gcc` do Fedora 42 NÃO traz os shared objects
 #     de runtime libasan.so.8/libubsan.so.1 que o linker precisa para
@@ -135,10 +147,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-# EN: Own concurrency group, independent of ci.yml/nightly.yml's -- these jobs run on a
+# EN: Own concurrency group, independent of ci.yml's -- these jobs run on a
 #     different runner (claudio, not codeberg-medium) so they never contend for the same
 #     runner-pool slot, but still cancel a stale in-progress run on the same ref.
-# PT: Grupo de concorrência próprio, independente do de ci.yml/nightly.yml -- estes jobs
+# PT: Grupo de concorrência próprio, independente do de ci.yml -- estes jobs
 #     rodam num runner diferente (claudio, não codeberg-medium) então nunca disputam a
 #     mesma vaga do pool, mas ainda assim cancelam um run em andamento obsoleto no mesmo
 #     ref.
@@ -148,21 +160,22 @@ concurrency:
 
 jobs:
   # EN: sanitize -- ASan/LSan/UBSan memory-safety gate (TST-L1-MEM, TODO.md LW-TST).
-  #     Mirrors .forgejo/workflows/nightly.yml's `sanitize` job content exactly (same
-  #     matrix, same configure/build/test flags, same un-pinned default compiler -- on
-  #     this image that resolves to gcc, matching nightly.yml's own `apt-get install
-  #     g++` choice, not clang; the SYS_futex workaround discussed in the file header is
-  #     therefore moot for THIS job specifically, it only ever mattered for clang
-  #     builds), promoted here to a PR->main + tag gate per the líder's ratified policy.
+  #     Ported from the (now-deleted, Onda 3) .forgejo/workflows/nightly.yml's
+  #     `sanitize` job content exactly (same matrix, same configure/build/test flags,
+  #     same un-pinned default compiler -- on this image that resolves to gcc,
+  #     matching that deleted file's own `apt-get install g++` choice, not clang; the
+  #     SYS_futex workaround discussed in the file header is therefore moot for THIS
+  #     job specifically, it only ever mattered for clang builds), now the sole PR->main
+  #     + tag ASan gate on Codeberg's side per the líder's ratified policy.
   # PT: sanitize -- gate de memory-safety ASan/LSan/UBSan (TST-L1-MEM, TODO.md LW-TST).
-  #     Espelha exatamente o conteúdo do job `sanitize` de
-  #     .forgejo/workflows/nightly.yml (mesma matrix, mesmas flags de
-  #     configure/build/test, mesmo compilador default não-fixado -- nesta imagem isso
-  #     resolve para gcc, batendo com a própria escolha `apt-get install g++` do
-  #     nightly.yml, não clang; o workaround SYS_futex discutido no cabeçalho do arquivo
-  #     portanto não se aplica a ESTE job especificamente, só importou para builds
-  #     clang), promovido aqui a gate de PR->main + tag conforme a política ratificada
-  #     pelo líder.
+  #     Portado exatamente do conteúdo do job `sanitize` do
+  #     .forgejo/workflows/nightly.yml (agora deletado, Onda 3) -- mesma matrix,
+  #     mesmas flags de configure/build/test, mesmo compilador default não-fixado --
+  #     nesta imagem isso resolve para gcc, batendo com a própria escolha `apt-get
+  #     install g++` daquele arquivo deletado, não clang; o workaround SYS_futex
+  #     discutido no cabeçalho do arquivo portanto não se aplica a ESTE job
+  #     especificamente, só importou para builds clang -- agora o único gate ASan de
+  #     PR->main + tag do lado Codeberg conforme a política ratificada pelo líder.
   sanitize:
     name: sanitize (claudio / GLFW=${{ matrix.backend }})
     runs-on: docker
@@ -178,13 +191,15 @@ jobs:
         uses: actions/checkout@v4
 
       # EN: Cache key namespaced with "claudio-f42" -- deliberately DIFFERENT from
-      #     ci.yml/nightly.yml's "rmlui-${{ runner.os }}-..." keys. The cached path
+      #     ci.yml's "rmlui-${{ runner.os }}-..." keys (the deleted nightly.yml used
+      #     the same convention). The cached path
       #     includes RmlUi's BUILT object files (FetchContent's _deps/rmlui-build), not
       #     just cloned source -- reusing a codeberg-medium (ubuntu act-latest,
       #     different libc/compiler ABI) cache entry here would risk linking
       #     ABI-mismatched objects. Never unify this key with the codeberg-medium jobs'.
       # PT: Chave de cache namespaced com "claudio-f42" -- deliberadamente DIFERENTE das
-      #     chaves "rmlui-${{ runner.os }}-..." de ci.yml/nightly.yml. O path cacheado
+      #     chaves "rmlui-${{ runner.os }}-..." de ci.yml (o nightly.yml deletado usava
+      #     a mesma convenção). O path cacheado
       #     inclui os object files JÁ BUILDADOS do RmlUi (_deps/rmlui-build do
       #     FetchContent), não só o source clonado -- reusar uma entrada de cache do
       #     codeberg-medium (ubuntu act-latest, ABI de libc/compilador diferente) aqui

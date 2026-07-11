@@ -112,6 +112,18 @@ bool& own_font_engine_hint_bypass();
 //     `false` (o DEFAULT, comportamento de release) deixa cobertura crua (a baseline "own_yhint").
 //     OFF por padrão porque o darkening foi medido como NÃO fechando o gap de nitidez pro FreeType.
 bool& own_font_engine_darken_enable();
+// EN: (L1.20-FONTFLIP FT-F4 pen-snap gate) Pen-snap bypass hook -- same src-internal, forward-
+//     declared-locally contract as the others (see font_engine_own.hpp). DEFAULT `false` == pen-snap
+//     ON (each per-glyph pen component -- advance / kern / letter-spacing / left bearing -- rounded
+//     to a whole pixel, FreeType's integer-pen convention). `true` bypasses pen-snap (raw fractional
+//     pen, the pre-snap behaviour). This is the leg the gate isolates.
+// PT: (gate de pen-snap do L1.20-FONTFLIP FT-F4) Hook de bypass do pen-snap -- mesmo contrato
+//     src-interno, forward-declarado localmente, dos outros (ver font_engine_own.hpp). DEFAULT
+//     `false` == pen-snap LIGADO (cada componente do pen por-glyph -- advance / kern /
+//     letter-spacing / bearing esquerdo -- arredondado a um pixel inteiro, convenção de pen inteiro
+//     do FreeType). `true` bypassa o pen-snap (pen fracionário cru, comportamento pré-snap). É a
+//     perna que o gate isola.
+bool& own_font_engine_pensnap_bypass();
 }
 
 namespace {
@@ -128,13 +140,20 @@ constexpr int W = 1600, H = 560;
 // PT: Os quatro ids de linha em fonteng_ab_visual_scene.rml e seu tamanho dp autorado (para
 //     rótulos).
 struct SizeRow { const char* id; int dp; };
-const SizeRow kSizes[] = { {"s11", 11}, {"s13", 13}, {"s16", 16}, {"s24", 24} };
+// EN: (pen-snap gate) the GusWorld cockpit HP/AP body-size sweep: 9..13 dp, the small-body regime
+//     where the pen's sub-pixel phase (and thus pen-snap) matters most.
+// PT: (gate de pen-snap) o varredura de corpo do HP/AP do cockpit do GusWorld: 9..13 dp, o regime
+//     de corpo pequeno onde a fase sub-pixel do pen (e portanto o pen-snap) mais importa.
+const SizeRow kSizes[] = { {"s09", 9}, {"s10", 10}, {"s11", 11}, {"s12", 12}, {"s13", 13} };
 constexpr int kNSizes = static_cast<int>(sizeof(kSizes) / sizeof(kSizes[0]));
 
-// EN: The two DPI scenarios: 1.0 = low-DPI (critical), 2.0 = HiDPI. Integer tag used in filenames.
-// PT: Os dois cenários de DPI: 1.0 = baixa-DPI (crítico), 2.0 = HiDPI. Tag inteira usada nos nomes
-//     de arquivo.
-const float kDpRatios[] = { 1.0f, 2.0f };
+// EN: THREE DPI scenarios: 1.0 (~1080p low-DPI), 1.5 (~150dpi Steam Deck -- the most demanding
+//     fractional-scale case), 2.0 (~4K HiDPI). Filenames tag dp as int(ratio*10) -> 10/15/20 (so
+//     1.5 does not collide with 1.0/2.0 under an integer cast).
+// PT: TRÊS cenários de DPI: 1.0 (~1080p baixa-DPI), 1.5 (~150dpi Steam Deck -- o caso de escala
+//     fracionária mais exigente), 2.0 (~4K HiDPI). Nomes de arquivo marcam o dp como int(ratio*10)
+//     -> 10/15/20 (pra 1.5 não colidir com 1.0/2.0 sob um cast inteiro).
+const float kDpRatios[] = { 1.0f, 1.5f, 2.0f };
 constexpr int kNDp = static_cast<int>(sizeof(kDpRatios) / sizeof(kDpRatios[0]));
 
 // EN: One captured frame + the element box of each measured line, for one (engine, dp_ratio).
@@ -172,8 +191,8 @@ void flip_to_top_down(std::vector<unsigned char>& px, int w, int h) {
 //     em out[dp_index]. Retorna 0 no sucesso. A UiLayer é destruída no retorno, resetando o
 //     font_interface do RmlUi para a próxima sessão re-selecionar seu motor limpo (ver o cabeçalho
 //     de fonteng_ab_compare.cpp).
-int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, const char* label,
-                   Capture out[kNDp]) {
+int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, bool pensnap_bypass,
+                   const char* label, Capture out[kNDp]) {
   // EN: (sub-phase 1.4/1.5) ab_bypass selects the ENGINE (false -> own, true -> FreeType);
   //     hint_bypass selects, WITHIN the own engine, whether Y grid-fitting runs (false -> hinted,
   //     true -> raw); darken_enable selects whether the own engine's coverage-curve stem darkening
@@ -187,6 +206,11 @@ int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, const c
   glintfx::own_font_engine_ab_bypass() = ab_bypass;
   glintfx::own_font_engine_hint_bypass() = hint_bypass;
   glintfx::own_font_engine_darken_enable() = darken_enable;
+  // EN: (pen-snap gate) fourth axis: bypass the per-glyph integer pen rounding. Read at bake time
+  //     (GetStringWidth / GenerateString), so it must be set before the UiLayer ctor / first bake.
+  // PT: (gate de pen-snap) quarto eixo: bypassa o arredondamento inteiro do pen por-glyph. Lido em
+  //     tempo de bake (GetStringWidth / GenerateString), então setado antes do ctor da UiLayer.
+  glintfx::own_font_engine_pensnap_bypass() = pensnap_bypass;
 
   glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
   if (!ui.ok()) {
@@ -273,30 +297,6 @@ Rect union_rect3(const glintfx::ElementBox& a, const glintfx::ElementBox& b,
   return r;
 }
 
-// EN: (L1.20-FONTFLIP sub-phase 1.5) Union of FOUR element boxes (own_nohint, own_yhint,
-//     own_yhint_dark, ft) -- the SAME crop rectangle for all four variants, so their side-by-side
-//     crops align pixel-for-pixel and none is cut tighter than the others (the honesty guarantee,
-//     now four-way).
-// PT: (L1.20-FONTFLIP sub-fase 1.5) União de QUATRO element boxes (own_nohint, own_yhint,
-//     own_yhint_dark, ft) -- o MESMO retângulo de recorte pra as quatro variantes, pra seus recortes
-//     lado-a-lado alinharem pixel-a-pixel e nenhum ser cortado mais apertado que os outros (a
-//     garantia de honestidade, agora a quatro).
-Rect union_rect4(const glintfx::ElementBox& a, const glintfx::ElementBox& b,
-                 const glintfx::ElementBox& c, const glintfx::ElementBox& d, int pad) {
-  const float x0 = std::min({a.x, b.x, c.x, d.x});
-  const float y0 = std::min({a.y, b.y, c.y, d.y});
-  const float x1 = std::max({a.x + a.w, b.x + b.w, c.x + c.w, d.x + d.w});
-  const float y1 = std::max({a.y + a.h, b.y + b.h, c.y + c.h, d.y + d.h});
-  Rect r;
-  r.x0 = std::max(0, static_cast<int>(std::floor(x0)) - pad);
-  r.y0 = std::max(0, static_cast<int>(std::floor(y0)) - pad);
-  r.x1 = std::min(W, static_cast<int>(std::ceil(x1)) + pad);
-  r.y1 = std::min(H, static_cast<int>(std::ceil(y1)) + pad);
-  if (r.x1 <= r.x0) r.x1 = std::min(W, r.x0 + 1);
-  if (r.y1 <= r.y0) r.y1 = std::min(H, r.y0 + 1);
-  return r;
-}
-
 // EN: Writes the sub-rectangle `r` of the top-down RGB frame `src` (W wide) as a binary PPM (P6).
 //     Returns true on success. No library, no dependency -- a P6 header line plus raw RGB rows.
 // PT: Grava o sub-retângulo `r` do frame RGB top-down `src` (largura W) como PPM binário (P6).
@@ -345,7 +345,8 @@ long count_ink(const std::vector<unsigned char>& px, const Rect& r) {
 //     dirigem cada número abaixo: row_cov[y] (soma por-coluna, dirige a métrica Y/altura-x) e
 //     col_cov[x] (soma por-linha, dirige a métrica X/haste).
 struct Oracle {
-  double vstem_edge_energy = 0.0; // EN: X-axis crispness (regression sentinel). PT: nitidez X (sentinela).
+  double vstem_edge_energy = 0.0; // EN: X-axis crispness (THE pen-snap metric). PT: nitidez X (a métrica do pen-snap).
+  double col_contrast = 0.0;      // EN: peak/valley modulation of column coverage (stem sharpness). PT: modulação pico/vale.
   int    x_edge_ramp_rows = 0;    // EN: transition rows at the x-height top edge -- FEWER == crisper.
   double x_edge_body_frac = 0.0;  // EN: fraction of the caps->x-height jump captured in the first body row.
   long   total_ink = 0;           // EN: coverage>100 pixel count (regression sentinel). PT: sentinela.
@@ -384,6 +385,41 @@ Oracle measure_oracle(const std::vector<unsigned char>& px, const Rect& r) {
   for (int x = 0; x < rw; ++x) tot += col_cov[x];
   for (int x = 1; x < rw; ++x) grad += std::fabs(col_cov[x] - col_cov[x - 1]);
   o.vstem_edge_energy = (tot > 0.0) ? grad / tot : 0.0;
+
+  // EN: COLUMN CONTRAST (pen-snap sharpness proxy, complementary to vstem_edge). A vertical stem
+  //     that lands ON a pixel column is a tall col_cov peak flanked by near-empty columns (deep
+  //     modulation); a stem straddling two columns spreads into a low, wide plateau (shallow
+  //     modulation). Over the INKED columns only (col_cov > 0.10*max, excluding blank margins and
+  //     inter-word gaps that would otherwise inflate the ratio), we take the ratio of a high
+  //     percentile (85th ~ the stem peaks) to a low percentile (20th ~ the inter-stem valleys):
+  //     HIGHER == crisper, better-modulated vertical stems. Pen-snap, being a pure horizontal
+  //     transform, should RAISE this toward FreeType when ON.
+  // PT: CONTRASTE DE COLUNA (proxy de nitidez do pen-snap, complementar ao vstem_edge). Uma haste
+  //     vertical que pousa SOBRE uma coluna de pixel é um pico col_cov alto ladeado por colunas quase
+  //     vazias (modulação profunda); uma haste montada em duas colunas se espalha num platô baixo e
+  //     largo (modulação rasa). Sobre as colunas COM tinta só (col_cov > 0.10*max, excluindo margens
+  //     em branco e vãos entre palavras que inflariam a razão), tomamos a razão de um percentil alto
+  //     (85 ~ os picos de haste) para um baixo (20 ~ os vales entre hastes): MAIOR == hastes
+  //     verticais mais nítidas e melhor moduladas. O pen-snap, sendo um transform horizontal puro,
+  //     deve SUBIR isto na direção do FreeType quando LIGADO.
+  double maxc = 0.0;
+  for (int x = 0; x < rw; ++x) maxc = std::max(maxc, col_cov[x]);
+  if (maxc > 0.0) {
+    std::vector<double> inked;
+    for (int x = 0; x < rw; ++x)
+      if (col_cov[x] > 0.10 * maxc) inked.push_back(col_cov[x]);
+    if (inked.size() >= 4) {
+      std::sort(inked.begin(), inked.end());
+      auto pct = [&](double p) {
+        const size_t n = inked.size();
+        size_t idx = static_cast<size_t>(p * static_cast<double>(n - 1) + 0.5);
+        if (idx >= n) idx = n - 1;
+        return inked[idx];
+      };
+      const double peak = pct(0.85), valley = pct(0.20);
+      o.col_contrast = (valley > 1e-9) ? peak / valley : 0.0;
+    }
+  }
 
   // EN: Y-AXIS x-HEIGHT ZONE ALIGNMENT (the grid-fitting win). ALL x-height letters share one
   //     font-unit x-height, so at a given size they ALL land on the SAME sub-pixel Y whether hinted
@@ -456,125 +492,187 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // EN: FOUR sessions, run sequentially, sharing ONE GLFW context (only RmlUi re-initialises
-  //     between them -- same clean re-init as fonteng_ab_compare.cpp). Each triple below is
-  //     (ab_bypass, hint_bypass, darken_enable):
-  //       (a) own_nohint      -- own, Y-hint OFF, darken OFF   (false, true,  false)
-  //       (b) own_yhint       -- own, Y-hint ON,  darken OFF   (false, false, false)  [DEFAULT / shipping]
-  //       (c) own_yhint_dark  -- own, Y-hint ON,  darken ON    (false, false, true)   [opt-in darkening]
-  //       (d) ft              -- RmlUi's built-in FreeType     (true,  -,     -)       [reference]
-  //     (b) vs (c) isolates sub-phase 1.5's OPT-IN stem darkening (same Y-hinting, coverage curve
-  //     the only difference); (c) vs (d) is the honest "did the cheap darkening close the vstem_edge
-  //     gap to FreeType?" comparison -- it did NOT (darkening measured vstem_edge worse + total_ink
-  //     up, a structural limit, hence it ships OFF). A future "own Y+X" stem grid-fit (the real fix)
-  //     would slot in as a 5th variant, líder-gated -- NOT this sub-phase.
-  // PT: QUATRO sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi re-inicializa entre
-  //     elas -- mesma re-init limpa do fonteng_ab_compare.cpp). Cada tripla abaixo é
-  //     (ab_bypass, hint_bypass, darken_enable):
-  //       (a) own_nohint      -- próprio, Y-hint OFF, darken OFF   (false, true,  false)
-  //       (b) own_yhint       -- próprio, Y-hint ON,  darken OFF   (false, false, false)  [DEFAULT / release]
-  //       (c) own_yhint_dark  -- próprio, Y-hint ON,  darken ON    (false, false, true)   [darkening opt-in]
-  //       (d) ft              -- FreeType embutido do RmlUi        (true,  -,     -)       [referência]
-  //     (b) vs (c) isola o stem-darkening OPT-IN da sub-fase 1.5 (mesmo Y-hint, a curva de cobertura
-  //     a única diferença); (c) vs (d) é a comparação honesta "o darkening barato fechou o gap de
-  //     vstem_edge pro FreeType?" -- NÃO fechou (darkening mediu vstem_edge pior + total_ink acima,
-  //     um limite estrutural, por isso sai OFF). Um futuro grid-fit de haste "own Y+X" (o fix real)
-  //     entraria como 5ª variante, do líder -- NÃO nesta sub-fase.
-  Capture own_nohint[kNDp], own_yhint[kNDp], own_yhint_dark[kNDp], ft[kNDp];
-  if (int rc = capture_engine(false, true,  false, "own_nohint",     own_nohint))     return rc;
-  if (int rc = capture_engine(false, false, false, "own_yhint",      own_yhint))      return rc;
-  if (int rc = capture_engine(false, false, true,  "own_yhint_dark", own_yhint_dark)) return rc;
-  if (int rc = capture_engine(true,  false, false, "freetype",       ft))             return rc;
-  glintfx::own_font_engine_ab_bypass()     = false; // EN: restore defaults. PT: restaura defaults.
-  glintfx::own_font_engine_hint_bypass()   = false;
-  glintfx::own_font_engine_darken_enable() = false;
+  // EN: PEN-SNAP GATE -- THREE sessions, run sequentially, sharing ONE GLFW context (only RmlUi
+  //     re-initialises between them -- same clean re-init as fonteng_ab_compare.cpp). Each tuple is
+  //     (ab_bypass, hint_bypass, darken_enable, pensnap_bypass):
+  //       (P) own_yhint_pensnap   -- own, Y-hint ON, pen-snap ON   (false, false, false, false)  [SHIPPING candidate]
+  //       (N) own_yhint_nopensnap -- own, Y-hint ON, pen-snap OFF  (false, false, false, true )  [isolates pen-snap]
+  //       (F) freetype            -- RmlUi's FreeType (integer pen) (true,  -,     -,     -    )  [baseline to match]
+  //     (P) vs (N) isolates the pen-snap effect alone (same Y-hinting, same coverage; the only
+  //     difference is whether each per-glyph pen component is rounded to a whole pixel). (P) vs (F)
+  //     is THE gate question: does the own engine with pen-snap ON match FreeType's stem crispness
+  //     at 9-13 dp across three DPIs? pen-snap is a PURE HORIZONTAL transform, so its signal lives in
+  //     the column-domain metrics (vstem_edge_energy, col_contrast), not the Y-axis x-height ones.
+  // PT: GATE DE PEN-SNAP -- TRÊS sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi
+  //     re-inicializa entre elas -- mesma re-init limpa do fonteng_ab_compare.cpp). Cada tupla é
+  //     (ab_bypass, hint_bypass, darken_enable, pensnap_bypass):
+  //       (P) own_yhint_pensnap   -- próprio, Y-hint ON, pen-snap ON   (false, false, false, false)  [candidato de release]
+  //       (N) own_yhint_nopensnap -- próprio, Y-hint ON, pen-snap OFF  (false, false, false, true )  [isola o pen-snap]
+  //       (F) freetype            -- FreeType do RmlUi (pen inteiro)   (true,  -,     -,     -    )  [baseline a empatar]
+  //     (P) vs (N) isola o efeito só do pen-snap (mesmo Y-hint, mesma cobertura; a única diferença é
+  //     se cada componente do pen por-glyph é arredondado a um pixel inteiro). (P) vs (F) é A pergunta
+  //     do gate: o motor próprio com pen-snap LIGADO empata a nitidez de haste do FreeType em 9-13 dp
+  //     nos três DPIs? O pen-snap é um transform HORIZONTAL PURO, então seu sinal vive nas métricas de
+  //     domínio-de-coluna (vstem_edge_energy, col_contrast), não nas de altura-x do eixo Y.
+  Capture pensnap[kNDp], nopensnap[kNDp], ft[kNDp];
+  if (int rc = capture_engine(false, false, false, false, "own_yhint_pensnap",   pensnap))   return rc;
+  if (int rc = capture_engine(false, false, false, true,  "own_yhint_nopensnap", nopensnap)) return rc;
+  if (int rc = capture_engine(true,  false, false, false, "freetype",            ft))        return rc;
+  glintfx::own_font_engine_ab_bypass()      = false; // EN: restore defaults. PT: restaura defaults.
+  glintfx::own_font_engine_hint_bypass()    = false;
+  glintfx::own_font_engine_darken_enable()  = false;
+  glintfx::own_font_engine_pensnap_bypass() = false;
 
-  std::printf("fonteng_ab_visual: %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
-  std::printf("  %-12s %5s %5s   %10s %10s %10s %10s\n",
-              "quad", "dp", "px", "ink_nohint", "ink_yhint", "ink_dark", "ink_ft");
+  // EN: dp -> integer filename tag: int(ratio*10) so 1.0/1.5/2.0 -> 10/15/20 (no collision).
+  // PT: dp -> tag inteira de arquivo: int(ratio*10) pra 1.0/1.5/2.0 -> 10/15/20 (sem colisão).
+  auto dp_tag_of = [](float r) { return static_cast<int>(std::lround(r * 10.0f)); };
+
+  std::printf("fonteng_ab_visual (PEN-SNAP GATE): %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
+  std::printf("  3 legs: own_yhint_pensnap (P, pen-snap ON) | own_yhint_nopensnap (N, OFF) | freetype (F)\n\n");
+  std::printf("== INK SANITY (pixels with coverage>100 in the shared 3-way crop) ==\n");
+  std::printf("  %-10s %5s %5s   %11s %11s %11s\n",
+              "quad", "dp", "px", "ink_P", "ink_N", "ink_F");
 
   int written = 0, missing = 0;
   for (int d = 0; d < kNDp; ++d) {
-    const int dp_tag = static_cast<int>(kDpRatios[d]);              // 1 or 2
+    const int dp_tag = dp_tag_of(kDpRatios[d]);
     for (int s = 0; s < kNSizes; ++s) {
-      const glintfx::ElementBox& bn = own_nohint[d].box[s];
-      const glintfx::ElementBox& by = own_yhint[d].box[s];
-      const glintfx::ElementBox& bd = own_yhint_dark[d].box[s];
+      const glintfx::ElementBox& bp = pensnap[d].box[s];
+      const glintfx::ElementBox& bn = nopensnap[d].box[s];
       const glintfx::ElementBox& bf = ft[d].box[s];
-      if (!bn.found || !by.found || !bd.found || !bf.found) {
+      if (!bp.found || !bn.found || !bf.found) {
         std::fprintf(stderr,
-                     "fonteng_ab_visual WARN: box not found dp=%d %s (nohint=%d yhint=%d dark=%d ft=%d)\n",
-                     dp_tag, kSizes[s].id, bn.found, by.found, bd.found, bf.found);
+                     "fonteng_ab_visual WARN: box not found dp=%d %s (P=%d N=%d F=%d)\n",
+                     dp_tag, kSizes[s].id, bp.found, bn.found, bf.found);
         ++missing;
         continue;
       }
-      const Rect r = union_rect4(bn, by, bd, bf, /*pad=*/2);
-      const int phys_px = kSizes[s].dp * dp_tag;   // authored dp -> physical px at this dp_ratio.
+      const Rect r = union_rect3(bp, bn, bf, /*pad=*/2);
+      const int phys_px = static_cast<int>(std::lround(kSizes[s].dp * kDpRatios[d]));
 
-      char pn[512], py[512], pd[512], pf[512];
-      std::snprintf(pn, sizeof pn, "%s/own_nohint_dp%d_s%02d.ppm",     outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(py, sizeof py, "%s/own_yhint_dp%d_s%02d.ppm",      outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pd, sizeof pd, "%s/own_yhint_dark_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pf, sizeof pf, "%s/ft_dp%d_s%02d.ppm",             outdir.c_str(), dp_tag, kSizes[s].dp);
+      char pp[512], pnn[512], pf[512];
+      std::snprintf(pp,  sizeof pp,  "%s/own_pensnap_dp%d_s%02d.ppm",   outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pnn, sizeof pnn, "%s/own_nopensnap_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pf,  sizeof pf,  "%s/ft_dp%d_s%02d.ppm",            outdir.c_str(), dp_tag, kSizes[s].dp);
 
-      const bool ok1 = write_ppm(pn, own_nohint[d].px,     r);
-      const bool ok2 = write_ppm(py, own_yhint[d].px,      r);
-      const bool ok3 = write_ppm(pd, own_yhint_dark[d].px, r);
-      const bool ok4 = write_ppm(pf, ft[d].px,             r);
-      if (ok1 && ok2 && ok3 && ok4) written += 4;
+      const bool ok1 = write_ppm(pp,  pensnap[d].px,   r);
+      const bool ok2 = write_ppm(pnn, nopensnap[d].px, r);
+      const bool ok3 = write_ppm(pf,  ft[d].px,        r);
+      if (ok1 && ok2 && ok3) written += 3;
 
-      std::printf("  dp%d_s%02d      %5.1f %5d   %10ld %10ld %10ld %10ld\n",
+      std::printf("  dp%02d_s%02d   %5.1f %5d   %11ld %11ld %11ld\n",
                   dp_tag, kSizes[s].dp, kDpRatios[d], phys_px,
-                  count_ink(own_nohint[d].px, r), count_ink(own_yhint[d].px, r),
-                  count_ink(own_yhint_dark[d].px, r), count_ink(ft[d].px, r));
+                  count_ink(pensnap[d].px, r), count_ink(nopensnap[d].px, r), count_ink(ft[d].px, r));
     }
   }
 
-  // EN: NUMERIC ORACLE -- printed for the SMALL body sizes at dp=1.0 (the low-DPI, few-px-per-glyph
-  //     regime where grid-fitting matters most). Each variant is measured on its OWN element-box
-  //     crop (padded), so the profiles are independent of the others' horizontal extent. The proof
-  //     the líder asked for: x_edge_1row_frac / x_edge_max_delta should RISE own_nohint -> own_yhint
-  //     (the x-height top edge concentrating onto one pixel row -- the Y-hint win), while
-  //     vstem_edge_energy and total_ink stay ~equal (no X-axis regression from a Y-only transform).
-  //     FreeType is shown as the reference bar.
-  // PT: ORÁCULO NUMÉRICO -- impresso pros tamanhos de corpo PEQUENOS em dp=1.0 (o regime baixa-DPI,
-  //     poucos-px-por-glyph, onde o grid-fitting mais importa). Cada variante é medida no recorte da
-  //     PRÓPRIA element-box (com folga), então os perfis independem da extensão horizontal dos
-  //     outros. A prova que o líder pediu: x_edge_1row_frac / x_edge_max_delta devem SUBIR
-  //     own_nohint -> own_yhint (a aresta superior da altura-x concentrando numa linha de pixel -- o
-  //     ganho do Y-hint), enquanto vstem_edge_energy e total_ink ficam ~iguais (sem regressão no
-  //     eixo X de um transform só-Y). O FreeType é mostrado como barra de referência.
-  std::printf("\nfonteng_ab_visual ORACLE (dp=1.0, all body sizes):\n");
-  std::printf("  sub-phase 1.5 proof: vstem_edge should RISE own_yhint -> own_yhint_dark, toward\n");
-  std::printf("  freetype (the stem-darkening win, biggest at 11-16px). total_ink rises modestly with\n");
-  std::printf("  it (darkening adds coverage) -- a RUNAWAY total_ink or letters merging would mean\n");
-  std::printf("  over-darkening. xedge_ramp/xedge_body remain the Y-hint (x-height) sentinels.\n");
-  std::printf("  %-6s %-14s %10s %11s %10s %10s\n",
-              "size", "variant", "total_ink", "vstem_edge", "xedge_ramp", "xedge_body");
-  const int dp1 = 0; // kDpRatios[0] == 1.0
-  for (int s = 0; s < kNSizes; ++s) {
-    const glintfx::ElementBox& bn = own_nohint[dp1].box[s];
-    const glintfx::ElementBox& by = own_yhint[dp1].box[s];
-    const glintfx::ElementBox& bd = own_yhint_dark[dp1].box[s];
-    const glintfx::ElementBox& bf = ft[dp1].box[s];
-    if (!bn.found || !by.found || !bd.found || !bf.found) continue;
-    const Rect rn = union_rect(bn, bn, /*pad=*/2);
-    const Rect ry = union_rect(by, by, /*pad=*/2);
-    const Rect rd = union_rect(bd, bd, /*pad=*/2);
-    const Rect rf = union_rect(bf, bf, /*pad=*/2);
-    const Oracle on = measure_oracle(own_nohint[dp1].px,     rn);
-    const Oracle oy = measure_oracle(own_yhint[dp1].px,      ry);
-    const Oracle od = measure_oracle(own_yhint_dark[dp1].px, rd);
-    const Oracle of = measure_oracle(ft[dp1].px,             rf);
-    const char* nm = kSizes[s].id;
-    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_nohint",
-                on.total_ink, on.vstem_edge_energy, on.x_edge_ramp_rows, on.x_edge_body_frac);
-    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint",
-                oy.total_ink, oy.vstem_edge_energy, oy.x_edge_ramp_rows, oy.x_edge_body_frac);
-    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "own_yhint_dark",
-                od.total_ink, od.vstem_edge_energy, od.x_edge_ramp_rows, od.x_edge_body_frac);
-    std::printf("  %-6s %-14s %10ld %11.4f %10d %10.4f\n", nm, "freetype",
-                of.total_ink, of.vstem_edge_energy, of.x_edge_ramp_rows, of.x_edge_body_frac);
+  // EN: NUMERIC ORACLE -- the gate table, printed for EVERY (dp, body size). Each leg is measured on
+  //     its OWN padded element-box crop, so the column profiles are independent of the others'
+  //     horizontal extent. The two pen-snap-sensitive metrics are vstem_edge (col-to-col gradient
+  //     energy) and col_contrast (peak/valley column modulation): both should RISE own_nopensnap ->
+  //     own_pensnap toward the freetype bar. xedge_ramp/xedge_body are the Y-hint (x-height)
+  //     sentinels -- they must stay ~equal across P and N (pen-snap is horizontal, it must not move
+  //     the vertical x-height edge).
+  // PT: ORÁCULO NUMÉRICO -- a tabela do gate, impressa pra CADA (dp, corpo). Cada perna é medida no
+  //     recorte da PRÓPRIA element-box (com folga), então os perfis de coluna independem da extensão
+  //     horizontal das outras. As duas métricas sensíveis ao pen-snap são vstem_edge (energia do
+  //     gradiente coluna-a-coluna) e col_contrast (modulação pico/vale de coluna): ambas devem SUBIR
+  //     own_nopensnap -> own_pensnap na direção da barra freetype. xedge_ramp/xedge_body são as
+  //     sentinelas do Y-hint (altura-x) -- devem ficar ~iguais entre P e N (pen-snap é horizontal,
+  //     não pode mover a aresta vertical da altura-x).
+  std::printf("\n== ORACLE (per dp, per body; higher vstem_edge/col_contrast == crisper stems) ==\n");
+  std::printf("  %4s %-8s %-20s %9s %11s %12s %9s %9s\n",
+              "dp", "size", "leg", "total_ink", "vstem_edge", "col_contrast", "xe_ramp", "xe_body");
+
+  // EN: keep the per-(dp,leg) vstem_edge series across sizes for the stability pass below.
+  // PT: guarda a série vstem_edge por-(dp,perna) ao longo dos corpos pro passo de estabilidade abaixo.
+  double series_vstem[kNDp][3][kNSizes] = {};
+  double series_contrast[kNDp][3][kNSizes] = {};
+  bool   series_ok[kNDp][3][kNSizes] = {};
+
+  for (int d = 0; d < kNDp; ++d) {
+    const int dp_tag = dp_tag_of(kDpRatios[d]);
+    for (int s = 0; s < kNSizes; ++s) {
+      const glintfx::ElementBox& bp = pensnap[d].box[s];
+      const glintfx::ElementBox& bn = nopensnap[d].box[s];
+      const glintfx::ElementBox& bf = ft[d].box[s];
+      if (!bp.found || !bn.found || !bf.found) continue;
+      const Rect rp = union_rect(bp, bp, /*pad=*/2);
+      const Rect rn = union_rect(bn, bn, /*pad=*/2);
+      const Rect rf = union_rect(bf, bf, /*pad=*/2);
+      const Oracle op = measure_oracle(pensnap[d].px,   rp);
+      const Oracle on = measure_oracle(nopensnap[d].px, rn);
+      const Oracle of = measure_oracle(ft[d].px,        rf);
+
+      series_vstem[d][0][s] = op.vstem_edge_energy; series_contrast[d][0][s] = op.col_contrast; series_ok[d][0][s] = true;
+      series_vstem[d][1][s] = on.vstem_edge_energy; series_contrast[d][1][s] = on.col_contrast; series_ok[d][1][s] = true;
+      series_vstem[d][2][s] = of.vstem_edge_energy; series_contrast[d][2][s] = of.col_contrast; series_ok[d][2][s] = true;
+
+      const struct { const char* nm; const Oracle& o; } rows[] = {
+        { "own_yhint_pensnap",   op },
+        { "own_yhint_nopensnap", on },
+        { "freetype",            of },
+      };
+      for (const auto& rr : rows)
+        std::printf("  %3d%c %-8s %-20s %9ld %11.4f %12.3f %9d %9.4f\n",
+                    dp_tag, ' ', kSizes[s].id, rr.nm,
+                    rr.o.total_ink, rr.o.vstem_edge_energy, rr.o.col_contrast,
+                    rr.o.x_edge_ramp_rows, rr.o.x_edge_body_frac);
+    }
+  }
+
+  // EN: STABILITY / DANCING PROXY -- per (dp, leg), the vstem_edge series across sizes 9->13, its
+  //     mean and its ROUGHNESS = mean |v[i+1]-v[i]| (mean absolute step). Without pen-snap the pen's
+  //     sub-pixel phase drifts per glyph and per size, so the metric jitters (higher roughness);
+  //     with pen-snap the phase is pinned to whole pixels at every size, so the series should be
+  //     SMOOTHER (lower roughness). A pen-snap roughness at/below freetype's, and clearly below
+  //     no-pensnap's, is the "stabilises the dance" evidence.
+  // PT: PROXY DE ESTABILIDADE / DANÇA -- por (dp, perna), a série vstem_edge ao longo dos corpos
+  //     9->13, sua média e sua RUGOSIDADE = média |v[i+1]-v[i]| (passo absoluto médio). Sem pen-snap
+  //     a fase sub-pixel do pen deriva por-glyph e por-corpo, então a métrica treme (rugosidade
+  //     maior); com pen-snap a fase é presa a pixels inteiros em todo corpo, então a série deve ser
+  //     MAIS SUAVE (rugosidade menor). Uma rugosidade do pen-snap igual/abaixo da do freetype, e
+  //     claramente abaixo da do no-pensnap, é a evidência de que "estabiliza a dança".
+  // EN: `reversals` = number of direction changes (sign flips of consecutive steps) in the vstem_edge
+  //     series -- the TREND-INDEPENDENT dancing proxy. A steadily-declining series (metric falls
+  //     smoothly as the glyph grows) has 0 reversals; a jittering one flips up/down (the per-glyph
+  //     sub-pixel-phase "dance"). Reported ALONGSIDE mean |step| because the latter is inflated by a
+  //     leg's absolute magnitude + trend slope (a higher, steeper-but-smooth curve has bigger raw
+  //     steps yet ZERO reversals) -- reversals is the honest steadiness signal here.
+  // PT: `reversals` = número de mudanças de direção (trocas de sinal de passos consecutivos) na série
+  //     vstem_edge -- o proxy de dança INDEPENDENTE DO TREND. Uma série que cai suavemente (métrica
+  //     desce à medida que o glyph cresce) tem 0 reversões; uma que treme oscila pra cima/baixo (a
+  //     "dança" da fase sub-pixel por-glyph). Reportado JUNTO do mean |step| porque este é inflado
+  //     pela magnitude absoluta + inclinação do trend da perna (uma curva mais alta e íngreme-mas-
+  //     suave tem passos crus maiores porém ZERO reversões) -- reversals é o sinal honesto de firmeza.
+  std::printf("\n== STABILITY (vstem_edge across sizes 9->13; reversals=direction-flips LOWER==steadier) ==\n");
+  std::printf("  %4s %-20s %8s %10s %10s   %s\n", "dp", "leg", "mean", "roughness", "reversals", "series 9..13");
+  const char* legnm[3] = { "own_yhint_pensnap", "own_yhint_nopensnap", "freetype" };
+  for (int d = 0; d < kNDp; ++d) {
+    const int dp_tag = dp_tag_of(kDpRatios[d]);
+    for (int L = 0; L < 3; ++L) {
+      double sum = 0.0, rough = 0.0; int n = 0, steps = 0; double prev = 0.0; bool have_prev = false;
+      int reversals = 0; double prev_step = 0.0; bool have_step = false;
+      char sbuf[256]; int off = 0;
+      for (int s = 0; s < kNSizes; ++s) {
+        if (!series_ok[d][L][s]) continue;
+        const double v = series_vstem[d][L][s];
+        sum += v; ++n;
+        if (have_prev) {
+          const double step = v - prev;
+          rough += std::fabs(step); ++steps;
+          if (have_step && ((step > 0.0) != (prev_step > 0.0)) && step != 0.0 && prev_step != 0.0)
+            ++reversals;
+          prev_step = step; have_step = true;
+        }
+        prev = v; have_prev = true;
+        off += std::snprintf(sbuf + off, sizeof(sbuf) - off, "%s%.4f",
+                             (s == 0 ? "" : " "), v);
+      }
+      const double mean = (n > 0) ? sum / n : 0.0;
+      const double roughness = (steps > 0) ? rough / steps : 0.0;
+      std::printf("  %3d  %-20s %8.4f %10.4f %10d   %s\n", dp_tag, legnm[L], mean, roughness, reversals, sbuf);
+    }
   }
 
   std::printf("\nfonteng_ab_visual: wrote %d PPM(s), %d line(s) with a missing box\n",

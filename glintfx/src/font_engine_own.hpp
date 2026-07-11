@@ -392,11 +392,20 @@ private:
   //     around an UN-baked glyph (`glyph_or_null == nullptr`, no gid to look up) or before the
   //     first glyph of the string (no predecessor) -- both leave the running pen exactly as
   //     GetStringWidth()/GenerateString() already handled the no-kerning case before this
-  //     amadurecimento. Rounding: intentionally NONE mid-loop -- `pen` stays `float` for the
-  //     entire walk (kerning included) and only the FINAL total is rounded
-  //     (`std::lround`, in GetStringWidth()/GenerateString() themselves), which is exactly why
-  //     GetStringWidth()'s int return and GenerateString()'s emitted mesh extent agree to the
-  //     pixel even with kerning in the mix.
+  //     amadurecimento. Rounding -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): with pen-snap ON (the
+  //     DEFAULT, own_font_engine_pensnap_bypass()==false), each per-glyph pen COMPONENT is rounded
+  //     to a whole pixel BEFORE it is folded in -- the glyph's `advance` and left bearing
+  //     (`offset_x`) at bake time (BakeFaceInstance()), the `kern` adjustment and `letter_spacing`
+  //     here in the loop -- so `pen` holds an INTEGER value at every `emit()`, exactly mirroring
+  //     FreeType (integer horiAdvance/kern/bearing, FreeTypeInterface.cpp's `>> 6`). That lands
+  //     every glyph on the SAME sub-pixel phase (the shared frac(position.x), common to both
+  //     engines), so the GL_LINEAR atlas no longer smears each glyph's stems across a different
+  //     fractional phase -- the sharpness win this ticket is about. INVARIANCE is untouched:
+  //     GetStringWidth() and GenerateString() still share THIS one summation, so their totals stay
+  //     identical whether or not snapping is on (snapping only quantises the increments both
+  //     already share; with snap ON `pen` is already integral, so the final `std::lround` in
+  //     GetStringWidth()/GenerateString() is a no-op). Flip own_font_engine_pensnap_bypass() to
+  //     `true` to disable it (`pen` stays `float`, the pre-snap behaviour) for the A/B leg.
   // PT: Caminhada UTF-8 compartilhada usada TANTO por GetStringWidth() QUANTO por
   //     GenerateString() -- garante que a largura que o motor de layout do RmlUi mede (retorno
   //     de GetStringWidth) sempre bate com a largura que a mesh emitida de fato ocupa (retorno
@@ -417,11 +426,21 @@ private:
   //     um glyph NÃO-empacotado (`glyph_ou_null == nullptr`, sem gid pra buscar) ou antes do 1º
   //     glyph da string (sem predecessor) -- ambos deixam a pena corrente exatamente como
   //     GetStringWidth()/GenerateString() já tratavam o caso sem-kerning antes deste
-  //     amadurecimento. Arredondamento: propositalmente NENHUM no meio do laço -- `pen`
-  //     permanece `float` durante toda a caminhada (kerning incluso) e só o total FINAL é
-  //     arredondado (`std::lround`, no próprio GetStringWidth()/GenerateString()), motivo exato
-  //     pelo qual o retorno int de GetStringWidth() e a extensão da mesh emitida de
-  //     GenerateString() concordam até o pixel mesmo com kerning na mistura.
+  //     amadurecimento. Arredondamento -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): com o pen-snap LIGADO
+  //     (o DEFAULT, own_font_engine_pensnap_bypass()==false), cada COMPONENTE do pen por-glyph é
+  //     arredondado a um pixel inteiro ANTES de ser dobrado -- o `advance` do glyph e o bearing
+  //     esquerdo (`offset_x`) em tempo de bake (BakeFaceInstance()), o ajuste de `kern` e o
+  //     `letter_spacing` aqui no laço -- então `pen` guarda um valor INTEIRO em todo `emit()`,
+  //     espelhando exatamente o FreeType (horiAdvance/kern/bearing inteiros, o `>> 6` do
+  //     FreeTypeInterface.cpp). Isso põe todo glyph na MESMA fase sub-pixel (o frac(position.x)
+  //     compartilhado, comum aos dois motores), então o atlas GL_LINEAR não borra mais as hastes de
+  //     cada glyph numa fase fracionária diferente -- o ganho de nitidez que esta tarefa persegue.
+  //     A INVARIÂNCIA fica intacta: GetStringWidth() e GenerateString() ainda compartilham ESTA
+  //     única soma, então os totais continuam idênticos com ou sem o snap (o snap só quantiza os
+  //     incrementos que ambos já compartilham; com snap LIGADO o `pen` já é inteiro, então o
+  //     `std::lround` final em GetStringWidth()/GenerateString() é um no-op). Vire o
+  //     own_font_engine_pensnap_bypass() pra `true` pra desligá-lo (`pen` permanece `float`, o
+  //     comportamento pré-snap) na perna A/B.
   static float IterateGlyphs(const FaceInstance& inst, Rml::StringView string, float letter_spacing,
                               const std::function<void(float pen_x, const GlyphInfo*)>& emit);
 
@@ -554,6 +573,51 @@ bool& own_font_engine_hint_bypass();
 //     FreeType (ele faz o próprio darkening). Retorna uma referência a um `static bool` local de
 //     função (sem preocupação de ordem de init estática, uso só em teste single-thread).
 bool& own_font_engine_darken_enable();
+
+// EN: PEN-SNAP BYPASS HOOK (L1.20-FONTFLIP, FT-F4) -- a fourth src-internal, process-global toggle,
+//     sibling to own_font_engine_hint_bypass() above and orthogonal to all three: it does NOT
+//     choose the engine (ab_bypass), nor whether Y grid-fitting runs (hint_bypass), nor whether the
+//     coverage curve darkens (darken_enable); it chooses whether the OWN engine ROUNDS each
+//     per-glyph pen component to a whole pixel ("pen-snap"). Read in BOTH halves of the shared
+//     glyph walk: at bake time in BakeFaceInstance() (font_engine_own.cpp), where the glyph
+//     `advance` and left bearing (`offset_x`) are snapped to integers, AND per pen-increment in
+//     IterateGlyphs(), where the `kern` adjustment and `letter_spacing` are snapped -- so with the
+//     DEFAULT `false` (pen-snap ON, do NOT bypass) the running pen is integral at every glyph,
+//     exactly like FreeType (integer horiAdvance/kern/bearing). WHY it matters: the own engine's
+//     atlas samples through GL_LINEAR, so a glyph whose origin lands on a fractional sub-pixel phase
+//     has its vertical stems smeared across two columns; snapping the pen puts every glyph on the
+//     SAME phase (the shared frac(position.x), the identical residual FreeType also carries), which
+//     is what restores stem crispness at small body sizes. This is the SHIPPING behaviour (ON by
+//     default -- the correct, FreeType-like model); a test flips it to `true` to measure the raw,
+//     un-snapped float pen (the "pen float" A/B leg). The width invariance
+//     (GetStringWidth()==the mesh's own summed extent) holds either way because the snap lives
+//     inside the ONE IterateGlyphs()/bake path both consumers share -- see IterateGlyphs()'s
+//     doc-comment above. Only meaningful while the own engine is installed (ab_bypass==false) --
+//     inert with FreeType (which does its own integer rounding). Returns a reference to a
+//     function-local `static bool` (no static-init-order concern, single-threaded test use).
+// PT: HOOK DE BYPASS DO PEN-SNAP (L1.20-FONTFLIP, FT-F4) -- um quarto toggle src-interno,
+//     process-global, irmão do own_font_engine_hint_bypass() acima e ortogonal aos três: ele NÃO
+//     escolhe o motor (ab_bypass), nem se o grid-fitting Y roda (hint_bypass), nem se a curva de
+//     cobertura escurece (darken_enable); escolhe se o motor PRÓPRIO ARREDONDA cada componente do
+//     pen por-glyph a um pixel inteiro ("pen-snap"). Lido nas DUAS metades da caminhada de glyph
+//     compartilhada: em tempo de bake no BakeFaceInstance() (font_engine_own.cpp), onde o `advance`
+//     do glyph e o bearing esquerdo (`offset_x`) são snapados a inteiros, E por incremento-de-pen no
+//     IterateGlyphs(), onde o ajuste de `kern` e o `letter_spacing` são snapados -- então com o
+//     DEFAULT `false` (pen-snap LIGADO, NÃO bypassar) a pena corrente é inteira em todo glyph,
+//     exatamente como o FreeType (horiAdvance/kern/bearing inteiros). POR QUE importa: o atlas do
+//     motor próprio amostra via GL_LINEAR, então um glyph cuja origem cai numa fase sub-pixel
+//     fracionária tem suas hastes verticais borradas entre duas colunas; snapar o pen põe todo glyph
+//     na MESMA fase (o frac(position.x) compartilhado, o resíduo idêntico que o FreeType também
+//     carrega), que é o que restaura a nitidez de haste em corpos pequenos. É o comportamento de
+//     RELEASE (LIGADO por padrão -- o modelo correto, FreeType-like); um teste o vira pra `true` pra
+//     medir o pen float cru, sem-snap (a perna A/B "pen float"). A invariância de largura
+//     (GetStringWidth()==a própria extensão somada da mesh) vale de qualquer forma porque o snap
+//     vive dentro do ÚNICO caminho IterateGlyphs()/bake que os dois consumidores compartilham -- ver
+//     o doc-comment do IterateGlyphs() acima. Só faz sentido enquanto o motor próprio está instalado
+//     (ab_bypass==false) -- inerte com o FreeType (que faz seu próprio arredondamento inteiro).
+//     Retorna uma referência a um `static bool` local de função (sem preocupação de ordem de init
+//     estática, uso só em teste single-thread).
+bool& own_font_engine_pensnap_bypass();
 
 } // namespace glintfx
 

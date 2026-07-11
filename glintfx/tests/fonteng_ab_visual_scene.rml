@@ -70,9 +70,10 @@
   <title>glintfx L1.20-FONTFLIP visual sharpness compare</title>
 </head>
 <body>
+  <div class="row"><span class="p" id="s09" style="font-size: 9dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+  <div class="row"><span class="p" id="s10" style="font-size: 10dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
   <div class="row"><span class="p" id="s11" style="font-size: 11dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
+  <div class="row"><span class="p" id="s12" style="font-size: 12dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
   <div class="row"><span class="p" id="s13" style="font-size: 13dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
-  <div class="row"><span class="p" id="s16" style="font-size: 16dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
-  <div class="row"><span class="p" id="s24" style="font-size: 24dp;">Ação &amp; coração — Xyz (0123) níveis àéîõü</span></div>
 </body>
 </rml>

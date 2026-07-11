@@ -91,6 +91,25 @@ bool& own_font_engine_darken_enable() {
   return enable;
 }
 
+// EN: PEN-SNAP BYPASS storage (L1.20-FONTFLIP, FT-F4). See the long doc-comment on this function's
+//     declaration in font_engine_own.hpp for the full contract. Same function-local-static pattern
+//     as own_font_engine_hint_bypass() above (default `false` on first use, no static-init-order
+//     dependency, reference returned so a test can flip it). Default `false` == "apply pen-snap"
+//     (round each per-glyph pen component to a whole pixel, FreeType-like), so a normal ON build
+//     ships WITH snapping; a test flips it to `true` to measure the raw, un-snapped float pen (the
+//     "pen float" A/B leg).
+// PT: Armazenamento do BYPASS do PEN-SNAP (L1.20-FONTFLIP, FT-F4). Ver o doc-comment longo na
+//     declaração desta função em font_engine_own.hpp pro contrato completo. Mesmo padrão
+//     static-local-de-função do own_font_engine_hint_bypass() acima (default `false` no primeiro
+//     uso, sem dependência de ordem de init estática, referência retornada pra um teste poder
+//     virá-lo). Default `false` == "aplica pen-snap" (arredonda cada componente do pen por-glyph a
+//     um pixel inteiro, FreeType-like), então um build ON normal já sai COM snapping; um teste o
+//     vira pra `true` pra medir o pen float cru, sem-snap (a perna A/B "pen float").
+bool& own_font_engine_pensnap_bypass() {
+  static bool bypass = false;
+  return bypass;
+}
+
 namespace {
 
 // EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
@@ -511,6 +530,25 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   const glx_sfnt_face& sf = inst.face->sfnt;
   const float scale = (float)inst.pixel_size / (float)sf.units_per_em; // caller already guards units_per_em>0.
 
+  // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP flag, read ONCE for this bake -- when true (the DEFAULT,
+  //     own_font_engine_pensnap_bypass()==false), the glyph `advance` and left bearing (`offset_x`)
+  //     below are rounded to whole pixels, so IterateGlyphs() accumulates an INTEGER pen at every
+  //     glyph (kern/letter_spacing are snapped there in the same walk), mirroring FreeType's integer
+  //     horiAdvance/bearing and keeping every glyph on the shared frac(position.x) sub-pixel phase
+  //     the GL_LINEAR atlas needs to stay crisp. Read here (bake) AND in IterateGlyphs() from the
+  //     same process-global hook; the A/B leg flips it BEFORE the UiLayer ctor triggers the first
+  //     bake (same discipline as the hint/darken hooks). See the hook's doc-comment in the header.
+  // PT: (L1.20-FONTFLIP, FT-F4) Flag do PEN-SNAP, lido UMA vez pra este bake -- quando true (o
+  //     DEFAULT, own_font_engine_pensnap_bypass()==false), o `advance` do glyph e o bearing esquerdo
+  //     (`offset_x`) abaixo são arredondados a pixels inteiros, então o IterateGlyphs() acumula uma
+  //     pena INTEIRA em todo glyph (kern/letter_spacing são snapados lá na mesma caminhada),
+  //     espelhando o horiAdvance/bearing inteiro do FreeType e mantendo todo glyph na fase sub-pixel
+  //     frac(position.x) compartilhada que o atlas GL_LINEAR precisa pra ficar nítido. Lido aqui
+  //     (bake) E no IterateGlyphs() do mesmo hook process-global; a perna A/B o vira ANTES do ctor
+  //     da UiLayer disparar o primeiro bake (mesma disciplina dos hooks de hint/darken). Ver o
+  //     doc-comment do hook no header.
+  const bool pen_snap = !own_font_engine_pensnap_bypass();
+
   // EN: FontMetrics derivation from head/hhea (font units) scaled to this instance's pixel
   //     size. `descender` is negative in TrueType's own convention (below the baseline);
   //     FontMetrics::descent wants a POSITIVE distance below the baseline, hence the negation.
@@ -589,7 +627,16 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
     Baked b;
     b.cp = cp;
     b.gid = gid;
-    b.advance = (float)advance_units * scale;
+    // EN: (L1.20-FONTFLIP, FT-F4) advance snapped to a whole pixel under pen-snap -- FreeType
+    //     reports an integer advance (FreeTypeInterface.cpp: `horiAdvance >> 6`); an integer advance
+    //     keeps the running pen integral in IterateGlyphs() so consecutive glyphs share one sub-pixel
+    //     phase. With pen-snap bypassed it is the raw fractional advance (the pre-snap behaviour).
+    // PT: (L1.20-FONTFLIP, FT-F4) advance snapado a um pixel inteiro sob pen-snap -- o FreeType
+    //     reporta um advance inteiro (FreeTypeInterface.cpp: `horiAdvance >> 6`); um advance inteiro
+    //     mantém a pena corrente inteira no IterateGlyphs() pra glyphs consecutivos compartilharem
+    //     uma fase sub-pixel. Com o pen-snap bypassado é o advance fracionário cru (comportamento
+    //     pré-snap).
+    b.advance = pen_snap ? (float)std::lround((double)advance_units * scale) : (float)advance_units * scale;
 
     glx_sfnt_outline outline{};
     const glx_sfnt_result r =
@@ -692,7 +739,26 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
             // PT: offset do canto superior-esquerdo do quad em relação a (pen_x, baseline_y),
             //     espaço de tela y-para-baixo -- derivado no doc-comment de GlyphInfo em
             //     font_engine_own.hpp / no contrato de IterateGlyphs.
-            b.offset_x = fx_min - kPad;
+            // EN: (L1.20-FONTFLIP, FT-F4) left bearing snapped to a whole pixel under pen-snap --
+            //     the quad's left edge is `pen_x + offset_x`; with `pen_x` already integral (snapped
+            //     advance/kern/letter_spacing) a whole-pixel bearing puts the glyph's ink origin on an
+            //     integer column (offset by the shared frac(position.x)), so GL_LINEAR does not smear
+            //     the stems -- FreeType likewise rounds its bearing. Rounding fx_min (then subtracting
+            //     the integer kPad) keeps offset_x integral. The bitmap itself is untouched (still
+            //     rasterised at its natural sub-pixel origin, origin_x_26_6 below unchanged): pen-snap
+            //     only quantises WHERE the quad is placed, not the glyph's internal shape (X-axis stem
+            //     grid-fit is a separate, future sub-phase). Bypassed == the raw fractional bearing.
+            // PT: (L1.20-FONTFLIP, FT-F4) bearing esquerdo snapado a um pixel inteiro sob pen-snap --
+            //     a aresta esquerda do quad é `pen_x + offset_x`; com `pen_x` já inteiro
+            //     (advance/kern/letter_spacing snapados) um bearing de pixel inteiro põe a origem da
+            //     tinta do glyph numa coluna inteira (deslocada pelo frac(position.x) compartilhado),
+            //     então o GL_LINEAR não borra as hastes -- o FreeType também arredonda o bearing dele.
+            //     Arredondar fx_min (depois subtrair o kPad inteiro) mantém offset_x inteiro. O próprio
+            //     bitmap fica intocado (ainda rasterizado na origem sub-pixel natural, origin_x_26_6
+            //     abaixo inalterado): o pen-snap só quantiza ONDE o quad é posto, não a forma interna do
+            //     glyph (grid-fit de haste no eixo X é uma sub-fase futura, à parte). Bypassado == o
+            //     bearing fracionário cru.
+            b.offset_x = (pen_snap ? (float)std::lround((double)fx_min) : fx_min) - kPad;
             b.offset_y = -(fy_max + kPad);
             if (cp == 0x78) inst.metrics.x_height = fy_max - fy_min; // 'x' baked -- refine x_height.
             // EN: U+2026 rasterised for this face -- RmlUi may use the native ellipsis glyph.
@@ -831,6 +897,21 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
   const glx_sfnt_face& sf = inst.face->sfnt;
   const float scale = (float)inst.pixel_size / (float)sf.units_per_em;
 
+  // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP -- the other half of the flag BakeFaceInstance() already
+  //     read for `advance`/`offset_x`. Snapping `letter_spacing` to a whole pixel here (once) and
+  //     the per-pair `kern` below keeps every pen increment integral, so `pen` is an integer at
+  //     each emit() (advance is already integral from bake) -- the FreeType-like phase-locked walk.
+  //     Both GetStringWidth() and GenerateString() run THIS same summation, so the width invariance
+  //     holds regardless of snap state (see this method's doc-comment in the header).
+  // PT: (L1.20-FONTFLIP, FT-F4) PEN-SNAP -- a outra metade do flag que o BakeFaceInstance() já leu
+  //     pro `advance`/`offset_x`. Snapar `letter_spacing` a um pixel inteiro aqui (uma vez) e o
+  //     `kern` por-par abaixo mantém todo incremento de pen inteiro, então `pen` é um inteiro em
+  //     todo emit() (o advance já é inteiro do bake) -- a caminhada com fase travada, FreeType-like.
+  //     Tanto GetStringWidth() quanto GenerateString() rodam ESTA mesma soma, então a invariância de
+  //     largura vale independente do estado do snap (ver o doc-comment deste método no header).
+  const bool pen_snap = !own_font_engine_pensnap_bypass();
+  const float ls = pen_snap ? (float)std::lround((double)letter_spacing) : letter_spacing;
+
   float pen = 0.f;
   bool has_prev = false;
   uint32_t prev_gid = 0;
@@ -849,11 +930,20 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
     //     em font_engine_own.hpp pro motivo do sem-arredondamento-no-meio-do-laço.
     if (has_prev && g) {
       const int16_t kern_funits = glx_sfnt_kern(&sf, prev_gid, g->gid);
-      if (kern_funits != 0) pen += (float)kern_funits * scale;
+      // EN: (L1.20-FONTFLIP, FT-F4) kern folded in snapped to a whole pixel under pen-snap --
+      //     FreeType's kern advance is likewise integer (`>> 6`). Bypassed == the raw fractional
+      //     kern (the pre-snap behaviour).
+      // PT: (L1.20-FONTFLIP, FT-F4) kern dobrado snapado a um pixel inteiro sob pen-snap -- o kern
+      //     do FreeType também é inteiro (`>> 6`). Bypassado == o kern fracionário cru (comportamento
+      //     pré-snap).
+      if (kern_funits != 0) {
+        const float kern_px = (float)kern_funits * scale;
+        pen += pen_snap ? (float)std::lround((double)kern_px) : kern_px;
+      }
     }
 
     emit(pen, g);
-    pen += (g ? g->advance : 0.0f) + letter_spacing;
+    pen += (g ? g->advance : 0.0f) + ls;
 
     has_prev = (g != nullptr);
     prev_gid = g ? g->gid : 0;

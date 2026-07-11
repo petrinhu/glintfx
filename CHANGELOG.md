@@ -10,6 +10,36 @@
 
 ## [Unreleased]
 
+### Documentation / Documentação
+
+- **EN:** `docs/embed-integration.md` §18 reinforced with a real consumer-found integration case
+  (GusWorld, 2026-07-10): a new "If your host declares RmlUi before glintfx" subsection documents
+  CMake `FetchContent`'s **first-population-wins** rule -- when a host declares its own
+  `FetchContent_Declare(RmlUi ...)` before glintfx's (a common pattern for pinning a `GIT_TAG` /
+  setting `RMLUI_FONT_ENGINE`), glintfx's `PATCH_COMMAND` for the teardown-UB patch never reaches the
+  winning tree, so the 2 `vptr:*` UBs from section 18's intro persist even on glintfx v0.9.1+. The fix
+  (apply the same patch to the host's own `FetchContent_Declare(RmlUi ...)`, pointing at glintfx's
+  tracked `.patch` file with the same idempotent `--reverse --check || apply` idiom) is validated:
+  `vptr:*` findings 9 -> 0 under UBSan, full 650-test suite green. Also added: a short note that
+  one-time LSan leak reports at the first GL context (`libEGL_nvidia`/GLVND `LoadVendors`,
+  `eglGetProcAddress`, Mesa/llvmpipe JIT regions) are third-party driver/JIT noise, not glintfx's or
+  RmlUi's to fix -- diagnose with `fast_unwind_on_malloc=0:print_module_map=1`, suppress host-side.
+  Doc-only change, no code/patch/CMake touched.
+- **PT:** a §18 de `docs/embed-integration.md` foi reforçada com um caso de integração real
+  encontrado por um consumidor (GusWorld, 2026-07-10): uma nova subseção "Se o seu host declara o
+  RmlUi antes do glintfx" documenta a regra **first-population-wins** do `FetchContent` do CMake --
+  quando um host declara a própria `FetchContent_Declare(RmlUi ...)` antes da da glintfx (padrão
+  comum pra pinar um `GIT_TAG` / setar `RMLUI_FONT_ENGINE`), o `PATCH_COMMAND` da glintfx pro patch de
+  UB de teardown nunca alcança a árvore vencedora, então os 2 UBs `vptr:*` da introdução da seção 18
+  persistem mesmo na glintfx v0.9.1+. A correção (aplicar o mesmo patch na própria
+  `FetchContent_Declare(RmlUi ...)` do host, apontando pro arquivo `.patch` rastreado da glintfx com o
+  mesmo idiom idempotente `--reverse --check || apply`) está validada: achados `vptr:*` de 9 para 0
+  sob UBSan, suíte completa de 650 testes verde. Também adicionada: uma nota curta de que relatórios
+  de leak únicos do LSan no primeiro contexto GL (`libEGL_nvidia`/`LoadVendors` do GLVND,
+  `eglGetProcAddress`, regiões JIT do Mesa/llvmpipe) são ruído de driver/JIT de terceiro, não da
+  glintfx nem do RmlUi corrigir -- diagnosticar com `fast_unwind_on_malloc=0:print_module_map=1`,
+  suprimir do lado do host. Mudança só-de-doc, nenhum código/patch/CMake tocado.
+
 ---
 
 ## [0.9.1] - 2026-07-10 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.9.1)

@@ -758,6 +758,80 @@ Set `UBSAN_OPTIONS=suppressions=<path>` before running the host binary, pointing
 suppression file (self-contained config), or directly at `<path-to-glintfx>/glintfx/tests/ubsan_suppressions.txt`
 if building glintfx in-tree pre-patch.
 
+### If your host declares RmlUi before glintfx (`FetchContent` first-population-wins) / Se o seu host declara o RmlUi antes do glintfx (`FetchContent` first-population-wins)
+
+**EN:** This is the single most common way situation 1 above happens in practice, and it is easy to
+miss because nothing errors -- the build just silently keeps the pre-patch UBs. If your host declares
+its **own** `FetchContent_Declare(RmlUi ...)` (a common pattern: the host wants to pin its own RmlUi
+`GIT_TAG` and/or set `RMLUI_FONT_ENGINE` before glintfx's own `FetchContent_Declare` runs), CMake's
+`FetchContent` resolves by **first-population-wins**: whichever `FetchContent_Declare`/`MakeAvailable`
+call populates the `RmlUi` source tree *first* owns it for the rest of the configure -- every later
+`FetchContent_Declare(RmlUi ...)` for the same dependency name, including glintfx's own (carrying the
+`PATCH_COMMAND` from this section's intro), is silently ignored. **The patch never reaches the tree.**
+A host on glintfx v0.9.1+ that pins its own RmlUi ahead of glintfx's `add_subdirectory`/
+`FetchContent_Declare(glintfx ...)` will therefore still see both `vptr:*` UBs under UBSan -- exactly
+as if it were still on a pre-patch glintfx release.
+
+**The fix, validated by a real consumer (GusWorld, 2026-07-10):** apply the same patch to the host's
+own `FetchContent_Declare(RmlUi ...)`, pointing `PATCH_COMMAND` at glintfx's own tracked patch file so
+both trees stay byte-identical:
+
+```cmake
+FetchContent_Declare(
+  RmlUi
+  GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
+  GIT_TAG        2cd28864   # keep in sync with glintfx's own pin
+  PATCH_COMMAND  git apply --reverse --check
+                 ${CMAKE_SOURCE_DIR}/path/to/glintfx/patches/rmlui-2cd28864-teardown-ub.patch
+                 || git apply
+                 ${CMAKE_SOURCE_DIR}/path/to/glintfx/patches/rmlui-2cd28864-teardown-ub.patch
+)
+```
+
+The `--reverse --check ... || apply` idiom is the same idempotent pattern glintfx's own
+`CMakeLists.txt` uses -- it survives a clean reconfigure (first run: the reverse-check fails because
+the patch is not yet applied, so `apply` runs; every run after: the reverse-check succeeds because it
+is already applied, so `apply` is skipped, avoiding a hard error on a non-idempotent `git apply`). Do
+not copy the patch text by hand -- point at glintfx's own file (or vendor a byte-identical copy) so the
+two trees never drift apart. **GusWorld's result applying this:** `vptr:*` findings under UBSan went
+from 9 down to 0, full 650-test suite green.
+
+**PT:** Esta é a forma mais comum, na prática, de a situação 1 acima acontecer, e é fácil passar batido
+porque nada dá erro -- o build simplesmente segue em frente, em silêncio, mantendo os UBs pré-patch. Se
+o seu host declara a **própria** `FetchContent_Declare(RmlUi ...)` (padrão comum: o host quer pinar o
+próprio `GIT_TAG` do RmlUi e/ou setar `RMLUI_FONT_ENGINE` antes da `FetchContent_Declare` da glintfx
+rodar), o `FetchContent` do CMake resolve por **first-population-wins**: qualquer que seja a chamada
+`FetchContent_Declare`/`MakeAvailable` que popular a árvore-fonte do `RmlUi` *primeiro* é dona dela pro
+resto do configure -- toda `FetchContent_Declare(RmlUi ...)` posterior para a mesma dependência,
+inclusive a da própria glintfx (carregando o `PATCH_COMMAND` da introdução desta seção), é ignorada
+silenciosamente. **O patch nunca alcança a árvore.** Um host na glintfx v0.9.1+ que pina o próprio
+RmlUi antes do `add_subdirectory`/`FetchContent_Declare(glintfx ...)` vai, portanto, continuar vendo os
+dois UBs `vptr:*` sob UBSan -- exatamente como se ainda estivesse numa release da glintfx pré-patch.
+
+**A correção, validada por um consumidor real (GusWorld, 2026-07-10):** aplicar o mesmo patch na
+`FetchContent_Declare(RmlUi ...)` do próprio host, apontando o `PATCH_COMMAND` pro arquivo de patch já
+rastreado da glintfx, pra as duas árvores ficarem byte-idênticas:
+
+```cmake
+FetchContent_Declare(
+  RmlUi
+  GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
+  GIT_TAG        2cd28864   # manter sincronizado com o pin da propria glintfx
+  PATCH_COMMAND  git apply --reverse --check
+                 ${CMAKE_SOURCE_DIR}/path/to/glintfx/patches/rmlui-2cd28864-teardown-ub.patch
+                 || git apply
+                 ${CMAKE_SOURCE_DIR}/path/to/glintfx/patches/rmlui-2cd28864-teardown-ub.patch
+)
+```
+
+O idiom `--reverse --check ... || apply` é o mesmo padrão idempotente que o próprio `CMakeLists.txt` da
+glintfx usa -- sobrevive a um reconfigure limpo (1ª execução: o reverse-check falha porque o patch
+ainda não foi aplicado, então o `apply` roda; das execuções seguintes em diante: o reverse-check tem
+sucesso porque já está aplicado, então o `apply` é pulado, evitando um erro duro num `git apply`
+não-idempotente). Não copie o texto do patch à mão -- aponte pro próprio arquivo da glintfx (ou
+vendorize uma cópia byte-idêntica) pra as duas árvores nunca divergirem. **Resultado do GusWorld
+aplicando isto:** os achados `vptr:*` sob UBSan foram de 9 para 0, suíte completa de 650 testes verde.
+
 **Upstream status:** this patch has not yet been submitted to RmlUi (mikke89/RmlUi) as of this
 writing; doing so, and retiring the patch from this repo once an equivalent fix lands upstream and
 the pinned `GIT_TAG` is bumped past it, is the intended next step (tracked in
@@ -770,6 +844,16 @@ decorated window -- can leave residual leak reports at process exit that are not
 system/vendor library, never to a `glintfx::` symbol or a file under `glintfx/src|include`). Apply the
 same discipline host-side via `LSAN_OPTIONS=suppressions=<path>`: never blanket-suppress a whole leak
 category, and never suppress by anything that could also match glintfx's own code.
+
+**A related, separate false positive: one-time leak reports at the very first GL context creation**
+-- typically attributed to `libEGL_nvidia.so`/GLVND's `LoadVendors`, `eglGetProcAddress`, or anonymous
+JIT-code regions inside Mesa/llvmpipe -- are the GPU driver's or JIT's own one-time initialization
+allocation, not a per-frame or per-document leak, and not glintfx's or RmlUi's to fix. They show up
+exactly once, at process start, regardless of how many `UiLayer`/`App` instances or document loads
+follow. Diagnose with `LSAN_OPTIONS=fast_unwind_on_malloc=0:print_module_map=1` to confirm the leaking
+module is a vendor driver `.so`, not `glintfx`/`RmlUi`/the host's own code, then suppress it in the
+host's own LSan suppression file -- the same discipline already applied to the `libasound` entries.
+Diagnosed by a real consumer (GusWorld).
 
 **Reverification:** the fallback UBSan suppressions above and every LSan entry are tied to the pinned
 RmlUi commit (`RMLUI` `GIT_TAG` in `glintfx/CMakeLists.txt`, currently `2cd28864`). Re-verify whenever
@@ -848,6 +932,17 @@ escopo em biblioteca de sistema/fornecedor pré-compilada, nunca num símbolo `g
 `glintfx/src|include`). Aplique a mesma disciplina do lado do host via
 `LSAN_OPTIONS=suppressions=<caminho>`: nunca suprima uma categoria inteira de leak de uma vez, e nunca
 suprima por algo que também possa casar com o próprio código da glintfx.
+
+**Um falso-positivo relacionado, mas separado: relatórios de leak únicos na primeira criação de
+contexto GL** -- tipicamente atribuídos a `libEGL_nvidia.so`/`LoadVendors` do GLVND,
+`eglGetProcAddress`, ou regiões anônimas de código JIT dentro do Mesa/llvmpipe -- são a própria
+alocação de inicialização única do driver de GPU ou do JIT, não um leak por-frame ou por-documento, e
+não são da glintfx nem do RmlUi corrigir. Aparecem exatamente uma vez, no início do processo,
+independente de quantas instâncias de `UiLayer`/`App` ou cargas de documento vierem depois. Diagnostique
+com `LSAN_OPTIONS=fast_unwind_on_malloc=0:print_module_map=1` pra confirmar que o módulo que vaza é uma
+`.so` de driver de terceiro, não `glintfx`/`RmlUi`/código do próprio host, e então suprima no próprio
+arquivo de supressão LSan do host -- a mesma disciplina já aplicada às entradas de `libasound`.
+Diagnosticado por um consumidor real (GusWorld).
 
 **Reverificação:** as supressões UBSan de fallback acima e cada entrada de LSan estão atadas ao commit
 pinado do RmlUi (`RMLUI` `GIT_TAG` em `glintfx/CMakeLists.txt`, atualmente `2cd28864`). Reverificar

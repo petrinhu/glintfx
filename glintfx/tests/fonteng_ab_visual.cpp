@@ -124,6 +124,21 @@ bool& own_font_engine_darken_enable();
 //     do FreeType). `true` bypassa o pen-snap (pen fracionário cru, comportamento pré-snap). É a
 //     perna que o gate isola.
 bool& own_font_engine_pensnap_bypass();
+// EN: (L1.20-FONTFLIP FT-F4 VSNAP gate) V-snap bypass hook -- same src-internal, forward-declared-
+//     locally contract as the others (see font_engine_own.hpp). DEFAULT `false` == vsnap ON (the
+//     glyph's fractional vertical origin `origin_y_26_6` and quad `offset_y` are snapped to a whole
+//     pixel, so the Y-hinted x-height edge lands on an integer atlas/screen row instead of being
+//     re-smeared by a fractional phase). `true` bypasses vsnap (raw fractional vertical origin, the
+//     pre-vsnap behaviour). This is the leg THIS gate isolates. Pure Y-axis transform -- must NOT
+//     move the X (stem) metrics.
+// PT: (gate de VSNAP do L1.20-FONTFLIP FT-F4) Hook de bypass do v-snap -- mesmo contrato src-interno,
+//     forward-declarado localmente, dos outros (ver font_engine_own.hpp). DEFAULT `false` == vsnap
+//     LIGADO (a origem vertical fracionaria `origin_y_26_6` e o `offset_y` do quad snapados a um
+//     pixel inteiro, pra a aresta da altura-x hintada em Y pousar numa row inteira do atlas/tela em
+//     vez de ser re-borrada por uma fase fracionaria). `true` bypassa o vsnap (origem vertical
+//     fracionaria crua, comportamento pre-vsnap). E a perna que ESTE gate isola. Transform de eixo Y
+//     puro -- NAO pode mover as metricas de X (haste).
+bool& own_font_engine_vsnap_bypass();
 }
 
 namespace {
@@ -192,7 +207,7 @@ void flip_to_top_down(std::vector<unsigned char>& px, int w, int h) {
 //     font_interface do RmlUi para a próxima sessão re-selecionar seu motor limpo (ver o cabeçalho
 //     de fonteng_ab_compare.cpp).
 int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, bool pensnap_bypass,
-                   const char* label, Capture out[kNDp]) {
+                   bool vsnap_bypass, const char* label, Capture out[kNDp]) {
   // EN: (sub-phase 1.4/1.5) ab_bypass selects the ENGINE (false -> own, true -> FreeType);
   //     hint_bypass selects, WITHIN the own engine, whether Y grid-fitting runs (false -> hinted,
   //     true -> raw); darken_enable selects whether the own engine's coverage-curve stem darkening
@@ -211,6 +226,11 @@ int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, bool pe
   // PT: (gate de pen-snap) quarto eixo: bypassa o arredondamento inteiro do pen por-glyph. Lido em
   //     tempo de bake (GetStringWidth / GenerateString), então setado antes do ctor da UiLayer.
   glintfx::own_font_engine_pensnap_bypass() = pensnap_bypass;
+  // EN: (VSNAP gate) fifth axis: bypass the per-glyph integer vertical origin/offset rounding. Read
+  //     at bake time (BakeFaceInstance), so it must be set before the UiLayer ctor / first bake.
+  // PT: (gate de VSNAP) quinto eixo: bypassa o arredondamento inteiro da origem/offset vertical por-
+  //     glyph. Lido em tempo de bake (BakeFaceInstance), setado antes do ctor da UiLayer.
+  glintfx::own_font_engine_vsnap_bypass() = vsnap_bypass;
 
   glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
   if (!ui.ok()) {
@@ -492,43 +512,50 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // EN: PEN-SNAP GATE -- THREE sessions, run sequentially, sharing ONE GLFW context (only RmlUi
-  //     re-initialises between them -- same clean re-init as fonteng_ab_compare.cpp). Each tuple is
-  //     (ab_bypass, hint_bypass, darken_enable, pensnap_bypass):
-  //       (P) own_yhint_pensnap   -- own, Y-hint ON, pen-snap ON   (false, false, false, false)  [SHIPPING candidate]
-  //       (N) own_yhint_nopensnap -- own, Y-hint ON, pen-snap OFF  (false, false, false, true )  [isolates pen-snap]
-  //       (F) freetype            -- RmlUi's FreeType (integer pen) (true,  -,     -,     -    )  [baseline to match]
-  //     (P) vs (N) isolates the pen-snap effect alone (same Y-hinting, same coverage; the only
-  //     difference is whether each per-glyph pen component is rounded to a whole pixel). (P) vs (F)
-  //     is THE gate question: does the own engine with pen-snap ON match FreeType's stem crispness
-  //     at 9-13 dp across three DPIs? pen-snap is a PURE HORIZONTAL transform, so its signal lives in
-  //     the column-domain metrics (vstem_edge_energy, col_contrast), not the Y-axis x-height ones.
-  // PT: GATE DE PEN-SNAP -- TRÊS sessões, sequenciais, compartilhando UM contexto GLFW (só o RmlUi
-  //     re-inicializa entre elas -- mesma re-init limpa do fonteng_ab_compare.cpp). Cada tupla é
-  //     (ab_bypass, hint_bypass, darken_enable, pensnap_bypass):
-  //       (P) own_yhint_pensnap   -- próprio, Y-hint ON, pen-snap ON   (false, false, false, false)  [candidato de release]
-  //       (N) own_yhint_nopensnap -- próprio, Y-hint ON, pen-snap OFF  (false, false, false, true )  [isola o pen-snap]
-  //       (F) freetype            -- FreeType do RmlUi (pen inteiro)   (true,  -,     -,     -    )  [baseline a empatar]
-  //     (P) vs (N) isola o efeito só do pen-snap (mesmo Y-hint, mesma cobertura; a única diferença é
-  //     se cada componente do pen por-glyph é arredondado a um pixel inteiro). (P) vs (F) é A pergunta
-  //     do gate: o motor próprio com pen-snap LIGADO empata a nitidez de haste do FreeType em 9-13 dp
-  //     nos três DPIs? O pen-snap é um transform HORIZONTAL PURO, então seu sinal vive nas métricas de
-  //     domínio-de-coluna (vstem_edge_energy, col_contrast), não nas de altura-x do eixo Y.
-  Capture pensnap[kNDp], nopensnap[kNDp], ft[kNDp];
-  if (int rc = capture_engine(false, false, false, false, "own_yhint_pensnap",   pensnap))   return rc;
-  if (int rc = capture_engine(false, false, false, true,  "own_yhint_nopensnap", nopensnap)) return rc;
-  if (int rc = capture_engine(true,  false, false, false, "freetype",            ft))        return rc;
+  // EN: VSNAP GATE -- THREE sessions, run sequentially, sharing ONE GLFW context (only RmlUi
+  //     re-initialises between them). Each tuple is (ab_bypass, hint_bypass, darken_enable,
+  //     pensnap_bypass, vsnap_bypass):
+  //       (P) own_full     -- own, Y-hint ON, pen-snap ON, vsnap ON  (false, false, false, false, false) [SHIPPING candidate]
+  //       (N) own_no_vsnap -- own, Y-hint ON, pen-snap ON, vsnap OFF (false, false, false, false, true ) [isolates vsnap]
+  //       (F) freetype     -- RmlUi's FreeType (integer pen + snap)  (true,  -,     -,     -,     -    ) [baseline to match]
+  //     Pen-snap stays ON in BOTH own legs (X must not regress). (P) vs (N) isolates the vsnap effect
+  //     alone (same Y-hinting, same pen-snap, same coverage; the only difference is whether the
+  //     fractional vertical origin/offset is rounded to a whole pixel). (P) vs (F) is THE gate
+  //     question: does own_full with vsnap ON match FreeType's x-height crispness (the plateau of
+  //     xe_body ~0.84) at 9-13 dp across three DPIs, and does it KILL the per-size variability the
+  //     fractional-phase "dance" caused? vsnap is a PURE VERTICAL transform, so its signal lives in
+  //     the Y-axis x-height metrics (xe_body / xe_ramp), NOT the column-domain stem ones; the stem
+  //     metric (vstem_edge) is the X SENTINEL -- it must stay ~equal between P and N.
+  // PT: GATE DE VSNAP -- TRES sessoes, sequenciais, compartilhando UM contexto GLFW (so o RmlUi
+  //     re-inicializa entre elas). Cada tupla e (ab_bypass, hint_bypass, darken_enable,
+  //     pensnap_bypass, vsnap_bypass):
+  //       (P) own_full     -- proprio, Y-hint ON, pen-snap ON, vsnap ON  (false,false,false,false,false) [candidato de release]
+  //       (N) own_no_vsnap -- proprio, Y-hint ON, pen-snap ON, vsnap OFF (false,false,false,false,true ) [isola o vsnap]
+  //       (F) freetype     -- FreeType do RmlUi (pen inteiro + snap)     (true, -,    -,    -,    -    ) [baseline a empatar]
+  //     Pen-snap fica LIGADO nas DUAS pernas own (X nao pode regredir). (P) vs (N) isola o efeito so do
+  //     vsnap (mesmo Y-hint, mesmo pen-snap, mesma cobertura; a unica diferenca e se a origem/offset
+  //     vertical fracionaria e arredondada a um pixel inteiro). (P) vs (F) e A pergunta do gate: o
+  //     own_full com vsnap LIGADO empata a nitidez de altura-x do FreeType (o plato de xe_body ~0.84)
+  //     em 9-13 dp nos tres DPIs, e MATA a variabilidade por-tamanho que a "danca" da fase fracionaria
+  //     causava? vsnap e um transform VERTICAL PURO, entao seu sinal vive nas metricas de altura-x do
+  //     eixo Y (xe_body / xe_ramp), NAO nas de haste do dominio-de-coluna; a metrica de haste
+  //     (vstem_edge) e a SENTINELA X -- deve ficar ~igual entre P e N.
+  Capture full[kNDp], novsnap[kNDp], ft[kNDp];
+  if (int rc = capture_engine(false, false, false, false, false, "own_full",     full))    return rc;
+  if (int rc = capture_engine(false, false, false, false, true,  "own_no_vsnap", novsnap)) return rc;
+  if (int rc = capture_engine(true,  false, false, false, false, "freetype",     ft))      return rc;
   glintfx::own_font_engine_ab_bypass()      = false; // EN: restore defaults. PT: restaura defaults.
   glintfx::own_font_engine_hint_bypass()    = false;
   glintfx::own_font_engine_darken_enable()  = false;
   glintfx::own_font_engine_pensnap_bypass() = false;
+  glintfx::own_font_engine_vsnap_bypass()   = false;
 
   // EN: dp -> integer filename tag: int(ratio*10) so 1.0/1.5/2.0 -> 10/15/20 (no collision).
   // PT: dp -> tag inteira de arquivo: int(ratio*10) pra 1.0/1.5/2.0 -> 10/15/20 (sem colisão).
   auto dp_tag_of = [](float r) { return static_cast<int>(std::lround(r * 10.0f)); };
 
-  std::printf("fonteng_ab_visual (PEN-SNAP GATE): %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
-  std::printf("  3 legs: own_yhint_pensnap (P, pen-snap ON) | own_yhint_nopensnap (N, OFF) | freetype (F)\n\n");
+  std::printf("fonteng_ab_visual (VSNAP GATE): %dx%d  writing crops to '%s/'\n", W, H, outdir.c_str());
+  std::printf("  3 legs: own_full (P, vsnap ON) | own_no_vsnap (N, vsnap OFF) | freetype (F) -- pen-snap ON on both own legs\n\n");
   std::printf("== INK SANITY (pixels with coverage>100 in the shared 3-way crop) ==\n");
   std::printf("  %-10s %5s %5s   %11s %11s %11s\n",
               "quad", "dp", "px", "ink_P", "ink_N", "ink_F");
@@ -537,8 +564,8 @@ int main(int argc, char** argv) {
   for (int d = 0; d < kNDp; ++d) {
     const int dp_tag = dp_tag_of(kDpRatios[d]);
     for (int s = 0; s < kNSizes; ++s) {
-      const glintfx::ElementBox& bp = pensnap[d].box[s];
-      const glintfx::ElementBox& bn = nopensnap[d].box[s];
+      const glintfx::ElementBox& bp = full[d].box[s];
+      const glintfx::ElementBox& bn = novsnap[d].box[s];
       const glintfx::ElementBox& bf = ft[d].box[s];
       if (!bp.found || !bn.found || !bf.found) {
         std::fprintf(stderr,
@@ -551,129 +578,140 @@ int main(int argc, char** argv) {
       const int phys_px = static_cast<int>(std::lround(kSizes[s].dp * kDpRatios[d]));
 
       char pp[512], pnn[512], pf[512];
-      std::snprintf(pp,  sizeof pp,  "%s/own_pensnap_dp%d_s%02d.ppm",   outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pnn, sizeof pnn, "%s/own_nopensnap_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
-      std::snprintf(pf,  sizeof pf,  "%s/ft_dp%d_s%02d.ppm",            outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pp,  sizeof pp,  "%s/own_full_dp%d_s%02d.ppm",     outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pnn, sizeof pnn, "%s/own_no_vsnap_dp%d_s%02d.ppm", outdir.c_str(), dp_tag, kSizes[s].dp);
+      std::snprintf(pf,  sizeof pf,  "%s/ft_dp%d_s%02d.ppm",           outdir.c_str(), dp_tag, kSizes[s].dp);
 
-      const bool ok1 = write_ppm(pp,  pensnap[d].px,   r);
-      const bool ok2 = write_ppm(pnn, nopensnap[d].px, r);
-      const bool ok3 = write_ppm(pf,  ft[d].px,        r);
+      const bool ok1 = write_ppm(pp,  full[d].px,    r);
+      const bool ok2 = write_ppm(pnn, novsnap[d].px, r);
+      const bool ok3 = write_ppm(pf,  ft[d].px,      r);
       if (ok1 && ok2 && ok3) written += 3;
 
       std::printf("  dp%02d_s%02d   %5.1f %5d   %11ld %11ld %11ld\n",
                   dp_tag, kSizes[s].dp, kDpRatios[d], phys_px,
-                  count_ink(pensnap[d].px, r), count_ink(nopensnap[d].px, r), count_ink(ft[d].px, r));
+                  count_ink(full[d].px, r), count_ink(novsnap[d].px, r), count_ink(ft[d].px, r));
     }
   }
 
   // EN: NUMERIC ORACLE -- the gate table, printed for EVERY (dp, body size). Each leg is measured on
-  //     its OWN padded element-box crop, so the column profiles are independent of the others'
-  //     horizontal extent. The two pen-snap-sensitive metrics are vstem_edge (col-to-col gradient
-  //     energy) and col_contrast (peak/valley column modulation): both should RISE own_nopensnap ->
-  //     own_pensnap toward the freetype bar. xedge_ramp/xedge_body are the Y-hint (x-height)
-  //     sentinels -- they must stay ~equal across P and N (pen-snap is horizontal, it must not move
-  //     the vertical x-height edge).
-  // PT: ORÁCULO NUMÉRICO -- a tabela do gate, impressa pra CADA (dp, corpo). Cada perna é medida no
-  //     recorte da PRÓPRIA element-box (com folga), então os perfis de coluna independem da extensão
-  //     horizontal das outras. As duas métricas sensíveis ao pen-snap são vstem_edge (energia do
-  //     gradiente coluna-a-coluna) e col_contrast (modulação pico/vale de coluna): ambas devem SUBIR
-  //     own_nopensnap -> own_pensnap na direção da barra freetype. xedge_ramp/xedge_body são as
-  //     sentinelas do Y-hint (altura-x) -- devem ficar ~iguais entre P e N (pen-snap é horizontal,
-  //     não pode mover a aresta vertical da altura-x).
-  std::printf("\n== ORACLE (per dp, per body; higher vstem_edge/col_contrast == crisper stems) ==\n");
-  std::printf("  %4s %-8s %-20s %9s %11s %12s %9s %9s\n",
+  //     its OWN padded element-box crop, so the row profiles are independent of the others' extent.
+  //     The vsnap gate's PRIMARY metric is the Y-axis xe_body (fraction of the caps->x-height jump
+  //     captured in the FIRST body row) and its companion xe_ramp (transition rows at the x-height
+  //     top edge -- FEWER == crisper): vsnap should PIN xe_body onto the FreeType plateau (~0.84) at
+  //     every body size and FLATTEN its per-size variability (the diagnosis' "0.30<->0.87 dance").
+  //     vstem_edge is the X SENTINEL -- vsnap is a pure vertical transform, so vstem_edge must stay
+  //     ~equal between own_full (P) and own_no_vsnap (N); any drift there would flag an unexpected
+  //     X-axis regression from a Y-only change.
+  // PT: ORACULO NUMERICO -- a tabela do gate, impressa pra CADA (dp, corpo). Cada perna e medida no
+  //     recorte da PROPRIA element-box (com folga), entao os perfis de linha independem da extensao
+  //     das outras. A metrica PRIMARIA do gate de vsnap e o xe_body do eixo Y (fracao do salto
+  //     maiusculas->altura-x capturada na PRIMEIRA linha de corpo) e sua companheira xe_ramp (linhas
+  //     de transicao na aresta superior da altura-x -- MENOS == mais nitida): o vsnap deve PRENDER o
+  //     xe_body no plato do FreeType (~0.84) em todo corpo e ACHATAR sua variabilidade por-tamanho (a
+  //     "danca 0.30<->0.87" do diagnostico). vstem_edge e a SENTINELA X -- vsnap e um transform
+  //     vertical puro, entao vstem_edge deve ficar ~igual entre own_full (P) e own_no_vsnap (N);
+  //     qualquer deriva ali flagraria uma regressao X inesperada de uma mudanca so-Y.
+  std::printf("\n== ORACLE (per dp, per body; PRIMARY=xe_body/xe_ramp (Y); vstem_edge=X sentinel) ==\n");
+  std::printf("  %4s %-8s %-14s %9s %11s %12s %9s %9s\n",
               "dp", "size", "leg", "total_ink", "vstem_edge", "col_contrast", "xe_ramp", "xe_body");
 
-  // EN: keep the per-(dp,leg) vstem_edge series across sizes for the stability pass below.
-  // PT: guarda a série vstem_edge por-(dp,perna) ao longo dos corpos pro passo de estabilidade abaixo.
+  // EN: keep the per-(dp,leg) series across sizes for the stability pass: xe_body is the PRIMARY
+  //     (Y-axis) dancing proxy; vstem_edge is kept as the X sentinel's steadiness cross-check.
+  // PT: guarda as series por-(dp,perna) ao longo dos corpos pro passo de estabilidade: xe_body e o
+  //     proxy de danca PRIMARIO (eixo Y); vstem_edge fica como cross-check de firmeza da sentinela X.
+  double series_xebody[kNDp][3][kNSizes] = {};
   double series_vstem[kNDp][3][kNSizes] = {};
-  double series_contrast[kNDp][3][kNSizes] = {};
   bool   series_ok[kNDp][3][kNSizes] = {};
 
   for (int d = 0; d < kNDp; ++d) {
     const int dp_tag = dp_tag_of(kDpRatios[d]);
     for (int s = 0; s < kNSizes; ++s) {
-      const glintfx::ElementBox& bp = pensnap[d].box[s];
-      const glintfx::ElementBox& bn = nopensnap[d].box[s];
+      const glintfx::ElementBox& bp = full[d].box[s];
+      const glintfx::ElementBox& bn = novsnap[d].box[s];
       const glintfx::ElementBox& bf = ft[d].box[s];
       if (!bp.found || !bn.found || !bf.found) continue;
       const Rect rp = union_rect(bp, bp, /*pad=*/2);
       const Rect rn = union_rect(bn, bn, /*pad=*/2);
       const Rect rf = union_rect(bf, bf, /*pad=*/2);
-      const Oracle op = measure_oracle(pensnap[d].px,   rp);
-      const Oracle on = measure_oracle(nopensnap[d].px, rn);
-      const Oracle of = measure_oracle(ft[d].px,        rf);
+      const Oracle op = measure_oracle(full[d].px,    rp);
+      const Oracle on = measure_oracle(novsnap[d].px, rn);
+      const Oracle of = measure_oracle(ft[d].px,      rf);
 
-      series_vstem[d][0][s] = op.vstem_edge_energy; series_contrast[d][0][s] = op.col_contrast; series_ok[d][0][s] = true;
-      series_vstem[d][1][s] = on.vstem_edge_energy; series_contrast[d][1][s] = on.col_contrast; series_ok[d][1][s] = true;
-      series_vstem[d][2][s] = of.vstem_edge_energy; series_contrast[d][2][s] = of.col_contrast; series_ok[d][2][s] = true;
+      series_xebody[d][0][s] = op.x_edge_body_frac; series_vstem[d][0][s] = op.vstem_edge_energy; series_ok[d][0][s] = true;
+      series_xebody[d][1][s] = on.x_edge_body_frac; series_vstem[d][1][s] = on.vstem_edge_energy; series_ok[d][1][s] = true;
+      series_xebody[d][2][s] = of.x_edge_body_frac; series_vstem[d][2][s] = of.vstem_edge_energy; series_ok[d][2][s] = true;
 
       const struct { const char* nm; const Oracle& o; } rows[] = {
-        { "own_yhint_pensnap",   op },
-        { "own_yhint_nopensnap", on },
-        { "freetype",            of },
+        { "own_full",     op },
+        { "own_no_vsnap", on },
+        { "freetype",     of },
       };
       for (const auto& rr : rows)
-        std::printf("  %3d%c %-8s %-20s %9ld %11.4f %12.3f %9d %9.4f\n",
+        std::printf("  %3d%c %-8s %-14s %9ld %11.4f %12.3f %9d %9.4f\n",
                     dp_tag, ' ', kSizes[s].id, rr.nm,
                     rr.o.total_ink, rr.o.vstem_edge_energy, rr.o.col_contrast,
                     rr.o.x_edge_ramp_rows, rr.o.x_edge_body_frac);
     }
   }
 
-  // EN: STABILITY / DANCING PROXY -- per (dp, leg), the vstem_edge series across sizes 9->13, its
-  //     mean and its ROUGHNESS = mean |v[i+1]-v[i]| (mean absolute step). Without pen-snap the pen's
-  //     sub-pixel phase drifts per glyph and per size, so the metric jitters (higher roughness);
-  //     with pen-snap the phase is pinned to whole pixels at every size, so the series should be
-  //     SMOOTHER (lower roughness). A pen-snap roughness at/below freetype's, and clearly below
-  //     no-pensnap's, is the "stabilises the dance" evidence.
-  // PT: PROXY DE ESTABILIDADE / DANÇA -- por (dp, perna), a série vstem_edge ao longo dos corpos
-  //     9->13, sua média e sua RUGOSIDADE = média |v[i+1]-v[i]| (passo absoluto médio). Sem pen-snap
-  //     a fase sub-pixel do pen deriva por-glyph e por-corpo, então a métrica treme (rugosidade
-  //     maior); com pen-snap a fase é presa a pixels inteiros em todo corpo, então a série deve ser
-  //     MAIS SUAVE (rugosidade menor). Uma rugosidade do pen-snap igual/abaixo da do freetype, e
-  //     claramente abaixo da do no-pensnap, é a evidência de que "estabiliza a dança".
-  // EN: `reversals` = number of direction changes (sign flips of consecutive steps) in the vstem_edge
-  //     series -- the TREND-INDEPENDENT dancing proxy. A steadily-declining series (metric falls
-  //     smoothly as the glyph grows) has 0 reversals; a jittering one flips up/down (the per-glyph
-  //     sub-pixel-phase "dance"). Reported ALONGSIDE mean |step| because the latter is inflated by a
-  //     leg's absolute magnitude + trend slope (a higher, steeper-but-smooth curve has bigger raw
-  //     steps yet ZERO reversals) -- reversals is the honest steadiness signal here.
-  // PT: `reversals` = número de mudanças de direção (trocas de sinal de passos consecutivos) na série
-  //     vstem_edge -- o proxy de dança INDEPENDENTE DO TREND. Uma série que cai suavemente (métrica
-  //     desce à medida que o glyph cresce) tem 0 reversões; uma que treme oscila pra cima/baixo (a
-  //     "dança" da fase sub-pixel por-glyph). Reportado JUNTO do mean |step| porque este é inflado
-  //     pela magnitude absoluta + inclinação do trend da perna (uma curva mais alta e íngreme-mas-
-  //     suave tem passos crus maiores porém ZERO reversões) -- reversals é o sinal honesto de firmeza.
-  std::printf("\n== STABILITY (vstem_edge across sizes 9->13; reversals=direction-flips LOWER==steadier) ==\n");
-  std::printf("  %4s %-20s %8s %10s %10s   %s\n", "dp", "leg", "mean", "roughness", "reversals", "series 9..13");
-  const char* legnm[3] = { "own_yhint_pensnap", "own_yhint_nopensnap", "freetype" };
-  for (int d = 0; d < kNDp; ++d) {
-    const int dp_tag = dp_tag_of(kDpRatios[d]);
-    for (int L = 0; L < 3; ++L) {
-      double sum = 0.0, rough = 0.0; int n = 0, steps = 0; double prev = 0.0; bool have_prev = false;
-      int reversals = 0; double prev_step = 0.0; bool have_step = false;
-      char sbuf[256]; int off = 0;
-      for (int s = 0; s < kNSizes; ++s) {
-        if (!series_ok[d][L][s]) continue;
-        const double v = series_vstem[d][L][s];
-        sum += v; ++n;
-        if (have_prev) {
-          const double step = v - prev;
-          rough += std::fabs(step); ++steps;
-          if (have_step && ((step > 0.0) != (prev_step > 0.0)) && step != 0.0 && prev_step != 0.0)
-            ++reversals;
-          prev_step = step; have_step = true;
+  // EN: STABILITY / DANCING PROXY -- per (dp, leg), a metric's series across sizes 9->13 reduced to:
+  //       mean       = average value over the sizes,
+  //       spread     = max - min over the sizes (THE variability the brief asks for: the amplitude
+  //                    of the "0.30<->0.87 dance"; vsnap should COLLAPSE this on own_full),
+  //       roughness  = mean |v[i+1]-v[i]| (mean absolute step; magnitude-and-trend-sensitive),
+  //       reversals  = number of direction changes (sign flips of consecutive steps) -- the
+  //                    TREND-INDEPENDENT dancing proxy: a steadily-varying series has 0, a jittering
+  //                    one flips up/down each step.
+  //     Run TWICE: first on xe_body (the PRIMARY Y-axis metric -- own_full should match FreeType's
+  //     flat ~0.84 plateau with a tiny spread, own_no_vsnap should show the large dancing spread);
+  //     then on vstem_edge (the X SENTINEL -- own_full and own_no_vsnap should be ~identical, since
+  //     vsnap is vertical and must not touch the stems).
+  // PT: PROXY DE ESTABILIDADE / DANCA -- por (dp, perna), a serie de uma metrica ao longo dos corpos
+  //     9->13 reduzida a: mean (media), spread (max-min, A variabilidade que o brief pede: a amplitude
+  //     da "danca 0.30<->0.87"; vsnap deve COLAPSAR isso no own_full), roughness (media |v[i+1]-v[i]|)
+  //     e reversals (mudancas de direcao, proxy de danca INDEPENDENTE do trend). Roda DUAS vezes:
+  //     primeiro no xe_body (metrica PRIMARIA do eixo Y -- own_full deve empatar o plato plano ~0.84
+  //     do FreeType com spread minusculo, own_no_vsnap deve mostrar o grande spread da danca); depois
+  //     no vstem_edge (a SENTINELA X -- own_full e own_no_vsnap devem ser ~identicos, ja que vsnap e
+  //     vertical e nao pode tocar as hastes).
+  const char* legnm[3] = { "own_full", "own_no_vsnap", "freetype" };
+  auto stability_pass = [&](const char* title, const double series[kNDp][3][kNSizes]) {
+    std::printf("\n== STABILITY: %s (across sizes 9..13; spread=max-min LOWER==steadier) ==\n", title);
+    std::printf("  %4s %-14s %8s %8s %10s %10s   %s\n",
+                "dp", "leg", "mean", "spread", "roughness", "reversals", "series 9..13");
+    for (int d = 0; d < kNDp; ++d) {
+      const int dp_tag = dp_tag_of(kDpRatios[d]);
+      for (int L = 0; L < 3; ++L) {
+        double sum = 0.0, rough = 0.0; int n = 0, steps = 0; double prev = 0.0; bool have_prev = false;
+        double vmin = 0.0, vmax = 0.0;
+        int reversals = 0; double prev_step = 0.0; bool have_step = false;
+        char sbuf[256]; int off = 0;
+        for (int s = 0; s < kNSizes; ++s) {
+          if (!series_ok[d][L][s]) continue;
+          const double v = series[d][L][s];
+          if (n == 0) { vmin = vmax = v; } else { vmin = std::min(vmin, v); vmax = std::max(vmax, v); }
+          sum += v; ++n;
+          if (have_prev) {
+            const double step = v - prev;
+            rough += std::fabs(step); ++steps;
+            if (have_step && ((step > 0.0) != (prev_step > 0.0)) && step != 0.0 && prev_step != 0.0)
+              ++reversals;
+            prev_step = step; have_step = true;
+          }
+          prev = v; have_prev = true;
+          off += std::snprintf(sbuf + off, sizeof(sbuf) - off, "%s%.4f",
+                               (s == 0 ? "" : " "), v);
         }
-        prev = v; have_prev = true;
-        off += std::snprintf(sbuf + off, sizeof(sbuf) - off, "%s%.4f",
-                             (s == 0 ? "" : " "), v);
+        const double mean = (n > 0) ? sum / n : 0.0;
+        const double spread = (n > 0) ? (vmax - vmin) : 0.0;
+        const double roughness = (steps > 0) ? rough / steps : 0.0;
+        std::printf("  %3d  %-14s %8.4f %8.4f %10.4f %10d   %s\n",
+                    dp_tag, legnm[L], mean, spread, roughness, reversals, sbuf);
       }
-      const double mean = (n > 0) ? sum / n : 0.0;
-      const double roughness = (steps > 0) ? rough / steps : 0.0;
-      std::printf("  %3d  %-20s %8.4f %10.4f %10d   %s\n", dp_tag, legnm[L], mean, roughness, reversals, sbuf);
     }
-  }
+  };
+  stability_pass("xe_body (PRIMARY, Y-axis x-height crispness)", series_xebody);
+  stability_pass("vstem_edge (X SENTINEL, must not move P vs N)", series_vstem);
 
   std::printf("\nfonteng_ab_visual: wrote %d PPM(s), %d line(s) with a missing box\n",
               written, missing);

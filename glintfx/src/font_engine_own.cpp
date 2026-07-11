@@ -110,6 +110,28 @@ bool& own_font_engine_pensnap_bypass() {
   return bypass;
 }
 
+// EN: VSNAP BYPASS storage (L1.20-FONTFLIP, FT-F4). See the long doc-comment on this function's
+//     declaration in font_engine_own.hpp for the full contract. Same function-local-static pattern
+//     as own_font_engine_pensnap_bypass() above (default `false` on first use, no static-init-order
+//     dependency, reference returned so a test can flip it). Default `false` == "apply vsnap" (snap
+//     the glyph's vertical origin/offset -- derived from fy_max -- to a whole pixel so the Y-hinted
+//     edge lands on an integer atlas row and the quad carries a single size-independent vertical
+//     phase), so a normal ON build ships WITH vertical snapping; a test flips it to `true` to measure
+//     the raw fractional vertical origin/offset (the "own, no vsnap" A/B leg).
+// PT: Armazenamento do BYPASS do VSNAP (L1.20-FONTFLIP, FT-F4). Ver o doc-comment longo na
+//     declaração desta função em font_engine_own.hpp pro contrato completo. Mesmo padrão
+//     static-local-de-função do own_font_engine_pensnap_bypass() acima (default `false` no primeiro
+//     uso, sem dependência de ordem de init estática, referência retornada pra um teste poder
+//     virá-lo). Default `false` == "aplica vsnap" (snapa a origem/offset vertical do glyph --
+//     derivada de fy_max -- a um pixel inteiro pra a aresta hintada em Y pousar numa row inteira do
+//     atlas e o quad carregar uma fase vertical única independente de tamanho), então um build ON
+//     normal já sai COM snapping vertical; um teste o vira pra `true` pra medir a origem/offset
+//     vertical fracionária crua (a perna A/B "próprio, sem vsnap").
+bool& own_font_engine_vsnap_bypass() {
+  static bool bypass = false;
+  return bypass;
+}
+
 namespace {
 
 // EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
@@ -549,6 +571,27 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   //     doc-comment do hook no header.
   const bool pen_snap = !own_font_engine_pensnap_bypass();
 
+  // EN: (L1.20-FONTFLIP, FT-F4) VSNAP flag, read ONCE for this bake -- when true (the DEFAULT,
+  //     own_font_engine_vsnap_bypass()==false), the rasteriser origin (origin_y_26_6) and the quad's
+  //     vertical placement (offset_y), both derived from the fractional fy_max below, are snapped to
+  //     a whole pixel: origin_y_26_6 becomes an exact multiple of 64 so the Y-hinted edge lands on an
+  //     integer atlas row (no GL_LINEAR smear of the fitted edge back into the texture), and offset_y
+  //     becomes an integer distance off the baseline (one size-independent vertical phase). This is
+  //     the vertical twin of pen-snap on the X axis; it leaves the X axis untouched (see the two use
+  //     sites below). Bypassed == the raw fractional vertical origin/offset. Read from the same
+  //     process-global hook the A/B leg flips before the first bake. See the hook's header doc-comment.
+  // PT: (L1.20-FONTFLIP, FT-F4) Flag do VSNAP, lido UMA vez pra este bake -- quando true (o DEFAULT,
+  //     own_font_engine_vsnap_bypass()==false), a origem do rasterizador (origin_y_26_6) e o offset de
+  //     posicionamento vertical do quad (offset_y), ambos derivados do fy_max fracionário abaixo, são
+  //     snapados a um pixel inteiro: origin_y_26_6 vira múltiplo exato de 64 pra a aresta hintada em Y
+  //     pousar numa row inteira do atlas (sem borrão GL_LINEAR da aresta fitada de volta na textura), e
+  //     offset_y vira uma distância inteira da baseline (uma fase vertical única, independente de
+  //     tamanho). É o gêmeo vertical do pen-snap no eixo X; deixa o eixo X intocado (ver os dois
+  //     pontos de uso abaixo). Bypassado == a origem/offset vertical fracionária crua. Lido do mesmo
+  //     hook process-global que a perna A/B vira antes do primeiro bake. Ver o doc-comment do hook no
+  //     header.
+  const bool v_snap = !own_font_engine_vsnap_bypass();
+
   // EN: FontMetrics derivation from head/hhea (font units) scaled to this instance's pixel
   //     size. `descender` is negative in TrueType's own convention (below the baseline);
   //     FontMetrics::descent wants a POSITIVE distance below the baseline, hence the negation.
@@ -720,7 +763,24 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
         const int32_t scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
         const int32_t scale_den = (int32_t)sf.units_per_em;
         const int32_t origin_x_26_6 = (int32_t)std::lround(((double)-fx_min + kPad) * 64.0);
-        const int32_t origin_y_26_6 = (int32_t)std::lround(((double)fy_max + kPad) * 64.0);
+        // EN: (L1.20-FONTFLIP, FT-F4) vsnap: place the glyph's y_max on a WHOLE atlas row. Rounding
+        //     fy_max first, THEN scaling by 64 (multiply, not lround-of-a-product), forces
+        //     origin_y_26_6 to an exact multiple of 64 -- so the edge that glx_hint_outline() already
+        //     grid-fitted to an integer device pixel lands on an integer bitmap row, instead of a
+        //     fractional one GL_LINEAR would smear back into the texture. The X twin (origin_x_26_6
+        //     above) is deliberately NOT changed -- vsnap is Y-only. kPad added as an integer keeps the
+        //     result a multiple of 64. Bypassed (own_font_engine_vsnap_bypass()==true) == the raw
+        //     fractional origin (round the whole (fy_max+kPad)*64 product, as before).
+        // PT: (L1.20-FONTFLIP, FT-F4) vsnap: põe o y_max do glyph numa row INTEIRA do atlas. Arredondar
+        //     fy_max primeiro, DEPOIS escalar por 64 (multiplicar, não lround-de-um-produto), força
+        //     origin_y_26_6 a um múltiplo exato de 64 -- então a aresta que o glx_hint_outline() já
+        //     grid-fitou a um pixel device inteiro pousa numa row inteira do bitmap, em vez de uma
+        //     fracionária que o GL_LINEAR borraria de volta na textura. O gêmeo X (origin_x_26_6 acima)
+        //     NÃO é mudado de propósito -- vsnap é só-Y. O kPad somado como inteiro mantém o resultado
+        //     múltiplo de 64. Bypassado (own_font_engine_vsnap_bypass()==true) == a origem fracionária
+        //     crua (arredonda o produto inteiro (fy_max+kPad)*64, como antes).
+        const int32_t origin_y_26_6 = v_snap ? ((int32_t)std::lround((double)fy_max) + kPad) * 64
+                                             : (int32_t)std::lround(((double)fy_max + kPad) * 64.0);
 
         std::vector<uint8_t> bitmap((size_t)gw * (size_t)gh, 0);
         const size_t scratch_n = glx_raster_scratch_floats(gw, gh);
@@ -759,7 +819,24 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
             //     glyph (grid-fit de haste no eixo X é uma sub-fase futura, à parte). Bypassado == o
             //     bearing fracionário cru.
             b.offset_x = (pen_snap ? (float)std::lround((double)fx_min) : fx_min) - kPad;
-            b.offset_y = -(fy_max + kPad);
+            // EN: (L1.20-FONTFLIP, FT-F4) vsnap: quad top offset from the baseline snapped to a whole
+            //     pixel, the vertical twin of the pen-snapped offset_x above. With fy_max rounded, the
+            //     quad's top edge is an integer distance above the baseline (`-position.y` in
+            //     GenerateString shares the same phase for every glyph), so the Y-hinted rows blit to
+            //     integer screen rows rather than a per-size fractional phase that would re-smear them.
+            //     Rounding cancels algebraically with the rounded origin_y_26_6 above (both derived
+            //     from the same rounded fy_max), preserving the origin/offset cancellation the bake
+            //     relies on. Bypassed == the raw fractional offset. X axis (offset_x) untouched here.
+            // PT: (L1.20-FONTFLIP, FT-F4) vsnap: offset do topo do quad em relação à baseline snapado a
+            //     um pixel inteiro, o gêmeo vertical do offset_x pen-snapado acima. Com fy_max
+            //     arredondado, a aresta de topo do quad fica a uma distância inteira acima da baseline
+            //     (o `-position.y` no GenerateString compartilha a mesma fase pra todo glyph), então as
+            //     rows hintadas em Y blittam pra rows inteiras de tela em vez de uma fase fracionária
+            //     por-tamanho que as borraria de novo. O arredondamento cancela algebricamente com o
+            //     origin_y_26_6 arredondado acima (ambos derivados do mesmo fy_max arredondado),
+            //     preservando o cancelamento origem/offset de que o bake depende. Bypassado == o offset
+            //     fracionário cru. Eixo X (offset_x) intocado aqui.
+            b.offset_y = v_snap ? -((float)std::lround((double)fy_max) + kPad) : -(fy_max + kPad);
             if (cp == 0x78) inst.metrics.x_height = fy_max - fy_min; // 'x' baked -- refine x_height.
             // EN: U+2026 rasterised for this face -- RmlUi may use the native ellipsis glyph.
             // PT: U+2026 rasterizou pra esta face -- o RmlUi pode usar o glyph nativo de reticências.

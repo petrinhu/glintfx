@@ -619,6 +619,61 @@ bool& own_font_engine_darken_enable();
 //     estática, uso só em teste single-thread).
 bool& own_font_engine_pensnap_bypass();
 
+// EN: VSNAP BYPASS HOOK (L1.20-FONTFLIP, FT-F4) -- a fifth src-internal, process-global toggle,
+//     sibling to own_font_engine_pensnap_bypass() above and orthogonal to all four: it does NOT
+//     choose the engine (ab_bypass), nor whether Y grid-fitting runs (hint_bypass), nor whether the
+//     coverage curve darkens (darken_enable), nor whether the HORIZONTAL pen is snapped (pensnap);
+//     it chooses whether the OWN engine snaps the glyph's VERTICAL origin/offset to a whole pixel
+//     ("vsnap"). Read once PER GLYPH in BakeFaceInstance() (font_engine_own.cpp), where the
+//     rasteriser origin_y_26_6 and the quad's vertical placement offset_y are both derived from
+//     `fy_max = outline.y_max * scale` (a fractional font-unit->pixel value). WHY it matters: the Y
+//     grid-fitter glx_hint_outline() (Camada 0, SOV-HINT) already aligns each glyph's horizontal
+//     edges (baseline / x-height / cap-height) to whole device pixels IN the outline -- but that
+//     work is thrown away downstream if origin_y_26_6 is NOT a multiple of 64, because the
+//     already-fitted edge then lands on a FRACTIONAL atlas row and GL_LINEAR smears it back into
+//     the texture; and offset_y, if fractional, gives the quad a per-size vertical screen phase
+//     that dances as the body size changes. Snapping fy_max to a whole pixel at both points (round
+//     fy_max, THEN add/subtract the integer kPad) makes origin_y_26_6 an exact multiple of 64 (the
+//     hinted edge lands on an integer atlas row) and puts the quad on a single, size-independent
+//     vertical phase off the baseline -- exactly mirroring the pen-snap fix on the X axis. The kPad
+//     (1px) absorbs the <=0.5px extremal shift a snap can introduce, so nothing clips (same rationale
+//     as the hint). This is the SHIPPING behaviour (ON by default -- the correct model, matching
+//     FreeType which snaps its origin/bearing to integers); a test flips it to `true` to measure the
+//     raw fractional vertical origin/offset (the "own, no vsnap" A/B leg). The width invariance
+//     (GetStringWidth()==the mesh's own summed extent) is UNAFFECTED -- vsnap is a pure Y-axis
+//     quantisation, it touches neither advance nor bearing nor any horizontal metric. Only
+//     meaningful while the own engine is installed (ab_bypass==false) -- inert with FreeType (which
+//     does its own integer origin rounding). Returns a reference to a function-local `static bool`
+//     (no static-init-order concern, single-threaded test use).
+// PT: HOOK DE BYPASS DO VSNAP (L1.20-FONTFLIP, FT-F4) -- um quinto toggle src-interno,
+//     process-global, irmão do own_font_engine_pensnap_bypass() acima e ortogonal aos quatro: ele
+//     NÃO escolhe o motor (ab_bypass), nem se o grid-fitting Y roda (hint_bypass), nem se a curva de
+//     cobertura escurece (darken_enable), nem se o pen HORIZONTAL é snapado (pensnap); escolhe se o
+//     motor PRÓPRIO snapa a origem/offset VERTICAL do glyph a um pixel inteiro ("vsnap"). Lido uma
+//     vez POR GLYPH no BakeFaceInstance() (font_engine_own.cpp), onde a origem do rasterizador
+//     origin_y_26_6 e o offset de posicionamento vertical do quad offset_y são ambos derivados de
+//     `fy_max = outline.y_max * scale` (um valor fracionário unidade-de-fonte->pixel). POR QUE
+//     importa: o grid-fitter Y glx_hint_outline() (Camada 0, SOV-HINT) já alinha as arestas
+//     horizontais de cada glyph (baseline / altura-x / altura-de-maiúscula) a pixels device inteiros
+//     DENTRO do outline -- mas esse trabalho é jogado fora rio-abaixo se origin_y_26_6 NÃO for
+//     múltiplo de 64, porque a aresta já fitada pousa então numa row FRACIONÁRIA do atlas e o
+//     GL_LINEAR a borra de volta na textura; e o offset_y, se fracionário, dá ao quad uma fase de
+//     tela vertical por-tamanho que dança conforme o corpo muda. Snapar fy_max a um pixel inteiro nos
+//     dois pontos (arredondar fy_max, DEPOIS somar/subtrair o kPad inteiro) faz origin_y_26_6 um
+//     múltiplo exato de 64 (a aresta hintada pousa numa row inteira do atlas) e põe o quad numa fase
+//     vertical única, independente de tamanho, a partir da baseline -- espelhando exatamente o
+//     pen-snap no eixo X. O kPad (1px) absorve o deslocamento extremal de <=0.5px que um snap pode
+//     introduzir, então nada corta (mesmo racional do hint). É o comportamento de RELEASE (LIGADO por
+//     padrão -- o modelo correto, igual ao FreeType que snapa sua origem/bearing a inteiros); um
+//     teste o vira pra `true` pra medir a origem/offset vertical fracionária crua (a perna A/B
+//     "próprio, sem vsnap"). A invariância de largura (GetStringWidth()==a própria extensão somada da
+//     mesh) NÃO é afetada -- vsnap é uma quantização de eixo Y pura, não toca advance nem bearing nem
+//     nenhuma métrica horizontal. Só faz sentido enquanto o motor próprio está instalado
+//     (ab_bypass==false) -- inerte com o FreeType (que faz seu próprio arredondamento inteiro de
+//     origem). Retorna uma referência a um `static bool` local de função (sem preocupação de ordem de
+//     init estática, uso só em teste single-thread).
+bool& own_font_engine_vsnap_bypass();
+
 } // namespace glintfx
 
 #endif // GLINTFX_OWN_FONT_ENGINE

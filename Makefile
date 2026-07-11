@@ -155,6 +155,19 @@ $(BIN)/test_sfnt: $(OBJ)/test_sfnt.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(B
 #     glx_rasterize_outline pra prova de winding-não-zero/flattening-de-curva do TST-RAST, ver o
 #     cabeçalho próprio do tests/test_raster.c) -- mesma nota de precedência
 #     regra-explícita-sobrepõe-regra-de-padrão do próprio comentário do test_sfnt acima.
+# EN: SOV-HINT (L1.20-FONTFLIP / FT-F4) test_hint needs the SAME embedded Open Sans fixture object
+#     as test_sfnt/test_raster above -- test_real_font_O feeds the real 'O' glyph outline through
+#     glx_hint_outline for the robustness/idempotency proof on genuine data (see tests/test_hint.c's
+#     own header) -- same explicit-rule-overrides-pattern-rule precedence note as test_raster's own
+#     comment above.
+# PT: O test_hint do SOV-HINT (L1.20-FONTFLIP / FT-F4) precisa do MESMO objeto de fixture Open Sans
+#     embutido que o test_sfnt/test_raster acima -- o test_real_font_O alimenta o outline do glyph
+#     'O' real pro glx_hint_outline pra prova de robustez/idempotência em dado genuíno (ver o
+#     cabeçalho próprio do tests/test_hint.c) -- mesma nota de precedência
+#     regra-explícita-sobrepõe-regra-de-padrão do próprio comentário do test_raster acima.
+$(BIN)/test_hint: $(OBJ)/test_hint.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(BIN)
+	$(LD) $(LDFLAGS) -o $@ $^
+
 $(BIN)/test_raster: $(OBJ)/test_raster.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o | $(BIN)
 	$(LD) $(LDFLAGS) -o $@ $^
 

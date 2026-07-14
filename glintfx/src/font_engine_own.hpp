@@ -27,26 +27,32 @@
 //
 //     SCOPE (v1, MVP -- an autonomous, documented scope decision made while implementing this
 //     ticket, not a request for a design review): a font FACE INSTANCE (one family/style/weight/
-//     pixel-size combination) BAKES its ENTIRE glyph atlas EAGERLY, ONCE, the first time
-//     GetFontFaceHandle() resolves it -- a FIXED codepoint set (printable ASCII U+0020..U+007E,
-//     the full printable Latin-1 Supplement U+00A0..U+00FF -- which covers Western-European accents
-//     incl. the pt-br set á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + uppercase, the previously-missing î, and
-//     the Latin-1 symbols -- plus common typographic punctuation em/en-dash, curved quotes,
-//     ellipsis and bullet; widened for general-purpose distribution in sub-phase 2.1, see
-//     BuildBakeSet() in the .cpp for the exact bands). There is NO lazy/incremental atlas growth
-//     after that: a codepoint outside the baked set (or one the face itself lacks -- gid 0/.notdef,
-//     skipped, never baked as a tofu box) silently has no glyph (advance 0, no quad -- the string
-//     still measures/renders, just missing that one character). This was chosen over
-//     lazy-bake-on-demand specifically because GetFontFaceHandle() (where a face instance is
-//     first resolved) is NOT passed a Rml::RenderManager& (only GenerateString() is) -- eager
-//     CPU-side baking needs no RenderManager at all, so it happens synchronously in
-//     GetFontFaceHandle(); only the GPU texture upload (MakeCallbackTexture(), which DOES need a
-//     RenderManager&) is deferred to the first GenerateString() call for that handle, and is
-//     never repeated after that (GetVersion() is therefore a constant `1` for a valid handle --
-//     the atlas for a given handle never changes after its first bake, so there is nothing to
-//     invalidate RmlUi's cached geometry over). Font effects (PrepareFontEffects) are a pure
-//     no-op returning handle `0` -- text-shadow/outline-via-font-effect is out of scope for this
-//     ticket (RmlUi tolerates an effects handle of `0`, text still renders without the effect).
+//     pixel-size combination) BAKES a FIXED, EAGER "warm set" the first time GetFontFaceHandle()
+//     resolves it -- printable ASCII U+0020..U+007E, the full printable Latin-1 Supplement
+//     U+00A0..U+00FF -- which covers Western-European accents incl. the pt-br set
+//     á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + uppercase, the previously-missing î, and the Latin-1 symbols --
+//     plus common typographic punctuation em/en-dash, curved quotes, ellipsis and bullet; widened
+//     for general-purpose distribution in sub-phase 2.1, see BuildBakeSet() in the .cpp for the
+//     exact bands. (L1.20-FONTFLIP sub-phase 2B amadurecimento) The warm set is no longer the ONLY
+//     bake: EnsureGlyphs() (.cpp) runs at the top of BOTH GetStringWidth() and GenerateString(),
+//     ADDITIVELY top-up-baking any codepoint missing from a given instance's atlas the first time it
+//     actually appears in a string -- via the same RasterizeGlyph() code path (identical pen-snap/
+//     vsnap/Y-hint/darken treatment) the warm set uses, packed onto a PERSISTENT shelf cursor that
+//     picks up where the warm set left off, growing the CPU-side atlas (amortized doubling,
+//     GrowAtlas()) if it no longer fits. A codepoint the FACE itself lacks (gid 0/.notdef) is still
+//     never baked as a tofu box -- it is NEGATIVE-CACHED (a `baked=false` GlyphInfo, so it is never
+//     re-attempted) and silently has no glyph (advance 0, no quad -- the string still
+//     measures/renders, just missing that one character). This still avoids needing a
+//     Rml::RenderManager& in GetFontFaceHandle() (which is not passed one -- only GenerateString()
+//     is): EnsureGlyphs() only ever touches CPU-side state (atlas_rgba/glyphs/the shelf cursor); the
+//     GPU texture upload (MakeCallbackTexture(), which DOES need a RenderManager&) still happens only
+//     in GenerateString(), which now ALSO re-uploads (rather than uploading once and never again)
+//     whenever inst.atlas_dirty is set -- GetVersion() therefore returns a per-instance `version`
+//     counter (starts at 1, bumped by EnsureGlyphs() whenever it top-up-bakes >=1 real new glyph)
+//     instead of a hardcoded constant, RmlUi's own standard "regenerate cached text geometry" signal.
+//     Font effects (PrepareFontEffects) are a pure no-op returning handle `0` -- text-shadow/
+//     outline-via-font-effect is out of scope for this ticket (RmlUi tolerates an effects handle of
+//     `0`, text still renders without the effect).
 //     Kerning (L1.19-FONTENG/L1.20-FONTFLIP amadurecimento): APPLIED between every consecutive
 //     baked-glyph pair, via SOV-SFNT's `glx_sfnt_kern` (classic `kern` table, format-0 horizontal
 //     subtable only -- see include/core/sfnt.h's own SCOPE note) -- IterateGlyphs() below folds
@@ -90,28 +96,32 @@
 //
 //     ESCOPO (v1, MVP -- uma decisão de escopo autônoma e documentada tomada ao implementar esta
 //     tarefa, não um pedido de revisão de design): uma INSTÂNCIA de face de fonte (uma combinação
-//     família/estilo/peso/tamanho-em-px) empacota o atlas de glyph INTEIRO AVIDAMENTE, UMA VEZ, na
-//     primeira vez que GetFontFaceHandle() a resolve -- um conjunto FIXO de codepoint (ASCII
-//     imprimível U+0020..U+007E, o Latin-1 Supplement imprimível completo U+00A0..U+00FF -- que
-//     cobre acentos da Europa Ocidental incl. o conjunto pt-br á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ +
-//     maiúsculas, o î que faltava, e os símbolos Latin-1 -- mais pontuação tipográfica comum
-//     em/en-dash, aspas curvas, reticências e bullet; ampliado pra distribuição geral na sub-fase
-//     2.1, ver BuildBakeSet() no .cpp pras faixas exatas). NÃO há crescimento de atlas preguiçoso/
-//     incremental depois disso: um codepoint fora do conjunto empacotado (ou um que a própria face
-//     não tenha -- gid 0/.notdef, pulado, nunca empacotado como caixa tofu) silenciosamente não tem
-//     glyph (avanço 0, sem quad -- a string ainda mede/renderiza, só falta aquele caractere). Isso
-//     foi escolhido em vez de empacotamento
-//     preguiçoso-sob-demanda especificamente porque GetFontFaceHandle() (onde uma instância de
-//     face é resolvida pela 1ª vez) NÃO recebe um Rml::RenderManager& (só GenerateString()
-//     recebe) -- o empacotamento CPU-side ávido não precisa de RenderManager nenhum, então
-//     acontece sincronamente em GetFontFaceHandle(); só o upload de textura GPU
-//     (MakeCallbackTexture(), que PRECISA de um RenderManager&) é adiado pra 1ª chamada de
-//     GenerateString() daquele handle, e nunca é repetido depois disso (GetVersion() portanto é
-//     uma constante `1` pra um handle válido -- o atlas de um dado handle nunca muda depois do
-//     1º empacotamento, então não há nada pra invalidar na geometria cacheada do RmlUi). Efeitos
-//     de fonte (PrepareFontEffects) são um no-op puro retornando handle `0` -- text-shadow/
-//     contorno via efeito-de-fonte está fora de escopo desta tarefa (o RmlUi tolera um handle de
-//     efeito `0`, o texto ainda renderiza sem o efeito). Kerning (amadurecimento L1.19-FONTENG/
+//     família/estilo/peso/tamanho-em-px) empacota um "warm set" FIXO e ÁVIDO na primeira vez que
+//     GetFontFaceHandle() a resolve -- ASCII imprimível U+0020..U+007E, o Latin-1 Supplement
+//     imprimível completo U+00A0..U+00FF -- que cobre acentos da Europa Ocidental incl. o conjunto
+//     pt-br á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + maiúsculas, o î que faltava, e os símbolos Latin-1 -- mais
+//     pontuação tipográfica comum em/en-dash, aspas curvas, reticências e bullet; ampliado pra
+//     distribuição geral na sub-fase 2.1, ver BuildBakeSet() no .cpp pras faixas exatas.
+//     (amadurecimento sub-fase 2B do L1.20-FONTFLIP) O warm set deixou de ser o ÚNICO bake:
+//     EnsureGlyphs() (.cpp) roda no topo TANTO do GetStringWidth() QUANTO do GenerateString(),
+//     empacotando ADITIVAMENTE por-demanda qualquer codepoint ausente do atlas de uma dada instância
+//     na 1ª vez que ele de fato aparece numa string -- via o mesmo caminho de código RasterizeGlyph()
+//     (tratamento pen-snap/vsnap/Y-hint/darken idêntico) que o warm set usa, empacotado num cursor de
+//     prateleira PERSISTENTE que continua de onde o warm set parou, crescendo o atlas lado-CPU
+//     (dobra amortizada, GrowAtlas()) se não couber mais. Um codepoint que a própria FACE não tenha
+//     (gid 0/.notdef) ainda nunca é empacotado como caixa tofu -- é CACHE-NEGATIVADO (um GlyphInfo
+//     `baked=false`, pra nunca ser reatentado) e silenciosamente não tem glyph (avanço 0, sem quad --
+//     a string ainda mede/renderiza, só falta aquele caractere). Isso continua dispensando um
+//     Rml::RenderManager& em GetFontFaceHandle() (que não recebe um -- só GenerateString() recebe):
+//     EnsureGlyphs() só toca estado lado-CPU (atlas_rgba/glyphs/o cursor de prateleira); o upload de
+//     textura GPU (MakeCallbackTexture(), que PRECISA de um RenderManager&) ainda só acontece no
+//     GenerateString(), que agora TAMBÉM reenvia (em vez de enviar uma vez e nunca mais) sempre que
+//     inst.atlas_dirty está setado -- GetVersion() portanto devolve um contador `version` por-instância
+//     (começa em 1, incrementado pelo EnsureGlyphs() toda vez que empacota-por-demanda >=1 glyph novo
+//     real) em vez de uma constante fixa, o próprio sinal padrão "regenere a geometria de texto
+//     cacheada" do RmlUi. Efeitos de fonte (PrepareFontEffects) são um no-op puro retornando handle
+//     `0` -- text-shadow/contorno via efeito-de-fonte está fora de escopo desta tarefa (o RmlUi tolera
+//     um handle de efeito `0`, o texto ainda renderiza sem o efeito). Kerning (amadurecimento L1.19-FONTENG/
 //     L1.20-FONTFLIP): APLICADO entre todo par consecutivo de glyph empacotado, via
 //     `glx_sfnt_kern` do SOV-SFNT (tabela `kern` clássica, só subtable formato-0 horizontal --
 //     ver a própria nota de ESCOPO do include/core/sfnt.h) -- o IterateGlyphs() abaixo dobra o
@@ -312,15 +322,25 @@ private:
     glx_hint_zones hint_zones{};
   };
 
-  // EN: One BAKED glyph within a FaceInstance's atlas. `baked == false` (the default, used as
-  //     the "not in this ticket's fixed bake set" sentinel by FindGlyph()) means the codepoint
-  //     has no atlas entry at all -- distinct from a real, baked-but-EMPTY glyph (space: `baked
-  //     == true`, `w == h == 0`, a valid non-zero advance, deliberately no quad emitted).
-  // PT: Um glyph EMPACOTADO dentro do atlas de uma FaceInstance. `baked == false` (o padrão,
-  //     usado como sentinela "fora do conjunto fixo empacotado desta tarefa" por FindGlyph())
-  //     significa que o codepoint não tem entrada de atlas nenhuma -- distinto de um glyph real,
-  //     empacotado-mas-VAZIO (espaço: `baked == true`, `w == h == 0`, um avanço não-zero válido,
-  //     deliberadamente sem quad emitido).
+  // EN: One BAKED glyph within a FaceInstance's atlas. `baked == false` means the codepoint has
+  //     no atlas entry -- distinct from a real, baked-but-EMPTY glyph (space: `baked == true`,
+  //     `w == h == 0`, a valid non-zero advance, deliberately no quad emitted). Sentinel used by
+  //     FindGlyph() to return nullptr. (L1.20-FONTFLIP sub-phase 2B) `inst.glyphs` now doubles as
+  //     the NEGATIVE CACHE: EnsureGlyphs()/BakeGlyph() (.cpp) insert a `baked == false` entry for
+  //     any codepoint this face genuinely lacks (gid 0, or an hmtx lookup failure) so it is never
+  //     re-attempted -- a KEY present in the map, whichever way `baked` reads, means "already
+  //     tried"; a codepoint not yet a key means "not yet tried" (EnsureGlyphs()'s own trigger to
+  //     call BakeGlyph()). Before sub-phase 2B every key came from the eager warm-set bake only.
+  // PT: Um glyph EMPACOTADO dentro do atlas de uma FaceInstance. `baked == false` significa que o
+  //     codepoint não tem entrada de atlas -- distinto de um glyph real, empacotado-mas-VAZIO
+  //     (espaço: `baked == true`, `w == h == 0`, um avanço não-zero válido, deliberadamente sem
+  //     quad emitido). Sentinela usada pelo FindGlyph() pra devolver nullptr. (sub-fase 2B do
+  //     L1.20-FONTFLIP) `inst.glyphs` agora também é o CACHE NEGATIVO: EnsureGlyphs()/BakeGlyph()
+  //     (.cpp) inserem uma entrada `baked == false` pra todo codepoint que esta face de fato não
+  //     tem (gid 0, ou uma falha de lookup no hmtx) pra nunca ser reatentado -- uma CHAVE presente
+  //     no mapa, seja qual for o valor de `baked`, significa "já tentado"; um codepoint ainda sem
+  //     chave significa "ainda não tentado" (o próprio gatilho do EnsureGlyphs() pra chamar
+  //     BakeGlyph()). Antes da sub-fase 2B toda chave vinha só do bake ávido do warm set.
   struct GlyphInfo {
     bool baked = false;
     // EN: The glyph id SOV-SFNT resolved for this codepoint at bake time (glx_sfnt_glyph_id()
@@ -364,6 +384,64 @@ private:
     int atlas_h = 0;
     bool texture_created = false;
     Rml::CallbackTexture texture;
+    // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) LAZY TOP-UP state -- see EnsureGlyphs()/BakeGlyph()
+    //     in the .cpp for the full mechanism. pen_x/pen_y/shelf_h is the PERSISTENT shelf-pack
+    //     cursor (seeded from wherever BakeFaceInstance()'s own eager warm-set pack left it, then
+    //     advanced by every subsequent BakeGlyph()) -- a lazily-baked glyph is APPENDED after the
+    //     warm set, never re-packed from scratch. version starts at 1 (a valid handle's first,
+    //     warm-set-only atlas) and is bumped by EnsureGlyphs() every time it bakes >=1 REAL new
+    //     glyph, so GetVersion() gives RmlUi's text-geometry cache the standard "regenerate me"
+    //     signal. atlas_dirty mirrors that same event for GenerateString()'s own GPU-texture
+    //     re-create decision (CPU-side atlas_rgba changed since the last upload -- grown and/or
+    //     top-blitted-into). cov_lut is the darken-curve LUT BakeFaceInstance() already built once
+    //     for the warm set (BuildCoverageLut()) -- hoisted here from a BakeFaceInstance()-local
+    //     array so BakeGlyph() can reuse the IDENTICAL per-instance curve for a lazily-baked
+    //     glyph's blit, instead of recomputing (or worse, drifting from) it.
+    // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Estado do TOP-UP PREGUIÇOSO -- ver EnsureGlyphs()/
+    //     BakeGlyph() no .cpp pro mecanismo completo. pen_x/pen_y/shelf_h é o cursor PERSISTENTE
+    //     de empacotamento em prateleiras (semeado de onde o próprio empacotamento ávido do warm
+    //     set do BakeFaceInstance() o deixou, depois avançado por todo BakeGlyph() seguinte) -- um
+    //     glyph empacotado preguiçosamente é ANEXADO depois do warm set, nunca reempacotado do
+    //     zero. version começa em 1 (o atlas só-warm-set do 1º handle válido) e é incrementado pelo
+    //     EnsureGlyphs() toda vez que empacota >=1 glyph novo REAL, pra GetVersion() dar ao cache
+    //     de geometria-de-texto do RmlUi o sinal padrão "me regenere". atlas_dirty espelha o mesmo
+    //     evento pra decisão própria de recriar-textura-GPU do GenerateString() (o atlas_rgba
+    //     lado-CPU mudou desde o último upload -- cresceu e/ou recebeu um blit novo). cov_lut é a
+    //     LUT de curva de escurecimento que o BakeFaceInstance() já construía uma vez pro warm set
+    //     (BuildCoverageLut()) -- içada pra cá de um array local do BakeFaceInstance() pra o
+    //     BakeGlyph() reusar a MESMA curva por-instância no blit de um glyph empacotado
+    //     preguiçosamente, em vez de recomputá-la (ou pior, dela divergir).
+    int pen_x = 0, pen_y = 0, shelf_h = 0;
+    int version = 1;
+    bool atlas_dirty = false;
+    uint8_t cov_lut[256] = {};
+  };
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) One RASTERIZED-but-not-yet-PACKED glyph -- the
+  //     output of RasterizeGlyph() (below), consumed by BOTH BakeFaceInstance()'s eager warm-set
+  //     shelf-pack pass AND BakeGlyph()'s lazy top-up. Kept as a nested type purely so it can
+  //     appear in RasterizeGlyph()'s signature below -- no dependency on FaceInstance/GlyphInfo's
+  //     own layout. y_max_px/y_min_px are the glyph's SCALED (font-unit->px) bbox extremes, valid
+  //     only when gw>0 && gh>0 (i.e. rasterization actually produced a bitmap) --
+  //     BakeFaceInstance()'s warm-set loop reads them ONLY for cp=='x'/U+2026 to refine
+  //     metrics.x_height/has_ellipsis, exactly mirroring the pre-refactor inline logic.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Um glyph RASTERIZADO mas ainda NÃO EMPACOTADO -- a
+  //     saída do RasterizeGlyph() (abaixo), consumida TANTO pelo passe de empacotamento em
+  //     prateleiras do warm set ávido do BakeFaceInstance() QUANTO pelo top-up preguiçoso do
+  //     BakeGlyph(). Guardado como tipo aninhado só pra poder aparecer na assinatura do
+  //     RasterizeGlyph() abaixo -- sem dependência do layout próprio de FaceInstance/GlyphInfo.
+  //     y_max_px/y_min_px são os extremos de bbox ESCALADOS (unidade-de-fonte->px) do glyph,
+  //     válidos só quando gw>0 && gh>0 (i.e. a rasterização de fato produziu um bitmap) -- o laço
+  //     do warm set do BakeFaceInstance() os lê SÓ pra cp=='x'/U+2026 pra refinar
+  //     metrics.x_height/has_ellipsis, espelhando exatamente a lógica inline pré-refactor.
+  struct Baked {
+    uint32_t cp = 0;
+    uint32_t gid = 0; // for glx_sfnt_kern() -- the 'kern' table is keyed by gid, not codepoint.
+    int gw = 0, gh = 0;
+    std::vector<uint8_t> coverage; // gw*gh coverage bytes, empty for a blank/un-rasterized glyph.
+    float advance = 0.f, offset_x = 0.f, offset_y = 0.f;
+    int atlas_x = 0, atlas_y = 0; // filled by the caller's shelf-pack step (warm set OR BakeGlyph()).
+    float y_max_px = 0.f, y_min_px = 0.f; // see this struct's doc-comment above.
   };
 
   bool RegisterFace(std::vector<uint8_t>&& blob, int face_index, const Rml::String& family,
@@ -371,7 +449,124 @@ private:
   const LoadedFace* FindBestFace(const Rml::String& family, Rml::Style::FontStyle style,
                                   Rml::Style::FontWeight weight) const;
   void BakeFaceInstance(FaceInstance& inst) const;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) THE crispness-preserving DRY extraction: every step
+  //     BakeFaceInstance()'s warm-set loop used to run inline for one codepoint -- hmetrics, outline
+  //     fetch, Y grid-fitting (glx_hint_outline(), hint-bypass-gated), pen-snap/vsnap rounding,
+  //     rasterization -- now lives HERE, so a glyph baked LAZILY by BakeGlyph() gets the byte-for-byte
+  //     IDENTICAL treatment as one baked in the warm set (no second, drifting code path for the exact
+  //     A/B-tested sharpness machinery this ticket spent its earlier sub-phases on). Caller resolves
+  //     `gid` first (glx_sfnt_glyph_id()) and is expected to treat gid==0 as an immediate skip/
+  //     negative-cache BEFORE calling this (this function does not re-check it). Returns `false` only
+  //     when glx_sfnt_hmetrics(gid) itself fails (gid out of the hmtx table's range) -- the caller's
+  //     OTHER "this codepoint doesn't really exist" signal, alongside gid==0. Returns `true` for every
+  //     other outcome, INCLUDING a glyph whose outline is empty/unparseable/too-large-to-raster (space,
+  //     or a malformed/oversized glyph) -- `out` is then left at gw==gh==0, exactly the pre-refactor
+  //     "baked, zero-size" case (a real character, just nothing to blit), never a negative-cache
+  //     trigger.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) A extração DRY que preserva a nitidez: todo passo que o
+  //     laço do warm set do BakeFaceInstance() rodava inline pra um codepoint -- hmetrics, busca de
+  //     outline, grid-fitting Y (glx_hint_outline(), protegido pelo hint-bypass), arredondamento
+  //     pen-snap/vsnap, rasterização -- agora mora AQUI, então um glyph empacotado PREGUIÇOSAMENTE
+  //     pelo BakeGlyph() recebe o tratamento byte-a-byte IDÊNTICO ao de um empacotado no warm set (sem
+  //     um segundo caminho de código, divergente, pra exatamente a maquinaria de nitidez testada em
+  //     A/B em que esta tarefa gastou suas sub-fases anteriores). Quem chama resolve `gid` primeiro
+  //     (glx_sfnt_glyph_id()) e deve tratar gid==0 como skip/cache-negativo imediato ANTES de chamar
+  //     isto (esta função não reconfirma). Retorna `false` só quando o próprio glx_sfnt_hmetrics(gid)
+  //     falha (gid fora do alcance da tabela hmtx) -- o OUTRO sinal de "este codepoint não existe de
+  //     verdade" pra quem chama, junto do gid==0. Retorna `true` pra todo outro resultado, INCLUINDO um
+  //     glyph cujo outline é vazio/imparseável/grande-demais-pra-rasterizar (espaço, ou um glyph
+  //     malformado/grande demais) -- `out` fica então com gw==gh==0, exatamente o caso pré-refactor
+  //     "empacotado, tamanho-zero" (um caractere real, só sem nada pra blitar), nunca um gatilho de
+  //     cache negativo.
+  bool RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out) const;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) LAZY TOP-UP for exactly ONE codepoint missing from
+  //     inst.glyphs -- called ONLY by EnsureGlyphs() below, which already checked the map first (so
+  //     BakeGlyph() itself never needs to). Resolves gid, calls RasterizeGlyph() (the SAME code path
+  //     BakeFaceInstance()'s warm set used), and either (a) inserts a `baked=false` GlyphInfo -- the
+  //     NEGATIVE CACHE, so EnsureGlyphs() never re-attempts this codepoint for this instance again --
+  //     when gid==0 or RasterizeGlyph() itself returns false, or (b) places the rasterized glyph into
+  //     the PERSISTENT shelf cursor (inst.pen_x/pen_y/shelf_h), growing the atlas via GrowAtlas() first
+  //     if it does not fit, blits its coverage through inst.cov_lut (the SAME per-instance darken curve
+  //     the warm set used), and inserts a `baked=true` GlyphInfo. Never touches inst.version/
+  //     atlas_dirty/the GPU texture -- that bookkeeping is EnsureGlyphs()'s job, once, after the whole
+  //     string has been walked (bumping per-glyph inside the loop would be correct but wasteful).
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) TOP-UP PREGUIÇOSO pra exatamente UM codepoint ausente de
+  //     inst.glyphs -- chamado SÓ pelo EnsureGlyphs() abaixo, que já checou o mapa antes (então o
+  //     BakeGlyph() em si nunca precisa). Resolve o gid, chama RasterizeGlyph() (o MESMO caminho de
+  //     código que o warm set do BakeFaceInstance() usou), e ou (a) insere um GlyphInfo `baked=false`
+  //     -- o CACHE NEGATIVO, pra o EnsureGlyphs() nunca reatentar este codepoint nesta instância de
+  //     novo -- quando gid==0 ou o próprio RasterizeGlyph() devolve false, ou (b) põe o glyph
+  //     rasterizado no cursor PERSISTENTE de prateleira (inst.pen_x/pen_y/shelf_h), crescendo o atlas
+  //     via GrowAtlas() primeiro se não couber, blita sua cobertura pela inst.cov_lut (a MESMA curva de
+  //     escurecimento por-instância que o warm set usou), e insere um GlyphInfo `baked=true`. Nunca
+  //     toca inst.version/atlas_dirty/a textura GPU -- essa contabilidade é trabalho do EnsureGlyphs(),
+  //     uma vez, depois de toda a string ter sido percorrida (incrementar por-glyph dentro do laço
+  //     seria correto mas desperdiçado).
+  void BakeGlyph(FaceInstance& inst, uint32_t cp) const;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) Grows inst.atlas_rgba to (at least) `new_w`x`new_h`,
+  //     amortized -- called by BakeGlyph() ONLY when the persistent shelf cursor no longer fits inside
+  //     the CURRENT atlas dimensions. Allocates a fresh, ZEROED buffer and copies the used region
+  //     row-by-row (strided -- source and destination stride differ whenever the width itself grows,
+  //     the width-grows-too pathological case), then swaps it in. CRITICALLY, no already-baked glyph's
+  //     atlas_x/atlas_y ever needs to change: every existing pixel keeps its exact (x, y) position in
+  //     the new, larger buffer (copied verbatim, never repacked) -- only the atlas_w/atlas_h
+  //     DENOMINATOR used to compute a quad's UVs (GenerateString()) changes, which is exactly what
+  //     bumping inst.version/atlas_dirty (EnsureGlyphs()) exists to signal downstream. No-op if the
+  //     requested size does not exceed the current one in either dimension (defensive -- BakeGlyph()
+  //     only calls this when it has already determined growth is needed, but a `std::max` floor here
+  //     costs nothing and cannot shrink the atlas by mistake).
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Cresce o inst.atlas_rgba pra (ao menos) `new_w`x`new_h`,
+  //     amortizado -- chamado pelo BakeGlyph() SÓ quando o cursor persistente de prateleira não cabe
+  //     mais dentro das dimensões ATUAIS do atlas. Aloca um buffer novo, ZERADO, e copia a região usada
+  //     linha-a-linha (com stride -- o stride de origem e destino diferem sempre que a própria largura
+  //     cresce, o caso patológico de largura-também-cresce), depois o troca. CRUCIALMENTE, nenhum
+  //     atlas_x/atlas_y de glyph já empacotado precisa mudar: todo pixel existente mantém sua posição
+  //     (x, y) exata no buffer novo, maior (copiado ao pé da letra, nunca reempacotado) -- só o
+  //     DENOMINADOR atlas_w/atlas_h usado pra computar as UVs de um quad (GenerateString()) muda, que é
+  //     exatamente o que incrementar inst.version/atlas_dirty (EnsureGlyphs()) existe pra sinalizar rio
+  //     abaixo. No-op se o tamanho pedido não excede o atual em nenhuma dimensão (defensivo --
+  //     BakeGlyph() só chama isto quando já determinou que o crescimento é necessário, mas um piso
+  //     `std::max` aqui não custa nada e não pode encolher o atlas por engano).
+  void GrowAtlas(FaceInstance& inst, int new_w, int new_h) const;
+
   static const GlyphInfo* FindGlyph(const FaceInstance& inst, uint32_t codepoint);
+
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) THE lazy-bake ENTRY POINT -- runs at the TOP of BOTH
+  //     GetStringWidth() and GenerateString(), before either calls the shared IterateGlyphs() walk, so
+  //     by the time IterateGlyphs()/FindGlyph() run every codepoint in `string` is ALREADY resolved one
+  //     way or the other (real+baked, or negative-cached) -- FindGlyph()'s own map lookup never needs
+  //     to trigger a bake mid-walk. Decodes `string` with the SAME Rml::StringIteratorU8 walk
+  //     IterateGlyphs() uses (so lazy top-up sees EXACTLY the codepoints that will be
+  //     measured/rendered, no decoding drift); for each codepoint NOT already a key in inst.glyphs (the
+  //     negative-cache contract -- see GlyphInfo's own doc-comment), calls BakeGlyph() once. Touches
+  //     ONLY CPU-side state (inst.atlas_rgba/glyphs/pen_x&pen_y&shelf_h/version/atlas_dirty) -- NEVER
+  //     the GPU texture, which is why this is safe to call from GetStringWidth() too (that override is
+  //     not even passed a Rml::RenderManager&). If at least one codepoint was newly baked as a REAL
+  //     glyph this call, bumps inst.version (RmlUi's own "regenerate cached text geometry" signal,
+  //     GetVersion()) and sets inst.atlas_dirty (GenerateString()'s own "re-upload the GPU texture"
+  //     signal) -- a call that only hits negative-cache codepoints (or codepoints already resolved from
+  //     a prior call) does neither, so a string with no NEW glyphs is a cheap map-lookup-only pass.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) O PONTO DE ENTRADA do bake preguiçoso -- roda no TOPO
+  //     TANTO do GetStringWidth() QUANTO do GenerateString(), antes de qualquer um chamar a caminhada
+  //     compartilhada IterateGlyphs(), então quando IterateGlyphs()/FindGlyph() rodam todo codepoint em
+  //     `string` JÁ está resolvido de um jeito ou de outro (real+empacotado, ou cache-negativado) -- o
+  //     lookup de mapa do próprio FindGlyph() nunca precisa disparar um bake no meio da caminhada.
+  //     Decodifica `string` com a MESMA caminhada Rml::StringIteratorU8 que o IterateGlyphs() usa (pra
+  //     o top-up preguiçoso ver EXATAMENTE os codepoints que serão medidos/renderizados, sem deriva de
+  //     decodificação); pra cada codepoint AINDA NÃO uma chave em inst.glyphs (o contrato de cache
+  //     negativo -- ver o próprio doc-comment de GlyphInfo), chama BakeGlyph() uma vez. Toca SÓ estado
+  //     lado-CPU (inst.atlas_rgba/glyphs/pen_x&pen_y&shelf_h/version/atlas_dirty) -- NUNCA a textura
+  //     GPU, motivo de ser seguro chamar isto do GetStringWidth() também (aquele override nem recebe um
+  //     Rml::RenderManager&). Se ao menos um codepoint foi recém-empacotado como glyph REAL nesta
+  //     chamada, incrementa inst.version (o próprio sinal "regenere a geometria de texto cacheada" do
+  //     RmlUi, GetVersion()) e seta inst.atlas_dirty (o próprio sinal "reenvie a textura GPU" do
+  //     GenerateString()) -- uma chamada que só atinge codepoints cache-negativados (ou já resolvidos
+  //     de uma chamada anterior) não faz nenhum dos dois, então uma string sem glyph NOVO é um passe
+  //     barato, só-lookup-de-mapa.
+  void EnsureGlyphs(FaceInstance& inst, Rml::StringView string) const;
 
   // EN: Shared UTF-8 walk used by BOTH GetStringWidth() and GenerateString() -- guarantees the
   //     width RmlUi's layout engine measures (GetStringWidth's return) always matches the width
@@ -494,7 +689,8 @@ bool& own_font_engine_ab_bypass();
 //     process-global toggle, sibling to own_font_engine_ab_bypass() above but orthogonal in
 //     meaning. It does NOT choose the engine (that is ab_bypass's job); it chooses whether the
 //     OWN engine applies its vertical (Y-axis) grid-fitting. Read once PER GLYPH inside
-//     BakeFaceInstance() (font_engine_own.cpp): when it returns `false` (the DEFAULT -- Y hinting
+//     RasterizeGlyph() (font_engine_own.cpp, sub-phase 2B: shared by BakeFaceInstance()'s warm set
+//     AND BakeGlyph()'s lazy top-up): when it returns `false` (the DEFAULT -- Y hinting
 //     is the mature, shipping behaviour of the own engine), glx_hint_outline() snaps each glyph's
 //     outline Y to the face's zones before rasterisation; when `true`, that call is SKIPPED and
 //     the own engine rasterises the raw, un-hinted outline (the "own, no hint" A/B leg). Only
@@ -507,7 +703,8 @@ bool& own_font_engine_ab_bypass();
 //     src-interno, process-global, irmão do own_font_engine_ab_bypass() acima mas ortogonal em
 //     significado. Ele NÃO escolhe o motor (isso é trabalho do ab_bypass); escolhe se o motor
 //     PRÓPRIO aplica seu grid-fitting vertical (eixo Y). Lido uma vez POR GLYPH dentro de
-//     BakeFaceInstance() (font_engine_own.cpp): quando retorna `false` (o DEFAULT -- o hinting Y é
+//     RasterizeGlyph() (font_engine_own.cpp, sub-fase 2B: compartilhado pelo warm set do
+//     BakeFaceInstance() E pelo top-up preguiçoso do BakeGlyph()): quando retorna `false` (o DEFAULT -- o hinting Y é
 //     o comportamento maduro, de release, do motor próprio), o glx_hint_outline() snapa o Y do
 //     outline de cada glyph nas zonas da face antes da rasterização; quando `true`, essa chamada é
 //     PULADA e o motor próprio rasteriza o outline cru, sem hint (a perna A/B "próprio, sem
@@ -579,7 +776,8 @@ bool& own_font_engine_darken_enable();
 //     choose the engine (ab_bypass), nor whether Y grid-fitting runs (hint_bypass), nor whether the
 //     coverage curve darkens (darken_enable); it chooses whether the OWN engine ROUNDS each
 //     per-glyph pen component to a whole pixel ("pen-snap"). Read in BOTH halves of the shared
-//     glyph walk: at bake time in BakeFaceInstance() (font_engine_own.cpp), where the glyph
+//     glyph walk: at bake time in RasterizeGlyph() (font_engine_own.cpp, sub-phase 2B: shared by
+//     BakeFaceInstance()'s warm set AND BakeGlyph()'s lazy top-up), where the glyph
 //     `advance` and left bearing (`offset_x`) are snapped to integers, AND per pen-increment in
 //     IterateGlyphs(), where the `kern` adjustment and `letter_spacing` are snapped -- so with the
 //     DEFAULT `false` (pen-snap ON, do NOT bypass) the running pen is integral at every glyph,
@@ -600,7 +798,9 @@ bool& own_font_engine_darken_enable();
 //     escolhe o motor (ab_bypass), nem se o grid-fitting Y roda (hint_bypass), nem se a curva de
 //     cobertura escurece (darken_enable); escolhe se o motor PRÓPRIO ARREDONDA cada componente do
 //     pen por-glyph a um pixel inteiro ("pen-snap"). Lido nas DUAS metades da caminhada de glyph
-//     compartilhada: em tempo de bake no BakeFaceInstance() (font_engine_own.cpp), onde o `advance`
+//     compartilhada: em tempo de bake no RasterizeGlyph() (font_engine_own.cpp, sub-fase 2B:
+//     compartilhado pelo warm set do BakeFaceInstance() E pelo top-up preguiçoso do BakeGlyph()),
+//     onde o `advance`
 //     do glyph e o bearing esquerdo (`offset_x`) são snapados a inteiros, E por incremento-de-pen no
 //     IterateGlyphs(), onde o ajuste de `kern` e o `letter_spacing` são snapados -- então com o
 //     DEFAULT `false` (pen-snap LIGADO, NÃO bypassar) a pena corrente é inteira em todo glyph,
@@ -624,7 +824,8 @@ bool& own_font_engine_pensnap_bypass();
 //     choose the engine (ab_bypass), nor whether Y grid-fitting runs (hint_bypass), nor whether the
 //     coverage curve darkens (darken_enable), nor whether the HORIZONTAL pen is snapped (pensnap);
 //     it chooses whether the OWN engine snaps the glyph's VERTICAL origin/offset to a whole pixel
-//     ("vsnap"). Read once PER GLYPH in BakeFaceInstance() (font_engine_own.cpp), where the
+//     ("vsnap"). Read once PER GLYPH in RasterizeGlyph() (font_engine_own.cpp, sub-phase 2B: shared
+//     by BakeFaceInstance()'s warm set AND BakeGlyph()'s lazy top-up), where the
 //     rasteriser origin_y_26_6 and the quad's vertical placement offset_y are both derived from
 //     `fy_max = outline.y_max * scale` (a fractional font-unit->pixel value). WHY it matters: the Y
 //     grid-fitter glx_hint_outline() (Camada 0, SOV-HINT) already aligns each glyph's horizontal
@@ -650,8 +851,9 @@ bool& own_font_engine_pensnap_bypass();
 //     NÃO escolhe o motor (ab_bypass), nem se o grid-fitting Y roda (hint_bypass), nem se a curva de
 //     cobertura escurece (darken_enable), nem se o pen HORIZONTAL é snapado (pensnap); escolhe se o
 //     motor PRÓPRIO snapa a origem/offset VERTICAL do glyph a um pixel inteiro ("vsnap"). Lido uma
-//     vez POR GLYPH no BakeFaceInstance() (font_engine_own.cpp), onde a origem do rasterizador
-//     origin_y_26_6 e o offset de posicionamento vertical do quad offset_y são ambos derivados de
+//     vez POR GLYPH no RasterizeGlyph() (font_engine_own.cpp, sub-fase 2B: compartilhado pelo warm
+//     set do BakeFaceInstance() E pelo top-up preguiçoso do BakeGlyph()), onde a origem do
+//     rasterizador origin_y_26_6 e o offset de posicionamento vertical do quad offset_y são ambos derivados de
 //     `fy_max = outline.y_max * scale` (um valor fracionário unidade-de-fonte->pixel). POR QUE
 //     importa: o grid-fitter Y glx_hint_outline() (Camada 0, SOV-HINT) já alinha as arestas
 //     horizontais de cada glyph (baseline / altura-x / altura-de-maiúscula) a pixels device inteiros

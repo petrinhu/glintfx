@@ -134,10 +134,13 @@ bool& own_font_engine_vsnap_bypass() {
 
 namespace {
 
-// EN: The fixed bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER, one-shot,
-//     FIXED set -- this ticket (L1.20-FONTFLIP sub-phase 2.1) only WIDENED it for general-purpose
-//     distribution (the product ships worldwide, not just pt-br), it did NOT change the eager
-//     fixed-set architecture (lazy/on-demand bake is a separately-decided future sub-phase). Three
+// EN: The fixed WARM-SET bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER,
+//     one-shot, FIXED set BuildBakeSet() itself describes -- this ticket (L1.20-FONTFLIP sub-phase
+//     2.1) only WIDENED it for general-purpose distribution (the product ships worldwide, not just
+//     pt-br). (Sub-phase 2B amadurecimento) The eager fixed-set architecture is no longer the WHOLE
+//     story: EnsureGlyphs()/BakeGlyph() (below) additively top-up-bake any codepoint OUTSIDE this set
+//     the first time it actually appears in a string -- this function's job stays exactly what it
+//     was, the deliberately curated FIRST-PAINT set every instance pays for up front. Three
 //     bands, all deduped by construction (no codepoint appears twice):
 //       1. Printable ASCII                U+0020..U+007E (95 cp) -- unchanged.
 //       2. Latin-1 Supplement printable   U+00A0..U+00FF (96 cp) -- SUPERSETS the old hand-picked
@@ -156,11 +159,15 @@ namespace {
 //     guarantee the face satisfies it.
 //     A plain function (not a file-scope static container) so it has no static-init-order concerns
 //     and is trivially re-callable from BakeFaceInstance() without exposing a mutable global.
-// PT: O conjunto fixo empacotado (ver a seção "ESCOPO" de font_engine_own.hpp). Continua um
-//     conjunto ÁVIDO, único, FIXO -- esta tarefa (sub-fase 2.1 do L1.20-FONTFLIP) só o AMPLIOU pra
-//     distribuição geral (o produto vai pro mundo, não só pt-br), NÃO mudou a arquitetura de
-//     conjunto-fixo-ávido (bake preguiçoso/sob-demanda é uma sub-fase futura decidida à parte).
-//     Três faixas, todas sem duplicata por construção (nenhum codepoint aparece duas vezes):
+// PT: O conjunto fixo empacotado do WARM SET (ver a seção "ESCOPO" de font_engine_own.hpp). Continua
+//     um conjunto ÁVIDO, único, FIXO conforme o próprio BuildBakeSet() descreve -- esta tarefa
+//     (sub-fase 2.1 do L1.20-FONTFLIP) só o AMPLIOU pra distribuição geral (o produto vai pro mundo,
+//     não só pt-br). (amadurecimento sub-fase 2B) A arquitetura de conjunto-fixo-ávido deixou de ser
+//     a história INTEIRA: EnsureGlyphs()/BakeGlyph() (abaixo) empacotam-por-demanda aditivamente
+//     qualquer codepoint FORA deste conjunto na 1ª vez que de fato aparece numa string -- o trabalho
+//     desta função continua exatamente o mesmo, o conjunto de PRIMEIRA-PINTURA deliberadamente
+//     curado que toda instância paga adiantado. Três faixas, todas sem duplicata por construção
+//     (nenhum codepoint aparece duas vezes):
 //       1. ASCII imprimível              U+0020..U+007E (95 cp) -- inalterado.
 //       2. Latin-1 Supplement imprimível U+00A0..U+00FF (96 cp) -- SUPERCONJUNTO da antiga lista
 //          pt-br escolhida a dedo (á/à/â/ã/ç/é/ê/í/ó/ô/õ/ú/ü/ñ + maiúsculas todos vivem em
@@ -548,49 +555,228 @@ const FontEngineOwn::LoadedFace* FontEngineOwn::FindBestFace(const Rml::String& 
   return nullptr;
 }
 
-void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) See this method's long doc-comment on its declaration
+//     in font_engine_own.hpp for the full DRY-extraction rationale. Caller has ALREADY resolved
+//     `gid` (glx_sfnt_glyph_id()) and confirmed it is non-zero -- this function's own `false` return
+//     covers the ONE remaining "codepoint doesn't really exist for this face" outcome
+//     (glx_sfnt_hmetrics() failing, gid out of the hmtx table's range). Everything below this point
+//     is copied VERBATIM from the pre-refactor inline loop (same pen-snap/vsnap/Y-hint constants,
+//     same kPad, same origin/scale derivation) -- see the individual EN/PT blocks below for the
+//     per-step rationale, unchanged from before this extraction.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Ver o doc-comment longo deste método na sua declaração em
+//     font_engine_own.hpp pro racional completo da extração DRY. Quem chama JÁ resolveu `gid`
+//     (glx_sfnt_glyph_id()) e confirmou que não é zero -- o retorno `false` desta função cobre o ÚNICO
+//     resultado restante de "este codepoint não existe de verdade pra esta face" (glx_sfnt_hmetrics()
+//     falhando, gid fora do alcance da tabela hmtx). Tudo abaixo deste ponto é copiado AO PÉ DA LETRA
+//     do laço inline pré-refactor (mesmas constantes pen-snap/vsnap/Y-hint, mesmo kPad, mesma
+//     derivação de origem/escala) -- ver os blocos EN/PT individuais abaixo pro racional por-passo,
+//     inalterado desde antes desta extração.
+bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out) const {
   const glx_sfnt_face& sf = inst.face->sfnt;
   const float scale = (float)inst.pixel_size / (float)sf.units_per_em; // caller already guards units_per_em>0.
 
-  // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP flag, read ONCE for this bake -- when true (the DEFAULT,
-  //     own_font_engine_pensnap_bypass()==false), the glyph `advance` and left bearing (`offset_x`)
-  //     below are rounded to whole pixels, so IterateGlyphs() accumulates an INTEGER pen at every
-  //     glyph (kern/letter_spacing are snapped there in the same walk), mirroring FreeType's integer
-  //     horiAdvance/bearing and keeping every glyph on the shared frac(position.x) sub-pixel phase
-  //     the GL_LINEAR atlas needs to stay crisp. Read here (bake) AND in IterateGlyphs() from the
-  //     same process-global hook; the A/B leg flips it BEFORE the UiLayer ctor triggers the first
-  //     bake (same discipline as the hint/darken hooks). See the hook's doc-comment in the header.
-  // PT: (L1.20-FONTFLIP, FT-F4) Flag do PEN-SNAP, lido UMA vez pra este bake -- quando true (o
-  //     DEFAULT, own_font_engine_pensnap_bypass()==false), o `advance` do glyph e o bearing esquerdo
-  //     (`offset_x`) abaixo são arredondados a pixels inteiros, então o IterateGlyphs() acumula uma
-  //     pena INTEIRA em todo glyph (kern/letter_spacing são snapados lá na mesma caminhada),
-  //     espelhando o horiAdvance/bearing inteiro do FreeType e mantendo todo glyph na fase sub-pixel
-  //     frac(position.x) compartilhada que o atlas GL_LINEAR precisa pra ficar nítido. Lido aqui
-  //     (bake) E no IterateGlyphs() do mesmo hook process-global; a perna A/B o vira ANTES do ctor
-  //     da UiLayer disparar o primeiro bake (mesma disciplina dos hooks de hint/darken). Ver o
-  //     doc-comment do hook no header.
+  // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP/VSNAP flags, read ONCE per glyph -- see
+  //     own_font_engine_pensnap_bypass()/own_font_engine_vsnap_bypass()'s own doc-comments in the
+  //     header for the full contract (both hooks now document THIS function, not BakeFaceInstance(),
+  //     as sub-phase 2B's shared read site).
+  // PT: (L1.20-FONTFLIP, FT-F4) Flags PEN-SNAP/VSNAP, lidos UMA vez por glyph -- ver os próprios
+  //     doc-comments de own_font_engine_pensnap_bypass()/own_font_engine_vsnap_bypass() no header pro
+  //     contrato completo (os dois hooks agora documentam ESTA função, não BakeFaceInstance(), como o
+  //     ponto de leitura compartilhado da sub-fase 2B).
   const bool pen_snap = !own_font_engine_pensnap_bypass();
-
-  // EN: (L1.20-FONTFLIP, FT-F4) VSNAP flag, read ONCE for this bake -- when true (the DEFAULT,
-  //     own_font_engine_vsnap_bypass()==false), the rasteriser origin (origin_y_26_6) and the quad's
-  //     vertical placement (offset_y), both derived from the fractional fy_max below, are snapped to
-  //     a whole pixel: origin_y_26_6 becomes an exact multiple of 64 so the Y-hinted edge lands on an
-  //     integer atlas row (no GL_LINEAR smear of the fitted edge back into the texture), and offset_y
-  //     becomes an integer distance off the baseline (one size-independent vertical phase). This is
-  //     the vertical twin of pen-snap on the X axis; it leaves the X axis untouched (see the two use
-  //     sites below). Bypassed == the raw fractional vertical origin/offset. Read from the same
-  //     process-global hook the A/B leg flips before the first bake. See the hook's header doc-comment.
-  // PT: (L1.20-FONTFLIP, FT-F4) Flag do VSNAP, lido UMA vez pra este bake -- quando true (o DEFAULT,
-  //     own_font_engine_vsnap_bypass()==false), a origem do rasterizador (origin_y_26_6) e o offset de
-  //     posicionamento vertical do quad (offset_y), ambos derivados do fy_max fracionário abaixo, são
-  //     snapados a um pixel inteiro: origin_y_26_6 vira múltiplo exato de 64 pra a aresta hintada em Y
-  //     pousar numa row inteira do atlas (sem borrão GL_LINEAR da aresta fitada de volta na textura), e
-  //     offset_y vira uma distância inteira da baseline (uma fase vertical única, independente de
-  //     tamanho). É o gêmeo vertical do pen-snap no eixo X; deixa o eixo X intocado (ver os dois
-  //     pontos de uso abaixo). Bypassado == a origem/offset vertical fracionária crua. Lido do mesmo
-  //     hook process-global que a perna A/B vira antes do primeiro bake. Ver o doc-comment do hook no
-  //     header.
   const bool v_snap = !own_font_engine_vsnap_bypass();
+
+  out = Baked{};
+  out.cp = cp;
+  out.gid = gid;
+
+  uint16_t advance_units = 0;
+  int16_t lsb = 0;
+  if (glx_sfnt_hmetrics(&sf, gid, &advance_units, &lsb) != GLX_SFNT_OK) return false; // gid out of hmtx range.
+
+  // EN: (L1.20-FONTFLIP, FT-F4) advance snapped to a whole pixel under pen-snap -- FreeType
+  //     reports an integer advance (FreeTypeInterface.cpp: `horiAdvance >> 6`); an integer advance
+  //     keeps the running pen integral in IterateGlyphs() so consecutive glyphs share one sub-pixel
+  //     phase. With pen-snap bypassed it is the raw fractional advance (the pre-snap behaviour).
+  // PT: (L1.20-FONTFLIP, FT-F4) advance snapado a um pixel inteiro sob pen-snap -- o FreeType
+  //     reporta um advance inteiro (FreeTypeInterface.cpp: `horiAdvance >> 6`); um advance inteiro
+  //     mantém a pena corrente inteira no IterateGlyphs() pra glyphs consecutivos compartilharem
+  //     uma fase sub-pixel. Com o pen-snap bypassado é o advance fracionário cru (comportamento
+  //     pré-snap).
+  out.advance = pen_snap ? (float)std::lround((double)advance_units * scale) : (float)advance_units * scale;
+
+  std::vector<glx_sfnt_point> points(kMaxOutlinePoints);
+  std::vector<uint16_t> contour_ends(kMaxOutlineContours);
+  glx_sfnt_outline outline{};
+  const glx_sfnt_result r =
+      glx_sfnt_glyph_outline(&sf, gid, points.data(), (uint16_t)points.size(), contour_ends.data(),
+                              (uint16_t)contour_ends.size(), &outline);
+
+  // EN: r != GLX_SFNT_OK (e.g. GLX_SFNT_ERR_BUFFER_TOO_SMALL) or an empty outline (space,
+  //     num_points==0) both leave `out` at gw==gh==0 -- a "baked, zero-size" glyph: still has a
+  //     valid advance, deliberately no bitmap (see GlyphInfo's own doc-comment in the header for
+  //     this exact distinction). Still returns `true` -- this is a REAL glyph, not a negative-cache
+  //     case.
+  // PT: r != GLX_SFNT_OK (ex.: GLX_SFNT_ERR_BUFFER_TOO_SMALL) ou um outline vazio (espaço,
+  //     num_points==0) ambos deixam `out` com gw==gh==0 -- um glyph "empacotado, tamanho-zero":
+  //     ainda tem um avanço válido, deliberadamente sem bitmap (ver o próprio doc-comment de
+  //     GlyphInfo no header pra essa distinção exata). Ainda retorna `true` -- é um glyph REAL, não
+  //     um caso de cache negativo.
+  if (r == GLX_SFNT_OK && outline.num_points > 0 && outline.num_contours > 0) {
+    // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.4) VERTICAL (Y-axis) GRID-FITTING -- the step that
+    //     makes this ticket real. glx_hint_outline() (Layer 0 SOV-HINT) nudges each point's Y
+    //     IN PLACE so the face's zones (baseline / x-height / cap-height / ascender / descender)
+    //     land on whole device pixels; X is untouched. It is fed the SAME device scale
+    //     (scale_num, scale_den) = (pixel_size*64, units_per_em) the rasteriser below consumes,
+    //     so the alignment survives the rasteriser's own re-scale of the (now hinted) font-unit
+    //     points by construction (see include/core/hint.h's COORDINATE SPACES note). CRUCIALLY
+    //     the glyph BBOX below is still read from `outline` (the glyf-header x_min/y_max, NOT
+    //     recomputed from the hinted points): the sub-pixel correction the hint applies and the
+    //     sub-pixel origin/offset the bbox implies CANCEL algebraically at composition time
+    //     (origin_y places y_max at row kPad, the quad's offset_y subtracts the same y_max, so a
+    //     zone snapped to a whole pixel above the baseline lands on a whole screen pixel WHEN the
+    //     baseline itself is integer-aligned) -- the whole point of writing the correction back
+    //     into font units rather than moving the bitmap. kPad (1px) absorbs the <=0.5px extremal
+    //     shift a snap can introduce, so no glyph clips. ON by DEFAULT (the mature behaviour);
+    //     own_font_engine_hint_bypass() flips it off for the A/B "own, no hint" leg.
+    //     GLX_HINT_NOOP (nothing to fit / already fitted) leaves `points` byte-for-byte
+    //     unchanged -- a clean, non-error outcome we neither check nor need to.
+    // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.4) GRID-FITTING VERTICAL (eixo Y) -- o passo que
+    //     torna esta tarefa real. glx_hint_outline() (SOV-HINT da Camada 0) empurra o Y de cada
+    //     ponto IN PLACE pra que as zonas da face (baseline / altura-x / altura-de-maiúscula /
+    //     ascender / descender) caiam em pixels device inteiros; o X é intocado. Recebe a MESMA
+    //     escala device (scale_num, scale_den) = (pixel_size*64, units_per_em) que o rasterizador
+    //     abaixo consome, então o alinhamento sobrevive ao re-escale que o próprio rasterizador
+    //     faz dos pontos (agora hintados) em unidade-de-fonte, por construção (ver a nota
+    //     ESPAÇOS DE COORDENADA do include/core/hint.h). CRUCIALMENTE a BBOX do glyph abaixo
+    //     ainda é lida de `outline` (o x_min/y_max do cabeçalho glyf, NÃO recomputada dos pontos
+    //     hintados): a correção sub-pixel que o hint aplica e o origin/offset sub-pixel que a
+    //     bbox implica se CANCELAM algebricamente no momento da composição (origin_y põe y_max na
+    //     linha kPad, o offset_y do quad subtrai o mesmo y_max, então uma zona snapada a um pixel
+    //     inteiro acima da baseline cai num pixel inteiro de tela QUANDO a própria baseline está
+    //     alinhada a inteiro) -- exatamente o motivo de escrever a correção de volta em unidade
+    //     de fonte em vez de mover o bitmap. O kPad (1px) absorve o deslocamento extremal de
+    //     <=0.5px que um snap pode introduzir, então nenhum glyph corta. LIGADO por PADRÃO (o
+    //     comportamento maduro); own_font_engine_hint_bypass() o desliga pra a perna A/B "próprio,
+    //     sem hint". GLX_HINT_NOOP (nada a fitar / já fitado) deixa `points` byte-a-byte intacto
+    //     -- um resultado limpo, sem erro, que nem checamos nem precisamos.
+    if (!own_font_engine_hint_bypass()) {
+      const int32_t hint_scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
+      glx_hint_outline(points.data(), outline.num_points, sf.units_per_em, hint_scale_num,
+                       (int32_t)sf.units_per_em, &inst.face->hint_zones);
+    }
+
+    const float fx_min = (float)outline.x_min * scale;
+    const float fx_max = (float)outline.x_max * scale;
+    const float fy_min = (float)outline.y_min * scale;
+    const float fy_max = (float)outline.y_max * scale;
+    out.y_max_px = fy_max; // see this method's own doc-comment in the header (metrics refinement).
+    out.y_min_px = fy_min;
+
+    constexpr int kPad = 1; // 1px transparent border -- avoids AA bleed between packed atlas cells.
+    const int gw = (int)std::ceil(fx_max - fx_min) + kPad * 2;
+    const int gh = (int)std::ceil(fy_max - fy_min) + kPad * 2;
+
+    if (gw > 0 && gh > 0 && gw <= 4096 && gh <= 4096) {
+      // EN: (scale_num, scale_den) is the rational font-unit->26.6-device-pixel scale factor
+      //     glx_rasterize_outline's own doc-comment specifies: (px_size_26_6, units_per_em).
+      //     origin_x/y_26_6 place this glyph's own (x_min, y_max) at bitmap pixel (kPad,
+      //     kPad) -- see include/core/raster.h's "COORDINATE MAPPING" note for the
+      //     device_x/y_26_6 formulas this inverts (origin chosen so
+      //     device_x(x_min)==kPad*64, device_y(y_max)==kPad*64).
+      // PT: (scale_num, scale_den) é o fator de escala racional unidade-de-fonte->pixel-de-
+      //     dispositivo-26.6 que o próprio doc-comment do glx_rasterize_outline especifica:
+      //     (px_size_26_6, units_per_em). origin_x/y_26_6 posiciona o próprio (x_min, y_max)
+      //     deste glyph no pixel de bitmap (kPad, kPad) -- ver a nota "MAPEAMENTO DE
+      //     COORDENADA" do include/core/raster.h pras fórmulas device_x/y_26_6 que isto
+      //     inverte (origem escolhida para device_x(x_min)==kPad*64, device_y(y_max)==kPad*64).
+      const int32_t scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
+      const int32_t scale_den = (int32_t)sf.units_per_em;
+      const int32_t origin_x_26_6 = (int32_t)std::lround(((double)-fx_min + kPad) * 64.0);
+      // EN: (L1.20-FONTFLIP, FT-F4) vsnap: place the glyph's y_max on a WHOLE atlas row. Rounding
+      //     fy_max first, THEN scaling by 64 (multiply, not lround-of-a-product), forces
+      //     origin_y_26_6 to an exact multiple of 64 -- so the edge that glx_hint_outline() already
+      //     grid-fitted to an integer device pixel lands on an integer bitmap row, instead of a
+      //     fractional one GL_LINEAR would smear back into the texture. The X twin (origin_x_26_6
+      //     above) is deliberately NOT changed -- vsnap is Y-only. kPad added as an integer keeps the
+      //     result a multiple of 64. Bypassed (own_font_engine_vsnap_bypass()==true) == the raw
+      //     fractional origin (round the whole (fy_max+kPad)*64 product, as before).
+      // PT: (L1.20-FONTFLIP, FT-F4) vsnap: põe o y_max do glyph numa row INTEIRA do atlas. Arredondar
+      //     fy_max primeiro, DEPOIS escalar por 64 (multiplicar, não lround-de-um-produto), força
+      //     origin_y_26_6 a um múltiplo exato de 64 -- então a aresta que o glx_hint_outline() já
+      //     grid-fitou a um pixel device inteiro pousa numa row inteira do bitmap, em vez de uma
+      //     fracionária que o GL_LINEAR borraria de volta na textura. O gêmeo X (origin_x_26_6 acima)
+      //     NÃO é mudado de propósito -- vsnap é só-Y. O kPad somado como inteiro mantém o resultado
+      //     múltiplo de 64. Bypassado (own_font_engine_vsnap_bypass()==true) == a origem fracionária
+      //     crua (arredonda o produto inteiro (fy_max+kPad)*64, como antes).
+      const int32_t origin_y_26_6 = v_snap ? ((int32_t)std::lround((double)fy_max) + kPad) * 64
+                                           : (int32_t)std::lround(((double)fy_max + kPad) * 64.0);
+
+      std::vector<uint8_t> bitmap((size_t)gw * (size_t)gh, 0);
+      const size_t scratch_n = glx_raster_scratch_floats(gw, gh);
+      if (scratch_n > 0) {
+        std::vector<float> scratch(scratch_n);
+        const glx_raster_result rr =
+            glx_rasterize_outline(points.data(), outline.num_points, contour_ends.data(), outline.num_contours,
+                                   scale_num, scale_den, origin_x_26_6, origin_y_26_6, bitmap.data(), gw, gh, gw,
+                                   scratch.data(), scratch.size());
+        if (rr == GLX_RASTER_OK) {
+          out.gw = gw;
+          out.gh = gh;
+          out.coverage = std::move(bitmap);
+          // EN: quad top-left offset from (pen_x, baseline_y), screen space y-down -- derived
+          //     in font_engine_own.hpp's GlyphInfo doc-comment / IterateGlyphs' contract.
+          // PT: offset do canto superior-esquerdo do quad em relação a (pen_x, baseline_y),
+          //     espaço de tela y-para-baixo -- derivado no doc-comment de GlyphInfo em
+          //     font_engine_own.hpp / no contrato de IterateGlyphs.
+          // EN: (L1.20-FONTFLIP, FT-F4) left bearing snapped to a whole pixel under pen-snap --
+          //     the quad's left edge is `pen_x + offset_x`; with `pen_x` already integral (snapped
+          //     advance/kern/letter_spacing) a whole-pixel bearing puts the glyph's ink origin on an
+          //     integer column (offset by the shared frac(position.x)), so GL_LINEAR does not smear
+          //     the stems -- FreeType likewise rounds its bearing. Rounding fx_min (then subtracting
+          //     the integer kPad) keeps offset_x integral. The bitmap itself is untouched (still
+          //     rasterised at its natural sub-pixel origin, origin_x_26_6 below unchanged): pen-snap
+          //     only quantises WHERE the quad is placed, not the glyph's internal shape (X-axis stem
+          //     grid-fit is a separate, future sub-phase). Bypassed == the raw fractional bearing.
+          // PT: (L1.20-FONTFLIP, FT-F4) bearing esquerdo snapado a um pixel inteiro sob pen-snap --
+          //     a aresta esquerda do quad é `pen_x + offset_x`; com `pen_x` já inteiro
+          //     (advance/kern/letter_spacing snapados) um bearing de pixel inteiro põe a origem da
+          //     tinta do glyph numa coluna inteira (deslocada pelo frac(position.x) compartilhado),
+          //     então o GL_LINEAR não borra as hastes -- o FreeType também arredonda o bearing dele.
+          //     Arredondar fx_min (depois subtrair o kPad inteiro) mantém offset_x inteiro. O próprio
+          //     bitmap fica intocado (ainda rasterizado na origem sub-pixel natural, origin_x_26_6
+          //     abaixo inalterado): o pen-snap só quantiza ONDE o quad é posto, não a forma interna do
+          //     glyph (grid-fit de haste no eixo X é uma sub-fase futura, à parte). Bypassado == o
+          //     bearing fracionário cru.
+          out.offset_x = (pen_snap ? (float)std::lround((double)fx_min) : fx_min) - kPad;
+          // EN: (L1.20-FONTFLIP, FT-F4) vsnap: quad top offset from the baseline snapped to a whole
+          //     pixel, the vertical twin of the pen-snapped offset_x above. With fy_max rounded, the
+          //     quad's top edge is an integer distance above the baseline (`-position.y` in
+          //     GenerateString shares the same phase for every glyph), so the Y-hinted rows blit to
+          //     integer screen rows rather than a per-size fractional phase that would re-smear them.
+          //     Rounding cancels algebraically with the rounded origin_y_26_6 above (both derived
+          //     from the same rounded fy_max), preserving the origin/offset cancellation the bake
+          //     relies on. Bypassed == the raw fractional offset. X axis (offset_x) untouched here.
+          // PT: (L1.20-FONTFLIP, FT-F4) vsnap: offset do topo do quad em relação à baseline snapado a
+          //     um pixel inteiro, o gêmeo vertical do offset_x pen-snapado acima. Com fy_max
+          //     arredondado, a aresta de topo do quad fica a uma distância inteira acima da baseline
+          //     (o `-position.y` no GenerateString compartilha a mesma fase pra todo glyph), então as
+          //     rows hintadas em Y blittam pra rows inteiras de tela em vez de uma fase fracionária
+          //     por-tamanho que as borraria de novo. O arredondamento cancela algebricamente com o
+          //     origin_y_26_6 arredondado acima (ambos derivados do mesmo fy_max arredondado),
+          //     preservando o cancelamento origem/offset de que o bake depende. Bypassado == o offset
+          //     fracionário cru. Eixo X (offset_x) intocado aqui.
+          out.offset_y = v_snap ? -((float)std::lround((double)fy_max) + kPad) : -(fy_max + kPad);
+        }
+      }
+    }
+  }
+  return true; // gid resolved + hmetrics OK -- a real, "baked" glyph (possibly zero-size).
+}
+
+void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
+  const glx_sfnt_face& sf = inst.face->sfnt;
+  const float scale = (float)inst.pixel_size / (float)sf.units_per_em; // caller already guards units_per_em>0.
 
   // EN: FontMetrics derivation from head/hhea (font units) scaled to this instance's pixel
   //     size. `descender` is negative in TrueType's own convention (below the baseline);
@@ -623,19 +809,8 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   m.has_ellipsis = false;
   inst.metrics = m;
 
-  struct Baked {
-    uint32_t cp = 0;
-    uint32_t gid = 0; // for glx_sfnt_kern() -- the 'kern' table is keyed by gid, not codepoint.
-    int gw = 0, gh = 0;
-    std::vector<uint8_t> coverage; // gw*gh coverage bytes, empty for a blank/un-rasterized glyph.
-    float advance = 0.f, offset_x = 0.f, offset_y = 0.f;
-    int atlas_x = 0, atlas_y = 0; // filled by the shelf-pack pass below.
-  };
   std::vector<Baked> baked;
   baked.reserve(128);
-
-  std::vector<glx_sfnt_point> points(kMaxOutlinePoints);
-  std::vector<uint16_t> contour_ends(kMaxOutlineContours);
 
   for (uint32_t cp : BuildBakeSet()) {
     const uint32_t gid = glx_sfnt_glyph_id(&sf, cp);
@@ -646,204 +821,47 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
     //     be absent from a given face, so skip them here rather than baking .notdef's own box
     //     outline under a real codepoint -- that would pollute the atlas with a visible tofu box
     //     and make FindGlyph() return a bogus quad for a character the font never had. Skipping
-    //     leaves the codepoint out of inst.glyphs entirely: FindGlyph() returns nullptr, the
-    //     string still measures/renders, that one character is simply blank (advance 0, no quad) --
-    //     the exact "codepoint outside the baked set" degradation the header's SCOPE promises. cp 0
-    //     is never in BuildBakeSet(), so this never wrongly drops a real glyph mapped to gid 0.
+    //     leaves the codepoint out of inst.glyphs entirely -- but (sub-phase 2B) that is now merely
+    //     "not yet tried": EnsureGlyphs()/BakeGlyph() will negative-cache it (`baked=false`) the
+    //     first time this codepoint actually appears in a string, so it is never re-attempted after
+    //     that either. FindGlyph() returns nullptr either way: the string still measures/renders,
+    //     that one character is simply blank (advance 0, no quad) -- the exact "codepoint the face
+    //     lacks" degradation the header's SCOPE promises. cp 0 is never in BuildBakeSet(), so this
+    //     never wrongly drops a real glyph mapped to gid 0.
     // PT: gid 0 é .notdef -- glx_sfnt_glyph_id() o retorna pra qualquer codepoint que o cmap da
     //     face não mapeia (convenção documentada de include/core/sfnt.h). Com o conjunto ampliado
     //     (Latin-1 Supplement + pontuação tipográfica) alguns codepoints listados podem
     //     legitimamente faltar numa dada face, então pula-os aqui em vez de empacotar o próprio
     //     outline de caixa do .notdef sob um codepoint real -- isso poluiria o atlas com uma caixa
     //     tofu visível e faria o FindGlyph() devolver um quad espúrio pra um caractere que a fonte
-    //     nunca teve. Pular deixa o codepoint totalmente fora de inst.glyphs: FindGlyph() devolve
-    //     nullptr, a string ainda mede/renderiza, aquele caractere só fica em branco (avanço 0, sem
-    //     quad) -- exatamente a degradação "codepoint fora do conjunto empacotado" que o SCOPE do
-    //     header promete. cp 0 nunca está em BuildBakeSet(), então isto nunca larga por engano um
-    //     glyph real mapeado a gid 0.
+    //     nunca teve. Pular deixa o codepoint fora de inst.glyphs -- mas (sub-fase 2B) isso agora é
+    //     só "ainda não tentado": EnsureGlyphs()/BakeGlyph() o cache-negativarão (`baked=false`) na
+    //     1ª vez que este codepoint de fato aparecer numa string, então também nunca é reatentado
+    //     depois disso. FindGlyph() devolve nullptr de qualquer forma: a string ainda
+    //     mede/renderiza, aquele caractere só fica em branco (avanço 0, sem quad) -- exatamente a
+    //     degradação "codepoint que a face não tem" que o SCOPE do header promete. cp 0 nunca está
+    //     em BuildBakeSet(), então isto nunca larga por engano um glyph real mapeado a gid 0.
     if (gid == 0) continue;
 
-    uint16_t advance_units = 0;
-    int16_t lsb = 0;
-    if (glx_sfnt_hmetrics(&sf, gid, &advance_units, &lsb) != GLX_SFNT_OK) continue; // gid out of range -- skip.
-
     Baked b;
-    b.cp = cp;
-    b.gid = gid;
-    // EN: (L1.20-FONTFLIP, FT-F4) advance snapped to a whole pixel under pen-snap -- FreeType
-    //     reports an integer advance (FreeTypeInterface.cpp: `horiAdvance >> 6`); an integer advance
-    //     keeps the running pen integral in IterateGlyphs() so consecutive glyphs share one sub-pixel
-    //     phase. With pen-snap bypassed it is the raw fractional advance (the pre-snap behaviour).
-    // PT: (L1.20-FONTFLIP, FT-F4) advance snapado a um pixel inteiro sob pen-snap -- o FreeType
-    //     reporta um advance inteiro (FreeTypeInterface.cpp: `horiAdvance >> 6`); um advance inteiro
-    //     mantém a pena corrente inteira no IterateGlyphs() pra glyphs consecutivos compartilharem
-    //     uma fase sub-pixel. Com o pen-snap bypassado é o advance fracionário cru (comportamento
-    //     pré-snap).
-    b.advance = pen_snap ? (float)std::lround((double)advance_units * scale) : (float)advance_units * scale;
+    // EN: (sub-phase 2B) RasterizeGlyph() does everything the inline loop used to -- hmetrics,
+    //     outline, Y-hint, pen-snap/vsnap, rasterization -- and returns `false` only for the OTHER
+    //     "codepoint doesn't exist" outcome (hmtx lookup failure); see its own doc-comment.
+    // PT: (sub-fase 2B) RasterizeGlyph() faz tudo que o laço inline fazia -- hmetrics, outline,
+    //     Y-hint, pen-snap/vsnap, rasterização -- e retorna `false` só pro OUTRO resultado
+    //     "codepoint não existe" (falha de lookup no hmtx); ver o próprio doc-comment.
+    if (!RasterizeGlyph(inst, cp, gid, b)) continue;
 
-    glx_sfnt_outline outline{};
-    const glx_sfnt_result r =
-        glx_sfnt_glyph_outline(&sf, gid, points.data(), (uint16_t)points.size(), contour_ends.data(),
-                                (uint16_t)contour_ends.size(), &outline);
-
-    // EN: r != GLX_SFNT_OK (e.g. GLX_SFNT_ERR_BUFFER_TOO_SMALL) or an empty outline (space,
-    //     num_points==0) both fall through to push_back(b) below with gw==gh==0 -- a "baked,
-    //     zero-size" glyph: still has a valid advance, deliberately emits no quad (see
-    //     GlyphInfo's own doc-comment in the header for this exact distinction).
-    // PT: r != GLX_SFNT_OK (ex.: GLX_SFNT_ERR_BUFFER_TOO_SMALL) ou um outline vazio (espaço,
-    //     num_points==0) ambos caem no push_back(b) abaixo com gw==gh==0 -- um glyph
-    //     "empacotado, tamanho-zero": ainda tem um avanço válido, deliberadamente não emite
-    //     quad (ver o próprio doc-comment de GlyphInfo no header pra essa distinção exata).
-    if (r == GLX_SFNT_OK && outline.num_points > 0 && outline.num_contours > 0) {
-      // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.4) VERTICAL (Y-axis) GRID-FITTING -- the step that
-      //     makes this ticket real. glx_hint_outline() (Layer 0 SOV-HINT) nudges each point's Y
-      //     IN PLACE so the face's zones (baseline / x-height / cap-height / ascender / descender)
-      //     land on whole device pixels; X is untouched. It is fed the SAME device scale
-      //     (scale_num, scale_den) = (pixel_size*64, units_per_em) the rasteriser below consumes,
-      //     so the alignment survives the rasteriser's own re-scale of the (now hinted) font-unit
-      //     points by construction (see include/core/hint.h's COORDINATE SPACES note). CRUCIALLY
-      //     the glyph BBOX below is still read from `outline` (the glyf-header x_min/y_max, NOT
-      //     recomputed from the hinted points): the sub-pixel correction the hint applies and the
-      //     sub-pixel origin/offset the bbox implies CANCEL algebraically at composition time
-      //     (origin_y places y_max at row kPad, the quad's offset_y subtracts the same y_max, so a
-      //     zone snapped to a whole pixel above the baseline lands on a whole screen pixel WHEN the
-      //     baseline itself is integer-aligned) -- the whole point of writing the correction back
-      //     into font units rather than moving the bitmap. kPad (1px) absorbs the <=0.5px extremal
-      //     shift a snap can introduce, so no glyph clips. ON by DEFAULT (the mature behaviour);
-      //     own_font_engine_hint_bypass() flips it off for the A/B "own, no hint" leg.
-      //     GLX_HINT_NOOP (nothing to fit / already fitted) leaves `points` byte-for-byte
-      //     unchanged -- a clean, non-error outcome we neither check nor need to.
-      // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.4) GRID-FITTING VERTICAL (eixo Y) -- o passo que
-      //     torna esta tarefa real. glx_hint_outline() (SOV-HINT da Camada 0) empurra o Y de cada
-      //     ponto IN PLACE pra que as zonas da face (baseline / altura-x / altura-de-maiúscula /
-      //     ascender / descender) caiam em pixels device inteiros; o X é intocado. Recebe a MESMA
-      //     escala device (scale_num, scale_den) = (pixel_size*64, units_per_em) que o rasterizador
-      //     abaixo consome, então o alinhamento sobrevive ao re-escale que o próprio rasterizador
-      //     faz dos pontos (agora hintados) em unidade-de-fonte, por construção (ver a nota
-      //     ESPAÇOS DE COORDENADA do include/core/hint.h). CRUCIALMENTE a BBOX do glyph abaixo
-      //     ainda é lida de `outline` (o x_min/y_max do cabeçalho glyf, NÃO recomputada dos pontos
-      //     hintados): a correção sub-pixel que o hint aplica e o origin/offset sub-pixel que a
-      //     bbox implica se CANCELAM algebricamente no momento da composição (origin_y põe y_max na
-      //     linha kPad, o offset_y do quad subtrai o mesmo y_max, então uma zona snapada a um pixel
-      //     inteiro acima da baseline cai num pixel inteiro de tela QUANDO a própria baseline está
-      //     alinhada a inteiro) -- exatamente o motivo de escrever a correção de volta em unidade
-      //     de fonte em vez de mover o bitmap. O kPad (1px) absorve o deslocamento extremal de
-      //     <=0.5px que um snap pode introduzir, então nenhum glyph corta. LIGADO por PADRÃO (o
-      //     comportamento maduro); own_font_engine_hint_bypass() o desliga pra a perna A/B "próprio,
-      //     sem hint". GLX_HINT_NOOP (nada a fitar / já fitado) deixa `points` byte-a-byte intacto
-      //     -- um resultado limpo, sem erro, que nem checamos nem precisamos.
-      if (!own_font_engine_hint_bypass()) {
-        const int32_t hint_scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
-        glx_hint_outline(points.data(), outline.num_points, sf.units_per_em, hint_scale_num,
-                         (int32_t)sf.units_per_em, &inst.face->hint_zones);
-      }
-
-      const float fx_min = (float)outline.x_min * scale;
-      const float fx_max = (float)outline.x_max * scale;
-      const float fy_min = (float)outline.y_min * scale;
-      const float fy_max = (float)outline.y_max * scale;
-
-      constexpr int kPad = 1; // 1px transparent border -- avoids AA bleed between packed atlas cells.
-      const int gw = (int)std::ceil(fx_max - fx_min) + kPad * 2;
-      const int gh = (int)std::ceil(fy_max - fy_min) + kPad * 2;
-
-      if (gw > 0 && gh > 0 && gw <= 4096 && gh <= 4096) {
-        // EN: (scale_num, scale_den) is the rational font-unit->26.6-device-pixel scale factor
-        //     glx_rasterize_outline's own doc-comment specifies: (px_size_26_6, units_per_em).
-        //     origin_x/y_26_6 place this glyph's own (x_min, y_max) at bitmap pixel (kPad,
-        //     kPad) -- see include/core/raster.h's "COORDINATE MAPPING" note for the
-        //     device_x/y_26_6 formulas this inverts (origin chosen so
-        //     device_x(x_min)==kPad*64, device_y(y_max)==kPad*64).
-        // PT: (scale_num, scale_den) é o fator de escala racional unidade-de-fonte->pixel-de-
-        //     dispositivo-26.6 que o próprio doc-comment do glx_rasterize_outline especifica:
-        //     (px_size_26_6, units_per_em). origin_x/y_26_6 posiciona o próprio (x_min, y_max)
-        //     deste glyph no pixel de bitmap (kPad, kPad) -- ver a nota "MAPEAMENTO DE
-        //     COORDENADA" do include/core/raster.h pras fórmulas device_x/y_26_6 que isto
-        //     inverte (origem escolhida para device_x(x_min)==kPad*64, device_y(y_max)==kPad*64).
-        const int32_t scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
-        const int32_t scale_den = (int32_t)sf.units_per_em;
-        const int32_t origin_x_26_6 = (int32_t)std::lround(((double)-fx_min + kPad) * 64.0);
-        // EN: (L1.20-FONTFLIP, FT-F4) vsnap: place the glyph's y_max on a WHOLE atlas row. Rounding
-        //     fy_max first, THEN scaling by 64 (multiply, not lround-of-a-product), forces
-        //     origin_y_26_6 to an exact multiple of 64 -- so the edge that glx_hint_outline() already
-        //     grid-fitted to an integer device pixel lands on an integer bitmap row, instead of a
-        //     fractional one GL_LINEAR would smear back into the texture. The X twin (origin_x_26_6
-        //     above) is deliberately NOT changed -- vsnap is Y-only. kPad added as an integer keeps the
-        //     result a multiple of 64. Bypassed (own_font_engine_vsnap_bypass()==true) == the raw
-        //     fractional origin (round the whole (fy_max+kPad)*64 product, as before).
-        // PT: (L1.20-FONTFLIP, FT-F4) vsnap: põe o y_max do glyph numa row INTEIRA do atlas. Arredondar
-        //     fy_max primeiro, DEPOIS escalar por 64 (multiplicar, não lround-de-um-produto), força
-        //     origin_y_26_6 a um múltiplo exato de 64 -- então a aresta que o glx_hint_outline() já
-        //     grid-fitou a um pixel device inteiro pousa numa row inteira do bitmap, em vez de uma
-        //     fracionária que o GL_LINEAR borraria de volta na textura. O gêmeo X (origin_x_26_6 acima)
-        //     NÃO é mudado de propósito -- vsnap é só-Y. O kPad somado como inteiro mantém o resultado
-        //     múltiplo de 64. Bypassado (own_font_engine_vsnap_bypass()==true) == a origem fracionária
-        //     crua (arredonda o produto inteiro (fy_max+kPad)*64, como antes).
-        const int32_t origin_y_26_6 = v_snap ? ((int32_t)std::lround((double)fy_max) + kPad) * 64
-                                             : (int32_t)std::lround(((double)fy_max + kPad) * 64.0);
-
-        std::vector<uint8_t> bitmap((size_t)gw * (size_t)gh, 0);
-        const size_t scratch_n = glx_raster_scratch_floats(gw, gh);
-        if (scratch_n > 0) {
-          std::vector<float> scratch(scratch_n);
-          const glx_raster_result rr =
-              glx_rasterize_outline(points.data(), outline.num_points, contour_ends.data(), outline.num_contours,
-                                     scale_num, scale_den, origin_x_26_6, origin_y_26_6, bitmap.data(), gw, gh, gw,
-                                     scratch.data(), scratch.size());
-          if (rr == GLX_RASTER_OK) {
-            b.gw = gw;
-            b.gh = gh;
-            b.coverage = std::move(bitmap);
-            // EN: quad top-left offset from (pen_x, baseline_y), screen space y-down -- derived
-            //     in font_engine_own.hpp's GlyphInfo doc-comment / IterateGlyphs' contract.
-            // PT: offset do canto superior-esquerdo do quad em relação a (pen_x, baseline_y),
-            //     espaço de tela y-para-baixo -- derivado no doc-comment de GlyphInfo em
-            //     font_engine_own.hpp / no contrato de IterateGlyphs.
-            // EN: (L1.20-FONTFLIP, FT-F4) left bearing snapped to a whole pixel under pen-snap --
-            //     the quad's left edge is `pen_x + offset_x`; with `pen_x` already integral (snapped
-            //     advance/kern/letter_spacing) a whole-pixel bearing puts the glyph's ink origin on an
-            //     integer column (offset by the shared frac(position.x)), so GL_LINEAR does not smear
-            //     the stems -- FreeType likewise rounds its bearing. Rounding fx_min (then subtracting
-            //     the integer kPad) keeps offset_x integral. The bitmap itself is untouched (still
-            //     rasterised at its natural sub-pixel origin, origin_x_26_6 below unchanged): pen-snap
-            //     only quantises WHERE the quad is placed, not the glyph's internal shape (X-axis stem
-            //     grid-fit is a separate, future sub-phase). Bypassed == the raw fractional bearing.
-            // PT: (L1.20-FONTFLIP, FT-F4) bearing esquerdo snapado a um pixel inteiro sob pen-snap --
-            //     a aresta esquerda do quad é `pen_x + offset_x`; com `pen_x` já inteiro
-            //     (advance/kern/letter_spacing snapados) um bearing de pixel inteiro põe a origem da
-            //     tinta do glyph numa coluna inteira (deslocada pelo frac(position.x) compartilhado),
-            //     então o GL_LINEAR não borra as hastes -- o FreeType também arredonda o bearing dele.
-            //     Arredondar fx_min (depois subtrair o kPad inteiro) mantém offset_x inteiro. O próprio
-            //     bitmap fica intocado (ainda rasterizado na origem sub-pixel natural, origin_x_26_6
-            //     abaixo inalterado): o pen-snap só quantiza ONDE o quad é posto, não a forma interna do
-            //     glyph (grid-fit de haste no eixo X é uma sub-fase futura, à parte). Bypassado == o
-            //     bearing fracionário cru.
-            b.offset_x = (pen_snap ? (float)std::lround((double)fx_min) : fx_min) - kPad;
-            // EN: (L1.20-FONTFLIP, FT-F4) vsnap: quad top offset from the baseline snapped to a whole
-            //     pixel, the vertical twin of the pen-snapped offset_x above. With fy_max rounded, the
-            //     quad's top edge is an integer distance above the baseline (`-position.y` in
-            //     GenerateString shares the same phase for every glyph), so the Y-hinted rows blit to
-            //     integer screen rows rather than a per-size fractional phase that would re-smear them.
-            //     Rounding cancels algebraically with the rounded origin_y_26_6 above (both derived
-            //     from the same rounded fy_max), preserving the origin/offset cancellation the bake
-            //     relies on. Bypassed == the raw fractional offset. X axis (offset_x) untouched here.
-            // PT: (L1.20-FONTFLIP, FT-F4) vsnap: offset do topo do quad em relação à baseline snapado a
-            //     um pixel inteiro, o gêmeo vertical do offset_x pen-snapado acima. Com fy_max
-            //     arredondado, a aresta de topo do quad fica a uma distância inteira acima da baseline
-            //     (o `-position.y` no GenerateString compartilha a mesma fase pra todo glyph), então as
-            //     rows hintadas em Y blittam pra rows inteiras de tela em vez de uma fase fracionária
-            //     por-tamanho que as borraria de novo. O arredondamento cancela algebricamente com o
-            //     origin_y_26_6 arredondado acima (ambos derivados do mesmo fy_max arredondado),
-            //     preservando o cancelamento origem/offset de que o bake depende. Bypassado == o offset
-            //     fracionário cru. Eixo X (offset_x) intocado aqui.
-            b.offset_y = v_snap ? -((float)std::lround((double)fy_max) + kPad) : -(fy_max + kPad);
-            if (cp == 0x78) inst.metrics.x_height = fy_max - fy_min; // 'x' baked -- refine x_height.
-            // EN: U+2026 rasterised for this face -- RmlUi may use the native ellipsis glyph.
-            // PT: U+2026 rasterizou pra esta face -- o RmlUi pode usar o glyph nativo de reticências.
-            if (cp == 0x2026) inst.metrics.has_ellipsis = true;
-          }
-        }
-      }
+    // EN: Metrics refinement -- gated on b.gw>0 (raster actually produced a bitmap), matching the
+    //     pre-refactor `rr==GLX_RASTER_OK` gate exactly (RasterizeGlyph() only sets gw/gh>0 there).
+    // PT: Refinamento de métricas -- protegido por b.gw>0 (a rasterização de fato produziu um
+    //     bitmap), batendo exatamente com o gate `rr==GLX_RASTER_OK` pré-refactor (RasterizeGlyph()
+    //     só seta gw/gh>0 lá).
+    if (b.gw > 0 && b.gh > 0) {
+      if (cp == 0x78) inst.metrics.x_height = b.y_max_px - b.y_min_px; // 'x' baked -- refine x_height.
+      // EN: U+2026 rasterised for this face -- RmlUi may use the native ellipsis glyph.
+      // PT: U+2026 rasterizou pra esta face -- o RmlUi pode usar o glyph nativo de reticências.
+      if (cp == 0x2026) inst.metrics.has_ellipsis = true;
     }
 
     baked.push_back(std::move(b));
@@ -856,12 +874,18 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   //     any the face lacks; no need for a general-purpose bin packer here). Only the atlas HEIGHT
   //     grows to fit the extra shelves (pen_y accumulates downward, atlas_h derived below); the
   //     512px shelf WIDTH is untouched -- no single Open Sans glyph at any UI size approaches it,
-  //     so the initial texture size did NOT need to grow for the larger set.
+  //     so the initial texture size did NOT need to grow for the larger set. (Sub-phase 2B) The
+  //     final pen_x/pen_y/shelf_h below is stashed into inst.pen_x/pen_y/shelf_h -- the PERSISTENT
+  //     shelf cursor BakeGlyph() continues from for every subsequent lazily-baked glyph, so a
+  //     top-up glyph is APPENDED after the warm set, never re-packed from scratch.
   // PT: Passe de empacotamento em prateleiras -- prateleiras de largura fixa (cresce pra caber
   //     o glyph mais largo, se algum exceder o padrão de 512px), linhas avançam pra baixo à
   //     medida que uma prateleira enche. Determinístico, passe único, suficiente pro conjunto
-  //     fixo de ~120 glyphs desta tarefa (sem necessidade de um bin packer de propósito geral
-  //     aqui).
+  //     fixo de ~199 codepoints desta tarefa após a ampliação da sub-fase 2.1 (sem necessidade de
+  //     um bin packer de propósito geral aqui). (Sub-fase 2B) O pen_x/pen_y/shelf_h final abaixo é
+  //     guardado em inst.pen_x/pen_y/shelf_h -- o cursor de prateleira PERSISTENTE do qual o
+  //     BakeGlyph() continua pra todo glyph seguinte empacotado preguiçosamente, então um glyph de
+  //     top-up é ANEXADO depois do warm set, nunca reempacotado do zero.
   int atlas_w = 512;
   for (const Baked& b : baked) atlas_w = std::max(atlas_w, b.gw);
 
@@ -883,6 +907,9 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   inst.atlas_w = atlas_w;
   inst.atlas_h = atlas_h;
   inst.atlas_rgba.assign((size_t)atlas_w * (size_t)atlas_h * 4, 0);
+  inst.pen_x = pen_x;
+  inst.pen_y = pen_y;
+  inst.shelf_h = shelf_h;
 
   // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) Stem-darkening coverage LUT for THIS instance's
   //     pixel size -- built ONCE here, applied per-texel in the blit below (a single array lookup
@@ -892,6 +919,8 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   //     darkening is optional machinery -- measured NOT to close the stem-sharpness gap to FreeType
   //     (structural: only X-axis stem grid-fit consolidates a 0.5/0.5-split stem into a crisp
   //     column; a coverage curve only adds weight). See this function's/the hook's header.
+  //     (Sub-phase 2B) Stored in inst.cov_lut (a member, not a local array) so BakeGlyph() can
+  //     reuse the IDENTICAL curve for a lazily-baked glyph's blit below.
   // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 1.5) LUT de cobertura de stem-darkening pro tamanho-em-px
   //     DESTA instância -- construída UMA vez aqui, aplicada por-texel no blit abaixo (uma consulta
   //     de array por pixel). OPT-IN, OFF por padrão: own_font_engine_darken_enable() precisa ser
@@ -900,8 +929,9 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   //     darkening é maquinaria opcional -- medido como NÃO fechando o gap de nitidez de haste pro
   //     FreeType (estrutural: só o grid-fit de haste no eixo X consolida uma haste dividida 0.5/0.5
   //     numa coluna nítida; uma curva de cobertura só adiciona peso). Ver o header desta função/hook.
-  uint8_t cov_lut[256];
-  BuildCoverageLut(cov_lut, inst.pixel_size, own_font_engine_darken_enable());
+  //     (Sub-fase 2B) Guardada em inst.cov_lut (um membro, não um array local) pra o BakeGlyph()
+  //     reusar a curva IDÊNTICA no blit de um glyph empacotado preguiçosamente abaixo.
+  BuildCoverageLut(inst.cov_lut, inst.pixel_size, own_font_engine_darken_enable());
 
   for (const Baked& b : baked) {
     GlyphInfo gi{};
@@ -940,7 +970,7 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
           // PT: (sub-fase 1.5) cobertura -> cobertura escurecida via a LUT por-instância (identidade
           //     quando o darkening é pulado ou o tamanho é >= kPxHi). Continua (cov,cov,cov,cov)
           //     branco-premultiplicado -- o darkening só remodela o byte de cobertura, não o truque.
-          const uint8_t cov = cov_lut[src_row[x]];
+          const uint8_t cov = inst.cov_lut[src_row[x]];
           dst_row[x * 4 + 0] = cov;
           dst_row[x * 4 + 1] = cov;
           dst_row[x * 4 + 2] = cov;
@@ -952,9 +982,142 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   }
 }
 
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) See this method's long doc-comment on its declaration
+//     in font_engine_own.hpp for the full contract.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Ver o doc-comment longo deste método na sua declaração
+//     em font_engine_own.hpp pro contrato completo.
+void FontEngineOwn::BakeGlyph(FaceInstance& inst, uint32_t cp) const {
+  const glx_sfnt_face& sf = inst.face->sfnt;
+  const uint32_t gid = glx_sfnt_glyph_id(&sf, cp);
+  if (gid == 0) {
+    inst.glyphs.emplace(cp, GlyphInfo{}); // negative-cache: this face has no glyph for `cp`.
+    return;
+  }
+
+  Baked b;
+  if (!RasterizeGlyph(inst, cp, gid, b)) {
+    inst.glyphs.emplace(cp, GlyphInfo{}); // negative-cache: hmtx lookup failed (gid out of range).
+    return;
+  }
+
+  GlyphInfo gi{};
+  gi.baked = true;
+  gi.gid = b.gid;
+  gi.advance = b.advance;
+
+  if (b.gw > 0 && b.gh > 0) {
+    // EN: Persistent shelf cursor -- see FaceInstance::pen_x/pen_y/shelf_h's own doc-comment. Same
+    //     shelf-pack algorithm BakeFaceInstance()'s warm-set pass uses, just one glyph at a time
+    //     and continuing from wherever the cursor already is (never reset to (0,0)).
+    // PT: Cursor de prateleira persistente -- ver o próprio doc-comment de
+    //     FaceInstance::pen_x/pen_y/shelf_h. Mesmo algoritmo de empacotamento em prateleiras que o
+    //     passe do warm set do BakeFaceInstance() usa, só um glyph de cada vez e continuando de
+    //     onde o cursor já está (nunca resetado pra (0,0)).
+    if (inst.pen_x + b.gw > inst.atlas_w) {
+      inst.pen_y += inst.shelf_h;
+      inst.pen_x = 0;
+      inst.shelf_h = 0;
+    }
+    if (inst.pen_y + b.gh > inst.atlas_h || b.gw > inst.atlas_w) {
+      const int new_w = std::max(inst.atlas_w, b.gw);
+      const int new_h = std::max(inst.atlas_h * 2, inst.pen_y + b.gh); // amortized doubling.
+      GrowAtlas(inst, new_w, new_h);
+    }
+
+    b.atlas_x = inst.pen_x;
+    b.atlas_y = inst.pen_y;
+    inst.pen_x += b.gw;
+    inst.shelf_h = std::max(inst.shelf_h, b.gh);
+
+    gi.atlas_x = b.atlas_x;
+    gi.atlas_y = b.atlas_y;
+    gi.w = b.gw;
+    gi.h = b.gh;
+    gi.offset_x = b.offset_x;
+    gi.offset_y = b.offset_y;
+
+    // EN: Same premultiplied-white coverage blit as BakeFaceInstance()'s warm-set loop, through the
+    //     SAME per-instance inst.cov_lut -- see that function's own comment for the full rationale.
+    // PT: Mesmo blit de cobertura branco-premultiplicado do laço do warm set do BakeFaceInstance(),
+    //     pela MESMA inst.cov_lut por-instância -- ver o comentário próprio daquela função pro
+    //     racional completo.
+    for (int y = 0; y < b.gh; ++y) {
+      const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
+      uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * inst.atlas_w + (size_t)b.atlas_x) * 4];
+      for (int x = 0; x < b.gw; ++x) {
+        const uint8_t cov = inst.cov_lut[src_row[x]];
+        dst_row[x * 4 + 0] = cov;
+        dst_row[x * 4 + 1] = cov;
+        dst_row[x * 4 + 2] = cov;
+        dst_row[x * 4 + 3] = cov;
+      }
+    }
+  }
+
+  inst.glyphs.emplace(cp, gi);
+}
+
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) See this method's long doc-comment on its declaration
+//     in font_engine_own.hpp for the full contract.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Ver o doc-comment longo deste método na sua declaração
+//     em font_engine_own.hpp pro contrato completo.
+void FontEngineOwn::GrowAtlas(FaceInstance& inst, int new_w, int new_h) const {
+  new_w = std::max(new_w, inst.atlas_w);
+  new_h = std::max(new_h, inst.atlas_h);
+  if (new_w == inst.atlas_w && new_h == inst.atlas_h) return; // nothing to do.
+
+  std::vector<uint8_t> grown((size_t)new_w * (size_t)new_h * 4, 0);
+  // EN: Row-by-row (strided) copy of the used region -- every already-baked glyph's atlas_x/atlas_y
+  //     stays a valid pixel coordinate verbatim in the new buffer (no glyph is ever moved/repacked).
+  // PT: Cópia linha-a-linha (com stride) da região usada -- todo atlas_x/atlas_y de glyph já
+  //     empacotado continua uma coordenada de pixel válida ao pé da letra no buffer novo (nenhum
+  //     glyph é jamais movido/reempacotado).
+  for (int y = 0; y < inst.atlas_h; ++y) {
+    const uint8_t* src_row = &inst.atlas_rgba[(size_t)y * inst.atlas_w * 4];
+    uint8_t* dst_row = &grown[(size_t)y * new_w * 4];
+    std::copy(src_row, src_row + (size_t)inst.atlas_w * 4, dst_row);
+  }
+  inst.atlas_rgba = std::move(grown);
+  inst.atlas_w = new_w;
+  inst.atlas_h = new_h;
+}
+
 const FontEngineOwn::GlyphInfo* FontEngineOwn::FindGlyph(const FaceInstance& inst, uint32_t codepoint) {
   const auto it = inst.glyphs.find(codepoint);
   return (it != inst.glyphs.end() && it->second.baked) ? &it->second : nullptr;
+}
+
+// EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) See this method's long doc-comment on its declaration
+//     in font_engine_own.hpp for the full contract. Uses the SAME Rml::StringIteratorU8 walk
+//     IterateGlyphs() (below) uses, deliberately duplicated rather than shared -- this pass only
+//     needs the decoded codepoint (no pen/emit/kerning bookkeeping), and running it separately here,
+//     BEFORE IterateGlyphs() ever starts, is what guarantees every glyph the walk below consults is
+//     already resolved.
+// PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Ver o doc-comment longo deste método na sua declaração em
+//     font_engine_own.hpp pro contrato completo. Usa a MESMA caminhada Rml::StringIteratorU8 que o
+//     IterateGlyphs() (abaixo) usa, deliberadamente duplicada em vez de compartilhada -- este passe
+//     só precisa do codepoint decodificado (sem a contabilidade de pen/emit/kerning), e rodá-lo
+//     separadamente aqui, ANTES do IterateGlyphs() sequer começar, é o que garante que todo glyph
+//     que a caminhada abaixo consulta já está resolvido.
+void FontEngineOwn::EnsureGlyphs(FaceInstance& inst, Rml::StringView string) const {
+  bool baked_any_real = false;
+  for (Rml::StringIteratorU8 it(string.begin(), string.begin(), string.end()); it; ++it) {
+    const uint32_t cp = (uint32_t)(*it);
+    if (inst.glyphs.find(cp) != inst.glyphs.end()) continue; // already tried (real or negative-cached).
+    BakeGlyph(inst, cp);
+    const auto found = inst.glyphs.find(cp);
+    if (found != inst.glyphs.end() && found->second.baked) baked_any_real = true;
+  }
+  if (baked_any_real) {
+    // EN: RmlUi's own "regenerate cached text geometry" signal (GetVersion()) + this engine's own
+    //     "re-upload the GPU texture" signal (GenerateString()) -- see FaceInstance::version/
+    //     atlas_dirty's own doc-comment in the header.
+    // PT: O próprio sinal "regenere a geometria de texto cacheada" do RmlUi (GetVersion()) + o
+    //     próprio sinal "reenvie a textura GPU" deste motor (GenerateString()) -- ver o próprio
+    //     doc-comment de FaceInstance::version/atlas_dirty no header.
+    inst.version++;
+    inst.atlas_dirty = true;
+  }
 }
 
 float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView string, float letter_spacing,
@@ -1087,8 +1250,15 @@ const Rml::FontMetrics& FontEngineOwn::GetFontMetrics(Rml::FontFaceHandle handle
 int FontEngineOwn::GetStringWidth(Rml::FontFaceHandle handle, Rml::StringView string,
                                    const Rml::TextShapingContext& text_shaping_context,
                                    Rml::Character /*prior_character*/) {
-  const auto* inst = reinterpret_cast<const FaceInstance*>(handle);
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) Non-const now -- EnsureGlyphs() may lazily top-up-bake
+  //     a codepoint missing from this instance's atlas. Still never touches the GPU (no
+  //     Rml::RenderManager& is even passed to this override) -- see EnsureGlyphs()'s own doc-comment.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Não-const agora -- o EnsureGlyphs() pode empacotar um
+  //     codepoint ausente do atlas desta instância por-demanda. Continua nunca tocando a GPU (este
+  //     override nem recebe um Rml::RenderManager&) -- ver o próprio doc-comment de EnsureGlyphs().
+  auto* inst = reinterpret_cast<FaceInstance*>(handle);
   if (!inst) return 0;
+  EnsureGlyphs(*inst, string);
   const float width =
       IterateGlyphs(*inst, string, text_shaping_context.letter_spacing, [](float, const GlyphInfo*) {});
   return (int)std::lround(width);
@@ -1102,21 +1272,45 @@ int FontEngineOwn::GenerateString(Rml::RenderManager& render_manager, Rml::FontF
   auto* inst = reinterpret_cast<FaceInstance*>(face_handle);
   if (!inst) return 0;
 
-  // EN: Lazy, ONE-SHOT GPU texture creation -- see font_engine_own.hpp's "SCOPE" section for
-  //     why this cannot happen earlier (GetFontFaceHandle() is not passed a RenderManager&).
-  //     The lambda captures `inst` (a stable pointer -- `instances_` holds it by
-  //     std::unique_ptr, never reallocated/moved) rather than copying atlas_rgba, so it reads
-  //     whatever is current in inst->atlas_rgba at the time the callback actually runs (which,
-  //     for this ticket's eager-bake design, is already final by this point regardless).
-  // PT: Criação de textura GPU preguiçosa, ÚNICA -- ver a seção "ESCOPO" de font_engine_own.hpp
-  //     pro motivo de isto não poder acontecer antes (GetFontFaceHandle() não recebe um
-  //     RenderManager&). A lambda captura `inst` (um ponteiro estável -- `instances_` o guarda
-  //     via std::unique_ptr, nunca realocado/movido) em vez de copiar atlas_rgba, então lê o
-  //     que estiver atual em inst->atlas_rgba no momento em que o callback de fato roda (que,
-  //     pro design de empacotamento ávido desta tarefa, já é final até este ponto de qualquer
-  //     forma).
-  if (!inst->texture_created) {
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) Lazy top-up BEFORE any GPU/UV read -- so by the time
+  //     the atlas_w_f/atlas_h_f below are captured and the texture is (re-)created, both already
+  //     reflect whatever EnsureGlyphs() just baked/grew. See EnsureGlyphs()'s own doc-comment.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Top-up preguiçoso ANTES de qualquer leitura de GPU/UV
+  //     -- pra quando o atlas_w_f/atlas_h_f abaixo forem capturados e a textura for (re)criada,
+  //     ambos já refletirem o que o EnsureGlyphs() acabou de empacotar/crescer. Ver o próprio
+  //     doc-comment de EnsureGlyphs().
+  EnsureGlyphs(*inst, string);
+
+  // EN: GPU texture (re-)creation -- was a lazy, ONE-SHOT creation before sub-phase 2B (see
+  //     font_engine_own.hpp's "SCOPE" section for why it cannot happen earlier than the first
+  //     GenerateString() call: GetFontFaceHandle() is not passed a RenderManager&). (Sub-phase 2B)
+  //     Now ALSO re-creates whenever inst.atlas_dirty is set (EnsureGlyphs() just baked/grew the
+  //     CPU-side atlas) -- a stale GL texture would otherwise keep serving the atlas's PRE-top-up
+  //     pixels/dimensions forever. The stale texture is explicitly reset to an empty
+  //     Rml::CallbackTexture{} first (same reset-then-recreate mechanism Shutdown() uses,
+  //     UniqueRenderResource's own RAII contract auto-releasing the old GL resource) so
+  //     MakeCallbackTexture() below issues a genuinely fresh GL texture sized to the CURRENT
+  //     (possibly grown) atlas dimensions, rather than trying to resize one in place. The lambda
+  //     captures `inst` (a stable pointer -- `instances_` holds it by std::unique_ptr, never
+  //     reallocated/moved) rather than copying atlas_rgba, so it reads whatever is current in
+  //     inst->atlas_rgba at the time the callback actually runs.
+  // PT: (Re)criação de textura GPU -- era uma criação preguiçosa, ÚNICA, antes da sub-fase 2B (ver a
+  //     seção "ESCOPO" de font_engine_own.hpp pro motivo de não poder acontecer antes da 1ª chamada
+  //     de GenerateString(): GetFontFaceHandle() não recebe um RenderManager&). (Sub-fase 2B) Agora
+  //     TAMBÉM recria sempre que inst.atlas_dirty está setado (o EnsureGlyphs() acabou de
+  //     empacotar/crescer o atlas lado-CPU) -- uma textura GL obsoleta senão continuaria servindo os
+  //     pixels/dimensões PRÉ-top-up do atlas pra sempre. A textura obsoleta é explicitamente
+  //     resetada pra um Rml::CallbackTexture{} vazio primeiro (mesmo mecanismo reset-depois-recria
+  //     que o Shutdown() usa, o próprio contrato RAII do UniqueRenderResource auto-liberando o
+  //     recurso GL antigo) pra o MakeCallbackTexture() abaixo emitir uma textura GL genuinamente
+  //     nova, dimensionada pro atlas ATUAL (possivelmente crescido), em vez de tentar redimensionar
+  //     uma no lugar. A lambda captura `inst` (um ponteiro estável -- `instances_` o guarda via
+  //     std::unique_ptr, nunca realocado/movido) em vez de copiar atlas_rgba, então lê o que estiver
+  //     atual em inst->atlas_rgba no momento em que o callback de fato roda.
+  if (!inst->texture_created || inst->atlas_dirty) {
+    if (inst->texture_created) inst->texture = Rml::CallbackTexture{}; // release the stale GL texture.
     inst->texture_created = true;
+    inst->atlas_dirty = false;
     inst->texture = render_manager.MakeCallbackTexture(
         [inst](const Rml::CallbackTextureInterface& texture_interface) -> bool {
           return texture_interface.GenerateTexture(
@@ -1178,13 +1372,22 @@ int FontEngineOwn::GenerateString(Rml::RenderManager& render_manager, Rml::FontF
 }
 
 int FontEngineOwn::GetVersion(Rml::FontFaceHandle handle) {
-  // EN: Constant `1` for any valid handle -- see font_engine_own.hpp's "SCOPE" section for why
-  //     this instance's atlas never changes after its one-shot bake (nothing to invalidate
-  //     RmlUi's cached geometry over).
-  // PT: Constante `1` pra qualquer handle válido -- ver a seção "ESCOPO" de font_engine_own.hpp
-  //     pro motivo do atlas desta instância nunca mudar depois do empacotamento único (nada pra
-  //     invalidar na geometria cacheada do RmlUi).
-  return handle ? 1 : 0;
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) Per-instance `version` counter -- was a hardcoded
+  //     constant `1` before this sub-phase (see font_engine_own.hpp's "SCOPE" section for why: the
+  //     atlas used to never change after its one-shot warm-set bake). Now EnsureGlyphs() bumps
+  //     inst->version every time it lazily top-up-bakes >=1 REAL new glyph, RmlUi's own standard
+  //     "regenerate cached text geometry" signal for THIS handle -- a handle whose string never
+  //     needed a codepoint outside the warm set still reports a constant `1` forever, byte-identical
+  //     to the pre-2B behaviour.
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Contador `version` por-instância -- era uma constante
+  //     fixa `1` antes desta sub-fase (ver a seção "ESCOPO" de font_engine_own.hpp pro motivo: o
+  //     atlas antes nunca mudava depois do empacotamento único do warm set). Agora o EnsureGlyphs()
+  //     incrementa inst->version toda vez que empacota-por-demanda >=1 glyph novo REAL, o próprio
+  //     sinal padrão "regenere a geometria de texto cacheada" do RmlUi pra ESTE handle -- um handle
+  //     cuja string nunca precisou de um codepoint fora do warm set continua reportando uma
+  //     constante `1` pra sempre, byte-idêntico ao comportamento pré-2B.
+  const auto* inst = reinterpret_cast<const FaceInstance*>(handle);
+  return inst ? inst->version : 0;
 }
 
 } // namespace glintfx

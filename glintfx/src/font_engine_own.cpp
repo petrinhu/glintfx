@@ -519,8 +519,40 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   //     dedup acima e o campo LoadedFace abaixo nunca dessincronizarem.
   const Rml::Style::FontWeight normalized_weight =
       (weight == Rml::Style::FontWeight::Auto) ? Rml::Style::FontWeight::Normal : weight;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, family-resolution case fix) Store the family LOWER-CASED. RmlUi's
+  //     layout engine resolves a computed `font-family` through ComputeFontFamily(), which lower-
+  //     cases it via StringUtilities::ToLower() BEFORE it reaches GetFontFaceHandle()/FindBestFace()
+  //     -- but the family a @font-face block declares (and hands to LoadFontFace()/RegisterFace())
+  //     keeps the RCSS literal's own case. Storing the registered family verbatim therefore made
+  //     `f->family != family` in FindBestFace() (below) NEVER match any @font-face whose declared
+  //     family had an upper-case letter (e.g. `font-family: "OpenSans"`), silently collapsing every
+  //     such request onto FindBestFace()'s "first registered / first fallback" last resort -- so
+  //     with two+ distinct families a document could get the WRONG font with no error. Normalising
+  //     ONCE here, at write time, makes the match exact (both sides lower-case) at zero per-lookup
+  //     cost. `family` is used ONLY for matching in this engine (dedup below + FindBestFace) -- it
+  //     is never surfaced for display -- so lower-casing the stored copy is loss-free. The
+  //     family-less LoadFontFace() overload derives its family from the file-name stem and reaches
+  //     here through the same path, so it is normalised identically (a file-stem family a document
+  //     references would likewise arrive lower-cased from RmlUi).
+  // PT: (L1.20-FONTFLIP, FT-F4, fix de case na resolução de família) Guarda a família em MINÚSCULAS.
+  //     O motor de layout do RmlUi resolve um `font-family` computado via ComputeFontFamily(), que
+  //     o passa por StringUtilities::ToLower() ANTES de chegar em GetFontFaceHandle()/FindBestFace()
+  //     -- mas a família que um bloco @font-face declara (e entrega ao LoadFontFace()/RegisterFace())
+  //     mantém o case literal do RCSS. Guardar a família registrada ao pé da letra fazia então o
+  //     `f->family != family` do FindBestFace() (abaixo) NUNCA casar nenhum @font-face cuja família
+  //     declarada tivesse uma letra maiúscula (ex.: `font-family: "OpenSans"`), colapsando
+  //     silenciosamente todo pedido desses no último recurso "primeira registrada / primeiro
+  //     fallback" do FindBestFace() -- então com duas+ famílias distintas um documento podia pegar a
+  //     fonte ERRADA sem erro nenhum. Normalizar UMA vez aqui, em tempo de escrita, torna o match
+  //     exato (os dois lados em minúsculas) a custo zero por-lookup. `family` é usado SÓ pra match
+  //     neste motor (dedup abaixo + FindBestFace) -- nunca é exibido -- então minusculizar a cópia
+  //     guardada é sem perda. A sobrecarga sem-família de LoadFontFace() deriva a família do stem do
+  //     nome de arquivo e chega aqui pelo mesmo caminho, então é normalizada idêntica (um family de
+  //     stem que um documento referenciasse chegaria igualmente minúsculo do RmlUi).
+  const Rml::String normalized_family = Rml::StringUtilities::ToLower(family);
   for (const auto& f : faces_) {
-    if (f->family == family && f->style == style && f->weight == normalized_weight &&
+    if (f->family == normalized_family && f->style == style && f->weight == normalized_weight &&
         f->blob.size() == blob.size() && f->blob == blob) {
       // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) EDGE: a duplicate-hit face that is ALSO
       //     `fallback_face==true` must still land in `fallback_faces_` if it is not already there --
@@ -562,7 +594,7 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   //     nem por-instância.
   lf->hint_zones = DeriveHintZones(lf->sfnt);
 
-  lf->family = family;
+  lf->family = normalized_family; // lower-cased -- see the hoisted-local comment above the dedup loop.
   lf->style = style;
   lf->weight = normalized_weight; // see the hoisted-local comment above the dedup loop.
   lf->fallback_face = fallback_face;
@@ -655,6 +687,17 @@ const FontEngineOwn::LoadedFace* FontEngineOwn::FindBestFace(const Rml::String& 
   const LoadedFace* best = nullptr;
   int best_score = -1;
   for (const auto& f : faces_) {
+    // EN: (L1.20-FONTFLIP, FT-F4, family-resolution case fix) Both sides are lower-case here: `f->family`
+    //     was lower-cased at RegisterFace() write time (see the normalized_family comment there), and
+    //     `family` arrives already lower-cased from RmlUi's ComputeFontFamily()/StringUtilities::ToLower()
+    //     upstream of GetFontFaceHandle(). So this exact compare now matches a mixed-case @font-face
+    //     declaration correctly, instead of falling through to the fallback below.
+    // PT: (L1.20-FONTFLIP, FT-F4, fix de case na resolução de família) Os dois lados aqui estão em
+    //     minúsculas: `f->family` foi minusculizado em tempo de escrita no RegisterFace() (ver o
+    //     comentário do normalized_family lá), e `family` já chega em minúsculas do
+    //     ComputeFontFamily()/StringUtilities::ToLower() do RmlUi a montante do GetFontFaceHandle().
+    //     Então esta comparação exata agora casa uma declaração @font-face de case misto corretamente,
+    //     em vez de cair no fallback abaixo.
     if (f->family != family) continue; // family is a hard requirement among family-matching candidates.
     int score = 100;
     if (f->style == style) score += 10;

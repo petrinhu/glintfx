@@ -987,6 +987,50 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_lazy_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_dedup_sanity (L1.20-FONTFLIP, FT-F4, pre-flip FIX) -- regression net for the
+  #     RegisterFace() face-registration LEAK confirmed by adversarial review and fixed the same
+  #     session (src/font_engine_own.cpp/.hpp): reloading the SAME document N times used to push N
+  #     duplicate LoadedFace blobs (~214KB/reload for Open Sans, unbounded over a session) with no
+  #     dedup; RegisterFace() now dedups by (family,style,weight,blob-content) before allocating,
+  #     mirroring the pinned RmlUi source's own FontProvider::AddFace()/FontFamily::AddFace()
+  #     "Duplicate" outcome. This test reloads fonteng_embed_scene.rml (already copied above by the
+  #     fonteng_own_embed_sanity block; its assets/ font dir too) 50 times in one UiLayer session
+  #     and asserts the src-internal DEBUG hook own_font_engine_debug_registered_face_count()
+  #     (font_engine_own.hpp/.cpp) is EXACTLY 1 after the first load and stays EXACTLY 1 after all
+  #     50 (an exact-integer oracle, not a tolerance -- the pre-fix code would have measured 50),
+  #     plus an ink check on the final reload proving the deduped face still renders. Same
+  #     registration shape as fonteng_lazy_sanity right above (OUTSIDE if(GLINTFX_BACKEND_GLFW),
+  #     via ${_embed_dep} + glloader). See fonteng_dedup_sanity.cpp's own header for the full method.
+  # PT: fonteng_dedup_sanity (L1.20-FONTFLIP, FT-F4, FIX pré-flip) -- rede de regressão do
+  #     VAZAMENTO de registro de face do RegisterFace(), confirmado por review adversarial e
+  #     corrigido na mesma sessão (src/font_engine_own.cpp/.hpp): recarregar o MESMO documento N
+  #     vezes empilhava N blobs LoadedFace duplicados (~214KB/reload pra Open Sans, sem limite ao
+  #     longo de uma sessão) sem dedup; o RegisterFace() agora deduplica por
+  #     (family,style,weight,conteúdo-do-blob) antes de alocar, espelhando o próprio resultado
+  #     "Duplicate" do FontProvider::AddFace()/FontFamily::AddFace() do source pinado do RmlUi.
+  #     Este teste recarrega fonteng_embed_scene.rml (já copiado acima pelo bloco
+  #     fonteng_own_embed_sanity; o dir de fonte assets/ também) 50 vezes numa única sessão UiLayer
+  #     e verifica que o hook de DEBUG src-interno
+  #     own_font_engine_debug_registered_face_count() (font_engine_own.hpp/.cpp) é EXATAMENTE 1
+  #     após a 1ª carga e permanece EXATAMENTE 1 após as 50 (oráculo de inteiro exato, não
+  #     tolerância -- o código pré-fix teria medido 50), mais um cheque de tinta no reload final
+  #     provando que a face deduplicada ainda renderiza. Mesmo formato de registro de
+  #     fonteng_lazy_sanity logo acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} +
+  #     glloader). Ver o cabeçalho próprio de fonteng_dedup_sanity.cpp pro método completo.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_dedup_sanity fonteng_dedup_sanity.cpp)
+  target_link_libraries(fonteng_dedup_sanity PRIVATE ${_embed_dep} glloader)
+  # EN: fonteng_embed_scene.rml + assets/ already copied to CMAKE_CURRENT_BINARY_DIR by the
+  #     fonteng_own_embed_sanity block above -- no further configure_file()/file(COPY) needed.
+  # PT: fonteng_embed_scene.rml + assets/ já copiados pra CMAKE_CURRENT_BINARY_DIR pelo bloco
+  #     fonteng_own_embed_sanity acima -- sem configure_file()/file(COPY) adicional necessário.
+  add_test(NAME fonteng_dedup_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_dedup_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

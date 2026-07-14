@@ -177,6 +177,7 @@
 #include <RmlUi/Core/RenderManager.h>
 #include <RmlUi/Core/StringUtilities.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -875,6 +876,45 @@ bool& own_font_engine_pensnap_bypass();
 //     origem). Retorna uma referência a um `static bool` local de função (sem preocupação de ordem de
 //     init estática, uso só em teste single-thread).
 bool& own_font_engine_vsnap_bypass();
+
+// EN: DEBUG REGISTERED-FACE-COUNT HOOK (L1.20-FONTFLIP, FT-F4, dedup leak fix) -- a sixth
+//     src-internal, process-global counter, but UNLIKE the five toggles above (which steer
+//     behaviour) this one is READ-ONLY telemetry: it counts how many LoadedFace entries
+//     RegisterFace() (font_engine_own.cpp) has actually PUSHED into faces_ across the whole
+//     process, i.e. how many distinct (family, style, weight, blob-content) faces are genuinely
+//     held. RegisterFace() increments it exactly once per successful push_back and does NOT
+//     increment it on a dedup hit (an already-registered equivalent face short-circuits before
+//     any LoadedFace is constructed) -- so this counter is the mechanical proof that reloading
+//     the SAME document (same @font-face src, same family/style/weight) N times leaves it
+//     UNCHANGED after the first load, instead of growing by N (the confirmed leak this fix
+//     closes: ~214KB/reload for Open Sans, unbounded over a session's lifetime). Exists ONLY to
+//     give tests/fonteng_dedup_sanity.cpp a deterministic, non-RSS-sampling oracle (RSS
+//     sampling is noisy/platform-dependent; a face count is exact). Same function-local-static
+//     pattern as the five hooks above (no static-init-order concern), but the reference is
+//     `size_t&` so a test can ALSO reset it to 0 for hygiene between independent measurement
+//     windows in the same process (mirrors `own_font_engine_ab_bypass() = false;` at the top of
+//     every A/B test in this suite). NOT part of glintfx's PUBLIC API: declared only in this
+//     src-internal header, and even here only when GLINTFX_OWN_FONT_ENGINE=ON.
+// PT: HOOK DE DEBUG DE CONTAGEM DE FACES REGISTRADAS (L1.20-FONTFLIP, FT-F4, fix de vazamento
+//     do dedup) -- um sexto contador src-interno, process-global, mas DIFERENTE dos cinco
+//     toggles acima (que guiam comportamento) este é telemetria SOMENTE-LEITURA: conta quantas
+//     entradas LoadedFace o RegisterFace() (font_engine_own.cpp) de fato EMPILHOU em faces_ ao
+//     longo do processo inteiro, i.e. quantas faces (family, style, weight, conteúdo-do-blob)
+//     distintas estão genuinamente retidas. O RegisterFace() o incrementa exatamente uma vez por
+//     push_back bem-sucedido e NÃO o incrementa num acerto de dedup (uma face equivalente já
+//     registrada retorna cedo antes de qualquer LoadedFace ser construída) -- então este contador
+//     é a prova mecânica de que recarregar o MESMO documento (mesmo src de @font-face, mesma
+//     family/style/weight) N vezes o deixa INALTERADO após a 1ª carga, em vez de crescer N vezes
+//     (o vazamento confirmado que este fix fecha: ~214KB/reload pra Open Sans, sem limite ao
+//     longo da vida de uma sessão). Existe SÓ para dar ao tests/fonteng_dedup_sanity.cpp um
+//     oráculo determinístico, sem amostragem de RSS (amostragem de RSS é ruidosa/dependente de
+//     plataforma; uma contagem de faces é exata). Mesmo padrão static-local-de-função dos cinco
+//     hooks acima (sem preocupação de ordem de init estática), mas a referência é `size_t&` para
+//     um teste TAMBÉM poder resetá-lo a 0 por higiene entre janelas de medição independentes no
+//     mesmo processo (espelha `own_font_engine_ab_bypass() = false;` no topo de todo teste A/B
+//     desta suíte). NÃO faz parte da API PÚBLICA do glintfx: declarado só neste header
+//     src-interno, e mesmo aqui só quando GLINTFX_OWN_FONT_ENGINE=ON.
+size_t& own_font_engine_debug_registered_face_count();
 
 } // namespace glintfx
 

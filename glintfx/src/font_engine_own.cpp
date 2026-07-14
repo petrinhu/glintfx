@@ -132,6 +132,20 @@ bool& own_font_engine_vsnap_bypass() {
   return bypass;
 }
 
+// EN: DEBUG registered-face-COUNT storage (L1.20-FONTFLIP, FT-F4, dedup leak fix). See the long
+//     doc-comment on this function's declaration in font_engine_own.hpp for the full contract.
+//     Same function-local-static pattern as the five hooks above; RegisterFace() increments it
+//     once per successful faces_.push_back() and leaves it untouched on a dedup early-return.
+// PT: Armazenamento da CONTAGEM de faces registradas, de debug (L1.20-FONTFLIP, FT-F4, fix de
+//     vazamento do dedup). Ver o doc-comment longo na declaração desta função em
+//     font_engine_own.hpp pro contrato completo. Mesmo padrão static-local-de-função dos cinco
+//     hooks acima; o RegisterFace() o incrementa uma vez por faces_.push_back() bem-sucedido e o
+//     deixa intocado num retorno antecipado de dedup.
+size_t& own_font_engine_debug_registered_face_count() {
+  static size_t count = 0;
+  return count;
+}
+
 namespace {
 
 // EN: The fixed WARM-SET bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER,
@@ -434,6 +448,84 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   //     documentada, não um bug silencioso.
   if (blob.empty()) return false;
 
+  // EN: (L1.20-FONTFLIP, dedup leak fix) DEDUP against already-registered faces BEFORE parsing/
+  //     allocating a new LoadedFace -- mirrors the pinned RmlUi source's own
+  //     FontProvider::AddFace()/FontFamily::AddFace() ("if (face.face->GetStyle() == style &&
+  //     face.face->GetWeight() == weight) return {Duplicate, nullptr};", confirmed reading
+  //     examples/RmlUi/Source/Core/FontEngineDefault/FontFamily.cpp), which never duplicates a
+  //     face or its font-file blob for an already-loaded (family, style, weight) identity.
+  //     WITHOUT this guard, RegisterFace() pushed a brand-new ~214KB-per-Open-Sans-file copy of
+  //     `blob` UNCONDITIONALLY on every call -- and Rml::LoadFontFace() is called once per
+  //     Context::LoadDocument() for every @font-face block the stylesheet declares (RmlUi's
+  //     StyleSheetParser::ParseFontFaceBlock), so reloading the SAME document N times (a normal
+  //     usage path: screen navigation, hot-reload -- NOT hostile input) leaked ~214KB*N, measured
+  //     +213893 bytes/reload of VmRSS over 300 reloads. FindBestFace()'s `if (score > best_score)`
+  //     (strictly greater) means the FIRST-registered face of a tied identity always wins ties, so
+  //     every duplicate pushed after the first was already 100% dead weight: registered, never
+  //     resolved to, never freed before Shutdown().
+  //     CRITERION: (family, style, weight) -- RmlUi's own identity -- PLUS blob-content equality
+  //     (exact byte match), narrower than RmlUi's family+style+weight-only rule on purpose: two
+  //     GENUINELY DIFFERENT font files sharing a (family, style, weight) triple (e.g. two
+  //     different @font-face blocks both claiming "Body/Normal/400" with different src) still
+  //     coexist here exactly as before this fix (FindBestFace()'s resolution semantics for
+  //     distinct faces are UNCHANGED -- first-registered still wins ties, by design, untouched by
+  //     this guard) -- only the common case this ticket targets, the SAME file reloaded, dedupes.
+  //     weight is compared post-Auto-normalisation (see the hoisted `normalized_weight` local
+  //     right below) so an Auto-weight reload against an already-normalised-Normal entry still
+  //     recognises the identity. Cheap: std::vector<uint8_t>::operator== is a single
+  //     memcmp-equivalent pass, paid
+  //     ONLY once family+style+weight already matched (rare outside the reload case this exists
+  //     for), and this early return skips glx_sfnt_open()/DeriveHintZones() entirely for a
+  //     dedup hit -- a bonus, not just a memory fix.
+  // PT: (L1.20-FONTFLIP, fix de vazamento do dedup) DEDUPLICA contra faces já registradas ANTES de
+  //     parsear/alocar uma nova LoadedFace -- espelha o próprio source pinado do RmlUi
+  //     (FontProvider::AddFace()/FontFamily::AddFace() -- "if (face.face->GetStyle() == style &&
+  //     face.face->GetWeight() == weight) return {Duplicate, nullptr};", confirmado lendo
+  //     examples/RmlUi/Source/Core/FontEngineDefault/FontFamily.cpp), que nunca duplica uma face
+  //     nem o blob do arquivo de fonte para uma identidade (family, style, weight) já carregada.
+  //     SEM esta guarda, RegisterFace() empilhava uma cópia nova de ~214KB (Open Sans) de `blob`
+  //     INCONDICIONALMENTE a cada chamada -- e Rml::LoadFontFace() é chamado uma vez por
+  //     Context::LoadDocument() pra cada bloco @font-face que a stylesheet declara
+  //     (StyleSheetParser::ParseFontFaceBlock do RmlUi), então recarregar o MESMO documento N
+  //     vezes (um caminho de uso NORMAL: navegação de tela, hot-reload -- NÃO input hostil)
+  //     vazava ~214KB*N, medido em +213893 bytes/reload de VmRSS ao longo de 300 reloads. O
+  //     `if (score > best_score)` (estritamente maior) do FindBestFace() faz a face registrada
+  //     PRIMEIRO de uma identidade empatada sempre ganhar, então toda duplicata empilhada depois
+  //     da primeira já era 100% peso-morto: registrada, nunca resolvida, nunca liberada antes do
+  //     Shutdown().
+  //     CRITÉRIO: (family, style, weight) -- a identidade do próprio RmlUi -- MAIS igualdade de
+  //     conteúdo do blob (match de byte exato), mais estreito que a regra só-family+style+weight
+  //     do RmlUi de propósito: dois arquivos de fonte GENUINAMENTE DIFERENTES compartilhando uma
+  //     tripla (family, style, weight) (ex.: dois blocos @font-face distintos ambos alegando
+  //     "Body/Normal/400" com src diferente) ainda coexistem aqui exatamente como antes deste fix
+  //     (a semântica de resolução do FindBestFace() para faces distintas fica INALTERADA -- a
+  //     registrada primeiro ainda ganha empates, por design, intocado por esta guarda) -- só o
+  //     caso comum que esta tarefa mira, o MESMO arquivo recarregado, deduplica. weight é
+  //     comparado pós-normalização-de-Auto (ver a local içada `normalized_weight` logo abaixo) pra
+  //     um reload de weight Auto contra uma entrada já-normalizada-Normal ainda reconhecer a
+  //     identidade. Barato: std::vector<uint8_t>::operator== é uma única passada equivalente a
+  //     memcmp, paga SÓ quando family+style+weight já casaram (raro fora do caso de reload que
+  //     isto existe para cobrir), e este retorno antecipado pula glx_sfnt_open()/
+  //     DeriveHintZones() inteiramente num acerto de dedup -- um bônus, não só um fix de memória.
+  // EN: Style::FontWeight::Auto (0) is not a real weight to MATCH against (here OR below at the
+  //     lf->weight assignment, which reuses this SAME variable) -- normalise to Normal (400),
+  //     RmlUi's own "no weight specified" convention (StyleTypes.h comment: "Any definite value
+  //     in the range [1,1000] is valid"). Hoisted to a single local so the dedup check above and
+  //     the LoadedFace field below can never drift out of sync.
+  // PT: Style::FontWeight::Auto (0) não é um peso real pra COMPARAR (aqui OU abaixo na atribuição
+  //     de lf->weight, que reusa esta MESMA variável) -- normaliza para Normal (400), a própria
+  //     convenção do RmlUi pra "nenhum peso especificado" (comentário de StyleTypes.h: "Any
+  //     definite value in the range [1,1000] is valid"). Içado pra uma única local pra o cheque de
+  //     dedup acima e o campo LoadedFace abaixo nunca dessincronizarem.
+  const Rml::Style::FontWeight normalized_weight =
+      (weight == Rml::Style::FontWeight::Auto) ? Rml::Style::FontWeight::Normal : weight;
+  for (const auto& f : faces_) {
+    if (f->family == family && f->style == style && f->weight == normalized_weight &&
+        f->blob.size() == blob.size() && f->blob == blob) {
+      return true; // already registered -- RmlUi's own "Duplicate" outcome is success, not error.
+    }
+  }
+
   auto lf = std::make_unique<LoadedFace>();
   lf->blob = std::move(blob);
   if (glx_sfnt_open(lf->blob.data(), lf->blob.size(), &lf->sfnt) != GLX_SFNT_OK) return false;
@@ -452,16 +544,11 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
 
   lf->family = family;
   lf->style = style;
-  // EN: Style::FontWeight::Auto (0) is not a real weight to MATCH against later -- normalise to
-  //     Normal (400), RmlUi's own "no weight specified" convention (StyleTypes.h comment: "Any
-  //     definite value in the range [1,1000] is valid").
-  // PT: Style::FontWeight::Auto (0) não é um peso real pra COMPARAR depois -- normaliza para
-  //     Normal (400), a própria convenção do RmlUi pra "nenhum peso especificado" (comentário
-  //     de StyleTypes.h: "Any definite value in the range [1,1000] is valid").
-  lf->weight = (weight == Rml::Style::FontWeight::Auto) ? Rml::Style::FontWeight::Normal : weight;
+  lf->weight = normalized_weight; // see the hoisted-local comment above the dedup loop.
   lf->fallback_face = fallback_face;
 
   faces_.push_back(std::move(lf));
+  ++own_font_engine_debug_registered_face_count(); // L1.20-FONTFLIP dedup fix -- see the hook's own doc-comment.
   return true;
 }
 

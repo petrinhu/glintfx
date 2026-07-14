@@ -25,8 +25,13 @@
 //     primeiro resultado não-NULL vence.
 #include "gl_loader.h"
 
-#include <dlfcn.h>
 #include <stddef.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -740,6 +745,92 @@ static const glintfx_gl_sym_t glintfx_gl_symbol_table[] = {
 //     avisos de -Wpedantic / strict-aliasing).
 typedef void (*glintfx_glx_fn_t)(void);
 
+#ifdef _WIN32
+// EN: Win32 codepath (L1.14-GLLOADER-WIN) -- mirrors the well-known GLAD
+//     GLAD_PLATFORM_WIN32 resolution strategy: wglGetProcAddress() first (covers GL
+//     >=1.2 core entry points and every extension), falling back to a direct
+//     GetProcAddress() against opengl32.dll (covers GL 1.0/1.1, which
+//     wglGetProcAddress is documented to NEVER resolve -- see the sentinel-value
+//     rationale on glintfx_resolve_symbol below). opengl32.dll is loaded via
+//     LoadLibraryA(), never linked (-lopengl32) -- kernel32's implicit
+//     Load/GetProcAddress import keeps this loader dependency-free for consumers'
+//     link lines, matching the POSIX branch's dlopen-not-link posture.
+// PT: Caminho Win32 (L1.14-GLLOADER-WIN) -- espelha a estratégia de resolução
+//     GLAD_PLATFORM_WIN32 do GLAD, bem conhecida: wglGetProcAddress() primeiro
+//     (cobre entry points core GL >=1.2 e toda extensão), caindo para
+//     GetProcAddress() direto em opengl32.dll (cobre GL 1.0/1.1, que o
+//     wglGetProcAddress é documentado a NUNCA resolver -- ver o racional dos
+//     valores-sentinela em glintfx_resolve_symbol abaixo). opengl32.dll é
+//     carregada via LoadLibraryA(), nunca linkada (-lopengl32) -- o import
+//     implícito de Load/GetProcAddress do kernel32 mantém este loader livre de
+//     dependência na linha de link dos consumidores, espelhando a postura
+//     dlopen-sem-linkar do ramo POSIX.
+typedef PROC (WINAPI *glintfx_wglGetProcAddress_t)(LPCSTR);
+
+static HMODULE glintfx_opengl32 = NULL;
+static glintfx_wglGetProcAddress_t glintfx_wgl_get_proc = NULL;
+
+static void* glintfx_resolve_symbol(const char* name) {
+  // EN: FARPROC/PROC are the same underlying function-pointer type on Win32
+  //     (<winnt.h>/<minwindef.h>: `typedef FARPROC PROC;`), so a single union
+  //     member covers both wglGetProcAddress()'s and GetProcAddress()'s return
+  //     value -- same void*<->function-pointer round-trip idiom as the POSIX
+  //     `cast` union below (avoids a direct object/function-pointer C-style cast).
+  // PT: FARPROC/PROC são o mesmo tipo de ponteiro-de-função por baixo no Win32
+  //     (<winnt.h>/<minwindef.h>: `typedef FARPROC PROC;`), então um único membro
+  //     de union cobre o retorno de wglGetProcAddress() e de GetProcAddress() --
+  //     mesmo idioma de round-trip void*<->ponteiro-de-função da union `cast`
+  //     POSIX abaixo (evita um cast C-style direto objeto/ponteiro-de-função).
+  union { void* obj; FARPROC fn; } cast;
+  cast.obj = NULL;
+
+  if (glintfx_wgl_get_proc) {
+    cast.fn = glintfx_wgl_get_proc(name);
+    void* p = cast.obj;
+    // EN: wglGetProcAddress signals failure not only with NULL but also with the
+    //     four documented sentinel values below (MSDN: "The pointer returned...
+    //     may be one of a number of failure codes"). Treating those as success
+    //     would hand a GL 1.0/1.1 caller a bogus non-NULL pointer that crashes on
+    //     first invocation -- those entry points are ordinary opengl32.dll
+    //     exports and are documented to NEVER resolve via wglGetProcAddress.
+    // PT: wglGetProcAddress sinaliza falha não só com NULL, mas também com os
+    //     quatro valores-sentinela documentados abaixo (MSDN: "o ponteiro
+    //     retornado... pode ser um dos vários códigos de falha"). Tratar esses
+    //     como sucesso entregaria a um chamador GL 1.0/1.1 um ponteiro não-NULL
+    //     espúrio que crasha na primeira chamada -- esses entry points são
+    //     exports comuns de opengl32.dll e são documentados a NUNCA resolver via
+    //     wglGetProcAddress.
+    if (p != NULL && p != (void*)1 && p != (void*)2 && p != (void*)3 && p != (void*)-1) {
+      return p;
+    }
+  }
+  if (glintfx_opengl32) {
+    cast.fn = GetProcAddress(glintfx_opengl32, name);
+    return cast.obj;
+  }
+  return NULL;
+}
+
+int glx_gl_load(void) {
+  if (!glintfx_opengl32) {
+    glintfx_opengl32 = LoadLibraryA("opengl32.dll");
+  }
+
+  if (glintfx_opengl32 && !glintfx_wgl_get_proc) {
+    union { FARPROC obj; glintfx_wglGetProcAddress_t fn; } cast;
+    cast.obj = GetProcAddress(glintfx_opengl32, "wglGetProcAddress");
+    glintfx_wgl_get_proc = cast.fn;
+  }
+
+  int missing = 0;
+  for (size_t i = 0; i < sizeof(glintfx_gl_symbol_table) / sizeof(glintfx_gl_symbol_table[0]); ++i) {
+    void* resolved = glintfx_resolve_symbol(glintfx_gl_symbol_table[i].name);
+    *glintfx_gl_symbol_table[i].slot = resolved;
+    if (!resolved) ++missing;
+  }
+  return missing ? 1 : 0;
+}
+#else
 typedef glintfx_glx_fn_t (*glintfx_glXGetProcAddress_t)(const unsigned char*);
 typedef void* (*glintfx_eglGetProcAddress_t)(const char*);
 
@@ -828,6 +919,7 @@ int glx_gl_load(void) {
   }
   return missing ? 1 : 0;
 }
+#endif // _WIN32
 
 #ifdef __cplusplus
 }

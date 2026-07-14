@@ -10,6 +10,65 @@
 
 ## [Unreleased]
 
+---
+
+## [0.9.2] - 2026-07-14 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.9.2)
+
+**EN:** **Patch** release -- consumer-driven fix, no public API surface change. The headline fix unblocks the Windows build of the generated GL loader (`L1.14-GLLOADER-WIN`), reported by GusWorld while preparing a Windows target. Also landing: a CI restructuring (gate order, self-hosted heavy sanitizer job, pre-push local gate) and a documentation reinforcement carried over from `[Unreleased]`. **No existing signature changed; this release is a drop-in upgrade from v0.9.1.**
+**PT:** Release **patch** -- fix consumer-driven, sem mudança de superfície pública de API. O fix de destaque destrava o build Windows do loader GL gerado (`L1.14-GLLOADER-WIN`), reportado pelo GusWorld ao preparar um alvo Windows. Também chegando: uma reestruturação de CI (ordem de gate, job pesado de sanitizer self-hosted, gate local pre-push) e um reforço de documentação carregado do `[Unreleased]`. **Nenhuma assinatura existente mudou; esta release é um upgrade drop-in a partir da v0.9.1.**
+
+### Fixed / Corrigido
+
+- **EN:** `glintfx/src/gl_loader.c` (and its generator, `tools/gen_glloader.py` -- the `.c`/`.h`
+  pair is GENERATED, never hand-edited) only resolved GL entry points via `dlopen`/`dlsym`
+  (`<dlfcn.h>`), a POSIX-only API that does not exist on Windows -- any consumer attempting a
+  Windows build (GusWorld, preparing a Windows target) hit a hard compile break at the very first
+  `#include <dlfcn.h>`. Fixed with an `#ifdef _WIN32` branch in the generator's source preamble
+  and load-function template: the Win32 codepath mirrors the well-known GLAD
+  `GLAD_PLATFORM_WIN32` resolution strategy -- `wglGetProcAddress()` first (covers GL >=1.2 core
+  entry points and every extension, with a guard against its 4 documented failure sentinel values
+  `NULL`/`0x1`/`0x2`/`0x3`/`-1`, which the naive nullptr-only check would miss), falling back to a
+  direct `GetProcAddress()` against `opengl32.dll` (covers GL 1.0/1.1, which
+  `wglGetProcAddress` is documented to never resolve). `opengl32.dll` is loaded via
+  `LoadLibraryA()`, never linked (`-lopengl32`) -- mirrors the POSIX branch's
+  dlopen-not-link posture, so consumers' link lines stay unchanged. The `#else` POSIX branch is
+  byte-identical to the pre-fix source (diff is additions only); `gl_loader.h` is untouched.
+  Validated by a MinGW-w64 cross-compile (produces a valid PE/COFF x86-64 object) plus a
+  non-regression build + `ctest -R gl_loader` on Linux.
+  **PT:** `glintfx/src/gl_loader.c` (e seu gerador, `tools/gen_glloader.py` -- o par `.c`/`.h` é
+  GERADO, nunca editado à mão) só resolvia entry points GL via `dlopen`/`dlsym` (`<dlfcn.h>`), uma
+  API POSIX-only que não existe no Windows -- qualquer consumidor tentando um build Windows
+  (GusWorld, preparando um alvo Windows) batia numa quebra de compilação logo no primeiro
+  `#include <dlfcn.h>`. Corrigido com um ramo `#ifdef _WIN32` no preâmbulo de source e no template
+  da função de load do gerador: o caminho Win32 espelha a estratégia de resolução
+  `GLAD_PLATFORM_WIN32` do GLAD, bem conhecida -- `wglGetProcAddress()` primeiro (cobre entry
+  points core GL >=1.2 e toda extensão, com uma guarda contra os 4 valores-sentinela de falha
+  documentados `NULL`/`0x1`/`0x2`/`0x3`/`-1`, que a checagem ingênua só-de-nullptr deixaria
+  passar), caindo para `GetProcAddress()` direto em `opengl32.dll` (cobre GL 1.0/1.1, que o
+  `wglGetProcAddress` é documentado a nunca resolver). `opengl32.dll` é carregada via
+  `LoadLibraryA()`, nunca linkada (`-lopengl32`) -- espelha a postura dlopen-sem-linkar do ramo
+  POSIX, então as linhas de link dos consumidores não mudam. O ramo `#else` POSIX é
+  byte-idêntico ao source pré-fix (diff é só adições); `gl_loader.h` está intocado. Validado por
+  um cross-compile MinGW-w64 (produz um objeto PE/COFF x86-64 válido) mais um build de
+  não-regressão + `ctest -R gl_loader` no Linux.
+
+### Infrastructure / Infraestrutura
+
+- **EN:** CI gate order canonicalized as `github` > `claudio` (self-hosted local runner,
+  `.forgejo/workflows/heavy.yml`, `fedora:42` container, runs ASan+UBSan sanitize + the own-font-engine
+  regression job) > `codeberg` (paritypruned to a single build leg, voluntary, never blocks a
+  release); a single green leg is sufficient. Added a local pre-push gate
+  (`tools/preci.sh` + `.githooks/pre-push`, `TST-L1-PRECI`) that reproduces the fast checks before
+  a push leaves the machine. Fixed a `CXXFLAGS`/`SYS_futex` build break on the `fedora:42`
+  container's `clang` for the font-engine job.
+  **PT:** ordem de gate de CI canonizada como `github` > `claudio` (runner local self-hosted,
+  `.forgejo/workflows/heavy.yml`, container `fedora:42`, roda ASan+UBSan sanitize + o job de
+  regressão do motor de fonte próprio) > `codeberg` (podado a uma única perna de build, voluntário,
+  nunca bloqueia release); uma perna verde já basta. Adicionado um gate local pre-push
+  (`tools/preci.sh` + `.githooks/pre-push`, `TST-L1-PRECI`) que reproduz as checagens rápidas antes
+  de um push sair da máquina. Corrigida uma quebra de build de `CXXFLAGS`/`SYS_futex` no `clang` do
+  container `fedora:42` pro job do motor de fonte.
+
 ### Documentation / Documentação
 
 - **EN:** `docs/embed-integration.md` §18 reinforced with a real consumer-found integration case

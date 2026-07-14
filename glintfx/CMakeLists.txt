@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.9.1)
+project(glintfx LANGUAGES C CXX VERSION 0.9.2)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23

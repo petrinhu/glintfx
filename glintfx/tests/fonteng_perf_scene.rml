@@ -1,0 +1,101 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: fonteng_perf_scene.rml -- L1.20-PERFBENCH HUD document, driven by fonteng_perf_bench.cpp.
+      Consumer-driven by the GusWorld: the cockpit HUD is dense, small-body (9-11dp) text that
+      MUTATES every frame (HP/AP/MANA/percent counters ticking) -- exactly the regime
+      GetStringWidth()/IterateGlyphs()/GenerateString() pay for on every real frame, and exactly
+      the regime a weak machine feels first.
+      Binds to the "hud" data model (fonteng_perf_bench.cpp: create_data_model -> bind_number x5
+      + bind_bool -> load, RmlUi's mandatory bind-before-load ordering): hp/ap/mana/pct/sector
+      (number) tick every measured frame so RmlUi's per-instance `version` counter
+      (FontEngineOwn::GetVersion()) actually changes and GenerateString() is genuinely re-invoked
+      -- see this file's own tests/fonteng_ab_visual.cpp sibling's data-model precedent and
+      fonteng_perf_bench.cpp's own header for why an UNCHANGED text would silently measure RmlUi's
+      cache instead of the font engine.
+      TWO font groups share this ONE document (data-if picks exactly one, per --font=pixelop|
+      opensans): "HudMono" (PixelOperatorMono.ttf, the GusWorld's own cockpit font -- see
+      feedback_gusworld_corpo_pequeno_fonte.md) and "HudSans" (OpenSans-Regular.ttf, the
+      contrast/general-distribution case -- see feedback_escopo_distribuicao_geral.md). Both
+      @font-face blocks are always declared (RmlUi lazily loads a face only when a matching
+      font-family is actually used by a LAID-OUT element, so the data-if="false" group's
+      @font-face never gets baked) so bind_bool("show_pixelop", ...) alone -- no scene reload --
+      selects which corpus is exercised.
+      Sizes 9/10/11dp per the líder's consumer-driven brief: HP/AP/MANA at 10dp, INVENTORY/EQUIP/
+      SETTINGS at 9-11dp, one long composite line at 11dp (the "longest line" layout-cost outlier).
+      Both groups' ids are prefixed po_/os_ so fonteng_perf_bench.cpp's per-frame set_number()
+      calls and get_element_box() probes address the SAME logical lines regardless of --font.
+  PT: fonteng_perf_scene.rml -- documento HUD do L1.20-PERFBENCH, dirigido por
+      fonteng_perf_bench.cpp. Consumer-driven pelo GusWorld: o HUD do cockpit é texto denso, de
+      corpo pequeno (9-11dp), que MUTA a cada frame (contadores de HP/AP/MANA/percentual
+      correndo) -- exatamente o regime que GetStringWidth()/IterateGlyphs()/GenerateString()
+      pagam a cada frame real, e exatamente o regime que uma máquina fraca sente primeiro.
+      Liga ao data model "hud" (fonteng_perf_bench.cpp: create_data_model -> bind_number x5 +
+      bind_bool -> load, ordenação obrigatória bind-antes-de-load do RmlUi): hp/ap/mana/pct/
+      sector (número) tickam a cada frame medido para que o contador `version` por-instância do
+      RmlUi (FontEngineOwn::GetVersion()) de fato mude e o GenerateString() seja genuinamente
+      re-invocado -- ver o precedente de data-model do irmão tests/fonteng_ab_visual.cpp e o
+      cabeçalho próprio de fonteng_perf_bench.cpp pro motivo de um texto INALTERADO
+      silenciosamente medir o cache do RmlUi em vez do motor de fonte.
+      DOIS grupos de fonte compartilham este documento ÚNICO (data-if escolhe exatamente um, por
+      --font=pixelop|opensans): "HudMono" (PixelOperatorMono.ttf, a própria fonte de cockpit do
+      GusWorld -- ver feedback_gusworld_corpo_pequeno_fonte.md) e "HudSans"
+      (OpenSans-Regular.ttf, o caso de contraste/distribuição geral -- ver
+      feedback_escopo_distribuicao_geral.md). Os dois blocos @font-face sempre são declarados (o
+      RmlUi carrega uma face preguiçosamente só quando uma font-family correspondente é de fato
+      usada por um elemento LAYOUTADO, então o @font-face do grupo data-if="false" nunca é
+      empacotado) então bind_bool("show_pixelop", ...) sozinho -- sem recarregar a cena -- escolhe
+      qual corpus é exercitado.
+      Tamanhos 9/10/11dp conforme o brief consumer-driven do líder: HP/AP/MANA a 10dp,
+      INVENTORY/EQUIP/SETTINGS a 9-11dp, uma linha composta longa a 11dp (o outlier de custo de
+      layout "linha mais longa").
+      Os ids dos dois grupos têm prefixo po_/os_ para que as chamadas set_number() por-frame e as
+      sondas get_element_box() do fonteng_perf_bench.cpp endereçem as MESMAS linhas lógicas
+      independente do --font.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "HudMono"; src: "assets/PixelOperatorMono.ttf"; }
+    @font-face { font-family: "HudSans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      margin: 8dp;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    div.grp { display: block; }
+    div.row { display: block; }
+    span.p {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    .mono  { font-family: "HudMono"; }
+    .sans  { font-family: "HudSans"; }
+  </style>
+  <title>glintfx L1.20-PERFBENCH HUD bench scene</title>
+</head>
+<body data-model="hud">
+  <div id="grp_pixelop" class="grp mono" data-if="show_pixelop">
+    <div class="row"><span class="p" id="po_hp"       style="font-size: 10dp;">HP {{hp}}/200</span></div>
+    <div class="row"><span class="p" id="po_ap"       style="font-size: 10dp;">AP {{ap}}/60</span></div>
+    <div class="row"><span class="p" id="po_mana"     style="font-size: 10dp;">MANA {{mana}}/500</span></div>
+    <div class="row"><span class="p" id="po_inv"      style="font-size: 9dp;">INVENTORY</span></div>
+    <div class="row"><span class="p" id="po_equip"    style="font-size: 9dp;">EQUIP</span></div>
+    <div class="row"><span class="p" id="po_settings" style="font-size: 11dp;">SETTINGS {{pct}}%</span></div>
+    <div class="row"><span class="p" id="po_long"     style="font-size: 11dp;">HP {{hp}}/200  AP {{ap}}/60  MANA {{mana}}/500  SECTOR {{sector}}  STATUS NOMINAL</span></div>
+  </div>
+  <div id="grp_opensans" class="grp sans" data-if="!show_pixelop">
+    <div class="row"><span class="p" id="os_hp"       style="font-size: 10dp;">HP {{hp}}/200</span></div>
+    <div class="row"><span class="p" id="os_ap"       style="font-size: 10dp;">AP {{ap}}/60</span></div>
+    <div class="row"><span class="p" id="os_mana"     style="font-size: 10dp;">MANA {{mana}}/500</span></div>
+    <div class="row"><span class="p" id="os_inv"      style="font-size: 9dp;">INVENTORY</span></div>
+    <div class="row"><span class="p" id="os_equip"    style="font-size: 9dp;">EQUIP</span></div>
+    <div class="row"><span class="p" id="os_settings" style="font-size: 11dp;">SETTINGS {{pct}}%</span></div>
+    <div class="row"><span class="p" id="os_long"     style="font-size: 11dp;">HP {{hp}}/200  AP {{ap}}/60  MANA {{mana}}/500  SECTOR {{sector}}  STATUS NOMINAL</span></div>
+  </div>
+</body>
+</rml>

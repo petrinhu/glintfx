@@ -919,6 +919,37 @@ if(GLINTFX_OWN_FONT_ENGINE)
                  ${CMAKE_CURRENT_BINARY_DIR}/fonteng_ab_visual_scene.rml COPYONLY)
 
   # -------------------------------------------------------------------------
+  # EN: fonteng_perf_bench (L1.20-PERFBENCH, FT-F4 perf gate) -- the PERFORMANCE sibling of
+  #     fonteng_ab_visual right above: a DIAGNOSTIC harness (NOT a ctest gate -- deliberately NO
+  #     add_test, same convention as fonteng_ab_visual) that measures the own SOV-SFNT/SOV-RAST
+  #     engine's CPU/memory cost against RmlUi's FreeType engine across four axes (bake/layout/
+  #     frame/mem), consumer-driven by the GusWorld's weak-hardware perf condition for flipping
+  #     GLINTFX_OWN_FONT_ENGINE's default. Run by hand under xvfb-run, one
+  #     --engine/--axis/--font/--dp combination per process -- see fonteng_perf_bench.cpp's own
+  #     header for the full per-axis method. Same registration shape as fonteng_ab_visual (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); the assets/ font dir (both
+  #     OpenSans-Regular.ttf AND PixelOperatorMono.ttf) is already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the fonteng_own_embed_sanity block at the top of this
+  #     GLINTFX_OWN_FONT_ENGINE block.
+  # PT: fonteng_perf_bench (L1.20-PERFBENCH, gate de perf do FT-F4) -- o irmão de PERFORMANCE do
+  #     fonteng_ab_visual logo acima: um harness de DIAGNÓSTICO (NÃO um gate do ctest --
+  #     propositalmente SEM add_test, mesma convenção do fonteng_ab_visual) que mede o custo de
+  #     CPU/memória do motor próprio SOV-SFNT/SOV-RAST contra o motor FreeType do RmlUi em quatro
+  #     eixos (bake/layout/frame/mem), consumer-driven pela condição de perf em hardware fraco do
+  #     GusWorld para virar o default do GLINTFX_OWN_FONT_ENGINE. Rode à mão sob xvfb-run, uma
+  #     combinação --engine/--axis/--font/--dp por processo -- ver o cabeçalho próprio de
+  #     fonteng_perf_bench.cpp pro método completo por-eixo. Mesmo formato de registro do
+  #     fonteng_ab_visual (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); o dir
+  #     de fonte assets/ (TANTO OpenSans-Regular.ttf QUANTO PixelOperatorMono.ttf) já é copiado
+  #     pra CMAKE_CURRENT_BINARY_DIR pelo bloco fonteng_own_embed_sanity no topo deste bloco
+  #     GLINTFX_OWN_FONT_ENGINE.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_perf_bench fonteng_perf_bench.cpp)
+  target_link_libraries(fonteng_perf_bench PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_perf_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_perf_scene.rml COPYONLY)
+
+  # -------------------------------------------------------------------------
   # EN: fonteng_extended_sanity (L1.20-FONTFLIP, FT-F4, sub-phase 2.1) -- regression net for the
   #     WIDENED bake set. Renders, through the OWN engine, spans containing ONLY the codepoints
   #     sub-phase 2.1 added to FontEngineOwn::BuildBakeSet() (î U+00EE, em/en-dash, curved quotes,

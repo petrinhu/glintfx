@@ -217,8 +217,18 @@ namespace glintfx {
 //     Rml::Shutdown() (mesma disciplina de lifetime do Impl::file_iface).
 class FontEngineOwn final : public Rml::FontEngineInterface {
 public:
-  FontEngineOwn() = default;
-  ~FontEngineOwn() override = default;
+  // EN: (L1.20-PERFBENCH) Defined out-of-line in the .cpp (no longer `= default`) purely to
+  //     register `this` into the src-internal "active instance" pointer the
+  //     own_font_engine_atlas_bytes() debug hook (below/see .cpp) reads -- see that hook's own
+  //     doc-comment for the full contract. The destructor clears the pointer if it still points
+  //     at `this`, so a stale pointer never outlives the instance.
+  // PT: (L1.20-PERFBENCH) Definido fora de linha no .cpp (não mais `= default`) só para
+  //     registrar `this` no ponteiro "instância ativa" src-interno que o hook de debug
+  //     own_font_engine_atlas_bytes() (abaixo/ver .cpp) lê -- ver o doc-comment próprio daquele
+  //     hook pro contrato completo. O destrutor limpa o ponteiro se ainda apontar pra `this`,
+  //     então um ponteiro obsoleto nunca sobrevive à instância.
+  FontEngineOwn();
+  ~FontEngineOwn() override;
 
   FontEngineOwn(const FontEngineOwn&) = delete;
   FontEngineOwn& operator=(const FontEngineOwn&) = delete;
@@ -280,6 +290,29 @@ public:
                       Rml::TexturedMeshList& mesh_list) override;
 
   int GetVersion(Rml::FontFaceHandle handle) override;
+
+  // EN: (L1.20-PERFBENCH) TEST-ONLY memory-footprint probe -- sums, over every baked
+  //     FaceInstance in `instances_`, the CPU-side atlas RGBA8 buffer (`atlas_rgba.size()`), an
+  //     approximation of the glyph map's payload (`glyphs.size() * sizeof(GlyphInfo)` -- a
+  //     per-node std::unordered_map, so this UNDERCOUNTS the real heap cost by the map's own
+  //     bucket/node overhead, deliberately kept simple since fonteng_perf_bench.cpp's brief asks
+  //     for a same-process CROSS-CHECK against `/proc/self/statm` RSS delta, not a byte-exact
+  //     accounting), and the fixed-size darken-curve LUT (`sizeof(cov_lut)` == 256). Declared
+  //     PUBLIC (unlike the private `instances_`/`FaceInstance` it reads) purely so
+  //     fonteng_perf_bench.cpp's own_font_engine_atlas_bytes() free-function hook (below) can
+  //     call it on the src-internal "active instance" pointer without becoming a friend.
+  // PT: (L1.20-PERFBENCH) Sonda de pegada de memória SÓ-DE-TESTE -- soma, sobre toda FaceInstance
+  //     empacotada em `instances_`, o buffer RGBA8 do atlas lado-CPU (`atlas_rgba.size()`), uma
+  //     aproximação do payload do mapa de glyphs (`glyphs.size() * sizeof(GlyphInfo)` -- um
+  //     std::unordered_map por-nó, então isto SUBESTIMA o custo real de heap pelo overhead de
+  //     bucket/nó próprio do mapa, deliberadamente mantido simples já que o brief do
+  //     fonteng_perf_bench.cpp pede um CROSS-CHECK no mesmo processo contra o RSS delta do
+  //     `/proc/self/statm`, não uma contabilidade byte-exata), e a LUT de tamanho fixo da curva
+  //     de escurecimento (`sizeof(cov_lut)` == 256). Declarado PÚBLICO (diferente do
+  //     `instances_`/`FaceInstance` privados que lê) só para o hook de função-livre
+  //     own_font_engine_atlas_bytes() do fonteng_perf_bench.cpp (abaixo) poder chamá-lo na
+  //     "instância ativa" src-interna sem virar friend.
+  size_t DebugAtlasBytes() const;
 
 private:
   // EN: One loaded font FILE (a parsed glx_sfnt_face borrowing read-only pointers into `blob`,
@@ -1033,6 +1066,43 @@ bool& own_font_engine_vsnap_bypass();
 //     desta suíte). NÃO faz parte da API PÚBLICA do glintfx: declarado só neste header
 //     src-interno, e mesmo aqui só quando GLINTFX_OWN_FONT_ENGINE=ON.
 size_t& own_font_engine_debug_registered_face_count();
+
+// EN: ATLAS-BYTES MEMORY HOOK (L1.20-PERFBENCH) -- a seventh src-internal, READ-ONLY telemetry
+//     hook, same READ-ONLY spirit as own_font_engine_debug_registered_face_count() above but
+//     answering a different question: how many CPU-side bytes the CURRENTLY ACTIVE
+//     FontEngineOwn instance's baked atlases hold RIGHT NOW (FontEngineOwn::DebugAtlasBytes(),
+//     see its own doc-comment for exactly what is counted). "Currently active instance" is a
+//     single function-local-static `FontEngineOwn*`, registered by the constructor and cleared
+//     by the destructor (font_engine_own.cpp) -- valid because exactly ONE FontEngineOwn is ever
+//     alive at a time in this codebase's own usage (one member of Bootstrap::Impl per session,
+//     confirmed the only construction site is src/bootstrap.cpp); returns `0` if no instance is
+//     currently alive (a bake-less/FreeType-selected session, or called outside any session).
+//     Plain `size_t` return (not `size_t&` like the counter above): this is a computed snapshot,
+//     not a mutable counter a test would ever want to reset. NOT part of glintfx's PUBLIC API:
+//     declared only in this src-internal header, and even here only when
+//     GLINTFX_OWN_FONT_ENGINE=ON. Exists ONLY so tests/fonteng_perf_bench.cpp (L1.20-PERFBENCH,
+//     consumer-driven by the GusWorld perf gate) can report the own engine's exact atlas
+//     footprint alongside the FreeType leg's /proc/self/statm RSS-delta proxy (FreeType is not
+//     introspectable from this side of RmlUi's FontEngineInterface).
+// PT: HOOK DE MEMÓRIA EM BYTES DO ATLAS (L1.20-PERFBENCH) -- um sétimo hook de telemetria
+//     src-interno, SOMENTE-LEITURA, no mesmo espírito do own_font_engine_debug_registered_face_
+//     count() acima mas respondendo pergunta diferente: quantos bytes lado-CPU os atlases
+//     empacotados da instância FontEngineOwn ATUALMENTE ATIVA seguram AGORA
+//     (FontEngineOwn::DebugAtlasBytes(), ver o doc-comment próprio pro que exatamente é contado).
+//     "Instância atualmente ativa" é um único `FontEngineOwn*` static-local-de-função, registrado
+//     pelo construtor e limpo pelo destrutor (font_engine_own.cpp) -- válido porque exatamente UMA
+//     FontEngineOwn está viva por vez no uso próprio deste código-base (um membro do
+//     Bootstrap::Impl por sessão, único ponto de construção confirmado em src/bootstrap.cpp);
+//     retorna `0` se nenhuma instância estiver viva no momento (uma sessão sem bake/com FreeType
+//     selecionado, ou chamado fora de qualquer sessão). Retorno `size_t` puro (não `size_t&` como
+//     o contador acima): é um snapshot computado, não um contador mutável que um teste algum dia
+//     quisesse resetar. NÃO faz parte da API PÚBLICA do glintfx: declarado só neste header
+//     src-interno, e mesmo aqui só quando GLINTFX_OWN_FONT_ENGINE=ON. Existe SÓ para o
+//     tests/fonteng_perf_bench.cpp (L1.20-PERFBENCH, consumer-driven pelo gate de perf do
+//     GusWorld) poder reportar a pegada exata de atlas do motor próprio ao lado do proxy de RSS
+//     delta do /proc/self/statm da perna FreeType (o FreeType não é introspectável deste lado da
+//     FontEngineInterface do RmlUi).
+size_t own_font_engine_atlas_bytes();
 
 } // namespace glintfx
 

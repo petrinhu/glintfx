@@ -147,6 +147,28 @@ size_t& own_font_engine_debug_registered_face_count() {
 }
 
 namespace {
+// EN: ACTIVE-INSTANCE storage for the atlas-bytes memory hook (L1.20-PERFBENCH). See
+//     own_font_engine_atlas_bytes()'s doc-comment in font_engine_own.hpp for the single-live-
+//     instance invariant this relies on. Function-local static (same no-static-init-order-
+//     dependency reasoning as every hook above), but unlike those it is written ONLY by
+//     FontEngineOwn's own ctor/dtor below, never by a test directly.
+// PT: Armazenamento da INSTÂNCIA ATIVA pro hook de memória de bytes-do-atlas (L1.20-PERFBENCH).
+//     Ver o doc-comment do own_font_engine_atlas_bytes() em font_engine_own.hpp pro invariante de
+//     instância-única-viva do qual depende. static local de função (mesmo racional de
+//     sem-dependência-de-ordem-de-init-estática de todo hook acima), mas diferente deles é
+//     escrito SÓ pelo próprio ctor/dtor do FontEngineOwn abaixo, nunca diretamente por um teste.
+FontEngineOwn*& ActiveInstanceSlot() {
+  static FontEngineOwn* active = nullptr;
+  return active;
+}
+} // namespace
+
+size_t own_font_engine_atlas_bytes() {
+  const FontEngineOwn* active = ActiveInstanceSlot();
+  return active ? active->DebugAtlasBytes() : 0;
+}
+
+namespace {
 
 // EN: The fixed WARM-SET bake set (see font_engine_own.hpp's "SCOPE" section). Still an EAGER,
 //     one-shot, FIXED set BuildBakeSet() itself describes -- this ticket (L1.20-FONTFLIP sub-phase
@@ -399,6 +421,38 @@ glx_hint_zones DeriveHintZones(const glx_sfnt_face& sf) {
 }
 
 } // namespace
+
+// EN: (L1.20-PERFBENCH) Registers `this` into ActiveInstanceSlot() -- see that function's and
+//     own_font_engine_atlas_bytes()'s doc-comments for the single-live-instance contract this
+//     relies on (one FontEngineOwn per Bootstrap::Impl, the only construction site).
+// PT: (L1.20-PERFBENCH) Registra `this` no ActiveInstanceSlot() -- ver os doc-comments daquela
+//     função e do own_font_engine_atlas_bytes() pro contrato de instância-única-viva do qual
+//     depende (uma FontEngineOwn por Bootstrap::Impl, único ponto de construção).
+FontEngineOwn::FontEngineOwn() {
+  ActiveInstanceSlot() = this;
+}
+
+// EN: Clears ActiveInstanceSlot() only if it still points at `this` -- a defensive no-op guard,
+//     harmless even under this codebase's own single-instance usage.
+// PT: Limpa o ActiveInstanceSlot() só se ainda apontar pra `this` -- uma guarda defensiva de
+//     no-op, inofensiva mesmo sob o uso próprio de instância-única deste código-base.
+FontEngineOwn::~FontEngineOwn() {
+  if (ActiveInstanceSlot() == this) ActiveInstanceSlot() = nullptr;
+}
+
+// EN: See the long doc-comment on this method's declaration in font_engine_own.hpp for exactly
+//     what is (and, honestly, is NOT) counted.
+// PT: Ver o doc-comment longo na declaração deste método em font_engine_own.hpp pro que
+//     exatamente é (e, com honestidade, NÃO é) contado.
+size_t FontEngineOwn::DebugAtlasBytes() const {
+  size_t total = 0;
+  for (const auto& inst : instances_) {
+    total += inst->atlas_rgba.size();
+    total += inst->glyphs.size() * sizeof(GlyphInfo);
+    total += sizeof(inst->cov_lut);
+  }
+  return total;
+}
 
 void FontEngineOwn::Shutdown() {
   // EN: Dropping instances_ destroys every FaceInstance, including its Rml::CallbackTexture

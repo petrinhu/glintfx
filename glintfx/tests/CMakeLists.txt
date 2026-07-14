@@ -1031,6 +1031,115 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_dedup_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_fallback_sanity (L1.20-FONTFLIP, FT-F4, per-glyph fallback) -- INDEPENDENT
+  #     ADVERSARIAL GATE for FontEngineOwn::fallback_faces_/BakeGlyph()/RasterizeGlyph()'s `src`
+  #     parameter (commit 957505b), written by the QA reviewer (not the implementer). Renders
+  #     Greek + superscript-2 codepoints "Primary" (PixelOperatorMono) genuinely lacks through a
+  #     TWO-candidate fallback list (an incapable candidate registered first, the capable Open Sans
+  #     one second) to prove non-tofu resolution + walk-past-a-non-resolving-candidate; compares a
+  #     fallback-resolved glyph's metrics against the SAME glyph baked directly on its own source
+  #     face to catch the units_per_em-mismatch CRITICAL bug class the review brief names; checks
+  #     width==mesh for a mixed Primary+fallback string (cross-face kern must be a no-op) and for a
+  #     same-face pair reached via the fallback family directly (kern DOES apply, mesh must still
+  #     match); exercises the CJK negative-cache path; and reloads the document under this SAME
+  #     UiLayer session to exercise RegisterFace()'s dedup + BakeGlyph()'s fallback path repeatedly
+  #     (meaningful under -DGLINTFX_SANITIZE=ON). Same registration shape as fonteng_dedup_sanity
+  #     right above (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); the assets/
+  #     font dir is already copied to CMAKE_CURRENT_BINARY_DIR by the top of this
+  #     GLINTFX_OWN_FONT_ENGINE block (includes assets/PixelOperatorMono.ttf). See
+  #     fonteng_fallback_sanity.cpp's own header for the full seven-criterion method.
+  # PT: fonteng_fallback_sanity (L1.20-FONTFLIP, FT-F4, fallback por-glyph) -- GATE ADVERSARIAL
+  #     INDEPENDENTE pro FontEngineOwn::fallback_faces_/BakeGlyph()/o parâmetro `src` do
+  #     RasterizeGlyph() (commit 957505b), escrito pelo revisor de QA (não o implementador).
+  #     Renderiza codepoints Grego + superscript-2 que a "Primary" (PixelOperatorMono) de fato não
+  #     tem através de uma lista de DOIS candidatos de fallback (um incapaz registrado primeiro, a
+  #     Open Sans capaz em segundo) pra provar resolução não-tofu + caminhada-além-de-um-candidato-
+  #     que-não-resolve; compara as métricas de um glyph resolvido por fallback contra o MESMO glyph
+  #     empacotado direto na própria face-fonte pra pegar a classe de bug CRÍTICA de mismatch-de-
+  #     units_per_em que a tarefa de review nomeia; checa largura==mesh pra uma string mista
+  #     Primary+fallback (kern entre faces precisa ser no-op) e pra um par da mesma face alcançado
+  #     pela família de fallback direto (kern SE aplica, mesh ainda precisa bater); exercita o
+  #     caminho de cache-negativo CJK; e recarrega o documento nesta MESMA sessão UiLayer pra
+  #     exercitar o dedup do RegisterFace() + o caminho de fallback do BakeGlyph() repetidamente
+  #     (relevante sob -DGLINTFX_SANITIZE=ON). Mesmo formato de registro de fonteng_dedup_sanity
+  #     logo acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); o dir de fonte
+  #     assets/ já é copiado pra CMAKE_CURRENT_BINARY_DIR pelo topo deste bloco
+  #     GLINTFX_OWN_FONT_ENGINE (inclui assets/PixelOperatorMono.ttf). Ver o cabeçalho próprio de
+  #     fonteng_fallback_sanity.cpp pro método completo dos sete critérios.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_fallback_sanity fonteng_fallback_sanity.cpp)
+  target_link_libraries(fonteng_fallback_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_fallback_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_fallback_scene.rml COPYONLY)
+  add_test(NAME fonteng_fallback_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_fallback_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_fallback_contraprova_sanity (L1.20-FONTFLIP, FT-F4, per-glyph fallback) -- the
+  #     CONTRA-PROVA half of the gate above: a SEPARATE process/document declaring "Primary"
+  #     (PixelOperatorMono) ONLY, with NO -rmlui-fallback-face block anywhere, asserting the same
+  #     Greek/superscript-2 spans render BLANK (not the non-blank result fonteng_fallback_sanity
+  #     measures) -- proving that non-blank result is attributable to the fallback mechanism
+  #     specifically. Needs its OWN process because FontEngineOwn::fallback_faces_ is a flat,
+  #     process-lifetime vector shared by every document a UiLayer session ever loads (see
+  #     fonteng_fallback_contraprova_sanity.cpp's own header). Same registration shape as
+  #     fonteng_fallback_sanity right above.
+  # PT: fonteng_fallback_contraprova_sanity (L1.20-FONTFLIP, FT-F4, fallback por-glyph) -- a metade
+  #     CONTRA-PROVA do gate acima: um processo/documento SEPARADO declarando só "Primary"
+  #     (PixelOperatorMono), SEM bloco -rmlui-fallback-face em lugar nenhum, verificando que os
+  #     mesmos spans Grego/superscript-2 renderizam EM BRANCO (não o resultado não-branco que o
+  #     fonteng_fallback_sanity mede) -- provando que aquele resultado não-branco é atribuível ao
+  #     mecanismo de fallback especificamente. Precisa do PRÓPRIO processo porque
+  #     FontEngineOwn::fallback_faces_ é um vetor plano, de vida-de-processo, compartilhado por todo
+  #     documento que uma sessão UiLayer algum dia carrega (ver o cabeçalho próprio de
+  #     fonteng_fallback_contraprova_sanity.cpp). Mesmo formato de registro de
+  #     fonteng_fallback_sanity logo acima.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_fallback_contraprova_sanity fonteng_fallback_contraprova_sanity.cpp)
+  target_link_libraries(fonteng_fallback_contraprova_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_fallback_contraprova_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_fallback_contraprova_scene.rml COPYONLY)
+  add_test(NAME fonteng_fallback_contraprova_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_fallback_contraprova_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_sup_sanity (L1.20-FONTFLIP, FT-F4) -- validates the RCSS `vertical-align: super` +
+  #     smaller `font-size` workaround for the GusWorld dev's "a²+b²=c²" problem (Primary/
+  #     PixelOperatorMono lacks the real superscript-2 glyph; the plain digit '2' it DOES have is
+  #     styled instead). Asserts each `.sup` span is measurably ELEVATED (smaller box.y) and
+  #     measurably SMALLER (box.h) than its neighbouring baseline text AND an apples-to-apples
+  #     full-size reference digit, for all three formula instances. Also writes an upscaled PPM
+  #     artifact of the whole formula line to OUTDIR/sup_formula.ppm (OUTDIR = argv[1], defaults to
+  #     "ab_visual" under WORKING_DIRECTORY when ctest invokes it with no extra args) for the líder
+  #     to inspect visually -- see fonteng_sup_sanity.cpp's own header for the full method.
+  # PT: fonteng_sup_sanity (L1.20-FONTFLIP, FT-F4) -- valida o workaround RCSS
+  #     `vertical-align: super` + `font-size` menor pro problema "a²+b²=c²" do dev do GusWorld
+  #     (Primary/PixelOperatorMono não tem o glyph real de superscript-2; o dígito plano '2' que ela
+  #     TEM é estilizado no lugar). Verifica que cada span `.sup` está mensuravelmente ELEVADO
+  #     (box.y menor) e mensuravelmente MENOR (box.h) que o texto de baseline vizinho E uma
+  #     referência de dígito em tamanho-cheio maçã-com-maçã, pras três instâncias da fórmula. Também
+  #     grava um artefato PPM ampliado da linha da fórmula inteira em OUTDIR/sup_formula.ppm
+  #     (OUTDIR = argv[1], default "ab_visual" sob WORKING_DIRECTORY quando o ctest o invoca sem
+  #     args extras) pro líder inspecionar visualmente -- ver o cabeçalho próprio de
+  #     fonteng_sup_sanity.cpp pro método completo.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_sup_sanity fonteng_sup_sanity.cpp)
+  target_link_libraries(fonteng_sup_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_sup_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_sup_scene.rml COPYONLY)
+  add_test(NAME fonteng_sup_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_sup_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

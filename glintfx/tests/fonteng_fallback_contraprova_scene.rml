@@ -1,0 +1,62 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: CONTRA-PROVA document for tests/fonteng_fallback_sanity.cpp's non-tofu claims -- a SEPARATE
+      process/document from fonteng_fallback_scene.rml (fallback_faces_ is a flat, PROCESS-lifetime
+      vector on FontEngineOwn shared by every document a session ever loads, so isolating "no
+      fallback face was EVER registered" requires a fresh process, not merely a second <rml> file
+      loaded into the same UiLayer). Declares ONLY "primary" (assets/PixelOperatorMono.ttf,
+      confirmed Latin-only by cmap probe), with NO -rmlui-fallback-face block anywhere. Same four
+      span ids fonteng_fallback_scene.rml uses for its own non-tofu checks (ctrl_ascii,
+      greek_omega, greek_alpha_lo, sup2) -- ctrl_ascii MUST still render ink (pipeline sanity,
+      Primary alone covers plain ASCII), the other three MUST render ZERO ink (Primary genuinely
+      lacks Ω/α/² and, with no fallback registered at all, BakeGlyph() has nothing else to try --
+      negative-cache, exactly the pre-fallback-feature behaviour). This is what proves the OTHER
+      scene's non-blank result for these exact three glyphs is actually attributable to the
+      fallback mechanism, not some other change/coincidence.
+  PT: Documento de CONTRA-PROVA para as alegações de não-tofu de
+      tests/fonteng_fallback_sanity.cpp -- um processo/documento SEPARADO de
+      fonteng_fallback_scene.rml (fallback_faces_ é um vetor plano, de vida-de-PROCESSO, no
+      FontEngineOwn compartilhado por todo documento que uma sessão algum dia carrega, então isolar
+      "nenhuma face de fallback foi JAMAIS registrada" exige um processo novo, não meramente um 2º
+      arquivo <rml> carregado na mesma UiLayer). Declara SÓ "primary"
+      (assets/PixelOperatorMono.ttf, confirmado Latin-only por sonda de cmap), SEM bloco
+      -rmlui-fallback-face em lugar nenhum. Os mesmos quatro ids de span que
+      fonteng_fallback_scene.rml usa pros próprios cheques de não-tofu (ctrl_ascii, greek_omega,
+      greek_alpha_lo, sup2) -- ctrl_ascii PRECISA renderizar tinta mesmo assim (sanidade de
+      pipeline, Primary sozinha cobre ASCII plano), os outros três PRECISAM renderizar tinta ZERO
+      (Primary de fato não tem Ω/α/² e, sem fallback nenhum registrado, o BakeGlyph() não tem mais
+      nada a tentar -- cache negativo, exatamente o comportamento pré-feature-de-fallback). Isto é o
+      que prova que o resultado NÃO-branco da OUTRA cena pra estes exatos três glyphs é de fato
+      atribuível ao mecanismo de fallback, não a outra mudança/coincidência qualquer.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "primary"; src: "assets/PixelOperatorMono.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "primary";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP fallback CONTRA-PROVA (no fallback face registered)</title>
+</head>
+<body>
+  <span id="ctrl_ascii">Axg</span><br/>
+  <span id="greek_omega">Ω</span><br/>
+  <span id="greek_alpha_lo">α</span><br/>
+  <span id="sup2">²</span>
+</body>
+</rml>

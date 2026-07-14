@@ -1,0 +1,67 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP superscript-workaround validation document -- driven by
+      tests/fonteng_sup_sanity.cpp. Renders "a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>" through
+      "Primary" (assets/PixelOperatorMono.ttf, the GusWorld consumer's OWN font, confirmed by cmap
+      probe to lack the real superscript-2 glyph U+00B2) using ONLY the plain ASCII digit '2'
+      (which PixelOperatorMono DOES have) styled with RCSS `vertical-align: super` + a smaller
+      `font-size` -- the workaround this session hands to the GusWorld dev in place of the missing
+      ² glyph. `.sup` spans (sup1/sup2/sup3) sit immediately after their own `base_*` letter span on
+      the SAME line/baseline, so get_element_box()'s y/h can be compared directly between a `.sup`
+      span and its neighbouring baseline-level span. `ref2_full` is a plain, non-superscript '2' at
+      the SAME 64px body size on its own line -- an apples-to-apples height reference for "the sup
+      glyph is genuinely SMALLER", independent of the unrelated shapes of 'a'/'b'/'c'.
+      Every measured span is `display: inline-block` (still inline-level, so `vertical-align`
+      applies per CSS/RCSS -- confirmed reading the pinned RmlUi source's own
+      StyleSheetSpecification.cpp registration of `vertical-align`), zero padding/border/margin,
+      `white-space: nowrap` -- this suite's own get_element_box()-oracle convention.
+  PT: Documento de validação do workaround de superíndice do L1.20-FONTFLIP -- dirigido por
+      tests/fonteng_sup_sanity.cpp. Renderiza "a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>" pela
+      "Primary" (assets/PixelOperatorMono.ttf, a PRÓPRIA fonte do consumidor GusWorld, confirmada
+      por sonda de cmap como sem o glyph real de superscript-2 U+00B2) usando SÓ o dígito ASCII
+      plano '2' (que a PixelOperatorMono TEM) estilizado com RCSS `vertical-align: super` + um
+      `font-size` menor -- o workaround que esta sessão entrega ao dev do GusWorld no lugar do
+      glyph ² ausente. Os spans `.sup` (sup1/sup2/sup3) ficam imediatamente após o próprio span de
+      letra `base_*` na MESMA linha/baseline, então o y/h do get_element_box() pode ser comparado
+      diretamente entre um span `.sup` e o span de nível-de-baseline vizinho. `ref2_full` é um '2'
+      plano, não-superíndice, no MESMO corpo de 64px na própria linha -- uma referência de altura
+      maçã-com-maçã pra "o glyph sup é de fato MENOR", independente das formas não-relacionadas de
+      'a'/'b'/'c'.
+      Todo span medido é `display: inline-block` (ainda de nível inline, então `vertical-align` se
+      aplica conforme CSS/RCSS -- confirmado lendo o próprio registro de `vertical-align` do
+      StyleSheetSpecification.cpp do source pinado do RmlUi), padding/borda/margem zero,
+      `white-space: nowrap` -- convenção própria desta suíte de oráculo via get_element_box().
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Primary"; src: "assets/PixelOperatorMono.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Primary";
+      font-size: 64px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    .sup {
+      vertical-align: super;
+      font-size: 0.7em;
+    }
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP superscript-workaround validation</title>
+</head>
+<body>
+  <span id="formula_line"><span id="base_a">a</span><span id="sup1" class="sup">2</span> + <span id="base_b">b</span><span id="sup2" class="sup">2</span> = <span id="base_c">c</span><span id="sup3" class="sup">2</span></span><br/>
+  <span id="ref2_full">2</span>
+</body>
+</rml>

@@ -1,0 +1,91 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP (FT-F4) sub-phase 2B ADVERSARIAL GATE document -- driven by
+      tests/fonteng_lazy_sanity.cpp (independent QA gate, NOT the implementer). Exercises the lazy
+      on-demand bake path (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/GrowAtlas()) with codepoints
+      the eager warm set (BuildBakeSet(), font_engine_own.cpp: printable ASCII + Latin-1 Supplement
+      U+00A0..U+00FF + a handful of typographic punctuation up to U+2026) never bakes:
+        - Greek: U+0391 (Α), U+03B1 (α)
+        - Cyrillic: U+0410 (А), U+0434 (д)
+      (the exact four codepoints the review brief names -- note the brief's inline glyph samples
+      "Ω"/"Я" next to those hex values are a labelling slip in the brief text; U+0391/U+0410 are
+      actually Α/А -- this document tests the CODEPOINTS as specified, correctly labelled below).
+      CJK U+4E00 (一) is included as the NEGATIVE case: Open Sans does not contain it (gid==0), so
+      it must render blank (advance 0, no quad) rather than crash or draw tofu.
+      `grower` starts EMPTY and is populated at runtime by fonteng_lazy_sanity.cpp via
+      UiLayer::set_text("grower", ...) with ~114 further distinct Greek+Cyrillic codepoints -- see
+      that file's header for why this specific codepoint count is engineered to GUARANTEE at least
+      one FontEngineOwn::GrowAtlas() call (not merely likely).
+      Every element is `display: inline-block` (grower: `display: block` on its own line, since its
+      content changes size at runtime and must not be measured against a stale inline flow), zero
+      padding/border/margin, white-space:nowrap -- get_element_box(id) is the true per-span
+      bounding box. Black bg + white text: a pixel is "ink" iff a glyph covers it. Font src
+      "assets/OpenSans-Regular.ttf" resolves against the test WORKING_DIRECTORY (build/tests/),
+      copied by the GLINTFX_OWN_FONT_ENGINE CMake block (same convention as every fonteng_* scene).
+  PT: Documento do GATE ADVERSARIAL da sub-fase 2B do L1.20-FONTFLIP (FT-F4) -- dirigido por
+      tests/fonteng_lazy_sanity.cpp (gate de QA independente, NÃO o implementador). Exercita o
+      caminho de empacotamento preguiçoso sob demanda (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/
+      GrowAtlas()) com codepoints que o conjunto ávido (BuildBakeSet(), font_engine_own.cpp: ASCII
+      imprimível + Latin-1 Supplement U+00A0..U+00FF + um punhado de pontuação tipográfica até
+      U+2026) nunca empacota:
+        - Grego: U+0391 (Α), U+03B1 (α)
+        - Cirílico: U+0410 (А), U+0434 (д)
+      (os quatro codepoints exatos que a tarefa de review nomeia -- nota: as amostras de glyph
+      "Ω"/"Я" ao lado desses hex no texto da tarefa são um deslize de rotulagem; U+0391/U+0410 são
+      na verdade Α/А -- este documento testa os CODEPOINTS conforme especificado, corretamente
+      rotulados abaixo).
+      CJK U+4E00 (一) está incluso como o caso NEGATIVO: a Open Sans não o contém (gid==0), então
+      precisa renderizar em branco (avanço 0, sem quad) em vez de crashar ou desenhar tofu.
+      `grower` começa VAZIO e é populado em runtime por fonteng_lazy_sanity.cpp via
+      UiLayer::set_text("grower", ...) com mais ~114 codepoints distintos de Grego+Cirílico -- ver o
+      cabeçalho daquele arquivo pro motivo desta contagem específica de codepoint ser projetada pra
+      GARANTIR pelo menos uma chamada de FontEngineOwn::GrowAtlas() (não meramente provável).
+      Todo elemento é `display: inline-block` (grower: `display: block` na própria linha, já que seu
+      conteúdo muda de tamanho em runtime e não pode ser medido contra um fluxo inline obsoleto),
+      padding/borda/margem zero, white-space:nowrap -- get_element_box(id) é a bounding box real
+      por-span. Fundo preto + texto branco: um pixel é "tinta" sse um glyph o cobre. O src
+      "assets/OpenSans-Regular.ttf" resolve contra o WORKING_DIRECTORY do teste (build/tests/),
+      copiado pelo bloco CMake GLINTFX_OWN_FONT_ENGINE (mesma convenção de toda cena fonteng_*).
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    #grower {
+      display: block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP sub-phase 2B lazy-bake gate</title>
+</head>
+<body>
+  <span id="ctrl_ascii">Axg</span><br/>
+  <span id="greek_alpha_up">Α</span><br/>
+  <span id="greek_beta_up">Β</span><br/>
+  <span id="greek_gamma_up">Γ</span><br/>
+  <span id="greek_seq">ΑΒΓ</span><br/>
+  <span id="greek_alpha_lo">α</span><br/>
+  <span id="cyr_a_up">А</span><br/>
+  <span id="cyr_de_lo">д</span><br/>
+  <span id="cjk_missing">一</span><br/>
+  <span id="grower"></span>
+</body>
+</rml>

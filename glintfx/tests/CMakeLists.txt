@@ -950,6 +950,43 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_extended_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_lazy_sanity (L1.20-FONTFLIP, FT-F4, sub-phase 2B) -- INDEPENDENT ADVERSARIAL GATE
+  #     for the lazy on-demand bake (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/GrowAtlas(), commit
+  #     7f119f1), written by the QA reviewer (not the implementer). Renders Greek/Cyrillic
+  #     codepoints OUTSIDE the eager warm set to prove non-tofu lazy bake, forces a GUARANTEED
+  #     GrowAtlas() call via a runtime set_text() top-up and re-measures two canary glyphs baked
+  #     BEFORE that growth to prove no corruption, checks a lazy multi-glyph string's layout width
+  #     against its own rendered mesh extent, and exercises a codepoint the face lacks (CJK) through
+  #     the negative-cache path without crashing. Same registration shape as fonteng_extended_sanity
+  #     right above (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), so it builds
+  #     and runs with GLINTFX_BACKEND_GLFW ON or OFF; the assets/ font dir is already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the top of this GLINTFX_OWN_FONT_ENGINE block. See
+  #     fonteng_lazy_sanity.cpp's own header for the full six-criterion method.
+  # PT: fonteng_lazy_sanity (L1.20-FONTFLIP, FT-F4, sub-fase 2B) -- GATE ADVERSARIAL INDEPENDENTE
+  #     pro empacotamento preguiçoso sob demanda (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/
+  #     GrowAtlas(), commit 7f119f1), escrito pelo revisor de QA (não o implementador). Renderiza
+  #     codepoints Grego/Cirílico FORA do conjunto ávido pra provar empacotamento preguiçoso
+  #     não-tofu, força uma chamada GARANTIDA de GrowAtlas() via um top-up set_text() em runtime e
+  #     remede dois glyphs canário empacotados ANTES daquele crescimento pra provar ausência de
+  #     corrupção, checa a largura de layout de uma string preguiçosa multi-glyph contra a própria
+  #     extensão renderizada do mesh, e exercita um codepoint que a face não tem (CJK) pelo caminho
+  #     de cache negativo sem crashar. Mesmo formato de registro de fonteng_extended_sanity logo
+  #     acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), para buildar e rodar
+  #     com GLINTFX_BACKEND_GLFW ON ou OFF; o dir de fonte assets/ já é copiado pra
+  #     CMAKE_CURRENT_BINARY_DIR pelo topo deste bloco GLINTFX_OWN_FONT_ENGINE. Ver o cabeçalho
+  #     próprio de fonteng_lazy_sanity.cpp pro método completo dos seis critérios.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_lazy_sanity fonteng_lazy_sanity.cpp)
+  target_link_libraries(fonteng_lazy_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_lazy_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_lazy_scene.rml COPYONLY)
+  add_test(NAME fonteng_lazy_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_lazy_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

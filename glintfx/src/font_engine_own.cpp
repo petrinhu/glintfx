@@ -522,6 +522,26 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   for (const auto& f : faces_) {
     if (f->family == family && f->style == style && f->weight == normalized_weight &&
         f->blob.size() == blob.size() && f->blob == blob) {
+      // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) EDGE: a duplicate-hit face that is ALSO
+      //     `fallback_face==true` must still land in `fallback_faces_` if it is not already there --
+      //     mirrors the pinned RmlUi source's own FontFamily::AddFace(), which (confirmed reading it)
+      //     appends to `fallback_font_faces` even on its "Duplicate" outcome, not only on a fresh
+      //     insert. Without this, a document whose @font-face block re-declares the SAME fallback
+      //     font (a legitimate reload path, the exact scenario the dedup guard above exists for)
+      //     would silently lose per-glyph fallback for every codepoint the primary lacks, on the
+      //     2nd+ load.
+      // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) EDGE: uma face que bate no dedup mas
+      //     TAMBÉM é `fallback_face==true` ainda precisa cair em `fallback_faces_` se ainda não
+      //     estiver lá -- espelha o próprio FontFamily::AddFace() do source pinado do RmlUi, que
+      //     (confirmado lendo-o) anexa a `fallback_font_faces` mesmo no resultado "Duplicate", não
+      //     só numa inserção nova. Sem isto, um documento cujo bloco @font-face redeclara a MESMA
+      //     fonte de fallback (um caminho de reload legítimo, exatamente o cenário pra que a guarda
+      //     de dedup acima existe) perderia silenciosamente o fallback por-glyph pra todo codepoint
+      //     que a primária não tem, na 2ª+ carga.
+      if (fallback_face &&
+          std::find(fallback_faces_.begin(), fallback_faces_.end(), f.get()) == fallback_faces_.end()) {
+        fallback_faces_.push_back(f.get());
+      }
       return true; // already registered -- RmlUi's own "Duplicate" outcome is success, not error.
     }
   }
@@ -547,8 +567,26 @@ bool FontEngineOwn::RegisterFace(std::vector<uint8_t>&& blob, int /*face_index*/
   lf->weight = normalized_weight; // see the hoisted-local comment above the dedup loop.
   lf->fallback_face = fallback_face;
 
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) Stash the raw pointer BEFORE the
+  //     faces_.push_back() below moves `lf` out -- `.get()` on the (about-to-be-null) unique_ptr
+  //     after the move would be undefined, `.get()` on the still-live one right here is not.
+  //     Pointer stays valid post-move (faces_ owns a vector of unique_ptr<LoadedFace>, so the
+  //     LoadedFace object itself never relocates -- only the unique_ptr handle does).
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) Guarda o ponteiro cru ANTES do
+  //     faces_.push_back() abaixo mover `lf` pra fora -- `.get()` no unique_ptr (prestes a ficar
+  //     nulo) depois do move seria indefinido, `.get()` no ainda-vivo aqui não é. O ponteiro
+  //     continua válido pós-move (faces_ é dono de um vector de unique_ptr<LoadedFace>, então o
+  //     próprio objeto LoadedFace nunca realoca -- só o handle unique_ptr).
+  const LoadedFace* raw = lf.get();
   faces_.push_back(std::move(lf));
   ++own_font_engine_debug_registered_face_count(); // L1.20-FONTFLIP dedup fix -- see the hook's own doc-comment.
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) Index into fallback_faces_ IN REGISTRATION
+  //     ORDER -- see that member's own doc-comment for the full contract (mirrors RmlUi's
+  //     FontProvider::fallback_font_faces).
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) Indexa em fallback_faces_ EM ORDEM DE REGISTRO
+  //     -- ver o próprio doc-comment daquele membro pro contrato completo (espelha o
+  //     FontProvider::fallback_font_faces do RmlUi).
+  if (fallback_face) fallback_faces_.push_back(raw);
   return true;
 }
 
@@ -658,8 +696,24 @@ const FontEngineOwn::LoadedFace* FontEngineOwn::FindBestFace(const Rml::String& 
 //     do laço inline pré-refactor (mesmas constantes pen-snap/vsnap/Y-hint, mesmo kPad, mesma
 //     derivação de origem/escala) -- ver os blocos EN/PT individuais abaixo pro racional por-passo,
 //     inalterado desde antes desta extração.
-bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out) const {
-  const glx_sfnt_face& sf = inst.face->sfnt;
+bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out,
+                                    const LoadedFace* src) const {
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) Resolve the default -- see this method's own
+  //     doc-comment in the header for why the default cannot be spelled `inst.face` directly in the
+  //     signature (a default argument expression cannot name another parameter).
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) Resolve o default -- ver o próprio doc-comment
+  //     deste método no header pro motivo do default não poder ser escrito `inst.face` direto na
+  //     assinatura (uma expressão de argumento default não pode nomear outro parâmetro).
+  if (!src) src = inst.face;
+  const glx_sfnt_face& sf = src->sfnt;
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) CRITICAL: scale MUST divide by `src`'s own
+  //     units_per_em, not inst.face's -- see this method's header doc-comment. `RegisterFace()`
+  //     already rejects units_per_em==0 for every LoadedFace (including fallback ones), so this
+  //     division is safe for any `src` reachable here.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) CRÍTICO: a escala PRECISA dividir pelo próprio
+  //     units_per_em de `src`, não o de inst.face -- ver o doc-comment deste método no header. O
+  //     RegisterFace() já rejeita units_per_em==0 pra toda LoadedFace (incluindo as de fallback),
+  //     então esta divisão é segura pra qualquer `src` alcançável aqui.
   const float scale = (float)inst.pixel_size / (float)sf.units_per_em; // caller already guards units_per_em>0.
 
   // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP/VSNAP flags, read ONCE per glyph -- see
@@ -749,8 +803,19 @@ bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32
     //     -- um resultado limpo, sem erro, que nem checamos nem precisamos.
     if (!own_font_engine_hint_bypass()) {
       const int32_t hint_scale_num = (int32_t)std::lround((double)inst.pixel_size * 64.0);
+      // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) `src->hint_zones` -- a FALLBACK-supplied
+      //     glyph grid-fits against ITS OWN face's zones (baseline/x-height/cap-height measured
+      //     from that face's own 'x'/'H' outlines at RegisterFace() time), not the primary's --
+      //     the two font files' em-square/glyph proportions are unrelated, so the primary's zones
+      //     would misplace a fallback glyph's Y grid-fit.
+      // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) `src->hint_zones` -- um glyph suprido por
+      //     FALLBACK se grid-fita contra as zonas da PRÓPRIA face (baseline/altura-x/altura-de-
+      //     maiúscula medidas dos próprios outlines de 'x'/'H' daquela face em tempo de
+      //     RegisterFace()), não as da primária -- as proporções de em-square/glyph dos dois
+      //     arquivos de fonte não se relacionam, então as zonas da primária deslocariam mal o
+      //     grid-fit Y de um glyph de fallback.
       glx_hint_outline(points.data(), outline.num_points, sf.units_per_em, hint_scale_num,
-                       (int32_t)sf.units_per_em, &inst.face->hint_zones);
+                       (int32_t)sf.units_per_em, &src->hint_zones);
     }
 
     const float fx_min = (float)outline.x_min * scale;
@@ -1024,6 +1089,13 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
     GlyphInfo gi{};
     gi.baked = true;
     gi.gid = b.gid;
+    // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) The warm set NEVER falls back (see this
+    //     file's header "SCOPE"/anti-OE note) -- every glyph it bakes came from the FaceInstance's
+    //     own primary face.
+    // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) O warm set NUNCA recorre a fallback (ver a
+    //     nota "ESCOPO"/anti-OE deste header) -- todo glyph que ele empacota veio da própria face
+    //     primária da FaceInstance.
+    gi.src_face = inst.face;
     gi.advance = b.advance;
     if (b.gw > 0 && b.gh > 0) {
       gi.atlas_x = b.atlas_x;
@@ -1074,15 +1146,55 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
 // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) Ver o doc-comment longo deste método na sua declaração
 //     em font_engine_own.hpp pro contrato completo.
 void FontEngineOwn::BakeGlyph(FaceInstance& inst, uint32_t cp) const {
-  const glx_sfnt_face& sf = inst.face->sfnt;
-  const uint32_t gid = glx_sfnt_glyph_id(&sf, cp);
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) Resolve against the PRIMARY face first --
+  //     exactly the pre-fallback behaviour, unchanged.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) Resolve contra a face PRIMÁRIA primeiro --
+  //     exatamente o comportamento pré-fallback, inalterado.
+  uint32_t gid = glx_sfnt_glyph_id(&inst.face->sfnt, cp);
+  const LoadedFace* src = inst.face;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) THE gap this ticket closes: when the primary
+  //     face lacks the glyph (gid==0), walk `fallback_faces_` IN REGISTRATION ORDER -- mirrors the
+  //     pinned RmlUi source's own FontFaceHandleDefault.cpp glyph-shaping loop (confirmed reading
+  //     it: iterates fallback_font_faces in order, uses the first that resolves the character) --
+  //     and take the FIRST fallback face that resolves a non-zero gid for `cp`. `fb == inst.face`
+  //     is skipped so a face that is ALSO its own instance's primary (e.g. registered both as the
+  //     document's declared family AND, separately, as a fallback) is never re-tried a second time
+  //     under the same identity -- it already had its one shot above. `gid` and `src` are left as
+  //     the primary's (gid==0, src==inst.face) if NO fallback face has the glyph either, which the
+  //     `if (gid == 0)` check right below still catches -- identical negative-cache outcome as
+  //     before this loop existed, now just reached after exhausting every registered fallback too.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) O gap que esta tarefa fecha: quando a face
+  //     primária não tem o glyph (gid==0), percorre `fallback_faces_` EM ORDEM DE REGISTRO --
+  //     espelha o próprio laço de shaping de glyph do FontFaceHandleDefault.cpp do source pinado do
+  //     RmlUi (confirmado lendo-o: itera fallback_font_faces em ordem, usa a primeira que resolve o
+  //     caractere) -- e pega a PRIMEIRA face de fallback que resolve um gid não-zero pra `cp`.
+  //     `fb == inst.face` é pulada pra uma face que TAMBÉM é a primária da própria instância (ex.:
+  //     registrada tanto como a família declarada do documento QUANTO, separadamente, como
+  //     fallback) nunca ser retentada uma 2ª vez sob a mesma identidade -- ela já teve sua única
+  //     chance acima. `gid` e `src` ficam como os da primária (gid==0, src==inst.face) se NENHUMA
+  //     face de fallback tiver o glyph também, o que o cheque `if (gid == 0)` logo abaixo ainda
+  //     captura -- resultado de cache-negativo idêntico ao de antes deste laço existir, agora só
+  //     alcançado depois de esgotar toda fallback registrada também.
   if (gid == 0) {
-    inst.glyphs.emplace(cp, GlyphInfo{}); // negative-cache: this face has no glyph for `cp`.
+    for (const LoadedFace* fb : fallback_faces_) {
+      if (fb == inst.face) continue;
+      const uint32_t fb_gid = glx_sfnt_glyph_id(&fb->sfnt, cp);
+      if (fb_gid != 0) {
+        gid = fb_gid;
+        src = fb;
+        break;
+      }
+    }
+  }
+
+  if (gid == 0) {
+    inst.glyphs.emplace(cp, GlyphInfo{}); // negative-cache: no face (primary nor fallback) has `cp`.
     return;
   }
 
   Baked b;
-  if (!RasterizeGlyph(inst, cp, gid, b)) {
+  if (!RasterizeGlyph(inst, cp, gid, b, src)) {
     inst.glyphs.emplace(cp, GlyphInfo{}); // negative-cache: hmtx lookup failed (gid out of range).
     return;
   }
@@ -1090,6 +1202,7 @@ void FontEngineOwn::BakeGlyph(FaceInstance& inst, uint32_t cp) const {
   GlyphInfo gi{};
   gi.baked = true;
   gi.gid = b.gid;
+  gi.src_face = src; // primary or the resolving fallback face -- see GlyphInfo::src_face.
   gi.advance = b.advance;
 
   if (b.gw > 0 && b.gh > 0) {
@@ -1209,20 +1322,25 @@ void FontEngineOwn::EnsureGlyphs(FaceInstance& inst, Rml::StringView string) con
 
 float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView string, float letter_spacing,
                                     const std::function<void(float pen_x, const GlyphInfo*)>& emit) {
-  // EN: (L1.19-FONTENG/L1.20-FONTFLIP amadurecimento) Same font-unit->px scale BakeFaceInstance()
-  //     used to derive every glyph's own `advance`/outline for this instance -- glx_sfnt_kern()
-  //     returns its adjustment in FUnits (head::units_per_em-scaled, per include/core/sfnt.h),
-  //     so it must go through the identical `pixel_size / units_per_em` factor to land in the
-  //     same px space `pen` already accumulates in. `inst.face` is guaranteed non-null here (every
-  //     FaceInstance is baked from a resolved LoadedFace* in GetFontFaceHandle()).
-  // PT: Mesma escala unidade-de-fonte->px que BakeFaceInstance() usou pra derivar o próprio
-  //     `advance`/outline de todo glyph desta instância -- glx_sfnt_kern() devolve o ajuste dele
-  //     em FUnits (escalado por head::units_per_em, conforme include/core/sfnt.h), então precisa
-  //     passar pelo mesmo fator `pixel_size / units_per_em` pra cair no mesmo espaço-px em que
-  //     `pen` já acumula. `inst.face` é garantidamente não-nulo aqui (toda FaceInstance é
-  //     empacotada a partir de uma LoadedFace* resolvida em GetFontFaceHandle()).
-  const glx_sfnt_face& sf = inst.face->sfnt;
-  const float scale = (float)inst.pixel_size / (float)sf.units_per_em;
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) NO instance-wide font-unit->px `scale` is
+  //     hoisted here anymore -- kerning's own scale is now derived PER PAIR, below, from
+  //     `g->src_face->sfnt.units_per_em` (the face the CURRENT glyph actually came from), not
+  //     `inst.face`'s. Reason: a kerned pair only ever forms between two glyphs from the SAME
+  //     src_face (see the `prev_g->src_face == g->src_face` gate below) -- but that shared face may
+  //     be a FALLBACK face with a units_per_em different from the instance's primary (e.g. Open
+  //     Sans 2048 vs. a fallback face's own 1600), and using the wrong denominator would silently
+  //     mis-scale the FUnits kern adjustment glx_sfnt_kern() returns, exactly the class of bug
+  //     RasterizeGlyph()'s own `src`-scoped scale exists to avoid for bake-time metrics.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) NENHUM `scale` unidade-de-fonte->px de âmbito
+  //     de instância é mais içado aqui -- a própria escala do kerning agora é derivada POR PAR,
+  //     abaixo, de `g->src_face->sfnt.units_per_em` (a face de que o glyph ATUAL de fato veio), não
+  //     a de `inst.face`. Motivo: um par kernado só se forma entre dois glyphs da MESMA src_face
+  //     (ver a guarda `prev_g->src_face == g->src_face` abaixo) -- mas essa face compartilhada pode
+  //     ser uma face de FALLBACK com um units_per_em diferente do da primária da instância (ex.:
+  //     Open Sans 2048 vs. o 1600 próprio de uma face de fallback), e usar o denominador errado
+  //     dimensionaria mal, silenciosamente, o ajuste de kern em FUnits que o glx_sfnt_kern()
+  //     devolve -- exatamente a classe de bug que a escala escopada-por-`src` do próprio
+  //     RasterizeGlyph() existe pra evitar nas métricas de tempo de bake.
 
   // EN: (L1.20-FONTFLIP, FT-F4) PEN-SNAP -- the other half of the flag BakeFaceInstance() already
   //     read for `advance`/`offset_x`. Snapping `letter_spacing` to a whole pixel here (once) and
@@ -1241,22 +1359,39 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
 
   float pen = 0.f;
   bool has_prev = false;
-  uint32_t prev_gid = 0;
+  const GlyphInfo* prev_g = nullptr;
   for (Rml::StringIteratorU8 it(string.begin(), string.begin(), string.end()); it; ++it) {
     const Rml::Character c = *it;
     const uint32_t cp = (uint32_t)c;
     const GlyphInfo* g = FindGlyph(inst, cp);
 
-    // EN: Kerning applies ONLY between two CONSECUTIVE baked glyphs (both have a real gid) --
-    //     folded into `pen` BEFORE `emit()` so the current glyph's own quad/measurement already
-    //     reflects the tightened (or loosened) gap to its predecessor. See this method's
-    //     doc-comment in font_engine_own.hpp for the no-rounding-mid-loop rationale.
-    // PT: Kerning se aplica SÓ entre dois glyphs CONSECUTIVOS empacotados (ambos com gid real) --
-    //     dobrado em `pen` ANTES do `emit()` pra que o próprio quad/medição do glyph atual já
-    //     reflita o vão apertado (ou afrouxado) até o predecessor. Ver o doc-comment deste método
-    //     em font_engine_own.hpp pro motivo do sem-arredondamento-no-meio-do-laço.
-    if (has_prev && g) {
-      const int16_t kern_funits = glx_sfnt_kern(&sf, prev_gid, g->gid);
+    // EN: Kerning applies ONLY between two CONSECUTIVE baked glyphs (both have a real gid) SOURCED
+    //     FROM THE SAME FACE (L1.20-FONTFLIP, FT-F4, per-glyph fallback: `prev_g->src_face ==
+    //     g->src_face` -- the classic `kern` table is keyed by gid WITHIN one physical font file,
+    //     so a gid pair straddling a primary/fallback boundary, or two DIFFERENT fallback faces,
+    //     shares no meaningful gid-space and must not be looked up together; see
+    //     GlyphInfo::src_face's own doc-comment) -- folded into `pen` BEFORE `emit()` so the
+    //     current glyph's own quad/measurement already reflects the tightened (or loosened) gap to
+    //     its predecessor. See this method's doc-comment in font_engine_own.hpp for the
+    //     no-rounding-mid-loop rationale.
+    // PT: Kerning se aplica SÓ entre dois glyphs CONSECUTIVOS empacotados (ambos com gid real)
+    //     ORIGINADOS DA MESMA FACE (L1.20-FONTFLIP, FT-F4, fallback por-glyph:
+    //     `prev_g->src_face == g->src_face` -- a tabela clássica `kern` é indexada por gid DENTRO
+    //     de um único arquivo de fonte físico, então um par de gid atravessando uma fronteira
+    //     primária/fallback, ou duas faces de fallback DIFERENTES, não compartilha espaço-de-gid
+    //     significativo e não pode ser buscado junto; ver o próprio doc-comment de
+    //     GlyphInfo::src_face) -- dobrado em `pen` ANTES do `emit()` pra que o próprio
+    //     quad/medição do glyph atual já reflita o vão apertado (ou afrouxado) até o predecessor.
+    //     Ver o doc-comment deste método em font_engine_own.hpp pro motivo do
+    //     sem-arredondamento-no-meio-do-laço.
+    if (has_prev && g && prev_g->src_face != nullptr && prev_g->src_face == g->src_face) {
+      // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) per-pair scale derived from THIS shared
+      //     src_face's own units_per_em -- see this function's own doc-comment above for why.
+      // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) escala por-par derivada do próprio
+      //     units_per_em desta src_face compartilhada -- ver o doc-comment desta função acima pro
+      //     motivo.
+      const float kern_scale = (float)inst.pixel_size / (float)g->src_face->sfnt.units_per_em;
+      const int16_t kern_funits = glx_sfnt_kern(&g->src_face->sfnt, prev_g->gid, g->gid);
       // EN: (L1.20-FONTFLIP, FT-F4) kern folded in snapped to a whole pixel under pen-snap --
       //     FreeType's kern advance is likewise integer (`>> 6`). Bypassed == the raw fractional
       //     kern (the pre-snap behaviour).
@@ -1264,7 +1399,7 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
       //     do FreeType também é inteiro (`>> 6`). Bypassado == o kern fracionário cru (comportamento
       //     pré-snap).
       if (kern_funits != 0) {
-        const float kern_px = (float)kern_funits * scale;
+        const float kern_px = (float)kern_funits * kern_scale;
         pen += pen_snap ? (float)std::lround((double)kern_px) : kern_px;
       }
     }
@@ -1273,7 +1408,7 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
     pen += (g ? g->advance : 0.0f) + ls;
 
     has_prev = (g != nullptr);
-    prev_gid = g ? g->gid : 0;
+    prev_g = g;
   }
   return pen;
 }

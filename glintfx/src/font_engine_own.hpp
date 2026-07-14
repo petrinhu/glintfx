@@ -354,6 +354,29 @@ private:
     //     re-resolver cp->gid a cada avanço de pena (a própria tabela 'kern' é indexada por gid,
     //     não codepoint, conforme a spec OpenType).
     uint32_t gid = 0;
+    // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) The LoadedFace this glyph was ACTUALLY
+    //     rasterised from -- the FaceInstance's own primary `inst.face` for every warm-set glyph
+    //     and for a top-up glyph the primary face itself covers, but a FALLBACK face (from
+    //     `fallback_faces_`) when the primary lacked the codepoint and a fallback supplied it
+    //     (BakeGlyph(), .cpp). `nullptr` only for a negative-cached (`baked==false`) entry -- no
+    //     face at all had the glyph. Routes IterateGlyphs()'s kerning: the classic `kern` table is
+    //     keyed by gid WITHIN one font file, so kerning a pair drawn from two DIFFERENT physical
+    //     faces (their gid numbering spaces are unrelated) would look up garbage -- IterateGlyphs()
+    //     only calls glx_sfnt_kern() when `prev->src_face == cur->src_face`. 8 bytes/glyph
+    //     (pointer), a deliberate, small per-glyph cost for a correctness guarantee, not a
+    //     micro-optimisation target.
+    // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) A LoadedFace de que este glyph foi DE FATO
+    //     rasterizado -- o próprio `inst.face` primário da FaceInstance pra todo glyph do warm set
+    //     e pra um glyph de top-up que a própria face primária cobre, mas uma face de FALLBACK (de
+    //     `fallback_faces_`) quando a primária não tinha o codepoint e um fallback o supriu
+    //     (BakeGlyph(), .cpp). `nullptr` só numa entrada cache-negativada (`baked==false`) -- NENHUMA
+    //     face tinha o glyph. Roteia o kerning do IterateGlyphs(): a tabela clássica `kern` é
+    //     indexada por gid DENTRO de um arquivo de fonte, então kernar um par vindo de duas faces
+    //     físicas DIFERENTES (os espaços de numeração de gid delas não se relacionam) buscaria
+    //     lixo -- o IterateGlyphs() só chama glx_sfnt_kern() quando `prev->src_face == cur->src_face`.
+    //     8 bytes/glyph (ponteiro), um custo pequeno e deliberado por-glyph por uma garantia de
+    //     corretude, não um alvo de micro-otimização.
+    const LoadedFace* src_face = nullptr;
     int atlas_x = 0, atlas_y = 0, w = 0, h = 0;
     // EN: offset_x/offset_y (px): added to (pen_x, baseline_y) to get the quad's TOP-LEFT
     //     corner in screen space (y-down). See BakeFaceInstance()'s derivation in the .cpp.
@@ -480,31 +503,83 @@ private:
   //     malformado/grande demais) -- `out` fica então com gw==gh==0, exatamente o caso pré-refactor
   //     "empacotado, tamanho-zero" (um caractere real, só sem nada pra blitar), nunca um gatilho de
   //     cache negativo.
-  bool RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out) const;
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) `src` -- the LoadedFace whose sfnt/hint_zones/
+  //     units_per_em drive this rasterisation, DISTINCT from `inst.face` (the FaceInstance's
+  //     primary) whenever this call is rasterising a FALLBACK-supplied glyph. Defaults to nullptr,
+  //     which this function resolves to `inst.face` on entry -- so the pre-existing warm-set call
+  //     site (BakeFaceInstance(), which never passes this argument) is UNCHANGED, byte-for-byte,
+  //     by this parameter's addition. CRITICAL: the font-unit->px `scale` this function derives
+  //     MUST come from `src->sfnt.units_per_em`, NOT `inst.face->sfnt.units_per_em` -- every font
+  //     file defines its own em-square resolution (e.g. Open Sans 2048 vs. PixelOperatorMono
+  //     1600), and using the wrong one silently mis-sizes every metric this function derives
+  //     (advance, bbox, bearing) with no crash to signal it. `inst.pixel_size` (the target render
+  //     size) is UNCHANGED -- a fallback glyph is baked to fit the SAME instance/pixel-size the
+  //     primary face's glyphs already are, only the em-square denominator differs per source file.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) `src` -- a LoadedFace cujos sfnt/hint_zones/
+  //     units_per_em guiam esta rasterização, DISTINTA de `inst.face` (a primária da FaceInstance)
+  //     sempre que esta chamada rasteriza um glyph suprido por FALLBACK. Default nullptr, que esta
+  //     função resolve pra `inst.face` na entrada -- então o ponto de chamada pré-existente do warm
+  //     set (BakeFaceInstance(), que nunca passa este argumento) fica INALTERADO, byte-a-byte, por
+  //     esta adição de parâmetro. CRÍTICO: o `scale` unidade-de-fonte->px que esta função deriva
+  //     PRECISA vir de `src->sfnt.units_per_em`, NÃO de `inst.face->sfnt.units_per_em` -- todo
+  //     arquivo de fonte define a própria resolução de em-square (ex.: Open Sans 2048 vs.
+  //     PixelOperatorMono 1600), e usar a errada dimensiona mal, silenciosamente, toda métrica que
+  //     esta função deriva (advance, bbox, bearing) sem crash nenhum pra sinalizar. `inst.pixel_size`
+  //     (o tamanho de render alvo) fica INALTERADO -- um glyph de fallback é empacotado pra caber no
+  //     MESMO tamanho-em-px da instância que os glyphs da face primária já usam, só o denominador
+  //     em-square muda por arquivo-fonte de origem.
+  bool RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out,
+                       const LoadedFace* src = nullptr) const;
 
-  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) LAZY TOP-UP for exactly ONE codepoint missing from
-  //     inst.glyphs -- called ONLY by EnsureGlyphs() below, which already checked the map first (so
-  //     BakeGlyph() itself never needs to). Resolves gid, calls RasterizeGlyph() (the SAME code path
-  //     BakeFaceInstance()'s warm set used), and either (a) inserts a `baked=false` GlyphInfo -- the
-  //     NEGATIVE CACHE, so EnsureGlyphs() never re-attempts this codepoint for this instance again --
-  //     when gid==0 or RasterizeGlyph() itself returns false, or (b) places the rasterized glyph into
-  //     the PERSISTENT shelf cursor (inst.pen_x/pen_y/shelf_h), growing the atlas via GrowAtlas() first
-  //     if it does not fit, blits its coverage through inst.cov_lut (the SAME per-instance darken curve
-  //     the warm set used), and inserts a `baked=true` GlyphInfo. Never touches inst.version/
-  //     atlas_dirty/the GPU texture -- that bookkeeping is EnsureGlyphs()'s job, once, after the whole
-  //     string has been walked (bumping per-glyph inside the loop would be correct but wasteful).
-  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B) TOP-UP PREGUIÇOSO pra exatamente UM codepoint ausente de
-  //     inst.glyphs -- chamado SÓ pelo EnsureGlyphs() abaixo, que já checou o mapa antes (então o
-  //     BakeGlyph() em si nunca precisa). Resolve o gid, chama RasterizeGlyph() (o MESMO caminho de
-  //     código que o warm set do BakeFaceInstance() usou), e ou (a) insere um GlyphInfo `baked=false`
-  //     -- o CACHE NEGATIVO, pra o EnsureGlyphs() nunca reatentar este codepoint nesta instância de
-  //     novo -- quando gid==0 ou o próprio RasterizeGlyph() devolve false, ou (b) põe o glyph
-  //     rasterizado no cursor PERSISTENTE de prateleira (inst.pen_x/pen_y/shelf_h), crescendo o atlas
-  //     via GrowAtlas() primeiro se não couber, blita sua cobertura pela inst.cov_lut (a MESMA curva de
-  //     escurecimento por-instância que o warm set usou), e insere um GlyphInfo `baked=true`. Nunca
-  //     toca inst.version/atlas_dirty/a textura GPU -- essa contabilidade é trabalho do EnsureGlyphs(),
-  //     uma vez, depois de toda a string ter sido percorrida (incrementar por-glyph dentro do laço
-  //     seria correto mas desperdiçado).
+  // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B; per-glyph fallback amadurecimento) LAZY TOP-UP for
+  //     exactly ONE codepoint missing from inst.glyphs -- called ONLY by EnsureGlyphs() below,
+  //     which already checked the map first (so BakeGlyph() itself never needs to). Resolves gid
+  //     against the PRIMARY face (`inst.face`) first; if that face lacks the codepoint (gid==0),
+  //     walks `fallback_faces_` IN REGISTRATION ORDER (skipping `inst.face` itself, should it also
+  //     appear there) and uses the FIRST fallback face that resolves a non-zero gid -- mirroring
+  //     the pinned RmlUi source's own per-glyph fallback walk (FontFaceHandleDefault.cpp's glyph-
+  //     shaping loop, confirmed reading it: it iterates `fallback_font_faces` in order and takes the
+  //     first face with the missing character). RasterizeGlyph() is then called with THAT resolving
+  //     face as `src` (the SAME code path BakeFaceInstance()'s warm set used, now parametrised by
+  //     source face -- see RasterizeGlyph()'s own doc-comment for why `src`'s units_per_em, not
+  //     inst.face's, drives the scale). Either (a) inserts a `baked=false` GlyphInfo -- the NEGATIVE
+  //     CACHE, so EnsureGlyphs() never re-attempts this codepoint for this instance again -- when
+  //     NO face (primary nor any fallback) has the glyph, or RasterizeGlyph() itself returns false,
+  //     or (b) places the rasterized glyph into the PERSISTENT shelf cursor (inst.pen_x/pen_y/
+  //     shelf_h, on `inst`'s OWN atlas -- a fallback-sourced glyph packs into the SAME instance
+  //     atlas as any other, unaffected by which face it came from), growing the atlas via
+  //     GrowAtlas() first if it does not fit, blits its coverage through inst.cov_lut (the SAME
+  //     per-instance darken curve the warm set used, unaffected by source face), and inserts a
+  //     `baked=true` GlyphInfo with `gi.src_face` set to the RESOLVING face (primary or fallback --
+  //     see GlyphInfo::src_face's own doc-comment for why IterateGlyphs() needs this to gate
+  //     kerning). Never touches inst.version/atlas_dirty/the GPU texture -- that bookkeeping is
+  //     EnsureGlyphs()'s job, once, after the whole string has been walked (bumping per-glyph
+  //     inside the loop would be correct but wasteful).
+  // PT: (L1.20-FONTFLIP, FT-F4, sub-fase 2B; amadurecimento fallback por-glyph) TOP-UP PREGUIÇOSO
+  //     pra exatamente UM codepoint ausente de inst.glyphs -- chamado SÓ pelo EnsureGlyphs() abaixo,
+  //     que já checou o mapa antes (então o BakeGlyph() em si nunca precisa). Resolve o gid contra a
+  //     face PRIMÁRIA (`inst.face`) primeiro; se essa face não tem o codepoint (gid==0), percorre
+  //     `fallback_faces_` em ORDEM DE REGISTRO (pulando o próprio `inst.face`, caso ele também
+  //     apareça lá) e usa a PRIMEIRA face de fallback que resolve um gid não-zero -- espelhando a
+  //     própria caminhada de fallback por-glyph do source pinado do RmlUi (o laço de shaping de
+  //     glyph do FontFaceHandleDefault.cpp, confirmado lendo-o: ele itera `fallback_font_faces` em
+  //     ordem e pega a primeira face com o caractere ausente). RasterizeGlyph() é então chamado com
+  //     ESSA face resolvente como `src` (o MESMO caminho de código que o warm set do
+  //     BakeFaceInstance() usou, agora parametrizado pela face-fonte -- ver o próprio doc-comment do
+  //     RasterizeGlyph() pro motivo do units_per_em de `src`, não o de inst.face, guiar a escala).
+  //     Ou (a) insere um GlyphInfo `baked=false` -- o CACHE NEGATIVO, pra o EnsureGlyphs() nunca
+  //     reatentar este codepoint nesta instância de novo -- quando NENHUMA face (nem a primária nem
+  //     fallback nenhuma) tem o glyph, ou o próprio RasterizeGlyph() devolve false, ou (b) põe o
+  //     glyph rasterizado no cursor PERSISTENTE de prateleira (inst.pen_x/pen_y/shelf_h, no PRÓPRIO
+  //     atlas de `inst` -- um glyph de origem fallback empacota no MESMO atlas de instância que
+  //     qualquer outro, indiferente a de qual face veio), crescendo o atlas via GrowAtlas() primeiro
+  //     se não couber, blita sua cobertura pela inst.cov_lut (a MESMA curva de escurecimento
+  //     por-instância que o warm set usou, indiferente à face de origem), e insere um GlyphInfo
+  //     `baked=true` com `gi.src_face` setado pra face RESOLVENTE (primária ou fallback -- ver o
+  //     próprio doc-comment de GlyphInfo::src_face pro motivo do IterateGlyphs() precisar disto pra
+  //     controlar o kerning). Nunca toca inst.version/atlas_dirty/a textura GPU -- essa
+  //     contabilidade é trabalho do EnsureGlyphs(), uma vez, depois de toda a string ter sido
+  //     percorrida (incrementar por-glyph dentro do laço seria correto mas desperdiçado).
   void BakeGlyph(FaceInstance& inst, uint32_t cp) const;
 
   // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B) Grows inst.atlas_rgba to (at least) `new_w`x`new_h`,
@@ -588,7 +663,13 @@ private:
   //     around an UN-baked glyph (`glyph_or_null == nullptr`, no gid to look up) or before the
   //     first glyph of the string (no predecessor) -- both leave the running pen exactly as
   //     GetStringWidth()/GenerateString() already handled the no-kerning case before this
-  //     amadurecimento. Rounding -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): with pen-snap ON (the
+  //     amadurecimento. FALLBACK GATING (per-glyph fallback amadurecimento): the classic `kern`
+  //     table is keyed by gid WITHIN one physical font file -- a gid from one face means nothing in
+  //     another face's numbering space. So the pair-kern lookup above ALSO requires
+  //     `prev->src_face == cur->src_face` (both GlyphInfo::src_face, see its own doc-comment): two
+  //     consecutive glyphs sourced from DIFFERENT faces (one primary, one fallback-supplied, or two
+  //     different fallback faces) never kern against each other, exactly as if there were no
+  //     predecessor. Rounding -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): with pen-snap ON (the
   //     DEFAULT, own_font_engine_pensnap_bypass()==false), each per-glyph pen COMPONENT is rounded
   //     to a whole pixel BEFORE it is folded in -- the glyph's `advance` and left bearing
   //     (`offset_x`) at bake time (BakeFaceInstance()), the `kern` adjustment and `letter_spacing`
@@ -622,7 +703,13 @@ private:
   //     um glyph NÃO-empacotado (`glyph_ou_null == nullptr`, sem gid pra buscar) ou antes do 1º
   //     glyph da string (sem predecessor) -- ambos deixam a pena corrente exatamente como
   //     GetStringWidth()/GenerateString() já tratavam o caso sem-kerning antes deste
-  //     amadurecimento. Arredondamento -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): com o pen-snap LIGADO
+  //     amadurecimento. CONTROLE DE FALLBACK (amadurecimento fallback por-glyph): a tabela clássica
+  //     `kern` é indexada por gid DENTRO de um único arquivo de fonte físico -- um gid de uma face
+  //     não significa nada no espaço de numeração de outra face. Então o lookup de kern por-par
+  //     acima TAMBÉM exige `prev->src_face == cur->src_face` (ambos GlyphInfo::src_face, ver o
+  //     próprio doc-comment): dois glyphs consecutivos originados de faces DIFERENTES (um primário,
+  //     um suprido por fallback, ou duas faces de fallback diferentes) nunca kernam entre si,
+  //     exatamente como se não houvesse predecessor. Arredondamento -- PEN-SNAP (L1.20-FONTFLIP, FT-F4): com o pen-snap LIGADO
   //     (o DEFAULT, own_font_engine_pensnap_bypass()==false), cada COMPONENTE do pen por-glyph é
   //     arredondado a um pixel inteiro ANTES de ser dobrado -- o `advance` do glyph e o bearing
   //     esquerdo (`offset_x`) em tempo de bake (BakeFaceInstance()), o ajuste de `kern` e o
@@ -642,6 +729,37 @@ private:
 
   std::vector<std::unique_ptr<LoadedFace>> faces_;
   std::vector<std::unique_ptr<FaceInstance>> instances_;
+
+  // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) Faces registered with `fallback_face==true`
+  //     (RmlUi's own @font-face convention, "use this face for characters missing from other
+  //     faces"), in REGISTRATION ORDER -- mirrors the pinned RmlUi source's
+  //     `FontProvider::fallback_font_faces` (confirmed reading FontProvider.cpp/FontFamily.cpp),
+  //     which FontFaceHandleDefault.cpp's glyph-shaping loop walks IN ORDER, using the FIRST
+  //     fallback face that actually has the missing codepoint. Populated by RegisterFace() only
+  //     (raw pointers into `faces_`'s std::vector<unique_ptr<...>>, stable across future
+  //     faces_.push_back() reallocations -- same pointer-stability contract FaceInstance::face
+  //     already relies on). NOT the same list as `faces_` itself: a fallback face is ALSO in
+  //     `faces_` (RegisterFace() pushes it there unconditionally, fallback or not) -- this vector
+  //     is a second, filtered index over the same storage, existing purely so BakeGlyph()'s
+  //     per-glyph fallback loop (see BakeGlyph()'s own doc-comment) does not have to re-scan and
+  //     re-filter all of `faces_` (which may also hold non-fallback siblings of the SAME family)
+  //     on every gid==0 miss.
+  // PT: (L1.20-FONTFLIP, FT-F4, fallback por-glyph) Faces registradas com `fallback_face==true`
+  //     (convenção própria do RmlUi em @font-face, "usar esta face pra caracteres ausentes de
+  //     outras faces"), em ORDEM DE REGISTRO -- espelha o próprio
+  //     `FontProvider::fallback_font_faces` do source pinado do RmlUi (confirmado lendo
+  //     FontProvider.cpp/FontFamily.cpp), que o laço de shaping de glyph do
+  //     FontFaceHandleDefault.cpp percorre EM ORDEM, usando a PRIMEIRA face de fallback que de
+  //     fato tem o codepoint ausente. Populado só pelo RegisterFace() (ponteiros crus pra dentro
+  //     do std::vector<unique_ptr<...>> de `faces_`, estáveis através de futuros
+  //     faces_.push_back() que realocam -- o mesmo contrato de estabilidade de ponteiro que
+  //     FaceInstance::face já depende). NÃO é a mesma lista que `faces_` em si: uma face de
+  //     fallback TAMBÉM está em `faces_` (RegisterFace() a empilha lá incondicionalmente, fallback
+  //     ou não) -- este vetor é um segundo índice, filtrado, sobre o mesmo armazenamento,
+  //     existindo só pra o laço de fallback por-glyph do BakeGlyph() (ver o próprio doc-comment do
+  //     BakeGlyph()) não precisar re-varrer e re-filtrar todo `faces_` (que também pode ter
+  //     irmãos não-fallback da MESMA família) a cada miss de gid==0.
+  std::vector<const LoadedFace*> fallback_faces_;
 };
 
 // EN: A/B TEST HOOK (L1.20-FONTFLIP, FT-F4) -- a single process-global toggle read exactly once

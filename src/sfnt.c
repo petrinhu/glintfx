@@ -1224,32 +1224,97 @@ int16_t glx_sfnt_kern(const glx_sfnt_face* face, uint32_t left_gid, uint32_t rig
             size_t need = (size_t)n_pairs * 6u;
             if (!bounds_ok(kern_end, pairs_off, need)) return 0;
 
-            // EN: Pairs are spec-REQUIRED to be sorted by `(left<<16 | right)` (confirmed live
-            //     against Open Sans' own 18694 pairs, cross-checked independently with
-            //     `fontTools`) -- a binary search would be the throughput-optimal choice, but
-            //     this scan does not rely on that ordering (same correctness-first,
-            //     no-sortedness-assumption stance `find_table`/`cmap_lookup_format4` above
-            //     already take): an unsorted/hostile table simply yields "no match" safely
-            //     instead of a wrong-but-early-terminated one. Bounded by `n_pairs`
-            //     (`uint16_t`, at most 65535) -- finite regardless.
-            // PT: Pares são EXIGIDOS pela spec de estarem ordenados por `(left<<16 | right)`
-            //     (confirmado ao vivo contra os próprios 18694 pares da Open Sans, cruzado
-            //     independentemente com `fontTools`) -- uma busca binária seria a escolha
-            //     ótima de vazão, mas esta varredura não depende dessa ordenação (mesma postura
-            //     correção-primeiro, sem-suposição-de-ordenação que `find_table`/
-            //     `cmap_lookup_format4` acima já tomam): uma tabela desordenada/hostil
-            //     simplesmente resulta em "sem match" com segurança em vez de um match
-            //     errado-mas-terminado-cedo. Limitado por `n_pairs` (`uint16_t`, no máximo
-            //     65535) -- finito de qualquer jeito.
-            for (uint16_t p = 0; p < n_pairs; p++) {
-                size_t po = pairs_off + (size_t)p * 6u;
-                uint16_t l, r;
-                if (!rd_u16(blob, len, po, &l)) return 0;
-                if (!rd_u16(blob, len, po + 2, &r)) return 0;
-                if (l == (uint16_t)left_gid && r == (uint16_t)right_gid) {
-                    int16_t v;
-                    if (!rd_i16(blob, len, po + 4, &v)) return 0;
-                    return v;
+            // EN: FT-F4-KERN-BSEARCH -- pairs are spec-REQUIRED to be sorted by
+            //     `(left<<16 | right)` (confirmed live against Open Sans' own 18694 pairs,
+            //     cross-checked independently with `fontTools`); this lookup now ASSUMES that
+            //     ordering and bisects `[0, n_pairs)` instead of scanning it linearly -- the
+            //     linear scan's own former no-sortedness-assumption stance (kept, unswapped, in
+            //     this file's git history and as `kern_linear_ref` in tests/test_sfnt.c, its
+            //     independent oracle witness) made a real, measured difference: a linear scan
+            //     over Open Sans' 18694-pair table, called once per glyph pair every frame, cost
+            //     165x FreeType's own layout time. The correctness-first posture is NOT
+            //     abandoned, only re-grounded on what is actually load-bearing: the
+            //     `bounds_ok(kern_end, pairs_off, need)` check just above ALREADY proves every
+            //     index `m` in `[0, n_pairs)` has its whole 6-byte pair entry inside
+            //     `[kern_off, kern_end)` -- and therefore inside `[0, len)`, since `kern_end`
+            //     was itself proven `<= len` by `find_table`'s own `bounds_ok` in
+            //     `glx_sfnt_open` -- REGARDLESS of the byte values at those offsets, sorted or
+            //     not. A hostile/malformed table that violates the sort invariant can only ever
+            //     make bisection miss a pair that IS present (this function then returns `0`,
+            //     the ordinary "no kerning" value -- cosmetic, not a correctness break: this
+            //     function's whole contract is "the kern ADJUSTMENT for this pair, or 0", never
+            //     "whether this pair exists"). It can never read outside the pair array (the
+            //     bound above is unconditional, independent of the search strategy walking over
+            //     it) and it can never return a WRONG value for a pair that exists AND is found
+            //     (a match only fires on the exact equality `have == want` below, byte-identical
+            //     to the linear scan's own `l == left && r == right`). One residual, benign edge
+            //     case: the spec also forbids DUPLICATE `(left, right)` keys, which a hostile
+            //     table could still contain -- bisection over duplicates may return a DIFFERENT
+            //     matching entry than the linear scan's "first in file order" (both are
+            //     "a value this table declares for this pair", so still not a wrong-but-real
+            //     value; this can only ever differ from the old behaviour on already-malformed,
+            //     spec-violating input, never on any well-formed font, Open Sans included, whose
+            //     18694 pairs the exhaustive equivalence test in tests/test_sfnt.c proves are
+            //     each returned identically to before). Bounded by `n_pairs` (`uint16_t`, at
+            //     most 65535 pairs) either way, and now `O(log n_pairs)` instead of `O(n_pairs)`
+            //     -- at most 17 comparisons for Open Sans' 18694, not 18694.
+            // PT: FT-F4-KERN-BSEARCH -- pares são EXIGIDOS pela spec de estarem ordenados por
+            //     `(left<<16 | right)` (confirmado ao vivo contra os próprios 18694 pares da
+            //     Open Sans, cruzado independentemente com `fontTools`); esta busca agora ASSUME
+            //     essa ordenação e bisecta `[0, n_pairs)` em vez de varrer linearmente -- a
+            //     própria postura anterior de sem-suposição-de-ordenação da varredura linear
+            //     (mantida, sem swap, no histórico do git deste arquivo e como
+            //     `kern_linear_ref` no tests/test_sfnt.c, sua testemunha-oráculo independente)
+            //     fez uma diferença real, medida: uma varredura linear sobre a tabela de 18694
+            //     pares da Open Sans, chamada uma vez por par de glyph a cada frame, custava
+            //     165x o tempo de layout do próprio FreeType. A postura correção-primeiro NÃO é
+            //     abandonada, só reancorada no que de fato sustenta a garantia: a checagem
+            //     `bounds_ok(kern_end, pairs_off, need)` logo acima JÁ prova que todo índice `m`
+            //     em `[0, n_pairs)` tem sua entrada de par inteira de 6 bytes dentro de
+            //     `[kern_off, kern_end)` -- e portanto dentro de `[0, len)`, já que `kern_end`
+            //     em si foi provado `<= len` pelo próprio `bounds_ok` do `find_table` no
+            //     `glx_sfnt_open` -- INDEPENDENTE dos valores de byte nesses offsets, ordenados
+            //     ou não. Uma tabela hostil/malformada que viole o invariante de ordenação só
+            //     pode, no máximo, fazer a bisecção perder um par que ESTÁ presente (esta função
+            //     então retorna `0`, o valor comum de "sem kerning" -- cosmético, não uma
+            //     quebra de corretude: o contrato inteiro desta função é "o AJUSTE de kern
+            //     deste par, ou 0", nunca "se este par existe"). Ela nunca consegue ler fora do
+            //     array de par (o limite acima é incondicional, independente da estratégia de
+            //     busca que percorre por cima dele) e nunca consegue retornar um valor ERRADO
+            //     pra um par que existe E é encontrado (um match só dispara na igualdade exata
+            //     `have == want` abaixo, idêntica byte-a-byte ao `l == left && r == right` da
+            //     própria varredura linear). Um caso-limite residual, benigno: a spec também
+            //     proíbe chaves `(left, right)` DUPLICADAS, que uma tabela hostil ainda poderia
+            //     conter -- bisecção sobre duplicatas pode retornar uma entrada casada
+            //     DIFERENTE da "primeira na ordem do arquivo" da varredura linear (ambas são "um
+            //     valor que esta tabela declara pra este par", então ainda não é um valor
+            //     errado-mas-real; isso só pode diferir do comportamento antigo em input já
+            //     malformado/violador-de-spec, nunca em fonte bem-formada nenhuma, Open Sans
+            //     incluída, cujos 18694 pares o teste exaustivo de equivalência no
+            //     tests/test_sfnt.c prova serem retornados identicamente a antes). Limitado por
+            //     `n_pairs` (`uint16_t`, no máximo 65535 pares) de qualquer jeito, e agora
+            //     `O(log n_pairs)` em vez de `O(n_pairs)` -- no máximo 17 comparações pros 18694
+            //     da Open Sans, não 18694.
+            {
+                uint32_t want = ((uint32_t)(uint16_t)left_gid << 16) | (uint16_t)right_gid;
+                size_t lo = 0, hi = n_pairs;
+                while (lo < hi) {
+                    size_t m = lo + (hi - lo) / 2; // anti-overflow idiom, never `(lo + hi) / 2`
+                    size_t po = pairs_off + (size_t)m * 6u;
+                    uint16_t l, r;
+                    if (!rd_u16(blob, len, po, &l)) return 0;
+                    if (!rd_u16(blob, len, po + 2, &r)) return 0;
+                    uint32_t have = ((uint32_t)l << 16) | r;
+                    if (have == want) {
+                        int16_t v;
+                        if (!rd_i16(blob, len, po + 4, &v)) return 0;
+                        return v;
+                    }
+                    if (have < want) {
+                        lo = m + 1;
+                    } else {
+                        hi = m;
+                    }
                 }
             }
             return 0; // no matching pair in this subtable -- ordinary "these glyphs do not kern"

@@ -68,6 +68,11 @@ Bundled assets
   (https://github.com/googlefonts/opensans).
   File: glintfx/demos/showcase/assets/OpenSans-Regular.ttf
 
+- Pixel Operator Mono — Creative Commons Zero (CC0 1.0, public domain).
+  By Jayvee Enaguas (HarvettFox96), https://notabug.org/HarvettFox96/ttf-pixeloperator.
+  File: glintfx/demos/showcase/assets/PixelOperatorMono.ttf
+  Used as a Latin-only test fixture (font-fallback coverage tests).
+
 ────────────────────────────────────────────────────────────────────────
 
 Full license texts of these dependencies are available in their respective

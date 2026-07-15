@@ -152,7 +152,18 @@ status=0
 #     via um glob `glx_raster_*`/`glx_rasterize_*`) pra que um futuro helper interno acidental
 #     vazando um símbolo cru com o mesmo prefixo ainda falhe este gate em vez de viajar junto em
 #     silêncio.
-required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline glx_sfnt_kern glx_rasterize_outline glx_raster_scratch_floats"
+# EN: SOV-HINT (L1.20-FONTFLIP / FT-F4) adds its own front door -- `glx_hint_outline` is ALREADY
+#     namespaced by construction (no `$(CORE_RENAME_FLAGS)` entry needed, same reasoning as the
+#     `glx_sfnt_*`/`glx_raster_*` names above -- see src/hint.c's file header), listed explicitly (not
+#     via a `glx_hint_*` glob) so a future accidental internal helper leaking a bare-prefixed symbol
+#     still fails this gate instead of silently riding along.
+# PT: O SOV-HINT (L1.20-FONTFLIP / FT-F4) acrescenta a própria porta-da-frente -- `glx_hint_outline`
+#     já é namespaced por construção (nenhuma entrada em `$(CORE_RENAME_FLAGS)` necessária, mesmo
+#     raciocínio dos nomes `glx_sfnt_*`/`glx_raster_*` acima -- ver o cabeçalho de arquivo do
+#     src/hint.c), listado explicitamente (não via um glob `glx_hint_*`) pra que um futuro helper
+#     interno acidental vazando um símbolo com o mesmo prefixo ainda falhe este gate em vez de viajar
+#     junto em silêncio.
+required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline glx_sfnt_kern glx_rasterize_outline glx_raster_scratch_floats glx_hint_outline"
 
 # EN: Everything else this archive is allowed to export: the small ASM/wrapper set that was never
 #     libc-shaped to begin with (_start, the syscall*N* trampolines, the sys_* one-line wrappers)

@@ -847,6 +847,360 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_own_kern_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_ab_compare (L1.20-FONTFLIP, FT-F4) -- the A/B SAFETY NET for "the flip": renders
+  #     the SAME document (fonteng_ab_scene.rml) through BOTH the own SOV-SFNT/SOV-RAST engine and
+  #     RmlUi's FreeType engine, in ONE GLINTFX_OWN_FONT_ENGINE=ON build, and compares per-span
+  #     advance width + ink coverage numerically -- flagging GROSS divergence (missing glyph,
+  #     2x-wrong advance, broken pt-br composite-accent outline) before the own engine becomes the
+  #     default. Runtime engine selection is via the src-internal own_font_engine_ab_bypass() hook
+  #     (font_engine_own.hpp), read once per session by Bootstrap::init(). Same registration
+  #     pattern as fonteng_own_kern_sanity / fonteng_own_embed_sanity right above (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) so it builds and runs identically
+  #     with GLINTFX_BACKEND_GLFW ON or OFF -- exercising the A/B on both the GLFW-hosted-App CI
+  #     path and GusWorld's own embed-only (UiLayer) consumption path. The assets/ font dir is
+  #     already copied to CMAKE_CURRENT_BINARY_DIR by the fonteng_own_embed_sanity block above; the
+  #     scene's @font-face src ("assets/OpenSans-Regular.ttf") resolves against the shared
+  #     WORKING_DIRECTORY (= build/tests/). See fonteng_ab_compare.cpp's own header for the full
+  #     metric/tolerance derivation.
+  # PT: fonteng_ab_compare (L1.20-FONTFLIP, FT-F4) -- a REDE DE SEGURANÇA A/B para "o flip":
+  #     renderiza o MESMO documento (fonteng_ab_scene.rml) através TANTO do motor próprio
+  #     SOV-SFNT/SOV-RAST QUANTO do motor FreeType do RmlUi, num único build
+  #     GLINTFX_OWN_FONT_ENGINE=ON, e compara largura de avanço + cobertura de tinta por-span
+  #     numericamente -- flagrando divergência GROSSEIRA (glyph faltando, avanço 2x errado, outline
+  #     de acento composto pt-br quebrado) antes de o motor próprio virar o default. A seleção de
+  #     motor em runtime é via o hook src-interno own_font_engine_ab_bypass() (font_engine_own.hpp),
+  #     lido uma vez por sessão pelo Bootstrap::init(). Mesmo padrão de registro de
+  #     fonteng_own_kern_sanity / fonteng_own_embed_sanity logo acima (FORA de
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) para buildar e rodar identicamente
+  #     com GLINTFX_BACKEND_GLFW ON ou OFF -- exercitando o A/B tanto no caminho de CI
+  #     hospedado-por-GLFW-App quanto no próprio caminho de consumo embed-only (UiLayer) do
+  #     GusWorld. O dir de fonte assets/ já é copiado pra CMAKE_CURRENT_BINARY_DIR pelo bloco
+  #     fonteng_own_embed_sanity acima; o src de @font-face da cena ("assets/OpenSans-Regular.ttf")
+  #     resolve contra o WORKING_DIRECTORY compartilhado (= build/tests/). Ver o cabeçalho próprio
+  #     de fonteng_ab_compare.cpp pra derivação completa de métrica/tolerância.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_ab_compare fonteng_ab_compare.cpp)
+  target_link_libraries(fonteng_ab_compare PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_ab_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_ab_scene.rml COPYONLY)
+  add_test(NAME fonteng_ab_compare
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_ab_compare>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_engine_select_sanity (L1.20-FONTFLIP Phase 2/3, FT-F4 QA gate) -- proves the
+  #     PUBLIC UiLayerConfig::font_engine field (glintfx/include/glintfx/font_engine.hpp) itself
+  #     selects the engine, end-to-end -- unlike fonteng_ab_compare right above (which drives the
+  #     engine via the src-internal own_font_engine_ab_bypass() test hook), this file uses ONLY
+  #     the field a real consumer sets. Reuses fonteng_ab_scene.rml (already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the fonteng_ab_compare block above) and the same
+  #     hidden-GLFW-host-window fixture. Same registration pattern (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) so it builds and runs identically
+  #     with GLINTFX_BACKEND_GLFW ON or OFF. See fonteng_engine_select_sanity.cpp's own header
+  #     for the full two-proof (rollback-renders / field-is-not-a-no-op) rationale.
+  # PT: fonteng_engine_select_sanity (L1.20-FONTFLIP Fase 2/3, gate de QA do FT-F4) -- prova que o
+  #     campo PÚBLICO UiLayerConfig::font_engine (glintfx/include/glintfx/font_engine.hpp) em si
+  #     seleciona o motor, ponta-a-ponta -- diferente do fonteng_ab_compare logo acima (que dirige
+  #     o motor pelo hook src-interno só-de-teste own_font_engine_ab_bypass()), este arquivo usa
+  #     SÓ o campo que um consumidor real define. Reusa fonteng_ab_scene.rml (já copiado para
+  #     CMAKE_CURRENT_BINARY_DIR pelo bloco fonteng_ab_compare acima) e o mesmo fixture de janela-
+  #     host-GLFW-oculta. Mesmo padrão de registro (FORA de if(GLINTFX_BACKEND_GLFW), via
+  #     ${_embed_dep} + glloader) para buildar e rodar identicamente com GLINTFX_BACKEND_GLFW ON
+  #     ou OFF. Ver o cabeçalho próprio de fonteng_engine_select_sanity.cpp pra racional completa
+  #     das duas provas (rollback-renderiza / campo-não-é-no-op).
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_engine_select_sanity fonteng_engine_select_sanity.cpp)
+  target_link_libraries(fonteng_engine_select_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME fonteng_engine_select_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_engine_select_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_ab_visual (L1.20-FONTFLIP, FT-F4) -- the VISUAL sibling of fonteng_ab_compare: a
+  #     DIAGNOSTIC harness (NOT a ctest gate -- deliberately NO add_test) that renders the SAME
+  #     phrase through BOTH the own SOV-SFNT/SOV-RAST engine and RmlUi's FreeType engine, at four
+  #     small body sizes (11/13/16/24 dp) and two dp_ratios (1.0 low-DPI, 2.0 HiDPI), and dumps
+  #     aligned per-line PPM crops so a human can make the perceptual sharpness call the numeric
+  #     fonteng_ab_compare cannot. Same registration shape as fonteng_ab_compare right above
+  #     (add_executable + the scene copied to CMAKE_CURRENT_BINARY_DIR; the assets/ font dir is
+  #     already copied there by the fonteng_own_embed_sanity block). It is built but NOT run by
+  #     ctest -- run it by hand under xvfb-run, passing an output directory as argv[1]. See
+  #     fonteng_ab_visual.cpp's own header for the full rationale.
+  # PT: fonteng_ab_visual (L1.20-FONTFLIP, FT-F4) -- o irmão VISUAL do fonteng_ab_compare: um
+  #     harness de DIAGNÓSTICO (NÃO um gate do ctest -- de propósito SEM add_test) que renderiza a
+  #     MESMA frase através TANTO do motor próprio SOV-SFNT/SOV-RAST QUANTO do motor FreeType do
+  #     RmlUi, em quatro tamanhos de corpo pequenos (11/13/16/24 dp) e dois dp_ratios (1.0 baixa-DPI,
+  #     2.0 HiDPI), e despeja recortes PPM por-linha alinhados para que um humano faça a decisão
+  #     perceptual de nitidez que o numérico fonteng_ab_compare não faz. Mesmo formato de registro do
+  #     fonteng_ab_compare logo acima (add_executable + a cena copiada para CMAKE_CURRENT_BINARY_DIR;
+  #     o dir de fonte assets/ já é copiado lá pelo bloco fonteng_own_embed_sanity). É buildado mas
+  #     NÃO rodado pelo ctest -- rode-o à mão sob xvfb-run, passando um diretório de saída como
+  #     argv[1]. Ver o cabeçalho próprio de fonteng_ab_visual.cpp para a justificativa completa.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_ab_visual fonteng_ab_visual.cpp)
+  target_link_libraries(fonteng_ab_visual PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_ab_visual_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_ab_visual_scene.rml COPYONLY)
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_perf_bench (L1.20-PERFBENCH, FT-F4 perf gate) -- the PERFORMANCE sibling of
+  #     fonteng_ab_visual right above: a DIAGNOSTIC harness (NOT a ctest gate -- deliberately NO
+  #     add_test, same convention as fonteng_ab_visual) that measures the own SOV-SFNT/SOV-RAST
+  #     engine's CPU/memory cost against RmlUi's FreeType engine across four axes (bake/layout/
+  #     frame/mem), consumer-driven by the GusWorld's weak-hardware perf condition for flipping
+  #     GLINTFX_OWN_FONT_ENGINE's default. Run by hand under xvfb-run, one
+  #     --engine/--axis/--font/--dp combination per process -- see fonteng_perf_bench.cpp's own
+  #     header for the full per-axis method. Same registration shape as fonteng_ab_visual (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); the assets/ font dir (both
+  #     OpenSans-Regular.ttf AND PixelOperatorMono.ttf) is already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the fonteng_own_embed_sanity block at the top of this
+  #     GLINTFX_OWN_FONT_ENGINE block.
+  # PT: fonteng_perf_bench (L1.20-PERFBENCH, gate de perf do FT-F4) -- o irmão de PERFORMANCE do
+  #     fonteng_ab_visual logo acima: um harness de DIAGNÓSTICO (NÃO um gate do ctest --
+  #     propositalmente SEM add_test, mesma convenção do fonteng_ab_visual) que mede o custo de
+  #     CPU/memória do motor próprio SOV-SFNT/SOV-RAST contra o motor FreeType do RmlUi em quatro
+  #     eixos (bake/layout/frame/mem), consumer-driven pela condição de perf em hardware fraco do
+  #     GusWorld para virar o default do GLINTFX_OWN_FONT_ENGINE. Rode à mão sob xvfb-run, uma
+  #     combinação --engine/--axis/--font/--dp por processo -- ver o cabeçalho próprio de
+  #     fonteng_perf_bench.cpp pro método completo por-eixo. Mesmo formato de registro do
+  #     fonteng_ab_visual (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); o dir
+  #     de fonte assets/ (TANTO OpenSans-Regular.ttf QUANTO PixelOperatorMono.ttf) já é copiado
+  #     pra CMAKE_CURRENT_BINARY_DIR pelo bloco fonteng_own_embed_sanity no topo deste bloco
+  #     GLINTFX_OWN_FONT_ENGINE.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_perf_bench fonteng_perf_bench.cpp)
+  target_link_libraries(fonteng_perf_bench PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_perf_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_perf_scene.rml COPYONLY)
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_extended_sanity (L1.20-FONTFLIP, FT-F4, sub-phase 2.1) -- regression net for the
+  #     WIDENED bake set. Renders, through the OWN engine, spans containing ONLY the codepoints
+  #     sub-phase 2.1 added to FontEngineOwn::BuildBakeSet() (î U+00EE, em/en-dash, curved quotes,
+  #     ellipsis, bullet) -- no ASCII filler -- and asserts each draws real ink, so a glyph
+  #     regressing out of the set is caught mechanically. Same registration shape as
+  #     fonteng_ab_compare right above (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} +
+  #     glloader), so it builds and runs with GLINTFX_BACKEND_GLFW ON or OFF; the assets/ font dir
+  #     is already copied to CMAKE_CURRENT_BINARY_DIR by the top of this GLINTFX_OWN_FONT_ENGINE
+  #     block, and the scene's @font-face src resolves against the shared WORKING_DIRECTORY
+  #     (= build/tests/). See fonteng_extended_sanity.cpp's own header for the full method.
+  # PT: fonteng_extended_sanity (L1.20-FONTFLIP, FT-F4, sub-fase 2.1) -- rede de regressão do
+  #     conjunto empacotado AMPLIADO. Renderiza, pelo motor PRÓPRIO, spans contendo SÓ os codepoints
+  #     que a sub-fase 2.1 adicionou ao FontEngineOwn::BuildBakeSet() (î U+00EE, em/en-dash, aspas
+  #     curvas, reticências, bullet) -- sem enchimento ASCII -- e verifica que cada um desenha tinta
+  #     real, então um glyph regredindo pra fora do conjunto é pego mecanicamente. Mesmo formato de
+  #     registro de fonteng_ab_compare logo acima (FORA de if(GLINTFX_BACKEND_GLFW), via
+  #     ${_embed_dep} + glloader), para buildar e rodar com GLINTFX_BACKEND_GLFW ON ou OFF; o dir de
+  #     fonte assets/ já é copiado pra CMAKE_CURRENT_BINARY_DIR pelo topo deste bloco
+  #     GLINTFX_OWN_FONT_ENGINE, e o src de @font-face da cena resolve contra o WORKING_DIRECTORY
+  #     compartilhado (= build/tests/). Ver o cabeçalho próprio de fonteng_extended_sanity.cpp pro
+  #     método completo.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_extended_sanity fonteng_extended_sanity.cpp)
+  target_link_libraries(fonteng_extended_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_extended_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_extended_scene.rml COPYONLY)
+  add_test(NAME fonteng_extended_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_extended_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_lazy_sanity (L1.20-FONTFLIP, FT-F4, sub-phase 2B) -- INDEPENDENT ADVERSARIAL GATE
+  #     for the lazy on-demand bake (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/GrowAtlas(), commit
+  #     7f119f1), written by the QA reviewer (not the implementer). Renders Greek/Cyrillic
+  #     codepoints OUTSIDE the eager warm set to prove non-tofu lazy bake, forces a GUARANTEED
+  #     GrowAtlas() call via a runtime set_text() top-up and re-measures two canary glyphs baked
+  #     BEFORE that growth to prove no corruption, checks a lazy multi-glyph string's layout width
+  #     against its own rendered mesh extent, and exercises a codepoint the face lacks (CJK) through
+  #     the negative-cache path without crashing. Same registration shape as fonteng_extended_sanity
+  #     right above (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), so it builds
+  #     and runs with GLINTFX_BACKEND_GLFW ON or OFF; the assets/ font dir is already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the top of this GLINTFX_OWN_FONT_ENGINE block. See
+  #     fonteng_lazy_sanity.cpp's own header for the full six-criterion method.
+  # PT: fonteng_lazy_sanity (L1.20-FONTFLIP, FT-F4, sub-fase 2B) -- GATE ADVERSARIAL INDEPENDENTE
+  #     pro empacotamento preguiçoso sob demanda (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/
+  #     GrowAtlas(), commit 7f119f1), escrito pelo revisor de QA (não o implementador). Renderiza
+  #     codepoints Grego/Cirílico FORA do conjunto ávido pra provar empacotamento preguiçoso
+  #     não-tofu, força uma chamada GARANTIDA de GrowAtlas() via um top-up set_text() em runtime e
+  #     remede dois glyphs canário empacotados ANTES daquele crescimento pra provar ausência de
+  #     corrupção, checa a largura de layout de uma string preguiçosa multi-glyph contra a própria
+  #     extensão renderizada do mesh, e exercita um codepoint que a face não tem (CJK) pelo caminho
+  #     de cache negativo sem crashar. Mesmo formato de registro de fonteng_extended_sanity logo
+  #     acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), para buildar e rodar
+  #     com GLINTFX_BACKEND_GLFW ON ou OFF; o dir de fonte assets/ já é copiado pra
+  #     CMAKE_CURRENT_BINARY_DIR pelo topo deste bloco GLINTFX_OWN_FONT_ENGINE. Ver o cabeçalho
+  #     próprio de fonteng_lazy_sanity.cpp pro método completo dos seis critérios.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_lazy_sanity fonteng_lazy_sanity.cpp)
+  target_link_libraries(fonteng_lazy_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_lazy_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_lazy_scene.rml COPYONLY)
+  add_test(NAME fonteng_lazy_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_lazy_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_dedup_sanity (L1.20-FONTFLIP, FT-F4, pre-flip FIX) -- regression net for the
+  #     RegisterFace() face-registration LEAK confirmed by adversarial review and fixed the same
+  #     session (src/font_engine_own.cpp/.hpp): reloading the SAME document N times used to push N
+  #     duplicate LoadedFace blobs (~214KB/reload for Open Sans, unbounded over a session) with no
+  #     dedup; RegisterFace() now dedups by (family,style,weight,blob-content) before allocating,
+  #     mirroring the pinned RmlUi source's own FontProvider::AddFace()/FontFamily::AddFace()
+  #     "Duplicate" outcome. This test reloads fonteng_embed_scene.rml (already copied above by the
+  #     fonteng_own_embed_sanity block; its assets/ font dir too) 50 times in one UiLayer session
+  #     and asserts the src-internal DEBUG hook own_font_engine_debug_registered_face_count()
+  #     (font_engine_own.hpp/.cpp) is EXACTLY 1 after the first load and stays EXACTLY 1 after all
+  #     50 (an exact-integer oracle, not a tolerance -- the pre-fix code would have measured 50),
+  #     plus an ink check on the final reload proving the deduped face still renders. Same
+  #     registration shape as fonteng_lazy_sanity right above (OUTSIDE if(GLINTFX_BACKEND_GLFW),
+  #     via ${_embed_dep} + glloader). See fonteng_dedup_sanity.cpp's own header for the full method.
+  # PT: fonteng_dedup_sanity (L1.20-FONTFLIP, FT-F4, FIX pré-flip) -- rede de regressão do
+  #     VAZAMENTO de registro de face do RegisterFace(), confirmado por review adversarial e
+  #     corrigido na mesma sessão (src/font_engine_own.cpp/.hpp): recarregar o MESMO documento N
+  #     vezes empilhava N blobs LoadedFace duplicados (~214KB/reload pra Open Sans, sem limite ao
+  #     longo de uma sessão) sem dedup; o RegisterFace() agora deduplica por
+  #     (family,style,weight,conteúdo-do-blob) antes de alocar, espelhando o próprio resultado
+  #     "Duplicate" do FontProvider::AddFace()/FontFamily::AddFace() do source pinado do RmlUi.
+  #     Este teste recarrega fonteng_embed_scene.rml (já copiado acima pelo bloco
+  #     fonteng_own_embed_sanity; o dir de fonte assets/ também) 50 vezes numa única sessão UiLayer
+  #     e verifica que o hook de DEBUG src-interno
+  #     own_font_engine_debug_registered_face_count() (font_engine_own.hpp/.cpp) é EXATAMENTE 1
+  #     após a 1ª carga e permanece EXATAMENTE 1 após as 50 (oráculo de inteiro exato, não
+  #     tolerância -- o código pré-fix teria medido 50), mais um cheque de tinta no reload final
+  #     provando que a face deduplicada ainda renderiza. Mesmo formato de registro de
+  #     fonteng_lazy_sanity logo acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} +
+  #     glloader). Ver o cabeçalho próprio de fonteng_dedup_sanity.cpp pro método completo.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_dedup_sanity fonteng_dedup_sanity.cpp)
+  target_link_libraries(fonteng_dedup_sanity PRIVATE ${_embed_dep} glloader)
+  # EN: fonteng_embed_scene.rml + assets/ already copied to CMAKE_CURRENT_BINARY_DIR by the
+  #     fonteng_own_embed_sanity block above -- no further configure_file()/file(COPY) needed.
+  # PT: fonteng_embed_scene.rml + assets/ já copiados pra CMAKE_CURRENT_BINARY_DIR pelo bloco
+  #     fonteng_own_embed_sanity acima -- sem configure_file()/file(COPY) adicional necessário.
+  add_test(NAME fonteng_dedup_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_dedup_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_fallback_sanity (L1.20-FONTFLIP, FT-F4, per-glyph fallback) -- INDEPENDENT
+  #     ADVERSARIAL GATE for FontEngineOwn::fallback_faces_/BakeGlyph()/RasterizeGlyph()'s `src`
+  #     parameter (commit 957505b), written by the QA reviewer (not the implementer). Renders
+  #     Greek + superscript-2 codepoints "Primary" (PixelOperatorMono) genuinely lacks through a
+  #     TWO-candidate fallback list (an incapable candidate registered first, the capable Open Sans
+  #     one second) to prove non-tofu resolution + walk-past-a-non-resolving-candidate; compares a
+  #     fallback-resolved glyph's metrics against the SAME glyph baked directly on its own source
+  #     face to catch the units_per_em-mismatch CRITICAL bug class the review brief names; checks
+  #     width==mesh for a mixed Primary+fallback string (cross-face kern must be a no-op) and for a
+  #     same-face pair reached via the fallback family directly (kern DOES apply, mesh must still
+  #     match); exercises the CJK negative-cache path; and reloads the document under this SAME
+  #     UiLayer session to exercise RegisterFace()'s dedup + BakeGlyph()'s fallback path repeatedly
+  #     (meaningful under -DGLINTFX_SANITIZE=ON). Same registration shape as fonteng_dedup_sanity
+  #     right above (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); the assets/
+  #     font dir is already copied to CMAKE_CURRENT_BINARY_DIR by the top of this
+  #     GLINTFX_OWN_FONT_ENGINE block (includes assets/PixelOperatorMono.ttf). See
+  #     fonteng_fallback_sanity.cpp's own header for the full seven-criterion method.
+  # PT: fonteng_fallback_sanity (L1.20-FONTFLIP, FT-F4, fallback por-glyph) -- GATE ADVERSARIAL
+  #     INDEPENDENTE pro FontEngineOwn::fallback_faces_/BakeGlyph()/o parâmetro `src` do
+  #     RasterizeGlyph() (commit 957505b), escrito pelo revisor de QA (não o implementador).
+  #     Renderiza codepoints Grego + superscript-2 que a "Primary" (PixelOperatorMono) de fato não
+  #     tem através de uma lista de DOIS candidatos de fallback (um incapaz registrado primeiro, a
+  #     Open Sans capaz em segundo) pra provar resolução não-tofu + caminhada-além-de-um-candidato-
+  #     que-não-resolve; compara as métricas de um glyph resolvido por fallback contra o MESMO glyph
+  #     empacotado direto na própria face-fonte pra pegar a classe de bug CRÍTICA de mismatch-de-
+  #     units_per_em que a tarefa de review nomeia; checa largura==mesh pra uma string mista
+  #     Primary+fallback (kern entre faces precisa ser no-op) e pra um par da mesma face alcançado
+  #     pela família de fallback direto (kern SE aplica, mesh ainda precisa bater); exercita o
+  #     caminho de cache-negativo CJK; e recarrega o documento nesta MESMA sessão UiLayer pra
+  #     exercitar o dedup do RegisterFace() + o caminho de fallback do BakeGlyph() repetidamente
+  #     (relevante sob -DGLINTFX_SANITIZE=ON). Mesmo formato de registro de fonteng_dedup_sanity
+  #     logo acima (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader); o dir de fonte
+  #     assets/ já é copiado pra CMAKE_CURRENT_BINARY_DIR pelo topo deste bloco
+  #     GLINTFX_OWN_FONT_ENGINE (inclui assets/PixelOperatorMono.ttf). Ver o cabeçalho próprio de
+  #     fonteng_fallback_sanity.cpp pro método completo dos sete critérios.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_fallback_sanity fonteng_fallback_sanity.cpp)
+  target_link_libraries(fonteng_fallback_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_fallback_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_fallback_scene.rml COPYONLY)
+  add_test(NAME fonteng_fallback_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_fallback_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_fallback_contraprova_sanity (L1.20-FONTFLIP, FT-F4, per-glyph fallback) -- the
+  #     CONTRA-PROVA half of the gate above: a SEPARATE process/document declaring "Primary"
+  #     (PixelOperatorMono) ONLY, with NO -rmlui-fallback-face block anywhere, asserting the same
+  #     Greek/superscript-2 spans render BLANK (not the non-blank result fonteng_fallback_sanity
+  #     measures) -- proving that non-blank result is attributable to the fallback mechanism
+  #     specifically. Needs its OWN process because FontEngineOwn::fallback_faces_ is a flat,
+  #     process-lifetime vector shared by every document a UiLayer session ever loads (see
+  #     fonteng_fallback_contraprova_sanity.cpp's own header). Same registration shape as
+  #     fonteng_fallback_sanity right above.
+  # PT: fonteng_fallback_contraprova_sanity (L1.20-FONTFLIP, FT-F4, fallback por-glyph) -- a metade
+  #     CONTRA-PROVA do gate acima: um processo/documento SEPARADO declarando só "Primary"
+  #     (PixelOperatorMono), SEM bloco -rmlui-fallback-face em lugar nenhum, verificando que os
+  #     mesmos spans Grego/superscript-2 renderizam EM BRANCO (não o resultado não-branco que o
+  #     fonteng_fallback_sanity mede) -- provando que aquele resultado não-branco é atribuível ao
+  #     mecanismo de fallback especificamente. Precisa do PRÓPRIO processo porque
+  #     FontEngineOwn::fallback_faces_ é um vetor plano, de vida-de-processo, compartilhado por todo
+  #     documento que uma sessão UiLayer algum dia carrega (ver o cabeçalho próprio de
+  #     fonteng_fallback_contraprova_sanity.cpp). Mesmo formato de registro de
+  #     fonteng_fallback_sanity logo acima.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_fallback_contraprova_sanity fonteng_fallback_contraprova_sanity.cpp)
+  target_link_libraries(fonteng_fallback_contraprova_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_fallback_contraprova_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_fallback_contraprova_scene.rml COPYONLY)
+  add_test(NAME fonteng_fallback_contraprova_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_fallback_contraprova_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_sup_sanity (L1.20-FONTFLIP, FT-F4) -- validates the RCSS `vertical-align: super` +
+  #     smaller `font-size` workaround for the GusWorld dev's "a²+b²=c²" problem (Primary/
+  #     PixelOperatorMono lacks the real superscript-2 glyph; the plain digit '2' it DOES have is
+  #     styled instead). Asserts each `.sup` span is measurably ELEVATED (smaller box.y) and
+  #     measurably SMALLER (box.h) than its neighbouring baseline text AND an apples-to-apples
+  #     full-size reference digit, for all three formula instances. Also writes an upscaled PPM
+  #     artifact of the whole formula line to OUTDIR/sup_formula.ppm (OUTDIR = argv[1], defaults to
+  #     "ab_visual" under WORKING_DIRECTORY when ctest invokes it with no extra args) for the líder
+  #     to inspect visually -- see fonteng_sup_sanity.cpp's own header for the full method.
+  # PT: fonteng_sup_sanity (L1.20-FONTFLIP, FT-F4) -- valida o workaround RCSS
+  #     `vertical-align: super` + `font-size` menor pro problema "a²+b²=c²" do dev do GusWorld
+  #     (Primary/PixelOperatorMono não tem o glyph real de superscript-2; o dígito plano '2' que ela
+  #     TEM é estilizado no lugar). Verifica que cada span `.sup` está mensuravelmente ELEVADO
+  #     (box.y menor) e mensuravelmente MENOR (box.h) que o texto de baseline vizinho E uma
+  #     referência de dígito em tamanho-cheio maçã-com-maçã, pras três instâncias da fórmula. Também
+  #     grava um artefato PPM ampliado da linha da fórmula inteira em OUTDIR/sup_formula.ppm
+  #     (OUTDIR = argv[1], default "ab_visual" sob WORKING_DIRECTORY quando o ctest o invoca sem
+  #     args extras) pro líder inspecionar visualmente -- ver o cabeçalho próprio de
+  #     fonteng_sup_sanity.cpp pro método completo.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_sup_sanity fonteng_sup_sanity.cpp)
+  target_link_libraries(fonteng_sup_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_sup_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_sup_scene.rml COPYONLY)
+  add_test(NAME fonteng_sup_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_sup_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

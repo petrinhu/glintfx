@@ -395,6 +395,124 @@ static void patch_u32_be(unsigned char* buf, size_t off, unsigned int v) {
     buf[off + 3] = (unsigned char)(v & 0xFF);
 }
 
+// ============================================================================================
+// EN: FT-F4-KERN-BSEARCH -- independent oracle witness for `glx_sfnt_kern`'s linear-scan-to-
+//     binary-search rewrite. `src/sfnt.c` itself no longer contains a linear scan to compare the
+//     new bisection against (it was REPLACED, not kept behind a flag -- see this ticket), so
+//     `kern_linear_ref` below reproduces that former scan from scratch, independently, directly
+//     against `face->blob`/`face->len` (`rd_u16`/`rd_i16`/`bounds_ok` are `static` inside
+//     src/sfnt.c, not exported -- `ref_rd_u16`/`ref_rd_i16`/`ref_bounds_ok` below are a clean-room
+//     REBUILD of the identical field-by-field walk, not a call into the file under test). This is
+//     the TDD RED-then-GREEN witness this ticket's brief requires: written and exercised BEFORE
+//     the production swap (RED: passes trivially, both sides ARE the same linear scan), kept
+//     unchanged AFTER it (GREEN: production is now a binary search, this stays the old linear
+//     scan, and the exhaustive sweep below proves they agree on every one of Open Sans' 18694
+//     real pairs -- the actual regression-proof, not the RED/GREEN framing itself).
+//     `locate_kern_pairs_ref` factors out the shared "find the classic kern header's sole
+//     format-0 horizontal subtable's pair array" walk so both `kern_linear_ref` and the
+//     exhaustive sweep test below iterate the exact same `[pairs_off, pairs_off + n_pairs*6)`
+//     span without drifting apart on how they got there.
+// PT: FT-F4-KERN-BSEARCH -- testemunha-oráculo independente pra reescrita de
+//     varredura-linear-pra-busca-binária do `glx_sfnt_kern`. O próprio `src/sfnt.c` não tem mais
+//     uma varredura linear pra comparar a nova bisecção (ela foi SUBSTITUÍDA, não mantida atrás
+//     de uma flag -- ver esta tarefa), então o `kern_linear_ref` abaixo reproduz aquela
+//     varredura anterior do zero, independentemente, direto contra `face->blob`/`face->len`
+//     (`rd_u16`/`rd_i16`/`bounds_ok` são `static` dentro do src/sfnt.c, não exportados --
+//     `ref_rd_u16`/`ref_rd_i16`/`ref_bounds_ok` abaixo são uma RECONSTRUÇÃO clean-room do mesmo
+//     percurso campo-a-campo, não uma chamada pro arquivo sob teste). Esta é a testemunha
+//     VERMELHO-depois-VERDE de TDD que o brief desta tarefa exige: escrita e exercitada ANTES do
+//     swap de produção (VERMELHO: passa trivialmente, os dois lados SÃO a mesma varredura
+//     linear), mantida inalterada DEPOIS dele (VERDE: a produção agora é uma busca binária, este
+//     helper continua a varredura linear antiga, e a varredura exaustiva abaixo prova que
+//     concordam em cada um dos 18694 pares reais da Open Sans -- a prova-de-regressão de fato,
+//     não a moldura VERMELHO/VERDE em si). `locate_kern_pairs_ref` fatora o percurso
+//     compartilhado de "achar o array de par da única subtable formato-0 horizontal do header
+//     clássico de kern" pra que tanto o `kern_linear_ref` quanto o teste de varredura exaustiva
+//     abaixo iterem exatamente o mesmo vão `[pairs_off, pairs_off + n_pairs*6)` sem divergir em
+//     como chegaram lá.
+// ============================================================================================
+static int ref_bounds_ok(size_t len, size_t off, size_t need) {
+    if (off > len) return 0;
+    if (need > len - off) return 0;
+    return 1;
+}
+
+static int ref_rd_u16(const unsigned char* b, size_t len, size_t off, uint16_t* out) {
+    if (!ref_bounds_ok(len, off, 2)) return 0;
+    *out = (uint16_t)(((uint16_t)b[off] << 8) | (uint16_t)b[off + 1]);
+    return 1;
+}
+
+static int ref_rd_i16(const unsigned char* b, size_t len, size_t off, int16_t* out) {
+    uint16_t u;
+    if (!ref_rd_u16(b, len, off, &u)) return 0;
+    *out = (int16_t)u;
+    return 1;
+}
+
+static int locate_kern_pairs_ref(const glx_sfnt_face* face, size_t* pairs_off_out,
+                                  uint16_t* n_pairs_out) {
+    if (face == NULL || face->kern_len == 0) return 0;
+    const unsigned char* blob = face->blob;
+    size_t len = face->len;
+    size_t kern_off = face->kern_off;
+    size_t kern_end = kern_off + face->kern_len;
+
+    uint16_t kern_version;
+    if (!ref_rd_u16(blob, len, kern_off, &kern_version)) return 0;
+    if (kern_version != 0) return 0;
+
+    uint16_t num_subtables;
+    if (!ref_rd_u16(blob, len, kern_off + 2, &num_subtables)) return 0;
+
+    size_t cursor = kern_off + 4;
+    for (uint16_t i = 0; i < num_subtables; i++) {
+        if (!ref_bounds_ok(kern_end, cursor, 6)) return 0;
+        uint16_t sub_length, coverage;
+        if (!ref_rd_u16(blob, len, cursor + 2, &sub_length)) return 0;
+        if (!ref_rd_u16(blob, len, cursor + 4, &coverage)) return 0;
+        uint16_t format = (uint16_t)(coverage >> 8);
+        int horizontal = coverage & 0x0001;
+        if (format == 0 && horizontal) {
+            size_t f0_off = cursor + 6;
+            uint16_t n_pairs;
+            if (!ref_rd_u16(blob, len, f0_off, &n_pairs)) return 0;
+            size_t pairs_off = f0_off + 8;
+            size_t need = (size_t)n_pairs * 6u;
+            if (!ref_bounds_ok(kern_end, pairs_off, need)) return 0;
+            *pairs_off_out = pairs_off;
+            *n_pairs_out = n_pairs;
+            return 1;
+        }
+        if (sub_length == 0) return 0;
+        cursor += sub_length;
+        if (cursor > kern_end) return 0;
+    }
+    return 0;
+}
+
+static int16_t kern_linear_ref(const glx_sfnt_face* face, uint32_t left_gid,
+                                uint32_t right_gid) {
+    if (left_gid > 0xFFFFu || right_gid > 0xFFFFu) return 0;
+    size_t pairs_off;
+    uint16_t n_pairs;
+    if (!locate_kern_pairs_ref(face, &pairs_off, &n_pairs)) return 0;
+    const unsigned char* blob = face->blob;
+    size_t len = face->len;
+    for (uint16_t p = 0; p < n_pairs; p++) {
+        size_t po = pairs_off + (size_t)p * 6u;
+        uint16_t l, r;
+        if (!ref_rd_u16(blob, len, po, &l)) return 0;
+        if (!ref_rd_u16(blob, len, po + 2, &r)) return 0;
+        if (l == (uint16_t)left_gid && r == (uint16_t)right_gid) {
+            int16_t v;
+            if (!ref_rd_i16(blob, len, po + 4, &v)) return 0;
+            return v;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char** argv, char** envp) {
     (void)argc;
     (void)argv;
@@ -903,6 +1021,44 @@ int main(int argc, char** argv, char** envp) {
     //      comments above): 'A'=36, 'V'=57, 'T'=55, '.'=17 (period), 'a'=68 (also 'á' composite's
     //      own base component, gid 163 is unrelated -- plain 'a' is a separate, simple glyph).
     // ============================================================================================
+
+    // ============================================================================================
+    // ---- FT-F4-KERN-BSEARCH: exhaustive equivalence sweep, ALL 18694 real Open Sans pairs -------
+    //      This is the regression-proof the ticket brief requires: for every single pair the real
+    //      font declares, read `(l, r, value)` straight off the blob (a THIRD, independent read of
+    //      the same bytes, not routed through either lookup) and assert both `glx_sfnt_kern`
+    //      (production, now a binary search) AND `kern_linear_ref` (this file's own independent
+    //      linear-scan oracle, above) return that exact declared `value` -- proving the binary
+    //      search finds every existing pair the linear scan used to find, with the identical
+    //      result, across the WHOLE table, not a hand-picked sample.
+    // PT: FT-F4-KERN-BSEARCH: varredura exaustiva de equivalência, TODOS os 18694 pares reais da
+    //      Open Sans -- esta é a prova-de-regressão que o brief da tarefa exige: pra cada par que
+    //      a fonte real declara, lê `(l, r, value)` direto do blob (uma TERCEIRA leitura
+    //      independente dos mesmos bytes, não passando por nenhuma das duas buscas) e assere que
+    //      tanto o `glx_sfnt_kern` (produção, agora uma busca binária) QUANTO o `kern_linear_ref`
+    //      (o oráculo de varredura linear independente deste arquivo, acima) retornam exatamente
+    //      aquele `value` declarado -- provando que a busca binária acha todo par existente que a
+    //      varredura linear achava, com resultado idêntico, sobre a tabela INTEIRA, não uma
+    //      amostra escolhida a dedo.
+    // ============================================================================================
+    {
+        size_t pairs_off;
+        uint16_t n_pairs;
+        int located = locate_kern_pairs_ref(&face, &pairs_off, &n_pairs);
+        TEST_ASSERT_EQ(located, 1);
+        TEST_ASSERT_EQ((unsigned int)n_pairs, (unsigned int)18694);
+        for (uint16_t p = 0; p < n_pairs; p++) {
+            size_t po = pairs_off + (size_t)p * 6u;
+            uint16_t l, r;
+            int16_t v;
+            TEST_ASSERT_EQ(ref_rd_u16(face.blob, face.len, po, &l), 1);
+            TEST_ASSERT_EQ(ref_rd_u16(face.blob, face.len, po + 2, &r), 1);
+            TEST_ASSERT_EQ(ref_rd_i16(face.blob, face.len, po + 4, &v), 1);
+            TEST_ASSERT_EQ(glx_sfnt_kern(&face, l, r), v);
+            TEST_ASSERT_EQ(kern_linear_ref(&face, l, r), v);
+        }
+    }
+
     TEST_ASSERT_EQ(glx_sfnt_kern(&face, 36 /* A */, 57 /* V */), (short)-82);
     TEST_ASSERT_EQ(glx_sfnt_kern(&face, 55 /* T */, 17 /* period */), (short)-123);
     TEST_ASSERT_EQ(glx_sfnt_kern(&face, 57 /* V */, 68 /* a */), (short)-41);
@@ -915,6 +1071,14 @@ int main(int argc, char** argv, char** envp) {
     //     (`kernTable.get(('A','A')) is None`) -- o caso comum "esses dois glyphs não fazem
     //     kern", precisa retornar 0, não um valor lixo/crash.
     TEST_ASSERT_EQ(glx_sfnt_kern(&face, 36 /* A */, 36 /* A */), (short)0);
+    // EN: Same miss, asserted against the independent linear-scan oracle too (FT-F4-KERN-BSEARCH)
+    //     -- both the binary search and the retired linear scan must agree a genuinely absent
+    //     pair resolves to the ordinary "no kerning" 0, not just the pairs that DO exist.
+    // PT: O mesmo miss, testado também contra o oráculo de varredura linear independente
+    //     (FT-F4-KERN-BSEARCH) -- tanto a busca binária quanto a varredura linear aposentada
+    //     precisam concordar que um par genuinamente ausente resolve pro `0` comum de "sem
+    //     kerning", não só os pares que EXISTEM.
+    TEST_ASSERT_EQ(kern_linear_ref(&face, 36 /* A */, 36 /* A */), (short)0);
     // EN: gid above 0xFFFF -- can never match a wire (uint16) pair field, must return 0 cleanly.
     // PT: gid acima de 0xFFFF -- nunca consegue casar um campo de par no fio (uint16), precisa
     //     retornar 0 de forma limpa.

@@ -18,20 +18,28 @@
 //     Use esta macro para guardar código que depende da fachada App standalone.
 #cmakedefine01 GLINTFX_BACKEND_GLFW
 
-// EN: 1  when glintfx's own SOV-SFNT/SOV-RAST font engine (L1.19-FONTENG) is installed via
+// EN: 1  (default since L1.20-FONTFLIP Phase 1) when glintfx's own SOV-SFNT/SOV-RAST/SOV-HINT
+//        font engine (L1.19-FONTENG) is compiled in (sources vendored under
+//        glintfx/vendor/core/, see its README.md) and installed via
 //        Rml::SetFontEngineInterface() BEFORE Rml::Initialise() -- see
 //        glintfx/CMakeLists.txt's GLINTFX_OWN_FONT_ENGINE option and src/bootstrap.cpp's
 //        Bootstrap::init(). RmlUi's own RMLUI_FONT_ENGINE=freetype build option is left
 //        untouched either way (CMakeLists.txt) -- this is a RUNTIME A/B switch, not a
-//        RmlUi-rebuild switch.
-//     0  (default) RmlUi's own FreeType-backed default font engine is used, unchanged.
-// PT: 1  quando o motor de fonte próprio do glintfx (SOV-SFNT/SOV-RAST, L1.19-FONTENG) é
-//        instalado via Rml::SetFontEngineInterface() ANTES do Rml::Initialise() -- ver a
-//        option GLINTFX_OWN_FONT_ENGINE do glintfx/CMakeLists.txt e o Bootstrap::init() do
+//        RmlUi-rebuild switch; FreeType stays linked and available regardless of this macro
+//        ("soft flip", not a drop).
+//     0  RmlUi's own FreeType-backed default font engine is used, unchanged (set only when a
+//        consumer explicitly configures -DGLINTFX_OWN_FONT_ENGINE=OFF).
+// PT: 1  (padrão desde o L1.20-FONTFLIP Fase 1) quando o motor de fonte próprio do glintfx
+//        (SOV-SFNT/SOV-RAST/SOV-HINT, L1.19-FONTENG) é compilado (sources vendorizados em
+//        glintfx/vendor/core/, ver o README.md dele) e instalado via
+//        Rml::SetFontEngineInterface() ANTES do Rml::Initialise() -- ver a option
+//        GLINTFX_OWN_FONT_ENGINE do glintfx/CMakeLists.txt e o Bootstrap::init() do
 //        src/bootstrap.cpp. A option de build RMLUI_FONT_ENGINE=freetype do próprio RmlUi
 //        permanece intocada de qualquer forma (CMakeLists.txt) -- isto é uma chave A/B de
-//        RUNTIME, não uma chave de rebuild do RmlUi.
-//     0  (padrão) o motor de fonte default do RmlUi, apoiado em FreeType, é usado, inalterado.
+//        RUNTIME, não uma chave de rebuild do RmlUi; o FreeType continua linkado e disponível
+//        independente desta macro ("flip suave", não um descarte).
+//     0  o motor de fonte default do RmlUi, apoiado em FreeType, é usado, inalterado (só
+//        setado quando um consumidor configura explicitamente -DGLINTFX_OWN_FONT_ENGINE=OFF).
 #cmakedefine01 GLINTFX_OWN_FONT_ENGINE
 
 // EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()

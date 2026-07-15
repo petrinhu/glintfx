@@ -1,0 +1,109 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP (FT-F4) INDEPENDENT ADVERSARIAL GATE document for the per-glyph font fallback
+      (FontEngineOwn::fallback_faces_/BakeGlyph(), commit 957505b) -- driven by
+      tests/fonteng_fallback_sanity.cpp (QA reviewer gate, NOT the implementer). Uses the two REAL
+      fixture fonts declared by the review brief:
+        - "primary" = assets/PixelOperatorMono.ttf (upem 1600, Latin-only -- the GusWorld consumer's
+          own font; confirmed by cmap probe to LACK U+00B2 (superscript-2), U+0391..U+03C9 (Greek),
+          U+4E00 (CJK)).
+        - "fallback" = assets/OpenSans-Regular.ttf (upem 2048; confirmed by cmap probe to HAVE
+          U+00B2, Greek Omega U+03A9/alpha U+03B1, but NOT CJK U+4E00).
+      Three @font-face blocks, in this EXACT declared order (fixes FontEngineOwn::fallback_faces_'s
+      registration order, a flat vector shared by the WHOLE document regardless of which primary
+      family a span uses):
+        1. "primary"      -- PixelOperatorMono, NOT a fallback face (the body's own font).
+        2. "orderfbfirst" -- PixelOperatorMono AGAIN, under a DIFFERENT family name, flagged
+           -rmlui-fallback-face -- registered FIRST among fallbacks, deliberately INCAPABLE of
+           Greek/superscript-2/CJK (same content as "primary"). Its purpose: prove BakeGlyph()'s
+           fallback walk does not stop/fail at the FIRST candidate merely because it lacks the
+           glyph -- it must continue to the next.
+        3. "fallback"     -- OpenSans, flagged -rmlui-fallback-face -- registered SECOND, the only
+           candidate actually CAPABLE of Greek/superscript-2 in this fixture set.
+      This yields fallback_faces_ == [OrderFbFirst(incapable), Fallback(capable)] for the WHOLE
+      document -- every span below that needs a fallback-resolved glyph exercises this exact walk.
+      True two-CAPABLE-candidate tie-break ("does the FIRST of two candidates that BOTH have the
+      glyph win") is NOT constructible from only these two fixture files (PixelOperatorMono is
+      Latin-only, so it can never be the SECOND capable candidate for a Greek/²/CJK codepoint) --
+      see fonteng_fallback_sanity.cpp's own header for how this gate covers that residual gap by
+      code-reading, matching the precedent fonteng_lazy_sanity.cpp's criterion [4] already set for
+      this suite.
+      Every measured span is `display: inline-block`, zero padding/border/margin, `white-space:
+      nowrap` (this suite's own get_element_box()-oracle convention). Font-size fixed at 48px on
+      every span in this document (including the "fallback"-family ones) so every width figure is
+      directly comparable/reusable across checks without a per-span scale correction.
+  PT: Documento do GATE ADVERSARIAL INDEPENDENTE do L1.20-FONTFLIP (FT-F4) para o fallback de fonte
+      por-glyph (FontEngineOwn::fallback_faces_/BakeGlyph(), commit 957505b) -- dirigido por
+      tests/fonteng_fallback_sanity.cpp (gate do revisor de QA, NÃO o implementador). Usa as duas
+      fontes REAIS de fixture que a tarefa de review declara:
+        - "primary" = assets/PixelOperatorMono.ttf (upem 1600, Latin-only -- a própria fonte do
+          consumidor GusWorld; confirmado por sonda de cmap que NÃO TEM U+00B2 (superscript-2),
+          U+0391..U+03C9 (Grego), U+4E00 (CJK)).
+        - "fallback" = assets/OpenSans-Regular.ttf (upem 2048; confirmado por sonda de cmap que TEM
+          U+00B2, Ômega grego U+03A9/alfa U+03B1, mas NÃO CJK U+4E00).
+      Três blocos @font-face, NESTA ordem exata declarada (fixa a ordem de registro do
+      FontEngineOwn::fallback_faces_, um vetor plano compartilhado pelo documento INTEIRO
+      independente de qual família primária um span usa):
+        1. "primary"      -- PixelOperatorMono, NÃO é face de fallback (a própria fonte do corpo).
+        2. "orderfbfirst" -- PixelOperatorMono DE NOVO, sob um nome de família DIFERENTE, marcado
+           -rmlui-fallback-face -- registrado PRIMEIRO entre os fallbacks, deliberadamente
+           INCAPAZ de Grego/superscript-2/CJK (mesmo conteúdo de "primary"). Propósito: provar que
+           a caminhada de fallback do BakeGlyph() não para/falha no PRIMEIRO candidato só porque
+           ele não tem o glyph -- precisa continuar pro próximo.
+        3. "fallback"     -- OpenSans, marcado -rmlui-fallback-face -- registrado SEGUNDO, o único
+           candidato de fato CAPAZ de Grego/superscript-2 neste conjunto de fixture.
+      Isto produz fallback_faces_ == [OrderFbFirst(incapaz), Fallback(capaz)] pro documento INTEIRO
+      -- todo span abaixo que precisa de um glyph resolvido por fallback exercita exatamente esta
+      caminhada. O tie-break de dois candidatos AMBOS CAPAZES ("o PRIMEIRO de dois candidatos que
+      TÊM o glyph vence") NÃO é construível só com estes dois arquivos de fixture (PixelOperatorMono
+      é Latin-only, então nunca pode ser o SEGUNDO candidato capaz pra um codepoint Grego/²/CJK) --
+      ver o cabeçalho próprio de fonteng_fallback_sanity.cpp pra como este gate cobre esta lacuna
+      residual por leitura de código, batendo com o precedente que fonteng_lazy_sanity.cpp já
+      estabeleceu pro critério [4] desta suíte.
+      Todo span medido é `display: inline-block`, padding/borda/margem zero, `white-space: nowrap`
+      (convenção própria desta suíte de oráculo via get_element_box()). Font-size fixo em 48px em
+      todo span deste documento (incluindo os da família "fallback") pra toda figura de largura ser
+      diretamente comparável/reusável entre os cheques sem correção de escala por-span.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "primary"; src: "assets/PixelOperatorMono.ttf"; }
+    @font-face { font-family: "orderfbfirst"; src: "assets/PixelOperatorMono.ttf"; -rmlui-fallback-face: true; }
+    @font-face { font-family: "fallback"; src: "assets/OpenSans-Regular.ttf"; -rmlui-fallback-face: true; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "primary";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    .fb { font-family: "fallback"; }
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP per-glyph fallback gate</title>
+</head>
+<body>
+  <span id="ctrl_ascii">Axg</span><br/>
+  <span id="greek_omega">Ω</span><br/>
+  <span id="greek_alpha_lo">α</span><br/>
+  <span id="sup2">²</span><br/>
+  <span id="cjk_missing">一</span><br/>
+  <span id="omega_direct" class="fb">Ω</span><br/>
+  <span id="mixed_seq">AΩB</span><br/>
+  <span id="mixed_a">A</span><br/>
+  <span id="mixed_b">B</span><br/>
+  <span id="av_fallback" class="fb">AV</span><br/>
+  <span id="a_fallback" class="fb">A</span><br/>
+  <span id="v_fallback" class="fb">V</span>
+</body>
+</rml>

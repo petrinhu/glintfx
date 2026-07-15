@@ -21,6 +21,7 @@
 #include <glintfx/version.hpp>
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
+#include <glintfx/font_engine.hpp>
 namespace glintfx {
 
 // EN: Configuration for App construction. Zero-initialize safe; defaults are sane.
@@ -34,6 +35,22 @@ struct AppConfig {
   // PT: Density-independent pixel ratio inicial. 1 dp = dp_ratio pixels físicos.
   //     Corresponde a UiLayerConfig::dp_ratio; ver set_dp_ratio() para update em runtime.
   float dp_ratio = 1.0f;
+  // EN: Which font engine to install (L1.20-FONTFLIP Phase 2). Fixed at construction --
+  //     App reads this exactly once, during the ctor's Bootstrap::init() call, before
+  //     Rml::Initialise(); there is no runtime setter (see FontEngine's own doc-comment for the
+  //     full contract, including the GLINTFX_OWN_FONT_ENGINE=OFF fallback-to-FreeType path).
+  //     Default: FontEngine::Own -- the "soft flip" (L1.20-FONTFLIP Phase 1) makes glintfx's own
+  //     clean-room font engine the default; set to FontEngine::FreeType for a one-line,
+  //     no-rebuild rollback to RmlUi's built-in engine.
+  // PT: Qual motor de fonte instalar (L1.20-FONTFLIP Fase 2). Fixado na construção -- o App lê
+  //     isto exatamente uma vez, durante a chamada a Bootstrap::init() do ctor, antes do
+  //     Rml::Initialise(); não há setter de runtime (ver o doc-comment do próprio FontEngine
+  //     para o contrato completo, incluindo o caminho de fallback-para-FreeType quando
+  //     GLINTFX_OWN_FONT_ENGINE=OFF). Default: FontEngine::Own -- o "flip suave"
+  //     (L1.20-FONTFLIP Fase 1) torna o motor de fonte próprio clean-room do glintfx o padrão;
+  //     defina FontEngine::FreeType para um rollback de uma linha, sem rebuild, ao motor
+  //     embutido do RmlUi.
+  FontEngine font_engine = FontEngine::Own;
 };
 
 // EN: RAII application facade. Owns the window, renderer, and UI bootstrap.

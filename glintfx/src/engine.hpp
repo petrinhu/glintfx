@@ -19,6 +19,7 @@ namespace Rml { class Context; class SystemInterface; }
 #include <functional>
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/click_info.hpp>
+#include <glintfx/font_engine.hpp>
 
 namespace glintfx {
 
@@ -31,11 +32,25 @@ public:
 
   // EN: Initialise the RmlUi+GL3 subsystem against the CURRENT GL context.
   //     `system` lifetime is owned by the caller; must stay alive until ~Engine().
+  //     `font_engine` (L1.20-FONTFLIP Phase 2, default FontEngine::Own) is forwarded verbatim
+  //     to Bootstrap::init(), which reads it exactly once, before Rml::Initialise() -- see
+  //     that call's doc-comment (src/bootstrap.hpp) and glintfx/include/glintfx/font_engine.hpp
+  //     for the full selection/fallback contract. The default parameter exists so pre-existing
+  //     internal callers that never pass one (test harnesses under glintfx/tests/) keep
+  //     compiling unchanged, behaving exactly as they did before this parameter was added.
   //     Returns true on success. Safe to call only once per instance.
   // PT: Inicializa o subsistema RmlUi+GL3 contra o contexto GL CORRENTE.
   //     O lifetime de `system` pertence ao chamador; deve sobreviver até ~Engine().
+  //     `font_engine` (L1.20-FONTFLIP Fase 2, default FontEngine::Own) é encaminhado tal-e-qual
+  //     ao Bootstrap::init(), que o lê exatamente uma vez, antes do Rml::Initialise() -- ver o
+  //     doc-comment dessa chamada (src/bootstrap.hpp) e glintfx/include/glintfx/font_engine.hpp
+  //     para o contrato completo de seleção/fallback. O parâmetro default existe para que
+  //     chamadores internos pré-existentes que nunca passam um (harnesses de teste sob
+  //     glintfx/tests/) continuem compilando sem mudança, se comportando exatamente como antes
+  //     deste parâmetro existir.
   //     Retorna true em caso de sucesso. Seguro chamar apenas uma vez por instância.
-  bool attach(Rml::SystemInterface* system, int w, int h);
+  bool attach(Rml::SystemInterface* system, int w, int h,
+              FontEngine font_engine = FontEngine::Own);
 
   // EN: True after a successful attach().
   // PT: True após um attach() com sucesso.

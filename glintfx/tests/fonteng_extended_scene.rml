@@ -1,0 +1,66 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: L1.20-FONTFLIP (FT-F4) sub-phase 2.1 extended-charset document -- driven by
+      tests/fonteng_extended_sanity.cpp. Exercises codepoints the OWN font engine's bake set was
+      WIDENED to cover in sub-phase 2.1 but did NOT have before (the "î and — vanish" report):
+      î (U+00EE, Latin-1 Supplement), em-dash (U+2014), en-dash (U+2013), curved single/double
+      quotes (U+2018/U+2019, U+201C/U+201D), horizontal ellipsis (U+2026) and bullet (U+2022).
+      CRITICAL to the test's value: every non-control span below contains ONLY its target
+      codepoint(s) -- NO ASCII filler -- so if a target glyph is missing from the bake set the
+      span renders ZERO ink and the test fails. The ctrl_ascii span is the "rendering works at
+      all" control: if IT is blank the whole pipeline broke, not just these glyphs.
+      Every element is `display: inline-block`, zero padding/border/margin, white-space:nowrap, so
+      get_element_box(id) is the true per-span bounding box. Black bg + white text: a pixel is
+      "ink" iff a glyph covers it. Font src "assets/OpenSans-Regular.ttf" resolves against the
+      test WORKING_DIRECTORY (build/tests/), where the assets/ dir is copied by the
+      GLINTFX_OWN_FONT_ENGINE CMake block.
+  PT: Documento de charset estendido da sub-fase 2.1 do L1.20-FONTFLIP (FT-F4) -- dirigido por
+      tests/fonteng_extended_sanity.cpp. Exercita codepoints que o conjunto empacotado do motor de
+      fonte PRÓPRIO foi AMPLIADO pra cobrir na sub-fase 2.1 mas NÃO tinha antes (o relato "î e —
+      somem"): î (U+00EE, Latin-1 Supplement), em-dash (U+2014), en-dash (U+2013), aspas curvas
+      simples/duplas (U+2018/U+2019, U+201C/U+201D), reticências horizontais (U+2026) e bullet
+      (U+2022). CRÍTICO pro valor do teste: todo span não-controle abaixo contém SÓ o(s)
+      codepoint(s) alvo -- SEM enchimento ASCII -- então se um glyph alvo faltar no conjunto o span
+      renderiza ZERO tinta e o teste falha. O span ctrl_ascii é o controle "renderização funciona":
+      se ELE ficar em branco o pipeline inteiro quebrou, não só esses glyphs.
+      Todo elemento é `display: inline-block`, padding/borda/margem zero, white-space:nowrap, então
+      get_element_box(id) é a bounding box real por-span. Fundo preto + texto branco: um pixel é
+      "tinta" sse um glyph o cobre. O src "assets/OpenSans-Regular.ttf" resolve contra o
+      WORKING_DIRECTORY do teste (build/tests/), onde o dir assets/ é copiado pelo bloco CMake
+      GLINTFX_OWN_FONT_ENGINE.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    br { display: block; }
+  </style>
+  <title>glintfx L1.20-FONTFLIP extended charset</title>
+</head>
+<body>
+  <span id="ctrl_ascii">Axg</span><br/>
+  <span id="ext_icirc">îîî</span><br/>
+  <span id="ext_emdash">—</span><br/>
+  <span id="ext_endash">–</span><br/>
+  <span id="ext_squote">‘’</span><br/>
+  <span id="ext_dquote">“”</span><br/>
+  <span id="ext_ellipsis">…</span><br/>
+  <span id="ext_bullet">•</span>
+</body>
+</rml>

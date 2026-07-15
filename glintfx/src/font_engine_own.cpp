@@ -802,6 +802,19 @@ bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32
   //     deste método no header pro motivo do default não poder ser escrito `inst.face` direto na
   //     assinatura (uma expressão de argumento default não pode nomear outro parâmetro).
   if (!src) src = inst.face;
+  // EN: Defensive guard for the static analyzer (clang-tidy clang-analyzer-core.NullDereference):
+  //     `inst.face` is NEVER null in real use (every FaceInstance is constructed with a valid face),
+  //     but the analyzer cannot prove that across the FaceInstance/LoadedFace construction sites, so
+  //     it flags the `src->sfnt` dereference below as a possible null-deref. Fail-clean instead of
+  //     asserting: RasterizeGlyph already returns bool for "no glyph produced", and both callers
+  //     (BakeGlyph/BakeFaceInstance) already treat `false` as a normal failure (negative-cache/skip).
+  // PT: Guard defensivo pro analisador estático (clang-tidy clang-analyzer-core.NullDereference):
+  //     `inst.face` NUNCA é null em uso real (toda FaceInstance é construída com face válida), mas o
+  //     analisador não consegue provar isso através dos pontos de construção de FaceInstance/LoadedFace,
+  //     então ele sinaliza o dereference de `src->sfnt` abaixo como possível null-deref. Fail-clean em
+  //     vez de assert: RasterizeGlyph já retorna bool pra "nenhum glyph produzido", e os dois chamadores
+  //     (BakeGlyph/BakeFaceInstance) já tratam `false` como falha normal (negative-cache/skip).
+  if (!src) return false;
   const glx_sfnt_face& sf = src->sfnt;
   // EN: (L1.20-FONTFLIP, FT-F4, per-glyph fallback) CRITICAL: scale MUST divide by `src`'s own
   //     units_per_em, not inst.face's -- see this method's header doc-comment. `RegisterFace()`

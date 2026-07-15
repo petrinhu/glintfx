@@ -14,6 +14,7 @@ namespace Rml { class Context; class SystemInterface; }
 
 #include <functional>
 #include <glintfx/click_info.hpp>
+#include <glintfx/font_engine.hpp>
 
 namespace glintfx {
 
@@ -33,14 +34,56 @@ public:
   // EN: Set up RmlUi system+render interfaces, call Rml::Initialise(), and create a
   //     context named "main" with dimensions w×h. The caller OWNS the lifetime of
   //     `system` and must keep it alive until shutdown() or destruction.
+  //     `font_engine` (L1.20-FONTFLIP Phase 2, default FontEngine::Own) selects which
+  //     FontEngineInterface is registered via Rml::SetFontEngineInterface() BEFORE
+  //     Rml::Initialise() runs -- read exactly once, here, for this instance's lifetime:
+  //       - FontEngine::Own      -> installs glintfx's own font engine (font_engine_own.hpp)
+  //                                 WHEN this build was compiled with GLINTFX_OWN_FONT_ENGINE=ON
+  //                                 (the CMake default). When the build was instead compiled
+  //                                 with GLINTFX_OWN_FONT_ENGINE=OFF, the own engine does not
+  //                                 exist in this binary at all -- init() falls back to
+  //                                 FreeType (no install call; RmlUi's own built-in default
+  //                                 engine takes over inside Rml::Initialise()) and logs an
+  //                                 Rml::Log::LT_WARNING. Never a crash or a hard failure.
+  //       - FontEngine::FreeType -> never installs the own engine, regardless of how this
+  //                                 build was compiled; RmlUi's built-in FreeType-backed
+  //                                 default engine is used, unchanged.
+  //     The pre-existing test-only own_font_engine_ab_bypass() hook (font_engine_own.hpp,
+  //     GLINTFX_OWN_FONT_ENGINE=ON builds only) takes PRECEDENCE over `font_engine` when set
+  //     true -- it exists so tests/fonteng_ab_compare.cpp can force FreeType regardless of
+  //     what a caller's FontEngine config asked for, without breaking that pre-existing A/B
+  //     harness. See bootstrap.cpp's init() body for the exact precedence chain.
   //     Returns true on success. On failure the object is left in a safe state for
   //     shutdown() or destruction.
   // PT: Configura interfaces de sistema+render do RmlUi, chama Rml::Initialise() e
   //     cria contexto "main" com dimensões w×h. O chamador é DONO do lifetime de
   //     `system` e deve mantê-lo vivo até shutdown() ou destruição.
+  //     `font_engine` (L1.20-FONTFLIP Fase 2, default FontEngine::Own) seleciona qual
+  //     FontEngineInterface é registrada via Rml::SetFontEngineInterface() ANTES do
+  //     Rml::Initialise() rodar -- lido exatamente uma vez, aqui, para o lifetime desta
+  //     instância:
+  //       - FontEngine::Own      -> instala o motor de fonte próprio do glintfx
+  //                                 (font_engine_own.hpp) QUANDO este build foi compilado com
+  //                                 GLINTFX_OWN_FONT_ENGINE=ON (o padrão do CMake). Quando o
+  //                                 build foi compilado com GLINTFX_OWN_FONT_ENGINE=OFF, o
+  //                                 motor próprio simplesmente não existe neste binário -- o
+  //                                 init() cai no FreeType (sem chamada de instalação; o motor
+  //                                 default embutido do próprio RmlUi assume dentro do
+  //                                 Rml::Initialise()) e loga um Rml::Log::LT_WARNING. Nunca um
+  //                                 crash ou falha dura.
+  //       - FontEngine::FreeType -> nunca instala o motor próprio, independente de como este
+  //                                 build foi compilado; o motor default embutido do RmlUi,
+  //                                 apoiado em FreeType, é usado, inalterado.
+  //     O hook src-interno pré-existente só-de-teste own_font_engine_ab_bypass()
+  //     (font_engine_own.hpp, builds GLINTFX_OWN_FONT_ENGINE=ON apenas) tem PRECEDÊNCIA sobre
+  //     `font_engine` quando setado true -- existe para que tests/fonteng_ab_compare.cpp force
+  //     FreeType independente do que o FontEngine config de um chamador pediu, sem quebrar
+  //     esse harness A/B pré-existente. Ver o corpo de init() em bootstrap.cpp para a cadeia
+  //     de precedência exata.
   //     Retorna true em caso de sucesso. Em falha o objeto fica em estado seguro para
   //     shutdown() ou destruição.
-  bool init(Rml::SystemInterface* system, RenderGl3& render, int w, int h);
+  bool init(Rml::SystemInterface* system, RenderGl3& render, int w, int h,
+            FontEngine font_engine = FontEngine::Own);
 
   // EN: Load a document from rml_path and call Show(). Returns true on success.
   // PT: Carrega documento de rml_path e chama Show(). Retorna true em caso de sucesso.

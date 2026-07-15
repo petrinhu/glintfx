@@ -71,7 +71,7 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   // EN: Window::create() makes the GL context current — required by Engine::attach().
   // PT: Window::create() torna o contexto GL corrente — exigido por Engine::attach().
   impl_->system = std::make_unique<SystemInterface_GLFW>(impl_->window.handle());
-  impl_->ok = impl_->engine.attach(impl_->system.get(), cfg.width, cfg.height);
+  impl_->ok = impl_->engine.attach(impl_->system.get(), cfg.width, cfg.height, cfg.font_engine);
   // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
   // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
   if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);

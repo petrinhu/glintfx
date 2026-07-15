@@ -27,10 +27,10 @@ struct Engine::Impl {
 Engine::Engine()  : impl_(new Impl()) {}
 Engine::~Engine() { delete impl_; }
 
-bool Engine::attach(Rml::SystemInterface* system, int w, int h) {
+bool Engine::attach(Rml::SystemInterface* system, int w, int h, FontEngine font_engine) {
   if (impl_->ok) return false; // EN: guard: already attached. PT: guard: já anexado.
   if (!impl_->render.init()) return false;
-  if (!impl_->boot.init(system, impl_->render, w, h)) return false;
+  if (!impl_->boot.init(system, impl_->render, w, h, font_engine)) return false;
   // EN: Belt-and-suspenders: init() above already guards these, but we cache ok_ here
   //     so that all callers use a single flag rather than re-querying iface()/context().
   // PT: Dupla segurança: o init() acima já guarda esses casos, mas cacheamos ok_ aqui

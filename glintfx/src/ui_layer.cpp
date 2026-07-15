@@ -128,7 +128,7 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
     if (glx_gl_load() != 0) return;
   }
 
-  impl_->ok = impl_->engine.attach(&impl_->clock, impl_->w, impl_->h);
+  impl_->ok = impl_->engine.attach(&impl_->clock, impl_->w, impl_->h, cfg.font_engine);
   // EN: Apply the initial dp_ratio to the newly created context.
   //     SetDensityIndependentPixelRatio is idempotent when value equals the context default
   //     (1.0f), so always calling it here is safe and makes the intent explicit.

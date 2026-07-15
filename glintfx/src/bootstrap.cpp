@@ -845,7 +845,8 @@ private:
 
 Bootstrap::~Bootstrap() { shutdown(); }
 
-bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int h) {
+bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int h,
+                      FontEngine font_engine) {
   if (impl_) return false; // EN: guard: already initialised. PT: guard: já inicializado.
 
   impl_ = new Impl();
@@ -868,22 +869,74 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     rebuild do RmlUi, só reconfigurar/relinkar o próprio glintfx com uma option de CMake
   //     diferente.
   //
+  //     PRECEDENCE (L1.20-FONTFLIP Phase 2): own_font_engine_ab_bypass() (test-only, see below)
+  //     WINS over `font_engine` -- checked first, short-circuits the `font_engine` check via
+  //     `&&`, so a test that forces the bypass stays authoritative regardless of what a public
+  //     FontEngine config asked for (keeps tests/fonteng_ab_compare.cpp's pre-existing contract
+  //     intact). Below that: `font_engine == FontEngine::Own` (the public, per-instance choice
+  //     from AppConfig::font_engine/UiLayerConfig::font_engine) gates the actual install. When
+  //     `font_engine == FontEngine::FreeType`, the own engine is never installed here -- no
+  //     `#else` fallback warning needed in THIS branch, since the own engine module IS compiled
+  //     in (GLINTFX_OWN_FONT_ENGINE=ON) but simply not the caller's pick; RmlUi's FreeType
+  //     default takes over inside Rml::Initialise() exactly as if this whole #if block were
+  //     absent.
+  //     PRECEDÊNCIA (L1.20-FONTFLIP Fase 2): own_font_engine_ab_bypass() (só-de-teste, ver
+  //     abaixo) VENCE sobre `font_engine` -- checado primeiro, faz curto-circuito no check de
+  //     `font_engine` via `&&`, então um teste que força o bypass permanece autoritativo
+  //     independente do que um FontEngine config público pediu (mantém o contrato pré-existente
+  //     do tests/fonteng_ab_compare.cpp intacto). Abaixo disso: `font_engine ==
+  //     FontEngine::Own` (a escolha pública, por-instância, de AppConfig::font_engine/
+  //     UiLayerConfig::font_engine) controla a instalação de fato. Quando `font_engine ==
+  //     FontEngine::FreeType`, o motor próprio nunca é instalado aqui -- sem aviso de fallback
+  //     `#else` necessário NESTE ramo, já que o módulo do motor próprio ESTÁ compilado
+  //     (GLINTFX_OWN_FONT_ENGINE=ON) mas simplesmente não é a escolha do chamador; o default
+  //     FreeType do RmlUi assume dentro do Rml::Initialise() exatamente como se este bloco #if
+  //     inteiro estivesse ausente.
+  //
   //     A/B TEST BYPASS (L1.20-FONTFLIP, FT-F4): own_font_engine_ab_bypass() is a src-internal,
   //     test-only toggle (default false -- see its doc-comment in font_engine_own.hpp). When a
   //     test sets it true, this install is SKIPPED, so RmlUi's global font_interface stays null
   //     and Rml::Initialise() (called just below) falls back to its built-in FreeType default
   //     engine -- the ONE runtime switch that lets tests/fonteng_ab_compare.cpp measure the same
   //     scene through BOTH engines in a single ON build. A normal ON build never flips it, so the
-  //     own engine is installed exactly as before.
+  //     own engine is installed exactly as before (when `font_engine == FontEngine::Own`, the
+  //     default).
   //     BYPASS DE TESTE A/B (L1.20-FONTFLIP, FT-F4): own_font_engine_ab_bypass() é um toggle
   //     src-interno, só-de-teste (default false -- ver seu doc-comment em font_engine_own.hpp).
   //     Quando um teste o seta true, esta instalação é PULADA, então o font_interface global do
   //     RmlUi fica nulo e o Rml::Initialise() (chamado logo abaixo) cai no motor FreeType default
   //     embutido -- o ÚNICO switch de runtime que deixa o tests/fonteng_ab_compare.cpp medir a
   //     mesma cena através dos DOIS motores num único build ON. Um build ON normal nunca o vira,
-  //     então o motor próprio é instalado exatamente como antes.
-  if (!glintfx::own_font_engine_ab_bypass()) {
+  //     então o motor próprio é instalado exatamente como antes (quando `font_engine ==
+  //     FontEngine::Own`, o default).
+  if (!glintfx::own_font_engine_ab_bypass() && font_engine == FontEngine::Own) {
     Rml::SetFontEngineInterface(&impl_->font_engine_own);
+  }
+#else
+  // EN: FALLBACK (L1.20-FONTFLIP Phase 2): this build was compiled with
+  //     GLINTFX_OWN_FONT_ENGINE=OFF -- the own engine module does not exist in this binary at
+  //     all (font_engine_own.hpp/.cpp are excluded from the build, glintfx/CMakeLists.txt), so
+  //     there is no interface to install regardless of `font_engine`. A caller that requested
+  //     FontEngine::Own gets FreeType instead (RmlUi's own built-in default, taking over inside
+  //     Rml::Initialise() below exactly as if this call had asked for FreeType) -- NEVER a crash
+  //     or a hard failure, per FontEngine's own doc-comment contract. Logged once per init() call
+  //     so a consumer who opted OUT of the own engine at build time, but forgot to also flip
+  //     their config to FontEngine::FreeType, is not silently surprised.
+  // PT: FALLBACK (L1.20-FONTFLIP Fase 2): este build foi compilado com
+  //     GLINTFX_OWN_FONT_ENGINE=OFF -- o módulo do motor próprio simplesmente não existe neste
+  //     binário (font_engine_own.hpp/.cpp são excluídos do build, glintfx/CMakeLists.txt), então
+  //     não há interface para instalar independente de `font_engine`. Um chamador que pediu
+  //     FontEngine::Own recebe FreeType no lugar (o default embutido do próprio RmlUi, assumindo
+  //     dentro do Rml::Initialise() abaixo exatamente como se esta chamada tivesse pedido
+  //     FreeType) -- NUNCA um crash ou falha dura, conforme o contrato do doc-comment do próprio
+  //     FontEngine. Logado uma vez por chamada a init() para que um consumidor que optou por SAIR
+  //     do motor próprio em tempo de build, mas esqueceu de também virar seu config para
+  //     FontEngine::FreeType, não seja surpreendido silenciosamente.
+  if (font_engine == FontEngine::Own) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+        "FontEngine::Own was requested, but this glintfx build was compiled with "
+        "GLINTFX_OWN_FONT_ENGINE=OFF (the own font engine is not available in this binary) -- "
+        "falling back to RmlUi's built-in FreeType engine.");
   }
 #endif
   // EN: Install our FileInterface BEFORE Rml::Initialise(). It is owned by Impl and lives

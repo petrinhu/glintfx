@@ -22,6 +22,10 @@ vgcore.*
 # the bare `core` pattern above would otherwise swallow it
 !include/core/
 !include/core/**
+# nor glintfx/vendor/core/ (L1.20-FONTFLIP Phase 1 vendored copy of Layer 0's font-engine
+# "meat" -- glintfx/vendor/core/README.md) -- same trap, same fix
+!glintfx/vendor/core/
+!glintfx/vendor/core/**
 
 # Editores / IDE
 *~

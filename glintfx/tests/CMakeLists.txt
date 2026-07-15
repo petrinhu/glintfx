@@ -892,6 +892,36 @@ if(GLINTFX_OWN_FONT_ENGINE)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
   # -------------------------------------------------------------------------
+  # EN: fonteng_engine_select_sanity (L1.20-FONTFLIP Phase 2/3, FT-F4 QA gate) -- proves the
+  #     PUBLIC UiLayerConfig::font_engine field (glintfx/include/glintfx/font_engine.hpp) itself
+  #     selects the engine, end-to-end -- unlike fonteng_ab_compare right above (which drives the
+  #     engine via the src-internal own_font_engine_ab_bypass() test hook), this file uses ONLY
+  #     the field a real consumer sets. Reuses fonteng_ab_scene.rml (already copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the fonteng_ab_compare block above) and the same
+  #     hidden-GLFW-host-window fixture. Same registration pattern (OUTSIDE
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) so it builds and runs identically
+  #     with GLINTFX_BACKEND_GLFW ON or OFF. See fonteng_engine_select_sanity.cpp's own header
+  #     for the full two-proof (rollback-renders / field-is-not-a-no-op) rationale.
+  # PT: fonteng_engine_select_sanity (L1.20-FONTFLIP Fase 2/3, gate de QA do FT-F4) -- prova que o
+  #     campo PÚBLICO UiLayerConfig::font_engine (glintfx/include/glintfx/font_engine.hpp) em si
+  #     seleciona o motor, ponta-a-ponta -- diferente do fonteng_ab_compare logo acima (que dirige
+  #     o motor pelo hook src-interno só-de-teste own_font_engine_ab_bypass()), este arquivo usa
+  #     SÓ o campo que um consumidor real define. Reusa fonteng_ab_scene.rml (já copiado para
+  #     CMAKE_CURRENT_BINARY_DIR pelo bloco fonteng_ab_compare acima) e o mesmo fixture de janela-
+  #     host-GLFW-oculta. Mesmo padrão de registro (FORA de if(GLINTFX_BACKEND_GLFW), via
+  #     ${_embed_dep} + glloader) para buildar e rodar identicamente com GLINTFX_BACKEND_GLFW ON
+  #     ou OFF. Ver o cabeçalho próprio de fonteng_engine_select_sanity.cpp pra racional completa
+  #     das duas provas (rollback-renderiza / campo-não-é-no-op).
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_engine_select_sanity fonteng_engine_select_sanity.cpp)
+  target_link_libraries(fonteng_engine_select_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME fonteng_engine_select_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_engine_select_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
   # EN: fonteng_ab_visual (L1.20-FONTFLIP, FT-F4) -- the VISUAL sibling of fonteng_ab_compare: a
   #     DIAGNOSTIC harness (NOT a ctest gate -- deliberately NO add_test) that renders the SAME
   #     phrase through BOTH the own SOV-SFNT/SOV-RAST engine and RmlUi's FreeType engine, at four

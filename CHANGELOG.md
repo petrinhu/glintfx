@@ -12,6 +12,100 @@
 
 ---
 
+## [0.10.0] - 2026-07-15 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.10.0)
+
+**EN:** **Minor** release -- the "soft font flip" (`L1.20-FONTFLIP`). glintfx's own clean-room font engine (SOV-SFNT/SOV-RAST/SOV-HINT, `L1.19-FONTENG`, introduced opt-in in v0.9.1) is now the **default** rasteriser glintfx installs into RmlUi (`GLINTFX_OWN_FONT_ENGINE=ON` at build time, `FontEngine::Own` at runtime) -- a public, additive `FontEngine` enum on `AppConfig`/`UiLayerConfig` selects the engine per-instance. **This is a soft flip, not a drop:** FreeType stays linked and fully supported either way (`RMLUI_FONT_ENGINE` is still `freetype`); a consumer that hits a regression rolls back with a **one-line config change and no rebuild** (`font_engine = FontEngine::FreeType`). No existing public signature is removed; this release is additive (drop-in from v0.9.2 for consumers that don't touch `font_engine`, since `Own` was already exercised in production-adjacent testing throughout v0.9.1/v0.9.2 -- see [ADR-0011](docs/adr/0011-soft-font-flip.md)).
+**PT:** Release **minor** -- o "flip suave de fonte" (`L1.20-FONTFLIP`). O motor de fonte próprio clean-room do glintfx (SOV-SFNT/SOV-RAST/SOV-HINT, `L1.19-FONTENG`, introduzido opt-in na v0.9.1) agora é o rasterizador **default** que o glintfx instala no RmlUi (`GLINTFX_OWN_FONT_ENGINE=ON` em tempo de build, `FontEngine::Own` em runtime) -- um enum público e aditivo `FontEngine` em `AppConfig`/`UiLayerConfig` seleciona o motor por-instância. **É um flip suave, não um drop:** o FreeType continua linkado e plenamente suportado de qualquer forma (`RMLUI_FONT_ENGINE` continua `freetype`); um consumidor que encontrar uma regressão reverte com uma **mudança de config de uma linha e sem rebuild** (`font_engine = FontEngine::FreeType`). Nenhuma assinatura pública existente é removida; esta release é aditiva (drop-in a partir da v0.9.2 pra consumidores que não tocam `font_engine`, já que o `Own` já vinha sendo exercitado em teste próximo-de-produção ao longo da v0.9.1/v0.9.2 -- ver [ADR-0011](docs/adr/0011-soft-font-flip.md)).
+
+### Changed / Alterado
+
+- **EN:** Default font engine flips from FreeType to glintfx's own (`GLINTFX_OWN_FONT_ENGINE` CMake
+  option default `ON`; `AppConfig::font_engine`/`UiLayerConfig::font_engine` default
+  `FontEngine::Own`). If the library was instead built with `GLINTFX_OWN_FONT_ENGINE=OFF` (a
+  consumer opt-out at BUILD time), requesting `Own` at runtime falls back to FreeType with a
+  warning logged -- never a crash or a hard failure. Nitidez (crispness) at small body sizes was a
+  precondition for the flip: pen-snap on the X axis and a vertical grid-fitter (`vsnap`) on the Y
+  axis close the gap against FreeType's own auto-hinter at 9-15px, the size range that matters to
+  the first embed consumer (GusWorld's HUD, 9-13dp). Stem-darkening was tried and rejected (made
+  the flip axis worse, not better) -- see `TODO.md` L1.20-FONTFLIP history for the full
+  A/B record.
+  **PT:** O motor de fonte default vira o próprio do glintfx (opção CMake
+  `GLINTFX_OWN_FONT_ENGINE` com default `ON`; `AppConfig::font_engine`/`UiLayerConfig::font_engine`
+  com default `FontEngine::Own`). Se a lib foi buildada com `GLINTFX_OWN_FONT_ENGINE=OFF` (um
+  opt-out do consumidor em tempo de BUILD), pedir `Own` em runtime cai no FreeType com um aviso
+  logado -- nunca um crash ou falha dura. Nitidez em corpo pequeno era pré-condição pro flip:
+  pen-snap no eixo X e um grid-fitter vertical (`vsnap`) no eixo Y fecham o gap contra o
+  auto-hinter do próprio FreeType em 9-15px, a faixa de tamanho que importa pro 1º consumidor embed
+  (HUD do GusWorld, 9-13dp). Stem-darkening foi tentado e reprovado (piorou o eixo do flip, não
+  melhorou) -- ver o histórico L1.20-FONTFLIP no `TODO.md` pro registro A/B completo.
+
+### Added / Adicionado
+
+- **EN:** Public `glintfx::FontEngine` enum (`glintfx/include/glintfx/font_engine.hpp`) -- a plain,
+  engine-agnostic selector (`Own`/`FreeType`), no `Rml::` or FreeType type leaking into the public
+  header, consistent with every other header under `glintfx/include/glintfx/`. Wired as a new
+  field on `AppConfig` and `UiLayerConfig`, resolved once at `Bootstrap::init()` (construction
+  time only -- RmlUi resolves its registered `FontEngineInterface` once and does not support
+  flipping it after `Rml::Initialise()`; reconfigure-and-reconstruct is the supported way to
+  change engines at runtime).
+  **PT:** Enum público `glintfx::FontEngine` (`glintfx/include/glintfx/font_engine.hpp`) -- um
+  seletor simples, agnóstico de engine (`Own`/`FreeType`), sem nenhum tipo `Rml::` ou FreeType
+  vazando pro header público, consistente com todo outro header sob `glintfx/include/glintfx/`.
+  Ligado como campo novo em `AppConfig` e `UiLayerConfig`, resolvido uma única vez em
+  `Bootstrap::init()` (só em tempo de construção -- o RmlUi resolve sua `FontEngineInterface`
+  registrada uma vez e não suporta trocá-la depois do `Rml::Initialise()`; reconfigurar-e-reconstruir
+  é a forma suportada de trocar de motor em runtime).
+- **EN:** Layer 0's font-engine C core (`glx_sfnt`/`glx_raster`/`glx_hint`) vendored under
+  `glintfx/vendor/core/` (`src/`+`include/core/`, byte-identical copy of the canonical Camada-0
+  sources, README documenting provenance and re-sync steps) -- makes the own engine buildable from
+  a plain `glintfx/` checkout, no sibling Layer-0 tree required, portable to any consumer that
+  fetches glintfx standalone (`FetchContent`/`find_package`).
+  **PT:** O núcleo C do motor de fonte da Camada 0 (`glx_sfnt`/`glx_raster`/`glx_hint`) vendorizado
+  em `glintfx/vendor/core/` (`src/`+`include/core/`, cópia byte-idêntica das fontes canônicas da
+  Camada 0, README documentando procedência e passos de re-sincronização) -- torna o motor próprio
+  buildável a partir de um checkout puro de `glintfx/`, sem exigir uma árvore-irmã da Camada 0,
+  portável pra qualquer consumidor que busca o glintfx standalone (`FetchContent`/`find_package`).
+- **EN:** Per-glyph font fallback -- a face registered with `fallback_face=true` is now actually
+  consulted when the primary face lacks a codepoint (e.g. Greek `Ω`/`α` or a `²` superscript in a
+  Latin-only fixture such as PixelOperatorMono, GusWorld's own font), including a negative-cache
+  for CJK misses and case-insensitive family-name resolution (a production bug the fallback work
+  surfaced: `FindBestFace()` compared family names case-sensitively across two code paths that
+  didn't normalize the same way).
+  **PT:** Fallback de fonte por-glifo -- uma face registrada com `fallback_face=true` agora é
+  de fato consultada quando a face primária não tem um codepoint (ex.: `Ω`/`α` gregos ou um `²`
+  sobrescrito numa fixture Latin-only como a PixelOperatorMono, a própria fonte do GusWorld),
+  incluindo negative-cache pra misses CJK e resolução de nome-de-família case-insensitive (um bug
+  de produção que o trabalho de fallback revelou: `FindBestFace()` comparava nomes de família
+  case-sensitive entre dois caminhos de código que não normalizavam do mesmo jeito).
+
+### Fixed / Corrigido
+
+- **EN:** Kerning lookup in the own engine's `kern` format-0 subtable was O(n) linear scan
+  (18694 pairs in Open Sans, walked on every glyph pair, every frame) -- now O(log n) binary
+  search over the spec-required `(left<<16|right)` ordering, with memory safety unchanged (bounds
+  are proven before the search, independent of ordering; a hostile unsorted table degrades to "no
+  match", never OOB/UB). Validated by an exhaustive equivalence test against all 18694 real pairs
+  from Open Sans, cross-checked against an independent linear-scan reference witness.
+  **PT:** O lookup de kerning na subtable `kern` format-0 do motor próprio era varredura linear
+  O(n) (18694 pares na Open Sans, percorridos a cada par de glifo, a cada frame) -- agora é busca
+  binária O(log n) sobre a ordenação `(left<<16|right)` exigida pela spec, com segurança de memória
+  inalterada (os bounds são provados antes da busca, independente da ordenação; uma tabela hostil
+  desordenada degrada pra "sem match", nunca OOB/UB). Validado por um teste de equivalência
+  exaustivo contra os 18694 pares reais da Open Sans, cross-checado contra uma testemunha
+  independente de varredura linear.
+- **EN:** `FontEngineOwn::RegisterFace()` used to push a new `LoadedFace` (a full copy of the font
+  blob, ~214KB for Open Sans) unconditionally on every call, with no dedup -- since
+  `Rml::LoadFontFace()` is invoked once per `Context::LoadDocument()` for every `@font-face` block,
+  reloading the same document repeatedly leaked one blob copy per reload. Fixed with a dedup check
+  against the already-registered face set.
+  **PT:** `FontEngineOwn::RegisterFace()` empilhava incondicionalmente um novo `LoadedFace` (cópia
+  completa do blob da fonte, ~214KB pra Open Sans) a cada chamada, sem dedup -- como
+  `Rml::LoadFontFace()` é chamado uma vez por `Context::LoadDocument()` pra cada bloco
+  `@font-face`, recarregar o mesmo documento repetidamente vazava uma cópia de blob por reload.
+  Corrigido com uma checagem de dedup contra o conjunto de faces já registradas.
+
+---
+
 ## [0.9.2] - 2026-07-14 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.9.2)
 
 **EN:** **Patch** release -- consumer-driven fix, no public API surface change. The headline fix unblocks the Windows build of the generated GL loader (`L1.14-GLLOADER-WIN`), reported by GusWorld while preparing a Windows target. Also landing: a CI restructuring (gate order, self-hosted heavy sanitizer job, pre-push local gate) and a documentation reinforcement carried over from `[Unreleased]`. **No existing signature changed; this release is a drop-in upgrade from v0.9.1.**

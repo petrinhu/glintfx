@@ -16,3 +16,4 @@
 | [0008](0008-embed-guest-mode.md) | Embed / guest mode / Modo embutido (guest) | Accepted |
 | [0009](0009-internalization-boundary.md) | Internalization boundary (phased static link) / Fronteira de internalização (link estático faseado) | Accepted |
 | [0010](0010-image-tint-luminance-key.md) | image-tint() luminance-key shader / Shader luminance-key do image-tint() | Accepted |
+| [0011](0011-soft-font-flip.md) | Soft font-engine flip (own engine default, FreeType reversible) / Flip suave de motor de fonte (motor próprio default, FreeType reversível) | Accepted |

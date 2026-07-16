@@ -349,6 +349,62 @@ One `runes-base.png` (white runes + navy stone + gold trim), N domain colors at 
 
 **Tuning `image-tint-threshold` per asset.** To preserve a specific saturated color near-totally, raise `image-tint-threshold` above *that color's own luminance* — this pushes its `smoothstep` weight toward zero. **Trade-off:** raising the threshold also proportionally suppresses tinting of the neutral zone the effect exists to recolor, so keep `threshold` comfortably below the luminance of the texels you actually want tinted. There is no universal default that "just works" for every asset — treat `image-tint-threshold` as a per-asset dial, tuned against your own texture's luminance histogram, not a constant to copy-paste. `0.55` is a reasonable starting point for a base shaped like the example above, not a guarantee.
 
+### How-to: a persistent status echo / afterimage (e.g. a "cloned" actor) (`L1.21-ECHO`)
+
+This is a host-driven pattern built entirely from existing pieces -- plain RCSS plus the DOM read/write API already shipped in v0.9.0 (`add_class`/`remove_class`/`set_property`; see [`embed-integration.md`](embed-integration.md) section 15, `L1.16-DOMRW`). No new glintfx API is involved.
+
+**The pattern.** An "echo" element is a second copy of the actor's sprite/`<img>`/div, styled translucent and tinted:
+
+```css
+.actor-echo {
+    position: absolute;
+    opacity: 0.35;                    /* translucency -- the echo reads as "behind" the real actor */
+    image-color: #6ab0ff;             /* uniform cool/blue tint, see "tint / recolor" above */
+    transition: opacity 0.3s;         /* smooth toggle when the class is added/removed */
+    pointer-events: none;             /* the echo is decorative, never clickable */
+}
+
+/* Optional: a glowing variant instead of a flat tint, via image-tint (v0.7.0). */
+.actor-echo.glow {
+    decorator: image-tint( actor-sprite.png );
+    image-tint-mode: screen;          /* brightening blend -- gives a spectral look on a dark sprite */
+    image-tint-color: #6ab0ff;
+}
+
+/* The "afterimage" flourish: a one-shot detach-and-fade fired at the instant the status applies. */
+@keyframes echo-pulse {
+    0%   { transform: translate(0dp, 0dp);   opacity: 0.5; }
+    100% { transform: translate(-8dp, -4dp); opacity: 0; }
+}
+.actor-echo.pulsing {
+    animation: echo-pulse 0.4s ease-out 1;
+}
+```
+
+```html
+<!-- The echo shares the actor's slot: same box, one z-layer apart, toggled independently
+     by the host. -->
+<div class="actor-slot">
+    <img id="actor-sprite" src="actor.png" />
+    <img id="actor-echo" class="actor-echo" src="actor.png" />
+</div>
+```
+
+**How the host drives it.** The host detects the status condition (e.g. scanning the actor's status list for a "clone"/"phase" marker) and toggles the echo purely through the DOM read/write API glintfx already ships -- no new API surface, nothing to add to glintfx:
+
+```cpp
+// C++ -- host side, on status gained
+ui.add_class("actor-echo", "pulsing");    // fire the one-shot detach-and-fade
+
+// on status lost
+ui.remove_class("actor-echo", "pulsing");
+
+// or drive opacity directly, for a continuous glintfx-independent envelope
+ui.set_property("actor-echo", "opacity", "0.5");
+```
+
+**The condition -- read this before reaching for this pattern.** This only works if the actor's sprite is itself a glintfx element (an `<img>`/div declared in the embedded RML/RCSS). If the actor is instead drawn by the host BELOW the glintfx compose-only layer (e.g. an SDL3 sprite blit -- see [`embed-integration.md`](embed-integration.md) section 0), glintfx has no sprite of its own to echo: `UiLayer::render()` never reads the host's own framebuffer back (compose-only, section 0 of that document), so it cannot see, copy, or tint a texture the host drew. In that case the echo is the host's own work -- its own sprite, its own draw call. glintfx's only useful contribution then is anchoring: `get_element_box(slot_id)` (v0.2.5) gives the host the on-screen border-box of a UI-declared "slot" marker element, so the host's own echo sprite can align to a glintfx-driven layout position without duplicating RCSS geometry math by hand.
+
 ### Putting it together
 
 The showcase uses two sections: a near-black one for the glow and gradient cards (dark background makes the halo unmistakable), and a colourful gradient section for the blur and mask cards (so backdrop-blur has something to smear and the mask fades over rich content). Read [`../glintfx/demos/showcase/showcase.rcss`](../glintfx/demos/showcase/showcase.rcss) and [`showcase.rml`](../glintfx/demos/showcase/showcase.rml) for the full, working layout.
@@ -704,6 +760,62 @@ Uma única `runes-base.png` (runas brancas + pedra navy + trim ouro), N cores de
 **Nota honesta de fidelidade: "preserva texels saturados" é aproximado, não exato.** A ponderação `(1 − saturação)` é *linear*, não um corte duro -- um texel altamente-mas-não-totalmente-saturado (ex.: um trim ouro com `saturação ≈ 0.69`) ainda recebe uma fração não-trivial do tingimento no `threshold: 0.55` default, cerca de 13-16% de um tingimento pleno nesse caso. Isso não é um bug; é exatamente o que a fórmula calcula pra qualquer texel cuja luminância ultrapasse o threshold.
 
 **Tunando `image-tint-threshold` por asset.** Pra preservar uma cor saturada específica quase-totalmente, suba `image-tint-threshold` acima da *luminância própria daquela cor* -- isso empurra o peso `smoothstep` dela pra perto de zero. **Troca:** subir o threshold também suprime proporcionalmente o tingimento da zona neutra que o efeito existe pra recolorir, então mantenha `threshold` confortavelmente abaixo da luminância dos texels que você de fato quer tingidos. Não existe um default universal que "simplesmente funciona" pra todo asset -- trate `image-tint-threshold` como um dial por-asset, tunado contra o histograma de luminância da sua própria textura, não uma constante pra copiar-e-colar. `0.55` é um ponto de partida razoável pra uma base no formato do exemplo acima, não uma garantia.
+
+### How-to: um eco de status persistente / afterimage (ex.: um ator "clonado") (`L1.21-ECHO`)
+
+Este é um padrão dirigido pelo host, construído inteiramente com peças já existentes -- RCSS puro mais a API de leitura/escrita de DOM já distribuída na v0.9.0 (`add_class`/`remove_class`/`set_property`; ver [`embed-integration.md`](embed-integration.md) seção 15, `L1.16-DOMRW`). Nenhuma API nova da glintfx está envolvida.
+
+**O padrão.** Um elemento "eco" é uma segunda cópia do sprite/`<img>`/div do ator, estilizado translúcido e tingido:
+
+```css
+.eco-ator {
+    position: absolute;
+    opacity: 0.35;                    /* translucidez -- o eco lê como "atrás" do ator real */
+    image-color: #6ab0ff;             /* tingimento uniforme azulado, ver "tingir / recolorir" acima */
+    transition: opacity 0.3s;         /* toggle suave quando a classe é adicionada/removida */
+    pointer-events: none;             /* o eco é decorativo, nunca clicável */
+}
+
+/* Opcional: uma variante com glow em vez de tingimento plano, via image-tint (v0.7.0). */
+.eco-ator.glow {
+    decorator: image-tint( sprite-ator.png );
+    image-tint-mode: screen;          /* blend de clareamento -- dá um visual espectral num sprite escuro */
+    image-tint-color: #6ab0ff;
+}
+
+/* O toque de "afterimage": um destacamento-e-fade one-shot disparado no instante em que o status é aplicado. */
+@keyframes pulso-eco {
+    0%   { transform: translate(0dp, 0dp);   opacity: 0.5; }
+    100% { transform: translate(-8dp, -4dp); opacity: 0; }
+}
+.eco-ator.pulsando {
+    animation: pulso-eco 0.4s ease-out 1;
+}
+```
+
+```html
+<!-- O eco compartilha o slot do ator: mesma caixa, uma z-layer de distância, alternado
+     independentemente pelo host. -->
+<div class="slot-ator">
+    <img id="sprite-ator" src="ator.png" />
+    <img id="eco-ator" class="eco-ator" src="ator.png" />
+</div>
+```
+
+**Como o host dirige isso.** O host detecta a condição de status (ex.: varrendo a lista de status do ator por um marcador "clone"/"fase") e alterna o eco puramente através da API de leitura/escrita de DOM que a glintfx já distribui -- nenhuma superfície de API nova, nada para adicionar na glintfx:
+
+```cpp
+// C++ -- lado do host, ao ganhar o status
+ui.add_class("eco-ator", "pulsando");    // dispara o destacamento-e-fade one-shot
+
+// ao perder o status
+ui.remove_class("eco-ator", "pulsando");
+
+// ou dirige a opacidade diretamente, para um envelope contínuo independente da glintfx
+ui.set_property("eco-ator", "opacity", "0.5");
+```
+
+**A condição -- leia antes de recorrer a este padrão.** Isso só funciona se o sprite do ator for ele mesmo um elemento glintfx (um `<img>`/div declarado no RML/RCSS embutido). Se o ator é desenhado pelo host ABAIXO da camada compose-only da glintfx (ex.: um blit de sprite SDL3 -- ver [`embed-integration.md`](embed-integration.md) seção 0), a glintfx não tem sprite próprio pra ecoar: `UiLayer::render()` nunca lê de volta o próprio framebuffer do host (compose-only, seção 0 daquele documento), então não consegue ver, copiar ou tingir uma textura que o host desenhou. Nesse caso o eco é trabalho do próprio host -- sprite próprio, draw call próprio. A única contribuição útil da glintfx então é a ancoragem: `get_element_box(slot_id)` (v0.2.5) dá ao host o border-box na tela de um elemento marcador de "slot" declarado na UI, para que o próprio sprite-eco do host se alinhe a uma posição de layout dirigida pela glintfx sem duplicar a matemática de geometria RCSS à mão.
 
 ### Juntando tudo
 

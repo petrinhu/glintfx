@@ -950,6 +950,162 @@ sempre que aquele pin for atualizado -- uma correção upstream na ordem de tear
 upstream" acima) pode aposentar o próprio patch, e uma versão do RmlUi materialmente diferente pode
 introduzir achados novos e não relacionados.
 
+## 19. Screen-space VFX driven by the host (e.g. a time-distortion ripple) (`L1.22-WAVE`) / VFX screen-space dirigido pelo host (ex.: uma onda de distorção de tempo) (`L1.22-WAVE`)
+
+**EN:** A screen-space, transient VFX that refracts the HOST's OWN scene (e.g. a time-distortion ripple radiating out from a resolved action) cannot be built inside glintfx -- it has to be built by the host, in the host's own render pipeline. This section documents why, and the three things glintfx already provides so the host does not have to reinvent timing or epicentre bookkeeping from scratch.
+
+**Why this is host-side, not a glintfx feature.** glintfx's embed/guest mode is compose-only (section 0): `UiLayer::render()` composes the RmlUi-drawn UI **on top of** the host's own framebuffer (FBO 0) -- it never reads the host's own framebuffer back as a texture, and it never clears or swaps it (section 0/2). The scene a ripple would refract -- the battle scene, sprites, background -- lives entirely in the HOST's own render target; glintfx's compositor draws over it, it never samples from it. Every glintfx effect documented in [`effects.md`](effects.md) (blur, backdrop-filter, glow, mask, ...) operates only on what RmlUi/glintfx itself drew -- never on the host's own scene underneath. This is not a missing feature; it follows directly from the ADR-0008 compose-only contract ([ADR-0008](adr/0008-embed-guest-mode.md)), and adding a "read the host's own scene back" capability would break the fundamental guarantee that the host owns the clear/swap/composition target.
+
+**What glintfx does not expose, and why not.** glintfx has no `emit_vfx()` and no imperative screen-space effect channel, and none is planned -- effects are data-driven RCSS declared on elements glintfx itself owns (the "no imperative effect API" principle stated at the top of [`effects.md`](effects.md)). A screen-wide, camera-space VFX like a ripple is, by definition, outside RmlUi's element tree -- there is no RCSS selector for "the whole screen behind everything" -- so this is a structural mismatch with glintfx's design, not an oversight to file a gap for.
+
+**What glintfx DOES provide:**
+
+1. **Timing.** The host already learns the exact instant an action/card resolves through the observable event callbacks glintfx ships today -- `set_submit_callback`/`set_change_callback` (section 16, `L1.15-FORMEV`) for a UI-driven trigger, or `set_click_info_callback` (section 13) for a direct click trigger. The host starts its own `phase` timer (`0 -> 1`) from inside that callback; glintfx has no further role in the effect's lifetime once triggered.
+2. **Epicentre.** `get_element_box(slot_id)` (v0.2.5, section 1/10) returns the on-screen border-box of the target's UI slot, in window-space physical pixels -- the same coordinate space the host's own scene render target uses (section 10's coordinate contract). The host computes the ripple's screen-space origin as the box centre: `origin_px = (box.x + box.w / 2, box.y + box.h / 2)`.
+3. **A reference fragment shader (below)**, for the host to adapt into its own post-processing pass. This is documentation, not glintfx code -- it never compiles inside glintfx; it is meant for the host's own engine (e.g. GusWorld's `Render2dGl3`) to plug in as a full-screen pass sampling the host's own scene texture.
+
+**Reference shader (GLSL, OpenGL 3.3 core, fragment stage of a full-screen pass).** Uniforms: `sampler2D scene` (the host's own rendered scene, bound as a texture -- e.g. an offscreen FBO colour attachment the host rendered its frame into before this pass); `vec2 origin_px` (from step 2 above); `vec2 resolution` (render target size in pixels); `float phase` (`0 -> 1` over the effect's lifetime, advanced by the host, typically over ~450ms); `float strength` (peak radial displacement in pixels); `float width` (ring thickness in pixels); `float max_radius` (the radius the ring reaches at `phase = 1`; `length(resolution)` is a natural default so the ring always reaches past every corner); and an optional `float chroma` (chromatic-shear amount in pixels, `0` disables it). Per-pixel math: `d = distance(frag_px, origin_px)`; `front = phase * max_radius`; `ring = smoothstep(width, 0.0, abs(d - front))`; the radial `offset = normalize(frag_px - origin_px) * ring * strength * sin((d - front) * k)`; the scene is sampled at `uv + offset / resolution`; the whole displacement is attenuated by `(1.0 - phase)` so the one-shot ripple fades out as it finishes; chromatic shear is implemented by sampling R/G/B with a slightly different effective `strength` per channel.
+
+```glsl
+#version 330 core
+
+// Screen-space time-distortion ripple -- REFERENCE shader for HOST-side integration.
+// This is documentation, not glintfx source: it never compiles inside glintfx. glintfx's
+// compose-only embed mode never reads the host's own framebuffer back (see
+// docs/embed-integration.md section 0), so an effect that refracts the HOST's own scene
+// must be implemented by the host, in the host's own render pass. See section 19 of that
+// document for the full design writeup and the C++/glintfx side of the contract (timing
+// via event callbacks, epicentre via get_element_box()).
+
+in vec2 v_uv;               // fullscreen-quad UV, [0,1] x [0,1]
+out vec4 frag_color;
+
+uniform sampler2D scene;    // the HOST's own rendered scene (its own FBO/texture, NOT glintfx's)
+uniform vec2  resolution;   // render target size in pixels (w, h)
+uniform vec2  origin_px;    // ripple epicentre in pixels, same space as resolution
+uniform float phase;        // 0 at spawn -> 1 at the effect's natural end; host drives this
+uniform float strength;     // peak radial displacement, in pixels
+uniform float width;        // ring thickness, in pixels
+uniform float max_radius;   // radius the ring reaches at phase = 1; typically length(resolution)
+uniform float chroma;       // optional chromatic-shear amount, in pixels; 0 = disabled
+
+const float TAU = 6.28318530718;
+// Oscillations the ring carries as it travels outward -- higher k = a tighter, more
+// "watery" ripple; lower k = a single broad displacement pulse.
+const float k = TAU / 24.0;
+
+// Radial displacement for one channel; extra_shear offsets strength per-channel for the
+// chromatic-shear look (0 for the "true" green channel, +/-chroma for red/blue).
+vec2 sample_offset(vec2 frag_px, float extra_shear) {
+    vec2  to_frag = frag_px - origin_px;
+    float d       = length(to_frag);
+    vec2  dir     = d > 0.0001 ? to_frag / d : vec2(0.0);
+
+    float front = phase * max_radius;
+    // Distance from the current wavefront -- 0 exactly on the ring, growing off it.
+    float ring  = smoothstep(width, 0.0, abs(d - front));
+    float wave  = sin((d - front) * k);
+
+    return dir * ring * (strength + extra_shear) * wave;
+}
+
+void main() {
+    vec2 frag_px = v_uv * resolution;
+
+    // One-shot envelope: full strength at spawn, fades to nothing as phase -> 1.
+    float envelope = 1.0 - phase;
+
+    vec2 offset_r = sample_offset(frag_px,  chroma) * envelope;
+    vec2 offset_g = sample_offset(frag_px,  0.0)    * envelope;
+    vec2 offset_b = sample_offset(frag_px, -chroma) * envelope;
+
+    float r = texture(scene, v_uv + offset_r / resolution).r;
+    float g = texture(scene, v_uv + offset_g / resolution).g;
+    float b = texture(scene, v_uv + offset_b / resolution).b;
+
+    frag_color = vec4(r, g, b, 1.0);
+}
+```
+
+**Wiring it in, conceptually (host-side, not glintfx code).** Run this as a full-screen pass over the host's own scene texture immediately after the host renders its scene and before glintfx's `ui.render()` composes the UI on top -- the frame order from section 0 is unaffected, this pass sits entirely inside the host's own step 2 ("draw its scene into FBO 0"). Advance `phase` from `0` to `1` over the effect's duration (~450ms is a reasonable starting point for a snappy one-shot ripple) and stop running the pass once `phase >= 1`.
+
+**PT:** Um VFX screen-space e transiente que refrata a CENA do próprio host (ex.: uma onda de distorção de tempo irradiando a partir de uma ação resolvida) não pode ser construído dentro da glintfx -- precisa ser construído pelo host, no próprio pipeline de render do host. Esta seção documenta o porquê, e as três coisas que a glintfx já fornece para o host não precisar reinventar timing nem contabilidade de epicentro do zero.
+
+**Por que isso é host-side, não uma feature da glintfx.** O embed/guest mode da glintfx é compose-only (seção 0): `UiLayer::render()` compõe a UI desenhada pelo RmlUi **por cima** do próprio framebuffer do host (FBO 0) -- ela nunca lê de volta o framebuffer do host como textura, e nunca o limpa ou troca (seção 0/2). A cena que uma onda refrataria -- a cena de batalha, sprites, fundo -- vive inteiramente no render target do próprio HOST; o compositor da glintfx desenha por cima dela, nunca amostra dela. Todo efeito da glintfx documentado em [`effects.md`](effects.md) (blur, backdrop-filter, glow, mask, ...) opera só sobre o que o próprio RmlUi/glintfx desenhou -- nunca sobre a cena do host por baixo. Isso não é uma feature faltando; decorre diretamente do contrato compose-only da ADR-0008 ([ADR-0008](adr/0008-embed-guest-mode.md)), e adicionar uma capacidade de "ler de volta a cena do host" quebraria a garantia fundamental de que o host é dono do alvo de clear/swap/composição.
+
+**O que a glintfx não expõe, e por quê.** A glintfx não tem `emit_vfx()` nem um canal imperativo de efeito screen-space, e nenhum está planejado -- efeitos são RCSS data-driven declarado em elementos que a própria glintfx possui (o princípio "sem API imperativa de efeito" declarado no topo de [`effects.md`](effects.md)). Um VFX de câmera inteira, tela inteira, como uma onda, é, por definição, fora da árvore de elementos do RmlUi -- não há seletor RCSS para "a tela inteira atrás de tudo" -- então isso é um descompasso estrutural com o design da glintfx, não um gap a ser registrado.
+
+**O que a glintfx DE FATO fornece:**
+
+1. **Timing.** O host já sabe o instante exato em que uma ação/carta resolve através dos callbacks de evento observáveis que a glintfx já distribui hoje -- `set_submit_callback`/`set_change_callback` (seção 16, `L1.15-FORMEV`) para um gatilho dirigido pela UI, ou `set_click_info_callback` (seção 13) para um gatilho de clique direto. O host inicia o próprio timer de `phase` (`0 -> 1`) de dentro daquele callback; a glintfx não tem mais nenhum papel no ciclo de vida do efeito depois de disparado.
+2. **Epicentro.** `get_element_box(slot_id)` (v0.2.5, seção 1/10) retorna o border-box na tela do slot de UI do alvo, em pixels físicos espaço-janela -- o mesmo espaço de coordenadas que o render target de cena do próprio host usa (o contrato de coordenadas da seção 10). O host calcula a origem screen-space da onda como o centro da caixa: `origin_px = (box.x + box.w / 2, box.y + box.h / 2)`.
+3. **Um fragment shader de referência (abaixo)**, para o host adaptar no próprio passe de pós-processamento. Isto é documentação, não código da glintfx -- nunca compila dentro da glintfx; é destinado à engine do próprio host (ex.: o `Render2dGl3` do GusWorld) plugar como um passe fullscreen amostrando a própria textura de cena do host.
+
+**Shader de referência (GLSL, OpenGL 3.3 core, estágio de fragmento de um passe fullscreen).** Uniforms: `sampler2D scene` (a própria cena renderizada do host, ligada como textura -- ex.: um color attachment de FBO offscreen no qual o host renderizou o frame antes deste passe); `vec2 origin_px` (do passo 2 acima); `vec2 resolution` (tamanho do render target em pixels); `float phase` (`0 -> 1` ao longo do ciclo de vida do efeito, avançado pelo host, tipicamente em ~450ms); `float strength` (deslocamento radial de pico, em pixels); `float width` (espessura do anel, em pixels); `float max_radius` (o raio que o anel alcança em `phase = 1`; `length(resolution)` é um default natural para o anel sempre alcançar além de todo canto); e um `float chroma` opcional (quantidade de shear cromático em pixels, `0` desabilita). Matemática por-pixel: `d = distance(frag_px, origin_px)`; `front = phase * max_radius`; `ring = smoothstep(width, 0.0, abs(d - front))`; o `offset` radial `= normalize(frag_px - origin_px) * ring * strength * sin((d - front) * k)`; a cena é amostrada em `uv + offset / resolution`; o deslocamento inteiro é atenuado por `(1.0 - phase)` para a onda one-shot desaparecer ao terminar; o shear cromático é implementado amostrando R/G/B com um `strength` efetivo levemente diferente por canal.
+
+```glsl
+#version 330 core
+
+// Onda de distorção de tempo screen-space -- shader de REFERÊNCIA para integração do lado
+// do HOST. Isto é documentação, não source da glintfx: nunca compila dentro da glintfx. O
+// embed mode compose-only da glintfx nunca lê de volta o próprio framebuffer do host (ver
+// docs/embed-integration.md seção 0), então um efeito que refrata a cena do próprio HOST
+// precisa ser implementado pelo host, no próprio passe de render do host. Ver a seção 19
+// daquele documento para o relato completo de design e o lado C++/glintfx do contrato
+// (timing via callbacks de evento, epicentro via get_element_box()).
+
+in vec2 v_uv;               // UV do quad fullscreen, [0,1] x [0,1]
+out vec4 frag_color;
+
+uniform sampler2D scene;    // a própria cena renderizada do HOST (o FBO/textura dele, NÃO da glintfx)
+uniform vec2  resolution;   // tamanho do render target em pixels (w, h)
+uniform vec2  origin_px;    // epicentro da onda em pixels, mesmo espaço de resolution
+uniform float phase;        // 0 no spawn -> 1 no fim natural do efeito; o host dirige isto
+uniform float strength;     // deslocamento radial de pico, em pixels
+uniform float width;        // espessura do anel, em pixels
+uniform float max_radius;   // raio que o anel alcança em phase = 1; tipicamente length(resolution)
+uniform float chroma;       // quantidade opcional de shear cromático, em pixels; 0 = desabilitado
+
+const float TAU = 6.28318530718;
+// Oscilações que o anel carrega ao viajar pra fora -- k maior = onda mais apertada, mais
+// "aquosa"; k menor = um único pulso de deslocamento amplo.
+const float k = TAU / 24.0;
+
+// Deslocamento radial para um canal; extra_shear desloca strength por-canal para o visual
+// de shear cromático (0 para o canal verde "verdadeiro", +/-chroma para vermelho/azul).
+vec2 sample_offset(vec2 frag_px, float extra_shear) {
+    vec2  to_frag = frag_px - origin_px;
+    float d       = length(to_frag);
+    vec2  dir     = d > 0.0001 ? to_frag / d : vec2(0.0);
+
+    float front = phase * max_radius;
+    // Distância até a frente de onda atual -- 0 exatamente no anel, crescendo pra longe dele.
+    float ring  = smoothstep(width, 0.0, abs(d - front));
+    float wave  = sin((d - front) * k);
+
+    return dir * ring * (strength + extra_shear) * wave;
+}
+
+void main() {
+    vec2 frag_px = v_uv * resolution;
+
+    // Envelope one-shot: força plena no spawn, esmaece a zero conforme phase -> 1.
+    float envelope = 1.0 - phase;
+
+    vec2 offset_r = sample_offset(frag_px,  chroma) * envelope;
+    vec2 offset_g = sample_offset(frag_px,  0.0)    * envelope;
+    vec2 offset_b = sample_offset(frag_px, -chroma) * envelope;
+
+    float r = texture(scene, v_uv + offset_r / resolution).r;
+    float g = texture(scene, v_uv + offset_g / resolution).g;
+    float b = texture(scene, v_uv + offset_b / resolution).b;
+
+    frag_color = vec4(r, g, b, 1.0);
+}
+```
+
+**Encaixando na engine, conceitualmente (lado host, não código da glintfx).** Rode isto como um passe fullscreen sobre a própria textura de cena do host, imediatamente depois do host renderizar a cena e antes do `ui.render()` da glintfx compor a UI por cima -- a ordem de frame da seção 0 não é afetada, este passe fica inteiramente dentro do próprio passo 2 do host ("desenhar a cena no FBO 0"). Avance `phase` de `0` a `1` ao longo da duração do efeito (~450ms é um ponto de partida razoável para uma onda one-shot ágil) e pare de rodar o passe assim que `phase >= 1`.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

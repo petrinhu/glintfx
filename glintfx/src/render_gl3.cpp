@@ -31,6 +31,8 @@
 #include <RmlUi/Core/Dictionary.h>
 #include <RmlUi/Core/Log.h>
 
+#include <cmath>   // EN: std::sqrt (ripple's auto max-radius = captured backdrop diagonal, RenderShader).
+                   // PT: std::sqrt (raio-max auto do ripple = diagonal do backdrop capturado, RenderShader).
 #include <memory>
 #include <vector>
 
@@ -153,6 +155,105 @@ void main() {
 //     helper CreateShader (privado, static, inalcançável daqui) do RmlUi em
 //     Backends/RmlUi_Renderer_GL3.cpp, reimplementado localmente já que aquele vive numa
 //     translation unit diferente com linkage interno (namespace anônimo/static).
+// ---------------------------------------------------------------------------
+// EN: L1.22-WAVE -- "glintfx-ripple" shader: own GLSL fragment program, REUSES
+//     kGlintfxTintVertexShaderSrc above verbatim (see decorator_ripple.hpp's file header --
+//     "Vertex: idêntico ao do tint" -- the vertex stage is a plain position+transform,
+//     tex_coord passthrough with no vertex-colour attribute, textually identical to the tint
+//     program's own vertex stage, so it is compiled a second time from the SAME source string
+//     rather than duplicated). Dispatched via the SAME Gl3RenderInterface::CompileShader/
+//     RenderShader/ReleaseShader overrides as "glintfx-tint" (further down this file), tagged by
+//     GlintfxShaderHandle::is_ripple.
+//
+//     Fragment shader samples `backdrop_capture_tex_` (the FBO-0 backdrop captured by
+//     CaptureBackdrop, below) through a radial refraction ring -- see decorator_ripple.hpp for
+//     the full effect description. `fragTexCoord` here is box-local [0,1] (from the ripple
+//     element's own BuildQuadCorners quad, decorator_ripple.cpp) -- for the backdrop sample to
+//     land on the CORRECT screen pixel, the ripple element's box must cover the SAME region
+//     that was captured (offset_x/offset_y/w/h passed to begin_frame_compose); this is a
+//     documented authoring contract (see decorator_ripple.hpp's file header, "overlay
+//     fullscreen"), not something this shader can verify.
+//     The shader body below also flips the V coordinate at the FINAL `_backdrop` lookup only
+//     (document-space fragTexCoord/uv is y-down/top-left; the captured backdrop texture is
+//     OpenGL-native y-up/bottom-left) -- see the in-shader comment right above that
+//     `texture(_backdrop, ...)` call for the full derivation (found via manual GPU
+//     verification, not obvious from the coordinate-space description alone).
+// PT: L1.22-WAVE -- shader "glintfx-ripple": programa GLSL de fragmento próprio, REUSA
+//     kGlintfxTintVertexShaderSrc acima literalmente (ver o cabeçalho de arquivo de
+//     decorator_ripple.hpp -- "Vertex: idêntico ao do tint" -- o estágio de vértice é um
+//     passthrough simples de posição+transform, tex_coord, sem atributo de cor de vértice
+//     nenhum, textualmente idêntico ao próprio estágio de vértice do programa de tint, então é
+//     compilado uma segunda vez a partir da MESMA string de origem em vez de duplicado).
+//     Despachado pelos MESMOS overrides de Gl3RenderInterface::CompileShader/RenderShader/
+//     ReleaseShader que "glintfx-tint" (mais adiante neste arquivo), marcado por
+//     GlintfxShaderHandle::is_ripple.
+//
+//     O shader de fragmento amostra `backdrop_capture_tex_` (o backdrop do FBO-0 capturado por
+//     CaptureBackdrop, abaixo) através de um anel de refração radial -- ver decorator_ripple.hpp
+//     pra descrição completa do efeito. `fragTexCoord` aqui é box-local [0,1] (do próprio quad
+//     BuildQuadCorners do elemento ripple, decorator_ripple.cpp) -- para a amostra do backdrop
+//     cair no pixel de tela CORRETO, a caixa do elemento ripple precisa cobrir a MESMA região
+//     que foi capturada (offset_x/offset_y/w/h passados a begin_frame_compose); isso é um
+//     contrato de autoria documentado (ver o cabeçalho de arquivo de decorator_ripple.hpp,
+//     "overlay fullscreen"), não algo que este shader possa verificar.
+// ---------------------------------------------------------------------------
+const char* const kGlintfxRippleFragmentShaderSrc = R"(#version 330
+uniform sampler2D _backdrop;
+uniform vec2 _origin_px;
+uniform float _phase;
+uniform float _strength;
+uniform float _width;
+uniform vec2 _resolution;
+uniform float _max_radius;
+
+in vec2 fragTexCoord;
+out vec4 finalColor;
+
+void main() {
+  vec2 frag_px = fragTexCoord * _resolution;
+  float d = distance(frag_px, _origin_px);
+  float front = _phase * _max_radius;
+
+  // Auditoria dominó (mesma classe de bug do image-tint threshold -- ver
+  // decorator_image_tint.cpp's ResolveTintState doc comment): smoothstep(edge0, edge1, x) e' GLSL
+  // UB quando edge0 >= edge1. A forma "ingenua" smoothstep(_width, 0.0, abs(d - front)) teria
+  // edge0=_width > edge1=0.0 -- INVERTIDA e portanto UB. Reescrita como
+  // 1.0 - smoothstep(0.0, w, ...), que mantem edge0(0.0) < edge1(w) incondicionalmente (w e'
+  // clampado > 0 tanto aqui quanto do lado da CPU, ResolveRippleState em decorator_ripple.cpp) e
+  // produz a MESMA rampa visual (1.0 no centro do anel, decaindo suavemente pra 0.0 na borda).
+  float w = max(_width, 0.0001);
+  float ring = 1.0 - smoothstep(0.0, w, abs(d - front));
+
+  // Guarda de divisao por zero: normalize(frag_px - _origin_px) e' UB/NaN quando d==0 (fragmento
+  // exatamente na origem) -- divide por `d` manualmente em vez de chamar normalize(), com o
+  // ternario cobrindo o caso d==0 (dir=vec2(0.0), sem deslocamento, sem NaN propagado).
+  vec2 dir = (d > 0.0001) ? (frag_px - _origin_px) / d : vec2(0.0);
+
+  const float k = 0.15; // wave spatial frequency constant.
+  vec2 offset_px = dir * ring * _strength * sin((d - front) * k) * (1.0 - _phase);
+
+  vec2 uv = fragTexCoord + offset_px / _resolution;
+
+  // Y-flip on the way into _backdrop ONLY (found via manual GPU verification before handoff --
+  // NOT present in the original task spec, which assumed fragTexCoord could sample _backdrop
+  // directly): fragTexCoord/uv are in RmlUi's own document-space convention (origin top-left,
+  // y-down -- BuildQuadCorners in decorator_ripple.cpp maps tex_coord (0,0) to the box's TOP-LEFT
+  // corner). _backdrop, however, is populated by glCopyTexSubImage2D straight from the window's
+  // OpenGL-native backbuffer (origin BOTTOM-left, y-up -- confirmed against how every OTHER
+  // pixel-reading test in this repo (e.g. tests/image_tint_sanity.cpp's own pixel_at() helper,
+  // "row = h - 1 - content_y") already has to compensate for this exact convention mismatch).
+  // Sampling with the raw (un-flipped) v would read the backdrop vertically MIRRORED -- confirmed
+  // by an ad-hoc two-colour-band render+read-back before this file was handed off. Only the FINAL
+  // texture lookup needs the flip; _origin_px/_resolution/the ring/offset math above all stay in
+  // document-space intentionally (ripple-origin-y is an author-facing property and must keep
+  // ordinary top-down semantics, consistent with every other glintfx coordinate the author sees).
+  vec3 rgb = texture(_backdrop, vec2(uv.x, 1.0 - uv.y)).rgb;
+  // Premultiplied output: alpha = ring -- composes ONLY inside the travelling ring; everywhere
+  // else (ring~=0) this element is fully transparent and never repaints the host's backdrop.
+  finalColor = vec4(rgb * ring, ring);
+}
+)";
+
 bool CompileGlintfxStage(GLuint& out_shader, GLenum stage, const char* src) {
   GLuint id = glCreateShader(stage);
   glShaderSource(id, 1, &src, nullptr);
@@ -257,21 +358,61 @@ struct GlintfxTintShaderData {
   float opacity = 1.f;
 };
 
+// EN: L1.22-WAVE — per-CompileShader-call resolved ripple state, threaded from
+//     decorator_ripple.cpp's Dictionary parameters (see RippleDecorator::RenderElement) into
+//     RenderShader's uniforms. `vao`/`index_count` identify the glintfx-owned geometry to draw
+//     (decorator_ripple.cpp's RippleElementData) — mirrors GlintfxTintShaderData's own
+//     vao/index_count field pair immediately above, same rationale (RenderShader's own
+//     `geometry_handle` parameter is NEVER dereferenced for a ripple draw either).
+//     `max_radius_arg` is the RESOLVED decorator-argument value (0.f means "auto" — see
+//     decorator_ripple.hpp's RippleDecorator doc comment); RenderShader's ripple branch
+//     substitutes `sqrt(cap_w_^2 + cap_h_^2)` (the captured backdrop's own diagonal) whenever
+//     `max_radius_arg<=0.f`, since only Gl3RenderInterface — not decorator_ripple.cpp, which runs
+//     at RCSS-parse/style-recalc time with no viewport knowledge — knows the CURRENT capture
+//     resolution (cap_w_/cap_h_, set by CaptureBackdrop, below).
+// PT: L1.22-WAVE — estado de ripple resolvido por-chamada-de-CompileShader, repassado dos
+//     parâmetros Dictionary de decorator_ripple.cpp (ver RippleDecorator::RenderElement) pros
+//     uniforms do RenderShader. `vao`/`index_count` identificam a geometria dona-da-glintfx a
+//     desenhar (RippleElementData de decorator_ripple.cpp) — espelha o próprio par de campos
+//     vao/index_count de GlintfxTintShaderData logo acima, mesma racional (o próprio parâmetro
+//     `geometry_handle` de RenderShader também NUNCA é desreferenciado num draw de ripple).
+//     `max_radius_arg` é o valor de argumento-de-decorator RESOLVIDO (0.f significa "auto" — ver
+//     o doc-comment de RippleDecorator em decorator_ripple.hpp); o ramo de ripple de
+//     RenderShader substitui por `sqrt(cap_w_^2 + cap_h_^2)` (a própria diagonal do backdrop
+//     capturado) sempre que `max_radius_arg<=0.f`, já que só Gl3RenderInterface — não
+//     decorator_ripple.cpp, que roda em tempo de parse-RCSS/recálculo-de-estilo sem
+//     conhecimento nenhum de viewport — conhece a resolução de captura ATUAL (cap_w_/cap_h_,
+//     setada por CaptureBackdrop, abaixo).
+struct GlintfxRippleShaderData {
+  GLuint vao = 0;
+  int index_count = 0;
+  float origin_x = 0.f;
+  float origin_y = 0.f;
+  float phase = 0.f;
+  float strength = 0.f;
+  float width = 48.f;
+  float max_radius_arg = 0.f;  // 0.f == auto (see doc comment above).
+};
+
 // EN: Discriminated union returned (as an opaque Rml::CompiledShaderHandle, via reinterpret_cast)
-//     by every Gl3RenderInterface::CompileShader call — is_tint=false for every pre-existing
-//     shader kind (RmlUi's own filters/gradients/creation shaders, including polygon()'s reused
-//     gradient shaders), is_tint=true only for "glintfx-tint". See CompileShader/RenderShader/
-//     ReleaseShader below for the unwrap-and-delegate-or-draw split.
+//     by every Gl3RenderInterface::CompileShader call — is_tint=false and is_ripple=false for
+//     every pre-existing shader kind (RmlUi's own filters/gradients/creation shaders, including
+//     polygon()'s reused gradient shaders), is_tint=true only for "glintfx-tint", is_ripple=true
+//     only for "glintfx-ripple" (L1.22-WAVE) — the three are mutually exclusive. See
+//     CompileShader/RenderShader/ReleaseShader below for the unwrap-and-delegate-or-draw split.
 // PT: União discriminada retornada (como um Rml::CompiledShaderHandle opaco, via
-//     reinterpret_cast) por toda chamada de Gl3RenderInterface::CompileShader — is_tint=false
-//     pra todo tipo de shader pré-existente (os próprios filtros/gradientes/shaders de creation
-//     do RmlUi, inclusive os shaders de gradiente reusados pelo polygon()), is_tint=true só pro
-//     "glintfx-tint". Ver CompileShader/RenderShader/ReleaseShader abaixo pra divisão
-//     desembrulha-e-delega-ou-desenha.
+//     reinterpret_cast) por toda chamada de Gl3RenderInterface::CompileShader — is_tint=false e
+//     is_ripple=false pra todo tipo de shader pré-existente (os próprios filtros/gradientes/
+//     shaders de creation do RmlUi, inclusive os shaders de gradiente reusados pelo polygon()),
+//     is_tint=true só pro "glintfx-tint", is_ripple=true só pro "glintfx-ripple" (L1.22-WAVE) —
+//     os três são mutuamente exclusivos. Ver CompileShader/RenderShader/ReleaseShader abaixo pra
+//     divisão desembrulha-e-delega-ou-desenha.
 struct GlintfxShaderHandle {
   bool is_tint = false;
-  Rml::CompiledShaderHandle base_handle = 0;  // valid only if !is_tint.
+  bool is_ripple = false;
+  Rml::CompiledShaderHandle base_handle = 0;  // valid only if !is_tint && !is_ripple.
   GlintfxTintShaderData tint_data;            // valid only if is_tint.
+  GlintfxRippleShaderData ripple_data;        // valid only if is_ripple.
 };
 
 class Gl3RenderInterface : public RenderInterface_GL3 {
@@ -284,9 +425,23 @@ public:
   //     dia foi compilado. Nunca toca recursos VAO/VBO/EBO por-elemento (esses são donos/
   //     liberados por ImageTintElementData de decorator_image_tint.cpp, não por esta classe --
   //     ver o doc-comment de ReleaseShader abaixo).
+  // EN: L1.22-WAVE — also releases the lazily-compiled "glintfx-ripple" GL program and the
+  //     backdrop-capture GL texture (backdrop_capture_tex_, populated by CaptureBackdrop, below),
+  //     if either was ever allocated. Same "never touches per-element VAO/VBO/EBO" contract as
+  //     the "glintfx-tint" release above — those are owned/released by decorator_ripple.cpp's
+  //     RippleElementData, not by this class.
+  // PT: L1.22-WAVE — também libera o programa GL "glintfx-ripple" compilado de forma lazy e a
+  //     textura GL de captura de backdrop (backdrop_capture_tex_, preenchida por CaptureBackdrop,
+  //     abaixo), se alguma das duas foi alocada. Mesmo contrato "nunca toca VAO/VBO/EBO
+  //     por-elemento" da liberação de "glintfx-tint" acima — essas são donas/liberadas por
+  //     RippleElementData de decorator_ripple.cpp, não por esta classe.
   ~Gl3RenderInterface() override {
     if (tint_program_)
       glDeleteProgram(tint_program_);
+    if (ripple_program_)
+      glDeleteProgram(ripple_program_);
+    if (backdrop_capture_tex_)
+      glDeleteTextures(1, &backdrop_capture_tex_);
   }
 
   Rml::TextureHandle LoadTexture(Rml::Vector2i& dims,
@@ -406,21 +561,51 @@ public:
       return reinterpret_cast<Rml::CompiledShaderHandle>(wrapper);
     }
 
+    // EN: L1.22-WAVE — "glintfx-ripple" branch, mirrors the "glintfx-tint" one immediately
+    //     above (same lazily-compiled-program / falsy-handle-on-failure / Dictionary-unpack
+    //     shape). Compile failure degrades to a falsy Rml::CompiledShader, which
+    //     decorator_ripple.cpp's RenderElement is written to detect and draw NOTHING for (see
+    //     that file's RenderElement doc comment — UNLIKE tint there is no vanilla fallback here).
+    // PT: L1.22-WAVE — ramo "glintfx-ripple", espelha o "glintfx-tint" logo acima (mesma forma
+    //     de programa-compilado-de-forma-lazy / handle-falso-em-falha / desempacotamento-de-
+    //     Dictionary). Falha de compilação degrada pra um Rml::CompiledShader falso, que o
+    //     RenderElement de decorator_ripple.cpp é escrito pra detectar e NÃO desenhar nada (ver
+    //     o doc-comment de RenderElement daquele arquivo — DIFERENTE do tint não há fallback
+    //     vanilla aqui).
+    if (name == "glintfx-ripple") {
+      EnsureRippleProgramCompiled();
+      if (!ripple_program_)
+        return 0;
+      auto* wrapper = new GlintfxShaderHandle{};
+      wrapper->is_ripple = true;
+      wrapper->ripple_data.vao = static_cast<GLuint>(Rml::Get(parameters, "vao", 0));
+      wrapper->ripple_data.index_count = Rml::Get(parameters, "index_count", 0);
+      wrapper->ripple_data.origin_x = Rml::Get(parameters, "origin_x", 0.f);
+      wrapper->ripple_data.origin_y = Rml::Get(parameters, "origin_y", 0.f);
+      wrapper->ripple_data.phase = Rml::Get(parameters, "phase", 0.f);
+      wrapper->ripple_data.strength = Rml::Get(parameters, "strength", 0.f);
+      wrapper->ripple_data.width = Rml::Get(parameters, "width", 48.f);
+      wrapper->ripple_data.max_radius_arg = Rml::Get(parameters, "max_radius", 0.f);
+      return reinterpret_cast<Rml::CompiledShaderHandle>(wrapper);
+    }
+
     // EN: Every OTHER shader name (RmlUi's own filters/gradients/creation shaders, INCLUDING
     //     polygon()'s reused "radial-gradient"/"linear-gradient" — see decorator_polygon.cpp) —
-    //     delegate unchanged to the base class, then wrap the result too (is_tint=false) so
-    //     RenderShader/ReleaseShader can uniformly unwrap every Rml::CompiledShaderHandle this
-    //     class ever hands out.
+    //     delegate unchanged to the base class, then wrap the result too (is_tint=false,
+    //     is_ripple=false) so RenderShader/ReleaseShader can uniformly unwrap every
+    //     Rml::CompiledShaderHandle this class ever hands out.
     // PT: Todo OUTRO nome de shader (os próprios filtros/gradientes/shaders de creation do
     //     RmlUi, INCLUSIVE os "radial-gradient"/"linear-gradient" reusados pelo polygon() — ver
     //     decorator_polygon.cpp) — delega inalterado pra classe base, depois embrulha o
-    //     resultado também (is_tint=false) pra que RenderShader/ReleaseShader possam desembrulhar
-    //     uniformemente todo Rml::CompiledShaderHandle que esta classe já entregou.
+    //     resultado também (is_tint=false, is_ripple=false) pra que RenderShader/ReleaseShader
+    //     possam desembrulhar uniformemente todo Rml::CompiledShaderHandle que esta classe já
+    //     entregou.
     Rml::CompiledShaderHandle base = RenderInterface_GL3::CompileShader(name, parameters);
     if (!base)
       return 0;
     auto* wrapper = new GlintfxShaderHandle{};
     wrapper->is_tint = false;
+    wrapper->is_ripple = false;
     wrapper->base_handle = base;
     return reinterpret_cast<Rml::CompiledShaderHandle>(wrapper);
   }
@@ -431,8 +616,54 @@ public:
     if (!wrapper)
       return;
 
-    if (!wrapper->is_tint) {
+    if (!wrapper->is_tint && !wrapper->is_ripple) {
       RenderInterface_GL3::RenderShader(wrapper->base_handle, geometry_handle, translation, texture);
+      return;
+    }
+
+    if (wrapper->is_ripple) {
+      // EN: L1.22-WAVE — ripple draw path. `geometry_handle` and `texture` are BOTH
+      //     intentionally never touched here (see GlintfxRippleShaderData's doc comment above
+      //     and decorator_ripple.hpp's class-level doc comment): we draw from
+      //     `wrapper->ripple_data.vao` (glintfx-owned, built in decorator_ripple.cpp's
+      //     GenerateElementData) and sample `backdrop_capture_tex_` (glintfx-owned, captured by
+      //     CaptureBackdrop, below) instead — NOT the decorator's own (nonexistent) texture
+      //     handle. Same `this->ResetProgram()`-on-every-exit-path discipline as the tint branch
+      //     below (see that branch's doc comment for the full rationale, which applies
+      //     identically here).
+      // PT: L1.22-WAVE — caminho de draw de ripple. `geometry_handle` e `texture` são AMBOS
+      //     intencionalmente nunca tocados aqui (ver o doc-comment de GlintfxRippleShaderData
+      //     acima e o doc-comment de nível de classe de decorator_ripple.hpp): desenhamos a
+      //     partir de `wrapper->ripple_data.vao` (dono glintfx, construída em
+      //     decorator_ripple.cpp:GenerateElementData) e amostramos `backdrop_capture_tex_` (dono
+      //     glintfx, capturado por CaptureBackdrop, abaixo) em vez disso — NÃO o texture handle
+      //     (inexistente) do próprio decorator. Mesma disciplina de
+      //     `this->ResetProgram()`-em-todo-caminho-de-saída do ramo de tint abaixo (ver o
+      //     doc-comment daquele ramo pra racional completa, que se aplica identicamente aqui).
+      if (ripple_program_ && wrapper->ripple_data.vao != 0 && wrapper->ripple_data.index_count > 0 && backdrop_capture_tex_ != 0) {
+        const GlintfxRippleShaderData& d = wrapper->ripple_data;
+        const float max_radius = d.max_radius_arg > 0.f
+            ? d.max_radius_arg
+            : std::sqrt(static_cast<float>(cap_w_) * static_cast<float>(cap_w_) +
+                        static_cast<float>(cap_h_) * static_cast<float>(cap_h_));
+        glUseProgram(ripple_program_);
+        glUniform2f(ripple_loc_translate_, translation.x, translation.y);
+        glUniformMatrix4fv(ripple_loc_transform_, 1, GL_FALSE, this->GetTransform().data());
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, backdrop_capture_tex_);
+        glUniform1i(ripple_loc_backdrop_, 0);
+        glUniform2f(ripple_loc_origin_, d.origin_x, d.origin_y);
+        glUniform1f(ripple_loc_phase_, d.phase);
+        glUniform1f(ripple_loc_strength_, d.strength);
+        glUniform1f(ripple_loc_width_, d.width);
+        glUniform2f(ripple_loc_resolution_, static_cast<float>(cap_w_), static_cast<float>(cap_h_));
+        glUniform1f(ripple_loc_max_radius_, max_radius);
+        glBindVertexArray(d.vao);
+        glDrawElements(GL_TRIANGLES, d.index_count, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+      }
+      this->ResetProgram();
       return;
     }
 
@@ -489,21 +720,149 @@ public:
     if (!wrapper)
       return;
     // EN: Delegate-or-free-tag-only split, mirrors CompileShader. The VAO/VBO/EBO
-    //     (wrapper->tint_data.vao and friends) are NEVER deleted here — they are owned by
-    //     decorator_image_tint.cpp's ImageTintElementData (per-element, released in
-    //     ReleaseElementData), NOT by this per-CompileShader-call wrapper — see ADR-0010
-    //     Decision (a)'s explicit warning about this ownership split being the one place a
-    //     double-free/use-after-free could sneak in.
+    //     (wrapper->tint_data.vao / wrapper->ripple_data.vao and friends) are NEVER deleted here
+    //     — they are owned by decorator_image_tint.cpp's ImageTintElementData /
+    //     decorator_ripple.cpp's RippleElementData respectively (per-element, released in each
+    //     decorator's own ReleaseElementData), NOT by this per-CompileShader-call wrapper — see
+    //     ADR-0010 Decision (a)'s explicit warning about this ownership split being the one
+    //     place a double-free/use-after-free could sneak in (L1.22-WAVE's ripple branch inherits
+    //     the identical warning).
     // PT: Divisão delega-ou-libera-só-a-tag, espelha CompileShader. A VAO/VBO/EBO
-    //     (wrapper->tint_data.vao e companhia) NUNCA são deletadas aqui — são donas de
-    //     ImageTintElementData de decorator_image_tint.cpp (por-elemento, liberada em
-    //     ReleaseElementData), NÃO deste wrapper por-chamada-de-CompileShader — ver o aviso
-    //     explícito da Decisão (a) do ADR-0010 sobre essa divisão de posse ser o único lugar em
-    //     que um double-free/use-after-free poderia se infiltrar.
-    if (!wrapper->is_tint)
+    //     (wrapper->tint_data.vao / wrapper->ripple_data.vao e companhia) NUNCA são deletadas
+    //     aqui — são donas de ImageTintElementData de decorator_image_tint.cpp /
+    //     RippleElementData de decorator_ripple.cpp respectivamente (por-elemento, liberada no
+    //     próprio ReleaseElementData de cada decorator), NÃO deste wrapper
+    //     por-chamada-de-CompileShader — ver o aviso explícito da Decisão (a) do ADR-0010 sobre
+    //     essa divisão de posse ser o único lugar em que um double-free/use-after-free poderia
+    //     se infiltrar (o ramo de ripple do L1.22-WAVE herda o aviso idêntico).
+    if (!wrapper->is_tint && !wrapper->is_ripple)
       RenderInterface_GL3::ReleaseShader(wrapper->base_handle);
     delete wrapper;
   }
+
+  // ---------------------------------------------------------------------------
+  // EN: L1.22-CAPTURE — backdrop capture: called from RenderGl3::begin_frame_compose (below,
+  //     this file), BEFORE SetViewport()/BeginFrame() run — i.e. while FBO 0 still holds
+  //     whatever the HOST already drew this frame (RmlUi's own BeginFrame() only touches its own
+  //     private render-layer FBOs, never FBO 0 — confirmed by reading the pinned
+  //     RmlUi_Renderer_GL3.cpp: FBO 0 is only ever bound again inside EndFrame(), for the final
+  //     blit). See decorator_ripple.hpp for what consumes backdrop_capture_tex_.
+  //
+  //     COST-ZERO-WHEN-INACTIVE GATE (the core L1.22-CAPTURE requirement): the very first thing
+  //     this does is check `*ripple_active_counter_ > 0` — if no "ripple()" decorator is
+  //     currently alive anywhere in the document tree, this returns immediately: no
+  //     glCopyTexSubImage2D, no glTexImage2D, no allocation, no GL call whatsoever. The counter
+  //     is wired in by bootstrap.cpp (RenderGl3::set_ripple_active_counter) right after
+  //     RippleDecoratorInstancer is constructed+registered; a UiLayer/App instance that never
+  //     loads any RCSS using "ripple()" therefore pays exactly zero extra GL/CPU cost per frame
+  //     from this feature — see decorator_ripple.hpp's class-level doc comment for the
+  //     increment/decrement contract behind `*ripple_active_counter_`.
+  //
+  //     READ-FRAMEBUFFER SAFETY (the other L1.22-CAPTURE requirement): this method rebinds
+  //     GL_READ_FRAMEBUFFER to 0 and calls glReadBuffer(GL_BACK) to read the host's already-drawn
+  //     backbuffer content — it does NOT restore either afterwards itself. That restore is
+  //     handled by GlStateGuard (gl_state.hpp), which now ALSO snapshots/restores
+  //     GL_READ_FRAMEBUFFER_BINDING + GL_READ_BUFFER (see gl_state.hpp's own doc comment for why
+  //     this is the single correct place: GlStateGuard's ctor runs BEFORE
+  //     begin_frame_compose/CaptureBackdrop, and its dtor runs AFTER end_frame_compose/EndFrame()
+  //     — which itself unconditionally rebinds FBO 0 mid-frame via
+  //     glBindFramebuffer(GL_FRAMEBUFFER, 0), clobbering whatever THIS method leaves behind
+  //     regardless — so a local save/restore scoped to just this method would be silently
+  //     overwritten by EndFrame() anyway, and could never recover a host read-fb that was NOT
+  //     FBO 0 to begin with).
+  //
+  //     `(offset_x, offset_y, w, h)` are the SAME OpenGL-native, bottom-left-origin viewport
+  //     rectangle begin_frame_compose forwards to RenderInterface_GL3::SetViewport — capturing
+  //     that exact sub-region (glCopyTexSubImage2D's own (x,y) source-rect parameters), NOT the
+  //     whole FBO 0, so a UiLayer letterboxed/positioned inside a larger host window (F3,
+  //     UiLayer::set_viewport) captures only ITS OWN region, never neighbouring host content.
+  // PT: L1.22-CAPTURE — captura de backdrop: chamado de RenderGl3::begin_frame_compose (abaixo,
+  //     este arquivo), ANTES de SetViewport()/BeginFrame() rodarem — isto é, enquanto o FBO 0
+  //     ainda tem o que o HOST já desenhou neste frame (o próprio BeginFrame() do RmlUi só toca
+  //     os próprios FBOs privados de render-layer, nunca o FBO 0 — confirmado lendo o
+  //     RmlUi_Renderer_GL3.cpp pinado: o FBO 0 só é vinculado de novo dentro do EndFrame(), pro
+  //     blit final). Ver decorator_ripple.hpp pro que consome backdrop_capture_tex_.
+  //
+  //     GATE CUSTO-ZERO-QUANDO-INATIVO (o requisito central do L1.22-CAPTURE): a primeiríssima
+  //     coisa que isto faz é checar `*ripple_active_counter_ > 0` — se nenhum decorator
+  //     "ripple()" está vivo em nenhum lugar da árvore do documento agora, isto retorna
+  //     imediatamente: nenhum glCopyTexSubImage2D, nenhum glTexImage2D, nenhuma alocação,
+  //     nenhuma chamada GL nenhuma. O contador é conectado por bootstrap.cpp
+  //     (RenderGl3::set_ripple_active_counter) logo após RippleDecoratorInstancer ser
+  //     construído+registrado; uma instância de UiLayer/App que nunca carrega RCSS nenhum
+  //     usando "ripple()" portanto paga exatamente custo zero extra de GL/CPU por frame desta
+  //     feature — ver o doc-comment de nível de classe de decorator_ripple.hpp pro contrato de
+  //     incremento/decremento por trás de `*ripple_active_counter_`.
+  //
+  //     SEGURANÇA DO READ-FRAMEBUFFER (o outro requisito do L1.22-CAPTURE): este método
+  //     revincula GL_READ_FRAMEBUFFER a 0 e chama glReadBuffer(GL_BACK) pra ler o conteúdo do
+  //     backbuffer já desenhado pelo host — ele NÃO restaura nenhum dos dois depois, por conta
+  //     própria. Essa restauração é feita por GlStateGuard (gl_state.hpp), que agora TAMBÉM
+  //     tira snapshot/restaura GL_READ_FRAMEBUFFER_BINDING + GL_READ_BUFFER (ver o próprio
+  //     doc-comment de gl_state.hpp pro motivo deste ser o único lugar correto: o ctor de
+  //     GlStateGuard roda ANTES de begin_frame_compose/CaptureBackdrop, e o dtor dele roda
+  //     DEPOIS de end_frame_compose/EndFrame() — que por si só revincula o FBO 0
+  //     incondicionalmente no meio do frame via glBindFramebuffer(GL_FRAMEBUFFER, 0), sobrepondo
+  //     o que ESTE método deixar de qualquer forma — então um save/restore local restrito só a
+  //     este método seria silenciosamente sobrescrito pelo EndFrame() de qualquer jeito, e nunca
+  //     poderia recuperar um read-fb de host que NÃO era o FBO 0 pra começo de conversa).
+  //
+  //     `(offset_x, offset_y, w, h)` são o MESMO retângulo de viewport nativo do OpenGL, origem
+  //     inferior-esquerda, que begin_frame_compose repassa a RenderInterface_GL3::SetViewport —
+  //     capturando exatamente essa sub-região (os próprios parâmetros de retângulo-fonte (x,y)
+  //     de glCopyTexSubImage2D), NÃO o FBO 0 inteiro, então um UiLayer com letterbox/posicionado
+  //     dentro de uma janela de host maior (F3, UiLayer::set_viewport) captura só a PRÓPRIA
+  //     região dele, nunca conteúdo de host vizinho.
+  // ---------------------------------------------------------------------------
+  void CaptureBackdrop(int offset_x, int offset_y, int w, int h) {
+    if (!ripple_active_counter_ || *ripple_active_counter_ <= 0)
+      return;
+    if (w <= 0 || h <= 0)
+      return;
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+
+    if (backdrop_capture_tex_ == 0)
+      glGenTextures(1, &backdrop_capture_tex_);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, backdrop_capture_tex_);
+
+    if (cap_w_ != w || cap_h_ != h) {
+      // EN: (Re)allocate storage — GL_RGBA8, no mipmaps, GL_LINEAR filtering, GL_CLAMP_TO_EDGE
+      //     wrap (the ripple shader's UV can legitimately land slightly outside [0,1] at the
+      //     edge of a strong ring displacement — clamp-to-edge degrades that to a stretched
+      //     edge pixel rather than wrapping to the opposite side of the capture).
+      // PT: (Re)aloca storage — GL_RGBA8, sem mipmaps, filtro GL_LINEAR, wrap GL_CLAMP_TO_EDGE
+      //     (o UV do shader de ripple pode legitimamente cair um pouco fora de [0,1] na borda
+      //     de um deslocamento de anel forte — clamp-to-edge degrada isso pra um pixel de borda
+      //     esticado em vez de dar wrap pro lado oposto da captura).
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      cap_w_ = w;
+      cap_h_ = h;
+    }
+
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, offset_x, offset_y, w, h);
+  }
+
+  // EN: L1.22-CAPTURE gate wiring — see CaptureBackdrop's doc comment above and
+  //     decorator_ripple.hpp's class-level doc comment for the full contract. `counter` must
+  //     outlive this Gl3RenderInterface — bootstrap.cpp satisfies that (RippleDecoratorInstancer
+  //     is owned by Bootstrap::Impl, which outlives Rml::Shutdown(), which in turn outlives this
+  //     RenderGl3/Gl3RenderInterface, per the caller-owns-render-interface contract documented in
+  //     render_gl3.hpp).
+  // PT: Conexão do gate do L1.22-CAPTURE — ver o doc-comment de CaptureBackdrop acima e o
+  //     doc-comment de nível de classe de decorator_ripple.hpp pro contrato completo. `counter`
+  //     precisa sobreviver a este Gl3RenderInterface — bootstrap.cpp satisfaz isso
+  //     (RippleDecoratorInstancer é dono de Bootstrap::Impl, que sobrevive ao Rml::Shutdown(),
+  //     que por sua vez sobrevive a este RenderGl3/Gl3RenderInterface, pelo contrato de
+  //     dono-do-render-interface-é-o-chamador documentado em render_gl3.hpp).
+  void set_ripple_active_counter(const int* counter) { ripple_active_counter_ = counter; }
 
 private:
   // EN: Lazily compiles the "glintfx-tint" GL program on first use (idempotent — a prior hard
@@ -567,6 +926,90 @@ private:
   GLint tint_loc_mode_ = -1;
   GLint tint_loc_threshold_ = -1;
   GLint tint_loc_opacity_ = -1;
+
+  // EN: L1.22-WAVE — lazily compiles the "glintfx-ripple" GL program on first use, same
+  //     idempotent-latch discipline as EnsureTintProgramCompiled above. Vertex stage reuses
+  //     kGlintfxTintVertexShaderSrc VERBATIM (see that constant's own doc comment further up
+  //     this file) — only the fragment stage (kGlintfxRippleFragmentShaderSrc) is unique to this
+  //     program.
+  // PT: L1.22-WAVE — compila lazily o programa GL "glintfx-ripple" no primeiro uso, mesma
+  //     disciplina de trava idempotente de EnsureTintProgramCompiled acima. O estágio de vértice
+  //     reusa kGlintfxTintVertexShaderSrc LITERALMENTE (ver o próprio doc-comment daquela
+  //     constante mais acima neste arquivo) — só o estágio de fragmento
+  //     (kGlintfxRippleFragmentShaderSrc) é exclusivo deste programa.
+  void EnsureRippleProgramCompiled() {
+    if (ripple_program_ || ripple_compile_attempted_)
+      return;
+    ripple_compile_attempted_ = true;
+
+    GLuint vs = 0, fs = 0;
+    if (!CompileGlintfxStage(vs, GL_VERTEX_SHADER, kGlintfxTintVertexShaderSrc))
+      return;
+    if (!CompileGlintfxStage(fs, GL_FRAGMENT_SHADER, kGlintfxRippleFragmentShaderSrc)) {
+      glDeleteShader(vs);
+      return;
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glLinkProgram(program);
+    glDetachShader(program, vs);
+    glDetachShader(program, fs);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    GLint link_status = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &link_status);
+    if (link_status == GL_FALSE) {
+      GLint log_len = 0;
+      glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_len);
+      std::vector<char> log(static_cast<size_t>(log_len) + 1, '\0');
+      glGetProgramInfoLog(program, log_len, nullptr, log.data());
+      Rml::Log::Message(Rml::Log::LT_ERROR, "glintfx: ripple() program link failure: %s", log.data());
+      glDeleteProgram(program);
+      return;
+    }
+
+    ripple_program_ = program;
+    ripple_loc_translate_ = glGetUniformLocation(program, "_translate");
+    ripple_loc_transform_ = glGetUniformLocation(program, "_transform");
+    ripple_loc_backdrop_ = glGetUniformLocation(program, "_backdrop");
+    ripple_loc_origin_ = glGetUniformLocation(program, "_origin_px");
+    ripple_loc_phase_ = glGetUniformLocation(program, "_phase");
+    ripple_loc_strength_ = glGetUniformLocation(program, "_strength");
+    ripple_loc_width_ = glGetUniformLocation(program, "_width");
+    ripple_loc_resolution_ = glGetUniformLocation(program, "_resolution");
+    ripple_loc_max_radius_ = glGetUniformLocation(program, "_max_radius");
+  }
+
+  GLuint ripple_program_ = 0;
+  bool ripple_compile_attempted_ = false;
+  GLint ripple_loc_translate_ = -1;
+  GLint ripple_loc_transform_ = -1;
+  GLint ripple_loc_backdrop_ = -1;
+  GLint ripple_loc_origin_ = -1;
+  GLint ripple_loc_phase_ = -1;
+  GLint ripple_loc_strength_ = -1;
+  GLint ripple_loc_width_ = -1;
+  GLint ripple_loc_resolution_ = -1;
+  GLint ripple_loc_max_radius_ = -1;
+
+  // EN: L1.22-CAPTURE — backdrop-capture GL texture + its current dimensions (see
+  //     CaptureBackdrop's doc comment above), and the non-owning gate-counter pointer wired in
+  //     by set_ripple_active_counter (bootstrap.cpp). `backdrop_capture_tex_`/`cap_w_`/`cap_h_`
+  //     stay at 0 for the entire lifetime of a Gl3RenderInterface that never renders a
+  //     "ripple()" element — see CaptureBackdrop's cost-zero-when-inactive gate.
+  // PT: L1.22-CAPTURE — textura GL de captura de backdrop + as dimensões atuais dela (ver o
+  //     doc-comment de CaptureBackdrop acima), e o ponteiro não-dono do contador de gate
+  //     conectado por set_ripple_active_counter (bootstrap.cpp). `backdrop_capture_tex_`/
+  //     `cap_w_`/`cap_h_` ficam em 0 pela vida inteira de um Gl3RenderInterface que nunca
+  //     renderiza um elemento "ripple()" -- ver o gate custo-zero-quando-inativo de
+  //     CaptureBackdrop.
+  GLuint backdrop_capture_tex_ = 0;
+  int cap_w_ = 0;
+  int cap_h_ = 0;
+  const int* ripple_active_counter_ = nullptr;
 };
 
 namespace glintfx {
@@ -658,6 +1101,23 @@ void RenderGl3::end_frame() {
 
 void RenderGl3::begin_frame_compose(int offset_x, int offset_y, int w, int h) {
   if (!impl_) return;
+
+  // EN: L1.22-CAPTURE — capture the host's FBO 0 backdrop BEFORE SetViewport()/BeginFrame()
+  //     below run, i.e. while FBO 0 still holds whatever the host already drew this frame (see
+  //     Gl3RenderInterface::CaptureBackdrop's own doc comment, render_gl3.cpp, for the full
+  //     rationale, the cost-zero-when-inactive gate, and the read-framebuffer-safety argument).
+  //     Gated internally on the "ripple()" active-instance counter (bootstrap.cpp wires it via
+  //     set_ripple_active_counter) -- a no-op, zero-GL-call return when no ripple decorator is
+  //     currently alive.
+  // PT: L1.22-CAPTURE — captura o backdrop do FBO 0 do host ANTES de SetViewport()/BeginFrame()
+  //     abaixo rodarem, isto é, enquanto o FBO 0 ainda tem o que o host já desenhou neste frame
+  //     (ver o próprio doc-comment de Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp, pra
+  //     racional completa, o gate custo-zero-quando-inativo, e o argumento de
+  //     segurança-do-read-framebuffer). Protegido internamente pelo contador de instância ativa
+  //     de "ripple()" (bootstrap.cpp conecta via set_ripple_active_counter) -- um retorno no-op,
+  //     zero-chamada-GL quando nenhum decorator ripple está vivo no momento.
+  impl_->renderer.CaptureBackdrop(offset_x, offset_y, w, h);
+
   // EN: NO glClear here -- the host owns the framebuffer contents (scene already drawn).
   //     NO direct glViewport() call here either (removed, v0.2.5): SetViewport()+BeginFrame()
   //     below already issue glViewport(0,0,w,h) internally for the content-rasterisation
@@ -672,6 +1132,11 @@ void RenderGl3::begin_frame_compose(int offset_x, int offset_y, int w, int h) {
   //     acontece DENTRO de EndFrame() (ver doc-comment do header).
   impl_->renderer.SetViewport(w, h, offset_x, offset_y);
   impl_->renderer.BeginFrame();
+}
+
+void RenderGl3::set_ripple_active_counter(const int* counter) {
+  if (!impl_) return;
+  impl_->renderer.set_ripple_active_counter(counter);
 }
 
 void RenderGl3::end_frame_compose() {

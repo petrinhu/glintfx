@@ -373,6 +373,7 @@ set(_glintfx_sources
   src/data_binder.cpp
   src/decorator_polygon.cpp
   src/decorator_image_tint.cpp
+  src/decorator_ripple.cpp
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp

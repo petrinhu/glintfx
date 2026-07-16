@@ -9,6 +9,7 @@
 #include "base_url_file_interface.hpp"
 #include "decorator_polygon.hpp"
 #include "decorator_image_tint.hpp"
+#include "decorator_ripple.hpp"
 #include "ua_stylesheet.hpp"
 #include <glintfx/config.hpp>
 #if GLINTFX_OWN_FONT_ENGINE
@@ -132,6 +133,24 @@ struct Bootstrap::Impl {
   //     sobrevive ao Rml::Shutdown() pelo motivo idêntico (Rml::Factory::
   //     RegisterDecoratorInstancer guarda um ponteiro cru, não-dono).
   Rml::UniquePtr<glintfx::ImageTintDecoratorInstancer> tint_instancer;
+  // EN: L1.22-WAVE -- "ripple([<max-radius>])" decorator instancer. Same allocate-after-
+  //     Rml::Initialise()/outlives-Rml::Shutdown() lifetime discipline as polygon_instancer/
+  //     tint_instancer immediately above (see polygon_instancer's long doc comment for the full
+  //     ordering rationale, which applies identically here). ALSO carries the L1.22-CAPTURE
+  //     active-instance gate counter (RippleDecoratorInstancer::active_instance_count_ptr()) --
+  //     wired into RenderGl3/Gl3RenderInterface right after construction+registration below (see
+  //     init()) so begin_frame_compose's backdrop capture can skip entirely when no ripple
+  //     decorator is alive.
+  // PT: L1.22-WAVE -- instancer do decorator "ripple([<raio-max>])". Mesma disciplina de
+  //     lifetime alocar-após-Rml::Initialise()/sobrevive-ao-Rml::Shutdown() de
+  //     polygon_instancer/tint_instancer logo acima (ver o doc-comment longo de
+  //     polygon_instancer pra racional completa de ordenação, que se aplica identicamente
+  //     aqui). TAMBÉM carrega o contador de gate de instância ativa do L1.22-CAPTURE
+  //     (RippleDecoratorInstancer::active_instance_count_ptr()) -- conectado a
+  //     RenderGl3/Gl3RenderInterface logo após construção+registro abaixo (ver init()) para que
+  //     a captura de backdrop de begin_frame_compose possa pular inteiramente quando nenhum
+  //     decorator ripple estiver vivo.
+  Rml::UniquePtr<glintfx::RippleDecoratorInstancer> ripple_instancer;
   Rml::Context* ctx = nullptr;
   Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
@@ -1006,6 +1025,41 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     do nome de função ser próprio da glintfx, não "image".
   impl_->tint_instancer = Rml::MakeUnique<glintfx::ImageTintDecoratorInstancer>();
   Rml::Factory::RegisterDecoratorInstancer("image-tint", impl_->tint_instancer.get());
+
+  // EN: L1.22-WAVE -- construct + register the "ripple" decorator instancer, same ordering
+  //     constraint as "polygon"/"image-tint" immediately above (see impl_->ripple_instancer's
+  //     own doc comment). Registered as "ripple" so "decorator: ripple(200);" /
+  //     "decorator: ripple;" both resolve.
+  //
+  //     L1.22-CAPTURE gate wiring: right after registration, hand the instancer's shared
+  //     active-instance counter (active_instance_count_ptr()) to `render` (the SAME RenderGl3
+  //     reference passed into this init() call, whose ::iface() we already wired into
+  //     Rml::SetRenderInterface above) -- this is what lets
+  //     RenderGl3::begin_frame_compose/Gl3RenderInterface::CaptureBackdrop (render_gl3.cpp) skip
+  //     the FBO-0 backdrop capture at zero cost whenever no "ripple()" decorator is currently
+  //     alive anywhere in the document tree. The counter pointer is valid for exactly as long as
+  //     impl_->ripple_instancer is (see that field's doc comment) -- both outlive
+  //     Rml::Shutdown(), which in turn always completes before this RenderGl3 (owned by the
+  //     caller, per render_gl3.hpp's contract) could plausibly be destroyed.
+  // PT: L1.22-WAVE -- constrói + registra o instancer do decorator "ripple", mesma restrição de
+  //     ordenação de "polygon"/"image-tint" logo acima (ver o próprio doc-comment de
+  //     impl_->ripple_instancer). Registrado como "ripple" para que "decorator: ripple(200);" /
+  //     "decorator: ripple;" ambos resolvam.
+  //
+  //     Conexão do gate do L1.22-CAPTURE: logo após o registro, entrega o contador de instância
+  //     ativa compartilhado do instancer (active_instance_count_ptr()) a `render` (a MESMA
+  //     referência RenderGl3 passada a esta chamada de init(), cujo ::iface() já conectamos a
+  //     Rml::SetRenderInterface acima) -- é isso que permite
+  //     RenderGl3::begin_frame_compose/Gl3RenderInterface::CaptureBackdrop (render_gl3.cpp)
+  //     pular a captura de backdrop do FBO-0 a custo zero sempre que nenhum decorator
+  //     "ripple()" estiver vivo em nenhum lugar da árvore do documento. O ponteiro do contador é
+  //     válido por exatamente o tempo que impl_->ripple_instancer é (ver o doc-comment daquele
+  //     campo) -- ambos sobrevivem ao Rml::Shutdown(), que por sua vez sempre completa antes
+  //     deste RenderGl3 (dono é o chamador, pelo contrato de render_gl3.hpp) poder plausivelmente
+  //     ser destruído.
+  impl_->ripple_instancer = Rml::MakeUnique<glintfx::RippleDecoratorInstancer>();
+  Rml::Factory::RegisterDecoratorInstancer("ripple", impl_->ripple_instancer.get());
+  render.set_ripple_active_counter(impl_->ripple_instancer->active_instance_count_ptr());
 
   // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
   //     alone to a document) so it stays reusable as a merge base for every load().

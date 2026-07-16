@@ -1,0 +1,8 @@
+<rml>
+<head>
+  <link type="text/rcss" href="ripple_scene.rcss"/>
+</head>
+<body>
+  <div id="overlay"></div>
+</body>
+</rml>

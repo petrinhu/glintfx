@@ -1,0 +1,59 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for ripple_sanity (L1.22-WAVE/L1.22-CAPTURE gate). #overlay is a single
+       fullscreen (0,0,900,800) div -- MUST cover the exact region CaptureBackdrop
+       captures (the full window, see render_gl3.cpp's kGlintfxRippleFragmentShaderSrc
+       doc comment: frag_px = fragTexCoord * _resolution, where _resolution is the
+       CAPTURED backdrop's own size, not the element's box size -- a half-window box
+       would misalign fragTexCoord's [0,1] range against the captured pixels). Starts
+       with NO decorator (no ".active" class) -- ripple_sanity.cpp toggles the class at
+       runtime (Engine::add_class, same idiom as domrw_sanity.cpp) to flip between the
+       "zero active ripple decorators" and "one active ripple decorator" states without
+       reloading the document, and drives ripple-origin-x/-y/-phase/-strength/-width via
+       set_property (same idiom) so no @keyframes/transition ever runs -- fully
+       deterministic single-frame captures.
+   PT: Cena para ripple_sanity (gate do L1.22-WAVE/L1.22-CAPTURE). #overlay é um único
+       div fullscreen (0,0,900,800) -- PRECISA cobrir exatamente a região que
+       CaptureBackdrop captura (a janela inteira, ver o doc-comment de
+       kGlintfxRippleFragmentShaderSrc em render_gl3.cpp: frag_px = fragTexCoord *
+       _resolution, onde _resolution é o tamanho do PRÓPRIO backdrop capturado, não o
+       tamanho da caixa do elemento -- uma caixa de meia-janela desalinharia o range
+       [0,1] do fragTexCoord contra os pixels capturados). Começa SEM decorator (sem
+       classe ".active") -- ripple_sanity.cpp alterna a classe em runtime
+       (Engine::add_class, mesmo idioma de domrw_sanity.cpp) para trocar entre os
+       estados "zero decorators ripple ativos" e "um decorator ripple ativo" sem
+       recarregar o documento, e dirige ripple-origin-x/-y/-phase/-strength/-width via
+       set_property (mesmo idioma) para que nenhum @keyframes/transition nunca rode --
+       capturas de frame único totalmente determinísticas. */
+
+body {
+  margin: 0px;
+  padding: 0px;
+}
+
+#overlay {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 900px;
+  height: 800px;
+  ripple-origin-x: 0;
+  ripple-origin-y: 0;
+  ripple-phase: 0;
+  ripple-strength: 0;
+  ripple-width: 50;
+}
+
+/* EN: The ONLY rule that ever attaches the "ripple()" decorator -- toggled at runtime via
+       add_class("overlay","active")/remove_class. max-radius=300 is a fixed, explicit
+       (non-"auto") value so the test's own hand-derived expected pixels never depend on
+       the captured backdrop's diagonal -- irrelevant anyway once ripple-phase=0 (front =
+       phase*max_radius = 0 regardless of max_radius), kept explicit for clarity/intent.
+   PT: A ÚNICA regra que já anexa o decorator "ripple()" -- alternada em runtime via
+       add_class("overlay","active")/remove_class. max-radius=300 é um valor fixo,
+       explícito (não-"auto") para que os pixels esperados derivados à mão pelo teste
+       nunca dependam da diagonal do backdrop capturado -- irrelevante de qualquer forma
+       uma vez que ripple-phase=0 (front = phase*max_radius = 0 independente de
+       max_radius), mantido explícito por clareza/intenção. */
+#overlay.active {
+  decorator: ripple(300);
+}

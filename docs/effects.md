@@ -31,6 +31,7 @@ RmlUi 6.3 styling looks like CSS but differs in important ways. Keep these rules
 | Mask | `mask-image` | `horizontal-gradient(COLOR COLOR)` | `mask-image: horizontal-gradient(#000f #0000);` |
 | Uniform image tint | `image-color` | `COLOR` | `image-color: #ffcc66;` |
 | Luminance-key image tint | `decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` | `url` / `COLOR` / `none\|multiply\|luminance-multiply\|screen` / number | `decorator: image-tint(runes-base.png); image-tint-mode: luminance-multiply;` |
+| Screen-space ripple (backdrop refraction) | `decorator: ripple([<max-radius>])` + `ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width` | `max-radius` (optional, default `0` = auto) / number (px, no unit) each | `decorator: ripple(); ripple-strength: 18px; ripple-width: 40px;` |
 
 `box-shadow` and `filter: drop-shadow` differ: `box-shadow` is a rectangular (raster-box) shadow, while `drop-shadow` follows the element's alpha shape (e.g. rounded corners). They are independent and can be combined.
 
@@ -403,7 +404,71 @@ ui.remove_class("actor-echo", "pulsing");
 ui.set_property("actor-echo", "opacity", "0.5");
 ```
 
-**The condition -- read this before reaching for this pattern.** This only works if the actor's sprite is itself a glintfx element (an `<img>`/div declared in the embedded RML/RCSS). If the actor is instead drawn by the host BELOW the glintfx compose-only layer (e.g. an SDL3 sprite blit -- see [`embed-integration.md`](embed-integration.md) section 0), glintfx has no sprite of its own to echo: `UiLayer::render()` never reads the host's own framebuffer back (compose-only, section 0 of that document), so it cannot see, copy, or tint a texture the host drew. In that case the echo is the host's own work -- its own sprite, its own draw call. glintfx's only useful contribution then is anchoring: `get_element_box(slot_id)` (v0.2.5) gives the host the on-screen border-box of a UI-declared "slot" marker element, so the host's own echo sprite can align to a glintfx-driven layout position without duplicating RCSS geometry math by hand.
+**The condition -- read this before reaching for this pattern.** This only works if the actor's sprite is itself a glintfx element (an `<img>`/div declared in the embedded RML/RCSS). If the actor is instead drawn by the host BELOW the glintfx compose-only layer (e.g. an SDL3 sprite blit -- see [`embed-integration.md`](embed-integration.md) section 0), glintfx has no sprite of its own to echo: for any element short of the whole screen, `UiLayer::render()` still never reads the host's own framebuffer back (compose-only, section 0 of that document), so it cannot see, copy, or tint a texture the host drew *for a single sprite*. In that case the echo is the host's own work -- its own sprite, its own draw call. glintfx's only useful contribution then is anchoring: `get_element_box(slot_id)` (v0.2.5) gives the host the on-screen border-box of a UI-declared "slot" marker element, so the host's own echo sprite can align to a glintfx-driven layout position without duplicating RCSS geometry math by hand. (A *whole-screen* backdrop refraction of the host's scene is a different, now-solved problem -- see the `ripple()` how-to right below.)
+
+### How-to: a screen-space ripple / time-distortion decorator (`ripple()`, `L1.22-WAVE`/`L1.22-CAPTURE`)
+
+This is the in-library, RCSS-declarative counterpart to the host-side pattern documented in [`embed-integration.md`](embed-integration.md) section 19: `decorator: ripple(...)` captures a sub-region of the host's own FBO 0 (its already-drawn scene) into a glintfx-owned texture and refracts it through a radial ring that expands over time -- a "time distortion" look, entirely driven by RCSS + the existing DOM read/write API (`set_property`/`add_class`/`remove_class`, section 15 of that document). No new host-facing C++ API. See [ADR-0012](adr/0012-backdrop-capture.md) for the full design rationale (this is a conditional, opt-in exception to the compose-only contract of [ADR-0008](adr/0008-embed-guest-mode.md)) and [`embed-integration.md`](embed-integration.md) section 20 for the host-facing contract (what gets captured, when, and at what cost).
+
+**Syntax.** `decorator: ripple([<max-radius>])` -- the single, optional, positional shorthand argument is the ring's maximum travel radius, a plain number in pixels (default `0`, meaning **auto**: the captured backdrop's own diagonal, so the ring always reaches past every corner). A bare `ripple` and an empty `ripple()` are both valid and resolve to the same auto default -- neither is rejected. The effect itself is driven by five standalone, globally-registered, independently-animatable properties (not decorator arguments -- same idiom as `image-tint-*`):
+
+| Property | Meaning | Default |
+| :--- | :--- | :--- |
+| `ripple-origin-x` / `ripple-origin-y` | Epicentre, in viewport pixels | `0` |
+| `ripple-phase` | Ring position, `0` (spawn) -> `1` (fully expanded/faded) | `0` |
+| `ripple-strength` | Peak radial displacement, in pixels | `0` |
+| `ripple-width` | Ring thickness, in pixels | `48` |
+
+All five are plain numbers (no unit suffix -- same `AddParser("number")` idiom as `image-tint-threshold`), and every one is a normal, interpolable RCSS property: `transition`/`@keyframes` animate them exactly like any other numeric property, which is how an author sweeps `ripple-phase` from 0 to 1 over time.
+
+**Placement.** Put the decorator on a fullscreen overlay element and make it the **first child** of the document (background of the DOM stacking order) -- everything painted after it in document order (the real cockpit UI) composites on top, so the ring visually travels *behind* interactive panels. The element's box must cover the **same region** the host's `UiLayer`/`App` viewport captures (section 20 of `embed-integration.md`) -- a partial-coverage overlay samples the correct backdrop only where it overlaps that region.
+
+**A one-shot ripple, host-triggered:**
+
+```css
+.screen-ripple {
+    position: absolute;
+    top: 0dp; left: 0dp;
+    width: 100%; height: 100%;
+    decorator: ripple();              /* max-radius omitted -- auto: captured backdrop's own diagonal */
+    ripple-width: 40px;
+    ripple-strength: 18px;
+    pointer-events: none;             /* the ripple is decorative, never intercepts clicks */
+}
+
+@keyframes ripple-sweep {
+    0%   { ripple-phase: 0; }
+    100% { ripple-phase: 1; }
+}
+.screen-ripple.active {
+    animation: ripple-sweep 0.45s linear 1;
+}
+```
+
+```html
+<!-- First child, background of the DOM: painted before the real UI (which comes after it in
+     document order), so the ring travels visually BEHIND every interactive panel. Its box
+     must cover the SAME region the host's viewport captures (fullscreen here). -->
+<body>
+    <div id="screen-ripple" class="screen-ripple"></div>
+    <!-- ... real cockpit UI, drawn after (on top) ... -->
+</body>
+```
+
+```cpp
+// C++ -- host side, at the instant an action resolves (e.g. from set_submit_callback/
+// set_click_info_callback, embed-integration.md sections 16/13).
+glintfx::ElementBox slot = ui.get_element_box("actor-slot");   // epicentre = the target's own slot
+ui.set_property("screen-ripple", "ripple-origin-x", std::to_string(slot.x + slot.w / 2.f));
+ui.set_property("screen-ripple", "ripple-origin-y", std::to_string(slot.y + slot.h / 2.f));
+ui.add_class("screen-ripple", "active");        // starts the 0 -> 1 ripple-phase sweep
+
+// The host owns closing the cycle -- there is no animationend callback today, so a plain
+// ~450ms timer (matching the @keyframes duration above) removes the class:
+schedule_after(450ms, [&ui] { ui.remove_class("screen-ripple", "active"); });
+```
+
+**What it refracts, and what it costs.** The ring samples the HOST's own scene -- whatever was already drawn into FBO 0 before `render()` ran this frame -- not glintfx's own composed output. The capture (one `glCopyTexSubImage2D` of the viewport sub-region) is **conditional**: it runs only while at least one `ripple()` decorator is alive anywhere in the currently loaded document, and costs exactly zero GL calls the rest of the time. This is why the correct authoring pattern is `add_class`/`remove_class` around a one-shot animation (as above), not a permanently-present `ripple()` rule with `ripple-strength: 0` -- the *decorator's own instance* being alive is what keeps the capture running every frame, regardless of what `ripple-strength` currently evaluates to. Remove the class (or unload the element) when the effect is not needed.
 
 ### Putting it together
 
@@ -441,6 +506,7 @@ A estilização do RmlUi 6.3 parece CSS mas difere de formas importantes. Lembre
 | Mask | `mask-image` | `horizontal-gradient(COR COR)` | `mask-image: horizontal-gradient(#000f #0000);` |
 | Tingimento uniforme de imagem | `image-color` | `COR` | `image-color: #ffcc66;` |
 | Tingimento de imagem por luminance-key | `decorator: image-tint(url)` + `image-tint-color`/`-mode`/`-threshold` | `url` / `COR` / `none\|multiply\|luminance-multiply\|screen` / número | `decorator: image-tint(runes-base.png); image-tint-mode: luminance-multiply;` |
+| Onda screen-space (refração de backdrop) | `decorator: ripple([<raio-max>])` + `ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width` | `raio-max` (opcional, default `0` = auto) / número (px, sem unidade) cada | `decorator: ripple(); ripple-strength: 18px; ripple-width: 40px;` |
 
 `box-shadow` e `filter: drop-shadow` diferem: `box-shadow` é uma sombra retangular (box-raster), enquanto `drop-shadow` segue a forma do alpha do elemento (ex.: cantos arredondados). São independentes e podem ser combinados.
 
@@ -815,7 +881,71 @@ ui.remove_class("eco-ator", "pulsando");
 ui.set_property("eco-ator", "opacity", "0.5");
 ```
 
-**A condição -- leia antes de recorrer a este padrão.** Isso só funciona se o sprite do ator for ele mesmo um elemento glintfx (um `<img>`/div declarado no RML/RCSS embutido). Se o ator é desenhado pelo host ABAIXO da camada compose-only da glintfx (ex.: um blit de sprite SDL3 -- ver [`embed-integration.md`](embed-integration.md) seção 0), a glintfx não tem sprite próprio pra ecoar: `UiLayer::render()` nunca lê de volta o próprio framebuffer do host (compose-only, seção 0 daquele documento), então não consegue ver, copiar ou tingir uma textura que o host desenhou. Nesse caso o eco é trabalho do próprio host -- sprite próprio, draw call próprio. A única contribuição útil da glintfx então é a ancoragem: `get_element_box(slot_id)` (v0.2.5) dá ao host o border-box na tela de um elemento marcador de "slot" declarado na UI, para que o próprio sprite-eco do host se alinhe a uma posição de layout dirigida pela glintfx sem duplicar a matemática de geometria RCSS à mão.
+**A condição -- leia antes de recorrer a este padrão.** Isso só funciona se o sprite do ator for ele mesmo um elemento glintfx (um `<img>`/div declarado no RML/RCSS embutido). Se o ator é desenhado pelo host ABAIXO da camada compose-only da glintfx (ex.: um blit de sprite SDL3 -- ver [`embed-integration.md`](embed-integration.md) seção 0), a glintfx não tem sprite próprio pra ecoar: para qualquer elemento aquém da tela inteira, o `UiLayer::render()` ainda nunca lê de volta o próprio framebuffer do host (compose-only, seção 0 daquele documento), então não consegue ver, copiar ou tingir uma textura que o host desenhou *pra um sprite isolado*. Nesse caso o eco é trabalho do próprio host -- sprite próprio, draw call próprio. A única contribuição útil da glintfx então é a ancoragem: `get_element_box(slot_id)` (v0.2.5) dá ao host o border-box na tela de um elemento marcador de "slot" declarado na UI, para que o próprio sprite-eco do host se alinhe a uma posição de layout dirigida pela glintfx sem duplicar a matemática de geometria RCSS à mão. (Uma refração de backdrop de **tela inteira** da cena do host é um problema diferente, agora resolvido -- ver o how-to do `ripple()` logo abaixo.)
+
+### How-to: um decorator de onda screen-space / distorção de tempo (`ripple()`, `L1.22-WAVE`/`L1.22-CAPTURE`)
+
+Este é o equivalente in-library, RCSS-declarativo, do padrão host-side documentado em [`embed-integration.md`](embed-integration.md) seção 19: `decorator: ripple(...)` captura uma sub-região do próprio FBO 0 do host (a cena já desenhada) numa textura própria da glintfx e a refrata através de um anel radial que se expande no tempo -- um visual de "distorção de tempo", inteiramente dirigido por RCSS + a API de leitura/escrita de DOM já existente (`set_property`/`add_class`/`remove_class`, seção 15 daquele documento). Nenhuma API C++ nova pro host. Ver [ADR-0012](adr/0012-backdrop-capture.md) para a racional de design completa (isto é uma exceção condicional, opt-in, ao contrato compose-only do [ADR-0008](adr/0008-embed-guest-mode.md)) e [`embed-integration.md`](embed-integration.md) seção 20 pro contrato do lado do host (o que é capturado, quando, e a que custo).
+
+**Sintaxe.** `decorator: ripple([<raio-max>])` -- o único argumento de shorthand posicional, opcional, é o raio máximo de percurso do anel, um número simples em pixels (default `0`, significando **auto**: a própria diagonal do backdrop capturado, então o anel sempre alcança além de todo canto). Um `ripple` nu e um `ripple()` vazio são ambos válidos e resolvem para o mesmo default auto -- nenhum dos dois é rejeitado. O efeito em si é dirigido por cinco propriedades standalone, registradas globalmente, animáveis independentemente (não argumentos de decorator -- mesmo idioma de `image-tint-*`):
+
+| Propriedade | Significado | Default |
+| :--- | :--- | :--- |
+| `ripple-origin-x` / `ripple-origin-y` | Epicentro, em pixels de viewport | `0` |
+| `ripple-phase` | Posição do anel, `0` (spawn) -> `1` (totalmente expandido/esmaecido) | `0` |
+| `ripple-strength` | Deslocamento radial de pico, em pixels | `0` |
+| `ripple-width` | Espessura do anel, em pixels | `48` |
+
+As cinco são números simples (sem sufixo de unidade -- mesmo idioma `AddParser("number")` de `image-tint-threshold`), e cada uma é uma propriedade RCSS normal, interpolável: `transition`/`@keyframes` as animam exatamente como qualquer outra propriedade numérica, que é como um autor varre `ripple-phase` de 0 a 1 ao longo do tempo.
+
+**Posicionamento.** Coloque o decorator num elemento overlay de tela inteira e faça dele o **primeiro filho** do documento (fundo da ordem de empilhamento do DOM) -- tudo pintado depois dele na ordem do documento (a UI real do cockpit) compõe por cima, então o anel viaja visualmente *atrás* dos painéis interativos. A caixa do elemento precisa cobrir a **mesma região** que o viewport do `UiLayer`/`App` do host captura (seção 20 de `embed-integration.md`) -- um overlay de cobertura parcial amostra o backdrop correto só onde ele sobrepõe essa região.
+
+**Uma onda one-shot, disparada pelo host:**
+
+```css
+.screen-ripple {
+    position: absolute;
+    top: 0dp; left: 0dp;
+    width: 100%; height: 100%;
+    decorator: ripple();              /* max-radius omitido -- auto: diagonal do próprio backdrop capturado */
+    ripple-width: 40px;
+    ripple-strength: 18px;
+    pointer-events: none;             /* o ripple é decorativo, nunca intercepta cliques */
+}
+
+@keyframes ripple-sweep {
+    0%   { ripple-phase: 0; }
+    100% { ripple-phase: 1; }
+}
+.screen-ripple.active {
+    animation: ripple-sweep 0.45s linear 1;
+}
+```
+
+```html
+<!-- Primeiro filho, fundo do DOM: pintado antes da UI real (que vem depois dele na ordem do
+     documento), então o anel viaja visualmente ATRÁS de todo painel interativo. A caixa dele
+     precisa cobrir a MESMA região que o viewport do host captura (tela inteira aqui). -->
+<body>
+    <div id="screen-ripple" class="screen-ripple"></div>
+    <!-- ... UI real do cockpit, desenhada depois (por cima) ... -->
+</body>
+```
+
+```cpp
+// C++ -- lado do host, no instante em que uma ação resolve (ex.: a partir de
+// set_submit_callback/set_click_info_callback, embed-integration.md seções 16/13).
+glintfx::ElementBox slot = ui.get_element_box("actor-slot");   // epicentro = o próprio slot do alvo
+ui.set_property("screen-ripple", "ripple-origin-x", std::to_string(slot.x + slot.w / 2.f));
+ui.set_property("screen-ripple", "ripple-origin-y", std::to_string(slot.y + slot.h / 2.f));
+ui.add_class("screen-ripple", "active");        // inicia a varredura 0 -> 1 de ripple-phase
+
+// O host é dono do fechamento do ciclo -- não há callback de animationend hoje, então um
+// timer simples de ~450ms (batendo com a duração do @keyframes acima) remove a classe:
+schedule_after(450ms, [&ui] { ui.remove_class("screen-ripple", "active"); });
+```
+
+**O que ele refrata, e quanto custa.** O anel amostra a própria cena do HOST -- o que já estava desenhado no FBO 0 antes do `render()` rodar neste frame -- não a própria saída composta da glintfx. A captura (um `glCopyTexSubImage2D` da sub-região do viewport) é **condicional**: só roda enquanto pelo menos um decorator `ripple()` está vivo em algum lugar do documento carregado atualmente, e custa exatamente zero chamadas GL no resto do tempo. É por isso que o padrão de autoria correto é `add_class`/`remove_class` em volta de uma animação one-shot (como acima), não uma regra `ripple()` permanentemente presente com `ripple-strength: 0` -- a *instância do próprio decorator* estar viva é o que mantém a captura rodando todo frame, independente do que `ripple-strength` avalie no momento. Remova a classe (ou descarregue o elemento) quando o efeito não for necessário.
 
 ### Juntando tudo
 

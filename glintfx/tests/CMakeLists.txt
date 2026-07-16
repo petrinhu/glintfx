@@ -1806,6 +1806,74 @@ add_test(NAME form_events_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: ripple_sanity -- ADVERSARIAL GATE for the "ripple([<max-radius>])" FBO-0 backdrop-refraction
+#     decorator (L1.22-WAVE, decorator_ripple.{hpp,cpp}) and its capture (L1.22-CAPTURE,
+#     Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp). Proves (1) capture+refraction are
+#     pixel-correct on BOTH axes (horizontal AND vertical -- the vertical proof specifically
+#     targets the commit's own backdrop-sample Y-flip fix), (2) the cost-zero-when-inactive gate
+#     via a GL-entry-point SPY on glCopyTexSubImage2D (a pixel-only check cannot falsify this gate
+#     -- see ripple_sanity.cpp's own top comment), (3) GlStateGuard's read-framebuffer restore.
+#     Links glloader explicitly (like golden_test/ui_layer_compose/gl_state_guard above): the spy
+#     needs the SAME glCopyTexSubImage2D global CaptureBackdrop calls (see the linkage-reasoning
+#     comment in ripple_sanity.cpp for why `glintfx glloader` together, not `glintfx` alone,
+#     guarantees this). Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like the
+#     other embed tests above) -- the decorator + shader injection are backend-agnostic.
+# PT: ripple_sanity -- GATE ADVERSARIAL para o decorator de refração de backdrop do FBO-0
+#     "ripple([<raio-max>])" (L1.22-WAVE) e sua captura (L1.22-CAPTURE). Prova (1) captura+
+#     refração corretas em pixel em AMBOS os eixos (horizontal E vertical -- a prova vertical mira
+#     especificamente o fix de flip em Y do próprio commit), (2) o gate de custo-zero-quando-
+#     inativo via um ESPIÃO de entry point GL sobre glCopyTexSubImage2D (um check só-de-pixel não
+#     consegue falsificar este gate -- ver o próprio comentário do topo de ripple_sanity.cpp),
+#     (3) a restauração do read-framebuffer do GlStateGuard. Linka glloader explicitamente (como
+#     golden_test/ui_layer_compose/gl_state_guard acima). Roda em AMBAS as configs de build (teste
+#     de embed mode, linka ${_embed_dep} como os outros testes embed acima) -- o decorator + a
+#     injeção de shader são backend-agnósticos.
+# ---------------------------------------------------------------------------
+add_executable(ripple_sanity ripple_sanity.cpp)
+target_link_libraries(ripple_sanity PRIVATE ${_embed_dep} glloader)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ripple_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/ripple_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ripple_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/ripple_scene.rcss COPYONLY)
+add_test(NAME ripple_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ripple_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: ripple_stress_sanity -- INDEPENDENT adversarial gate for commit 43cdcfa (the L1.22-CAPTURE
+#     cold-start fix's own review: EnsureBackdropCaptured now runs mid-Context::Render(), not
+#     before it). Differential proof (NOT hand-derived math): renders the SAME document twice
+#     (ripple decorator inactive, then active) and diffs FOUR "after" elements -- each a different
+#     RenderInterface_GL3 draw path, each painted LATER in the SAME tree walk than the ripple
+#     element -- bit-exact between the two runs, plus a host-GL-state sentinel on a non-zero
+#     texture unit. See ripple_stress_sanity.cpp's own top comment for the full methodology. Links
+#     `glintfx glloader` like ripple_sanity above (same glCopyTexSubImage2D spy idiom, same
+#     linkage-safety reasoning).
+# PT: ripple_stress_sanity -- GATE ADVERSARIAL INDEPENDENTE pro commit 43cdcfa (review do próprio
+#     fix de cold-start do L1.22-CAPTURE). Prova DIFERENCIAL (NÃO matemática derivada à mão):
+#     renderiza o MESMO documento duas vezes (decorator ripple inativo, depois ativo) e compara
+#     QUATRO elementos "after" -- cada um um caminho de draw diferente do RenderInterface_GL3,
+#     cada um pintado DEPOIS do elemento ripple na MESMA caminhada de árvore -- bit-exatos entre as
+#     duas rodadas, mais um sentinela de estado GL do host numa unidade de textura não-zero. Ver o
+#     próprio comentário do topo de ripple_stress_sanity.cpp pra metodologia completa.
+# ---------------------------------------------------------------------------
+add_executable(ripple_stress_sanity ripple_stress_sanity.cpp)
+target_link_libraries(ripple_stress_sanity PRIVATE ${_embed_dep} glloader)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ripple_stress_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/ripple_stress_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ripple_stress_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/ripple_stress_scene.rcss COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_tint_fixture.png
+               ${CMAKE_CURRENT_BINARY_DIR}/image_tint_fixture.png COPYONLY)
+add_test(NAME ripple_stress_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ripple_stress_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

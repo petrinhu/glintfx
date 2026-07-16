@@ -159,6 +159,7 @@ Outras:
 - Decisões de arquitetura/stack são do líder (petrus): apresentar 2–3 opções com prós/contras antes de decidir (ver memória do projeto).
 - **Toda alteração de código/produto é feita por um agente especialista da constelação bigtech**, nunca inline pelo orquestrador (ver `AGENTS.md` seção "Governança").
 - Calibre de comunicação ao explicar: C/ASM com mais contexto; arquitetura, hardware e lógica direto ao ponto (ver memória `feedback-nivel-comunicacao`).
+- **Comunicação entre sessões (bus git + Claude Design):** no INÍCIO da sessão, `git pull` o bus `~/IDrive/Documentos/projetos_claudebrain/gusworld_ia_autocomm/`, ler `inbox/glintfx/` (meu slug), e ligar `watch-inbox.sh glintfx 300` em background (re-invoca ao chegar msg; ao acordar: ler+arquivar+relançar). Responder o gusworld = `.md` em `inbox/gusworld/` + `git push`. Repo PÚBLICO = zero dado sensível. O UI Kit do GusWorld vive no Claude Design (projeto "GusWorld :: UI Kit", ferramenta `DesignSync` após `/design consent`) + espelho `gusworld/docs/design/ui-kit/`. Detalhe: memórias `reference_autocomm` e `reference_design`.
 
 ## Licença
 

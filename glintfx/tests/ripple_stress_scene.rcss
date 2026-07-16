@@ -1,0 +1,99 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for ripple_stress_sanity (independent gate, review of commit 43cdcfa -- L1.22-CAPTURE
+       cold-start fix). #ripple_el is a fullscreen (0,0,900,800) div, FIRST in document order (so
+       it paints FIRST -- Context::Render() walks/paints siblings in document order). It carries
+       NO decorator by default; ripple_stress_sanity.cpp toggles decorator:ripple(300) on/off via
+       add_class("ripple_el","active")/remove_class (same idiom as ripple_scene.rcss) so the SAME
+       document can be rendered once with EnsureBackdropCaptured() never invoked (inactive) and
+       once with it invoked mid-Context::Render() (active), and the pixels of the FOUR "after"
+       elements below -- which paint LATER in the SAME tree walk, each exercising a DIFFERENT
+       RenderInterface_GL3 draw path -- diffed between the two runs.
+       #rect_after   -- native RenderGeometry "Color" program (plain background-color, no texture,
+                        no shader wrapper at all -- the most basic draw path).
+       #image_after  -- native RenderGeometry "Texture" program (decorator:image(...), a real GL
+                        texture bound to unit 0 -- exercises glActiveTexture/glBindTexture(GL_TEXTURE_2D)
+                        state independently of glintfx's own shader wrappers).
+       #gradient_after -- RenderShader's "is_tint=false && is_ripple=false" delegate-to-base path
+                        (decorator:linear-gradient(...) is RmlUi's OWN native gradient shader,
+                        compiled/rendered by the UNMODIFIED base RenderInterface_GL3 -- proves the
+                        capture doesn't corrupt state for shaders glintfx does not own).
+       #tint_after   -- glintfx's OWN "is_tint" RenderShader branch (decorator:image-tint(...)),
+                        which ALSO does glActiveTexture(GL_TEXTURE0)+glBindTexture right after the
+                        ripple element's own EnsureBackdropCaptured()/ripple draw -- the branch code-
+                        path-adjacent to the one under review, good for catching a texture-unit or
+                        program-cache regression specifically.
+       All four sit BELOW (higher `top`) #ripple_el's own 900x800 box, so document order alone
+       (not z-index) puts them AFTER it in the same Context::Render() walk -- each is drawn with an
+       OPAQUE fill, so even if #ripple_el's own compositing were wrong, that would only affect
+       #ripple_el's own pixels underneath, never these boxes' pixels (they overwrite, not blend
+       onto, whatever #ripple_el already painted there -- see this file's own header comment on why
+       position doesn't need to dodge the ring).
+   PT: Cena para ripple_stress_sanity (gate independente, review do commit 43cdcfa -- fix de
+       cold-start do L1.22-CAPTURE). Ver os parágrafos EN acima (espelhados aqui em conceito):
+       #ripple_el é um div fullscreen (0,0,900,800), PRIMEIRO na ordem do documento (pinta
+       PRIMEIRO); os quatro elementos "after" pintam DEPOIS na MESMA caminhada de árvore, cada um
+       exercitando um caminho de draw DIFERENTE do RenderInterface_GL3 (Color nativo, Texture
+       nativo, gradient delegado-pra-base, tint próprio da glintfx). */
+
+body {
+  margin: 0px;
+  padding: 0px;
+  background-color: #101010;
+}
+
+#ripple_el {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 900px;
+  height: 800px;
+  ripple-origin-x: 450;
+  ripple-origin-y: 400;
+  ripple-phase: 0;
+  ripple-strength: 150;
+  ripple-width: 50;
+}
+
+/* EN: The ONLY rule that ever attaches the "ripple()" decorator -- toggled at runtime.
+   PT: A ÚNICA regra que já anexa o decorator "ripple()" -- alternada em runtime. */
+#ripple_el.active {
+  decorator: ripple(300);
+}
+
+#rect_after {
+  position: absolute;
+  left: 20px;
+  top: 620px;
+  width: 180px;
+  height: 140px;
+  background-color: #e05050;
+}
+
+#image_after {
+  position: absolute;
+  left: 240px;
+  top: 620px;
+  width: 180px;
+  height: 60px;  /* 3:1 aspect matches image_tint_fixture.png's 300x100 native ratio */
+  decorator: image(image_tint_fixture.png);
+}
+
+#gradient_after {
+  position: absolute;
+  left: 460px;
+  top: 620px;
+  width: 180px;
+  height: 140px;
+  decorator: linear-gradient(90deg, #ffcc00, #0044ff);
+}
+
+#tint_after {
+  position: absolute;
+  left: 680px;
+  top: 620px;
+  width: 180px;
+  height: 60px;
+  decorator: image-tint(image_tint_fixture.png);
+  image-tint-mode: multiply;
+  image-tint-color: #20ff20;
+}

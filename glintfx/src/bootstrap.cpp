@@ -9,6 +9,7 @@
 #include "base_url_file_interface.hpp"
 #include "decorator_polygon.hpp"
 #include "decorator_image_tint.hpp"
+#include "decorator_ripple.hpp"
 #include "ua_stylesheet.hpp"
 #include <glintfx/config.hpp>
 #if GLINTFX_OWN_FONT_ENGINE
@@ -132,6 +133,22 @@ struct Bootstrap::Impl {
   //     sobrevive ao Rml::Shutdown() pelo motivo idêntico (Rml::Factory::
   //     RegisterDecoratorInstancer guarda um ponteiro cru, não-dono).
   Rml::UniquePtr<glintfx::ImageTintDecoratorInstancer> tint_instancer;
+  // EN: L1.22-WAVE -- "ripple([<max-radius>])" decorator instancer. Same allocate-after-
+  //     Rml::Initialise()/outlives-Rml::Shutdown() lifetime discipline as polygon_instancer/
+  //     tint_instancer immediately above (see polygon_instancer's long doc comment for the full
+  //     ordering rationale, which applies identically here). Does NOT carry any L1.22-CAPTURE
+  //     gate counter (a prior revision, commit 647350f, did -- removed as part of the cold-start
+  //     fix; see render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured doc comment and
+  //     decorator_ripple.hpp's own doc comment for why the gate no longer needs one).
+  // PT: L1.22-WAVE -- instancer do decorator "ripple([<raio-max>])". Mesma disciplina de
+  //     lifetime alocar-após-Rml::Initialise()/sobrevive-ao-Rml::Shutdown() de
+  //     polygon_instancer/tint_instancer logo acima (ver o doc-comment longo de
+  //     polygon_instancer pra racional completa de ordenação, que se aplica identicamente
+  //     aqui). NÃO carrega nenhum contador de gate do L1.22-CAPTURE (uma revisão anterior,
+  //     commit 647350f, carregava -- removido como parte do fix de cold-start; ver o
+  //     doc-comment de ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp e o próprio
+  //     doc-comment de decorator_ripple.hpp pro motivo do gate não precisar mais de um).
+  Rml::UniquePtr<glintfx::RippleDecoratorInstancer> ripple_instancer;
   Rml::Context* ctx = nullptr;
   Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
@@ -1006,6 +1023,26 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     do nome de função ser próprio da glintfx, não "image".
   impl_->tint_instancer = Rml::MakeUnique<glintfx::ImageTintDecoratorInstancer>();
   Rml::Factory::RegisterDecoratorInstancer("image-tint", impl_->tint_instancer.get());
+
+  // EN: L1.22-WAVE -- construct + register the "ripple" decorator instancer, same ordering
+  //     constraint as "polygon"/"image-tint" immediately above (see impl_->ripple_instancer's
+  //     own doc comment). Registered as "ripple" so "decorator: ripple(200);" /
+  //     "decorator: ripple;" both resolve. NO extra gate-counter wiring needed here (unlike a
+  //     prior revision, commit 647350f) -- the L1.22-CAPTURE cost-zero-when-inactive gate is now
+  //     structural, entirely inside render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured
+  //     pair; see decorator_ripple.hpp's own doc comment for the fix and why the earlier
+  //     counter-based gate had a cold-start bug.
+  // PT: L1.22-WAVE -- constrói + registra o instancer do decorator "ripple", mesma restrição de
+  //     ordenação de "polygon"/"image-tint" logo acima (ver o próprio doc-comment de
+  //     impl_->ripple_instancer). Registrado como "ripple" para que "decorator: ripple(200);" /
+  //     "decorator: ripple;" ambos resolvam. NENHUMA conexão extra de contador de gate
+  //     necessária aqui (diferente de uma revisão anterior, commit 647350f) -- o gate de
+  //     custo-zero-quando-inativo do L1.22-CAPTURE agora é estrutural, inteiramente dentro do
+  //     par ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp; ver o próprio
+  //     doc-comment de decorator_ripple.hpp pro fix e por que o gate baseado em contador
+  //     anterior tinha um bug de cold-start.
+  impl_->ripple_instancer = Rml::MakeUnique<glintfx::RippleDecoratorInstancer>();
+  Rml::Factory::RegisterDecoratorInstancer("ripple", impl_->ripple_instancer.get());
 
   // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
   //     alone to a document) so it stays reusable as a merge base for every load().

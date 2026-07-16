@@ -1,0 +1,12 @@
+<rml>
+<head>
+  <link type="text/rcss" href="ripple_stress_scene.rcss"/>
+</head>
+<body>
+  <div id="ripple_el"></div>
+  <div id="rect_after"></div>
+  <div id="image_after"></div>
+  <div id="gradient_after"></div>
+  <div id="tint_after"></div>
+</body>
+</rml>

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.10.0)
+project(glintfx LANGUAGES C CXX VERSION 0.11.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
@@ -373,6 +373,7 @@ set(_glintfx_sources
   src/data_binder.cpp
   src/decorator_polygon.cpp
   src/decorator_image_tint.cpp
+  src/decorator_ripple.cpp
   src/engine.cpp
   src/system_clock.cpp
   src/ui_layer.cpp

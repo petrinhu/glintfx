@@ -12,6 +12,53 @@
 
 ---
 
+## [0.11.0] - 2026-07-16 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.11.0)
+
+**EN:** **Minor** release -- the **backdrop-ripple** decorator (`L1.22-WAVE`/`L1.22-CAPTURE`). glintfx can now **capture the host's FBO 0 into an internal texture** and refract it screen-space via a data-driven `decorator: ripple(...)` in RCSS -- a shimmer over glintfx's own UI, driven entirely by custom RCSS properties (no imperative effect API, per the project principle). Scope is honest: this refracts glintfx's **own** content (the composed UI layer), **not** the host's battle scene -- an embed host that wants to distort its own render target does that host-side (see the reference GLSL in `docs/embed-integration.md`). The capture is **structurally cost-zero when no ripple is active** (arm/ensure pattern: an unconditional zero-GL arm in `begin_frame_compose`, plus a lazy on-demand capture reached only from inside the `ripple` shader path during `Context::Render()`). Additive and drop-in from v0.10.0: no existing public signature changes; a consumer that never uses `decorator: ripple` pays nothing. See [ADR-0012](docs/adr/0012-backdrop-capture.md).
+**PT:** Release **minor** -- o decorator **backdrop-ripple** (`L1.22-WAVE`/`L1.22-CAPTURE`). O glintfx agora **captura o FBO 0 do host numa textura interna** e o refrata em screen-space via um `decorator: ripple(...)` data-driven no RCSS -- um shimmer sobre a própria UI do glintfx, controlado inteiramente por propriedades RCSS customizadas (sem API imperativa de efeito, conforme o princípio do projeto). O escopo é honesto: isto refrata o conteúdo **próprio** do glintfx (a camada de UI composta), **não** a cena de batalha do host -- um host embed que queira distorcer o próprio render target faz isso host-side (ver o GLSL de referência em `docs/embed-integration.md`). A captura é **estruturalmente custo-zero quando nenhum ripple está ativo** (padrão arm/ensure: um arm incondicional de zero-GL em `begin_frame_compose`, mais uma captura lazy on-demand alcançada só de dentro do caminho do shader `ripple` durante o `Context::Render()`). Aditiva e drop-in a partir da v0.10.0: nenhuma assinatura pública existente muda; um consumidor que nunca usa `decorator: ripple` não paga nada. Ver [ADR-0012](docs/adr/0012-backdrop-capture.md).
+
+### Added / Adicionado
+
+- **EN:** `decorator: ripple(...)` RCSS decorator -- captures FBO 0 and applies a radial refraction ring
+  over the element's box. Custom properties `ripple-origin-x`/`-y` (epicentre, 0..1 of the element),
+  `ripple-phase` (0..1 lifecycle), `ripple-strength` (displacement amount), `ripple-width` (ring
+  thickness) -- all `<number>`, animatable via `@keyframes`. The ring composites alpha-shaped
+  (`alpha = ring`), so only the wavefront is drawn. Registered via `RenderShader` override (the same
+  mechanism as `image-tint`); no private RmlUi backend member is touched.
+- **EN:** FBO-0 backdrop capture into `backdrop_capture_tex_` (`RenderGl3`), read back with a
+  Y-flip for the RCSS top-left coordinate convention. `GlStateGuard` extended to save/restore
+  `GL_READ_FRAMEBUFFER_BINDING` + `GL_READ_BUFFER` so the host's read-framebuffer is never clobbered.
+- **PT:** decorator RCSS `decorator: ripple(...)` -- captura o FBO 0 e aplica um anel de refração
+  radial sobre a caixa do elemento. Propriedades customizadas `ripple-origin-x`/`-y` (epicentro,
+  0..1 do elemento), `ripple-phase` (ciclo 0..1), `ripple-strength` (deslocamento), `ripple-width`
+  (espessura do anel) -- todas `<number>`, animáveis via `@keyframes`. O anel compõe alpha-shaped
+  (`alpha = ring`), então só a frente de onda é desenhada. Registrado via override de `RenderShader`
+  (mesmo mecanismo do `image-tint`); nenhum membro privado do backend RmlUi é tocado.
+- **PT:** captura de backdrop do FBO 0 em `backdrop_capture_tex_` (`RenderGl3`), lida de volta com
+  flip em Y pra convenção top-left do RCSS. `GlStateGuard` estendido pra salvar/restaurar
+  `GL_READ_FRAMEBUFFER_BINDING` + `GL_READ_BUFFER`, pra que o read-framebuffer do host nunca seja
+  sobrescrito.
+
+### Notes / Notas
+
+- **EN:** Two independent adversarial gates ship with this feature: `ripple_sanity` (pixel-correct
+  refraction on both axes; cost-zero-when-inactive proven via a `glCopyTexSubImage2D` entry-point
+  spy, not a pixel check) and `ripple_stress_sanity` (differential proof that four elements drawn
+  *after* the ripple in the same `Context::Render()` stay bit-exact with vs without the mid-frame
+  capture, plus a host-GL-state sentinel). Full suite 52/52 under ASan+UBSan+LSan.
+- **EN:** Known limitation: `decorator: ripple` is inert in standalone `App` mode (no host owns the
+  scene, so there is no backdrop to capture) -- it only does anything in embed/`UiLayer` mode.
+- **PT:** Dois gates adversariais independentes acompanham a feature: `ripple_sanity` (refração
+  correta em pixel nos dois eixos; custo-zero-quando-inativo provado por um espião no entry point
+  `glCopyTexSubImage2D`, não por check de pixel) e `ripple_stress_sanity` (prova diferencial de que
+  quatro elementos desenhados *depois* do ripple no mesmo `Context::Render()` ficam bit-exatos com
+  vs sem a captura mid-frame, mais um sentinela de estado GL do host). Suíte completa 52/52 sob
+  ASan+UBSan+LSan.
+- **PT:** Limitação conhecida: `decorator: ripple` é inerte em modo `App` standalone (nenhum host é
+  dono da cena, então não há backdrop pra capturar) -- só faz efeito em modo embed/`UiLayer`.
+
+---
+
 ## [0.10.0] - 2026-07-15 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.10.0)
 
 **EN:** **Minor** release -- the "soft font flip" (`L1.20-FONTFLIP`). glintfx's own clean-room font engine (SOV-SFNT/SOV-RAST/SOV-HINT, `L1.19-FONTENG`, introduced opt-in in v0.9.1) is now the **default** rasteriser glintfx installs into RmlUi (`GLINTFX_OWN_FONT_ENGINE=ON` at build time, `FontEngine::Own` at runtime) -- a public, additive `FontEngine` enum on `AppConfig`/`UiLayerConfig` selects the engine per-instance. **This is a soft flip, not a drop:** FreeType stays linked and fully supported either way (`RMLUI_FONT_ENGINE` is still `freetype`); a consumer that hits a regression rolls back with a **one-line config change and no rebuild** (`font_engine = FontEngine::FreeType`). No existing public signature is removed; this release is additive (drop-in from v0.9.2 for consumers that don't touch `font_engine`, since `Own` was already exercised in production-adjacent testing throughout v0.9.1/v0.9.2 -- see [ADR-0011](docs/adr/0011-soft-font-flip.md)).

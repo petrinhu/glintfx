@@ -5,7 +5,7 @@
 
 - **Audience / Audiência:** someone with **little or no prior computing knowledge** - you do not need to know what "compiling" or "a library" means before starting. / Alguém com **pouco ou nenhum conhecimento prévio de computação** - você não precisa saber o que é "compilar" ou "uma biblioteca" antes de começar.
 - **Owner:** `technical-writer` agent (loucura_c_asm project) - maintained alongside the codebase.
-- **Last reviewed / Última revisão:** 2026-07-10, against `glintfx v0.9.0` and Layer 0 tag `core-v0.1.0`.
+- **Last reviewed / Última revisão:** 2026-07-16, against `glintfx v0.11.0` and Layer 0 tag `core-v0.3.0`.
 - **Found something wrong? / Achou algo errado?** Open an issue on the repository (Codeberg or GitHub, links below) describing what you read and what actually happened on your machine. / Abra uma issue no repositório (Codeberg ou GitHub, links abaixo) descrevendo o que você leu e o que de fato aconteceu na sua máquina.
 
 ---
@@ -129,9 +129,22 @@ cmake --build glintfx/build -j
 ctest --test-dir glintfx/build --output-on-failure
 ```
 
-`ctest` will print one line per test (`Passed`/`Failed`). As of this writing that's **38 tests** (plus a further 22 in an alternate "embed-only" build configuration - not something you need for first contact).
+`ctest` will print one line per test (`Passed`/`Failed`). The suite keeps growing every release (it was 38 tests at the time this guide was first written, and had grown past 50 as of `v0.11.0` - see [`CHANGELOG.md`](../CHANGELOG.md) for the exact, always-current count of each release; there is also a smaller, alternate "embed-only" build configuration - not something you need for first contact).
 
 **Where to go deeper from here:** [`docs/getting-started.md`](getting-started.md) walks through *writing your own* tiny glintfx program (not just running the bundled demo) - it assumes you already know some C++ and CMake, which you now have a first taste of.
+
+### 4.5. What changed since v0.9.0 (three things worth knowing)
+
+This guide was first written against `glintfx v0.9.0`. Three consumer-visible things changed in the three releases since then. Explained here in beginner terms; each links to the properly single-typed document that has the full technical detail.
+
+1. **glintfx now draws its own letters by default (`v0.10.0`).** Any program that shows text (buttons, labels, a game's heads-up display) needs a piece of software called a **font rasteriser**: it takes a font file (like a `.ttf`) and figures out exactly which dots ("pixels") on your screen need to light up, and in what shade, to draw a given letter at a given size. Up through `v0.9.0`, glintfx always used a mature, well-known third-party rasteriser called **FreeType** for this. Since `v0.9.1`, glintfx also has **its own, hand-written rasteriser** - part of the long-term "build it yourself" ambition from [section 1](#1-what-even-is-this-project-the-two-floor-building-analogy) above (its lowest-level math, reading the font file's bytes and turning outlines into pixels, is written on **Floor 0**, this project's from-scratch runtime - one more piece that "moved downstairs"). Since `v0.10.0`, that own rasteriser is the **default** one glintfx uses. **Nothing changes for you if you never touch this setting** - and if your own program's text ever looks wrong after upgrading, you can switch back to the old default with a single line of code, no reinstalling or rebuilding required:
+   ```cpp
+   glintfx::AppConfig cfg;
+   cfg.font_engine = glintfx::FontEngine::FreeType;  // rolls back to the pre-v0.10.0 default
+   ```
+   See [ADR-0011](adr/0011-soft-font-flip.md) for why this was done as a reversible "soft flip" rather than a one-way switch.
+2. **A screen "ripple" visual effect exists now (`v0.11.0`), for programs that embed glintfx inside a bigger app (like a game).** Picture the ring of ripples that spreads outward when you drop a stone in still water - that is roughly the visual. It is written entirely in the same CSS-like stylesheet language (`.rcss`) every other glintfx effect uses, as `decorator: ripple()` - no C++ code required to draw it. It only does anything in "embed mode" (see the [Glossary](#glossary)); it is a no-op in the standalone window mode this guide's [section 4](#4-first-contact-building-and-running-glintfx-floor-1) walked you through. See [`docs/effects.md`](effects.md) for the exact syntax.
+3. **glintfx took one small step toward Windows, not a full leap (`v0.9.2`).** One small internal piece (the "GL loader" - the bit of plumbing that finds the graphics card's drawing functions on whatever machine the program runs on) learned how to do that job on Windows too, and this was proven by compiling it *for* Windows *from* a Linux machine (a technique called **cross-compiling**). This is a real, useful step, but it is **not** the same as "glintfx fully supports Windows today": the project's one officially supported platform remains Linux on x86-64 processors (see the main [`README.md`](../README.md#known-limitations)'s "Known limitations"). If you are curious about a full Windows build, ask on the project's issue tracker before assuming everything works end-to-end.
 
 ### 5. First contact: building and testing Layer 0 (Floor 0)
 
@@ -220,9 +233,11 @@ Alphabetical. Every term used anywhere above is defined here again, in isolation
 - **CLI:** see "command" in section 2 above.
 - **CMake:** a tool that generates the actual low-level build instructions (for compilers/linkers) from a higher-level recipe file (`CMakeLists.txt`), so the same recipe can produce a working build across different machines/toolchains. Used by glintfx (Floor 1); Floor 0 uses a plain `Makefile` instead, deliberately, since it has no cross-platform ambitions.
 - **Compile / Compiler:** see section 2. The compiler used here is **clang**.
+- **Cross-compiling:** compiling a program on one kind of machine (e.g. Linux) so it can run on a different kind (e.g. Windows), without ever running the target machine yourself during the build. Used to validate glintfx's GL loader's Windows codepath (`v0.9.2`) without owning a Windows machine.
 - **Drop-in (library):** a library designed so that adding it to your project is as simple as possible - "add one line, get the feature," with no manual plumbing of its internal dependencies.
 - **ELF (Executable and Linkable Format):** the file format Linux uses for compiled programs and libraries - what a `.o` or a final executable file actually looks like as bytes on disk. Floor 0's [`docs/adr/0005-elf-layout.md`](adr/0005-elf-layout.md) documents the exact layout decisions made for its own hand-linked binaries.
 - **Embed mode:** a way of using glintfx where it does NOT own the application's window - instead, it attaches to a window/graphics context that a *host* application (e.g. a game) already created and owns, drawing its UI on top. Contrast with the default "standalone" mode, where glintfx creates and owns its own window. See [`docs/embed-integration.md`](embed-integration.md).
+- **Font rasteriser:** the piece of software that turns a font file's mathematical letter shapes into the actual coloured dots ("pixels") drawn on screen at a given size. glintfx used only the third-party FreeType rasteriser through `v0.9.0`; since `v0.10.0` it defaults to its own, hand-written one (see [section 4.5](#45-what-changed-since-v090-three-things-worth-knowing)).
 - **Freestanding:** a program built with NO assumption that an operating system's standard runtime environment (libc, `main`'s usual startup code, etc.) is available - you provide literally everything yourself, down to the program's very first instruction. Floor 0 is entirely freestanding.
 - **git:** the version-control tool that tracks every change ever made to this repository's files, who made it, and why (via a short message called a "commit message"). `git clone` downloads a full copy of a repository (and its history) to your machine.
 - **GPU (Graphics Processing Unit):** the specialized chip (separate from the general-purpose CPU) that computes graphics - including glintfx's visual effects - extremely fast, in parallel, because that's the one thing it's built to do.
@@ -362,9 +377,22 @@ cmake --build glintfx/build -j
 ctest --test-dir glintfx/build --output-on-failure
 ```
 
-O `ctest` vai imprimir uma linha por teste (`Passed`/`Failed`). No momento em que este guia foi escrito, são **38 testes** (mais outros 22 numa configuração alternativa "embed-only" - não necessário pro primeiro contato).
+O `ctest` vai imprimir uma linha por teste (`Passed`/`Failed`). A suíte cresce a cada release (eram 38 testes quando este guia foi escrito pela primeira vez, e já passava de 50 na `v0.11.0` - ver [`CHANGELOG.md`](../CHANGELOG.md) pra contagem exata e sempre atual de cada release; existe também uma configuração alternativa "embed-only", menor - não necessária pro primeiro contato).
 
 **Pra ir mais fundo a partir daqui:** [`docs/getting-started.md`](getting-started.md) percorre *escrever seu próprio* programinha glintfx (não só rodar o demo embutido) - ele assume que você já sabe um pouco de C++ e CMake, do qual você agora já teve um primeiro gostinho.
+
+### 4.5. O que mudou desde a v0.9.0 (três coisas que vale saber)
+
+Este guia foi escrito pela primeira vez contra a `glintfx v0.9.0`. Três coisas visíveis pro consumidor mudaram nas três releases desde então. Explicadas aqui em termos de iniciante; cada uma linka pro documento de tipo único correspondente, com o detalhe técnico completo.
+
+1. **A glintfx agora desenha as próprias letras por padrão (`v0.10.0`).** Qualquer programa que mostra texto (botões, rótulos, o HUD de um jogo) precisa de um pedaço de software chamado **rasterizador de fonte**: ele pega um arquivo de fonte (tipo um `.ttf`) e decide exatamente quais pontos ("pixels") da sua tela precisam acender, e em que tom, pra desenhar uma letra num tamanho dado. Até a `v0.9.0`, a glintfx sempre usava um rasterizador de terceiro, maduro e bem conhecido, chamado **FreeType**, pra isso. Desde a `v0.9.1`, a glintfx também tem **o próprio rasterizador, escrito à mão** - parte da ambição de longo prazo "construir tudo você mesmo" da [seção 1](#1-afinal-o-que-é-este-projeto-a-analogia-do-prédio-de-dois-andares) acima (a matemática de mais baixo nível dele, ler os bytes do arquivo de fonte e transformar contornos em pixels, é escrita no **Andar 0**, o runtime deste projeto feito do zero - mais uma peça que "desceu de andar"). Desde a `v0.10.0`, esse rasterizador próprio é o **padrão** que a glintfx usa. **Nada muda pra você se você nunca tocar nessa configuração** - e se o texto do seu próprio programa parecer errado depois de um upgrade, você consegue voltar pro default antigo com uma única linha de código, sem reinstalar nem rebuildar nada:
+   ```cpp
+   glintfx::AppConfig cfg;
+   cfg.font_engine = glintfx::FontEngine::FreeType;  // volta pro default pré-v0.10.0
+   ```
+   Ver [ADR-0011](adr/0011-soft-font-flip.md) pra entender por que isso foi feito como um "flip suave" reversível, e não uma troca sem volta.
+2. **Existe um efeito visual de "ondulação" ("ripple") de tela agora (`v0.11.0`), pra programas que embutem a glintfx dentro de um app maior (tipo um jogo).** Pense no anel de ondas que se espalha quando você joga uma pedra num lago parado - é mais ou menos esse o visual. Ele é escrito inteiramente na mesma linguagem de folha de estilo tipo-CSS (`.rcss`) que todo outro efeito da glintfx usa, como `decorator: ripple()` - nenhum código C++ é necessário pra desenhá-lo. Ele só faz alguma coisa em "modo embed" (ver o [Glossário](#glossário)); é um no-op no modo janela standalone que a [seção 4](#4-primeiro-contato-buildando-e-rodando-o-glintfx-andar-1) deste guia te mostrou. Ver [`docs/effects.md`](effects.md) pra sintaxe exata.
+3. **A glintfx deu um passo pequeno rumo ao Windows, não um salto completo (`v0.9.2`).** Uma peça pequena, interna (o "loader GL" - o pedaço de encanamento que encontra as funções de desenho da placa de vídeo na máquina onde o programa roda) aprendeu a fazer esse trabalho também no Windows, e isso foi comprovado compilando-a *para* Windows *a partir de* uma máquina Linux (uma técnica chamada **cross-compiling**). É um passo real e útil, mas **não** é o mesmo que "a glintfx suporta Windows por completo hoje": a única plataforma oficialmente suportada do projeto continua sendo Linux em processadores x86-64 (ver a seção "Limitações conhecidas" do [`README.md`](../README.md#limitações-conhecidas) principal). Se você tem curiosidade sobre um build Windows completo, pergunte no issue tracker do projeto antes de assumir que tudo funciona de ponta a ponta.
 
 ### 5. Primeiro contato: buildando e testando a Camada 0 (Andar 0)
 
@@ -454,6 +482,7 @@ Em ordem alfabética. Todo termo usado em qualquer lugar acima é definido aqui 
 - **CLI:** ver "comando" na seção 2 acima.
 - **CMake:** uma ferramenta que gera as instruções de build de baixo nível de fato (para compiladores/linkers) a partir de um arquivo de receita de mais alto nível (`CMakeLists.txt`), pra que a mesma receita produza um build funcionando em máquinas/toolchains diferentes. Usado pelo glintfx (Andar 1); a Camada 0 usa um `Makefile` simples em vez disso, deliberadamente, já que não tem ambição multiplataforma.
 - **Compilar / Compilador:** ver seção 2. O compilador usado aqui é o **clang**.
+- **Cross-compiling (compilação cruzada):** compilar um programa numa máquina de um tipo (ex.: Linux) pra ele rodar num tipo diferente (ex.: Windows), sem nunca rodar a máquina-alvo durante o build. Usado pra validar o codepath Windows do loader GL da glintfx (`v0.9.2`) sem ter uma máquina Windows.
 - **Drop-in (biblioteca):** uma biblioteca desenhada pra que adicioná-la ao seu projeto seja o mais simples possível - "adicione uma linha, ganhe a feature", sem encanamento manual das dependências internas dela.
 - **ELF (Executable and Linkable Format):** o formato de arquivo que o Linux usa pra programas e bibliotecas compilados - como um `.o` ou um executável final de fato parecem em bytes no disco. O [`docs/adr/0005-elf-layout.md`](adr/0005-elf-layout.md) da Camada 0 documenta as decisões exatas de layout tomadas para os binários linkados à mão dela.
 - **Embed mode (modo embutido):** um jeito de usar o glintfx onde ele NÃO é dono da janela da aplicação - em vez disso, ele se anexa a uma janela/contexto gráfico que uma aplicação *host* (ex.: um jogo) já criou e é dona, desenhando a UI dele por cima. Em contraste com o modo padrão "standalone", onde o glintfx cria e é dono da própria janela. Ver [`docs/embed-integration.md`](embed-integration.md).
@@ -467,6 +496,7 @@ Em ordem alfabética. Todo termo usado em qualquer lugar acima é definido aqui 
 - **Mermaid (diagrama):** um jeito de desenhar um diagrama (fluxograma, diagrama de sequência) como texto puro, que ferramentas como o renderizador do README/wiki deste repositório transformam numa imagem de fato - mantido em controle de versão igual código, em vez de um arquivo de imagem separado que pode ficar desatualizado em silêncio.
 - **OpenGL:** uma interface padrão pra falar com uma GPU e desenhar gráficos; a renderização do glintfx é construída sobre OpenGL versão 3.3.
 - **RAII (Resource Acquisition Is Initialization):** um padrão de C++ onde um objeto se limpa automaticamente (fecha um arquivo, libera memória, destrói uma janela) no momento em que sai de escopo, pra um programador não conseguir esquecer. Os tipos públicos `App`/`UiLayer` do glintfx seguem este padrão.
+- **Rasterizador de fonte (font rasteriser):** o pedaço de software que transforma o desenho matemático das letras de um arquivo de fonte nos pontos coloridos ("pixels") de fato desenhados na tela, num tamanho dado. A glintfx só usava o rasterizador de terceiro FreeType até a `v0.9.0`; desde a `v0.10.0` ela usa por padrão o próprio, escrito à mão (ver a [seção 4.5](#45-o-que-mudou-desde-a-v090-três-coisas-que-vale-saber)).
 - **Repositório ("repo"):** ver seção 0.
 - **RmlUi:** uma biblioteca open-source madura e já existente sobre a qual o glintfx é construído pra montar e renderizar uma interface de usuário, descrita em arquivos parecidos com HTML simplificado (`.rml`) e CSS (`.rcss`).
 - **Shader:** um programinha que roda direto na GPU, escrito numa linguagem específica de gráficos, que computa como algo deve aparecer na tela (ex.: os efeitos de glow/blur do glintfx são implementados como shaders).

@@ -1,5 +1,16 @@
 # Home
 
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/LICENSE)
+[![Version: 0.11.0](https://img.shields.io/badge/Version-0.11.0-blue.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
+[![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
+[![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
+[![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
+[![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
+[![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
+[![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
+[![CI (Codeberg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://codeberg.org/petrinhu/glintfx/raw/branch/main/glintfx/coverage-badge.json)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
+
 > Repository: [Codeberg](https://codeberg.org/petrinhu/glintfx) (primary) / [GitHub](https://github.com/petrinhu/glintfx) (mirror). This wiki is a lightweight index; the real documentation lives as versioned files inside the repository itself, under `docs/`.
 > Repositório: [Codeberg](https://codeberg.org/petrinhu/glintfx) (principal) / [GitHub](https://github.com/petrinhu/glintfx) (espelho). Esta wiki é um índice leve; a documentação de verdade vive como arquivos versionados dentro do próprio repositório, em `docs/`.
 

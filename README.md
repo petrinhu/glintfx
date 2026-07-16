@@ -233,6 +233,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Architecture / rationale:** the [ADRs](docs/adr/README.md) and the [design spec](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
 - **Versioning policy:** [`CONTRIBUTING.md#versioning`](CONTRIBUTING.md#versioning) -- what counts as a minor vs. a patch release while glintfx is pre-1.0.
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md). **AI agents:** [`AGENTS.md`](AGENTS.md). **Security:** [`SECURITY.md`](SECURITY.md).
+- **Audits:** [`docs/auditoria/README.md`](docs/auditoria/README.md), the audit dossier's master index (verdicts, findings by severity). **Release checklist:** [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md), the short pre-tag gate.
 
 ### Known limitations
 
@@ -495,6 +496,7 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 - **Arquitetura / racional:** os [ADRs](docs/adr/README.md) e a [spec de design](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
 - **Política de versionamento:** [`CONTRIBUTING.md#versionamento`](CONTRIBUTING.md#versionamento) -- o que conta como release minor vs. patch enquanto o glintfx está pré-1.0.
 - **Contribuir:** [`CONTRIBUTING.md`](CONTRIBUTING.md). **Agentes de IA:** [`AGENTS.md`](AGENTS.md). **Segurança:** [`SECURITY.md`](SECURITY.md).
+- **Auditorias:** [`docs/auditoria/README.md`](docs/auditoria/README.md), o índice mestre do dossiê de auditoria (vereditos, achados por severidade). **Checklist de release:** [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md), o gate curto pré-tag.
 
 ### Limitações conhecidas
 

@@ -31,6 +31,8 @@
 #include <RmlUi/Core/Dictionary.h>
 #include <RmlUi/Core/Log.h>
 
+#include <climits>  // EN: INT_MAX (AUD-L1-PARSE — LoadTexture's static_cast<int>(len) overflow guard).
+                    // PT: INT_MAX (AUD-L1-PARSE — guarda de overflow do static_cast<int>(len) do LoadTexture).
 #include <cmath>   // EN: std::sqrt (ripple's auto max-radius = captured backdrop diagonal, RenderShader).
                    // PT: std::sqrt (raio-max auto do ripple = diagonal do backdrop capturado, RenderShader).
 #include <memory>
@@ -444,6 +446,34 @@ public:
       glDeleteTextures(1, &backdrop_capture_tex_);
   }
 
+  // EN: AUD-L1-PARSE — hard ceiling on the raw asset file size LoadTexture will read into
+  //     memory. Without it, a hostile/corrupt asset (or a symlink/FUSE mount reporting a bogus
+  //     huge size via SEEK_END) drives `std::vector<unsigned char> buf(len)` below to an
+  //     unbounded allocation attempt: `bad_alloc` propagates straight out of LoadTexture,
+  //     across the RmlUi virtual-call boundary, into the host application (DoS by asset, not a
+  //     memory-safety bug, but just as real for an embedding host — see docs/embed-integration.md
+  //     which promises the host graceful degradation, never a thrown exception in its face).
+  //     256 MiB is generous for any texture a UI asset realistically needs (a 8192x8192 RGBA8
+  //     texture, an extreme case already past what most GPUs' `GL_MAX_TEXTURE_SIZE` allows, is
+  //     256 MiB raw) while still being far below what would pressure a typical host's memory
+  //     budget. This ceiling is checked BEFORE the `std::vector` allocation (not after), so the
+  //     allocation itself is bounded — that is the actual guard; the file is never read into
+  //     memory once it fails this check.
+  // PT: AUD-L1-PARSE — teto rígido no tamanho bruto do arquivo de asset que o LoadTexture vai ler
+  //     pra memória. Sem ele, um asset hostil/corrompido (ou um symlink/mount FUSE reportando um
+  //     tamanho enorme falso via SEEK_END) leva o `std::vector<unsigned char> buf(len)` abaixo a
+  //     uma tentativa de alocação sem teto: `bad_alloc` propaga direto do LoadTexture, cruzando a
+  //     fronteira de virtual-call do RmlUi, até a aplicação host (DoS via asset, não um bug de
+  //     memory-safety, mas igualmente real pra um host embarcador — ver docs/embed-integration.md,
+  //     que promete ao host degradação graciosa, nunca uma exceção lançada na cara dele).
+  //     256 MiB é generoso pra qualquer textura que um asset de UI realisticamente precisa (uma
+  //     textura RGBA8 8192x8192, já um caso extremo além do que `GL_MAX_TEXTURE_SIZE` permite na
+  //     maioria das GPUs, são 256 MiB brutos) e ainda assim bem abaixo do que pressionaria o
+  //     orçamento de memória de um host típico. Este teto é checado ANTES da alocação do
+  //     `std::vector` (não depois), então a própria alocação já sai limitada — essa é a guarda de
+  //     fato; o arquivo nunca chega a ser lido pra memória se falhar esta checagem.
+  static constexpr size_t kMaxAssetFileBytes = 256u * 1024u * 1024u;  // 256 MiB.
+
   Rml::TextureHandle LoadTexture(Rml::Vector2i& dims,
                                  const Rml::String& source) override
   {
@@ -459,11 +489,53 @@ public:
       return RenderInterface_GL3::LoadTexture(dims, source);
     }
 
-    // EN: Read entire file into a buffer.
-    // PT: Lê o arquivo inteiro em um buffer.
+    // EN: Determine the file size before reading a single byte, so the size cap below can
+    //     reject an oversized/hostile asset without ever allocating a buffer for it.
+    // PT: Determina o tamanho do arquivo antes de ler um único byte, pra que o teto abaixo
+    //     possa rejeitar um asset hostil/grande demais sem nunca alocar um buffer pra ele.
     fi->Seek(fh, 0, SEEK_END);
     size_t len = fi->Tell(fh);
     fi->Seek(fh, 0, SEEK_SET);
+
+    // EN: AUD-L1-PARSE guard 1/2 — reject before allocating. `kMaxAssetFileBytes` (256 MiB) is
+    //     itself well under INT_MAX (~2 GiB), so this check also subsumes guard 2/2 below in
+    //     every case that actually reaches stbi_load_from_memory; guard 2/2 stays as an explicit,
+    //     independent defense-in-depth check in case this ceiling is ever raised without
+    //     re-deriving that invariant.
+    //     DELIBERATELY DOES NOT delegate to `RenderInterface_GL3::LoadTexture(dims, source)` like
+    //     every other failure path in this function below — that base-class fallback (RmlUi's own
+    //     TGA loader, Backends/RmlUi_Renderer_GL3.cpp) re-`Open()`s the SAME file and does
+    //     `new byte[buffer_size]` UNCONDITIONALLY, with no size cap of its own. Falling through to
+    //     it here would re-attempt the exact unbounded allocation this guard exists to prevent,
+    //     silently defeating it for oversized assets specifically (every OTHER fallback in this
+    //     function is safe to delegate because by the time it runs, `len` has already been proven
+    //     <= kMaxAssetFileBytes). `return false` mirrors the base loader's own idiom for a hard
+    //     failure (Backends/RmlUi_Renderer_GL3.cpp's LoadTexture: `if (!file_handle) return false;`).
+    // PT: guarda 1/2 do AUD-L1-PARSE — rejeita antes de alocar. `kMaxAssetFileBytes` (256 MiB) já
+    //     está bem abaixo de INT_MAX (~2 GiB), então esta checagem já cobre a guarda 2/2 abaixo em
+    //     todo caso que de fato alcança stbi_load_from_memory; a guarda 2/2 permanece como checagem
+    //     explícita e independente de defesa em profundidade, caso este teto seja elevado algum dia
+    //     sem re-derivar esse invariante.
+    //     DELIBERADAMENTE NÃO delega para `RenderInterface_GL3::LoadTexture(dims, source)` como
+    //     todo outro caminho de falha nesta função abaixo -- esse fallback da base (loader TGA
+    //     próprio do RmlUi, Backends/RmlUi_Renderer_GL3.cpp) reabre o MESMO arquivo e faz
+    //     `new byte[buffer_size]` INCONDICIONALMENTE, sem teto próprio nenhum. Cair nele aqui
+    //     re-tentaria exatamente a alocação sem teto que esta guarda existe pra prevenir,
+    //     derrotando-a silenciosamente para assets grandes demais especificamente (todo OUTRO
+    //     fallback nesta função é seguro de delegar porque, quando roda, `len` já foi provado
+    //     <= kMaxAssetFileBytes). `return false` espelha o próprio idioma do loader da base pra
+    //     falha dura (Backends/RmlUi_Renderer_GL3.cpp, LoadTexture: `if (!file_handle) return
+    //     false;`).
+    if (len > kMaxAssetFileBytes) {
+      Rml::Log::Message(Rml::Log::LT_WARNING,
+          "LoadTexture: asset '%s' is %zu bytes, exceeding the %zu byte cap -- refusing to load.",
+          source.c_str(), len, kMaxAssetFileBytes);
+      fi->Close(fh);
+      return false;
+    }
+
+    // EN: Read entire file into a buffer.
+    // PT: Lê o arquivo inteiro em um buffer.
     std::vector<unsigned char> buf(len);
     size_t nread = fi->Read(buf.data(), len, fh);
     fi->Close(fh);
@@ -471,6 +543,34 @@ public:
       // EN: Short read — file truncated or I/O error; fallback to base.
       // PT: Leitura incompleta — arquivo truncado ou erro de I/O; fallback para base.
       return RenderInterface_GL3::LoadTexture(dims, source);
+    }
+
+    // EN: AUD-L1-PARSE guard 2/2 — defense-in-depth against static_cast<int>(len) below wrapping
+    //     negative for len > INT_MAX. Unreachable today (guard 1/2 above already caps `len` at
+    //     256 MiB, far under INT_MAX), kept explicit per the same fail-secure idiom as the other
+    //     hostile-input guards in this file (see e.g. decorator_polygon.cpp's `sides` guard).
+    //     `return false` (NOT a fallback to the base loader) for the same reason as guard 1/2
+    //     above: this guard's whole point is that `len` is too large to touch further, and the
+    //     base loader's own `new byte[buffer_size]` has no cap of its own -- if `kMaxAssetFileBytes`
+    //     is ever raised past INT_MAX without this guard also being revisited, delegating here
+    //     would silently resurrect the same unbounded-allocation DoS this whole guard pair exists
+    //     to close.
+    // PT: guarda 2/2 do AUD-L1-PARSE — defesa em profundidade contra o static_cast<int>(len)
+    //     abaixo dar wrap negativo para len > INT_MAX. Inalcançável hoje (a guarda 1/2 acima já
+    //     limita `len` a 256 MiB, bem abaixo de INT_MAX), mantida explícita seguindo o mesmo
+    //     idioma fail-secure das outras guardas de entrada hostil deste arquivo (ver p.ex. a
+    //     guarda de `sides` de decorator_polygon.cpp).
+    //     `return false` (NÃO um fallback pro loader da base) pela mesma razão da guarda 1/2
+    //     acima: o ponto inteiro desta guarda é que `len` é grande demais pra sequer tocar, e o
+    //     `new byte[buffer_size]` próprio do loader da base não tem teto nenhum -- se
+    //     `kMaxAssetFileBytes` algum dia for elevado além de INT_MAX sem esta guarda também ser
+    //     revisitada, delegar aqui ressuscitaria silenciosamente o mesmo DoS de alocação sem teto
+    //     que este par de guardas existe pra fechar.
+    if (len > static_cast<size_t>(INT_MAX)) {
+      Rml::Log::Message(Rml::Log::LT_WARNING,
+          "LoadTexture: asset '%s' is %zu bytes, exceeding INT_MAX -- refusing to load.",
+          source.c_str(), len);
+      return false;
     }
 
     // EN: Decode via stb_image (forces 4-channel RGBA output regardless of source format).

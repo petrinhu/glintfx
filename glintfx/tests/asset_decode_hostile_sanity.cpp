@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE) -- corpus test for
-//     Gl3RenderInterface::LoadTexture (render_gl3.cpp) against malformed/hostile asset files.
-//     Deliberately NOT a fuzz campaign (CTO decision, LW-AUD scope): stb_image is one of the
-//     most fuzzed open-source targets in the world (OSS-Fuzz), and our own code around it is
-//     ~6 lines (file-size cap + INT_MAX guard, both added by this same audit wave). This is a
-//     small, FIXED corpus of five representative hostile shapes, each proving the oracle: the
-//     document still LOADS (a broken <img> degrades the TEXTURE, not the whole document -- see
-//     RmlUi's own base LoadTexture, Backends/RmlUi_Renderer_GL3.cpp, which returns `false`/0 on
-//     failure, never aborts), the engine does not crash/UB/OOM, and -- critically -- the UiLayer
-//     stays fully usable for the NEXT document afterward (proven PIXEL-LEVEL by a final real-PNG
-//     load+decode check, reusing circle_rgba.png and the exact red-pixel-count oracle
-//     texture_png_alpha.cpp's own Check A already proves for that fixture -- not merely "did not
-//     crash").
+// EN: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE) -- corpus test for malformed/
+//     hostile asset files across BOTH the image path (Gl3RenderInterface::LoadTexture,
+//     render_gl3.cpp) and the font path (FontEngineOwn::LoadFontFace / RmlUi's own default
+//     FreeType FontProvider::LoadFontFace, both funneled through the single AUD-L1-PARSE size
+//     cap in glintfx::BaseUrlFileInterface::Open() -- src/base_url_file_interface.hpp -- added
+//     after a 2026-07-16 adversarial review found the font path had no cap of its own; see that
+//     class's own top comment for the full single-point-of-enforcement design). Deliberately NOT
+//     a fuzz campaign (CTO decision, LW-AUD scope): stb_image is one of the most fuzzed open-
+//     source targets in the world (OSS-Fuzz), and glintfx's own code around the size-cap
+//     mechanism is a handful of lines. This is a small, FIXED corpus of seven representative
+//     hostile shapes (five image-format-malformation cases + two size-DoS discriminator cases,
+//     one per asset kind), each proving the oracle: the document still LOADS (a broken <img>/
+//     @font-face degrades that ONE resource, not the whole document -- see RmlUi's own base
+//     LoadTexture, Backends/RmlUi_Renderer_GL3.cpp, which returns `false`/0 on failure, never
+//     aborts), the engine does not crash/UB/OOM, and -- critically -- the UiLayer stays fully
+//     usable for the NEXT document afterward (proven PIXEL-LEVEL by a final real-PNG load+decode
+//     check, reusing circle_rgba.png and the exact red-pixel-count oracle texture_png_alpha.cpp's
+//     own Check A already proves for that fixture -- not merely "did not crash").
 //
-//     The five cases:
+//     The five image-format-malformation cases:
 //       1. png_truncated -- valid PNG signature + valid small (4x4 RGBA) IHDR, then an IDAT chunk
 //          that declares more bytes than actually follow before EOF. Exercises stb_image's
 //          "outofdata" short-read path (stb_image.h's stbi__getn returning 0 mid-IDAT).
@@ -44,30 +49,63 @@
 //          closes -- see render_gl3.cpp's own "DELIBERATELY DOES NOT delegate" comment on that
 //          guard for the full why).
 //
+//     Two size-DoS DISCRIMINATOR cases (added 2026-07-16, adversarial review IMPORTANTE #1/#2):
+//       6. img_huge_1tib -- same run_case() path as #5 above, but at kHugeFileBytes (2^40+1, see
+//          that constant's own comment for why 256 MiB+1 in case #5 is a BOUNDARY-VALUE proof but
+//          NOT a real regression guard -- a 256 MiB allocation does not crash an unguarded
+//          allocator either, so removing the guard would NOT flip case #5 red). Removing EITHER
+//          the central Open()-level cap (base_url_file_interface.hpp) OR render_gl3.cpp's own
+//          image-specific guard still leaves this case green (the other layer catches it) --
+//          confirmed by mutation testing during this case's own development; only removing BOTH
+//          simultaneously reproduces the crash the original adversarial review found.
+//       7. font_huge_1tib -- run_font_case() (a "@font-face" probe, not an "<img>" one) at the
+//          same kHugeFileBytes size. This is the case that actually discriminates the NEW central
+//          guard in glintfx::BaseUrlFileInterface::Open(): the font path has NO OTHER guard, so
+//          removing that one guard and rebuilding under GLINTFX_SANITIZE=ON makes this specific
+//          case abort under ASan's own allocation-size-too-big trap (confirmed by mutation
+//          testing -- see this file's own commit message / the AUD-L1-PARSE PR notes for the
+//          exact before/after ctest transcript).
+//
 //     Runs in BOTH build configs (embed-mode, UiLayer via a WindowGlfw GL-context fixture -- same
 //     idiom as input_hardening_sanity.cpp/ripple_sanity.cpp). No GL-entry-point spy needed here
 //     (unlike ripple_sanity) -- this test's oracle is "did not crash + still decodes real assets
 //     afterward", not a specific GL call count; links ${_embed_dep} glloader (glloader only for
 //     offscreen.hpp's <gl_loader.h> include, same pair as input_hardening_sanity.cpp).
 // PT: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE) -- teste de corpus para
-//     Gl3RenderInterface::LoadTexture (render_gl3.cpp) contra arquivos de asset malformados/
-//     hostis. Deliberadamente NÃO uma campanha de fuzz (decisão do CTO, escopo LW-AUD): o
-//     stb_image é um dos alvos open-source mais fuzzados do mundo (OSS-Fuzz), e o nosso próprio
-//     código ao redor dele tem ~6 linhas (teto de tamanho de arquivo + guarda INT_MAX, ambos
-//     adicionados por esta mesma onda de auditoria). Este é um corpus pequeno e FIXO de cinco
-//     formas hostis representativas, cada uma provando o oráculo: o documento ainda CARREGA (um
-//     <img> quebrado degrada a TEXTURA, não o documento inteiro -- ver o próprio LoadTexture da
-//     base do RmlUi, Backends/RmlUi_Renderer_GL3.cpp, que retorna `false`/0 em falha, nunca
-//     aborta), o engine não crasha/UB/OOM, e -- criticamente -- a UiLayer permanece totalmente
-//     usável para o PRÓXIMO documento depois (provado a NÍVEL DE PIXEL por um check final de
-//     load+decode de PNG real, reusando circle_rgba.png e o mesmo oráculo de contagem de pixel
-//     vermelho que o próprio Check A de texture_png_alpha.cpp já prova pra essa fixture -- não
-//     só "não crashou").
+//     arquivos de asset malformados/hostis nos DOIS caminhos: imagem (Gl3RenderInterface::
+//     LoadTexture, render_gl3.cpp) e fonte (FontEngineOwn::LoadFontFace / o próprio
+//     FontProvider::LoadFontFace default do FreeType do RmlUi, ambos canalizados pelo teto único
+//     AUD-L1-PARSE em glintfx::BaseUrlFileInterface::Open() -- src/base_url_file_interface.hpp
+//     -- adicionado depois de uma review adversarial de 2026-07-16 achar que o caminho de fonte
+//     não tinha teto próprio nenhum; ver o próprio comentário do topo daquela classe pro design
+//     completo de ponto-único-de-aplicação). Deliberadamente NÃO uma campanha de fuzz (decisão do
+//     CTO, escopo LW-AUD): o stb_image é um dos alvos open-source mais fuzzados do mundo
+//     (OSS-Fuzz), e o código próprio da glintfx ao redor do mecanismo de teto de tamanho é um
+//     punhado de linhas. Este é um corpus pequeno e FIXO de sete formas hostis representativas
+//     (cinco casos de malformação de formato de imagem + dois casos discriminadores de DoS de
+//     tamanho, um por tipo de asset), cada uma provando o oráculo: o documento ainda CARREGA (um
+//     <img>/@font-face quebrado degrada SÓ aquele recurso, não o documento inteiro -- ver o
+//     próprio LoadTexture da base do RmlUi, Backends/RmlUi_Renderer_GL3.cpp, que retorna
+//     `false`/0 em falha, nunca aborta), o engine não crasha/UB/OOM, e -- criticamente -- a
+//     UiLayer permanece totalmente usável para o PRÓXIMO documento depois (provado a NÍVEL DE
+//     PIXEL por um check final de load+decode de PNG real, reusando circle_rgba.png e o mesmo
+//     oráculo de contagem de pixel vermelho que o próprio Check A de texture_png_alpha.cpp já
+//     prova pra essa fixture -- não só "não crashou").
 //
-//     Os cinco casos: ver os parágrafos EN acima (espelhados aqui em conceito) -- PNG truncado no
-//     meio do IDAT, lixo puro, dimensões absurdas (100000x100000, rejeitado dentro do próprio
-//     parse do IHDR antes de qualquer IDAT ser necessário), arquivo 0-byte, e um arquivo esparso
-//     um byte acima do teto de 256 MiB do AUD-L1-PARSE (consome ~0 disco real via hole).
+//     Os cinco casos de malformação de imagem: ver os parágrafos EN acima (espelhados aqui em
+//     conceito) -- PNG truncado no meio do IDAT, lixo puro, dimensões absurdas (100000x100000,
+//     rejeitado dentro do próprio parse do IHDR antes de qualquer IDAT ser necessário), arquivo
+//     0-byte, e um arquivo esparso um byte acima do teto de 256 MiB do AUD-L1-PARSE (consome ~0
+//     disco real via hole).
+//
+//     Os dois casos discriminadores de DoS de tamanho (adicionados 2026-07-16, review adversarial
+//     IMPORTANTE #1/#2): ver os parágrafos EN acima (espelhados aqui em conceito) --
+//     img_huge_1tib (mesmo caminho de run_case() do caso #5, mas em kHugeFileBytes = 2^40+1,
+//     porque 256 MiB+1 é pequeno demais pra crashar um alocador sem guarda nenhuma -- não
+//     discrimina "guarda presente" de "guarda removida") e font_huge_1tib (run_font_case(), a
+//     ÚNICA guarda do caminho de fonte é a nova guarda central do Open(), então removê-la sob
+//     GLINTFX_SANITIZE=ON faz este caso especificamente abortar sob a trap de
+//     allocation-size-too-big do ASan -- confirmado por mutation testing).
 //
 //     Roda em AMBAS as configs de build (embed-mode, UiLayer via fixture WindowGlfw de contexto
 //     GL -- mesmo idioma de input_hardening_sanity.cpp/ripple_sanity.cpp). Sem espião de GL aqui
@@ -98,6 +136,38 @@ namespace fs = std::filesystem;
 //     -- ver o comentário do topo deste arquivo pro porquê de um desalinhamento entre os dois ser
 //     capturado (não mascarado silenciosamente).
 constexpr uint64_t kAssetCapBytes = 256ull * 1024ull * 1024ull;
+
+// EN: A size deliberately WAY past any legitimate cap (2^40 = 1 TiB) -- unlike the boundary-value
+//     "oversized" case above (256 MiB+1, which is too SMALL to itself crash an allocator even with
+//     ZERO guard present -- allocating 256 MiB just... succeeds, gracefully falls through to a
+//     decode-failure path either way, so that case alone cannot DISCRIMINATE "guard present" from
+//     "guard silently removed", the false-negative this review round's IMPORTANTE #2 found), 1 TiB
+//     is chosen specifically to sit at/above AddressSanitizer's own hard-coded allocator ceiling
+//     (compiler-rt's allocator refuses any single request beyond roughly this order of magnitude
+//     with "requested allocation size ... exceeds maximum supported size", aborting the process
+//     immediately -- confirmed empirically during this test's own development under
+//     GLINTFX_SANITIZE=ON: a std::vector<unsigned char>/Rml::String/`new byte[]` of this size
+//     aborts under ASan with NO guard present, and is rejected gracefully in ~0ms WITH the guard
+//     present). A std::filesystem::resize_file() sparse hole makes the on-disk cost of this
+//     ~0 real bytes regardless (see write_sparse_file()) -- confirmed empirically: `du` on a
+//     freshly resize_file()'d 1 TiB+1 file reports 0 real blocks on this machine's ext4 /var/tmp.
+// PT: Um tamanho deliberadamente MUITO além de qualquer teto legítimo (2^40 = 1 TiB) -- diferente
+//     do caso de valor-de-fronteira "oversized" acima (256 MiB+1, que é PEQUENO demais pra crashar
+//     um alocador sozinho mesmo com ZERO guarda presente -- alocar 256 MiB simplesmente... tem
+//     sucesso, cai graciosamente num caminho de falha de decode de qualquer jeito, então aquele
+//     caso sozinho não consegue DISCRIMINAR "guarda presente" de "guarda removida
+//     silenciosamente", o falso-negativo que o IMPORTANTE #2 desta rodada de review achou), 1 TiB
+//     é escolhido especificamente por ficar no/acima do teto hard-coded do próprio alocador do
+//     AddressSanitizer (o alocador do compiler-rt recusa qualquer requisição única além
+//     aproximadamente desta ordem de grandeza com "requested allocation size ... exceeds maximum
+//     supported size", abortando o processo imediatamente -- confirmado empiricamente durante o
+//     desenvolvimento deste teste sob GLINTFX_SANITIZE=ON: um std::vector<unsigned char>/
+//     Rml::String/`new byte[]` deste tamanho aborta sob ASan SEM a guarda presente, e é rejeitado
+//     graciosamente em ~0ms COM a guarda presente). Um hole de std::filesystem::resize_file() faz
+//     o custo em disco disto ~0 bytes reais de qualquer forma (ver write_sparse_file()) --
+//     confirmado empiricamente: `du` num arquivo de 1 TiB+1 recém resize_file()'d reporta 0 blocos
+//     reais no ext4 desta máquina em /var/tmp.
+constexpr uint64_t kHugeFileBytes = (1ull << 40) + 1;  // 1 TiB + 1 byte.
 
 void put_be32(std::vector<unsigned char>& v, uint32_t x) {
   v.push_back(static_cast<unsigned char>((x >> 24) & 0xFF));
@@ -256,6 +326,30 @@ size_t count_red(const std::vector<unsigned char>& px, int w, int h) {
   return n;
 }
 
+// EN: Minimal RML document declaring a "@font-face" pointing at `font_path` (bare filename, same
+//     document-relative-resolution reasoning as write_probe_rml's own comment applies here too --
+//     RmlUi's StyleSheetParser calls Rml::LoadFontFace() DIRECTLY when it parses the "@font-face"
+//     at-rule (Source/Core/StyleSheetParser.cpp), REGARDLESS of whether any element in the
+//     document actually uses that font-family -- no text content is needed to trigger the load).
+// PT: Documento RML mínimo declarando um "@font-face" apontando pra `font_path` (nome de arquivo
+//     puro, mesmo racional de resolução relativa-ao-documento do próprio comentário de
+//     write_probe_rml também se aplica aqui -- o StyleSheetParser do RmlUi chama
+//     Rml::LoadFontFace() DIRETO quando parseia a at-rule "@font-face" (Source/Core/
+//     StyleSheetParser.cpp), INDEPENDENTE de algum elemento do documento de fato usar essa
+//     font-family -- nenhum conteúdo de texto é necessário pra disparar o load).
+bool write_font_probe_rml(const fs::path& rml_path, const fs::path& font_path) {
+  std::ofstream f(rml_path, std::ios::trunc);
+  if (!f)
+    return false;
+  f << "<rml>\n<head>\n<style>\n"
+       "@font-face { font-family: \"HostileFont\"; src: \""
+    << font_path.string()
+    << "\"; }\n"
+       "body { background: #101010; margin: 0; padding: 0; }\n"
+       "</style>\n<title>asset_decode_hostile font probe</title>\n</head>\n<body>\n</body>\n</rml>\n";
+  return f.good();
+}
+
 }  // namespace
 
 int main() {
@@ -367,6 +461,90 @@ int main() {
     fs::remove(rml_path, ec);
   };
 
+  // EN: Font-path counterpart of run_case above -- IMPORTANTE #1 (2026-07-16 adversarial review):
+  //     "@font-face" loads a font file with NO cap of its own (FontEngineOwn::LoadFontFace via
+  //     the base Rml::FileInterface::LoadFile(), and RmlUi's own default FreeType
+  //     FontProvider::LoadFontFace) -- closed centrally in
+  //     glintfx::BaseUrlFileInterface::Open() (src/base_url_file_interface.hpp, see that class's
+  //     own top comment for the full design/why-a-single-point rationale), not per-engine. This
+  //     lambda proves that closure end-to-end through whichever font engine is active at runtime
+  //     in this build (the guard is engine-agnostic by construction -- it lives below BOTH
+  //     engines, at the file layer both of them share).
+  // PT: Contraparte de fonte do run_case acima -- IMPORTANTE #1 (review adversarial de
+  //     2026-07-16): "@font-face" carrega um arquivo de fonte SEM teto próprio nenhum
+  //     (FontEngineOwn::LoadFontFace via o LoadFile() base de Rml::FileInterface, e o próprio
+  //     FontProvider::LoadFontFace default do FreeType do RmlUi) -- fechado centralmente em
+  //     glintfx::BaseUrlFileInterface::Open() (src/base_url_file_interface.hpp, ver o próprio
+  //     comentário do topo daquela classe pro racional completo de por-que-um-ponto-único), não
+  //     por-motor. Esta lambda prova esse fechamento ponta-a-ponta através de qualquer motor de
+  //     fonte ativo em runtime neste build (a guarda é agnóstica de motor por construção -- vive
+  //     abaixo dos DOIS motores, na camada de arquivo que ambos compartilham).
+  auto run_font_case = [&](const char* name, uint64_t sparse_size) {
+    const fs::path font_path = tmp_dir / (std::string(name) + ".bin");
+    if (!write_sparse_file(font_path, sparse_size)) {
+      std::printf("asset_decode_hostile_sanity FAIL [%s]: could not write font fixture at '%s'\n",
+                  name, font_path.c_str());
+      ++failures;
+      return;
+    }
+
+    const fs::path rml_path = tmp_dir / (std::string(name) + ".rml");
+    // EN: Unlike <img src=...> (JoinPath'd document-relative -- see run_case's own comment),
+    //     "@font-face { src: ...; }" is passed to Rml::LoadFontFace() COMPLETELY RAW: RmlUi's
+    //     StyleSheetParser::ParseFontFaceBlock (Source/Core/StyleSheetParser.cpp) reads `src` via
+    //     FontFacePropertyParser (which only StringUtilities::ExpandString()s the comma-separated
+    //     value -- no path joining at all) and hands it straight to Rml::LoadFontFace(src, ...),
+    //     which itself does nothing but forward to the font engine's LoadFontFace(file_path, ...)
+    //     -- confirmed by reading that call chain end-to-end during this test's own development
+    //     (a bare filename here resolved relative to the PROCESS's cwd, not this scratch dir,
+    //     silently missing the fixture and producing a false-pass with the guard never even
+    //     exercised). The ABSOLUTE `font_path` therefore has to be used AS-IS here (not
+    //     `.filename()` like run_case's <img> probe) -- and works directly because this
+    //     particular chain never strips the leading '/' the way JoinPath does for images.
+    // PT: Diferente de <img src=...> (resolvido document-relative via JoinPath -- ver o próprio
+    //     comentário de run_case), "@font-face { src: ...; }" é passado pro Rml::LoadFontFace()
+    //     COMPLETAMENTE CRU: o StyleSheetParser::ParseFontFaceBlock do RmlUi (Source/Core/
+    //     StyleSheetParser.cpp) lê `src` via FontFacePropertyParser (que só faz
+    //     StringUtilities::ExpandString() do valor separado por vírgula -- nenhum join de path)
+    //     e entrega direto pro Rml::LoadFontFace(src, ...), que por si só só encaminha pro
+    //     LoadFontFace(file_path, ...) do motor de fonte -- confirmado lendo essa cadeia de
+    //     chamada ponta-a-ponta durante o desenvolvimento deste teste (um nome de arquivo puro
+    //     aqui resolveria relativo ao cwd do PROCESSO, não este scratch dir, perdendo a fixture
+    //     silenciosamente e produzindo um falso-positivo com a guarda nunca sequer exercitada).
+    //     O `font_path` ABSOLUTO portanto precisa ser usado COMO-ESTÁ aqui (não `.filename()`
+    //     como o probe <img> de run_case) -- e funciona direto porque esta cadeia específica
+    //     nunca remove a '/' inicial do jeito que o JoinPath faz para imagens.
+    if (!write_font_probe_rml(rml_path, font_path)) {
+      std::printf("asset_decode_hostile_sanity FAIL [%s]: could not write font probe .rml\n", name);
+      ++failures;
+      return;
+    }
+
+    const bool ok_load = ui.load(rml_path.c_str());
+    if (!ok_load) {
+      std::printf("asset_decode_hostile_sanity FAIL [%s]: document load itself failed -- a "
+                  "hostile @font-face asset must degrade the FONT, not the whole document\n", name);
+      ++failures;
+    } else {
+      ui.update();
+      ui.render();
+      ui.update();
+      ui.render();
+      if (!ui.ok()) {
+        std::printf("asset_decode_hostile_sanity FAIL [%s]: ui.ok() went false after rendering a "
+                    "hostile @font-face asset -- the engine did not survive intact\n", name);
+        ++failures;
+      } else {
+        std::printf("asset_decode_hostile_sanity [%s]: loaded+rendered, no crash, ui.ok()=true\n",
+                    name);
+      }
+    }
+
+    std::error_code ec;
+    fs::remove(font_path, ec);
+    fs::remove(rml_path, ec);
+  };
+
   {
     const auto bytes = build_png_truncated();
     run_case("png_truncated", &bytes, 0);
@@ -385,6 +563,20 @@ int main() {
   }
   {
     run_case("oversized", nullptr, kAssetCapBytes + 1);
+  }
+  {
+    // EN: IMPORTANTE #2 -- the real discriminating regression guard (see kHugeFileBytes's own
+    //     comment for why 256 MiB+1 above cannot serve this purpose).
+    // PT: IMPORTANTE #2 -- a guarda de regressão que de fato discrimina (ver o próprio
+    //     comentário de kHugeFileBytes pro porquê do 256 MiB+1 acima não servir pra isso).
+    run_case("img_huge_1tib", nullptr, kHugeFileBytes);
+  }
+  {
+    // EN: IMPORTANTE #1 + #2 combined -- the font path's ONLY guard (central Open()-level,
+    //     base_url_file_interface.hpp), exercised at a size that actually discriminates.
+    // PT: IMPORTANTE #1 + #2 combinados -- a ÚNICA guarda do caminho de fonte (nível Open()
+    //     central, base_url_file_interface.hpp), exercitada num tamanho que de fato discrimina.
+    run_font_case("font_huge_1tib", kHugeFileBytes);
   }
 
   std::error_code ec;

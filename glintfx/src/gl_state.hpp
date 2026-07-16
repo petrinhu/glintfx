@@ -6,20 +6,26 @@
 //     draw FBO binding, READ FBO binding + read buffer (L1.22-CAPTURE), and colour write mask.
 //
 //     L1.22-CAPTURE ADDITION (GL_READ_FRAMEBUFFER_BINDING / GL_READ_BUFFER): added for
-//     Gl3RenderInterface::CaptureBackdrop (render_gl3.cpp), which rebinds GL_READ_FRAMEBUFFER to
-//     0 and calls glReadBuffer(GL_BACK) to read the host's already-drawn backbuffer content, but
-//     deliberately does NOT restore either itself. THIS is the one correct place to do it: this
-//     guard's ctor runs in Engine::render_compose (engine.cpp) BEFORE
-//     RenderGl3::begin_frame_compose (which is where CaptureBackdrop runs, at the very top,
-//     before SetViewport()/BeginFrame()), and this guard's dtor runs AFTER
-//     RenderGl3::end_frame_compose (RenderInterface_GL3::EndFrame()) returns. EndFrame() itself
+//     Gl3RenderInterface::EnsureBackdropCaptured (render_gl3.cpp), which rebinds
+//     GL_READ_FRAMEBUFFER to 0 and calls glReadBuffer(GL_BACK) to read the host's already-drawn
+//     backbuffer content, but deliberately does NOT restore either itself. THIS is the one
+//     correct place to do it: this guard's ctor runs in Engine::render_compose (engine.cpp)
+//     BEFORE RenderGl3::begin_frame_compose, and this guard's dtor runs AFTER
+//     RenderGl3::end_frame_compose (RenderInterface_GL3::EndFrame()) returns --
+//     EnsureBackdropCaptured itself runs SOMEWHERE inside that window (on demand, from within
+//     Rml::Context::Render()'s tree walk, the first time -- if ever -- a "glintfx-ripple" shader
+//     actually draws that frame; see EnsureBackdropCaptured's own doc comment, render_gl3.cpp,
+//     for the L1.22-CAPTURE cold-start-fix derivation of exactly WHEN within the window it runs)
+//     -- the EXACT moment within the window does not matter for this guard's own correctness,
+//     only that the window fully encloses it, which it always does. EndFrame() itself
 //     unconditionally rebinds BOTH read+draw targets to FBO 0 partway through
 //     (glBindFramebuffer(GL_FRAMEBUFFER, 0), Backends/RmlUi_Renderer_GL3.cpp -- confirmed by
-//     reading the pinned source) -- so a save/restore scoped to JUST CaptureBackdrop's own
-//     method body would be silently clobbered by EndFrame() moments later regardless, and could
-//     never recover a host read-fb binding that was NOT already FBO 0 to begin with. Restoring
-//     here, at the very end of the whole render_compose() call, is therefore the only place that
-//     actually returns the host's TRUE original read-framebuffer state.
+//     reading the pinned source) -- so a save/restore scoped to JUST
+//     EnsureBackdropCaptured's own method body would be silently clobbered by EndFrame() moments
+//     later regardless, and could never recover a host read-fb binding that was NOT already FBO
+//     0 to begin with. Restoring here, at the very end of the whole render_compose() call, is
+//     therefore the only place that actually returns the host's TRUE original read-framebuffer
+//     state.
 // PT: Snapshot/restore RAII do estado GL que o backend GL3 do RmlUi mexe, para o renderer do
 //     host (ex.: Render2dGl3 no GusWorld) ver o contexto inalterado após UiLayer::render().
 //     Capturado: viewport, scissor box+enable, blend func+equation+enable, enables
@@ -28,21 +34,26 @@
 //     (L1.22-CAPTURE), e colour write mask.
 //
 //     ADIÇÃO DO L1.22-CAPTURE (GL_READ_FRAMEBUFFER_BINDING / GL_READ_BUFFER): adicionado para
-//     Gl3RenderInterface::CaptureBackdrop (render_gl3.cpp), que revincula GL_READ_FRAMEBUFFER a
-//     0 e chama glReadBuffer(GL_BACK) pra ler o conteúdo do backbuffer já desenhado pelo host,
-//     mas deliberadamente NÃO restaura nenhum dos dois por conta própria. ESTE é o único lugar
-//     correto pra fazer isso: o ctor deste guard roda em Engine::render_compose (engine.cpp)
-//     ANTES de RenderGl3::begin_frame_compose (onde CaptureBackdrop roda, bem no topo, antes de
-//     SetViewport()/BeginFrame()), e o dtor deste guard roda DEPOIS de
-//     RenderGl3::end_frame_compose (RenderInterface_GL3::EndFrame()) retornar. O próprio
-//     EndFrame() revincula AMBOS os alvos read+draw pro FBO 0 incondicionalmente no meio do
-//     caminho (glBindFramebuffer(GL_FRAMEBUFFER, 0), Backends/RmlUi_Renderer_GL3.cpp --
-//     confirmado lendo o source pinado) -- então um save/restore restrito só ao corpo do próprio
-//     método CaptureBackdrop seria silenciosamente sobrescrito pelo EndFrame() momentos depois
-//     de qualquer forma, e nunca poderia recuperar um binding de read-fb de host que NÃO era já
-//     o FBO 0 pra começo de conversa. Restaurar aqui, bem no fim da chamada inteira de
-//     render_compose(), é portanto o único lugar que de fato devolve o estado de
-//     read-framebuffer ORIGINAL VERDADEIRO do host.
+//     Gl3RenderInterface::EnsureBackdropCaptured (render_gl3.cpp), que revincula
+//     GL_READ_FRAMEBUFFER a 0 e chama glReadBuffer(GL_BACK) pra ler o conteúdo do backbuffer já
+//     desenhado pelo host, mas deliberadamente NÃO restaura nenhum dos dois por conta própria.
+//     ESTE é o único lugar correto pra fazer isso: o ctor deste guard roda em
+//     Engine::render_compose (engine.cpp) ANTES de RenderGl3::begin_frame_compose, e o dtor
+//     deste guard roda DEPOIS de RenderGl3::end_frame_compose (RenderInterface_GL3::EndFrame())
+//     retornar -- o próprio EnsureBackdropCaptured roda EM ALGUM PONTO dentro dessa janela (sob
+//     demanda, de dentro da caminhada de árvore de Rml::Context::Render(), na primeira vez -- se
+//     alguma -- que um shader "glintfx-ripple" de fato desenha naquele frame; ver o próprio
+//     doc-comment de EnsureBackdropCaptured, render_gl3.cpp, pra derivação do fix de cold-start
+//     do L1.22-CAPTURE de exatamente QUANDO dentro da janela ele roda) -- o momento EXATO dentro
+//     da janela não importa pra correção deste próprio guard, só que a janela o envolva por
+//     inteiro, o que sempre acontece. O próprio EndFrame() revincula AMBOS os alvos read+draw
+//     pro FBO 0 incondicionalmente no meio do caminho (glBindFramebuffer(GL_FRAMEBUFFER, 0),
+//     Backends/RmlUi_Renderer_GL3.cpp -- confirmado lendo o source pinado) -- então um
+//     save/restore restrito só ao corpo do próprio método EnsureBackdropCaptured seria
+//     silenciosamente sobrescrito pelo EndFrame() momentos depois de qualquer forma, e nunca
+//     poderia recuperar um binding de read-fb de host que NÃO era já o FBO 0 pra começo de
+//     conversa. Restaurar aqui, bem no fim da chamada inteira de render_compose(), é portanto o
+//     único lugar que de fato devolve o estado de read-framebuffer ORIGINAL VERDADEIRO do host.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 #include "gl_loader.h"
@@ -75,29 +86,29 @@ public:
     glGetIntegerv(GL_TEXTURE_BINDING_2D,      &tex2d_);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fbo_);
     // EN: L1.22-CAPTURE — see the class-level doc comment above for why THIS ctor (not a local
-    //     save/restore inside CaptureBackdrop itself) is the correct place to snapshot these.
+    //     save/restore inside EnsureBackdropCaptured itself) is the correct place to snapshot these.
     //     GL_READ_BUFFER always queries whichever framebuffer object is CURRENTLY bound to
     //     GL_READ_FRAMEBUFFER at this point (the host's own, untouched-by-us binding) -- if that
-    //     binding is later something CaptureBackdrop never rebinds to 0 itself (i.e. the host's
+    //     binding is later something EnsureBackdropCaptured never rebinds to 0 itself (i.e. the host's
     //     original read-fb was NOT the default framebuffer), this captured value pertains to
-    //     THAT fbo's own read-buffer state (never mutated by CaptureBackdrop's
+    //     THAT fbo's own read-buffer state (never mutated by EnsureBackdropCaptured's
     //     glReadBuffer(GL_BACK) call, which only ever touches FBO 0's own stored setting) and
     //     restoring it in the destructor below is a harmless, correct no-op; if the host's
     //     original read-fb WAS 0, this captures FBO 0's pre-capture read-buffer setting, which
-    //     CaptureBackdrop's glReadBuffer(GL_BACK) DOES mutate -- restoring it below is then the
+    //     EnsureBackdropCaptured's glReadBuffer(GL_BACK) DOES mutate -- restoring it below is then the
     //     step that actually matters.
     // PT: L1.22-CAPTURE — ver o doc-comment de nível de classe acima pro motivo deste ctor (e
-    //     não um save/restore local dentro do próprio CaptureBackdrop) ser o lugar correto pra
+    //     não um save/restore local dentro do próprio EnsureBackdropCaptured) ser o lugar correto pra
     //     tirar snapshot destes. GL_READ_BUFFER sempre consulta qualquer que seja o objeto de
     //     framebuffer CORRENTEMENTE vinculado a GL_READ_FRAMEBUFFER neste ponto (o binding
     //     próprio do host, intocado por nós) -- se esse binding for depois algo que
-    //     CaptureBackdrop nunca revincula a 0 ele mesmo (isto é, o read-fb original do host NÃO
+    //     EnsureBackdropCaptured nunca revincula a 0 ele mesmo (isto é, o read-fb original do host NÃO
     //     era o framebuffer default), este valor capturado pertence ao próprio estado de
     //     read-buffer DAQUELE fbo (nunca mutado pela chamada glReadBuffer(GL_BACK) de
-    //     CaptureBackdrop, que só toca o próprio ajuste guardado do FBO 0) e restaurá-lo no
+    //     EnsureBackdropCaptured, que só toca o próprio ajuste guardado do FBO 0) e restaurá-lo no
     //     destrutor abaixo é um no-op inofensivo e correto; se o read-fb original do host ERA 0,
     //     isto captura o ajuste de read-buffer pré-captura do FBO 0, que o
-    //     glReadBuffer(GL_BACK) de CaptureBackdrop DE FATO muta -- restaurá-lo abaixo é então o
+    //     glReadBuffer(GL_BACK) de EnsureBackdropCaptured DE FATO muta -- restaurá-lo abaixo é então o
     //     passo que de fato importa.
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fbo_);
     glGetIntegerv(GL_READ_BUFFER,              &read_buffer_);

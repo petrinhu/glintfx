@@ -5,9 +5,13 @@
 //       (a) no Rml::Texture at all (the "texture" sampled is the glintfx-captured backdrop,
 //           bound directly inside Gl3RenderInterface::RenderShader's ripple branch);
 //       (b) an optional (not required) decorator-shorthand argument (`max-radius`, default 0 ==
-//           auto), instead of image-tint's required `src`;
-//       (c) the active-instance GATE counter (L1.22-CAPTURE) -- see decorator_ripple.hpp's
-//           class-level doc comment for the full increment/decrement contract.
+//           auto), instead of image-tint's required `src`.
+//     NOTE: this decorator does NOT own or touch any L1.22-CAPTURE gate counter -- an earlier
+//     revision (commit 647350f) did (an `active_instances_` refcount incremented/decremented
+//     here), but it caused a cold-start bug (the counter was read too early, before
+//     Context::Render() made it accurate) -- see render_gl3.cpp's ArmBackdropCapture/
+//     EnsureBackdropCaptured doc comment and decorator_ripple.hpp's own doc comment for the fix
+//     and the full derivation.
 // PT: Implementação de RippleDecorator / RippleDecoratorInstancer -- ver decorator_ripple.hpp
 //     para a racional de design completa (espelha o precedente de
 //     decorator_image_tint.cpp/ADR-0010 quase linha a linha). Este arquivo só difere de
@@ -15,9 +19,13 @@
 //       (a) nenhum Rml::Texture (a "textura" amostrada é o backdrop capturado pela glintfx,
 //           vinculado diretamente dentro do ramo de ripple de Gl3RenderInterface::RenderShader);
 //       (b) um argumento de shorthand de decorator OPCIONAL (não obrigatório) (`max-radius`,
-//           default 0 == auto), em vez do `src` obrigatório do image-tint;
-//       (c) o contador GATE de instância ativa (L1.22-CAPTURE) -- ver o doc-comment de nível de
-//           classe de decorator_ripple.hpp para o contrato completo de incremento/decremento.
+//           default 0 == auto), em vez do `src` obrigatório do image-tint.
+//     NOTE: este decorator NÃO é dono nem toca nenhum contador de gate do L1.22-CAPTURE -- uma
+//     revisão anterior (commit 647350f) era (um refcount `active_instances_` incrementado/
+//     decrementado aqui), mas causava um bug de cold-start (o contador era lido cedo demais,
+//     antes de Context::Render() torná-lo preciso) -- ver o doc-comment de
+//     ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp e o próprio doc-comment de
+//     decorator_ripple.hpp pro fix e a derivação completa.
 // Copyright (c) 2026 Petrus Silva Costa
 
 // EN: gl_loader.h FIRST -- defines all GL 3.x function pointers loaded at runtime (same
@@ -152,9 +160,8 @@ QuadCorners BuildQuadCorners(Rml::Vector2f offset, Rml::Vector2f size) {
 
 }  // namespace
 
-void RippleDecorator::Initialise(float max_radius, int* active_instance_counter) {
+void RippleDecorator::Initialise(float max_radius) {
   max_radius_ = max_radius;
-  active_instance_counter_ = active_instance_counter;
 }
 
 Rml::DecoratorDataHandle RippleDecorator::GenerateElementData(Rml::Element* element, Rml::BoxArea paint_area) const {
@@ -237,19 +244,6 @@ Rml::DecoratorDataHandle RippleDecorator::GenerateElementData(Rml::Element* elem
 
   data->index_count = 6;
 
-  // EN: L1.22-CAPTURE gate -- increment ONLY here, on the guaranteed-success path (every earlier
-  //     `return INVALID_DECORATORDATAHANDLE` above is a case RmlUi will NEVER call
-  //     ReleaseElementData for, so incrementing before this point would leak the counter upward
-  //     with no matching decrement) -- see decorator_ripple.hpp's class-level doc comment for
-  //     the full increment/decrement contract.
-  // PT: Gate do L1.22-CAPTURE -- incrementa SÓ aqui, no caminho de sucesso garantido (todo
-  //     `return INVALID_DECORATORDATAHANDLE` anterior acima é um caso pro qual o RmlUi NUNCA vai
-  //     chamar ReleaseElementData, então incrementar antes deste ponto vazaria o contador pra
-  //     cima sem decremento pareado) -- ver o doc-comment de nível de classe de
-  //     decorator_ripple.hpp pro contrato completo de incremento/decremento.
-  if (active_instance_counter_)
-    ++(*active_instance_counter_);
-
   return reinterpret_cast<Rml::DecoratorDataHandle>(data);
 }
 
@@ -268,18 +262,6 @@ void RippleDecorator::ReleaseElementData(Rml::DecoratorDataHandle element_data) 
   if (data->ebo)
     glDeleteBuffers(1, &data->ebo);
   delete data;
-
-  // EN: L1.22-CAPTURE gate -- unconditional decrement, paired 1:1 with GenerateElementData's
-  //     conditional increment above: RmlUi's own per-element contract guarantees
-  //     ReleaseElementData runs exactly once for every handle GenerateElementData successfully
-  //     returned (see decorator_ripple.hpp's class-level doc comment).
-  // PT: Gate do L1.22-CAPTURE -- decremento incondicional, pareado 1:1 com o incremento
-  //     condicional de GenerateElementData acima: o próprio contrato por-elemento do RmlUi
-  //     garante que ReleaseElementData roda exatamente uma vez para todo handle que
-  //     GenerateElementData retornou com sucesso (ver o doc-comment de nível de classe de
-  //     decorator_ripple.hpp).
-  if (active_instance_counter_)
-    --(*active_instance_counter_);
 }
 
 void RippleDecorator::RenderElement(Rml::Element* element, Rml::DecoratorDataHandle element_data) const {
@@ -418,7 +400,7 @@ Rml::SharedPtr<Rml::Decorator> RippleDecoratorInstancer::InstanceDecorator(const
   }
 
   auto decorator = Rml::MakeShared<RippleDecorator>();
-  decorator->Initialise(max_radius, &active_instances_);
+  decorator->Initialise(max_radius);
   return decorator;
 }
 

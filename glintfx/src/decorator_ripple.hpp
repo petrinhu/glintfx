@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: Custom RmlUi decorator -- "ripple([<max-radius>])" -- a SCREEN-SPACE distortion effect:
 //     the element's own paint box is filled by sampling the glintfx-captured FBO-0 backdrop
-//     (RenderGl3::begin_frame_compose -> Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp,
-//     L1.22-CAPTURE) through a radial refraction ring that expands over time -- a "time
-//     distortion" look. Composited ONLY inside a smoothstep-shaped ring around
+//     (RenderGl3::begin_frame_compose -> Gl3RenderInterface::EnsureBackdropCaptured,
+//     render_gl3.cpp, L1.22-CAPTURE) through a radial refraction ring that expands over time --
+//     a "time distortion" look. Composited ONLY inside a smoothstep-shaped ring around
 //     `distance(fragment, origin) == phase * max_radius`; everywhere else the element is fully
 //     transparent (alpha=0), so an author places this decorator on a fullscreen-covering
 //     element and only the travelling ring visibly perturbs the host's content underneath.
@@ -33,29 +33,30 @@
 //     texture-handle resolution, see RenderManager.cpp:219 -- confirmed by reading the pinned
 //     source before writing this comment).
 //
-//     ACTIVE-INSTANCE GATE (L1.22-CAPTURE, the "cost when nobody uses it is ZERO" requirement):
-//     RippleDecoratorInstancer owns a single `int active_instances_` counter, SHARED by every
-//     RippleDecorator this instancer ever creates (there is one instancer, but potentially many
-//     separate "decorator: ripple(...)" RCSS rules, each producing its own RippleDecorator
-//     instance via InstanceDecorator -- the counter must be global across all of them, not
-//     per-rule, so Gl3RenderInterface::CaptureBackdrop can ask a single "is ANY ripple element
-//     alive right now" question). Each RippleDecorator holds a non-owning `int*` back into that
-//     counter (handed in by Initialise, alongside the resolved `max_radius` argument);
-//     GenerateElementData increments it on the SUCCESS path only (never on an early
-//     INVALID_DECORATORDATAHANDLE return -- RmlUi never calls ReleaseElementData for a handle it
-//     never received, so an unconditional increment would leak the count upward forever),
-//     ReleaseElementData decrements it unconditionally (RmlUi's own per-element contract
-//     guarantees ReleaseElementData runs exactly once for every handle GenerateElementData
-//     handed back). Gl3RenderInterface reads `*counter > 0` at the very top of every
-//     begin_frame_compose call (via RippleDecoratorInstancer::active_instance_count_ptr(),
-//     wired in by bootstrap.cpp right after construction+registration) and skips the entire
-//     glCopyTexSubImage2D capture -- no allocation, no GL call at all -- whenever it is zero.
+//     COST-ZERO-WHEN-INACTIVE (L1.22-CAPTURE): THIS DECORATOR NO LONGER OWNS ANY GATE COUNTER --
+//     a prior revision (commit 647350f) had RippleDecoratorInstancer track a shared
+//     `active_instances_` refcount (incremented in GenerateElementData / decremented in
+//     ReleaseElementData) that Gl3RenderInterface read BEFORE Rml::Context::Render() ran, at the
+//     top of begin_frame_compose. That refcount is only accurate DURING/AFTER Context::Render()'s
+//     own tree walk (GenerateElementData is called from Element::Render() -> RenderEffects(),
+//     confirmed by reading the pinned Source/Core/ElementEffects.cpp), which made the gate read
+//     STALE (last frame's) data on the very FIRST frame a ripple decorator became active -- a
+//     cold-start bug an adversarial QA gate (ripple_sanity.cpp) caught and reproduced. The fix
+//     (render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured pair) makes the "is any ripple
+//     active this frame" question implicit and free instead: the real GL capture now runs
+//     on-demand, from INSIDE the "glintfx-ripple" RenderShader branch itself, the first time (per
+//     frame) that branch is actually reached -- which can only happen if a RippleDecorator is
+//     actually drawing. See render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured doc
+//     comment for the full derivation, including why this also sidesteps a second latent risk
+//     the old counter design had (RmlUi's own Decorator instances can be shared/cached across
+//     elements with an identical declaration, StyleSheet::InstanceDecorators -- counting
+//     CONSTRUCTED instances would have needed to reason about that sharing too).
 // PT: Decorator customizado do RmlUi -- "ripple([<raio-max>])" -- um efeito de distorção
 //     EM ESPAÇO DE TELA: a própria caixa de pintura do elemento é preenchida amostrando o
 //     backdrop do FBO-0 capturado pela glintfx (RenderGl3::begin_frame_compose ->
-//     Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp, L1.22-CAPTURE) através de um anel de
-//     refração radial que se expande no tempo -- um visual de "distorção de tempo". Composto SÓ
-//     dentro de um anel em forma de smoothstep ao redor de
+//     Gl3RenderInterface::EnsureBackdropCaptured, render_gl3.cpp, L1.22-CAPTURE) através de um
+//     anel de refração radial que se expande no tempo -- um visual de "distorção de tempo".
+//     Composto SÓ dentro de um anel em forma de smoothstep ao redor de
 //     `distance(fragmento, origem) == phase * raio_max`; em todo o resto o elemento é
 //     inteiramente transparente (alpha=0), então um autor posiciona este decorator num elemento
 //     que cobre a tela inteira e só o anel viajante perturba visivelmente o conteúdo do host por
@@ -88,24 +89,26 @@
 //     RenderManager.cpp:219 -- confirmado lendo o source pinado antes de escrever este
 //     comentário).
 //
-//     GATE DE INSTÂNCIA ATIVA (L1.22-CAPTURE, o requisito "custo quando ninguém usa é ZERO"):
-//     RippleDecoratorInstancer é dono de um único contador `int active_instances_`,
-//     COMPARTILHADO por todo RippleDecorator que este instancer já criou (há um instancer, mas
-//     potencialmente muitas regras RCSS "decorator: ripple(...)" separadas, cada uma produzindo
-//     sua própria instância de RippleDecorator via InstanceDecorator -- o contador precisa ser
-//     global entre todas elas, não por-regra, para que Gl3RenderInterface::CaptureBackdrop possa
-//     fazer uma única pergunta "existe QUALQUER elemento ripple vivo agora"). Cada
-//     RippleDecorator guarda um `int*` não-dono de volta pra esse contador (entregue por
-//     Initialise, junto do argumento `max_radius` resolvido); GenerateElementData o incrementa
-//     SÓ no caminho de sucesso (nunca num retorno antecipado de INVALID_DECORATORDATAHANDLE --
-//     o RmlUi nunca chama ReleaseElementData para um handle que nunca recebeu, então um
-//     incremento incondicional vazaria a contagem para cima para sempre), ReleaseElementData o
-//     decrementa incondicionalmente (o próprio contrato por-elemento do RmlUi garante que
-//     ReleaseElementData roda exatamente uma vez para todo handle que GenerateElementData
-//     devolveu). Gl3RenderInterface lê `*counter > 0` bem no topo de toda chamada de
-//     begin_frame_compose (via RippleDecoratorInstancer::active_instance_count_ptr(), conectado
-//     por bootstrap.cpp logo após construção+registro) e pula a captura glCopyTexSubImage2D
-//     inteira -- nenhuma alocação, nenhuma chamada GL nenhuma -- sempre que for zero.
+//     CUSTO-ZERO-QUANDO-INATIVO (L1.22-CAPTURE): ESTE DECORATOR NÃO É MAIS DONO DE NENHUM
+//     CONTADOR DE GATE -- uma revisão anterior (commit 647350f) fazia RippleDecoratorInstancer
+//     rastrear um refcount `active_instances_` compartilhado (incrementado em
+//     GenerateElementData / decrementado em ReleaseElementData) que Gl3RenderInterface lia ANTES
+//     de Rml::Context::Render() rodar, no topo de begin_frame_compose. Esse refcount só é preciso
+//     DURANTE/DEPOIS da própria caminhada de árvore de Context::Render() (GenerateElementData é
+//     chamado a partir de Element::Render() -> RenderEffects(), confirmado lendo o
+//     Source/Core/ElementEffects.cpp pinado), o que fazia o gate ler dado OBSOLETO (do frame
+//     anterior) no PRIMEIRO frame em que um decorator ripple ficava ativo -- um bug de cold-start
+//     que um gate adversarial de QA (ripple_sanity.cpp) pegou e reproduziu. O fix (o par
+//     ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp) torna a pergunta "algum ripple
+//     está ativo neste frame" implícita e grátis em vez disso: a captura GL real agora roda sob
+//     demanda, de DENTRO do próprio ramo de RenderShader "glintfx-ripple", na primeira vez (por
+//     frame) que aquele ramo é de fato alcançado -- o que só pode acontecer se um RippleDecorator
+//     estiver de fato desenhando. Ver o doc-comment de ArmBackdropCapture/EnsureBackdropCaptured
+//     de render_gl3.cpp pra derivação completa, inclusive por que isso também contorna um segundo
+//     risco latente que o design de contador antigo tinha (as próprias instâncias de Decorator
+//     do RmlUi podem ser compartilhadas/cacheadas entre elementos com uma declaração idêntica,
+//     StyleSheet::InstanceDecorators -- contar instâncias CONSTRUÍDAS precisaria ter raciocinado
+//     sobre esse compartilhamento também).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
@@ -115,31 +118,21 @@
 namespace glintfx {
 
 // EN: The decorator itself -- holds the resolved (constant, decorator-argument) `max_radius`
-//     value and the non-owning back-pointer into the owning instancer's shared active-instance
-//     counter. `max_radius_` of 0.f means "auto" -- Gl3RenderInterface::RenderShader (the only
+//     value. `max_radius_` of 0.f means "auto" -- Gl3RenderInterface::RenderShader (the only
 //     place that KNOWS the current capture resolution) substitutes the captured backdrop's own
 //     diagonal in that case; see render_gl3.cpp's GlintfxRippleShaderData::max_radius_arg doc
 //     comment.
 // PT: O decorator em si -- guarda o valor `max_radius` resolvido (constante, argumento de
-//     decorator) e o contra-ponteiro não-dono para o contador de instância ativa compartilhado
-//     do instancer dono. `max_radius_` de 0.f significa "auto" -- Gl3RenderInterface::RenderShader
-//     (o único lugar que CONHECE a resolução de captura atual) substitui pela própria diagonal
-//     do backdrop capturado nesse caso; ver o doc-comment de
+//     decorator). `max_radius_` de 0.f significa "auto" -- Gl3RenderInterface::RenderShader (o
+//     único lugar que CONHECE a resolução de captura atual) substitui pela própria diagonal do
+//     backdrop capturado nesse caso; ver o doc-comment de
 //     GlintfxRippleShaderData::max_radius_arg em render_gl3.cpp.
 class RippleDecorator : public Rml::Decorator {
 public:
   RippleDecorator() = default;
   ~RippleDecorator() override = default;
 
-  // EN: `active_instance_counter` is a non-owning pointer into the owning
-  //     RippleDecoratorInstancer's shared counter -- MUST outlive every RippleDecorator this
-  //     instancer creates, which it does per the same lifetime rule bootstrap.cpp documents for
-  //     polygon_instancer/tint_instancer (the instancer itself outlives Rml::Shutdown()).
-  // PT: `active_instance_counter` é um ponteiro não-dono para o contador compartilhado do
-  //     RippleDecoratorInstancer dono -- PRECISA sobreviver a todo RippleDecorator que este
-  //     instancer cria, o que acontece pela mesma regra de lifetime que bootstrap.cpp documenta
-  //     para polygon_instancer/tint_instancer (o próprio instancer sobrevive ao Rml::Shutdown()).
-  void Initialise(float max_radius, int* active_instance_counter);
+  void Initialise(float max_radius);
 
   Rml::DecoratorDataHandle GenerateElementData(Rml::Element* element, Rml::BoxArea paint_area) const override;
   void ReleaseElementData(Rml::DecoratorDataHandle element_data) const override;
@@ -147,7 +140,6 @@ public:
 
 private:
   float max_radius_ = 0.f;
-  int* active_instance_counter_ = nullptr;
 };
 
 // EN: Parses "decorator: ripple([<max-radius>]);" -- the ONLY decorator-shorthand argument is
@@ -188,40 +180,8 @@ public:
   Rml::SharedPtr<Rml::Decorator> InstanceDecorator(const Rml::String& name, const Rml::PropertyDictionary& properties,
       const Rml::DecoratorInstancerInterface& instancer_interface) override;
 
-  // EN: L1.22-CAPTURE gate accessor -- returns a pointer to the SHARED active-instance counter
-  //     (see the class-level doc comment above), wired into Gl3RenderInterface by bootstrap.cpp
-  //     right after this instancer is constructed+registered
-  //     (RenderGl3::set_ripple_active_counter). The pointee is `active_instances_` below, which
-  //     outlives every RippleDecorator this instancer creates (this instancer itself outlives
-  //     Rml::Shutdown(), same lifetime rule as polygon_instancer/tint_instancer).
-  // PT: Acessor do gate do L1.22-CAPTURE -- retorna um ponteiro para o contador de instância
-  //     ativa COMPARTILHADO (ver o doc-comment de nível de classe acima), conectado a
-  //     Gl3RenderInterface por bootstrap.cpp logo após este instancer ser
-  //     construído+registrado (RenderGl3::set_ripple_active_counter). O apontado é
-  //     `active_instances_` abaixo, que sobrevive a todo RippleDecorator que este instancer
-  //     cria (este próprio instancer sobrevive ao Rml::Shutdown(), mesma regra de lifetime de
-  //     polygon_instancer/tint_instancer).
-  const int* active_instance_count_ptr() const { return &active_instances_; }
-
 private:
   Rml::PropertyId max_radius_id_{};
-  // EN: Shared, mutated from the OUTSIDE (via RippleDecorator::GenerateElementData/
-  //     ReleaseElementData's non-owning `int*` back-pointer, handed out by InstanceDecorator
-  //     below) across every RippleDecorator this instancer creates -- see the class-level doc
-  //     comment for why it must be per-INSTANCER, not per-decorator. Not `mutable`: nothing
-  //     mutates it through a `const RippleDecoratorInstancer&`; InstanceDecorator (non-const)
-  //     takes its address, and active_instance_count_ptr() (const) merely reads/returns that
-  //     same address (a `const int*` falls out naturally from a const member function without
-  //     needing the member itself to be `mutable`).
-  // PT: Compartilhado, mutado de FORA (via o contra-ponteiro `int*` não-dono de
-  //     RippleDecorator::GenerateElementData/ReleaseElementData, entregue por InstanceDecorator
-  //     abaixo) entre todo RippleDecorator que este instancer cria -- ver o doc-comment de nível
-  //     de classe pro motivo de precisar ser por-INSTANCER, não por-decorator. Não é `mutable`:
-  //     nada o muta através de uma `const RippleDecoratorInstancer&`; InstanceDecorator
-  //     (não-const) toma seu endereço, e active_instance_count_ptr() (const) só lê/retorna esse
-  //     mesmo endereço (um `const int*` sai naturalmente de uma função-membro const sem precisar
-  //     que o próprio membro seja `mutable`).
-  int active_instances_ = 0;
 };
 
 } // namespace glintfx

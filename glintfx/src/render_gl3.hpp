@@ -66,30 +66,6 @@ public:
   // PT: End compose-only: chama EndFrame do RmlUi — SEM alpha-fix do FBO0.
   void end_frame_compose();
 
-  // EN: L1.22-CAPTURE — wires the "ripple()" decorator's shared active-instance counter into
-  //     the renderer, so begin_frame_compose can skip the FBO-0 backdrop capture entirely (zero
-  //     GL calls, zero allocation) whenever no "ripple()" decorator is currently alive anywhere
-  //     in the document tree -- see Gl3RenderInterface::CaptureBackdrop's doc comment
-  //     (render_gl3.cpp) and decorator_ripple.hpp's class-level doc comment for the full
-  //     contract. `counter` is a plain, non-owning `const int*` -- no RmlUi/GL type leaks
-  //     through this signature (same "no RmlUi or GL types leak" discipline this whole header
-  //     already follows). `counter` must outlive this RenderGl3 -- bootstrap.cpp satisfies that
-  //     (owned by Bootstrap::Impl, same lifetime discipline as the decorator instancers
-  //     themselves). A no-op if init() was not called or failed (mirrors every other method on
-  //     this class).
-  // PT: L1.22-CAPTURE — conecta o contador de instância ativa compartilhado do decorator
-  //     "ripple()" ao renderer, para que begin_frame_compose possa pular a captura de backdrop
-  //     do FBO-0 inteiramente (zero chamadas GL, zero alocação) sempre que nenhum decorator
-  //     "ripple()" estiver vivo em nenhum lugar da árvore do documento -- ver o doc-comment de
-  //     Gl3RenderInterface::CaptureBackdrop (render_gl3.cpp) e o doc-comment de nível de classe
-  //     de decorator_ripple.hpp pro contrato completo. `counter` é um `const int*` comum,
-  //     não-dono -- nenhum tipo RmlUi/GL vaza nesta assinatura (mesma disciplina "nenhum tipo
-  //     RmlUi ou GL vaza" que este header inteiro já segue). `counter` precisa sobreviver a este
-  //     RenderGl3 -- bootstrap.cpp satisfaz isso (dono é Bootstrap::Impl, mesma disciplina de
-  //     lifetime dos próprios decorator instancers). Sem efeito se init() não foi chamado ou
-  //     falhou (espelha todo outro método desta classe).
-  void set_ripple_active_counter(const int* counter);
-
 private:
   struct Impl;   // EN: defined in render_gl3.cpp; holds RenderInterface_GL3.
                  // PT: definido em render_gl3.cpp; contém RenderInterface_GL3.

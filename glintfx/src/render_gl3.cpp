@@ -166,7 +166,7 @@ void main() {
 //     GlintfxShaderHandle::is_ripple.
 //
 //     Fragment shader samples `backdrop_capture_tex_` (the FBO-0 backdrop captured by
-//     CaptureBackdrop, below) through a radial refraction ring -- see decorator_ripple.hpp for
+//     EnsureBackdropCaptured, below) through a radial refraction ring -- see decorator_ripple.hpp for
 //     the full effect description. `fragTexCoord` here is box-local [0,1] (from the ripple
 //     element's own BuildQuadCorners quad, decorator_ripple.cpp) -- for the backdrop sample to
 //     land on the CORRECT screen pixel, the ripple element's box must cover the SAME region
@@ -189,7 +189,7 @@ void main() {
 //     GlintfxShaderHandle::is_ripple.
 //
 //     O shader de fragmento amostra `backdrop_capture_tex_` (o backdrop do FBO-0 capturado por
-//     CaptureBackdrop, abaixo) através de um anel de refração radial -- ver decorator_ripple.hpp
+//     EnsureBackdropCaptured, abaixo) através de um anel de refração radial -- ver decorator_ripple.hpp
 //     pra descrição completa do efeito. `fragTexCoord` aqui é box-local [0,1] (do próprio quad
 //     BuildQuadCorners do elemento ripple, decorator_ripple.cpp) -- para a amostra do backdrop
 //     cair no pixel de tela CORRETO, a caixa do elemento ripple precisa cobrir a MESMA região
@@ -369,7 +369,7 @@ struct GlintfxTintShaderData {
 //     substitutes `sqrt(cap_w_^2 + cap_h_^2)` (the captured backdrop's own diagonal) whenever
 //     `max_radius_arg<=0.f`, since only Gl3RenderInterface — not decorator_ripple.cpp, which runs
 //     at RCSS-parse/style-recalc time with no viewport knowledge — knows the CURRENT capture
-//     resolution (cap_w_/cap_h_, set by CaptureBackdrop, below).
+//     resolution (cap_w_/cap_h_, set by EnsureBackdropCaptured, below).
 // PT: L1.22-WAVE — estado de ripple resolvido por-chamada-de-CompileShader, repassado dos
 //     parâmetros Dictionary de decorator_ripple.cpp (ver RippleDecorator::RenderElement) pros
 //     uniforms do RenderShader. `vao`/`index_count` identificam a geometria dona-da-glintfx a
@@ -382,7 +382,7 @@ struct GlintfxTintShaderData {
 //     capturado) sempre que `max_radius_arg<=0.f`, já que só Gl3RenderInterface — não
 //     decorator_ripple.cpp, que roda em tempo de parse-RCSS/recálculo-de-estilo sem
 //     conhecimento nenhum de viewport — conhece a resolução de captura ATUAL (cap_w_/cap_h_,
-//     setada por CaptureBackdrop, abaixo).
+//     setada por EnsureBackdropCaptured, abaixo).
 struct GlintfxRippleShaderData {
   GLuint vao = 0;
   int index_count = 0;
@@ -426,12 +426,12 @@ public:
   //     liberados por ImageTintElementData de decorator_image_tint.cpp, não por esta classe --
   //     ver o doc-comment de ReleaseShader abaixo).
   // EN: L1.22-WAVE — also releases the lazily-compiled "glintfx-ripple" GL program and the
-  //     backdrop-capture GL texture (backdrop_capture_tex_, populated by CaptureBackdrop, below),
+  //     backdrop-capture GL texture (backdrop_capture_tex_, populated by EnsureBackdropCaptured, below),
   //     if either was ever allocated. Same "never touches per-element VAO/VBO/EBO" contract as
   //     the "glintfx-tint" release above — those are owned/released by decorator_ripple.cpp's
   //     RippleElementData, not by this class.
   // PT: L1.22-WAVE — também libera o programa GL "glintfx-ripple" compilado de forma lazy e a
-  //     textura GL de captura de backdrop (backdrop_capture_tex_, preenchida por CaptureBackdrop,
+  //     textura GL de captura de backdrop (backdrop_capture_tex_, preenchida por EnsureBackdropCaptured,
   //     abaixo), se alguma das duas foi alocada. Mesmo contrato "nunca toca VAO/VBO/EBO
   //     por-elemento" da liberação de "glintfx-tint" acima — essas são donas/liberadas por
   //     RippleElementData de decorator_ripple.cpp, não por esta classe.
@@ -627,7 +627,7 @@ public:
       //     and decorator_ripple.hpp's class-level doc comment): we draw from
       //     `wrapper->ripple_data.vao` (glintfx-owned, built in decorator_ripple.cpp's
       //     GenerateElementData) and sample `backdrop_capture_tex_` (glintfx-owned, captured by
-      //     CaptureBackdrop, below) instead — NOT the decorator's own (nonexistent) texture
+      //     EnsureBackdropCaptured, below) instead — NOT the decorator's own (nonexistent) texture
       //     handle. Same `this->ResetProgram()`-on-every-exit-path discipline as the tint branch
       //     below (see that branch's doc comment for the full rationale, which applies
       //     identically here).
@@ -636,32 +636,48 @@ public:
       //     acima e o doc-comment de nível de classe de decorator_ripple.hpp): desenhamos a
       //     partir de `wrapper->ripple_data.vao` (dono glintfx, construída em
       //     decorator_ripple.cpp:GenerateElementData) e amostramos `backdrop_capture_tex_` (dono
-      //     glintfx, capturado por CaptureBackdrop, abaixo) em vez disso — NÃO o texture handle
+      //     glintfx, capturado por EnsureBackdropCaptured, abaixo) em vez disso — NÃO o texture handle
       //     (inexistente) do próprio decorator. Mesma disciplina de
       //     `this->ResetProgram()`-em-todo-caminho-de-saída do ramo de tint abaixo (ver o
       //     doc-comment daquele ramo pra racional completa, que se aplica identicamente aqui).
-      if (ripple_program_ && wrapper->ripple_data.vao != 0 && wrapper->ripple_data.index_count > 0 && backdrop_capture_tex_ != 0) {
-        const GlintfxRippleShaderData& d = wrapper->ripple_data;
-        const float max_radius = d.max_radius_arg > 0.f
-            ? d.max_radius_arg
-            : std::sqrt(static_cast<float>(cap_w_) * static_cast<float>(cap_w_) +
-                        static_cast<float>(cap_h_) * static_cast<float>(cap_h_));
-        glUseProgram(ripple_program_);
-        glUniform2f(ripple_loc_translate_, translation.x, translation.y);
-        glUniformMatrix4fv(ripple_loc_transform_, 1, GL_FALSE, this->GetTransform().data());
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, backdrop_capture_tex_);
-        glUniform1i(ripple_loc_backdrop_, 0);
-        glUniform2f(ripple_loc_origin_, d.origin_x, d.origin_y);
-        glUniform1f(ripple_loc_phase_, d.phase);
-        glUniform1f(ripple_loc_strength_, d.strength);
-        glUniform1f(ripple_loc_width_, d.width);
-        glUniform2f(ripple_loc_resolution_, static_cast<float>(cap_w_), static_cast<float>(cap_h_));
-        glUniform1f(ripple_loc_max_radius_, max_radius);
-        glBindVertexArray(d.vao);
-        glDrawElements(GL_TRIANGLES, d.index_count, GL_UNSIGNED_INT, nullptr);
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+      if (ripple_program_ && wrapper->ripple_data.vao != 0 && wrapper->ripple_data.index_count > 0) {
+        // EN: L1.22-CAPTURE COLD-START FIX -- capture ON DEMAND, exactly HERE, the first time
+        //     (this frame) a ripple element actually needs to sample the backdrop -- NOT
+        //     up-front in begin_frame_compose gated on a counter. See EnsureBackdropCaptured's
+        //     own doc comment (below) for the full derivation of why this is the only place
+        //     that is simultaneously correct AND still zero-cost-when-inactive: this branch is
+        //     reached if and only if a "glintfx-ripple" shader is actually being drawn.
+        // PT: FIX DE COLD-START DO L1.22-CAPTURE -- captura SOB DEMANDA, exatamente AQUI, na
+        //     primeira vez (neste frame) que um elemento ripple de fato precisa amostrar o
+        //     backdrop -- NÃO adiantado em begin_frame_compose protegido por um contador. Ver o
+        //     próprio doc-comment de EnsureBackdropCaptured (abaixo) pra derivação completa de
+        //     por que este é o único lugar simultaneamente correto E ainda custo-zero-quando-
+        //     inativo: este ramo só é alcançado se e somente se um shader "glintfx-ripple"
+        //     está de fato sendo desenhado.
+        EnsureBackdropCaptured();
+        if (backdrop_capture_tex_ != 0) {
+          const GlintfxRippleShaderData& d = wrapper->ripple_data;
+          const float max_radius = d.max_radius_arg > 0.f
+              ? d.max_radius_arg
+              : std::sqrt(static_cast<float>(cap_w_) * static_cast<float>(cap_w_) +
+                          static_cast<float>(cap_h_) * static_cast<float>(cap_h_));
+          glUseProgram(ripple_program_);
+          glUniform2f(ripple_loc_translate_, translation.x, translation.y);
+          glUniformMatrix4fv(ripple_loc_transform_, 1, GL_FALSE, this->GetTransform().data());
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, backdrop_capture_tex_);
+          glUniform1i(ripple_loc_backdrop_, 0);
+          glUniform2f(ripple_loc_origin_, d.origin_x, d.origin_y);
+          glUniform1f(ripple_loc_phase_, d.phase);
+          glUniform1f(ripple_loc_strength_, d.strength);
+          glUniform1f(ripple_loc_width_, d.width);
+          glUniform2f(ripple_loc_resolution_, static_cast<float>(cap_w_), static_cast<float>(cap_h_));
+          glUniform1f(ripple_loc_max_radius_, max_radius);
+          glBindVertexArray(d.vao);
+          glDrawElements(GL_TRIANGLES, d.index_count, GL_UNSIGNED_INT, nullptr);
+          glBindVertexArray(0);
+          glBindTexture(GL_TEXTURE_2D, 0);
+        }
       }
       this->ResetProgram();
       return;
@@ -741,82 +757,169 @@ public:
   }
 
   // ---------------------------------------------------------------------------
-  // EN: L1.22-CAPTURE — backdrop capture: called from RenderGl3::begin_frame_compose (below,
-  //     this file), BEFORE SetViewport()/BeginFrame() run — i.e. while FBO 0 still holds
-  //     whatever the HOST already drew this frame (RmlUi's own BeginFrame() only touches its own
-  //     private render-layer FBOs, never FBO 0 — confirmed by reading the pinned
-  //     RmlUi_Renderer_GL3.cpp: FBO 0 is only ever bound again inside EndFrame(), for the final
-  //     blit). See decorator_ripple.hpp for what consumes backdrop_capture_tex_.
+  // EN: L1.22-CAPTURE, COLD-START FIX (post-647350f QA finding) — split into a cheap "arm" step
+  //     (called unconditionally from RenderGl3::begin_frame_compose, below this file) and a
+  //     real, on-demand "ensure" step (called from RenderShader's ripple branch, above, exactly
+  //     once per frame, the very first time a ripple element actually needs to sample the
+  //     backdrop). This REPLACES the original counter-gated design (`ripple_active_counter_`,
+  //     `RenderGl3::set_ripple_active_counter`), which had a real cold-start bug: the counter
+  //     (incremented in decorator_ripple.cpp's GenerateElementData) is only accurate DURING/AFTER
+  //     Rml::Context::Render()'s tree walk (confirmed by reading the pinned
+  //     Source/Core/ElementEffects.cpp: `InstanceEffects()`/`GenerateElementData` both run from
+  //     `Element::Render()` -> `RenderEffects()`, i.e. INSIDE Context::Render(), never earlier),
+  //     but the old gate read it BEFORE Context::Render() even started (at the top of
+  //     begin_frame_compose) -- so on the very FIRST frame a ripple decorator became active, the
+  //     counter still read 0 (last frame's value), the capture was skipped, and the ripple
+  //     shader sampled a still-zero `backdrop_capture_tex_` -- the "opening frame" of a
+  //     `ripple-phase: 0` keyframe animation (the most visually intense one) silently rendered as
+  //     nothing. ripple_sanity.cpp (QA, independent of this implementer) proves this with a spy
+  //     on the real glCopyTexSubImage2D entry point plus hand-derived expected pixels.
   //
-  //     COST-ZERO-WHEN-INACTIVE GATE (the core L1.22-CAPTURE requirement): the very first thing
-  //     this does is check `*ripple_active_counter_ > 0` — if no "ripple()" decorator is
-  //     currently alive anywhere in the document tree, this returns immediately: no
-  //     glCopyTexSubImage2D, no glTexImage2D, no allocation, no GL call whatsoever. The counter
-  //     is wired in by bootstrap.cpp (RenderGl3::set_ripple_active_counter) right after
-  //     RippleDecoratorInstancer is constructed+registered; a UiLayer/App instance that never
-  //     loads any RCSS using "ripple()" therefore pays exactly zero extra GL/CPU cost per frame
-  //     from this feature — see decorator_ripple.hpp's class-level doc comment for the
-  //     increment/decrement contract behind `*ripple_active_counter_`.
+  //     WHY ON-DEMAND-INSIDE-RENDERSHADER FIXES IT WITHOUT REINTRODUCING A COUNTER: the decision
+  //     "does ANY ripple element need the backdrop this frame" no longer needs to be made in
+  //     advance at all -- it is now IMPLICIT and free: EnsureBackdropCaptured() is only ever
+  //     reachable from inside the "glintfx-ripple" RenderShader branch, which is only ever
+  //     reached if RippleDecorator::RenderElement (decorator_ripple.cpp) actually compiled and
+  //     is drawing that shader THIS frame. Zero ripple elements in the document => that branch
+  //     never executes => EnsureBackdropCaptured() is never called => zero
+  //     glCopyTexSubImage2D/glTexImage2D/allocation calls -- the SAME cost-zero-when-inactive
+  //     guarantee as before, but derived structurally instead of from a counter whose accuracy
+  //     window didn't line up with when the gate needed to read it. This also sidesteps a SECOND
+  //     latent risk the counter design had (flagged, not yet hit): RmlUi's own decorator
+  //     INSTANCES can be shared/cached across elements with an identical decorator declaration
+  //     (StyleSheet::InstanceDecorators) -- a naive "count constructed instances" fix would have
+  //     needed to reason about that sharing too; this design never counts instances at all.
   //
-  //     READ-FRAMEBUFFER SAFETY (the other L1.22-CAPTURE requirement): this method rebinds
-  //     GL_READ_FRAMEBUFFER to 0 and calls glReadBuffer(GL_BACK) to read the host's already-drawn
-  //     backbuffer content — it does NOT restore either afterwards itself. That restore is
-  //     handled by GlStateGuard (gl_state.hpp), which now ALSO snapshots/restores
-  //     GL_READ_FRAMEBUFFER_BINDING + GL_READ_BUFFER (see gl_state.hpp's own doc comment for why
-  //     this is the single correct place: GlStateGuard's ctor runs BEFORE
-  //     begin_frame_compose/CaptureBackdrop, and its dtor runs AFTER end_frame_compose/EndFrame()
-  //     — which itself unconditionally rebinds FBO 0 mid-frame via
-  //     glBindFramebuffer(GL_FRAMEBUFFER, 0), clobbering whatever THIS method leaves behind
-  //     regardless — so a local save/restore scoped to just this method would be silently
-  //     overwritten by EndFrame() anyway, and could never recover a host read-fb that was NOT
-  //     FBO 0 to begin with).
+  //     CORRECTNESS (still capturing the HOST's undisturbed FBO 0, not glintfx's own
+  //     in-progress render): unchanged from the original design's own reasoning, just re-derived
+  //     for the new call SITE. FBO 0 is untouched by RmlUi from BeginFrame() (inside
+  //     begin_frame_compose, called before Context::Render()) all the way through the ENTIRE
+  //     Context::Render() tree walk -- RmlUi only ever draws into its OWN private render-layer
+  //     FBOs during that walk (confirmed by reading the pinned RmlUi_Renderer_GL3.cpp) -- and
+  //     only rebinds/blits onto FBO 0 inside EndFrame() (called from end_frame_compose, AFTER
+  //     Context::Render() returns). Since EnsureBackdropCaptured() always runs strictly inside
+  //     Context::Render() (from a RenderShader call), it is unconditionally BEFORE EndFrame(),
+  //     so FBO 0 still holds exactly what the host drew before this glintfx frame began,
+  //     regardless of how many OTHER elements (ripple or not) already painted into RmlUi's
+  //     private layers earlier in the SAME tree walk.
   //
-  //     `(offset_x, offset_y, w, h)` are the SAME OpenGL-native, bottom-left-origin viewport
-  //     rectangle begin_frame_compose forwards to RenderInterface_GL3::SetViewport — capturing
-  //     that exact sub-region (glCopyTexSubImage2D's own (x,y) source-rect parameters), NOT the
-  //     whole FBO 0, so a UiLayer letterboxed/positioned inside a larger host window (F3,
-  //     UiLayer::set_viewport) captures only ITS OWN region, never neighbouring host content.
-  // PT: L1.22-CAPTURE — captura de backdrop: chamado de RenderGl3::begin_frame_compose (abaixo,
-  //     este arquivo), ANTES de SetViewport()/BeginFrame() rodarem — isto é, enquanto o FBO 0
-  //     ainda tem o que o HOST já desenhou neste frame (o próprio BeginFrame() do RmlUi só toca
-  //     os próprios FBOs privados de render-layer, nunca o FBO 0 — confirmado lendo o
-  //     RmlUi_Renderer_GL3.cpp pinado: o FBO 0 só é vinculado de novo dentro do EndFrame(), pro
-  //     blit final). Ver decorator_ripple.hpp pro que consome backdrop_capture_tex_.
+  //     ONE-CAPTURE-PER-FRAME (unchanged intent, new mechanism): `backdrop_captured_this_frame_`
+  //     latches true on the first EnsureBackdropCaptured() call each frame (reset back to false
+  //     by ArmBackdropCapture, called once per begin_frame_compose) -- if a document has MULTIPLE
+  //     ripple elements, only the FIRST one drawn each frame triggers the real GL capture; every
+  //     later ripple element that frame reuses the SAME `backdrop_capture_tex_` (still correct:
+  //     none of them can see each other's own draws, since RmlUi's own render-layer output never
+  //     reaches FBO 0 until EndFrame(), long after every ripple element has already drawn).
   //
-  //     GATE CUSTO-ZERO-QUANDO-INATIVO (o requisito central do L1.22-CAPTURE): a primeiríssima
-  //     coisa que isto faz é checar `*ripple_active_counter_ > 0` — se nenhum decorator
-  //     "ripple()" está vivo em nenhum lugar da árvore do documento agora, isto retorna
-  //     imediatamente: nenhum glCopyTexSubImage2D, nenhum glTexImage2D, nenhuma alocação,
-  //     nenhuma chamada GL nenhuma. O contador é conectado por bootstrap.cpp
-  //     (RenderGl3::set_ripple_active_counter) logo após RippleDecoratorInstancer ser
-  //     construído+registrado; uma instância de UiLayer/App que nunca carrega RCSS nenhum
-  //     usando "ripple()" portanto paga exatamente custo zero extra de GL/CPU por frame desta
-  //     feature — ver o doc-comment de nível de classe de decorator_ripple.hpp pro contrato de
-  //     incremento/decremento por trás de `*ripple_active_counter_`.
+  //     READ-FRAMEBUFFER SAFETY: unchanged from the original design -- EnsureBackdropCaptured()
+  //     still rebinds GL_READ_FRAMEBUFFER to 0 + glReadBuffer(GL_BACK) and does NOT restore
+  //     either itself; GlStateGuard (gl_state.hpp) still owns that restore (its ctor/dtor window
+  //     -- Engine::render_compose, engine.cpp -- still fully encloses the entire
+  //     begin_frame_compose -> Context::Render() -> end_frame_compose sequence, so moving the
+  //     actual GL capture to occur partway THROUGH Context::Render() changes nothing about when
+  //     the guard's own ctor/dtor run relative to it).
+  // PT: L1.22-CAPTURE, FIX DE COLD-START (achado do QA pós-647350f) — dividido num passo "arm"
+  //     barato (chamado incondicionalmente de RenderGl3::begin_frame_compose, mais abaixo neste
+  //     arquivo) e num passo "ensure" real, sob demanda (chamado do ramo de ripple de
+  //     RenderShader, acima, exatamente uma vez por frame, na primeira vez que um elemento
+  //     ripple de fato precisa amostrar o backdrop). Isto SUBSTITUI o design original protegido
+  //     por contador (`ripple_active_counter_`, `RenderGl3::set_ripple_active_counter`), que
+  //     tinha um bug real de cold-start: o contador (incrementado em GenerateElementData de
+  //     decorator_ripple.cpp) só é preciso DURANTE/DEPOIS da caminhada de árvore de
+  //     Rml::Context::Render() (confirmado lendo o Source/Core/ElementEffects.cpp pinado:
+  //     `InstanceEffects()`/`GenerateElementData` ambos rodam a partir de `Element::Render()` ->
+  //     `RenderEffects()`, isto é, DENTRO de Context::Render(), nunca antes), mas o gate antigo o
+  //     lia ANTES de Context::Render() sequer começar (no topo de begin_frame_compose) -- então
+  //     no PRIMEIRO frame em que um decorator ripple ficava ativo, o contador ainda lia 0 (valor
+  //     do frame anterior), a captura era pulada, e o shader de ripple amostrava um
+  //     `backdrop_capture_tex_` ainda zero -- o frame de "abertura" de uma animação de
+  //     `ripple-phase: 0` (o mais intenso visualmente) renderizava silenciosamente como nada.
+  //     ripple_sanity.cpp (QA, independente deste implementador) prova isso com um espião no
+  //     entry point real glCopyTexSubImage2D mais pixels esperados derivados à mão.
   //
-  //     SEGURANÇA DO READ-FRAMEBUFFER (o outro requisito do L1.22-CAPTURE): este método
-  //     revincula GL_READ_FRAMEBUFFER a 0 e chama glReadBuffer(GL_BACK) pra ler o conteúdo do
-  //     backbuffer já desenhado pelo host — ele NÃO restaura nenhum dos dois depois, por conta
-  //     própria. Essa restauração é feita por GlStateGuard (gl_state.hpp), que agora TAMBÉM
-  //     tira snapshot/restaura GL_READ_FRAMEBUFFER_BINDING + GL_READ_BUFFER (ver o próprio
-  //     doc-comment de gl_state.hpp pro motivo deste ser o único lugar correto: o ctor de
-  //     GlStateGuard roda ANTES de begin_frame_compose/CaptureBackdrop, e o dtor dele roda
-  //     DEPOIS de end_frame_compose/EndFrame() — que por si só revincula o FBO 0
-  //     incondicionalmente no meio do frame via glBindFramebuffer(GL_FRAMEBUFFER, 0), sobrepondo
-  //     o que ESTE método deixar de qualquer forma — então um save/restore local restrito só a
-  //     este método seria silenciosamente sobrescrito pelo EndFrame() de qualquer jeito, e nunca
-  //     poderia recuperar um read-fb de host que NÃO era o FBO 0 pra começo de conversa).
+  //     POR QUE SOB-DEMANDA-DENTRO-DO-RENDERSHADER CONSERTA SEM REINTRODUZIR UM CONTADOR: a
+  //     decisão "algum elemento ripple precisa do backdrop neste frame" não precisa mais ser
+  //     tomada de antemão -- agora é IMPLÍCITA e grátis: EnsureBackdropCaptured() só é alcançável
+  //     de dentro do ramo "glintfx-ripple" de RenderShader, que só é alcançado se
+  //     RippleDecorator::RenderElement (decorator_ripple.cpp) de fato compilou e está desenhando
+  //     aquele shader NESTE frame. Zero elementos ripple no documento => aquele ramo nunca
+  //     executa => EnsureBackdropCaptured() nunca é chamado => zero chamadas de
+  //     glCopyTexSubImage2D/glTexImage2D/alocação -- a MESMA garantia de custo-zero-quando-
+  //     inativo de antes, mas derivada estruturalmente em vez de um contador cuja janela de
+  //     precisão não batia com quando o gate precisava lê-lo. Isto também contorna um SEGUNDO
+  //     risco latente que o design de contador tinha (sinalizado, ainda não atingido): as
+  //     PRÓPRIAS instâncias de decorator do RmlUi podem ser compartilhadas/cacheadas entre
+  //     elementos com uma declaração de decorator idêntica (StyleSheet::InstanceDecorators) -- um
+  //     fix ingênuo de "contar instâncias construídas" precisaria ter raciocinado sobre esse
+  //     compartilhamento também; este design nunca conta instâncias.
   //
-  //     `(offset_x, offset_y, w, h)` são o MESMO retângulo de viewport nativo do OpenGL, origem
-  //     inferior-esquerda, que begin_frame_compose repassa a RenderInterface_GL3::SetViewport —
-  //     capturando exatamente essa sub-região (os próprios parâmetros de retângulo-fonte (x,y)
-  //     de glCopyTexSubImage2D), NÃO o FBO 0 inteiro, então um UiLayer com letterbox/posicionado
-  //     dentro de uma janela de host maior (F3, UiLayer::set_viewport) captura só a PRÓPRIA
-  //     região dele, nunca conteúdo de host vizinho.
+  //     CORREÇÃO (ainda capturando o FBO 0 intocado do HOST, não o render em progresso da
+  //     própria glintfx): inalterada da racional do design original, só re-derivada pro novo
+  //     PONTO de chamada. O FBO 0 fica intocado pelo RmlUi desde o BeginFrame() (dentro de
+  //     begin_frame_compose, chamado antes de Context::Render()) até o FIM da caminhada de
+  //     árvore inteira de Context::Render() -- o RmlUi só desenha nos PRÓPRIOS FBOs privados de
+  //     render-layer durante essa caminhada -- e só revincula/blita no FBO 0 dentro de EndFrame()
+  //     (chamado de end_frame_compose, DEPOIS de Context::Render() retornar). Como
+  //     EnsureBackdropCaptured() sempre roda estritamente dentro de Context::Render() (a partir
+  //     de uma chamada de RenderShader), está incondicionalmente ANTES de EndFrame(), então o
+  //     FBO 0 ainda tem exatamente o que o host desenhou antes deste frame da glintfx começar,
+  //     independente de quantos OUTROS elementos (ripple ou não) já pintaram nas camadas
+  //     privadas do RmlUi mais cedo na MESMA caminhada de árvore.
+  //
+  //     UMA-CAPTURA-POR-FRAME (intenção inalterada, mecanismo novo): `backdrop_captured_this_frame_`
+  //     trava true na primeira chamada de EnsureBackdropCaptured() de cada frame (resetada pra
+  //     false por ArmBackdropCapture, chamado uma vez por begin_frame_compose) -- se um documento
+  //     tem MÚLTIPLOS elementos ripple, só o PRIMEIRO desenhado a cada frame dispara a captura GL
+  //     de fato; todo elemento ripple posterior naquele frame reusa o MESMO
+  //     `backdrop_capture_tex_` (ainda correto: nenhum deles consegue ver os próprios draws uns
+  //     dos outros, já que a saída de render-layer do próprio RmlUi nunca alcança o FBO 0 até o
+  //     EndFrame(), muito depois de todo elemento ripple já ter desenhado).
+  //
+  //     SEGURANÇA DO READ-FRAMEBUFFER: inalterada do design original -- EnsureBackdropCaptured()
+  //     ainda revincula GL_READ_FRAMEBUFFER a 0 + glReadBuffer(GL_BACK) e NÃO restaura nenhum dos
+  //     dois por conta própria; GlStateGuard (gl_state.hpp) ainda é dono dessa restauração (a
+  //     janela ctor/dtor dele -- Engine::render_compose, engine.cpp -- ainda envolve a sequência
+  //     begin_frame_compose -> Context::Render() -> end_frame_compose inteira, então mover a
+  //     captura GL de fato pra ocorrer no meio de Context::Render() não muda nada sobre quando o
+  //     ctor/dtor do guard rodam em relação a ela).
   // ---------------------------------------------------------------------------
-  void CaptureBackdrop(int offset_x, int offset_y, int w, int h) {
-    if (!ripple_active_counter_ || *ripple_active_counter_ <= 0)
+
+  // EN: Cheap, unconditional, zero-GL-call "arm" step -- called once per frame from
+  //     RenderGl3::begin_frame_compose (below), BEFORE Context::Render() runs. Just remembers the
+  //     capture rectangle for whenever (if ever) EnsureBackdropCaptured() needs it this frame,
+  //     and resets the once-per-frame latch.
+  // PT: Passo "arm" barato, incondicional, zero-chamada-GL -- chamado uma vez por frame a partir
+  //     de RenderGl3::begin_frame_compose (abaixo), ANTES de Context::Render() rodar. Só lembra o
+  //     retângulo de captura pra quando (se algum dia) EnsureBackdropCaptured() precisar dele
+  //     neste frame, e reseta a trava de uma-vez-por-frame.
+  void ArmBackdropCapture(int offset_x, int offset_y, int w, int h) {
+    pending_offset_x_ = offset_x;
+    pending_offset_y_ = offset_y;
+    pending_w_ = w;
+    pending_h_ = h;
+    backdrop_captured_this_frame_ = false;
+  }
+
+  // EN: The real, on-demand capture -- called from RenderShader's "glintfx-ripple" branch
+  //     (above), never from begin_frame_compose directly (see this section's own doc comment for
+  //     the full derivation of why). Idempotent within a single frame via
+  //     `backdrop_captured_this_frame_` (armed/reset by ArmBackdropCapture, above).
+  // PT: A captura real, sob demanda -- chamada do ramo "glintfx-ripple" de RenderShader (acima),
+  //     nunca diretamente de begin_frame_compose (ver o doc-comment desta seção pra derivação
+  //     completa do porquê). Idempotente dentro de um único frame via
+  //     `backdrop_captured_this_frame_` (armado/resetado por ArmBackdropCapture, acima).
+  void EnsureBackdropCaptured() {
+    if (backdrop_captured_this_frame_)
       return;
+    backdrop_captured_this_frame_ = true;  // EN: latch BEFORE any early return below -- a failed
+                                            //     attempt (e.g. w<=0) should not be retried every
+                                            //     single ripple element this same frame.
+                                            // PT: trava ANTES de qualquer retorno antecipado
+                                            //     abaixo -- uma tentativa falha (ex.: w<=0) não
+                                            //     deve ser retentada a cada elemento ripple deste
+                                            //     mesmo frame.
+    const int offset_x = pending_offset_x_, offset_y = pending_offset_y_;
+    const int w = pending_w_, h = pending_h_;
     if (w <= 0 || h <= 0)
       return;
 
@@ -849,20 +952,6 @@ public:
 
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, offset_x, offset_y, w, h);
   }
-
-  // EN: L1.22-CAPTURE gate wiring — see CaptureBackdrop's doc comment above and
-  //     decorator_ripple.hpp's class-level doc comment for the full contract. `counter` must
-  //     outlive this Gl3RenderInterface — bootstrap.cpp satisfies that (RippleDecoratorInstancer
-  //     is owned by Bootstrap::Impl, which outlives Rml::Shutdown(), which in turn outlives this
-  //     RenderGl3/Gl3RenderInterface, per the caller-owns-render-interface contract documented in
-  //     render_gl3.hpp).
-  // PT: Conexão do gate do L1.22-CAPTURE — ver o doc-comment de CaptureBackdrop acima e o
-  //     doc-comment de nível de classe de decorator_ripple.hpp pro contrato completo. `counter`
-  //     precisa sobreviver a este Gl3RenderInterface — bootstrap.cpp satisfaz isso
-  //     (RippleDecoratorInstancer é dono de Bootstrap::Impl, que sobrevive ao Rml::Shutdown(),
-  //     que por sua vez sobrevive a este RenderGl3/Gl3RenderInterface, pelo contrato de
-  //     dono-do-render-interface-é-o-chamador documentado em render_gl3.hpp).
-  void set_ripple_active_counter(const int* counter) { ripple_active_counter_ = counter; }
 
 private:
   // EN: Lazily compiles the "glintfx-tint" GL program on first use (idempotent — a prior hard
@@ -996,20 +1085,28 @@ private:
   GLint ripple_loc_max_radius_ = -1;
 
   // EN: L1.22-CAPTURE — backdrop-capture GL texture + its current dimensions (see
-  //     CaptureBackdrop's doc comment above), and the non-owning gate-counter pointer wired in
-  //     by set_ripple_active_counter (bootstrap.cpp). `backdrop_capture_tex_`/`cap_w_`/`cap_h_`
+  //     EnsureBackdropCaptured's doc comment above). `backdrop_capture_tex_`/`cap_w_`/`cap_h_`
   //     stay at 0 for the entire lifetime of a Gl3RenderInterface that never renders a
-  //     "ripple()" element — see CaptureBackdrop's cost-zero-when-inactive gate.
+  //     "ripple()" element — see EnsureBackdropCaptured's cost-zero-when-inactive derivation.
   // PT: L1.22-CAPTURE — textura GL de captura de backdrop + as dimensões atuais dela (ver o
-  //     doc-comment de CaptureBackdrop acima), e o ponteiro não-dono do contador de gate
-  //     conectado por set_ripple_active_counter (bootstrap.cpp). `backdrop_capture_tex_`/
-  //     `cap_w_`/`cap_h_` ficam em 0 pela vida inteira de um Gl3RenderInterface que nunca
-  //     renderiza um elemento "ripple()" -- ver o gate custo-zero-quando-inativo de
-  //     CaptureBackdrop.
+  //     doc-comment de EnsureBackdropCaptured acima). `backdrop_capture_tex_`/`cap_w_`/`cap_h_`
+  //     ficam em 0 pela vida inteira de um Gl3RenderInterface que nunca renderiza um elemento
+  //     "ripple()" -- ver a derivação de custo-zero-quando-inativo de EnsureBackdropCaptured.
   GLuint backdrop_capture_tex_ = 0;
   int cap_w_ = 0;
   int cap_h_ = 0;
-  const int* ripple_active_counter_ = nullptr;
+
+  // EN: L1.22-CAPTURE COLD-START FIX — the "armed" capture rectangle (set by ArmBackdropCapture,
+  //     read by EnsureBackdropCaptured) and the once-per-frame latch. See the
+  //     ArmBackdropCapture/EnsureBackdropCaptured doc comment above for the full mechanism.
+  // PT: FIX DE COLD-START DO L1.22-CAPTURE — o retângulo de captura "armado" (setado por
+  //     ArmBackdropCapture, lido por EnsureBackdropCaptured) e a trava de uma-vez-por-frame. Ver
+  //     o doc-comment de ArmBackdropCapture/EnsureBackdropCaptured acima pro mecanismo completo.
+  int pending_offset_x_ = 0;
+  int pending_offset_y_ = 0;
+  int pending_w_ = 0;
+  int pending_h_ = 0;
+  bool backdrop_captured_this_frame_ = false;
 };
 
 namespace glintfx {
@@ -1102,21 +1199,29 @@ void RenderGl3::end_frame() {
 void RenderGl3::begin_frame_compose(int offset_x, int offset_y, int w, int h) {
   if (!impl_) return;
 
-  // EN: L1.22-CAPTURE — capture the host's FBO 0 backdrop BEFORE SetViewport()/BeginFrame()
-  //     below run, i.e. while FBO 0 still holds whatever the host already drew this frame (see
-  //     Gl3RenderInterface::CaptureBackdrop's own doc comment, render_gl3.cpp, for the full
-  //     rationale, the cost-zero-when-inactive gate, and the read-framebuffer-safety argument).
-  //     Gated internally on the "ripple()" active-instance counter (bootstrap.cpp wires it via
-  //     set_ripple_active_counter) -- a no-op, zero-GL-call return when no ripple decorator is
-  //     currently alive.
-  // PT: L1.22-CAPTURE — captura o backdrop do FBO 0 do host ANTES de SetViewport()/BeginFrame()
-  //     abaixo rodarem, isto é, enquanto o FBO 0 ainda tem o que o host já desenhou neste frame
-  //     (ver o próprio doc-comment de Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp, pra
-  //     racional completa, o gate custo-zero-quando-inativo, e o argumento de
-  //     segurança-do-read-framebuffer). Protegido internamente pelo contador de instância ativa
-  //     de "ripple()" (bootstrap.cpp conecta via set_ripple_active_counter) -- um retorno no-op,
-  //     zero-chamada-GL quando nenhum decorator ripple está vivo no momento.
-  impl_->renderer.CaptureBackdrop(offset_x, offset_y, w, h);
+  // EN: L1.22-CAPTURE, COLD-START FIX (post-647350f) — ARM the backdrop capture rectangle
+  //     unconditionally (cheap: 4 int stores + 1 bool reset, zero GL calls) BEFORE
+  //     SetViewport()/BeginFrame() below run, i.e. while FBO 0 still holds whatever the host
+  //     already drew this frame. The REAL, on-demand GL capture (glCopyTexSubImage2D and
+  //     friends) now happens later, from INSIDE Context::Render() (called by the caller right
+  //     after this function returns -- see Engine::render_compose, engine.cpp), the very first
+  //     time a "glintfx-ripple" shader actually draws -- see
+  //     Gl3RenderInterface::ArmBackdropCapture/EnsureBackdropCaptured's own doc comment
+  //     (render_gl3.cpp) for the full derivation of why arming here but capturing later is both
+  //     CORRECT (FBO 0 stays untouched by RmlUi across that entire window, not just up to this
+  //     point) and cost-zero-when-inactive (structurally, no counter needed).
+  // PT: L1.22-CAPTURE, FIX DE COLD-START (pós-647350f) — ARMA o retângulo de captura de backdrop
+  //     incondicionalmente (barato: 4 stores de int + 1 reset de bool, zero chamadas GL) ANTES
+  //     de SetViewport()/BeginFrame() abaixo rodarem, isto é, enquanto o FBO 0 ainda tem o que o
+  //     host já desenhou neste frame. A captura GL REAL, sob demanda (glCopyTexSubImage2D e
+  //     companhia) agora acontece depois, de DENTRO de Context::Render() (chamado pelo chamador
+  //     logo após esta função retornar -- ver Engine::render_compose, engine.cpp), na primeira
+  //     vez que um shader "glintfx-ripple" de fato desenha -- ver o próprio doc-comment de
+  //     Gl3RenderInterface::ArmBackdropCapture/EnsureBackdropCaptured (render_gl3.cpp) pra
+  //     derivação completa de por que armar aqui mas capturar depois é tanto CORRETO (o FBO 0
+  //     fica intocado pelo RmlUi por toda essa janela, não só até este ponto) quanto
+  //     custo-zero-quando-inativo (estruturalmente, sem contador necessário).
+  impl_->renderer.ArmBackdropCapture(offset_x, offset_y, w, h);
 
   // EN: NO glClear here -- the host owns the framebuffer contents (scene already drawn).
   //     NO direct glViewport() call here either (removed, v0.2.5): SetViewport()+BeginFrame()
@@ -1132,11 +1237,6 @@ void RenderGl3::begin_frame_compose(int offset_x, int offset_y, int w, int h) {
   //     acontece DENTRO de EndFrame() (ver doc-comment do header).
   impl_->renderer.SetViewport(w, h, offset_x, offset_y);
   impl_->renderer.BeginFrame();
-}
-
-void RenderGl3::set_ripple_active_counter(const int* counter) {
-  if (!impl_) return;
-  impl_->renderer.set_ripple_active_counter(counter);
 }
 
 void RenderGl3::end_frame_compose() {

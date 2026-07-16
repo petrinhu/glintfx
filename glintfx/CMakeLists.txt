@@ -515,6 +515,61 @@ if(GLINTFX_BACKEND_GLFW)
 endif()
 target_compile_features(glintfx PUBLIC cxx_std_17)
 
+# EN: -Wall -Wextra (CONTRACT §10.4 build-hygiene gap, chore/lw-aud) — applied via
+#     target_compile_options(glintfx PRIVATE ...), i.e. scoped to THIS single target only,
+#     never via directory-wide add_compile_options(). PRIVATE also means the flags never leak
+#     to consumers via usage requirements (a FetchContent/find_package consumer must not be
+#     forced to build under our warning flags). Deliberately does NOT touch RmlUi (~200 fetched
+#     translation units), glloader (INTERFACE, gl_loader.c compiled per-consumer) or the
+#     tests/demos subdirectories (26 test targets + 2 demo targets, out of scope for this
+#     pass) -- instrumenting those would drown our own signal in third-party/generated-code
+#     noise we do not control. No -Werror yet: 87 clang-tidy findings are already tracked as
+#     out-of-scope debt (see AUDITORIAS.md); promoting -Wall/-Wextra to a hard gate is a
+#     separate future decision, not bundled here.
+# PT: -Wall -Wextra (gap de higiene de build do CONTRACT §10.4, chore/lw-aud) — aplicado via
+#     target_compile_options(glintfx PRIVATE ...), ou seja, escopado só a ESTE alvo, nunca via
+#     add_compile_options() de diretório inteiro. PRIVATE também significa que as flags nunca
+#     vazam a consumidores via usage requirements (um consumidor via FetchContent/find_package
+#     não deve ser forçado a buildar sob nossas flags de warning). Deliberadamente NÃO toca no
+#     RmlUi (~200 unidades de tradução fetchadas), no glloader (INTERFACE, gl_loader.c
+#     compilado por-consumidor) nem nos subdiretórios tests/demos (26 alvos de teste + 2 de
+#     demo, fora de escopo nesta passada) -- instrumentar esses afogaria nosso próprio sinal em
+#     ruído de código de terceiro/gerado que não controlamos. Ainda sem -Werror: 87 achados de
+#     clang-tidy já são débito rastreado fora de escopo (ver AUDITORIAS.md); promover
+#     -Wall/-Wextra a gate duro é uma decisão futura separada, não incluída aqui.
+target_compile_options(glintfx PRIVATE -Wall -Wextra)
+
+# EN: The two RmlUi_*.cpp Backends files (${_rml_backends}/RmlUi_Renderer_GL3.cpp always,
+#     RmlUi_Platform_GLFW.cpp only when GLINTFX_BACKEND_GLFW=ON) are compiled directly as
+#     glintfx sources but are NOT ours -- they are RmlUi's own upstream backend source,
+#     referenced straight out of the FetchContent tree (${rmlui_SOURCE_DIR}/Backends), not
+#     even a vendored copy we could patch. -Wall -Wextra above is target-wide (target_compile_
+#     options has no per-source-subset form), so without this override these two files would
+#     leak third-party warning noise into our signal (confirmed: RmlUi_Renderer_GL3.cpp emits
+#     -Wunused-parameter at line 2142, code we do not author and would not "fix" upstream from
+#     here). -w on just these two source files silences that noise at its origin instead of
+#     polluting the target's warning output; it does not affect any of our own 17 authored
+#     sources in _glintfx_sources. Harmless to list RmlUi_Platform_GLFW.cpp unconditionally --
+#     the property is a no-op if the file is never added to the target's source list
+#     (GLINTFX_BACKEND_GLFW=OFF).
+# PT: Os dois arquivos RmlUi_*.cpp de Backends (${_rml_backends}/RmlUi_Renderer_GL3.cpp
+#     sempre, RmlUi_Platform_GLFW.cpp só com GLINTFX_BACKEND_GLFW=ON) são compilados
+#     diretamente como sources da glintfx mas NÃO são nossos -- são o próprio backend source
+#     upstream do RmlUi, referenciado direto da árvore FetchContent (${rmlui_SOURCE_DIR}/
+#     Backends), nem sequer uma cópia vendorizada que poderíamos remendar. O -Wall -Wextra
+#     acima é de escopo de alvo inteiro (target_compile_options não tem forma por-subconjunto-
+#     de-source), então sem este override esses dois arquivos vazariam ruído de warning de
+#     terceiro pro nosso sinal (confirmado: RmlUi_Renderer_GL3.cpp emite -Wunused-parameter na
+#     linha 2142, código que não autoramos e não "consertaríamos" upstream daqui). -w só
+#     nesses dois source files silencia o ruído na origem em vez de poluir a saída de warning
+#     do alvo; não afeta nenhum dos nossos 17 sources autorais em _glintfx_sources. Inofensivo
+#     listar RmlUi_Platform_GLFW.cpp incondicionalmente -- a property é no-op se o arquivo
+#     nunca entrar na lista de sources do alvo (GLINTFX_BACKEND_GLFW=OFF).
+set_source_files_properties(
+  ${_rml_backends}/RmlUi_Renderer_GL3.cpp
+  ${_rml_backends}/RmlUi_Platform_GLFW.cpp
+  PROPERTIES COMPILE_OPTIONS "-w")
+
 # EN: L1.18-COVCI -- instrument the glintfx library itself (no-op when GLINTFX_COVERAGE=OFF).
 #     See the GLINTFX_COVERAGE option block above for the full rationale (per-target, not
 #     directory-wide; why RmlUi/_deps stay uninstrumented; the demos/GLINTFX_BUILD_DEMOS caveat).

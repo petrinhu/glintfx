@@ -1,0 +1,34 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- EN: Scene for echo_sanity (L1.21-ECHO). Proves the "sprite-echo" RCSS pattern
+         (consumer-driven by GusWorld: a translucent, blue-tinted "ghost" copy of a sprite,
+         faded in/out by the host via the existing DOM API) is achievable with ZERO new glintfx
+         C++ feature -- only the "image-tint(<url>)" decorator (GLINTFX-TINT-1/2, shipped since
+         v0.3.x), CSS `opacity`, and `add_class`/`remove_class` (shipped since v0.9.0's
+         L1.16-DOMRW). See echo_scene.rcss for box geometry/decorator declarations and the exact
+         RGB arithmetic behind each proof.
+         No data-model needed here (unlike image_tint_scene.rml's data-style-image-tint-color
+         freshness proof) -- the toggle proof below drives #toggle_echo purely via
+         add_class("toggle_echo","echo-visible")/remove_class(...), the actual host-facing API a
+         game would call every frame the echo should be shown/hidden.
+     PT: Cena para echo_sanity (L1.21-ECHO). Prova que o padrão RCSS "sprite-eco"
+         (consumer-driven pelo GusWorld: uma cópia "fantasma" translúcida e tingida de azul de um
+         sprite, com fade in/out pelo host via a API DOM já existente) é alcançável com ZERO
+         feature C++ nova no glintfx -- só o decorator "image-tint(<url>)" (GLINTFX-TINT-1/2,
+         lançado desde v0.3.x), o `opacity` do CSS, e `add_class`/`remove_class` (lançados desde
+         o L1.16-DOMRW da v0.9.0). Ver echo_scene.rcss pra geometria de caixa/declarações de
+         decorator e a aritmética RGB exata por trás de cada prova.
+         Nenhum data-model necessário aqui (diferente da prova de frescor
+         data-style-image-tint-color de image_tint_scene.rml) -- a prova de toggle abaixo dirige
+         #toggle_echo puramente via add_class("toggle_echo","echo-visible")/remove_class(...), a
+         API de fato voltada ao host que um jogo chamaria a cada frame em que o eco deve
+         aparecer/sumir. -->
+<rml>
+<head>
+  <link type="text/rcss" href="echo_scene.rcss"/>
+</head>
+<body>
+  <div id="sprite_full"></div>
+  <div id="sprite_echo"></div>
+  <div id="toggle_echo"></div>
+</body>
+</rml>

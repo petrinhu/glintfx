@@ -1,0 +1,123 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* EN: Scene for echo_sanity (L1.21-ECHO). All three boxes reuse circle_rgba.png (the SAME 64x64
+       warm-red-circle-on-transparent fixture already vendored for texture_png_alpha.cpp, centre
+       texel RGB=(220,80,80) fully opaque -- see that test's header comment). Boxes are sized
+       64x64 (native texture resolution, 1:1 texel-to-px, no GL_LINEAR magnification blur at the
+       sampled centre) so the reasoning below is exact, not approximate.
+
+       image-tint-color:#0070ff (straight (0,112,255), alpha=1) was chosen -- rather than a
+       "softer" blue -- SPECIFICALLY because its R channel is exactly 0: under
+       image-tint-mode:multiply (tinted = straight * tint_color, per render_gl3.cpp's
+       kGlintfxTintFragmentShaderSrc), the circle's R channel (220) collapses to 0 while B (80)
+       survives unscaled (255/255=1.0 multiplier). That flips the circle's own dominant channel
+       from R (full sprite: R=220 >> B=80, "warm") to B (echo: B >> R=0, "cool/blue") -- a
+       qualitative hue INVERSION, not just a quantitative shift, which is what makes Proof 2 in
+       echo_sanity.cpp robust against tolerance-band flakiness (no need to hand-tune a threshold
+       between "still red" and "confidently blue").
+
+       opacity:0.35 on the echo boxes is the GusWorld-consumer-driven value cited in this task
+       ("opacity ~0.35"). The harness (echo_sanity.cpp's capture()) renders TWO frames with NO
+       clear between them (UiLayer's compose-mode contract, same methodology as
+       image_tint_sanity.cpp/polygon_gradient_sanity.cpp), so a partially-transparent draw
+       ACCUMULATES: effective alpha over 2 un-cleared frames = 1-(1-0.35)^2 = 0.5775 (harmless,
+       documented property of the 2-frame TEST harness, not a bug -- see image_tint_sanity.cpp's
+       Proof 5 comment for the general derivation). Hand-derived expected centre pixels (straight
+       tinted colour (0, 0.1378, 0.3137) normalized, i.e. (0,35,80) in 0-255 space, times the
+       2-frame-accumulated alpha factor):
+         #sprite_full  (opacity 1.0, native image(), no tint) -> (220, 80, 80)  [idempotent -- an
+           opaque draw's 2nd frame fully overwrites the 1st, see image_tint_sanity.cpp Proof 6]
+         #sprite_echo  (opacity 0.35, image-tint multiply #0070ff) -> ~(0, 20, 46)
+         #toggle_echo  BEFORE add_class("echo-visible")  (opacity 0)    -> (0, 0, 0) (pure body bg)
+         #toggle_echo  AFTER  add_class("echo-visible")  (opacity 0.35) -> ~(0, 20, 46) (same
+           recipe as #sprite_echo -- echo_sanity.cpp glClear()s before this capture so it is an
+           independent, un-accumulated-with-the-OFF-state reading)
+         #toggle_echo  AFTER  remove_class("echo-visible") (back to opacity 0) -> (0, 0, 0) again
+           -- proves the sprite-echo is a REVERSIBLE on/off toggle, not a one-shot fade.
+   PT: Cena para echo_sanity (L1.21-ECHO). As três caixas reusam circle_rgba.png (a MESMA fixture
+       64x64 de círculo vermelho-quente sobre transparência já vendorizada para
+       texture_png_alpha.cpp, texel central RGB=(220,80,80) totalmente opaco -- ver o comentário
+       de cabeçalho daquele teste). Caixas dimensionadas 64x64 (resolução nativa da textura,
+       texel-para-px 1:1, sem blur de magnificação GL_LINEAR no centro amostrado) para que o
+       raciocínio abaixo seja exato, não aproximado.
+
+       image-tint-color:#0070ff (straight (0,112,255), alpha=1) foi escolhido -- em vez de um
+       azul "mais suave" -- ESPECIFICAMENTE porque seu canal R é exatamente 0: sob
+       image-tint-mode:multiply (tinted = straight * tint_color, conforme
+       kGlintfxTintFragmentShaderSrc de render_gl3.cpp), o canal R do círculo (220) colapsa para 0
+       enquanto B (80) sobrevive sem escala (multiplicador 255/255=1.0). Isso inverte o canal
+       dominante do próprio círculo, de R (sprite cheio: R=220 >> B=80, "quente") para B (eco:
+       B >> R=0, "frio/azul") -- uma INVERSÃO qualitativa de matiz, não só um deslocamento
+       quantitativo, o que torna a Prova 2 de echo_sanity.cpp robusta contra flakiness de banda de
+       tolerância (sem precisar calibrar à mão um limiar entre "ainda vermelho" e
+       "confiavelmente azul").
+
+       opacity:0.35 nas caixas de eco é o valor consumer-driven pelo GusWorld citado nesta tarefa
+       ("opacity ~0.35"). O harness (capture() de echo_sanity.cpp) renderiza DOIS frames SEM clear
+       entre eles (contrato de modo-compose do UiLayer, mesma metodologia de
+       image_tint_sanity.cpp/polygon_gradient_sanity.cpp), então um draw parcialmente transparente
+       ACUMULA: alfa efetivo sobre 2 frames sem clear = 1-(1-0.35)^2 = 0.5775 (propriedade
+       inofensiva e documentada do harness de TESTE de 2 frames, não um bug -- ver o comentário da
+       Prova 5 de image_tint_sanity.cpp pra derivação geral). Pixels centrais esperados derivados à
+       mão (cor tingida straight (0, 0.1378, 0.3137) normalizada, i.e. (0,35,80) em espaço 0-255,
+       vezes o fator de alfa acumulado em 2 frames): ver a lista em inglês acima (espelhada aqui em
+       conceito) -- #sprite_full opaco (220,80,80) idempotente; #sprite_echo ~(0,20,46);
+       #toggle_echo ANTES do add_class (opacity 0) -> (0,0,0) puro fundo do body; #toggle_echo
+       DEPOIS do add_class("echo-visible") (opacity 0.35) -> ~(0,20,46) (mesma receita de
+       #sprite_echo -- echo_sanity.cpp dá glClear() antes desta captura, então é uma leitura
+       independente, não acumulada com o estado OFF); #toggle_echo DEPOIS do
+       remove_class("echo-visible") (volta a opacity 0) -> (0,0,0) de novo -- prova que o
+       sprite-eco é um toggle on/off REVERSÍVEL, não um fade de disparo único. */
+
+body {
+  background-color: #000000;
+}
+
+/* "Full" sprite -- the real, opaque, untinted game object. Native image() decorator, no glintfx
+   feature involved at all -- the baseline every echo is compared against. */
+#sprite_full {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  width: 64px;
+  height: 64px;
+  decorator: image(circle_rgba.png);
+}
+
+/* "Echo" sprite -- always-on variant (no class toggle) proving the STATIC recipe: translucent
+   (opacity) + blue-tinted (image-tint multiply) copy of the same sprite. This is the load-bearing
+   proof pair with #sprite_full (Proofs 1+2 in echo_sanity.cpp). */
+#sprite_echo {
+  position: absolute;
+  left: 120px;
+  top: 20px;
+  width: 64px;
+  height: 64px;
+  decorator: image-tint(circle_rgba.png);
+  image-tint-mode: multiply;
+  image-tint-color: #0070ff;
+  opacity: 0.35;
+}
+
+/* "Toggle" echo -- IDENTICAL recipe to #sprite_echo, but opacity:0 by default (i.e. absent) and
+   only reaching opacity:0.35 once the host calls add_class(id,"echo-visible") -- proving the
+   pattern is driven by the DOM API a real host (GusWorld) would call every frame the echo should
+   be shown, not just a static RCSS declaration. A real host would additionally declare
+   `transition: opacity 150ms;` here for a smooth fade; deliberately OMITTED in this test scene so
+   the toggle proof (Proof 3 in echo_sanity.cpp) is a DETERMINISTIC before/after comparison, not
+   dependent on wall-clock transition timing (SystemClock uses real steady_clock -- see
+   src/system_clock.hpp -- so an animated assertion would be inherently flaky under CI scheduling
+   jitter). */
+#toggle_echo {
+  position: absolute;
+  left: 20px;
+  top: 120px;
+  width: 64px;
+  height: 64px;
+  decorator: image-tint(circle_rgba.png);
+  image-tint-mode: multiply;
+  image-tint-color: #0070ff;
+  opacity: 0;
+}
+#toggle_echo.echo-visible {
+  opacity: 0.35;
+}

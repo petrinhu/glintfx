@@ -1533,6 +1533,44 @@ add_test(NAME image_tint_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: echo_sanity (L1.21-ECHO) -- proves the "sprite-echo" RCSS pattern (consumer-driven by
+#     GusWorld: a translucent, blue-tinted "ghost" copy of a sprite, faded in/out by the host) is
+#     achievable with ZERO new glintfx C++ feature -- only the existing "image-tint(<url>)"
+#     decorator (GLINTFX-TINT-1/2) + CSS opacity + the existing add_class/remove_class DOM API
+#     (L1.16-DOMRW). Reuses the circle_rgba.png fixture already vendored for texture_png_alpha.cpp
+#     (copied again here, flat, next to echo_scene.rml/.rcss, so this embed-mode test's
+#     WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR resolves "circle_rgba.png" the same way
+#     image_tint_sanity resolves "image_tint_fixture.png"). Same build-config/WORKING_DIRECTORY
+#     pattern as image_tint_sanity/polygon_gradient_sanity above (runs in BOTH GLINTFX_BACKEND_GLFW
+#     configs -- the decorator + opacity + DOM API are all backend-agnostic).
+# PT: echo_sanity (L1.21-ECHO) -- prova que o padrão RCSS "sprite-eco" (consumer-driven pelo
+#     GusWorld: uma cópia "fantasma" translúcida e tingida de azul de um sprite, com fade in/out
+#     pelo host) é alcançável com ZERO feature C++ nova no glintfx -- só o decorator
+#     "image-tint(<url>)" já existente (GLINTFX-TINT-1/2) + o opacity do CSS + a API DOM
+#     add_class/remove_class já existente (L1.16-DOMRW). Reusa a fixture circle_rgba.png já
+#     vendorizada para texture_png_alpha.cpp (copiada de novo aqui, plana, junto de
+#     echo_scene.rml/.rcss, para que este teste embed com
+#     WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR resolva "circle_rgba.png" do mesmo jeito que
+#     image_tint_sanity resolve "image_tint_fixture.png"). Mesmo padrão de
+#     config-de-build/WORKING_DIRECTORY de image_tint_sanity/polygon_gradient_sanity acima (roda em
+#     AMBAS as configs de GLINTFX_BACKEND_GLFW -- decorator + opacity + API DOM são todos
+#     backend-agnósticos).
+# ---------------------------------------------------------------------------
+add_executable(echo_sanity echo_sanity.cpp)
+target_link_libraries(echo_sanity PRIVATE ${_embed_dep} glloader)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/echo_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/echo_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/echo_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/echo_scene.rcss COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/circle_rgba.png
+               ${CMAKE_CURRENT_BINARY_DIR}/circle_rgba.png COPYONLY)
+add_test(NAME echo_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:echo_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: input_hardening_sanity -- proves the three v0.3.0 input-surface hardening fixes (security
 #     audit) reject invalid input fail-high without breaking valid use, all via the UiLayer/Engine
 #     path shared with App: Bootstrap::load(nullptr) -> false with no SIGABRT [CRITICAL];

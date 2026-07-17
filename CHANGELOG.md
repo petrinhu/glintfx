@@ -12,6 +12,23 @@
 
 ---
 
+## [0.11.1] - 2026-07-16 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.11.1)
+
+**EN:** **Patch** release -- security hardening from the formal Layer-1 audit wave (`LW-AUD`); no public API surface change, drop-in from v0.11.0. The headline is a **denial-of-service guard against oversized asset files**: a `256 MiB` ceiling in `BaseUrlFileInterface::Open()` now caps every file the UI loads (images **and** `@font-face` fonts -- both engines route through it), rejecting a hostile/corrupt oversized file gracefully with a log instead of a `bad_alloc` / `allocation-size-too-big` that would take the host process down. A defence-in-depth guard also sits in `LoadTexture` (plus an `INT_MAX` overflow guard on the stb size cast). Found and closed by an adversarial review that reproduced the crash. Also: `-Wall -Wextra` on the `glintfx` target (zero warnings across the 17 authored sources), a new `RELEASE_CHECKLIST.md` and audit dossier index (`docs/auditoria/README.md`), and the `SECURITY.md` supported-versions table corrected to 0.11.x.
+**PT:** Release **patch** -- hardening de segurança da onda de auditoria formal da Camada 1 (`LW-AUD`); nenhuma mudança de superfície de API pública, drop-in a partir da v0.11.0. O destaque é uma **guarda de negação-de-serviço contra arquivos de asset gigantes**: um teto de `256 MiB` em `BaseUrlFileInterface::Open()` agora limita todo arquivo que a UI carrega (imagens **e** fontes `@font-face` -- ambos os motores passam por lá), rejeitando graciosamente com log um arquivo hostil/corrompido gigante em vez de um `bad_alloc` / `allocation-size-too-big` que derrubaria o processo host. Uma guarda de defesa-em-camadas também fica no `LoadTexture` (mais uma guarda de overflow `INT_MAX` no cast de tamanho do stb). Achado e fechado por um review adversarial que reproduziu o crash. Também: `-Wall -Wextra` no alvo `glintfx` (zero warnings nos 17 sources autorais), um novo `RELEASE_CHECKLIST.md` e índice do dossiê de auditoria (`docs/auditoria/README.md`), e a tabela de versões suportadas do `SECURITY.md` corrigida pra 0.11.x.
+
+### Security / Segurança
+
+- **EN:** DoS guard: 256 MiB file-size ceiling in `BaseUrlFileInterface::Open()` (covers image + font asset loading), fail-secure with an `LT_WARNING` log; defence-in-depth guard + `INT_MAX` cast guard in `Gl3RenderInterface::LoadTexture`. New adversarial corpus test `asset_decode_hostile_sanity` (mutation-validated). `AUD-L1-PARSE`.
+- **PT:** Guarda de DoS: teto de 256 MiB em `BaseUrlFileInterface::Open()` (cobre carregamento de asset de imagem + fonte), fail-secure com log `LT_WARNING`; guarda de defesa-em-camadas + guarda de cast `INT_MAX` no `Gl3RenderInterface::LoadTexture`. Teste de corpus adversarial novo `asset_decode_hostile_sanity` (validado por mutation). `AUD-L1-PARSE`.
+
+### Changed / Alterado
+
+- **EN:** `-Wall -Wextra` on the `glintfx` target (authored sources only; third-party TUs untouched). `SECURITY.md` supported-versions table 0.4.x → 0.11.x.
+- **PT:** `-Wall -Wextra` no alvo `glintfx` (só sources autorais; TUs de terceiros intocadas). Tabela de versões suportadas do `SECURITY.md` 0.4.x → 0.11.x.
+
+---
+
 ## [0.11.0] - 2026-07-16 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.11.0)
 
 **EN:** **Minor** release -- the **backdrop-ripple** decorator (`L1.22-WAVE`/`L1.22-CAPTURE`). glintfx can now **capture the host's FBO 0 into an internal texture** and refract it screen-space via a data-driven `decorator: ripple(...)` in RCSS -- a shimmer over glintfx's own UI, driven entirely by custom RCSS properties (no imperative effect API, per the project principle). Scope is honest: this refracts glintfx's **own** content (the composed UI layer), **not** the host's battle scene -- an embed host that wants to distort its own render target does that host-side (see the reference GLSL in `docs/embed-integration.md`). The capture is **structurally cost-zero when no ripple is active** (arm/ensure pattern: an unconditional zero-GL arm in `begin_frame_compose`, plus a lazy on-demand capture reached only from inside the `ripple` shader path during `Context::Render()`). Additive and drop-in from v0.10.0: no existing public signature changes; a consumer that never uses `decorator: ripple` pays nothing. See [ADR-0012](docs/adr/0012-backdrop-capture.md).

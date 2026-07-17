@@ -1600,6 +1600,54 @@ add_test(NAME input_hardening_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE, LW-AUD wave) -- fixed 5-case
+#     corpus test for Gl3RenderInterface::LoadTexture (render_gl3.cpp) against malformed/hostile
+#     asset files: PNG truncated mid-IDAT, pure garbage bytes, a PNG with absurd declared
+#     dimensions (100000x100000), a 0-byte file, and a sparse file one byte past the 256 MiB
+#     file-size cap the same audit wave added. Oracle: each hostile document still LOADS (broken
+#     texture degrades the <img>, not the document), no crash/UB/OOM, and the engine remains
+#     fully usable afterward (a real PNG decode still succeeds post-corpus). See
+#     asset_decode_hostile_sanity.cpp's own top comment for the full per-case rationale and why
+#     this is NOT a fuzz campaign (stb_image is already one of the world's most fuzzed OSS
+#     targets; glintfx's own code around it is ~6 lines). Runs in BOTH build configs (embed-mode,
+#     links ${_embed_dep} glloader -- same pair as input_hardening_sanity above; glloader is
+#     needed for offscreen.hpp's own <gl_loader.h> include even though this test has no
+#     GL-entry-point spy, unlike ripple_sanity). Depends on image_tint_fixture.png, already copied to
+#     CMAKE_CURRENT_BINARY_DIR by the image_tint_sanity/ripple_stress_sanity blocks above for the
+#     final "still usable" real-asset check. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (repo-
+#     wide embed-test convention) so "image_tint_fixture.png" resolves by bare relative name;
+#     hostile fixtures themselves are written at runtime under /var/tmp (NOT /tmp -- tmpfs on the
+#     dev machine, see the project's own CLAUDE.md gotcha), not checked into the build tree.
+# PT: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE, onda LW-AUD) -- teste de corpus
+#     fixo de 5 casos para Gl3RenderInterface::LoadTexture (render_gl3.cpp) contra arquivos de
+#     asset malformados/hostis: PNG truncado no meio do IDAT, bytes de lixo puro, um PNG com
+#     dimensões declaradas absurdas (100000x100000), um arquivo 0-byte, e um arquivo esparso um
+#     byte acima do teto de 256 MiB que a mesma onda de auditoria adicionou. Oráculo: cada
+#     documento hostil ainda CARREGA (textura quebrada degrada o <img>, não o documento), sem
+#     crash/UB/OOM, e o engine permanece totalmente usável depois (um decode de PNG real ainda
+#     funciona pós-corpus). Ver o próprio comentário do topo de asset_decode_hostile_sanity.cpp
+#     pro racional completo por-caso e por que isto NÃO é uma campanha de fuzz (stb_image já é um
+#     dos alvos OSS mais fuzzados do mundo; o código próprio da glintfx ao redor dele tem ~6
+#     linhas). Roda em AMBAS as configs de build (embed-mode, linka ${_embed_dep} glloader --
+#     mesmo par de input_hardening_sanity acima; glloader é necessário pro próprio
+#     <gl_loader.h> de offscreen.hpp mesmo este teste não tendo espião de GL-entry-point,
+#     diferente do ripple_sanity). Depende de image_tint_fixture.png, já copiado para
+#     CMAKE_CURRENT_BINARY_DIR pelos blocos
+#     image_tint_sanity/ripple_stress_sanity acima para o check final "ainda usável" de asset
+#     real. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (convenção repo-wide de teste embed) para
+#     "image_tint_fixture.png" resolver por nome relativo simples; as fixtures hostis em si são
+#     escritas em runtime sob /var/tmp (NÃO /tmp -- tmpfs na máquina de dev, ver o gotcha do
+#     CLAUDE.md deste projeto), não versionadas na árvore de build.
+# ---------------------------------------------------------------------------
+add_executable(asset_decode_hostile_sanity asset_decode_hostile_sanity.cpp)
+target_link_libraries(asset_decode_hostile_sanity PRIVATE ${_embed_dep} glloader)
+add_test(NAME asset_decode_hostile_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:asset_decode_hostile_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: data_model_embed_sanity -- embed-path (UiLayer) end-to-end proof for the data-model API
 #     (AUD-TEC-7, 2026-07-08 audit finding): create_data_model/bind_number/bind_string/
 #     bind_bool/bind_list/load/set_number/set_string/set_bool/set_list, all via UiLayer, never

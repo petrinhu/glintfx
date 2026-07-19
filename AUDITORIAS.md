@@ -4,6 +4,8 @@ Manual de auditorias do projeto. Auditoria é **downstream** de código + teste:
 
 ## Catálogo aplicável
 
+**Estado (2026-07-19): `AUD-ABI`/`AUD-SEC` re-emitidas como delta na Onda 4** (`AUD-ABI-Δ`/`AUD-SEC-Δ`, `docs/auditoria/AUD-C0-PLAN.md`), cobrindo tudo que pousou na Camada 0 depois da auditoria original de 2026-07-09 (`core-v0.1.0`) — alocador free-list reescrito, `ftoa`/`atof`/`%f`, a fronteira `libcore.a` (ADR-0009), SFNT `kern`/bsearch, `src/hint.c` (1ª auditoria, gate `sanitize-hint` novo). Ambos vereditos **CONFORME-COM-RESSALVAS**, 1 achado 🟠 IMPORTANTE cada, **ambos encontrados E resolvidos dentro da própria onda** (custo PIE/ASLR aceito por adendo à ADR-0009; overflow de mantissa do `atof` corrigido em 2 rodadas com 2 reviews adversariais). Zero 🔴 CRÍTICO. Relatórios em `docs/auditoria/AUD-ABI.md`/`AUD-SEC.md` (seção "Delta re-audit 2026-07-19"); índice consolidado em `docs/auditoria/README.md`. `REL-TAG core-v0.4.0` segue como decisão go/no-go do líder, ver `TODO.md` (linhas `AUD-ABI-Δ`/`AUD-SEC-Δ`).
+
 | ID | Auditoria | O que verifica | Pré-requisito |
 | :--- | :--- | :--- | :--- |
 | AUD-ABI | Conformidade ABI / ASM | Convenção de chamada System V AMD64 ([ADR-0003](docs/adr/0003-internal-abi.md)): preservação de registradores callee-saved (`rbx,rbp,r12-r15`), alinhamento de stack 16B em todo `call`, uso correto de `r10` no `syscall`, ausência de clobber indevido | Código de bootstrap + libc-núcleo testados |
@@ -25,7 +27,8 @@ Auditorias da biblioteca C++ (RmlUi 6.3 + renderer GL3), stack distinta da Camad
 
 ### Semente — dívida técnica (não-catalogada ainda)
 
-- **AUD-L1-QUALITY** (levantada na consolidação `LW-AUD` 2026-07-16, sem gatilho urgente): god-class/complexidade ciclomática/dead-code da Camada 1, escopo do `tech-lead` (não do `security-engineer`/`compliance-legal` — este catálogo é de segurança/compliance, não de qualidade de código). Candidatos já identificados: `font_engine_own.cpp` (1727L), `bootstrap.cpp` (1500L), `render_gl3.cpp` (1349L). Pull antes da v1.0. Detalhe em `TODO.md` INBOX.
+- ~~**AUD-L1-QUALITY**~~ ✅ **RESOLVIDA 2026-07-19** (levantada na consolidação `LW-AUD` 2026-07-16, puxada na Onda 1 do `chore/l1-quality`): god-class/complexidade ciclomática/dead-code da Camada 1, escopo do `tech-lead` (não do `security-engineer`/`compliance-legal`). Veredito **CONFORME COM RESSALVAS** (`docs/auditoria/AUD-L1-QUALITY.md`): os 3 candidatos (`font_engine_own.cpp` 1727L/`bootstrap.cpp` 1500L/`render_gl3.cpp` 1349L) **não são god-classes** (55–74% do volume é doc-comment bilíngue obrigatório; medidos em código, 469–577L cada); zero dead-code; 2 duplicações reais achadas e corrigidas (`0f29879`/`d6ee6ba`). Detalhe em `TODO.md` INBOX.
+- **AUD-C0-PICVAR** (semente nova, levantada pelo achado 🟠 do `AUD-ABI-Δ` 2026-07-19, ver adendo da [ADR-0009](docs/adr/0009-internalization-boundary.md)): variante `-fpic` da `libcore.a` pra consumidor hosted que exigir PIE — deliberadamente NÃO construída sem consumidor real. Detalhe em `TODO.md` INBOX.
 
 ### Fora de escopo (descartados — sem superfície neste perfil)
 

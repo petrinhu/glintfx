@@ -61,6 +61,13 @@ já validou em produção -- não é construir um sistema de input do zero.
 
 ## 2. Desenho (coerente com o ADR-0015)
 
+Nota de escopo de módulos (decisão do líder 2026-07-19, ADR-0015 (c)): **ui e fx agora são
+DOIS átomos separados** (fx = efeitos opt-in, dependência de mão única fx -> ui). Isso **não
+muda nenhuma superfície do A1**: o input toca window (`window_glfw.*`), o núcleo ui
+(`engine.*`, rota `UiEvent`) e o agregador app (`app.*`); ZERO contato com decorators ou
+shaders de efeito. O recorte físico do fx pra fora do `render_gl3.cpp` é fase própria,
+posterior, sob o princípio "mais fácil + melhor ROI primeiro" (ADR-0015 (g)).
+
 Três peças, cada uma no módulo a que pertence (regra (f) do ADR-0015: código pré-A0 aterrissa
 posicionado pro split futuro de flag ser movimento de build, não refactor):
 

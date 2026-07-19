@@ -19,3 +19,5 @@
 | [0011](0011-soft-font-flip.md) | Soft font-engine flip (own engine default, FreeType reversible) / Flip suave de motor de fonte (motor próprio default, FreeType reversível) | Accepted |
 | [0012](0012-backdrop-capture.md) | Backdrop capture: glintfx reads FBO 0, conditionally / Captura de backdrop: a glintfx lê o FBO 0, condicionalmente | Accepted |
 | [0013](0013-gl-symbol-boundary.md) | GL loader symbol boundary: `glx_` prefix on every exported pointer / Fronteira de símbolo do loader GL: prefixo `glx_` em todo ponteiro exportado | Accepted |
+| 0014 | (retired -- abandoned on a deleted branch, number not reused / aposentado -- abandonado em branch deletado, número não reutilizado) | Abandoned |
+| [0015](0015-framework-2d-atomized-architecture.md) | Framework 2D: atomized-by-subsystem architecture / Framework 2D: arquitetura atomizada por subsistema | Accepted |

@@ -85,11 +85,44 @@ public:
   // PT: Avança o contexto RmlUi um passo (chamar uma vez por frame antes de render_*).
   void update();
 
-  // EN: Standalone frame path — clear + render UI + alpha-fix on FBO0.
+  // EN: Standalone frame path — clear + [scene_hook] + render UI + alpha-fix on FBO0.
   //     Used by App (owns the window). Does NOT swap buffers.
-  // PT: Caminho de frame standalone — clear + render UI + alpha-fix no FBO0.
+  //     `scene_hook` (A1, framework-2D -- App::set_frame_callback's underlying insertion
+  //     point) runs, if set, AFTER the clear (RmlUi's own BeginFrame() has already run, so
+  //     the GL state it just established is live) and BEFORE the UI render pass, so a game
+  //     scene drawn inside it composes UNDER the UI. GL STATE CONTRACT: the hook may leave
+  //     ARBITRARY GL state behind (bind any program/VAO/texture, toggle
+  //     blend/depth/scissor/cull/stencil, change blend func/equation, change the active
+  //     texture unit or 2D texture binding, rebind the draw framebuffer) -- a GlStateGuard
+  //     snapshot taken right before the hook runs is used to restore that exact set of state
+  //     to what RmlUi's own BeginFrame() had just set, immediately after the hook returns and
+  //     before Context::Render() runs, so the UI render pass never sees hook-induced state
+  //     drift (confirmed necessary by reading the pinned RmlUi 6.3 GL3 backend: its own
+  //     BeginFrame() sets blend/depth/cull/scissor once per frame, and RenderGeometry() does
+  //     NOT re-assert most of that per draw call -- see
+  //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.3's "risk to
+  //     verify" note for the full derivation). No-op (scene_hook not invoked) when not ok() or
+  //     when scene_hook is empty.
+  // PT: Caminho de frame standalone — clear + [scene_hook] + render UI + alpha-fix no FBO0.
   //     Usado pelo App (dono da janela). NÃO faz swap de buffers.
-  void render_standalone(int w, int h);
+  //     `scene_hook` (A1, framework-2D -- o ponto de inserção por trás de
+  //     App::set_frame_callback) roda, se definido, APÓS o clear (o próprio BeginFrame() do
+  //     RmlUi já rodou, então o estado GL que ele acabou de estabelecer está vivo) e ANTES do
+  //     passe de render de UI, para que uma cena de jogo desenhada dentro dele componha SOB a
+  //     UI. CONTRATO DE ESTADO GL: o hook pode deixar estado GL ARBITRÁRIO para trás (vincular
+  //     qualquer programa/VAO/textura, alternar blend/depth/scissor/cull/stencil, mudar
+  //     função/equação de blend, mudar a unidade de textura ativa ou o binding de textura 2D,
+  //     revincular o draw framebuffer) -- um snapshot de GlStateGuard tirado logo antes do hook
+  //     rodar é usado para restaurar exatamente esse conjunto de estado ao que o próprio
+  //     BeginFrame() do RmlUi tinha acabado de definir, imediatamente após o hook retornar e
+  //     antes de Context::Render() rodar, para que o passe de render de UI nunca veja deriva de
+  //     estado induzida pelo hook (confirmado necessário lendo o backend GL3 pinado do RmlUi
+  //     6.3: o próprio BeginFrame() dele define blend/depth/cull/scissor uma vez por frame, e
+  //     RenderGeometry() NÃO reafirma a maior parte disso por chamada de desenho -- ver a nota
+  //     "risco a verificar" da seção 2.3 de
+  //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md para a derivação completa).
+  //     No-op (scene_hook não invocado) quando não ok() ou quando scene_hook está vazio.
+  void render_standalone(int w, int h, const std::function<void()>& scene_hook = {});
 
   // EN: Compose-only frame path. (offset_x, offset_y) are OpenGL-native (bottom-left-origin)
   //     viewport offset -- ALREADY CONVERTED by the caller (UiLayer). Engine stays offset-space

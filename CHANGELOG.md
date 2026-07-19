@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** (branch `feat/framework2d`, not yet released) `glintfx::App` gets its own physical input route (A1, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): GLFW keyboard/mouse/scroll events now reach the UI in standalone mode via the same neutral `UiEvent` translation embed mode has always used, refactored up into a shared `Engine::process_event`. New public surface: `App::process_event(const UiEvent&)` (synthetic/replay channel, parity with `UiLayer::process_event`) and `App::set_frame_callback(fn(dt))` (game per-frame draw hook, GL-current, composes under the UI). Suite grows to 57 GLFW=ON / 37 embed.
+- **PT:** (branch `feat/framework2d`, ainda não lançado) `glintfx::App` ganha rota de input físico própria (A1, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): eventos de teclado/mouse/scroll do GLFW agora chegam à UI no modo standalone pela mesma tradução neutra `UiEvent` que o embed mode sempre usou, subida para um `Engine::process_event` compartilhado. Superfície pública nova: `App::process_event(const UiEvent&)` (canal sintético/replay, paridade com `UiLayer::process_event`) e `App::set_frame_callback(fn(dt))` (hook de desenho por-frame do jogo, GL corrente, compõe sob a UI). Suíte cresce para 57 GLFW=ON / 37 embed.
+
 ---
 
 ## [0.11.2] - 2026-07-19 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.11.2)

@@ -1,0 +1,6 @@
+<rml>
+<head><link type="text/rcss" href="app_process_event_scene.rcss"/></head>
+<body>
+  <div id="btn_a">&nbsp;</div>
+</body>
+</rml>

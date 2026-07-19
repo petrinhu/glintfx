@@ -53,6 +53,24 @@ struct App::Impl {
   int  last_render_h = 0;
   bool ok = false;
 
+  // EN: A1 (framework-2D) -- the game's per-frame draw hook + dt bookkeeping. frame_cb is
+  //     empty until set_frame_callback() installs one; render() below only measures time and
+  //     builds the scene_hook lambda when it is non-empty (zero cost otherwise). frame_cb_seen
+  //     tracks whether render() has ever invoked the hook before -- the FIRST invocation
+  //     reports dt_seconds=0.0f (no meaningful previous frame to measure against, see
+  //     App::set_frame_callback's doc-comment in app.hpp) instead of a huge bogus delta against
+  //     last_frame_time's zero-initialised value.
+  // PT: A1 (framework-2D) -- o hook de desenho por-frame do jogo + contabilidade de dt.
+  //     frame_cb fica vazio até set_frame_callback() instalar um; o render() abaixo só mede
+  //     tempo e constrói a lambda scene_hook quando ele não está vazio (custo zero caso
+  //     contrário). frame_cb_seen rastreia se o render() já invocou o hook alguma vez antes --
+  //     a PRIMEIRA invocação reporta dt_seconds=0.0f (nenhum frame anterior significativo para
+  //     medir contra, ver o doc-comment de App::set_frame_callback em app.hpp) em vez de um
+  //     delta bogus enorme contra o valor zero-inicializado de last_frame_time.
+  std::function<void(float)> frame_cb;
+  double                     last_frame_time = 0.0;
+  bool                       frame_cb_seen   = false;
+
   // EN: AUD-PUB-1-TWIN (v0.5.0) -- shared diff-and-set_viewport helper, see the doc-comment on
   //     the out-of-line definition below (just above App::render()) for the full rationale.
   //     Called by BOTH render() and snapshot() so a window resize is picked up identically
@@ -62,6 +80,25 @@ struct App::Impl {
   //     racional completa. Chamado por AMBOS render() e snapshot() para que um resize de janela
   //     seja capturado identicamente independente de qual dos dois roda primeiro depois dele.
   void sync_viewport(int w, int h);
+
+  // EN: A1 (framework-2D) -- shared render_standalone(+hook) call, same AUD-PUB-1-TWIN
+  //     "share it, do not duplicate it" discipline as sync_viewport() above. Without this,
+  //     App::snapshot() would silently skip the frame_cb hook the way it used to silently skip
+  //     sync_viewport() before the AUD-PUB-1-TWIN fix -- a host driving its game loop through
+  //     snapshot() (e.g. an offscreen/CI capture harness) would see a game scene that never
+  //     appears in its captured frames, and tests/app_frame_callback_smoke.cpp's pixel-proof
+  //     leg (paint inside the hook, then snapshot() to verify composition order) would not be
+  //     exercising the hook at all. Measures dt the same way both call sites used to inline it.
+  // PT: A1 (framework-2D) -- chamada compartilhada de render_standalone(+hook), mesma
+  //     disciplina "compartilhe, não duplique" do AUD-PUB-1-TWIN de sync_viewport() acima. Sem
+  //     isto, App::snapshot() puraria silenciosamente o hook frame_cb do mesmo jeito que
+  //     pulava silenciosamente sync_viewport() antes do fix AUD-PUB-1-TWIN -- um host que
+  //     conduz o loop do jogo através de snapshot() (ex.: um harness de captura offscreen/CI)
+  //     veria uma cena de jogo que nunca aparece nos frames capturados, e a perna de prova por
+  //     pixel de tests/app_frame_callback_smoke.cpp (pintar dentro do hook, depois snapshot()
+  //     para verificar a ordem de composição) não estaria exercitando o hook nenhuma vez. Mede
+  //     dt do mesmo jeito que os dois call sites faziam inline antes.
+  void render_frame(int w, int h);
 };
 
 App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
@@ -75,6 +112,31 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
   // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
   if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
+  // EN: A1 (framework-2D) -- arm the physical input route: install the sink WindowGlfw's 5
+  //     GLFW callbacks (already registered inside window.create() above, before engine even
+  //     existed) feed into. Only after this call does poll_events() -> glfwPollEvents()
+  //     actually reach the UI; before it, callbacks fire into an empty sink_ and are dropped
+  //     (WindowGlfw::dispatch's null-check), same as before A1 shipped. Captures the raw
+  //     Impl* (not `this`/impl_.get() re-read later): App is move-only and the Impl object's
+  //     OWN address never changes across a move (only the unique_ptr's stored pointer moves
+  //     with it), so this lambda stays valid for the Impl's whole lifetime regardless of how
+  //     many times the owning App is moved.
+  // PT: A1 (framework-2D) -- arma a rota de input físico: instala o sink que os 5 callbacks
+  //     GLFW do WindowGlfw (já registrados dentro de window.create() acima, antes mesmo do
+  //     engine existir) alimentam. Só depois desta chamada poll_events() -> glfwPollEvents()
+  //     de fato alcança a UI; antes dela, callbacks disparam num sink_ vazio e são descartados
+  //     (null-check de WindowGlfw::dispatch), igual antes do A1 existir. Captura o Impl* cru
+  //     (não `this`/impl_.get() relido depois): o App é move-only e o próprio endereço do
+  //     objeto Impl nunca muda através de um move (só o ponteiro guardado pelo unique_ptr se
+  //     move junto), então esta lambda permanece válida pela vida inteira do Impl,
+  //     independente de quantas vezes o App dono for movido.
+  if (impl_->ok) {
+    Impl* impl_raw = impl_.get();
+    impl_->window.set_event_sink([impl_raw](const UiEvent& ev) {
+      if (!impl_raw->ok) return;
+      impl_raw->engine.process_event(ev, 0, 0);
+    });
+  }
   // EN: Seed the resize-tracking cache (AUD-PUB-1 fix) with the dims Engine::attach() just
   //     used to construct the Rml::Context. render() only re-applies set_viewport() when the
   //     window size differs from this cache, so the first frame does not redo the identical
@@ -219,14 +281,40 @@ void App::Impl::sync_viewport(int w, int h) {
   }
 }
 
+// EN: A1 (framework-2D) -- see the doc-comment on this method's declaration (Impl struct
+//     above) for why render() and snapshot() BOTH call this instead of each inlining their own
+//     copy. Only measures dt / builds the scene_hook lambda when a frame callback is actually
+//     installed (zero cost for every App that never calls set_frame_callback(), i.e. every
+//     pre-A1 consumer). glfwGetTime() is safe here: app.cpp is already a GLFW-backend-only TU
+//     (GLINTFX_BACKEND_GLFW=ON gates its compilation) and transitively includes
+//     <GLFW/glfw3.h> via RmlUi_Platform_GLFW.h above.
+// PT: A1 (framework-2D) -- ver o doc-comment na declaração deste método (struct Impl acima)
+//     pra racional de por que render() E snapshot() chamam este em vez de cada um inlinar a
+//     própria cópia. Só mede dt / constrói a lambda scene_hook quando um frame callback está
+//     de fato instalado (custo zero para todo App que nunca chama set_frame_callback(), ou
+//     seja, todo consumidor pré-A1). glfwGetTime() é seguro aqui: app.cpp já é uma TU
+//     exclusiva do backend GLFW (compilação controlada por GLINTFX_BACKEND_GLFW=ON) e inclui
+//     <GLFW/glfw3.h> transitivamente via RmlUi_Platform_GLFW.h acima.
+void App::Impl::render_frame(int w, int h) {
+  if (frame_cb) {
+    const double now = glfwGetTime();
+    const float  dt  = frame_cb_seen ? static_cast<float>(now - last_frame_time) : 0.0f;
+    last_frame_time = now;
+    frame_cb_seen   = true;
+    engine.render_standalone(w, h, [&]() { frame_cb(dt); });
+  } else {
+    engine.render_standalone(w, h);
+  }
+}
+
 void App::render() {
   // EN: Guard: no-op if subsystem init failed (consistent with load()/running()).
-  // PT: Guard: no-op se a inicialização falhou (consistente com load()/running()).
+  // PT: Guard: no-op se a inicialização falhou (consistente com load()/render()).
   if (!impl_->ok) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
   impl_->sync_viewport(w, h);
-  impl_->engine.render_standalone(w, h);
+  impl_->render_frame(w, h);
   impl_->window.swap();
 }
 
@@ -259,7 +347,15 @@ bool App::snapshot(const char* ppm_path) {
   //     RmlUi conhecia. Ver o doc-comment de sync_viewport() (acima de App::render()) pra
   //     história completa.
   impl_->sync_viewport(w, h);
-  impl_->engine.render_standalone(w, h);
+  // EN: A1 (framework-2D) -- render_frame() (not a bare render_standalone(w, h) call) so the
+  //     frame_cb hook, if installed, fires here too -- see render_frame()'s doc-comment (Impl
+  //     struct declaration, above in this file) for why snapshot() sharing this with render()
+  //     matters.
+  // PT: A1 (framework-2D) -- render_frame() (não uma chamada nua a render_standalone(w, h))
+  //     para que o hook frame_cb, se instalado, dispare aqui também -- ver o doc-comment de
+  //     render_frame() (declaração da struct Impl, acima neste arquivo) pra por que
+  //     compartilhar isto com render() importa.
+  impl_->render_frame(w, h);
   // EN: FBO 0 now contains the complete composited frame. Read before swap.
   // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap.
   glBindFramebuffer(0x8D40, 0); // GL_FRAMEBUFFER, 0 = window
@@ -284,6 +380,21 @@ bool App::snapshot(const char* ppm_path) {
   }
   fclose(f);
   return true;
+}
+
+void App::process_event(const UiEvent& ev) {
+  if (!impl_->ok) return;
+  // EN: Resize documented no-op (see app.hpp doc-comment) -- App owns the window and is
+  //     already the size authority via render()/snapshot()'s sync_viewport().
+  // PT: Resize é no-op documentado (ver doc-comment em app.hpp) -- o App é dono da janela e já
+  //     é a própria autoridade sobre o tamanho via sync_viewport() de render()/snapshot().
+  if (ev.type == UiEvent::Type::Resize) return;
+  impl_->engine.process_event(ev, 0, 0);
+}
+
+void App::set_frame_callback(std::function<void(float)> cb) {
+  if (!impl_->ok) return;
+  impl_->frame_cb = std::move(cb);
 }
 
 void App::set_click_callback(std::function<void(const char*)> cb) {

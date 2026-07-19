@@ -812,15 +812,28 @@ if(GLINTFX_MODULE_WINDOW)
   add_library(glintfx_window OBJECT src/window_glfw.cpp)
   # EN: gl_loader.h comes transitively from linking glloader (INTERFACE); GLFW's
   #     own headers come transitively from linking the glfw imported target.
-  #     window_glfw.cpp includes no glintfx PUBLIC header (window_glfw.hpp is a
-  #     private, self-contained header), so no target_include_directories()
-  #     call is needed here beyond what those two link deps already provide.
+  #     window_glfw.hpp now includes ONE glintfx PUBLIC header, <glintfx/ui_event.hpp>
+  #     (A1, framework-2D: WindowGlfw::set_event_sink/dispatch construct and forward UiEvent
+  #     instances -- docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.2), so
+  #     this target now needs the public include dir explicitly (it previously did not --
+  #     window_glfw.hpp used to be fully self-contained). PRIVATE is enough: only this OBJECT
+  #     library's own compilation resolves the include; downstream consumers of the aggregate
+  #     `glintfx` target already get the public include dir from ITS OWN
+  #     target_include_directories() call, unrelated to this one.
   # PT: gl_loader.h vem transitivamente de linkar glloader (INTERFACE); os
   #     próprios headers do GLFW vêm transitivamente de linkar o alvo
-  #     importado glfw. window_glfw.cpp não inclui nenhum header PÚBLICO da
-  #     glintfx (window_glfw.hpp é um header privado e auto-contido), então
-  #     nenhuma chamada target_include_directories() é necessária aqui além
-  #     do que essas duas deps de link já fornecem.
+  #     importado glfw. window_glfw.hpp agora inclui UM header PÚBLICO da glintfx,
+  #     <glintfx/ui_event.hpp> (A1, framework-2D: WindowGlfw::set_event_sink/dispatch
+  #     constroem e repassam instâncias de UiEvent --
+  #     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md seção 2.2), então este alvo
+  #     agora precisa do include dir público explicitamente (antes não precisava --
+  #     window_glfw.hpp era totalmente auto-contido). PRIVATE basta: só a compilação desta
+  #     biblioteca OBJECT resolve o include; consumidores do alvo agregado `glintfx` já
+  #     recebem o include dir público da PRÓPRIA chamada target_include_directories() dele,
+  #     sem relação com esta.
+  target_include_directories(glintfx_window PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
   target_link_libraries(glintfx_window PRIVATE glloader glfw)
   target_compile_options(glintfx_window PRIVATE -Wall -Wextra)
   glintfx_instrument_coverage(glintfx_window)

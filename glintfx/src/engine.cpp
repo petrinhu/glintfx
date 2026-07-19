@@ -170,13 +170,22 @@ void Engine::update() {
   if (auto* c = impl_->boot.context()) c->Update();
 }
 
-void Engine::render_standalone(int w, int h) {
-  // EN: Standalone frame path — clear + render UI + alpha-fix on FBO0.
-  //     Identical to the old App loop (minus the buffer swap, which the caller does).
-  // PT: Caminho de frame standalone — clear + render UI + alpha-fix no FBO0.
-  //     Idêntico ao loop antigo do App (menos o swap de buffer, que o chamador faz).
+void Engine::render_standalone(int w, int h, const std::function<void()>& scene_hook) {
+  // EN: Standalone frame path — clear + [scene_hook] + render UI + alpha-fix on FBO0.
+  //     Identical to the old App loop (minus the buffer swap, which the caller does) when
+  //     scene_hook is empty -- see this method's doc-comment in engine.hpp for the GL state
+  //     contract the GlStateGuard below enforces around the hook (A1, framework-2D).
+  // PT: Caminho de frame standalone — clear + [scene_hook] + render UI + alpha-fix no FBO0.
+  //     Idêntico ao loop antigo do App (menos o swap de buffer, que o chamador faz) quando
+  //     scene_hook está vazio -- ver o doc-comment deste método em engine.hpp para o contrato
+  //     de estado GL que o GlStateGuard abaixo enforça ao redor do hook (A1, framework-2D).
   if (!impl_->ok) return;
   impl_->render.begin_frame(w, h);
+  if (scene_hook) {
+    GlStateGuard guard;  // EN: snapshot the state BeginFrame() just set. PT: snapshota o estado que BeginFrame() acabou de definir.
+    scene_hook();
+  }                      // EN: ~guard restores it here, before Context::Render() below.
+                         // PT: ~guard o restaura aqui, antes do Context::Render() abaixo.
   if (auto* c = impl_->boot.context()) c->Render();
   impl_->render.end_frame();
 }

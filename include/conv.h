@@ -320,12 +320,15 @@ char* ftoa(double value, char* buf, unsigned precision);
 //     shortest-round-trip" disclaimer in spirit. FRACTIONAL-part digits use a DIFFERENT technique
 //     (`src/conv.c`, AUD-SEC-Delta fix): each digit is scaled down and added directly (never
 //     multiplied forward like the integer part), and accumulation of fractional digits is capped
-//     at the first ~16 SIGNIFICANT ones (further digits are still consumed as trailing-garbage-
-//     shaped syntax but no longer folded in) -- unlike the exponent caps above, THIS cap DOES
-//     change the result for real input whenever a fractional part has more than ~16 significant
-//     digits, by design: a `double` cannot resolve finer fractional resolution than that anyway,
-//     and capping there is what GUARANTEES `atof` of a string of fractional digits that is
-//     mathematically `< 1.0` (e.g. `"0." + "9"*309`) never returns `>= 1.0` or `+Infinity` -- a
+//     at the first ~16 SIGNIFICANT ones, counted from the first NON-ZERO fractional digit onward
+//     -- leading zeros are free and never draw from that budget, e.g. `atof("0." + "0"*19 + "1")`
+//     -> `1e-20`, not `0.0` (further digits, past the 16-significant-digit budget, are still
+//     consumed as trailing-garbage-shaped syntax but no longer folded in) -- unlike the exponent
+//     caps above, THIS cap DOES change the result for real input whenever a fractional part has
+//     more than ~16 significant digits, by design: a `double` cannot resolve finer fractional
+//     resolution than that anyway, and capping there is what GUARANTEES `atof` of a string of
+//     fractional digits that is mathematically `< 1.0` (e.g. `"0." + "9"*309`) never returns
+//     `>= 1.0` or `+Infinity` -- a
 //     prior revision of this converter used the same `mantissa*10+digit` technique for fractional
 //     digits too (deferring the rescale to the very end), which let a long-enough fractional part
 //     inflate `mantissa` past `DBL_MAX` BEFORE the rescale ever ran, empirically confirmed to
@@ -378,8 +381,11 @@ char* ftoa(double value, char* buf, unsigned precision);
 //     Digitos da parte FRACIONARIA usam uma tecnica DIFERENTE (`src/conv.c`, fix AUD-SEC-Delta):
 //     cada digito e' escalonado pra baixo e somado diretamente (nunca multiplicado pra frente como
 //     a parte inteira), e a acumulacao de digitos fracionarios e' limitada aos primeiros ~16
-//     SIGNIFICATIVOS (digitos alem disso ainda sao consumidos como sintaxe de lixo-final-formato
-//     mas nao mais dobrados) -- diferente dos limites de expoente acima, ESSE limite MUDA o
+//     SIGNIFICATIVOS, contados a partir do primeiro digito fracionario NAO-ZERO em diante -- zeros
+//     a esquerda sao gratis e nunca consomem desse orcamento, ex.: `atof("0." + "0"*19 + "1")` ->
+//     `1e-20`, nao `0.0` (digitos alem disso, passado o orcamento de 16 significativos, ainda sao
+//     consumidos como sintaxe de lixo-final-formato mas nao mais dobrados) -- diferente dos
+//     limites de expoente acima, ESSE limite MUDA o
 //     resultado pra input real sempre que uma parte fracionaria tem mais de ~16 digitos
 //     significativos, de proposito: um `double` nao consegue resolver resolucao fracionaria mais
 //     fina que isso de qualquer jeito, e limitar ali e' o que GARANTE que `atof` de uma string de

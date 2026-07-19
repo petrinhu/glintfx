@@ -146,6 +146,24 @@ static void t_fill_point9(char* buf, int n) {
     buf[2 + n] = '\0';
 }
 
+// EN: AUD-SEC-Delta REGRESSION helper -- fills `buf` with "0." followed by `n_zeros` '0'
+//     characters and a single trailing '9', NUL-terminated (e.g. `n_zeros=3` -> "0.0009").
+//     Local test plumbing only, mirrors `t_fill_point9` above. Caller sizes `buf` to at least
+//     `n_zeros + 4` bytes.
+// PT: Auxiliar de REGRESSAO do AUD-SEC-Delta -- preenche `buf` com "0." seguido de `n_zeros`
+//     caracteres '0' e um unico '9' final, terminado em NUL (ex.: `n_zeros=3` -> "0.0009").
+//     Andaime de teste local apenas, espelha o `t_fill_point9` acima. Chamador dimensiona `buf`
+//     com pelo menos `n_zeros + 4` bytes.
+static void t_fill_zeros_then_9(char* buf, int n_zeros) {
+    buf[0] = '0';
+    buf[1] = '.';
+    for (int k = 0; k < n_zeros; k++) {
+        buf[2 + k] = '0';
+    }
+    buf[2 + n_zeros] = '9';
+    buf[3 + n_zeros] = '\0';
+}
+
 int main(int argc, char** argv, char** envp) {
     (void)argc;
     (void)argv;
@@ -595,6 +613,50 @@ int main(int argc, char** argv, char** envp) {
             TEST_ASSERT(v > 0.99); // sanity: still a plausible "almost 1" value, not e.g. 0.0
             TEST_ASSERT_EQ(t_sign(v), 0); // no leading '-' in the input -> positive
         }
+    }
+
+    // ---- atof: AUD-SEC-Delta REGRESSION -- leading zeros in the fractional part must NOT burn
+    //     the significant-digit budget. "0." + N zeros + "9" is a perfectly ordinary finite
+    //     double (~9 * 10^-(N+1)) for ANY N, but the fractional-loop fix landed in 27efe3f
+    //     (immediately above/before this fix) counted every fractional digit toward the
+    //     16-significant-digit cap -- zeros included -- so N>=16 leading zeros silently burned
+    //     the whole budget before the "9" was ever reached, returning `0.0` instead. Verified
+    //     here against the scientific-notation spelling of the SAME value (already exercised by
+    //     the exponent-scaling path tested above, and unaffected by this bug), which is a
+    //     trustworthy oracle. N=16 sits exactly on the boundary that used to break; N=20 and
+    //     N=40 are comfortably past it.
+    // PT: Regressao do AUD-SEC-Delta -- zeros a esquerda na parte fracionaria NAO podem queimar
+    //     o orcamento de digitos significativos. "0." + N zeros + "9" e' um double finito
+    //     perfeitamente comum (~9 * 10^-(N+1)) pra QUALQUER N, mas o fix do laco fracionario que
+    //     pousou no 27efe3f (imediatamente acima/antes deste fix) contava todo digito
+    //     fracionario pro limite de 16 digitos significativos -- zeros inclusos -- entao N>=16
+    //     zeros a esquerda queimava o orcamento inteiro antes do "9" ser sequer alcancado,
+    //     retornando `0.0` em vez disso. Verificado aqui contra a grafia em notacao cientifica do
+    //     MESMO valor (ja exercitada pelo caminho de escala-por-expoente testado acima, e nao
+    //     afetada por esse bug), que e' um oraculo confiavel. N=16 fica exatamente na fronteira
+    //     que costumava quebrar; N=20 e N=40 estao confortavelmente alem dela.
+    {
+        static const int ns[] = {16, 20, 40};
+        static const char* const exps[] = {"9e-17", "9e-21", "9e-41"};
+        char buf[64];
+        for (size_t vi = 0; vi < sizeof(ns) / sizeof(ns[0]); vi++) {
+            t_fill_zeros_then_9(buf, ns[vi]);
+            double v = atof(buf);
+            double expected = atof(exps[vi]);
+            TEST_ASSERT(v != 0.0); // THE regression this fix closes -- must NOT silently zero out
+            TEST_ASSERT(t_close_rel(v, expected, 1e-13));
+            TEST_ASSERT_EQ(t_sign(v), 0); // no leading '-' in the input -> positive
+        }
+    }
+
+    // ---- atof: AUD-SEC-Delta REGRESSION, exact literal from the review report (19 leading
+    //     zeros + "1", the input that first exposed the bug live) --------------------------------
+    {
+        double v = atof("0.00000000000000000001");
+        double expected = atof("1e-20");
+        TEST_ASSERT(v != 0.0);
+        TEST_ASSERT(t_close_rel(v, expected, 1e-13));
+        TEST_ASSERT_EQ(t_sign(v), 0);
     }
 
     // ---- atof: AUD-SEC-Delta sibling case (bonus, found while designing the fix, NOT part of the

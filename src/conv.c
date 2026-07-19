@@ -335,37 +335,54 @@ unsigned atou(const char* s) {
 // EN: AUD-SEC-Delta fix -- `FCONV_MAX_SIG_FRAC_DIGITS` caps how many fractional digits are ever
 //     FOLDED into the running fractional accumulator (`frac_value` in `atof`, below); digits past
 //     this cap are still CONSUMED (advance the parse position, same "trailing garbage does not
-//     invalidate what was parsed" spirit as the rest of this file) but simply never added.
+//     invalidate what was parsed" spirit as the rest of this file) but simply never added. As of
+//     the follow-up regression fix below, this budget counts only from the first NON-ZERO
+//     fractional digit onward -- leading zeros are free and never draw from it (see the loop in
+//     `atof` for the mechanism).
 //     16 is not an arbitrary round number: it is the largest N for which the worst-case fractional
-//     string "9" * N -- the value closest to the 1.0 boundary a fractional accumulator can ever
+//     digit-run "9" * N -- the value closest to the 1.0 boundary a fractional accumulator can ever
 //     produce -- still rounds to a `double` STRICTLY below 1.0. Empirically verified (see task
 //     report) across n in {300, 309, 400} nines and across `-O0`/`-O2`/`-ffp-contract=fast|off`:
-//     N=16 always yields ~0.9999999999999999 (< 1.0); N=17 already rounds UP to exactly 1.0 (the
-//     mathematically "correctly rounded" answer for the true limit of the underlying geometric
-//     series -- see below -- but this file's `atof` is explicitly NOT a correctly-rounded
-//     converter, and the contract promised to `include/conv.h`'s callers is "never >= 1.0 for an
-//     input that is mathematically < 1.0"). This lines up with the well-known fact that a `double`
-//     has only ~15-17 significant decimal digits of real precision (`DBL_DIG` == 15 is the
-//     ALWAYS-safe count; 16-17 is the boundary where behaviour starts depending on the specific
-//     digit pattern) -- 16 sits deliberately on the safe side of that boundary, not the risky one.
+//     N=16 always yields ~0.9999999999999999 (< 1.0). This was measured with a dedicated,
+//     UNCAPPED calibration accumulator (the same fold-in-directly technique, just without the cap
+//     applied) -- it is NOT something `atof` itself, as shipped, will ever be observed to produce:
+//     the cap below means `atof` never folds a 17th significant digit into `frac_value` in the
+//     first place. For the record, that same uncapped calibration run showed N=17 rounding UP to
+//     exactly 1.0 (the mathematically "correctly rounded" answer for the true limit of the
+//     underlying geometric series -- but this file's `atof` is explicitly NOT a
+//     correctly-rounded converter, and the contract promised to `include/conv.h`'s callers is
+//     "never >= 1.0 for an input that is mathematically < 1.0"), which is exactly the empirical
+//     evidence that justified drawing the cap at 16 rather than 17 or higher. This lines up with
+//     the well-known fact that a `double` has only ~15-17 significant decimal digits of real
+//     precision (`DBL_DIG` == 15 is the ALWAYS-safe count; 16-17 is the boundary where behaviour
+//     starts depending on the specific digit pattern) -- 16 sits deliberately on the safe side of
+//     that boundary, not the risky one.
 // PT: Fix AUD-SEC-Delta -- `FCONV_MAX_SIG_FRAC_DIGITS` limita quantos digitos fracionarios sao
 //     alguma vez DOBRADOS no acumulador fracionario corrente (`frac_value` no `atof`, abaixo);
 //     digitos alem desse limite ainda sao CONSUMIDOS (avancam a posicao de parse, mesmo espirito
 //     "lixo final nao invalida o que foi parseado" do resto deste arquivo) mas simplesmente nunca
-//     somados.
-//     16 nao e' um numero redondo arbitrario: e' o maior N pro qual a string fracionaria de
+//     somados. A partir do fix de regressao subsequente abaixo, esse orcamento so conta a partir
+//     do primeiro digito fracionario NAO-ZERO em diante -- zeros a esquerda sao gratis e nunca
+//     consomem dele (ver o laco do `atof` pro mecanismo).
+//     16 nao e' um numero redondo arbitrario: e' o maior N pro qual a sequencia fracionaria de
 //     pior-caso "9" * N -- o valor mais proximo da fronteira de 1.0 que um acumulador fracionario
 //     consegue produzir -- ainda arredonda pra um `double` ESTRITAMENTE abaixo de 1.0.
 //     Verificado empiricamente (ver relatorio da tarefa) pra n em {300, 309, 400} noves e pra
-//     `-O0`/`-O2`/`-ffp-contract=fast|off`: N=16 sempre da ~0.9999999999999999 (< 1.0); N=17 ja
-//     arredonda PRA CIMA pra exatamente 1.0 (a resposta matematicamente "corretamente arredondada"
-//     pro limite verdadeiro da serie geometrica subjacente -- ver abaixo -- mas o `atof` deste
-//     arquivo explicitamente NAO e' um conversor corretamente-arredondado, e o contrato prometido
-//     aos chamadores do `include/conv.h` e' "nunca >= 1.0 pra um input que e' matematicamente <
-//     1.0"). Isso bate com o fato conhecido de que um `double` so tem ~15-17 digitos decimais
-//     significativos de precisao real (`DBL_DIG` == 15 e' a contagem SEMPRE segura; 16-17 e' a
-//     fronteira onde o comportamento passa a depender do padrao especifico de digitos) -- 16 fica
-//     deliberadamente do lado seguro dessa fronteira, nao do arriscado.
+//     `-O0`/`-O2`/`-ffp-contract=fast|off`: N=16 sempre da ~0.9999999999999999 (< 1.0). Isso foi
+//     medido com um acumulador de calibracao DEDICADO e SEM LIMITE (a mesma tecnica de dobrar
+//     direto, so' sem o limite aplicado) -- NAO e' algo que o proprio `atof`, como entregue,
+//     algum dia sera observado produzindo: o limite abaixo significa que o `atof` nunca dobra um
+//     17o digito significativo em `frac_value` em primeiro lugar. Pro registro, essa mesma
+//     rodada de calibracao sem limite mostrou N=17 arredondando PRA CIMA pra exatamente 1.0 (a
+//     resposta matematicamente "corretamente arredondada" pro limite verdadeiro da serie
+//     geometrica subjacente -- mas o `atof` deste arquivo explicitamente NAO e' um conversor
+//     corretamente-arredondado, e o contrato prometido aos chamadores do `include/conv.h` e'
+//     "nunca >= 1.0 pra um input que e' matematicamente < 1.0"), o que e' exatamente a evidencia
+//     empirica que justificou tracar o limite em 16 em vez de 17 ou mais. Isso bate com o fato
+//     conhecido de que um `double` so tem ~15-17 digitos decimais significativos de precisao real
+//     (`DBL_DIG` == 15 e' a contagem SEMPRE segura; 16-17 e' a fronteira onde o comportamento
+//     passa a depender do padrao especifico de digitos) -- 16 fica deliberadamente do lado
+//     seguro dessa fronteira, nao do arriscado.
 #define FCONV_MAX_SIG_FRAC_DIGITS 16
 
 static unsigned long fconv_bits(double d) {
@@ -716,24 +733,77 @@ double atof(const char* s) {
     if (s[i] == '.') {
         i++;
         double frac_scale = 1.0;
-        int frac_sig_digits = 0; // scope reduced to this block only -- unused past it (cppcheck)
+        int frac_sig_digits = 0;   // budget of digits actually FOLDED into frac_value (see below)
+        int frac_significant = 0;  // true once the first NON-ZERO fractional digit has been seen
+        // EN: AUD-SEC-Delta REGRESSION fix -- `frac_sig_digits` (the FCONV_MAX_SIG_FRAC_DIGITS
+        //     budget) must only start counting from the first NON-ZERO fractional digit onward.
+        //     The prior revision of this loop incremented `frac_sig_digits` for EVERY digit seen,
+        //     leading zeros included -- so a string like `"0." + "0"*20 + "9"` (mathematically
+        //     ~9e-21, a perfectly ordinary finite double) burned the whole 16-digit budget on the
+        //     20 leading zeros before ever reaching the "9", and silently returned `0.0` instead
+        //     (proven live: `atof("0.00000000000000000001")` returned `0.0` instead of `1e-20`;
+        //     the old, now-replaced-again, pre-27efe3f technique did not have this bug). The fix:
+        //     `frac_significant` gates the budget counter (and the accumulation into
+        //     `frac_value`) -- it flips true on the first non-zero digit and stays true. Crucially,
+        //     `frac_scale *= 0.1` keeps running for EVERY digit while the budget is not yet
+        //     exhausted, INCLUDING leading zeros -- it is the POSITIONAL scale (one decimal place
+        //     per digit examined), a wholly different thing from the SIGNIFICANCE budget, and
+        //     conflating the two is exactly what caused this regression. Leading zeros must still
+        //     shrink `frac_scale` (so the first significant digit lands at the right power of ten)
+        //     while NOT touching the 16-digit budget. This does not reopen the original overflow
+        //     the 27efe3f fix closed: the series summed into `frac_value` is still bounded by the
+        //     same convergent `sum(9 * 0.1^k) = 1.0`, since at most 16 NON-ZERO-weighted terms are
+        //     ever added regardless of how many leading zeros precede them.
+        // PT: Fix de REGRESSAO do AUD-SEC-Delta -- `frac_sig_digits` (o orcamento do
+        //     FCONV_MAX_SIG_FRAC_DIGITS) so deve comecar a contar a partir do primeiro digito
+        //     fracionario NAO-ZERO em diante. A revisao anterior deste laco incrementava
+        //     `frac_sig_digits` pra TODO digito visto, zeros a esquerda inclusos -- entao uma
+        //     string tipo `"0." + "0"*20 + "9"` (matematicamente ~9e-21, um double finito
+        //     perfeitamente comum) queimava o orcamento inteiro de 16 digitos nos 20 zeros a
+        //     esquerda antes de sequer alcancar o "9", e retornava `0.0` silenciosamente (provado
+        //     ao vivo: `atof("0.00000000000000000001")` retornava `0.0` em vez de `1e-20`; a
+        //     tecnica antiga, anterior ao 27efe3f e agora substituida de novo, nao tinha esse
+        //     bug). O fix: `frac_significant` controla o contador de orcamento (e a acumulacao em
+        //     `frac_value`) -- vira verdadeiro no primeiro digito nao-zero e fica assim.
+        //     Crucialmente, `frac_scale *= 0.1` continua rodando pra TODO digito enquanto o
+        //     orcamento nao esta esgotado, INCLUSIVE zeros a esquerda -- e' a escala POSICIONAL
+        //     (uma casa decimal por digito examinado), uma coisa totalmente diferente do
+        //     orcamento de SIGNIFICANCIA, e conflar os dois e' exatamente o que causou essa
+        //     regressao. Zeros a esquerda precisam continuar encolhendo `frac_scale` (pra que o
+        //     primeiro digito significativo caia na potencia de dez certa) sem tocar no orcamento
+        //     de 16 digitos. Isso nao reabre o overflow original que o fix do 27efe3f fechou: a
+        //     serie somada em `frac_value` continua limitada pela mesma serie convergente
+        //     `soma(9 * 0.1^k) = 1.0`, ja que no maximo 16 termos com peso NAO-ZERO sao alguma vez
+        //     somados, independente de quantos zeros a esquerda os precedem.
         while (s[i] >= '0' && s[i] <= '9') {
+            int digit = s[i] - '0';
+            if (digit != 0) {
+                frac_significant = 1;
+            }
             if (frac_sig_digits < FCONV_MAX_SIG_FRAC_DIGITS) {
                 frac_scale *= 0.1;
-                frac_value += (double)(s[i] - '0') * frac_scale;
-                frac_sig_digits++;
+                if (frac_significant) {
+                    frac_value += (double)digit * frac_scale;
+                    frac_sig_digits++;
+                }
             }
-            // EN: Digits beyond the cap are still CONSUMED (they are syntactically part of the
-            //     number) but no longer accumulated -- see FCONV_MAX_SIG_FRAC_DIGITS above and
+            // EN: Digits beyond the cap (i.e. once 16 SIGNIFICANT digits have already been
+            //     folded in) are still CONSUMED (they are syntactically part of the number) but
+            //     no longer accumulated -- see FCONV_MAX_SIG_FRAC_DIGITS above and
             //     include/conv.h's doc-comment: past ~16 significant digits, a `double` cannot
             //     resolve the difference anyway, so folding them in would be pure wasted work
-            //     (were it even safe to do so, which the old technique was not).
-            // PT: Digitos alem do limite ainda sao CONSUMIDOS (sao sintaticamente parte do
-            //     numero) mas nao mais acumulados -- ver FCONV_MAX_SIG_FRAC_DIGITS acima e o
-            //     doc-comment do include/conv.h: alem de ~16 digitos significativos, um `double`
-            //     nao consegue resolver a diferenca de qualquer jeito, entao dobra-los seria
-            //     puro trabalho desperdicado (mesmo que fosse seguro fazer isso, o que a tecnica
-            //     antiga nao era).
+            //     (were it even safe to do so, which the old technique was not). Leading zeros
+            //     BEFORE the first significant digit are a distinct case, handled above -- they
+            //     are consumed AND scale `frac_scale`, but never draw from the budget.
+            // PT: Digitos alem do limite (ou seja, uma vez que 16 digitos SIGNIFICATIVOS ja
+            //     foram dobrados) ainda sao CONSUMIDOS (sao sintaticamente parte do numero) mas
+            //     nao mais acumulados -- ver FCONV_MAX_SIG_FRAC_DIGITS acima e o doc-comment do
+            //     include/conv.h: alem de ~16 digitos significativos, um `double` nao consegue
+            //     resolver a diferenca de qualquer jeito, entao dobra-los seria puro trabalho
+            //     desperdicado (mesmo que fosse seguro fazer isso, o que a tecnica antiga nao
+            //     era). Zeros a esquerda ANTES do primeiro digito significativo sao um caso
+            //     distinto, tratado acima -- sao consumidos E escalam o `frac_scale`, mas nunca
+            //     consomem do orcamento.
             i++;
             any_digits = 1;
         }

@@ -65,6 +65,15 @@
 
 #include "decorator_image_tint.hpp"
 
+// EN: box-corner quad geometry (QuadCorners/BuildQuadCorners) + raw VAO/VBO/EBO scaffold shared
+//     with decorator_ripple.cpp -- see decorator_gl_quad.hpp's file header for the AUD-L1-QUALITY
+//     extraction rationale (IMPORTANTE #2, was a byte-identical copy).
+// PT: geometria de quad de cantos de caixa (QuadCorners/BuildQuadCorners) + andaime de VAO/VBO/EBO
+//     crua compartilhado com decorator_ripple.cpp -- ver o comentário de cabeçalho de
+//     decorator_gl_quad.hpp pra racional da extração AUD-L1-QUALITY (IMPORTANTE #2, era cópia
+//     byte-idêntica).
+#include "decorator_gl_quad.hpp"
+
 #include <RmlUi/Core/CompiledFilterShader.h>  // EN: complete Rml::CompiledShader type. PT: tipo Rml::CompiledShader completo.
 #include <RmlUi/Core/ComputedValues.h>
 #include <RmlUi/Core/Dictionary.h>
@@ -79,7 +88,6 @@
 
 #include <algorithm>  // EN: std::clamp. PT: std::clamp.
 #include <cmath>      // EN: std::isfinite. PT: std::isfinite.
-#include <cstddef>    // EN: offsetof. PT: offsetof.
 #include <utility>    // EN: std::move. PT: std::move.
 
 namespace glintfx {
@@ -191,29 +199,6 @@ void ResolveTintState(Rml::Element* element, TintState& out) {
   }
 }
 
-// EN: Single vertex layout shared by BOTH the Rml::Mesh (vanilla path) and the raw VAO (tint
-//     path) below -- built ONCE per GenerateElementData call, see BuildQuadCorners.
-// PT: Layout de vértice único compartilhado TANTO pelo Rml::Mesh (caminho vanilla) QUANTO pela
-//     VAO crua (caminho de tint) abaixo -- construído UMA VEZ por chamada de GenerateElementData,
-//     ver BuildQuadCorners.
-struct QuadCorners {
-  Rml::Vector2f position[4];   // EN: border-box-relative, CW from top-left. PT: relativo à border-box, CW a partir do topo-esquerda.
-  Rml::Vector2f tex_coord[4];  // EN: (0,0)..(1,1), same winding. PT: (0,0)..(1,1), mesmo giro.
-};
-
-QuadCorners BuildQuadCorners(Rml::Vector2f offset, Rml::Vector2f size) {
-  QuadCorners q;
-  q.position[0] = offset;
-  q.position[1] = offset + Rml::Vector2f(size.x, 0.f);
-  q.position[2] = offset + size;
-  q.position[3] = offset + Rml::Vector2f(0.f, size.y);
-  q.tex_coord[0] = Rml::Vector2f(0.f, 0.f);
-  q.tex_coord[1] = Rml::Vector2f(1.f, 0.f);
-  q.tex_coord[2] = Rml::Vector2f(1.f, 1.f);
-  q.tex_coord[3] = Rml::Vector2f(0.f, 1.f);
-  return q;
-}
-
 }  // namespace
 
 void ImageTintDecorator::Initialise(Rml::Texture texture) {
@@ -269,53 +254,19 @@ Rml::DecoratorDataHandle ImageTintDecorator::GenerateElementData(Rml::Element* e
   auto* data = new ImageTintElementData{render_manager->MakeGeometry(std::move(mesh)), 0, 0, 0, 0};
 
   // EN: Raw VAO/VBO/EBO -- the geometry the "glintfx-tint" fragment shader actually draws from
-  //     (Gl3RenderInterface::RenderShader's tint branch, render_gl3.cpp) -- 2 attributes only
-  //     (position @location=0, tex_coord @location=1), no vertex colour attribute at all (tint/
-  //     opacity are shader uniforms, re-read fresh every RenderElement call -- see ADR-0010
-  //     Decision (c)). Layout(location=N) qualifiers in the GLSL (render_gl3.cpp) mean no
-  //     glBindAttribLocation/glGetAttribLocation dance is needed here.
+  //     (Gl3RenderInterface::RenderShader's tint branch, render_gl3.cpp); tint/opacity are shader
+  //     uniforms, re-read fresh every RenderElement call (see ADR-0010 Decision (c)), not vertex
+  //     attributes. Scaffold (vertex layout, GL create/bind/upload/attrib/unbind sequence) shared
+  //     byte-for-byte with decorator_ripple.cpp -- see decorator_gl_quad.hpp (AUD-L1-QUALITY
+  //     extraction) for the full rationale and the exact GL call order this produces.
   // PT: VAO/VBO/EBO crua -- a geometria de onde o shader de fragmento "glintfx-tint" de fato
-  //     desenha (ramo de tint de Gl3RenderInterface::RenderShader, render_gl3.cpp) -- só 2
-  //     atributos (posição @location=0, tex_coord @location=1), nenhum atributo de cor de vértice
-  //     (tint/opacity são uniforms de shader, relidos frescos a cada chamada de RenderElement --
-  //     ver a Decisão (c) do ADR-0010). Qualificadores layout(location=N) no GLSL (render_gl3.cpp)
-  //     significam que nenhuma dança de glBindAttribLocation/glGetAttribLocation é necessária
-  //     aqui.
-  struct TintVertex {
-    float x, y, u, v;
-  };
-  const TintVertex tv[4] = {
-      {quad.position[0].x, quad.position[0].y, quad.tex_coord[0].x, quad.tex_coord[0].y},
-      {quad.position[1].x, quad.position[1].y, quad.tex_coord[1].x, quad.tex_coord[1].y},
-      {quad.position[2].x, quad.position[2].y, quad.tex_coord[2].x, quad.tex_coord[2].y},
-      {quad.position[3].x, quad.position[3].y, quad.tex_coord[3].x, quad.tex_coord[3].y},
-  };
-  const unsigned int idx[6] = {0, 1, 2, 0, 2, 3};
-
-  glGenVertexArrays(1, &data->vao);
-  glGenBuffers(1, &data->vbo);
-  glGenBuffers(1, &data->ebo);
-
-  glBindVertexArray(data->vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data->vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(tv), tv, GL_STATIC_DRAW);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data->ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TintVertex), reinterpret_cast<const void*>(offsetof(TintVertex, x)));
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TintVertex), reinterpret_cast<const void*>(offsetof(TintVertex, u)));
-  // EN: Unbind the VAO FIRST -- the GL_ELEMENT_ARRAY_BUFFER binding is part of VAO state (unlike
-  //     GL_ARRAY_BUFFER, which is global GL state); unbinding the VAO here preserves `data->ebo`
-  //     as ITS recorded element-buffer binding. Only then reset the (harmless, global)
-  //     GL_ARRAY_BUFFER binding for hygiene.
-  // PT: Desvincula a VAO PRIMEIRO -- o binding de GL_ELEMENT_ARRAY_BUFFER é parte do estado da
-  //     VAO (diferente de GL_ARRAY_BUFFER, que é estado GL global); desvincular a VAO aqui
-  //     preserva `data->ebo` como o binding de buffer-de-elemento REGISTRADO dela. Só depois
-  //     reseta o binding (inofensivo, global) de GL_ARRAY_BUFFER por higiene.
-  glBindVertexArray(0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+  //     desenha (ramo de tint de Gl3RenderInterface::RenderShader, render_gl3.cpp); tint/opacity
+  //     são uniforms de shader, relidos frescos a cada chamada de RenderElement (ver a Decisão (c)
+  //     do ADR-0010), não atributos de vértice. Andaime (layout de vértice, sequência GL de criar/
+  //     vincular/enviar/attrib/desvincular) compartilhado byte a byte com decorator_ripple.cpp --
+  //     ver decorator_gl_quad.hpp (extração AUD-L1-QUALITY) pra racional completa e a ordem exata
+  //     de chamadas GL que isto produz.
+  CreateGlQuadBuffers(quad, data->vao, data->vbo, data->ebo);
   data->index_count = 6;
 
   return reinterpret_cast<Rml::DecoratorDataHandle>(data);
@@ -325,19 +276,16 @@ void ImageTintDecorator::ReleaseElementData(Rml::DecoratorDataHandle element_dat
   auto* data = reinterpret_cast<ImageTintElementData*>(element_data);
   // EN: The VAO/VBO/EBO are NOT owned by any CompiledShader -- see render_gl3.cpp's ReleaseShader
   //     doc comment for why that ownership split matters (a double-free/use-after-free risk spot
-  //     flagged explicitly in ADR-0010 Decision (a)). They are released HERE, once per element,
-  //     never per-frame/per-CompileShader-call.
+  //     flagged explicitly in ADR-0010 Decision (a)). Released HERE, once per element, never
+  //     per-frame/per-CompileShader-call, via DestroyGlQuadBuffers (decorator_gl_quad.hpp, shared
+  //     with decorator_ripple.cpp -- AUD-L1-QUALITY extraction).
   // PT: A VAO/VBO/EBO NÃO são donas de nenhum CompiledShader -- ver o comentário de doc do
   //     ReleaseShader em render_gl3.cpp pra por que essa divisão de posse importa (um ponto de
   //     risco de double-free/use-after-free sinalizado explicitamente na Decisão (a) do
-  //     ADR-0010). São liberadas AQUI, uma vez por elemento, nunca por-frame/por-chamada-de-
-  //     CompileShader.
-  if (data->vao)
-    glDeleteVertexArrays(1, &data->vao);
-  if (data->vbo)
-    glDeleteBuffers(1, &data->vbo);
-  if (data->ebo)
-    glDeleteBuffers(1, &data->ebo);
+  //     ADR-0010). Liberadas AQUI, uma vez por elemento, nunca por-frame/por-chamada-de-
+  //     CompileShader, via DestroyGlQuadBuffers (decorator_gl_quad.hpp, compartilhado com
+  //     decorator_ripple.cpp -- extração AUD-L1-QUALITY).
+  DestroyGlQuadBuffers(data->vao, data->vbo, data->ebo);
   delete data;
 }
 

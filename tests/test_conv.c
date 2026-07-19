@@ -131,6 +131,39 @@ static int t_close_rel(double a, double b, double tol) {
     return t_abs(a - b) <= tol * t_abs(b);
 }
 
+// EN: AUD-SEC-Delta regression helper -- fills `buf` with "0." followed by `n` '9' characters,
+//     NUL-terminated. Local test plumbing only (mirrors the `t_*` helpers above), not part of the
+//     public API under test. Caller sizes `buf` to at least `n + 3` bytes.
+// PT: Auxiliar de regressao do AUD-SEC-Delta -- preenche `buf` com "0." seguido de `n` caracteres
+//     '9', terminado em NUL. Andaime de teste local apenas (espelha os helpers `t_*` acima), nao
+//     faz parte da API publica sob teste. Chamador dimensiona `buf` com pelo menos `n + 3` bytes.
+static void t_fill_point9(char* buf, int n) {
+    buf[0] = '0';
+    buf[1] = '.';
+    for (int k = 0; k < n; k++) {
+        buf[2 + k] = '9';
+    }
+    buf[2 + n] = '\0';
+}
+
+// EN: AUD-SEC-Delta REGRESSION helper -- fills `buf` with "0." followed by `n_zeros` '0'
+//     characters and a single trailing '9', NUL-terminated (e.g. `n_zeros=3` -> "0.0009").
+//     Local test plumbing only, mirrors `t_fill_point9` above. Caller sizes `buf` to at least
+//     `n_zeros + 4` bytes.
+// PT: Auxiliar de REGRESSAO do AUD-SEC-Delta -- preenche `buf` com "0." seguido de `n_zeros`
+//     caracteres '0' e um unico '9' final, terminado em NUL (ex.: `n_zeros=3` -> "0.0009").
+//     Andaime de teste local apenas, espelha o `t_fill_point9` acima. Chamador dimensiona `buf`
+//     com pelo menos `n_zeros + 4` bytes.
+static void t_fill_zeros_then_9(char* buf, int n_zeros) {
+    buf[0] = '0';
+    buf[1] = '.';
+    for (int k = 0; k < n_zeros; k++) {
+        buf[2 + k] = '0';
+    }
+    buf[2 + n_zeros] = '9';
+    buf[3 + n_zeros] = '\0';
+}
+
 int main(int argc, char** argv, char** envp) {
     (void)argc;
     (void)argv;
@@ -549,6 +582,109 @@ int main(int argc, char** argv, char** envp) {
     {
         TEST_ASSERT(t_is_pos_inf(atof("1e400")));
         TEST_ASSERT(t_is_neg_inf(atof("-1e400")));
+    }
+
+    // ---- atof: AUD-SEC-Delta regression -- a pathological ALL-NINES fractional string must NEVER
+    //     overflow to +Infinity nor round to `>= 1.0` (mathematically always `< 1.0` for any finite
+    //     count of digits) -- proven BROKEN before this fix: `n=300` (well under the OLD
+    //     400-digit cap, already wrong before the fix) returned a value `>= 1.0`; `n=309` (the
+    //     exact string from the audit finding) and `n=400` (the old cap's own boundary) both
+    //     returned `+Inf`. See `src/conv.c`'s `FCONV_MAX_SIG_FRAC_DIGITS` doc-comment for the fix
+    //     mechanism (a separate, geometrically-bounded fractional accumulator that can never
+    //     overflow by construction).
+    // PT: Regressao do AUD-SEC-Delta -- uma string fracionaria TODA-NOVES patologica NUNCA deve
+    //     estourar pra +Infinito nem arredondar pra `>= 1.0` (matematicamente sempre `< 1.0` pra
+    //     qualquer contagem finita de digitos) -- provado QUEBRADO antes deste fix: `n=300`
+    //     (confortavelmente abaixo do ANTIGO limite de 400 digitos, ja errado antes do fix)
+    //     retornava um valor `>= 1.0`; `n=309` (a string exata do achado da auditoria) e `n=400`
+    //     (a propria fronteira do antigo limite) retornavam `+Inf`. Ver o doc-comment do
+    //     `FCONV_MAX_SIG_FRAC_DIGITS` no `src/conv.c` pro mecanismo do fix (um acumulador
+    //     fracionario separado, limitado geometricamente, que nunca consegue estourar por
+    //     construcao).
+    {
+        static const int ns[] = {300, 309, 400};
+        char buf[410];
+        for (size_t vi = 0; vi < sizeof(ns) / sizeof(ns[0]); vi++) {
+            t_fill_point9(buf, ns[vi]);
+            double v = atof(buf);
+            TEST_ASSERT(!t_is_pos_inf(v));
+            TEST_ASSERT(!t_is_nan(v));
+            TEST_ASSERT(v < 1.0);  // THE invariant the audit finding demanded
+            TEST_ASSERT(v > 0.99); // sanity: still a plausible "almost 1" value, not e.g. 0.0
+            TEST_ASSERT_EQ(t_sign(v), 0); // no leading '-' in the input -> positive
+        }
+    }
+
+    // ---- atof: AUD-SEC-Delta REGRESSION -- leading zeros in the fractional part must NOT burn
+    //     the significant-digit budget. "0." + N zeros + "9" is a perfectly ordinary finite
+    //     double (~9 * 10^-(N+1)) for ANY N, but the fractional-loop fix landed in 27efe3f
+    //     (immediately above/before this fix) counted every fractional digit toward the
+    //     16-significant-digit cap -- zeros included -- so N>=16 leading zeros silently burned
+    //     the whole budget before the "9" was ever reached, returning `0.0` instead. Verified
+    //     here against the scientific-notation spelling of the SAME value (already exercised by
+    //     the exponent-scaling path tested above, and unaffected by this bug), which is a
+    //     trustworthy oracle. N=16 sits exactly on the boundary that used to break; N=20 and
+    //     N=40 are comfortably past it.
+    // PT: Regressao do AUD-SEC-Delta -- zeros a esquerda na parte fracionaria NAO podem queimar
+    //     o orcamento de digitos significativos. "0." + N zeros + "9" e' um double finito
+    //     perfeitamente comum (~9 * 10^-(N+1)) pra QUALQUER N, mas o fix do laco fracionario que
+    //     pousou no 27efe3f (imediatamente acima/antes deste fix) contava todo digito
+    //     fracionario pro limite de 16 digitos significativos -- zeros inclusos -- entao N>=16
+    //     zeros a esquerda queimava o orcamento inteiro antes do "9" ser sequer alcancado,
+    //     retornando `0.0` em vez disso. Verificado aqui contra a grafia em notacao cientifica do
+    //     MESMO valor (ja exercitada pelo caminho de escala-por-expoente testado acima, e nao
+    //     afetada por esse bug), que e' um oraculo confiavel. N=16 fica exatamente na fronteira
+    //     que costumava quebrar; N=20 e N=40 estao confortavelmente alem dela.
+    {
+        static const int ns[] = {16, 20, 40};
+        static const char* const exps[] = {"9e-17", "9e-21", "9e-41"};
+        char buf[64];
+        for (size_t vi = 0; vi < sizeof(ns) / sizeof(ns[0]); vi++) {
+            t_fill_zeros_then_9(buf, ns[vi]);
+            double v = atof(buf);
+            double expected = atof(exps[vi]);
+            TEST_ASSERT(v != 0.0); // THE regression this fix closes -- must NOT silently zero out
+            TEST_ASSERT(t_close_rel(v, expected, 1e-13));
+            TEST_ASSERT_EQ(t_sign(v), 0); // no leading '-' in the input -> positive
+        }
+    }
+
+    // ---- atof: AUD-SEC-Delta REGRESSION, exact literal from the review report (19 leading
+    //     zeros + "1", the input that first exposed the bug live) --------------------------------
+    {
+        double v = atof("0.00000000000000000001");
+        double expected = atof("1e-20");
+        TEST_ASSERT(v != 0.0);
+        TEST_ASSERT(t_close_rel(v, expected, 1e-13));
+        TEST_ASSERT_EQ(t_sign(v), 0);
+    }
+
+    // ---- atof: AUD-SEC-Delta sibling case (bonus, found while designing the fix, NOT part of the
+    //     original audit finding) -- a LARGE INTEGER part combined with a fractional part must also
+    //     stay finite when it legitimately should: the OLD "multiply mantissa forward for
+    //     fractional digits too" technique could push a near-DBL_MAX integer part over the edge to
+    //     `+Infinity` purely from appending fractional digits, even though the true combined value
+    //     is comfortably finite. 308 nines ~= 9.99...e307 (well below `DBL_MAX` ~1.798e308);
+    //     appending ".5" must NOT flip the result to `+Infinity`.
+    // PT: Caso irmao do AUD-SEC-Delta (bonus, encontrado ao desenhar o fix, NAO parte do achado
+    //     original da auditoria) -- uma parte INTEIRA GRANDE combinada com uma parte fracionaria
+    //     tambem deve ficar finita quando legitimamente deveria: a tecnica ANTIGA de "multiplicar
+    //     mantissa pra frente tambem pros digitos fracionarios" conseguia empurrar uma parte
+    //     inteira perto de `DBL_MAX` alem da borda pra `+Infinito` so' por anexar digitos
+    //     fracionarios, mesmo o valor combinado verdadeiro sendo confortavelmente finito. 308
+    //     noves ~= 9.99...e307 (bem abaixo de `DBL_MAX` ~1.798e308); anexar ".5" NAO deve virar o
+    //     resultado pra `+Infinito`.
+    {
+        char buf[320];
+        for (int k = 0; k < 308; k++) {
+            buf[k] = '9';
+        }
+        buf[308] = '.';
+        buf[309] = '5';
+        buf[310] = '\0';
+        double v = atof(buf);
+        TEST_ASSERT(!t_is_pos_inf(v));
+        TEST_ASSERT(v > 9.9e307); // still comfortably in the ~1e308 magnitude, not blown to Inf
     }
 
     // ---- atof: exponent UNDERFLOW -- best-effort signed zero/denormal, no crash ---------------

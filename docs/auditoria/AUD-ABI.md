@@ -97,3 +97,130 @@ Each `sys_*.c` wrapper's call to `syscallN` was checked against `syscallN`'s NAS
 **EN:** The Camada 0 hand-written assembly surface (`start.asm`, `syscall.asm`) and its C boundary (`sys_exit.c`, `sys_write.c`, `sys_read.c`, `sys_mmap.c`) are **fully conformant** with the System V AMD64 ABI as ratified in ADR-0001/0003/0005, verified both by source inspection and by disassembling/inspecting the actual toolchain output (`clang`+`nasm`+`ld`). Zero CRITICAL, zero IMPORTANT findings; one non-blocking COSMETIC comment-clarity suggestion. `AUD-ABI`'s "Estado Auditado" column may move to `✓` (aprovado) once the líder ratifies this report; it does not block `REL-TAG` on its own (still needs `AUD-SEC` + `F1` per the TODO.md dependency graph).
 
 **PT:** A superfície de assembly escrito à mão da Camada 0 (`start.asm`, `syscall.asm`) e sua fronteira C (`sys_exit.c`, `sys_write.c`, `sys_read.c`, `sys_mmap.c`) estão **totalmente conformes** à ABI System V AMD64 conforme ratificada no ADR-0001/0003/0005, verificado tanto por inspeção de source quanto por desmontagem/inspeção da saída real do toolchain (`clang`+`nasm`+`ld`). Zero achados CRÍTICOS, zero IMPORTANTES; uma sugestão COSMÉTICA de clareza de comentário, não-bloqueante. A coluna "Estado Auditado" de `AUD-ABI` pode passar a `✓` (aprovado) assim que o líder ratificar este relatório; ela sozinha não libera o `REL-TAG` (ainda depende de `AUD-SEC` + `F1` no grafo de pré-requisitos do TODO.md).
+
+---
+
+## Delta re-audit 2026-07-19 / Re-auditoria delta 2026-07-19
+
+- **Auditor:** embedded-firmware-engineer (same auditor as the 2026-07-09 report — method continuity, per `docs/auditoria/AUD-C0-PLAN.md` §3 / mesmo auditor do relatório de 2026-07-09 — continuidade de método, conforme `docs/auditoria/AUD-C0-PLAN.md` §3).
+- **Scope item / Item da TODO.md:** `AUD-ABI-Δ` + `AUD-C0-GATE` (Onda 4, `docs/auditoria/AUD-C0-PLAN.md` §2.1/§2.3). **Delta only** — everything the 2026-07-09 report already verified (`syscall1/3/6`, `_start`, `sys_exit/write/read/mmap`) is **unchanged** at this HEAD and is **not** re-derived below, only re-confirmed where the delta touches shared code paths. / **Só o delta** — tudo que o relatório de 2026-07-09 já verificou (`syscall1/3/6`, `_start`, `sys_exit/write/read/mmap`) está **inalterado** neste HEAD e **não** é re-derivado abaixo, só re-confirmado onde o delta toca caminhos de código compartilhados.
+- **Verdict / Veredito:** **CONFORME-COM-RESSALVAS — one 🟠 IMPORTANT finding (new, undocumented), zero 🔴 CRITICAL.** / **CONFORME-COM-RESSALVAS — um achado 🟠 IMPORTANTE (novo, não-documentado), zero 🔴 CRÍTICO.**
+
+### Scope of the delta / Escopo do delta
+
+**EN:** Per `AUD-C0-PLAN.md` §2.1: (1) `syscall2` (`src/syscall.asm`), re-added by SOV-ALLOC (W15) for `sys_munmap`; (2) `src/sys_munmap.c`, the new C↔ASM boundary calling it; (3) `src/core_api.c` + the mixed `libcore.a` ↔ hosted-C++ boundary of ADR-0009 (stack alignment, red zone, `glx_` prefix leak-tightness, `nm -u` gate).
+
+**PT:** Conforme `AUD-C0-PLAN.md` §2.1: (1) `syscall2` (`src/syscall.asm`), readicionada pelo SOV-ALLOC (W15) pro `sys_munmap`; (2) `src/sys_munmap.c`, a fronteira C↔ASM nova que a chama; (3) `src/core_api.c` + a fronteira mista `libcore.a` ↔ C++ hosted da ADR-0009 (alinhamento de stack, red zone, estanqueidade do prefixo `glx_`, gate `nm -u`).
+
+### Method / Método
+
+**EN:** Rebuilt from clean with `TMPDIR=/var/tmp` (`make clean && make build && make libcore && make libcore-test`, zero warnings across all four). Cross-checked the actual generated machine code (not just source) via `objdump -d -M intel` and `readelf` on the rebuilt binaries in `build/bin/` and the archive members in `build/libcore.a`. Ran `strace -f -c` on **every** binary in `build/bin/` (16 freestanding gate programs + `libcore_consumer`) to inventory real syscalls, following forks (`-f`) since `libcore_consumer` forks 3 children to prove the ADR-0009 heap-ownership boundary. Ran every gate listed in `AUD-C0-PLAN.md` §2.3 that exists at this HEAD (`sanitize-hint` does not exist yet — it is `security-engineer`'s deliverable under `AUD-SEC-Δ`, out of my write scope; noted as pending below, not scored as a failure of this chapter).
+
+**PT:** Rebuild limpo com `TMPDIR=/var/tmp` (`make clean && make build && make libcore && make libcore-test`, zero warnings nos quatro). Conferência cruzada do código de máquina realmente gerado (não só do source) via `objdump -d -M intel` e `readelf` nos binários rebuiltados em `build/bin/` e nos membros do archive em `build/libcore.a`. Rodado `strace -f -c` em **todo** binário de `build/bin/` (16 programas-gate freestanding + `libcore_consumer`) pra inventariar as syscalls reais, seguindo forks (`-f`) já que `libcore_consumer` forka 3 filhos pra provar a fronteira de ownership de heap da ADR-0009. Rodado todo gate listado em `AUD-C0-PLAN.md` §2.3 que existe neste HEAD (`sanitize-hint` ainda não existe — é entregável do `security-engineer` sob `AUD-SEC-Δ`, fora do meu escopo de escrita; anotado como pendente abaixo, não contado como falha deste capítulo).
+
+### Findings / Achados
+
+#### CRITICAL / CRÍTICO
+
+None found. / Nenhum encontrado.
+
+#### IMPORTANT / IMPORTANTE
+
+| # | File:line / Arquivo:linha | Finding / Achado |
+|---|---|---|
+| 1 | `Makefile:39` (`CXXFLAGS`) + the `libcore.a`↔hosted-C++ link at `Makefile:570-571` | **EN:** Linking `build/libcore.a` (compiled `-fno-pic`, `Makefile:23`, mandatory for Layer 0's freestanding contract) into an ordinary hosted C++ program **silently forces the whole consumer binary out of PIE**. Verified live: `readelf -h build/bin/libcore_consumer` reports `Tipo: EXEC` (not `DYN`), entry point `0x400410` — a fixed, non-randomized load address — even though `CXXFLAGS` (`Makefile:39`) requests no `-no-pie` and modern `clang++`/`ld` default to PIE. `ld` silently falls back to a non-PIE `ET_EXEC` because it cannot place non-position-independent object code (the archive members, all built with `-fno-pic`) into a position-independent image; it does **not** error, so nothing in the current build flags this loss of a real OS-level hardening (ASLR) to whoever links `libcore.a`. This is a **new, undocumented cost of ADR-0009's Option A**, distinct from the "no longer zero-libc-observable" cost the ADR already accepts and states explicitly — this one is nowhere named. It matters concretely because the ADR's own stated destination for `libcore.a` is exactly a hosted C++ shell that will eventually parse **hostile input** (SFNT — already flagged as such in `AUD-C0-PLAN.md` §1/§2.2, and `src/sfnt.c`/`src/raster.c`/`src/hint.c` are already archive members today, see `nm -u build/libcore.a` evidence below) — losing ASLR system-wide on that binary removes a real line of defense-in-depth exactly where a hostile-input parser lives. Not exploitable by itself (no memory corruption, no ABI violation — every function call across the boundary is empirically correct, see "Verified conformant" below), hence 🟠 not 🔴. **Remediation is documentation, not necessarily code**: either (a) add this as an explicit accepted-cost addendum to ADR-0009 (parallel to the existing zero-libc-purity one) so every future consumer of `libcore.a` makes an informed choice, or (b) evaluate a `-fpic`-compiled variant of the archive for hosted PIE consumers (architecture decision, not mine to make — `software-architect`/líder). Flagging, not fixing, per this chapter's write scope. **PT:** Linkar a `build/libcore.a` (compilada `-fno-pic`, `Makefile:23`, obrigatório pelo contrato freestanding da Camada 0) num programa C++ hosted comum **força em silêncio o binário do consumidor inteiro pra fora de PIE**. Verificado ao vivo: `readelf -h build/bin/libcore_consumer` reporta `Tipo: EXEC` (não `DYN`), ponto de entrada `0x400410` — um endereço de carga fixo, não-aleatorizado — mesmo o `CXXFLAGS` (`Makefile:39`) não pedindo `-no-pie` nenhum e `clang++`/`ld` modernos default pra PIE. O `ld` cai em silêncio pra um `ET_EXEC` não-PIE porque não consegue colocar código-objeto não-posição-independente (os membros do archive, todos compilados `-fno-pic`) dentro de uma imagem posição-independente; ele **não** dá erro, então nada no build atual sinaliza essa perda de um hardening real de nível de SO (ASLR) pra quem linkar a `libcore.a`. Este é um **custo novo, não-documentado, da Opção A da ADR-0009**, distinto do custo "deixa de ser zero-libc-observável" que a ADR já aceita e enuncia explicitamente — este aqui não é nomeado em lugar nenhum. Importa concretamente porque o próprio destino declarado da ADR pra `libcore.a` é exatamente uma casca C++ hosted que vai eventualmente parsear **input hostil** (SFNT — já sinalizado como tal em `AUD-C0-PLAN.md` §1/§2.2, e `src/sfnt.c`/`src/raster.c`/`src/hint.c` já são membros do archive hoje, ver evidência `nm -u build/libcore.a` abaixo) — perder ASLR no binário inteiro remove uma linha real de defesa-em-profundidade exatamente onde mora um parser de input hostil. Não é explorável por si só (sem corrupção de memória, sem violação de ABI — toda chamada através da fronteira está empiricamente correta, ver "Verificado conforme" abaixo), daí 🟠 e não 🔴. **Remediação é documentação, não necessariamente código**: ou (a) acrescentar isto como um adendo explícito de custo-aceito na ADR-0009 (paralelo ao de pureza-zero-libc já existente) pra todo futuro consumidor da `libcore.a` fazer uma escolha informada, ou (b) avaliar uma variante `-fpic` do archive pra consumidores PIE hosted (decisão de arquitetura, não minha pra tomar — `software-architect`/líder). Sinalizando, não corrigindo, conforme o escopo de escrita deste capítulo. |
+
+#### COSMETIC / COSMÉTICO
+
+| # | File:line / Arquivo:linha | Finding / Achado |
+|---|---|---|
+| 2 | `src/syscall.asm:36` (`syscall2`) | **EN:** Same observation as COSMETIC finding #1 of the 2026-07-09 report, now extended to the new `syscall2`: its line comment (`nr=rdi a1=rsi a2=rdx`) correctly never mentions `r10`/`rcx`/`rdx→rcx` reshuffling because a 2-arg syscall needs neither — but a reader skimming only that line could momentarily wonder why, same as with `syscall1`/`syscall3` before it. No code issue, non-blocking; a one-line clarifying comment would pre-empt the question, same remediation already on file for finding #1. **PT:** Mesma observação do achado COSMÉTICO #1 do relatório de 2026-07-09, agora estendida à nova `syscall2`: seu comentário de linha (`nr=rdi a1=rsi a2=rdx`) corretamente nunca menciona reorganização de `r10`/`rcx`/`rdx→rcx` porque uma syscall de 2 args não precisa de nenhuma das duas — mas quem ler só essa linha pode se perguntar momentaneamente por quê, igual já acontecia com `syscall1`/`syscall3` antes dela. Não é problema de código, não-bloqueante; um comentário de uma linha evitaria a dúvida, mesma remediação já registrada pro achado #1. |
+
+### Verified conformant, with evidence / Verificado conforme, com evidência
+
+**1. `syscall2` register reshuffle and clobber ordering / Reorganização de registrador e ordem de clobber da `syscall2`**
+
+Source (`src/syscall.asm:36-41`) and the actual machine code linked into `build/bin/test_alloc` (the one gate program that calls `sys_munmap`, via `objdump -d -M intel`) match instruction-for-instruction:
+
+```
+syscall2:
+    mov rax, rdi
+    mov rdi, rsi
+    mov rsi, rdx
+    syscall
+    ret
+```
+
+Two raw syscall args (`addr`, `len`), so only `rax/rdi/rsi` are touched — `r10`/`rdx`/`rcx` are correctly never referenced, consistent with the reshuffle-only-what-is-needed pattern already verified for `syscall1`/`syscall3` in the 2026-07-09 report. No clobber-before-read hazard is possible with only 2 registers in play (unlike `syscall6`'s documented `r8→r10`-before-`r8`-is-overwritten ordering, which remains unchanged and still correct at this HEAD — re-confirmed via `objdump` on `build/bin/exit42`/`test_alloc`, identical to the original report's listing).
+
+**2. `sys_munmap.c` C↔ASM boundary / Fronteira C↔ASM do `sys_munmap.c`**
+
+`src/sys_munmap.c:31-33` casts both `void* addr` and `size_t len` to `long` before crossing into `syscall2`, matching the "raw syscall ABI is all-`long`" contract every other `sys_*.c` wrapper already follows (verified against `include/syscall.h`'s `long syscall2(long, long, long)` prototype — arity matches the NASM `global syscall2` definition exactly, no signature drift).
+
+**3. `libcore.a` boundary — stack alignment, red zone, `glx_` prefix tightness / Fronteira `libcore.a` — alinhamento de stack, red zone, estanqueidade do prefixo `glx_`**
+
+- **Stack alignment (16B at `call`):** not a new risk. Every function crossing the `libcore.a` boundary (`glx_malloc`/`glx_free`/`glx_realloc`/`glx_memcpy`/`glx_memset` and everything they call internally) is an **ordinary** clang-compiled C function, not a hand-rolled entry point like `_start` — both the freestanding side and the hosted C++ caller side independently honor the System V AMD64 C-ABI's own 16B-at-`call` contract regardless of `-ffreestanding`/`-nostdlib`, which govern *runtime environment assumptions*, not the calling convention itself. Empirically exercised hard by `libcore_consumer`'s 16/16 PASS checks (`make libcore-test` output below), including grow/shrink `realloc` cycles that would corrupt on any real misalignment — none did.
+- **Red zone:** no new exposure. The functions crossing the boundary are ordinary leaf-adjacent C functions (not signal handlers, not code that can be asynchronously interrupted below `rsp`), so the SysV red-zone hazard class does not apply here regardless of which side of the boundary calls which — same conclusion as the 2026-07-09 report's finding 6, unchanged.
+- **`glx_` prefix tightness (`nm -u build/libcore.a`, pasted below):** every archive member (`alloc.o`, `conv.o`, `core_api.o`, `hint.o`, `mem.o`, `printf.o`, `raster.o`, `sfnt.o`, `str.o`, `sys_exit.o`, `sys_mmap.o`, `sys_munmap.o`, `sys_read.o`, `sys_write.o`, plus the reused `start.o`/`syscall.o`) references **only** `glx_core_*_impl` names, this project's own `sys_*`/`syscall1..6` names, or `main` (an intentional undefined reference in `start.o`, resolved by whatever program links it, freestanding or otherwise) — **zero bare libc-shaped identifier** (`malloc`, `strlen`, `memcpy`, …) anywhere in the archive, confirming the `$(CORE_RENAME_FLAGS)` mechanism (`Makefile:521-532`) and its prior CRITICAL fix (post-`decb2fb`, per `src/core_api.c`'s own header) still hold at this HEAD. `tools/check_libcore_symbols.sh` (positive whitelist, run by `make libcore-test`) independently confirms the same thing from the exported-symbol side.
+
+### AUD-C0-GATE evidence / Evidência do AUD-C0-GATE
+
+**`nm -u` — zero-libc invariant across every binary / invariante zero-libc em todo binário:**
+
+```
+$ for f in build/bin/*; do echo "--- $f ---"; nm -u "$f"; done
+--- build/bin/echo_stdin ---        (empty)
+--- build/bin/exit42 ---            (empty)
+--- build/bin/hello ---             (empty)
+--- build/bin/libcore_consumer ---  U _exit@GLIBC_2.2.5, U exit@GLIBC_2.2.5, U fork@GLIBC_2.2.5,
+                                    U free@GLIBC_2.2.5, w __gmon_start__, U __libc_start_main@GLIBC_2.34,
+                                    U malloc@GLIBC_2.2.5, U memcmp@GLIBC_2.2.5, U memset@GLIBC_2.2.5,
+                                    U perror@GLIBC_2.2.5, U printf@GLIBC_2.2.5, U waitpid@GLIBC_2.2.5
+--- build/bin/negative_probe ---, printf_e2e, selftest, test_alloc, test_alloc_free, test_conv,
+    test_hint, test_mem, test_printf, test_raster, test_sfnt, test_str ---  (all empty)
+```
+
+**EN:** All 16 freestanding gate binaries show `nm -u` **empty** — zero undefined symbols, i.e. zero libc dependency, at the strictest possible level (no libc symbol reference exists to even *attempt* resolving). `libcore_consumer` is the sole, **by-design**, exception (ADR-0009 explicitly never claims zero-libc purity for the hosted-shell side) — its undefined-symbol list is exactly the ordinary glibc/libstdc++ surface a `fork`+`malloc`+`printf` C++ program needs, nothing more, nothing unexpected.
+
+**PT:** Os 16 binários-gate freestanding mostram `nm -u` **vazio** — zero símbolo não-resolvido, ou seja, zero dependência de libc, no nível mais estrito possível (não existe referência a símbolo de libc nem pra *tentar* resolver). O `libcore_consumer` é a única exceção, **por design** (a ADR-0009 nunca reivindica pureza zero-libc pro lado casca-hosted) — sua lista de símbolos não-resolvidos é exatamente a superfície glibc/libstdc++ comum que um programa C++ `fork`+`malloc`+`printf` precisa, nada mais, nada inesperado.
+
+**`strace -f -c` — syscall inventory / inventário de syscalls:**
+
+| Binary / Binário | Syscalls observed (beyond `execve`) / Syscalls observadas (além de `execve`) |
+|---|---|
+| `echo_stdin` | `read` |
+| `exit42` | (none) |
+| `hello` | `write` |
+| `negative_probe` | `write` |
+| `printf_e2e` | `write` (×2) |
+| `selftest` | (none) |
+| `test_alloc` | `write`, `mmap` (×4) |
+| `test_alloc_free` | `write`, `mmap` (×3), `munmap` (×2) |
+| `test_conv`, `test_mem`, `test_printf`, `test_raster`, `test_sfnt`, `test_str` | `write` |
+| `test_hint` | `write` |
+| `libcore_consumer` (hosted, `-f` follows 3 forked children) | `wait4`(×3), `clone`(×3), `mmap`(×24), `mprotect`(×6), `openat`(×5), `fstat`(×6), `munmap`(×3), `close`(×5), `read`(×4), `rt_sigprocmask`(×9), `brk`(×3), `pread64`(×2), `write`, `access`, `rseq`, `arch_prctl`, `set_tid_address`, `set_robust_list`(×4), `futex`, `getrandom`, `prlimit64`, `writev`, `getpid`, `gettid`, `tgkill` |
+
+**EN:** Every freestanding binary emits **only** syscalls this project itself implements (`write`, `read`, `mmap`, `munmap` — exactly `sys_write`/`sys_read`/`sys_mmap`/`sys_munmap`), confirming at the syscall-inventory level (not just symbol-table level) that no hidden libc is doing I/O or allocation on the process's behalf. `libcore_consumer`'s broader inventory is the expected footprint of an ordinary dynamically-linked, forking hosted C++ program (dynamic loader `openat`/`mmap`/`mprotect`/`fstat`, `clone`/`wait4` for its 3 deliberate boundary-misuse forks, `getrandom`/`arch_prctl`/`rseq` from glibc/CRT startup) — nothing unexpected, nothing that suggests a hidden network/file/process surface.
+
+**PT:** Todo binário freestanding emite **só** as syscalls que este projeto mesmo implementa (`write`, `read`, `mmap`, `munmap` — exatamente `sys_write`/`sys_read`/`sys_mmap`/`sys_munmap`), confirmando no nível de inventário-de-syscall (não só de tabela-de-símbolo) que nenhuma libc escondida está fazendo I/O ou alocação em nome do processo. O inventário mais amplo do `libcore_consumer` é a pegada esperada de um programa C++ hosted comum, dinamicamente linkado e que forka (carregador dinâmico `openat`/`mmap`/`mprotect`/`fstat`, `clone`/`wait4` pelos seus 3 forks deliberados de mau-uso de fronteira, `getrandom`/`arch_prctl`/`rseq` do startup glibc/CRT) — nada inesperado, nada que sugira superfície escondida de rede/arquivo/processo.
+
+**Gate scoreboard / placar de gates (`AUD-C0-PLAN.md` §2.3):**
+
+| Gate | Result / Resultado |
+|---|---|
+| `make clean && make build` | 🟢 verde — zero warnings |
+| `make libcore` | 🟢 verde — zero warnings |
+| `make libcore-test` (`libcore_consumer` 16/16 checks + `check_libcore_symbols.sh`) | 🟢 verde |
+| `make test` (16/16 gate programs) | 🟢 verde |
+| `make test-negative` | 🟢 verde |
+| `make check-static` (cppcheck + clang --analyze + SPDX + syscall_nums sync) | 🟢 verde — 0 achados |
+| `make test-mem` (valgrind × test_alloc/test_mem) | 🟢 verde — 0 erros (limitação de malloc-hook documentada, inalterada) |
+| `make sanitize-sfnt` | 🟢 verde — ASan/UBSan silenciosos |
+| `make sanitize-raster` | 🟢 verde — ASan/UBSan silenciosos |
+| `make sanitize-hint` | ⚪ não existe neste HEAD ainda — entregável do `security-engineer` sob `AUD-SEC-Δ` (`AUD-C0-PLAN.md` §2.2), fora do escopo de escrita deste capítulo |
+
+### Conclusion / Conclusão
+
+**EN:** The Δ surface (`syscall2`, `sys_munmap.c`, the `libcore.a`↔hosted-C++ boundary) is ABI-conformant with System V AMD64 as ratified in ADR-0001/0003/0005/0009 — the reshuffle/clobber/argument-count discipline the 2026-07-09 report already verified for `syscall1/3/6` holds identically for `syscall2`, and every crossing of the mixed `libcore.a` boundary is empirically correct (16/16 `libcore_consumer` checks, zero `nm -u` leakage, zero unexpected syscall). One new 🟠 IMPORTANT finding — the hosted `libcore.a` consumer silently loses PIE/ASLR, an undocumented cost of ADR-0009's Option A distinct from the zero-libc-purity cost the ADR already names — is raised for the líder/`software-architect` to disposition (documentation addendum vs. a `-fpic` archive variant); it does not corrupt memory or violate the ABI itself. All `AUD-C0-GATE` checks that exist at this HEAD are green; `sanitize-hint` is pending the parallel `AUD-SEC-Δ` agent. Given the finding is real, new, and not yet dispositioned, this report's overall delta verdict is **CONFORME-COM-RESSALVAS**, not a clean CONFORME — per the wave's own gate rule (`AUD-C0-PLAN.md` §4), the 🟠 should be resolved (fixed or formally accepted-and-documented) within the wave before `REL-TAG core-v0.4.0`.
+
+**PT:** A superfície Δ (`syscall2`, `sys_munmap.c`, a fronteira `libcore.a`↔C++ hosted) é conforme à ABI System V AMD64 conforme ratificada no ADR-0001/0003/0005/0009 — a disciplina de reorganização/clobber/contagem-de-argumento que o relatório de 2026-07-09 já verificou pra `syscall1/3/6` vale identicamente pra `syscall2`, e toda travessia da fronteira mista `libcore.a` está empiricamente correta (16/16 checks do `libcore_consumer`, zero vazamento em `nm -u`, zero syscall inesperada). Um achado novo 🟠 IMPORTANTE — o consumidor hosted da `libcore.a` perde PIE/ASLR em silêncio, um custo não-documentado da Opção A da ADR-0009 distinto do custo de pureza-zero-libc que a ADR já nomeia — é levantado pro líder/`software-architect` dispor (adendo de documentação vs. uma variante `-fpic` do archive); ele não corrompe memória nem viola a ABI em si. Todo gate do `AUD-C0-GATE` que existe neste HEAD está verde; `sanitize-hint` está pendente do agente paralelo do `AUD-SEC-Δ`. Dado que o achado é real, novo, e ainda não disposto, o veredito geral deste delta é **CONFORME-COM-RESSALVAS**, não um CONFORME limpo — pela própria regra de gate da onda (`AUD-C0-PLAN.md` §4), o 🟠 deveria ser resolvido (corrigido ou formalmente aceito-e-documentado) dentro da onda antes do `REL-TAG core-v0.4.0`.

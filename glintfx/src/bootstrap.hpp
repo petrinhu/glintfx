@@ -8,9 +8,18 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
-// EN: Forward-declare only — callers must not depend on RmlUi headers.
-// PT: Só forward-declaration — callers não devem depender dos headers do RmlUi.
-namespace Rml { class Context; class SystemInterface; }
+// EN: Forward-declare only — callers must not depend on RmlUi headers. `Element` is added
+//     (AUD-L1-QUALITY Item A) for the private find_element() helper below -- forward-declared
+//     only, same discipline as Context/SystemInterface, no RmlUi header pulled in here.
+// PT: Só forward-declaration — callers não devem depender dos headers do RmlUi. `Element` foi
+//     adicionado (AUD-L1-QUALITY Item A) para o helper privado find_element() abaixo -- só
+//     forward-declarado, mesma disciplina de Context/SystemInterface, nenhum header do RmlUi
+//     puxado aqui.
+namespace Rml {
+class Context;
+class SystemInterface;
+class Element;
+} // namespace Rml
 
 #include <functional>
 #include <glintfx/click_info.hpp>
@@ -941,6 +950,27 @@ public:
   void shutdown();
 
 private:
+  // EN: AUD-L1-QUALITY Item A -- shared lookup prelude for the id-keyed DOM accessors
+  //     (get_element_box .. set_property): guards `impl_`/`impl_->doc`/`id` (null AND empty),
+  //     then `impl_->doc->GetElementById(id)`. Returns nullptr on any guard failure OR when no
+  //     element with that id exists -- callers uniformly treat both as "not found". A private
+  //     member (not a free function) because it reaches into `Impl`, which only Bootstrap's own
+  //     members may name (`private: struct Impl;` above). Does NOT replace a guard that has
+  //     EXTRA validation interleaved with the id check (e.g. set_element_scroll_top's
+  //     std::isfinite(scroll_top) check sits between the id guard and the lookup) -- that site
+  //     is deliberately left as its own inline sequence rather than reordered around this helper.
+  // PT: Prelúdio de busca compartilhado pelos acessores DOM indexados por id
+  //     (get_element_box .. set_property): guarda `impl_`/`impl_->doc`/`id` (nulo E vazio),
+  //     depois `impl_->doc->GetElementById(id)`. Retorna nullptr em qualquer falha de guarda OU
+  //     quando não existe elemento com aquele id -- os chamadores tratam os dois casos
+  //     uniformemente como "não encontrado". É membro privado (não função livre) porque acessa
+  //     `Impl`, que só as próprias funções-membro do Bootstrap podem nomear (`private: struct
+  //     Impl;` abaixo). NÃO substitui uma guarda que tem validação EXTRA intercalada com o check
+  //     de id (ex.: o check std::isfinite(scroll_top) de set_element_scroll_top fica entre a
+  //     guarda de id e a busca) -- aquele sítio é deliberadamente deixado como sua própria
+  //     sequência inline em vez de reordenado ao redor deste helper.
+  Rml::Element* find_element(const char* id) const;
+
   struct Impl;        // EN: defined in bootstrap.cpp; hides RmlUi types.
                       // PT: definido em bootstrap.cpp; oculta tipos RmlUi.
   Impl* impl_ = nullptr;

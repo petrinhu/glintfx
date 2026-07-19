@@ -71,11 +71,11 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 #     rodado pelo próprio alvo dedicado `sanitize-sfnt` abaixo em vez disso (mesmo padrão que o
 #     `tests/libcore_consumer.cpp` já usa, só que via exclusão baseada em extensão lá em vez de um
 #     filter-out explícito).
-PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c tests/sanitize_raster.c,$(wildcard tests/*.c))
+PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c tests/sanitize_raster.c tests/sanitize_hint.c,$(wildcard tests/*.c))
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
 .PHONY: build test test-negative check-static test-mem clean run libcore libcore-test sanitize-sfnt \
-        sanitize-raster
+        sanitize-raster sanitize-hint
 
 build: $(PROGRAMS)
 
@@ -627,6 +627,26 @@ SANITIZE_RASTER_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,und
 sanitize-raster: | $(BIN)
 	$(CC) $(SANITIZE_RASTER_FLAGS) -o $(BIN)/sanitize_raster tests/sanitize_raster.c src/raster.c src/sfnt.c
 	$(BIN)/sanitize_raster
+
+# EN: SOV-HINT (L1.20-FONTFLIP / FT-F4) sanitizer gate -- AUD-SEC-Delta addition (2026-07-19):
+#     `src/hint.c` was the last of the SFNT/raster/hint trio with no hosted-companion sanitizer
+#     target (AUD-C0-PLAN.md's "Hotspot #2" -- newest TU, tested but never sanitizer-run). Same
+#     hosted-companion pattern/flags as SANITIZE_SFNT_FLAGS/SANITIZE_RASTER_FLAGS above (`-O1`,
+#     the documented ASan/UBSan sweet spot) -- `src/hint.c` links alone (it has no dependency on
+#     `src/sfnt.c`/`src/raster.c` beyond the `glx_sfnt_point` POD declared in core/sfnt.h).
+# PT: Portão sanitizer do SOV-HINT (L1.20-FONTFLIP / FT-F4) -- acréscimo do AUD-SEC-Delta
+#     (2026-07-19): o `src/hint.c` era o último do trio SFNT/raster/hint sem alvo sanitizer
+#     hosted-companion (o "Hotspot #2" do AUD-C0-PLAN.md -- TU mais nova, testada mas nunca
+#     rodada sob sanitizer). Mesmo padrão/flags hosted-companion do SANITIZE_SFNT_FLAGS/
+#     SANITIZE_RASTER_FLAGS acima (`-O1`, o ponto-doce documentado de ASan/UBSan) -- o
+#     `src/hint.c` linka sozinho (não depende de `src/sfnt.c`/`src/raster.c` além do POD
+#     `glx_sfnt_point` declarado em core/sfnt.h).
+SANITIZE_HINT_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,undefined \
+                       -fno-sanitize-recover=all -g -O1
+
+sanitize-hint: | $(BIN)
+	$(CC) $(SANITIZE_HINT_FLAGS) -o $(BIN)/sanitize_hint tests/sanitize_hint.c src/hint.c
+	$(BIN)/sanitize_hint
 
 clean:
 	rm -rf $(BUILD)

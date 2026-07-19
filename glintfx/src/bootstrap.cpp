@@ -232,6 +232,55 @@ struct Bootstrap::Impl {
 #endif
 };
 
+namespace {
+
+// EN: AUD-L1-QUALITY Item A -- shared ancestor-id walk. Starting at `el`, climbs
+//     GetParentNode() until it finds the first element with a non-empty id, and returns that
+//     id (`""` if none found). This same text was previously duplicated verbatim 10x across
+//     the listener classes below; the loop and its stop condition are now defined ONCE here.
+//
+//     THE INVARIANT (do not touch without re-reading this comment in full): the walk stops
+//     AT `doc` and never asks GetParentNode() past it. Bug found in Step 3 (v0.2.5): a plain
+//     "walk to the first non-empty id" loop with no stop condition overshoots the document --
+//     Context.cpp:65 does `root->SetId(name)` on the CONTEXT's internal root element (the one
+//     above every ElementDocument, named after the context -- "main" in this codebase), so an
+//     author-authored subtree with NO id anywhere would silently report that internal "main"
+//     id instead of "". Stopping the walk AT `doc` ensures only ids the RML AUTHOR could have
+//     written are ever reported; the document's own id (usually unset) is still checked once,
+//     inclusively (`el != doc` is the loop's continuation condition, not its stop-and-exclude
+//     condition -- when `el == doc` the loop body does not run again, but `doc`'s own
+//     (typically empty) id is still read by the ternary below, same as every other element).
+//     Removing or weakening `el != doc` reintroduces the overshoot bug in EVERY call site at
+//     once -- this is exactly the "did the guard's sibling get the fix too?" dominó class the
+//     AUD-L1-QUALITY finding calls out.
+// PT: AUD-L1-QUALITY Item A -- subida de ancestral por id, compartilhada. Partindo de `el`,
+//     sobe por GetParentNode() até achar o primeiro elemento com id não-vazio, e retorna esse
+//     id (`""` se nenhum for achado). Este mesmo texto estava duplicado ao pé da letra 10x
+//     entre as classes de listener abaixo; o laço e sua condição de parada agora são
+//     definidos UMA VEZ aqui.
+//
+//     O INVARIANTE (não mexer sem reler este comentário por inteiro): a subida para EM `doc`
+//     e nunca chama GetParentNode() além dele. Bug encontrado no Step 3 (v0.2.5): um loop
+//     simples "sobe até o 1º id não-vazio" sem condição de parada ultrapassa o documento --
+//     Context.cpp:65 faz `root->SetId(name)` no elemento root INTERNO do contexto (o que fica
+//     acima de todo ElementDocument, nomeado com o nome do contexto -- "main" neste código),
+//     então uma subárvore autorada SEM id em lugar nenhum reportaria silenciosamente esse id
+//     interno "main" em vez de "". Parar a subida EM `doc` garante que só ids que o AUTOR do
+//     RML poderia ter escrito sejam reportados; o id do próprio documento (normalmente não
+//     definido) ainda é checado uma vez, de forma inclusiva (`el != doc` é a condição de
+//     CONTINUAÇÃO do laço, não uma condição de parar-e-excluir -- quando `el == doc` o corpo
+//     do laço não roda de novo, mas o id (tipicamente vazio) do próprio `doc` ainda é lido
+//     pelo ternário abaixo, igual a qualquer outro elemento). Remover ou enfraquecer
+//     `el != doc` reintroduz o bug de overshoot em TODO sítio de chamada de uma vez -- é
+//     exatamente a classe dominó "o irmão da guarda levou o fix também?" que o achado
+//     AUD-L1-QUALITY aponta.
+const char* AncestorIdOf(Rml::Element* el, Rml::ElementDocument* doc) {
+  while (el && el->GetId().empty() && el != doc) el = el->GetParentNode();
+  return (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+}
+
+} // namespace
+
 // EN: Bubble-phase "click" listener attached to each loaded document's root (F1, v0.2.5).
 //     Self-deletes on OnDetach -- RmlUi's own idiom, confirmed in the pinned samples
 //     (Samples/basic/{benchmark,animation,harfbuzz,demo}/src/*.cpp).
@@ -245,24 +294,12 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    // EN: Bug found in Step 3 (v0.2.5): a plain "walk to the first non-empty id" loop with no
-    //     stop condition overshoots the document -- Context.cpp:65 does `root->SetId(name)` on
-    //     the CONTEXT's internal root element (the one above every ElementDocument, named after
-    //     the context -- "main" here), so an author-authored subtree with NO id anywhere would
-    //     silently report that internal "main" id instead of "". Stop the walk AT doc_ (never
-    //     ask GetParentNode() past it) so only ids the RML AUTHOR could have written are ever
-    //     reported; the document's own id (usually unset) is still checked once, inclusively.
-    // PT: Bug encontrado no Step 3 (v0.2.5): um loop simples "sobe até o 1º id não-vazio" sem
-    //     condição de parada ultrapassa o documento -- Context.cpp:65 faz `root->SetId(name)`
-    //     no elemento root INTERNO do contexto (o que fica acima de todo ElementDocument,
-    //     nomeado com o nome do contexto -- "main" aqui), então uma subárvore autorada SEM id
-    //     em lugar nenhum reportaria silenciosamente esse id interno "main" em vez de "". Para
-    //     a subida EM doc_ (nunca chama GetParentNode() além dele) para que só ids que o AUTOR
-    //     do RML poderia ter escrito sejam reportados; o id do próprio documento (normalmente
-    //     não definido) ainda é checado uma vez, de forma inclusiva.
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: AncestorIdOf() (defined above) walks to the nearest ancestor id, stopping AT doc_ --
+    //     see its doc-comment for the overshoot-bug invariant (Step 3, v0.2.5) it preserves.
+    // PT: AncestorIdOf() (definida acima) sobe até o id ancestral mais próximo, parando EM
+    //     doc_ -- ver o doc-comment dela pro invariante do bug de overshoot (Step 3, v0.2.5)
+    //     que ela preserva.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     // EN: Copy the functor before invoking (AUD-TEC-3): cb_ points into
     //     Bootstrap::Impl::click_cb. If the callback itself calls set_click_callback(...) (a
     //     plausible pattern -- "clicked 'Play' -> swap in the next screen's handler"), that
@@ -324,16 +361,13 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    // EN: Same ancestor-walk-to-nearest-id as ClickEventListener::ProcessEvent above (id="" if
-    //     no ancestor up to doc_ has one) -- see the detailed comment there for why the walk
-    //     stops AT doc_ instead of overshooting into the context's internal root element.
-    // PT: Mesma subida de ancestral até o id mais próximo do ClickEventListener::ProcessEvent
-    //     acima (id="" se nenhum ancestral até doc_ tiver um) -- ver o comentário detalhado lá
-    //     do motivo de a subida parar EM doc_ em vez de ultrapassar pro elemento root interno
-    //     do contexto.
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() as ClickEventListener::ProcessEvent above (id="" if no ancestor
+    //     up to doc_ has one) -- see its doc-comment for why the walk stops AT doc_ instead of
+    //     overshooting into the context's internal root element.
+    // PT: Mesma AncestorIdOf() do ClickEventListener::ProcessEvent acima (id="" se nenhum
+    //     ancestral até doc_ tiver um) -- ver o doc-comment dela do motivo de a subida parar EM
+    //     doc_ em vez de ultrapassar pro elemento root interno do contexto.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
 
     // EN: Parameter names confirmed by grepping the pinned RmlUi source
     //     (Source/Core/Context.cpp:1538-1541, GenerateMouseEventParameters): "button", "mouse_x",
@@ -418,9 +452,9 @@ public:
     //     limites.
     if (button <= 0 || button > 2) return;
 
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
 
     pending_[button].valid = true;
     pending_[button].id    = id_str;
@@ -493,9 +527,9 @@ public:
 
     if (!cb_ || !*cb_) return;
 
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* up_id = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* up_id = AncestorIdOf(event.GetTargetElement(), doc_);
 
     if (pending.id != up_id) return; // EN: down and up landed on different elements -- no click.
                                       // PT: down e up caíram em elementos diferentes -- sem clique.
@@ -552,15 +586,13 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    // EN: Same ancestor-walk-stops-at-doc_ rule as ClickEventListener::ProcessEvent above -- see
-    //     the detailed comment there for why the walk must not overshoot into the context's
-    //     internal root element.
-    // PT: Mesma regra de subida-para-em-doc_ do ClickEventListener::ProcessEvent acima -- ver o
-    //     comentário detalhado lá do motivo de a subida não poder ultrapassar pro elemento root
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above -- see its
+    //     doc-comment for why the walk must not overshoot into the context's internal root
+    //     element.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima -- ver o
+    //     doc-comment dela do motivo de a subida não poder ultrapassar pro elemento root
     //     interno do contexto.
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     // EN: Copy the functor before invoking (AUD-TEC-3 reentrancy guard, same reasoning as
     //     ClickEventListener::ProcessEvent above).
     // PT: Copia o functor antes de invocar (guarda de reentrância AUD-TEC-3, mesmo raciocínio de
@@ -594,11 +626,9 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    // EN: Same ancestor-walk-stops-at-doc_ rule as ClickEventListener::ProcessEvent above.
-    // PT: Mesma regra de subida-para-em-doc_ do ClickEventListener::ProcessEvent acima.
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     // EN: Local Rml::String keeps the "value" parameter's storage alive for the duration of
     //     this call (event.GetParameter<Rml::String> returns BY VALUE) -- c_str() on a
     //     temporary would dangle the instant the full-expression ends; binding to a named
@@ -642,9 +672,9 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     auto cb = *cb_;
     if (cb) cb(id_str);
   }
@@ -681,9 +711,9 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     auto cb = *cb_;
     if (cb) cb(id_str);
   }
@@ -718,9 +748,9 @@ public:
 
   void ProcessEvent(Rml::Event& event) override {
     if (!cb_ || !*cb_) return;
-    Rml::Element* el = event.GetTargetElement();
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above.
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima.
+    const char* id_str = AncestorIdOf(event.GetTargetElement(), doc_);
     auto cb = *cb_;
     if (cb) cb(id_str);
   }
@@ -817,8 +847,13 @@ public:
     Rml::Element* target = event.GetTargetElement();
     Rml::Context* target_ctx = target ? target->GetContext() : nullptr;
     Rml::Element* el = target_ctx ? target_ctx->GetHoverElement() : target;
-    while (el && el->GetId().empty() && el != doc_) el = el->GetParentNode();
-    const char* id_str = (el && !el->GetId().empty()) ? el->GetId().c_str() : "";
+    // EN: Same AncestorIdOf() walk as ClickEventListener::ProcessEvent above -- starting point
+    //     `el` is the live hover element resolved above, not event.GetTargetElement() directly
+    //     (see the class-level comment above for why).
+    // PT: Mesma subida AncestorIdOf() do ClickEventListener::ProcessEvent acima -- o ponto de
+    //     partida `el` é o elemento de hover vivo resolvido acima, não event.GetTargetElement()
+    //     diretamente (ver o comentário de nível de classe acima do motivo).
+    const char* id_str = AncestorIdOf(el, doc_);
     // EN: Dedup: no state change, no-op. This is what kills re-firing while the cursor crosses
     //     unlabeled children of the SAME labeled container (every raw Mouseover on those
     //     children resolves, via the ancestor walk above, to the SAME container id).
@@ -1259,15 +1294,23 @@ void Bootstrap::set_hover_callback(std::function<void(const char*, bool)> cb) {
   if (impl_) impl_->hover_cb = std::move(cb);
 }
 
+// EN: AUD-L1-QUALITY Item A -- shared lookup prelude for the id-keyed DOM accessors below.
+//     See the doc-comment on the declaration (bootstrap.hpp) for the full contract; this text
+//     was previously duplicated verbatim across get_element_box .. set_property.
+// PT: AUD-L1-QUALITY Item A -- prelúdio de busca compartilhado pelos acessores DOM indexados
+//     por id abaixo. Ver o doc-comment da declaração (bootstrap.hpp) pro contrato completo;
+//     este texto estava duplicado ao pé da letra entre get_element_box .. set_property.
+Rml::Element* Bootstrap::find_element(const char* id) const {
+  if (!impl_ || !impl_->doc || !id || !*id) return nullptr;
+  return impl_->doc->GetElementById(id);
+}
+
 bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, float& h) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard (reject empty id "" too, not just null)
+  //     and the impl_/doc null-checks -- see its doc-comment (bootstrap.hpp) for the contract.
+  // PT: find_element() incorpora a guarda AUD-TEC-5 (rejeita id vazio "" também, não só nulo)
+  //     e os checks de nulo de impl_/doc -- ver o doc-comment dela (bootstrap.hpp) pro contrato.
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   const Rml::Vector2f offset = el->GetAbsoluteOffset(Rml::BoxArea::Border);
   const Rml::Vector2f size   = el->GetBox().GetSize(Rml::BoxArea::Border);
@@ -1276,61 +1319,54 @@ bool Bootstrap::get_element_box(const char* id, float& x, float& y, float& w, fl
 }
 
 bool Bootstrap::scroll_element_into_view(const char* id, bool align_with_top) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   el->ScrollIntoView(align_with_top);
   return true;
 }
 
 bool Bootstrap::get_element_scroll_top(const char* id, float& out_scroll_top) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   out_scroll_top = el->GetScrollTop();
   return true;
 }
 
 bool Bootstrap::get_element_scroll_height(const char* id, float& out_scroll_height) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   out_scroll_height = el->GetScrollHeight();
   return true;
 }
 
 bool Bootstrap::get_element_client_height(const char* id, float& out_client_height) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   out_client_height = el->GetClientHeight();
   return true;
 }
 
+// EN: NOT refactored onto find_element() (AUD-L1-QUALITY Item A, deliberate exclusion): the
+//     std::isfinite(scroll_top) check is INTERLEAVED between the id guard and the element
+//     lookup below, not a byte-identical repeat of the shared prelude -- forcing it into
+//     find_element() would mean reordering the isfinite check around the helper call. Left as
+//     its own inline sequence per this wave's conservative-refactor instruction (see
+//     AUD-L1-QUALITY.md and find_element()'s own doc-comment in bootstrap.hpp).
+// PT: NÃO refatorado sobre find_element() (AUD-L1-QUALITY Item A, exclusão deliberada): o
+//     check std::isfinite(scroll_top) fica INTERCALADO entre a guarda de id e a busca do
+//     elemento abaixo, não é uma repetição byte-idêntica do prelúdio compartilhado --
+//     forçá-lo em find_element() significaria reordenar o check de isfinite ao redor da
+//     chamada do helper. Deixado como sua própria sequência inline conforme a instrução
+//     conservadora desta onda (ver AUD-L1-QUALITY.md e o doc-comment de find_element() em
+//     bootstrap.hpp).
 bool Bootstrap::set_element_scroll_top(const char* id, float scroll_top) const {
   // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
   //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
@@ -1351,14 +1387,9 @@ bool Bootstrap::set_element_scroll_top(const char* id, float scroll_top) const {
 }
 
 bool Bootstrap::set_focus(const char* id) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- an author/host that
-  //     passes "" (e.g. a computed id that resolved empty) should fail-high the same way
-  //     null does, not silently fall through to GetElementById("") lookups.
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- um autor/host que
-  //     passe "" (ex.: id computado que resolveu vazio) deve falhar fail-high da mesma
-  //     forma que nulo, não cair silenciosamente em buscas GetElementById("").
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   // EN: Element::Focus()'s own bool -- false when the element itself is authored
   //     `focus: none;` (see the doc-comment in bootstrap.hpp for the full `focus` vs.
@@ -1389,12 +1420,9 @@ bool Bootstrap::clear_focus() const {
 }
 
 bool Bootstrap::set_text(const char* id, const char* text) const {
-  // EN: Guard (AUD-TEC-5): reject empty id "" too, not just null -- same rationale as every
-  //     other per-id method in this file (get_element_box, set_focus, etc.).
-  // PT: Guard (AUD-TEC-5): rejeita id vazio "" também, não só nulo -- mesma racional de todo
-  //     outro método por-id neste arquivo (get_element_box, set_focus, etc.).
-  if (!impl_ || !impl_->doc || !id || !*id) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   // EN: CRITICAL hardening (see the doc-comment in bootstrap.hpp for the full rationale):
   //     escape RML-significant characters BEFORE SetInnerRML, so `text` can never inject
@@ -1409,42 +1437,56 @@ bool Bootstrap::set_text(const char* id, const char* text) const {
 }
 
 bool Bootstrap::add_class(const char* id, const char* cls) const {
-  // EN: Guard (AUD-TEC-5): id AND cls must both be non-null/non-empty -- an empty class name
-  //     is a structurally-invalid caller input (e.g. a computed class string that resolved
-  //     empty), rejected the same way an empty id is.
-  // PT: Guard (AUD-TEC-5): id E cls devem ser não-nulos/não-vazios -- um nome de classe vazio
-  //     é entrada estruturalmente inválida do chamador (ex.: string de classe computada que
-  //     resolveu vazia), rejeitada do mesmo jeito que um id vazio.
-  if (!impl_ || !impl_->doc || !id || !*id || !cls || !*cls) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: Guard (AUD-TEC-5): cls must be non-null/non-empty -- an empty class name is a
+  //     structurally-invalid caller input (e.g. a computed class string that resolved empty),
+  //     rejected the same way an empty id is. The id/impl_/doc part of the original combined
+  //     guard now lives in find_element() below -- splitting a single `&&`-conjunction guard
+  //     into two sequential early-returns changes neither input has no observable behaviour
+  //     (both checks are pure, side-effect-free, and their overall truth table -- reject iff
+  //     id invalid OR cls invalid -- is unchanged by evaluation order).
+  // PT: Guard (AUD-TEC-5): cls deve ser não-nulo/não-vazio -- um nome de classe vazio é
+  //     entrada estruturalmente inválida do chamador (ex.: string de classe computada que
+  //     resolveu vazia), rejeitada do mesmo jeito que um id vazio. A parte id/impl_/doc da
+  //     guarda combinada original agora mora em find_element() abaixo -- dividir uma guarda de
+  //     conjunção `&&` única em dois early-returns sequenciais não muda comportamento
+  //     observável (os dois checks são puros, sem efeito colateral, e a tabela-verdade geral
+  //     -- rejeita se id inválido OU cls inválido -- é inalterada pela ordem de avaliação).
+  if (!cls || !*cls) return false;
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   el->SetClass(cls, /*activate=*/true);
   return true;
 }
 
 bool Bootstrap::remove_class(const char* id, const char* cls) const {
-  // EN: Guard (AUD-TEC-5): same id/cls null-or-empty rejection as add_class above.
-  // PT: Guard (AUD-TEC-5): mesma rejeição de id/cls nulo-ou-vazio do add_class acima.
-  if (!impl_ || !impl_->doc || !id || !*id || !cls || !*cls) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  // EN: Guard (AUD-TEC-5): same cls null-or-empty rejection as add_class above, same
+  //     split-guard equivalence rationale (see add_class's comment above).
+  // PT: Guard (AUD-TEC-5): mesma rejeição de cls nulo-ou-vazio do add_class acima, mesma
+  //     racional de equivalência de guarda dividida (ver o comentário do add_class acima).
+  if (!cls || !*cls) return false;
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   el->SetClass(cls, /*activate=*/false);
   return true;
 }
 
 bool Bootstrap::set_property(const char* id, const char* prop, const char* value) const {
-  // EN: Guard (AUD-TEC-5): id AND prop must both be non-null/non-empty -- an empty property
-  //     NAME cannot resolve to any real RCSS property, structurally invalid caller input.
-  //     `value` is NOT guarded the same way here -- a null value is normalised to "" and
-  //     forwarded to RmlUi's own parser, which is the sole authority on whether an empty value
-  //     is acceptable for the named property (see the doc-comment in bootstrap.hpp).
-  // PT: Guard (AUD-TEC-5): id E prop devem ser não-nulos/não-vazios -- um NOME de propriedade
-  //     vazio não resolve para nenhuma propriedade RCSS real, entrada estruturalmente inválida
-  //     do chamador. `value` NÃO é guardado do mesmo jeito aqui -- um value nulo é normalizado
+  // EN: Guard (AUD-TEC-5): prop must be non-null/non-empty -- an empty property NAME cannot
+  //     resolve to any real RCSS property, structurally invalid caller input. `value` is NOT
+  //     guarded the same way here -- a null value is normalised to "" and forwarded to RmlUi's
+  //     own parser, which is the sole authority on whether an empty value is acceptable for
+  //     the named property (see the doc-comment in bootstrap.hpp). The id/impl_/doc part of
+  //     the original combined guard now lives in find_element() below -- same split-guard
+  //     equivalence rationale as add_class's comment above.
+  // PT: Guard (AUD-TEC-5): prop deve ser não-nulo/não-vazio -- um NOME de propriedade vazio
+  //     não resolve para nenhuma propriedade RCSS real, entrada estruturalmente inválida do
+  //     chamador. `value` NÃO é guardado do mesmo jeito aqui -- um value nulo é normalizado
   //     para "" e encaminhado ao próprio parser do RmlUi, que é a única autoridade sobre se um
   //     valor vazio é aceitável para a propriedade nomeada (ver o doc-comment em bootstrap.hpp).
-  if (!impl_ || !impl_->doc || !id || !*id || !prop || !*prop) return false;
-  Rml::Element* el = impl_->doc->GetElementById(id);
+  //     A parte id/impl_/doc da guarda combinada original agora mora em find_element() abaixo
+  //     -- mesma racional de equivalência de guarda dividida do comentário de add_class acima.
+  if (!prop || !*prop) return false;
+  Rml::Element* el = find_element(id);
   if (!el) return false;
   // EN: SetProperty's own bool -- a real parse outcome, propagated unchanged (no glintfx-level
   //     re-validation on top).

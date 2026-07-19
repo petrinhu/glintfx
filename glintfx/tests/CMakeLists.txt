@@ -1722,6 +1722,49 @@ add_test(NAME document_reload_leak
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: gl_resource_leak (TST-L1-GLLEAK / GLLEAK-2) -- endurance-lite proof that no GL driver
+#     HANDLE (texture/FBO/renderbuffer/buffer/VAO/program/shader) leaks across 20 reload-on-
+#     navigate cycles (alternating min.rml/min_partial.rml, the same document pair
+#     document_reload_leak.cpp reuses above) plus 1 full UiLayer destroy+recreate cycle.
+#     Complements document_reload_leak.cpp: that test proves heap/document-count hygiene via
+#     ASan/LSan (TST-L1-MEM), which is BLIND to GL object names living in the driver's own
+#     namespace. Uses ONLY the public UiLayer API + raw GL queries (glIsTexture et al.) via
+#     glloader, no RmlUi:: internals needed -- unlike document_reload_leak.cpp/focus_sanity.cpp
+#     above, so it does NOT link RmlUi::Core. Links glloader explicitly: the test calls
+#     glIsTexture/glIsFramebuffer/glIsRenderbuffer/glIsBuffer/glIsVertexArray/glIsProgram/
+#     glIsShader directly, same reasoning as gl_state_guard.cpp/ui_layer_compose.cpp above.
+#     Runs in BOTH build configs (links ${_embed_dep}) since the code under test
+#     (engine.cpp/bootstrap.cpp/render_gl3.cpp) is always compiled regardless of
+#     GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml"/
+#     "tests/min_partial.rml" resolve to build/tests/*.rml regardless of where ctest is
+#     invoked from -- same convention as document_reload_leak.cpp immediately above.
+# PT: gl_resource_leak (TST-L1-GLLEAK / GLLEAK-2) -- prova endurance-lite de que nenhum HANDLE
+#     de driver GL (textura/FBO/renderbuffer/buffer/VAO/programa/shader) vaza ao longo de 20
+#     ciclos de reload-on-navigate (alternando min.rml/min_partial.rml, o mesmo par de
+#     documentos que document_reload_leak.cpp reutiliza acima) mais 1 ciclo completo de
+#     destroy+recreate do UiLayer. Complementa document_reload_leak.cpp: aquele teste prova
+#     higiene de heap/contagem-de-documento via ASan/LSan (TST-L1-MEM), que é CEGO a nomes de
+#     objeto GL que vivem no namespace do próprio driver. Usa SÓ a API pública do UiLayer +
+#     queries GL cruas (glIsTexture etc.) via glloader, sem precisar de internals do RmlUi:: --
+#     diferente de document_reload_leak.cpp/focus_sanity.cpp acima, então NÃO linka
+#     RmlUi::Core. Linka glloader explicitamente: o teste chama glIsTexture/glIsFramebuffer/
+#     glIsRenderbuffer/glIsBuffer/glIsVertexArray/glIsProgram/glIsShader diretamente, mesmo
+#     raciocínio de gl_state_guard.cpp/ui_layer_compose.cpp acima. Roda em AMBAS as configs de
+#     build (linka ${_embed_dep}) já que o código sob teste (engine.cpp/bootstrap.cpp/
+#     render_gl3.cpp) é sempre compilado independente de GLINTFX_BACKEND_GLFW.
+#     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml"/"tests/min_partial.rml"
+#     resolvam para build/tests/*.rml independente de onde o ctest é invocado -- mesma
+#     convenção do document_reload_leak.cpp logo acima.
+# ---------------------------------------------------------------------------
+add_executable(gl_resource_leak gl_resource_leak.cpp)
+target_link_libraries(gl_resource_leak PRIVATE ${_embed_dep} glloader)
+add_test(NAME gl_resource_leak
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_resource_leak>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: focus_sanity -- verifies Engine::set_focus()/clear_focus() (L1.17-FOCUS, consumes the
 #     GAP-4 seed from docs/embed-integration.md section 5), the exact code both
 #     glintfx::UiLayer::set_focus/clear_focus and glintfx::App::set_focus/clear_focus delegate
@@ -1922,6 +1965,86 @@ add_test(NAME ripple_stress_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: contract_consume (TST-L1-CONTRACT) — proves the consumer-side contract end-to-end from
+#     OUTSIDE the glintfx source tree: cmake --install this build tree to a throwaway staging
+#     prefix, configure + build the SEPARATE consumer-example-embed/ project against that
+#     prefix via find_package(glintfx CONFIG) + CMAKE_PREFIX_PATH (NOT FetchContent -- see
+#     contract_consume.cmake's own top-of-file comment for why that distinction matters: it is
+#     what avoids re-building RmlUi, a genuine anti-OOM constraint on this repo's dev/CI
+#     hardware), then run the resulting consumer_embed binary and check it renders a
+#     non-degenerate frame. All 4 sub-steps (install / configure / build / run) happen inside
+#     a single CMake -P script driver (contract_consume.cmake) so ctest reports ONE test with
+#     the full stdout/stderr of whichever step failed attached -- a gap anywhere in the public
+#     install (a header the Config forgot to co-install, a missing find_dependency, ...)
+#     surfaces here as a normal ctest failure, not a silent skip.
+#
+#     Gated behind GLINTFX_CONTRACT_TEST (default OFF): the extra `cmake --install` +
+#     `cmake --build` round-trip this test performs is real (if modest) wall-clock cost every
+#     `ctest` invocation would otherwise always pay in the local dev loop; CI turns it ON
+#     explicitly (mirrors GLINTFX_GOLDEN_TEST's OFF-by-default, opt-in-in-CI shape a few
+#     hundred lines up in this same file). Also gated `AND NOT GLINTFX_SANITIZE`: a
+#     GLINTFX_SANITIZE=ON build's installed libglintfx.a is ASan/UBSan-instrumented, but
+#     consumer-example-embed/CMakeLists.txt does not (and, being a wholly separate project
+#     that any THIRD-PARTY consumer would build unmodified, structurally should not) apply
+#     those same instrumentation flags to its own consumer_embed executable -- linking an
+#     instrumented static archive into an uninstrumented final binary is a known-broken
+#     combination (missing __asan_*/__ubsan_* runtime symbols), a different, not-yet-solved
+#     problem out of scope for this contract test; the nightly GLINTFX_SANITIZE gate already
+#     covers glintfx's OWN memory-safety in-tree, which is what it exists for.
+#     Also only registered when glintfx is the TOP-LEVEL project (mirrors the
+#     `if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)` guard around the install() rules
+#     themselves, further up in CMakeLists.txt) -- running an install-and-reconsume round-trip
+#     makes sense only for glintfx's own build, never when glintfx is pulled in as a
+#     FetchContent/add_subdirectory dependency of another project's build (e.g. GusWorld).
+# PT: contract_consume (TST-L1-CONTRACT) — prova o contrato do lado consumidor ponta-a-ponta
+#     de FORA da árvore de fonte da glintfx: cmake --install nesta árvore de build para um
+#     prefixo de staging descartável, configura + builda o projeto SEPARADO
+#     consumer-example-embed/ contra esse prefixo via find_package(glintfx CONFIG) +
+#     CMAKE_PREFIX_PATH (NÃO FetchContent -- ver o comentário no topo do próprio
+#     contract_consume.cmake para o porquê dessa distinção importar: é o que evita re-buildar
+#     o RmlUi, uma restrição anti-OOM real no hardware de dev/CI deste repositório), depois
+#     roda o binário consumer_embed resultante e verifica que ele renderiza um frame
+#     não-degenerado. Todos os 4 sub-passos (install / configure / build / run) acontecem
+#     dentro de um único script driver CMake -P (contract_consume.cmake) para que o ctest
+#     reporte UM teste com o stdout/stderr completo de qualquer passo que falhou anexado -- um
+#     gap em qualquer lugar do install público (um header que o Config esqueceu de
+#     co-instalar, um find_dependency faltando, ...) aparece aqui como uma falha normal de
+#     ctest, não um skip silencioso.
+#
+#     Bloqueado por GLINTFX_CONTRACT_TEST (default OFF): o ciclo extra de `cmake --install` +
+#     `cmake --build` que este teste executa é um custo real (ainda que modesto) de
+#     wall-clock que toda invocação de `ctest` de outra forma sempre pagaria no loop de dev
+#     local; o CI liga explicitamente (espelha o formato OFF-por-padrão,
+#     opt-in-no-CI do GLINTFX_GOLDEN_TEST algumas centenas de linhas acima neste mesmo
+#     arquivo). Também bloqueado `AND NOT GLINTFX_SANITIZE`: o libglintfx.a instalado de um
+#     build GLINTFX_SANITIZE=ON é instrumentado com ASan/UBSan, mas
+#     consumer-example-embed/CMakeLists.txt não aplica (e, sendo um projeto inteiramente
+#     separado que qualquer consumidor TERCEIRO buildaria sem modificação, estruturalmente não
+#     deveria aplicar) essas mesmas flags de instrumentação ao próprio executável
+#     consumer_embed -- linkar um archive estático instrumentado num binário final não
+#     instrumentado é uma combinação conhecidamente quebrada (símbolos de runtime
+#     __asan_*/__ubsan_* faltando), um problema diferente e ainda não resolvido, fora do
+#     escopo deste teste de contrato; o gate noturno GLINTFX_SANITIZE já cobre a segurança de
+#     memória da PRÓPRIA glintfx in-tree, que é para o que ele existe.
+#     Também só registrado quando a glintfx é o projeto TOP-LEVEL (espelha o guard
+#     `if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)` em torno das próprias regras install(),
+#     mais acima no CMakeLists.txt) -- um round-trip de install-e-reconsumo só faz sentido
+#     para o próprio build da glintfx, nunca quando a glintfx é puxada como dependência
+#     FetchContent/add_subdirectory do build de outro projeto (ex.: GusWorld).
+# ---------------------------------------------------------------------------
+option(GLINTFX_CONTRACT_TEST
+  "Enable the contract_consume ctest: install + find_package(glintfx) + link + run round-trip (TST-L1-CONTRACT)"
+  OFF)
+
+if(GLINTFX_CONTRACT_TEST AND NOT GLINTFX_SANITIZE AND CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  add_test(NAME contract_consume
+    COMMAND ${CMAKE_COMMAND}
+      -DGLINTFX_BUILD_DIR=${CMAKE_BINARY_DIR}
+      -DCONSUMER_SRC_DIR=${CMAKE_SOURCE_DIR}/../consumer-example-embed
+      -P ${CMAKE_SOURCE_DIR}/tests/contract_consume.cmake)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF
@@ -2008,3 +2131,19 @@ if(GLINTFX_COVERAGE)
     endif()
   endforeach()
 endif()
+
+# EN: -Wall -Wextra on every authored test/demo-helper target in this directory
+#     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) picks up all targets
+#     defined above + any future one, so a new test never silently escapes the gate.
+#     No -Werror (mirrors the glintfx lib target, commit 45209e5). Third-party/fetched
+#     TUs are not defined here, so they are untouched.
+# PT: -Wall -Wextra em todo alvo autoral de teste/demo-helper deste diretório
+#     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) pega todos os alvos
+#     acima + qualquer futuro, então um teste novo nunca escapa do gate em silêncio.
+#     Sem -Werror (espelha o alvo glintfx, 45209e5). TUs de terceiros/fetchados não
+#     são definidos aqui, então ficam intocados.
+get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+             PROPERTY BUILDSYSTEM_TARGETS)
+foreach(_t IN LISTS _glintfx_test_targets)
+  target_compile_options(${_t} PRIVATE -Wall -Wextra)
+endforeach()

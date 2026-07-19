@@ -17,3 +17,5 @@
 | [0009](0009-internalization-boundary.md) | Internalization boundary (phased static link) / Fronteira de internalização (link estático faseado) | Accepted |
 | [0010](0010-image-tint-luminance-key.md) | image-tint() luminance-key shader / Shader luminance-key do image-tint() | Accepted |
 | [0011](0011-soft-font-flip.md) | Soft font-engine flip (own engine default, FreeType reversible) / Flip suave de motor de fonte (motor próprio default, FreeType reversível) | Accepted |
+| [0012](0012-backdrop-capture.md) | Backdrop capture: glintfx reads FBO 0, conditionally / Captura de backdrop: a glintfx lê o FBO 0, condicionalmente | Accepted |
+| [0013](0013-gl-symbol-boundary.md) | GL loader symbol boundary: `glx_` prefix on every exported pointer / Fronteira de símbolo do loader GL: prefixo `glx_` em todo ponteiro exportado | Accepted |

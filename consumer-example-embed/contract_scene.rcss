@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: contract_scene styles (TST-L1-CONTRACT). A single vivid solid fill covering the whole
+       viewport -- #ff3366 (R=255, G=51, B=102), mean_channel = (255+51+102)/3 = 136 -- well
+       above the 50 threshold main.cpp checks, comfortably clear of any llvmpipe/Xvfb rounding
+       noise. Deliberately simpler than glintfx/tests/embed_scene.rcss's gradient+glow scene:
+       this consumer only needs to prove "the library rendered SOMETHING", not exercise any
+       particular effect, so one flat colour keeps the pixel assertion in main.cpp a single
+       coarse threshold instead of the three llvmpipe-tolerant statistics ui_layer_sanity
+       needs for its richer scene.
+   PT: Estilos da contract_scene (TST-L1-CONTRACT). Um único preenchimento sólido vívido
+       cobrindo a viewport inteira -- #ff3366 (R=255, G=51, B=102), canal médio =
+       (255+51+102)/3 = 136 -- bem acima do limiar 50 que main.cpp verifica, confortavelmente
+       livre de qualquer ruído de arredondamento do llvmpipe/Xvfb. Deliberadamente mais simples
+       que a cena gradiente+glow de glintfx/tests/embed_scene.rcss: este consumidor só precisa
+       provar "a lib renderizou ALGO", não exercitar nenhum efeito em particular, então uma
+       cor chapada mantém a asserção de pixel em main.cpp num único limiar grosseiro em vez
+       das três estatísticas tolerantes a llvmpipe que o ui_layer_sanity precisa para sua cena
+       mais rica. */
+
+body
+{
+    /* EN: display:block required in RmlUi (default is inline). Fill the full viewport.
+       PT: display:block obrigatório no RmlUi (padrão é inline). Preenche a viewport inteira. */
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: #ff3366;
+}

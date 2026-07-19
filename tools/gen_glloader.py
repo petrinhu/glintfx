@@ -7,25 +7,38 @@
 #     (gl.xml, Apache-2.0, https://github.com/KhronosGroup/OpenGL-Registry) vendored
 #     at glintfx/third_party/khronos/gl.xml and emits two generated (do-not-hand-edit)
 #     files:
-#       glintfx/src/gl_loader.h — one `extern PFN<CMD>PROC <cmd>;` declaration per GL
-#                                  3.3 core command (the pointer variable is named
-#                                  identically to the GL function it replaces, e.g.
-#                                  `glCullFace` — a call site that reads `glCullFace(x)`
-#                                  transparently calls through the pointer; this works
-#                                  because glcorearb.h only exposes real `extern`
-#                                  function *prototypes* under the opt-in
-#                                  `GL_GLEXT_PROTOTYPES` macro, which this loader never
-#                                  defines, so there is no redeclaration clash), plus the
-#                                  `int glx_gl_load(void)` entry point.
-#       glintfx/src/gl_loader.c — storage for each pointer variable, a name→slot table,
-#                                  and the `glx_gl_load()` implementation that resolves
-#                                  every symbol via, in order: `glXGetProcAddressARB`/
-#                                  `glXGetProcAddress` (dlsym'd out of libGL.so.1),
-#                                  `eglGetProcAddress` (dlsym'd out of libEGL.so.1, for
-#                                  EGL-backed contexts), then a direct `dlsym` against
-#                                  the libGL handle (covers core entry points that are
-#                                  ordinary exported symbols and do not require a
-#                                  GetProcAddress indirection on most GL/Mesa builds).
+#       glintfx/src/gl_loader.h — one `extern PFN<CMD>PROC glx_<cmd>;` declaration per
+#                                  GL 3.3 core command (AUD-L1-GLSYM, 2026-07-19: the
+#                                  pointer variable carries a `glx_` prefix — e.g.
+#                                  `glx_glCullFace` — instead of the bare GL name, so
+#                                  that `nm libglintfx.a` never shows a data symbol
+#                                  named exactly like a real GL entry point; a static
+#                                  archive that DID export e.g. a BSS `glClear` let an
+#                                  embed host's own `glClear` reference resolve against
+#                                  glintfx's uninitialised pointer slot instead of
+#                                  libGL's real function if glintfx was linked before
+#                                  libGL, crashing on first call. A second block, right
+#                                  after the extern declarations, `#define`s the bare
+#                                  name to the prefixed one — e.g. `#define glCullFace
+#                                  glx_glCullFace` — purely so INTERNAL glintfx call
+#                                  sites (`glCullFace(x)`) keep reading naturally; the
+#                                  macro never leaves this private header, and the
+#                                  archive's exported symbol is always `glx_glCullFace`,
+#                                  never `glCullFace`), plus the `int glx_gl_load(void)`
+#                                  entry point.
+#       glintfx/src/gl_loader.c — storage for each `glx_`-prefixed pointer variable, a
+#                                  name→slot table (keyed by the BARE GL name — that is
+#                                  the real string every GetProcAddress call needs, and
+#                                  a string literal is immune to the `#define` rewrite
+#                                  above), and the `glx_gl_load()` implementation that
+#                                  resolves every symbol via, in order:
+#                                  `glXGetProcAddressARB`/`glXGetProcAddress` (dlsym'd
+#                                  out of libGL.so.1), `eglGetProcAddress` (dlsym'd out
+#                                  of libEGL.so.1, for EGL-backed contexts), then a
+#                                  direct `dlsym` against the libGL handle (covers core
+#                                  entry points that are ordinary exported symbols and
+#                                  do not require a GetProcAddress indirection on most
+#                                  GL/Mesa builds).
 #
 #     ALGORITHM (standard Khronos-registry command-set derivation — the same technique
 #     every public GL loader generator, custom or off-the-shelf, is documented to use;
@@ -61,19 +74,33 @@
 #     Khronos (gl.xml, Apache-2.0, https://github.com/KhronosGroup/OpenGL-Registry)
 #     vendorizado em glintfx/third_party/khronos/gl.xml e emite dois arquivos gerados
 #     (não editar à mão):
-#       glintfx/src/gl_loader.h — uma declaração `extern PFN<CMD>PROC <cmd>;` por
-#                                  comando GL 3.3 core (a variável-ponteiro tem o MESMO
-#                                  nome da função GL que substitui, ex.: `glCullFace` —
-#                                  um call site que lê `glCullFace(x)` chama através do
-#                                  ponteiro de forma transparente; isso funciona porque
-#                                  glcorearb.h só expõe protótipos `extern` de função
-#                                  de verdade sob a macro opt-in `GL_GLEXT_PROTOTYPES`,
-#                                  que este loader nunca define, então não há choque de
-#                                  redeclaração), mais o ponto de entrada
+#       glintfx/src/gl_loader.h — uma declaração `extern PFN<CMD>PROC glx_<cmd>;` por
+#                                  comando GL 3.3 core (AUD-L1-GLSYM, 2026-07-19: a
+#                                  variável-ponteiro carrega prefixo `glx_` — ex.:
+#                                  `glx_glCullFace` — em vez do nome GL cru, para que
+#                                  `nm libglintfx.a` nunca mostre um símbolo de dado com
+#                                  o nome exato de um entry point GL real; um archive
+#                                  estático que EXPORTASSE, por ex., um `glClear` em BSS
+#                                  deixava a referência a `glClear` de um host embed
+#                                  resolver contra o slot de ponteiro não-inicializado
+#                                  do glintfx em vez da função real da libGL, se o
+#                                  glintfx fosse linkado antes da libGL — crash na
+#                                  primeira chamada. Um segundo bloco, logo após as
+#                                  declarações extern, faz `#define` do nome cru para o
+#                                  prefixado — ex.: `#define glCullFace glx_glCullFace`
+#                                  — só para que os call sites INTERNOS do glintfx
+#                                  (`glCullFace(x)`) continuem lendo naturalmente; a
+#                                  macro nunca sai deste header privado, e o símbolo
+#                                  exportado pelo archive é sempre `glx_glCullFace`,
+#                                  nunca `glCullFace`), mais o ponto de entrada
 #                                  `int glx_gl_load(void)`.
-#       glintfx/src/gl_loader.c — armazenamento de cada variável-ponteiro, uma tabela
-#                                  nome→slot, e a implementação de `glx_gl_load()` que
-#                                  resolve cada símbolo, em ordem: `glXGetProcAddressARB`/
+#       glintfx/src/gl_loader.c — armazenamento de cada variável-ponteiro prefixada com
+#                                  `glx_`, uma tabela nome→slot (indexada pelo nome GL
+#                                  CRU — é a string real que toda chamada a
+#                                  GetProcAddress precisa, e um literal de string é
+#                                  imune à reescrita do `#define` acima), e a
+#                                  implementação de `glx_gl_load()` que resolve cada
+#                                  símbolo, em ordem: `glXGetProcAddressARB`/
 #                                  `glXGetProcAddress` (via dlsym em libGL.so.1),
 #                                  `eglGetProcAddress` (via dlsym em libEGL.so.1, para
 #                                  contextos com backing EGL), depois `dlsym` direto no
@@ -195,6 +222,18 @@ def typedef_name(command_name: str) -> str:
     return "PFNGL" + command_name[2:].upper() + "PROC"
 
 
+def glx_name(command_name: str) -> str:
+    """EN: gl<Foo> -> glx_gl<Foo> (AUD-L1-GLSYM) -- the actual name of the pointer
+    variable / exported archive symbol. The bare `<cmd>` name is reserved for the
+    `#define <cmd> glx_<cmd>` call-site-rewrite macro and for the GetProcAddress
+    lookup string; it is never itself an identifier in the generated .h/.c.
+    PT: gl<Foo> -> glx_gl<Foo> (AUD-L1-GLSYM) -- o nome real da variável-ponteiro /
+    símbolo exportado do archive. O nome cru `<cmd>` fica reservado para a macro de
+    reescrita de call site `#define <cmd> glx_<cmd>` e para a string de busca do
+    GetProcAddress; ele nunca é, por si só, um identificador no .h/.c gerado."""
+    return "glx_" + command_name
+
+
 def verify_typedefs_exist(commands: list[str], glcorearb_h_path: Path) -> None:
     content = glcorearb_h_path.read_text()
     known = set(re.findall(r"PFNGL\w+PROC", content))
@@ -215,12 +254,22 @@ HEADER_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
 //     clean-room note (L1.14-GLLOADER: this loader was NOT written by reading the
 //     previously-vendored gl3w sources).
 //
-//     Declares one `extern PFN<CMD>PROC <cmd>;` function-pointer variable per GL 3.3
-//     core-profile command -- the variable shares the exact name of the GL function it
-//     stands in for (e.g. `glCullFace`), so existing call sites (`glCullFace(x)`) keep
-//     working unchanged once glx_gl_load() has populated the pointers. This is safe
-//     because glcorearb.h only emits *real* `extern` function prototypes under the
-//     opt-in GL_GLEXT_PROTOTYPES macro, which this header never defines.
+//     Declares one `extern PFN<CMD>PROC glx_<cmd>;` function-pointer variable per GL
+//     3.3 core-profile command, PREFIXED with `glx_` (AUD-L1-GLSYM, 2026-07-19) so
+//     that no data symbol in libglintfx.a is ever named identically to a real GL entry
+//     point -- `nm libglintfx.a` used to show a BSS `glClear`, `glClearColor`, etc.
+//     (344 of them); an embed host linking its own GL calls against libglintfx.a
+//     *before* libGL.so could have those references resolve to glintfx's
+//     uninitialised pointer slot instead of the driver's real function, crashing on
+//     first call. A second block below, AFTER both the glcorearb.h include and every
+//     extern declaration, `#define`s each bare name to its glx_-prefixed variable
+//     (e.g. `#define glCullFace glx_glCullFace`) purely so glintfx's OWN, INTERNAL
+//     call sites (`glCullFace(x)`) keep compiling unchanged -- this header is private
+//     (glintfx/src/, never installed under glintfx/include/glintfx/), so the macro
+//     never reaches a consumer's translation unit. Only the typedef token
+//     (`PFN<CMD>PROC`) is untouched by the macro -- the preprocessor rewrites whole
+//     identifiers only, and `PFNGLCULLFACEPROC` is never equal to the `glCullFace`
+//     macro name, so there is no risk of the macro clobbering the type name.
 //
 //     glx_gl_load() resolves every symbol against the host's current GL context and
 //     returns 0 on success (same polarity as the gl3wInit() call sites it replaces),
@@ -231,13 +280,23 @@ HEADER_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
 //     de geração e a nota clean-room (L1.14-GLLOADER: este loader NÃO foi escrito
 //     lendo os fontes do gl3w previamente vendorizado).
 //
-//     Declara uma variável-ponteiro-de-função `extern PFN<CMD>PROC <cmd>;` por
-//     comando do profile core GL 3.3 -- a variável tem exatamente o mesmo nome da
-//     função GL que substitui (ex.: `glCullFace`), então call sites existentes
-//     (`glCullFace(x)`) continuam funcionando sem mudança assim que glx_gl_load()
-//     tiver preenchido os ponteiros. Isso é seguro porque glcorearb.h só emite
-//     protótipos `extern` de função de verdade sob a macro opt-in
-//     GL_GLEXT_PROTOTYPES, que este header nunca define.
+//     Declara uma variável-ponteiro-de-função `extern PFN<CMD>PROC glx_<cmd>;` por
+//     comando do profile core GL 3.3, PREFIXADA com `glx_` (AUD-L1-GLSYM, 2026-07-19)
+//     para que nenhum símbolo de dado do libglintfx.a tenha o nome exato de um entry
+//     point GL real -- `nm libglintfx.a` mostrava um `glClear`, `glClearColor` etc. em
+//     BSS (344 deles); um host embed que linkasse suas próprias chamadas GL contra
+//     libglintfx.a ANTES de libGL.so podia ter essas referências resolvidas contra o
+//     slot de ponteiro não-inicializado do glintfx em vez da função real do driver --
+//     crash na primeira chamada. Um segundo bloco abaixo, DEPOIS tanto do include de
+//     glcorearb.h quanto de toda declaração extern, faz `#define` de cada nome cru
+//     para sua variável prefixada com glx_ (ex.: `#define glCullFace glx_glCullFace`)
+//     só para que os call sites PRÓPRIOS, INTERNOS do glintfx (`glCullFace(x)`)
+//     continuem compilando sem mudança -- este header é privado (glintfx/src/, nunca
+//     instalado sob glintfx/include/glintfx/), então a macro nunca alcança a unidade
+//     de tradução de um consumidor. Só o token do typedef (`PFN<CMD>PROC`) fica imune
+//     à macro -- o pré-processador reescreve identificadores inteiros, e
+//     `PFNGLCULLFACEPROC` nunca é igual ao nome de macro `glCullFace`, então não há
+//     risco de a macro atropelar o nome do tipo.
 //
 //     glx_gl_load() resolve cada símbolo contra o contexto GL corrente do host e
 //     retorna 0 em sucesso (mesma polaridade dos call-sites de gl3wInit() que
@@ -282,6 +341,14 @@ SOURCE_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
 //
 // EN: GENERATED FILE -- do not hand-edit. See gl_loader.h / tools/gen_glloader.py.
 //
+//     Every pointer variable defined below carries the `glx_` prefix (AUD-L1-GLSYM,
+//     2026-07-19, e.g. `glx_glCullFace`); the symbol table keys on the BARE GL name
+//     (`"glCullFace"`) because that is the literal string GetProcAddress needs to
+//     resolve the real driver entry point -- a string literal is not an identifier and
+//     is therefore never touched by gl_loader.h's `#define glCullFace glx_glCullFace`
+//     call-site-rewrite macros, so there is no risk of this table ending up keyed on
+//     the wrong (prefixed) string.
+//
 //     glx_gl_load() resolution order per symbol, matching the L1.14-GLLOADER task
 //     brief: (1) glXGetProcAddressARB/glXGetProcAddress, dlsym'd out of the libGL.so.1
 //     handle -- covers GLX-backed desktop contexts (GLFW's default on X11/Mesa,
@@ -292,6 +359,14 @@ SOURCE_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
 //     strictly require a GetProcAddress indirection. The first non-NULL result
 //     wins.
 // PT: GENERATED FILE -- não editar à mão. Ver gl_loader.h / tools/gen_glloader.py.
+//
+//     Toda variável-ponteiro definida abaixo carrega o prefixo `glx_` (AUD-L1-GLSYM,
+//     2026-07-19, ex.: `glx_glCullFace`); a tabela de símbolos é indexada pelo nome GL
+//     CRU (`"glCullFace"`) porque é essa a string literal que o GetProcAddress precisa
+//     para resolver o entry point real do driver -- um literal de string não é um
+//     identificador e por isso nunca é tocado pelas macros de reescrita de call site
+//     `#define glCullFace glx_glCullFace` de gl_loader.h, então não há risco de esta
+//     tabela acabar indexada pela string (prefixada) errada.
 //
 //     Ordem de resolução por símbolo em glx_gl_load(), conforme o brief da tarefa
 //     L1.14-GLLOADER: (1) glXGetProcAddressARB/glXGetProcAddress, via dlsym no
@@ -526,20 +601,60 @@ def main() -> None:
     verify_typedefs_exist(commands, GLCOREARB_H)
 
     # ---- gl_loader.h ----
+    # EN: AUD-L1-GLSYM -- the extern declaration itself already uses the glx_-prefixed
+    #     name (Design A: the generator never emits a plain-named data symbol, not even
+    #     transiently), and the call-site-rewrite `#define`s are a second, separate
+    #     block emitted only AFTER every extern declaration (and after the
+    #     glcorearb.h include, already done in HEADER_PREAMBLE) -- matching the ordering
+    #     the task brief calls out as critical.
+    # PT: AUD-L1-GLSYM -- a própria declaração extern já usa o nome prefixado com
+    #     glx_ (Design A: o gerador nunca emite um símbolo de dado com nome cru, nem
+    #     transitoriamente), e os `#define` de reescrita de call site são um segundo
+    #     bloco, separado, emitido só DEPOIS de toda declaração extern (e depois do
+    #     include de glcorearb.h, já feito em HEADER_PREAMBLE) -- respeitando a ordem
+    #     que o brief da tarefa aponta como crítica.
     h_lines = [HEADER_PREAMBLE]
     for cmd in commands:
-        h_lines.append(f"extern {typedef_name(cmd)} {cmd};\n")
+        h_lines.append(f"extern {typedef_name(cmd)} {glx_name(cmd)};\n")
+    h_lines.append(
+        "\n"
+        "// EN: Call-site-rewrite macros -- rename glintfx's OWN internal GL call sites\n"
+        "//     (e.g. `glCullFace(x)`) to the glx_-prefixed pointer variable declared\n"
+        "//     above, transparently, without touching a single .cpp call site. Private\n"
+        "//     header only (glintfx/src/) -- never leaks into glintfx/include/glintfx/,\n"
+        "//     so no consumer translation unit is ever exposed to these macros.\n"
+        "// PT: Macros de reescrita de call site -- renomeiam os call sites GL\n"
+        "//     internos, PRÓPRIOS do glintfx (ex.: `glCullFace(x)`) para a\n"
+        "//     variável-ponteiro prefixada com glx_ declarada acima, de forma\n"
+        "//     transparente, sem tocar um único call site .cpp. Só header privado\n"
+        "//     (glintfx/src/) -- nunca vaza para glintfx/include/glintfx/, então\n"
+        "//     nenhuma unidade de tradução de consumidor é exposta a estas macros.\n"
+    )
+    for cmd in commands:
+        h_lines.append(f"#define {cmd} {glx_name(cmd)}\n")
     h_lines.append(HEADER_POSTAMBLE)
     OUT_H.write_text("".join(h_lines))
 
     # ---- gl_loader.c ----
+    # EN: Definitions and the symbol table both spell out the glx_-prefixed identifier
+    #     directly (never relying on the header's #define to rewrite a plain name into
+    #     the prefixed one) -- so gl_loader.c's own generated text is immune to the
+    #     call-site-rewrite macros it pulls in via `#include "gl_loader.h"` regardless
+    #     of ordering. Only the GetProcAddress lookup key is the bare name, and it is a
+    #     string literal, which macros never touch.
+    # PT: Definições e a tabela de símbolos escrevem o identificador prefixado com
+    #     glx_ diretamente (nunca dependendo do #define do header para reescrever um
+    #     nome cru no prefixado) -- então o próprio texto gerado de gl_loader.c fica
+    #     imune às macros de reescrita de call site que ele puxa via
+    #     `#include "gl_loader.h"`, independente de ordem. Só a chave de busca do
+    #     GetProcAddress é o nome cru, e é um literal de string, que macro nunca toca.
     c_lines = [SOURCE_PREAMBLE]
     for cmd in commands:
-        c_lines.append(f"{typedef_name(cmd)} {cmd} = NULL;\n")
+        c_lines.append(f"{typedef_name(cmd)} {glx_name(cmd)} = NULL;\n")
     c_lines.append("\ntypedef struct { const char* name; void** slot; } glintfx_gl_sym_t;\n\n")
     c_lines.append("static const glintfx_gl_sym_t glintfx_gl_symbol_table[] = {\n")
     for cmd in commands:
-        c_lines.append(f'  {{ "{cmd}", (void**)&{cmd} }},\n')
+        c_lines.append(f'  {{ "{cmd}", (void**)&{glx_name(cmd)} }},\n')
     c_lines.append("};\n")
     c_lines.append(LOAD_FN_TEMPLATE)
     OUT_C.write_text("".join(c_lines))

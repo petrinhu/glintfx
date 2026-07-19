@@ -1722,6 +1722,49 @@ add_test(NAME document_reload_leak
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: gl_resource_leak (TST-L1-GLLEAK / GLLEAK-2) -- endurance-lite proof that no GL driver
+#     HANDLE (texture/FBO/renderbuffer/buffer/VAO/program/shader) leaks across 20 reload-on-
+#     navigate cycles (alternating min.rml/min_partial.rml, the same document pair
+#     document_reload_leak.cpp reuses above) plus 1 full UiLayer destroy+recreate cycle.
+#     Complements document_reload_leak.cpp: that test proves heap/document-count hygiene via
+#     ASan/LSan (TST-L1-MEM), which is BLIND to GL object names living in the driver's own
+#     namespace. Uses ONLY the public UiLayer API + raw GL queries (glIsTexture et al.) via
+#     glloader, no RmlUi:: internals needed -- unlike document_reload_leak.cpp/focus_sanity.cpp
+#     above, so it does NOT link RmlUi::Core. Links glloader explicitly: the test calls
+#     glIsTexture/glIsFramebuffer/glIsRenderbuffer/glIsBuffer/glIsVertexArray/glIsProgram/
+#     glIsShader directly, same reasoning as gl_state_guard.cpp/ui_layer_compose.cpp above.
+#     Runs in BOTH build configs (links ${_embed_dep}) since the code under test
+#     (engine.cpp/bootstrap.cpp/render_gl3.cpp) is always compiled regardless of
+#     GLINTFX_BACKEND_GLFW. WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml"/
+#     "tests/min_partial.rml" resolve to build/tests/*.rml regardless of where ctest is
+#     invoked from -- same convention as document_reload_leak.cpp immediately above.
+# PT: gl_resource_leak (TST-L1-GLLEAK / GLLEAK-2) -- prova endurance-lite de que nenhum HANDLE
+#     de driver GL (textura/FBO/renderbuffer/buffer/VAO/programa/shader) vaza ao longo de 20
+#     ciclos de reload-on-navigate (alternando min.rml/min_partial.rml, o mesmo par de
+#     documentos que document_reload_leak.cpp reutiliza acima) mais 1 ciclo completo de
+#     destroy+recreate do UiLayer. Complementa document_reload_leak.cpp: aquele teste prova
+#     higiene de heap/contagem-de-documento via ASan/LSan (TST-L1-MEM), que é CEGO a nomes de
+#     objeto GL que vivem no namespace do próprio driver. Usa SÓ a API pública do UiLayer +
+#     queries GL cruas (glIsTexture etc.) via glloader, sem precisar de internals do RmlUi:: --
+#     diferente de document_reload_leak.cpp/focus_sanity.cpp acima, então NÃO linka
+#     RmlUi::Core. Linka glloader explicitamente: o teste chama glIsTexture/glIsFramebuffer/
+#     glIsRenderbuffer/glIsBuffer/glIsVertexArray/glIsProgram/glIsShader diretamente, mesmo
+#     raciocínio de gl_state_guard.cpp/ui_layer_compose.cpp acima. Roda em AMBAS as configs de
+#     build (linka ${_embed_dep}) já que o código sob teste (engine.cpp/bootstrap.cpp/
+#     render_gl3.cpp) é sempre compilado independente de GLINTFX_BACKEND_GLFW.
+#     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml"/"tests/min_partial.rml"
+#     resolvam para build/tests/*.rml independente de onde o ctest é invocado -- mesma
+#     convenção do document_reload_leak.cpp logo acima.
+# ---------------------------------------------------------------------------
+add_executable(gl_resource_leak gl_resource_leak.cpp)
+target_link_libraries(gl_resource_leak PRIVATE ${_embed_dep} glloader)
+add_test(NAME gl_resource_leak
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_resource_leak>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: focus_sanity -- verifies Engine::set_focus()/clear_focus() (L1.17-FOCUS, consumes the
 #     GAP-4 seed from docs/embed-integration.md section 5), the exact code both
 #     glintfx::UiLayer::set_focus/clear_focus and glintfx::App::set_focus/clear_focus delegate

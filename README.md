@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.11.0](https://img.shields.io/badge/Version-0.11.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -249,9 +249,9 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.11.0** (stable, tagged), 2026-07-16. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
+> **Current release: v0.11.2** (stable, tagged), 2026-07-19. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below.
 
-**Delivered (v0.2.x-v0.11.0):**
+**Delivered (v0.2.x-v0.11.2):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** the `UiLayer` facade **attaches to a host-owned GL context** (game / engine) instead of creating its own window -- compose-only render, injected events, full GL state save/restore (`GlStateGuard`). Enables using glintfx **inside** a game without owning the window. First consumer: GusWorld / GusEngine (SDL3). The standalone `App` stays intact for UI-only apps. Integration contract: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Optional GLFW backend, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library (`UiLayer` only) with no GLFW dependency, for SDL3/X11 hosts.
@@ -268,6 +268,8 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Form/DOM event callbacks, v0.9.0 (`L1.15-FORMEV`):** `set_change_callback(id, value)`/`set_submit_callback(id)`/`set_focus_callback(id)`/`set_blur_callback(id)`/`set_hover_callback(id, entered)` on both `App` and `UiLayer` -- forms and focus/hover are no longer inert to the host; these are the hooks a host uses to trigger its own sound/UX reaction. See [`docs/embed-integration.md`](docs/embed-integration.md) section 16.
 - **Self-hosted code coverage in CI, v0.9.0 (`L1.18-COVCI`):** llvm-cov (Clang source-based coverage), no third-party uploader; a 75%-floor gate in `.github/workflows/ci.yml` (GitHub-only since Onda 3, 2026-07-11 -- `.forgejo/workflows/ci.yml` was reduced to minimal parity and no longer runs this job), an HTML report artifact, and the `Coverage` badge above (reads `glintfx/coverage-badge.json`, committed to the repo by the GitHub job, straight off the Codeberg git blob -- no CI needs to run on Codeberg for the badge to work). Local-first script: `tools/coverage_report.sh`.
 - **Backdrop-ripple decorator, v0.11.0 (`L1.22-WAVE`/`L1.22-CAPTURE`):** `decorator: ripple(...)` captures the host's own FBO 0 into a glintfx-owned texture and refracts it screen-space over glintfx's own composed UI -- a shimmer over the UI layer, driven entirely by RCSS custom properties (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, all animatable via `@keyframes`), no imperative C++ effect API. Embed/`UiLayer` mode only (inert in standalone `App`, since there is no host scene to capture); structurally cost-zero when no `ripple()` decorator is active in the loaded document. A documented, opt-in, per-element exception to `UiLayer`'s compose-only guarantee -- see [ADR-0012](docs/adr/0012-backdrop-capture.md).
+- **DoS-guarded asset loading, v0.11.1:** a 256 MiB ceiling in `BaseUrlFileInterface::Open()` caps every asset file the UI loads (images and `@font-face` fonts alike), rejecting an oversized/hostile file gracefully instead of crashing the host process. Found and closed by the formal Layer-1 audit wave (`LW-AUD`).
+- **GL loader symbol-boundary fix and quality pass, v0.11.2 (`AUD-L1-GLSYM`):** closes a real `SIGSEGV`-on-first-GL-call bug class -- the generated GL loader's 344 function pointers no longer leak as bare-named `gl*` symbols out of `libglintfx.a` (a collision risk for any embed host that links the archive before `libGL.so`); every exported slot is renamed `glx_<cmd>` with an internal `#define` keeping glintfx's own call sites unchanged. See [ADR-0013](docs/adr/0013-gl-symbol-boundary.md). Ships alongside a code-quality pass (two duplication extractions, `-Wall -Wextra` on the test targets) and two new tests (`gl_resource_leak`, `contract_consume`). Drop-in, no public API change.
 
 **Planned (paused, not yet started):**
 
@@ -279,10 +281,10 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 This repository is named **glintfx** (the released library above), but it also hosts a second, experimental track:
 
-- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.9.0`).
-- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Core implementation complete, pending audit:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), and typed `exit`/`write`/`read` helpers, proven end to end -> a hand-rolled test harness enabling TDD -> a small core libc (memory, string, int-to-string conversion) -> a mini-printf -> a bump allocator over `mmap`, all zero libc and delivered under TDD plus adversarial review. Items sit at `🔍 Pending verification` awaiting the `TST-*`/`F1`/`AUD-*`/`REL-TAG` waves (`core-v0.1.0`) before `✅`. Still a **long-term track**: internalizing glintfx's remaining dependencies (RmlUi, FreeType, GLFW) remains years away (the GL loader piece, gl3w, was already internalized in L1.14-GLLOADER).
+- **Layer 1 = glintfx:** the C++ library documented here. **Released and the repository's active product** (tag `v0.11.2`).
+- **Layer 0 = `loucura_c_asm`:** a sovereign experimental runtime in **pure C + Assembly, zero libc**, talking to the Linux kernel only through syscalls. **Implementation complete and audited, tag `core-v0.4.0`:** a freestanding pipeline (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) with a hand-written `_start`, raw syscall wrappers (System V AMD64 ABI), typed `exit`/`write`/`read` helpers, a hand-rolled test harness enabling TDD, a small core libc (memory, string, int/float-to-string conversion), a mini-printf, a free-list allocator over `mmap`, and a clean-room `SOV-SFNT`/`SOV-RAST`/`SOV-HINT` font engine (see the v0.10.0 font-flip entry above) -- all zero libc, delivered under TDD plus adversarial review. Two rounds of audit (`core-v0.1.0`'s original `AUD-ABI`/`AUD-SEC`, then `core-v0.4.0`'s delta re-audit `AUD-ABI-Δ`/`AUD-SEC-Δ` covering everything landed since) both closed **CONFORME-COM-RESSALVAS** (compliant with caveats), 0 CRITICAL. Still a **long-term track**: internalizing glintfx's remaining dependencies (RmlUi, GLFW, and FreeType's non-default consumers) remains years away (the GL loader piece, gl3w, and the font engine were already internalized -- L1.14-GLLOADER and L1.20-FONTFLIP).
 
-Treat glintfx as the product; Layer 0 is a separate long-term track, now implementation-complete and awaiting audit.
+Treat glintfx as the product; Layer 0 is a separate long-term track, implementation-complete and audited (`core-v0.4.0`), with no committed roadmap of its own.
 
 ### License
 
@@ -512,9 +514,9 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.11.0** (estável, taggeada), 2026-07-16. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
+> **Lançamento atual: v0.11.2** (estável, taggeada), 2026-07-19. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo.
 
-**Entregue (v0.2.x-v0.11.0):**
+**Entregue (v0.2.x-v0.11.2):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** a fachada `UiLayer` **anexa ao contexto GL de um host** (jogo / engine) em vez de criar a própria janela -- render compose-only, eventos injetados, save/restore completo do estado GL (`GlStateGuard`). Permite usar o glintfx **dentro** de um jogo sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). O `App` standalone permanece intacto para apps só-de-UI. Contrato de integração: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Backend GLFW opcional, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only (só `UiLayer`) sem dependência de GLFW, para hosts SDL3/X11.
@@ -531,6 +533,8 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 - **Callbacks de evento form/DOM, v0.9.0 (`L1.15-FORMEV`):** `set_change_callback(id, value)`/`set_submit_callback(id)`/`set_focus_callback(id)`/`set_blur_callback(id)`/`set_hover_callback(id, entered)` em `App` e `UiLayer` -- formulários e focus/hover deixam de ser inertes pro host; são os ganchos que um host usa pra disparar sua própria reação sonora/UX. Ver [`docs/embed-integration.md`](docs/embed-integration.md) seção 16.
 - **Cobertura de código self-hosted no CI, v0.9.0 (`L1.18-COVCI`):** llvm-cov (cobertura source-based do Clang), sem uploader de terceiro; gate de piso 75% em `.github/workflows/ci.yml` (GitHub-only desde a Onda 3, 2026-07-11 -- `.forgejo/workflows/ci.yml` foi encolhido a paridade mínima e não roda mais este job), artifact de relatório HTML, e o badge `Coverage` acima (lê `glintfx/coverage-badge.json`, commitado no repo pelo job do GitHub, direto do blob git do Codeberg -- nenhum CI precisa rodar no Codeberg para o badge funcionar). Script local-first: `tools/coverage_report.sh`.
 - **Decorator backdrop-ripple, v0.11.0 (`L1.22-WAVE`/`L1.22-CAPTURE`):** `decorator: ripple(...)` captura o próprio FBO 0 do host numa textura própria da glintfx e o refrata em screen-space sobre a própria UI composta da glintfx -- um shimmer sobre a camada de UI, dirigido inteiramente por propriedades customizadas RCSS (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, todas animáveis via `@keyframes`), sem API C++ imperativa de efeito. Só em modo embed/`UiLayer` (inerte no `App` standalone, já que não há cena de host pra capturar); estruturalmente custo-zero quando nenhum decorator `ripple()` está ativo no documento carregado. Uma exceção documentada, opt-in, por-elemento, à garantia compose-only do `UiLayer` -- ver [ADR-0012](docs/adr/0012-backdrop-capture.md).
+- **Carregamento de asset com guarda de DoS, v0.11.1:** um teto de 256 MiB em `BaseUrlFileInterface::Open()` limita todo arquivo de asset que a UI carrega (imagens e fontes `@font-face` igualmente), rejeitando graciosamente um arquivo gigante/hostil em vez de derrubar o processo host. Achado e fechado pela onda de auditoria formal da Camada 1 (`LW-AUD`).
+- **Fix de fronteira de símbolo do loader GL e passada de qualidade, v0.11.2 (`AUD-L1-GLSYM`):** fecha uma classe real de bug `SIGSEGV`-na-primeira-chamada-GL -- os 344 ponteiros de função do loader GL gerado deixam de vazar como símbolos `gl*` de nome cru pra fora do `libglintfx.a` (um risco de colisão pra qualquer host embed que linke o archive antes do `libGL.so`); todo slot exportado é renomeado pra `glx_<cmd>` com um `#define` interno mantendo os call sites da própria glintfx inalterados. Ver [ADR-0013](docs/adr/0013-gl-symbol-boundary.md). Vem junto com uma passada de qualidade de código (duas extrações de duplicação, `-Wall -Wextra` nos alvos de teste) e dois testes novos (`gl_resource_leak`, `contract_consume`). Drop-in, sem mudança de API pública.
 
 **Planejado (pausado, ainda não iniciado):**
 
@@ -542,10 +546,10 @@ A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
 
 Este repositório se chama **glintfx** (a biblioteca lançada acima), mas também abriga uma segunda trilha experimental:
 
-- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.9.0`).
-- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação do núcleo completa, aguardando auditoria:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64) e helpers tipados `exit`/`write`/`read`, provado ponta a ponta -> um harness de teste próprio habilitando TDD -> uma libc-núcleo pequena (memória, string, conversão int↔string) -> um mini-printf -> um alocador bump via `mmap`, tudo zero libc e entregue sob TDD mais review adversarial. Itens em `🔍 Pendente verificação`, aguardando as ondas `TST-*`/`F1`/`AUD-*`/`REL-TAG` (`core-v0.1.0`) pro `✅`. Ainda é uma trilha **de longo prazo**: internalizar as dependências restantes do glintfx (RmlUi, FreeType, GLFW) segue a anos de distância (a peça do loader GL, gl3w, já foi internalizada no L1.14-GLLOADER).
+- **Camada 1 = glintfx:** a biblioteca C++ documentada aqui. **Lançada e é o produto ativo deste repositório** (tag `v0.11.2`).
+- **Camada 0 = `loucura_c_asm`:** um runtime soberano experimental em **C + Assembly puros, zero libc**, falando com o kernel Linux só por syscalls. **Implementação completa e auditada, tag `core-v0.4.0`:** um pipeline freestanding (`clang -std=c23 -ffreestanding -nostdlib` + NASM + `ld -nostdlib -static -no-pie -e _start`) com `_start` próprio, wrappers de syscall crus (ABI System V AMD64), helpers tipados `exit`/`write`/`read`, um harness de teste próprio habilitando TDD, uma libc-núcleo pequena (memória, string, conversão int/float↔string), um mini-printf, um alocador free-list via `mmap`, e um motor de fonte clean-room `SOV-SFNT`/`SOV-RAST`/`SOV-HINT` (ver a entrada do flip de fonte v0.10.0 acima) -- tudo zero libc, entregue sob TDD mais review adversarial. Duas rodadas de auditoria (`AUD-ABI`/`AUD-SEC` originais da `core-v0.1.0`, depois a re-auditoria delta `AUD-ABI-Δ`/`AUD-SEC-Δ` da `core-v0.4.0`, cobrindo tudo que pousou desde então) fecharam as duas em **CONFORME-COM-RESSALVAS**, 0 CRÍTICO. Ainda é uma trilha **de longo prazo**: internalizar as dependências restantes do glintfx (RmlUi, GLFW, e os consumidores não-default do FreeType) segue a anos de distância (a peça do loader GL, gl3w, e o motor de fonte já foram internalizados -- L1.14-GLLOADER e L1.20-FONTFLIP).
 
-Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada, agora com a implementação completa e aguardando auditoria.
+Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada, com a implementação completa e auditada (`core-v0.4.0`), sem roadmap próprio comprometido.
 
 ### Licença
 

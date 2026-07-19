@@ -2,7 +2,7 @@
 
 ## English
 
-**glintfx** is a drop-in C++ library for Linux x86-64 (MPL-2.0 license) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.11.0**, full history in [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
+**glintfx** is a drop-in C++ library for Linux x86-64 (MPL-2.0 license) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.11.2**, full history in [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
 
 Two ways to consume it:
 
@@ -19,6 +19,8 @@ Two ways to consume it:
   ```
   See [ADR-0011](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0011-soft-font-flip.md) and `docs/embed-integration.md` section 17.
 - **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** a `decorator: ripple(...)` RCSS decorator captures the host's FBO 0 and refracts it screen-space over glintfx's own composed UI -- a shimmer/water-ripple look, driven entirely by RCSS custom properties (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, all animatable via `@keyframes`), no new C++ API. Embed/`UiLayer` mode only. See [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) for the syntax and [ADR-0012](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0012-backdrop-capture.md) for the design rationale (a documented, opt-in, cost-zero-when-inactive exception to `UiLayer`'s compose-only guarantee).
+- **`v0.11.1`:** a safety net so a huge or corrupted image/font file can never crash the app that uses glintfx: any asset over 256 MiB is now politely rejected (logged, not loaded) instead of being read into memory wholesale.
+- **`v0.11.2` (`AUD-L1-GLSYM`):** fixes a subtle "ghost symbol" bug. glintfx's OpenGL loader used to publish 344 internal placeholder variables under the exact same names as real graphics-driver functions (`glClear`, and so on). If a host program happened to link glintfx's compiled library before the graphics driver's own library, it could accidentally grab glintfx's empty placeholder instead of the real function and crash instantly. Every placeholder now carries a private `glx_`-prefixed name, so it can never be mistaken for the real thing. Nothing a normal app author needs to change; see [ADR-0013](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0013-gl-symbol-boundary.md) for the full story.
 
 ### Where to go
 
@@ -45,7 +47,7 @@ glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License), the
 
 ## Português
 
-O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença MPL-2.0) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.11.0**, histórico completo em [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
+O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença MPL-2.0) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.11.2**, histórico completo em [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
 
 Dois jeitos de consumir:
 
@@ -62,6 +64,8 @@ Dois jeitos de consumir:
   ```
   Ver [ADR-0011](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0011-soft-font-flip.md) e a seção 17 de `docs/embed-integration.md`.
 - **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** um decorator RCSS `decorator: ripple(...)` captura o FBO 0 do host e o refrata em screen-space sobre a própria UI composta da glintfx -- um visual de shimmer/ondulação na água, dirigido inteiramente por propriedades customizadas RCSS (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, todas animáveis via `@keyframes`), sem API C++ nova. Só em modo embed/`UiLayer`. Ver [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) pra sintaxe e [ADR-0012](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0012-backdrop-capture.md) pra racional de design (uma exceção documentada, opt-in, custo-zero-quando-inativa à garantia compose-only do `UiLayer`).
+- **`v0.11.1`:** uma rede de segurança pra que um arquivo de imagem ou fonte gigante ou corrompido nunca derrube o app que usa a glintfx: todo asset acima de 256 MiB agora é educadamente rejeitado (registrado em log, não carregado) em vez de ser lido inteiro pra memória.
+- **`v0.11.2` (`AUD-L1-GLSYM`):** corrige um bug sutil de "símbolo fantasma". O loader OpenGL da glintfx publicava 344 variáveis internas de placeholder com o MESMO nome de funções reais do driver gráfico (`glClear`, e por aí vai). Se um programa host por acaso linkasse a biblioteca compilada da glintfx antes da própria biblioteca do driver gráfico, ele podia sem querer pegar o placeholder vazio da glintfx em vez da função real e crashar na hora. Todo placeholder agora carrega um nome privado com prefixo `glx_`, então nunca mais pode ser confundido com o de verdade. Nada que um autor de app comum precise mudar; ver [ADR-0013](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0013-gl-symbol-boundary.md) pra história completa.
 
 ### Pra onde ir
 

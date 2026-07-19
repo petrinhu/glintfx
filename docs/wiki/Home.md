@@ -1,7 +1,7 @@
 # Home
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/LICENSE)
-[![Version: 0.11.0](https://img.shields.io/badge/Version-0.11.0-blue.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
+[![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-blue.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)

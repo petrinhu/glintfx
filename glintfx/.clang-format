@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MPL-2.0
+BasedOnStyle: Google
+ColumnLimit: 100
+ReflowComments: false
+SortIncludes: Never
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AccessModifierOffset: -2
+SpacesBeforeTrailingComments: 1

@@ -189,6 +189,107 @@ run_layer1_full() {
 }
 
 # -----------------------------------------------------------------------------
+# EN: 3.5) TST-L1-FORMAT -- .clang-format gate, lines-changed-only (AUD-L1-QUALITY
+#     Onda 2). Runs `clang-format-diff` restricted to the LINES actually touched in
+#     each C++ file under review -- NOT whole-file -- because retrofitting
+#     glintfx/.clang-format onto this tree leaves an 11% residual of pre-existing
+#     formatting drift (measured empirically by the CTO before adopting the config);
+#     a whole-file gate would fail on unrelated pre-existing lines and block every
+#     push. Runs in BOTH fast and full mode (cheap: only touched files, no build).
+#     Excludes glintfx/third_party/ (vendorized) and glintfx/src/gl_loader.{h,c}
+#     (generated -- reformatting it would fight the generator). New (untracked)
+#     C++ files get a stricter whole-file check via `clang-format --dry-run
+#     --Werror`, since there is no "pre-existing" content to be lenient about.
+#     Zero touched C++ files -> silent skip (not a failure). Missing
+#     clang-format/clang-format-diff in PATH -> warning + skip, same policy as
+#     gitleaks below (do not block the gate on a missing optional tool).
+# PT: 3.5) Gate TST-L1-FORMAT -- .clang-format, só linhas mudadas (AUD-L1-QUALITY
+#     Onda 2). Roda `clang-format-diff` restrito às LINHAS de fato tocadas em cada
+#     arquivo C++ em revisão -- NÃO o arquivo inteiro -- porque retrofit do
+#     glintfx/.clang-format nesta árvore deixa um residual de 11% de deriva de
+#     formatação pré-existente (medido empiricamente pelo CTO antes de adotar a
+#     config); um gate de arquivo inteiro falharia em linhas pré-existentes não
+#     relacionadas e bloquearia todo push. Roda nos DOIS modos, fast e full (barato:
+#     só arquivos tocados, sem build). Exclui glintfx/third_party/ (vendorizado) e
+#     glintfx/src/gl_loader.{h,c} (gerado -- reformatar brigaria com o gerador).
+#     Arquivos C++ novos (untracked) recebem checagem mais estrita de arquivo
+#     inteiro via `clang-format --dry-run --Werror`, já que não há conteúdo
+#     "pré-existente" a tolerar. Zero arquivo C++ tocado -> skip silencioso (não
+#     falha). clang-format/clang-format-diff ausentes no PATH -> aviso + skip,
+#     mesma política do gitleaks abaixo (não bloqueia o gate por ferramenta
+#     opcional ausente).
+# -----------------------------------------------------------------------------
+run_format_gate() {
+  if ! command -v clang-format >/dev/null 2>&1 || ! command -v clang-format-diff >/dev/null 2>&1; then
+    echo "warning: 'clang-format'/'clang-format-diff' not found in PATH -- skipping TST-L1-FORMAT (install clang-tools, see TOOLING.md)" >&2
+    return 0
+  fi
+
+  local base="origin/main"
+  if ! git rev-parse --verify --quiet "${base}" >/dev/null; then
+    base="$(git hash-object -t tree /dev/null)"
+  fi
+
+  local -a touched_fmt
+  mapfile -t touched_fmt < <(detect_touched_files)
+
+  local -a tracked_cpp=()
+  local -a untracked_cpp=()
+  local f
+  for f in "${touched_fmt[@]}"; do
+    [[ -z "${f}" ]] && continue
+    case "${f}" in
+      glintfx/third_party/*) continue ;;
+      glintfx/src/gl_loader.h|glintfx/src/gl_loader.c) continue ;;
+      glintfx/*.cpp|glintfx/*.hpp|glintfx/*.h) ;;
+      *) continue ;;
+    esac
+    # EN: skip deleted files -- nothing left on disk to format-check.
+    # PT: pula arquivos deletados -- nada em disco pra checar formatação.
+    [[ -f "${f}" ]] || continue
+    if git ls-files --error-unmatch -- "${f}" >/dev/null 2>&1; then
+      tracked_cpp+=("${f}")
+    else
+      untracked_cpp+=("${f}")
+    fi
+  done
+
+  if [[ "${#tracked_cpp[@]}" -eq 0 && "${#untracked_cpp[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  section "TST-L1-FORMAT -- .clang-format gate (lines-changed, glintfx/.clang-format)"
+
+  local gate_failed=0
+
+  if [[ "${#tracked_cpp[@]}" -gt 0 ]]; then
+    local diff_out
+    diff_out="$(git diff -U0 "${base}" -- "${tracked_cpp[@]}" 2>/dev/null | clang-format-diff -p1 -style=file || true)"
+    if [[ -n "${diff_out}" ]]; then
+      echo "${diff_out}"
+      echo "error: clang-format-diff flagged formatting drift in touched lines of: ${tracked_cpp[*]}" >&2
+      gate_failed=1
+    fi
+  fi
+
+  if [[ "${#untracked_cpp[@]}" -gt 0 ]]; then
+    local uf
+    for uf in "${untracked_cpp[@]}"; do
+      if ! clang-format --style=file --dry-run --Werror "${uf}" 2>&1; then
+        echo "error: '${uf}' is a new file and fails the whole-file clang-format check." >&2
+        gate_failed=1
+      fi
+    done
+  fi
+
+  if [[ "${gate_failed}" -eq 1 ]]; then
+    return 1
+  fi
+
+  ran_anything=1
+}
+
+# -----------------------------------------------------------------------------
 # EN: 4) --full extras: TST-L1-STATIC's encapsulation sub-check + TST-L1-SECRETS
 #     (gitleaks). Both are cheap and always-green per TESTES.md's adoption order, so
 #     they only run in --full (fast mode stays focused on build+test of the touched
@@ -221,10 +322,12 @@ run_full_extras() {
 if [[ "${MODE}" == "fast" ]]; then
   [[ "${layer0_touched}" -eq 1 ]] && run_layer0
   [[ "${layer1_touched}" -eq 1 ]] && run_layer1_fast
+  run_format_gate
 else
   run_layer0
   run_layer1_full
   run_full_extras
+  run_format_gate
 fi
 
 if [[ "${ran_anything}" -eq 0 ]]; then

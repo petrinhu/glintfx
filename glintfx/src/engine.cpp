@@ -11,9 +11,67 @@
 #include "bootstrap.hpp"
 #include "data_binder.hpp"
 #include <RmlUi/Core.h>
-#include <cmath>  // EN: std::isfinite (dp-ratio input hardening). PT: std::isfinite (hardening do dp-ratio).
+#include <RmlUi/Core/Input.h>
+#include <cmath>  // EN: std::isfinite (dp-ratio input hardening / process_event guards). PT: std::isfinite (hardening do dp-ratio / guards do process_event).
 
 namespace glintfx {
+
+// ---------------------------------------------------------------------------
+// EN: Internal translation helpers — never exposed in public headers. Moved here from
+//     ui_layer.cpp (A1, framework-2D, docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
+//     section 2.1) so process_event() below is the ONE place both App and UiLayer route
+//     through -- see that method's doc-comment in engine.hpp.
+// PT: Helpers internos de tradução — nunca expostos nos headers públicos. Movidos para cá de
+//     ui_layer.cpp (A1, framework-2D, docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
+//     seção 2.1) para que process_event() abaixo seja o ÚNICO lugar por onde App e UiLayer
+//     passam -- ver o doc-comment desse método em engine.hpp.
+// ---------------------------------------------------------------------------
+
+// EN: Map glintfx::Key to Rml::Input::KeyIdentifier.
+//     Gamepad nav: Up/Down/Left/Right → arrow keys; Enter → Return; Escape stays Escape.
+//     Tab drives RmlUi's built-in focus cycle; Space/Backspace for text widget editing.
+//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
+//     KI_NEXT — names confirmed by grepping the pinned RmlUi source
+//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR is Page Up,
+//     KI_NEXT is Page Down — RmlUi's own naming, not a typo here).
+// PT: Mapeia glintfx::Key para Rml::Input::KeyIdentifier.
+//     Nav por gamepad: Up/Down/Left/Right → setas; Enter → Return; Escape permanece Escape.
+//     Tab aciona o ciclo de foco interno do RmlUi; Space/Backspace para edição em widget de texto.
+//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
+//     KI_NEXT — nomes confirmados grepando o source pinado do RmlUi
+//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR é Page Up,
+//     KI_NEXT é Page Down — nomenclatura do próprio RmlUi, não é erro de digitação aqui).
+static Rml::Input::KeyIdentifier to_rml_key(Key k) noexcept {
+  switch (k) {
+    case Key::Up:        return Rml::Input::KI_UP;
+    case Key::Down:      return Rml::Input::KI_DOWN;
+    case Key::Left:      return Rml::Input::KI_LEFT;
+    case Key::Right:     return Rml::Input::KI_RIGHT;
+    case Key::Enter:     return Rml::Input::KI_RETURN;
+    case Key::Escape:    return Rml::Input::KI_ESCAPE;
+    case Key::Tab:       return Rml::Input::KI_TAB;
+    case Key::Space:     return Rml::Input::KI_SPACE;
+    case Key::Backspace: return Rml::Input::KI_BACK;
+    case Key::Delete:    return Rml::Input::KI_DELETE;
+    case Key::Home:      return Rml::Input::KI_HOME;
+    case Key::End:       return Rml::Input::KI_END;
+    case Key::PageUp:    return Rml::Input::KI_PRIOR;
+    case Key::PageDown:  return Rml::Input::KI_NEXT;
+    default:             return Rml::Input::KI_UNKNOWN;
+  }
+}
+
+// EN: Map glintfx::Mod bitmask to Rml::Input::KeyModifier bitmask.
+//     glintfx::Mod_Shift=1, Mod_Ctrl=2, Mod_Alt=4
+//     Rml::Input::KM_CTRL=1, KM_SHIFT=2, KM_ALT=4
+// PT: Mapeia bitmask de glintfx::Mod para bitmask de Rml::Input::KeyModifier.
+static int to_rml_mods(int mods) noexcept {
+  int result = 0;
+  if (mods & Mod_Shift) result |= Rml::Input::KM_SHIFT;  // EN: Shift. PT: Shift.
+  if (mods & Mod_Ctrl)  result |= Rml::Input::KM_CTRL;   // EN: Ctrl.  PT: Ctrl.
+  if (mods & Mod_Alt)   result |= Rml::Input::KM_ALT;    // EN: Alt.   PT: Alt.
+  return result;
+}
 
 struct Engine::Impl {
   RenderGl3  render;
@@ -143,6 +201,128 @@ void Engine::render_compose(int offset_x, int offset_y, int w, int h) {
 
 Rml::Context* Engine::context() {
   return impl_->ok ? impl_->boot.context() : nullptr;
+}
+
+void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
+  // EN: Guard: drop events when the engine is not ready or context is gone (same shape as
+  //     every other Engine method — "!ok() -> no-op"). Moved verbatim from
+  //     UiLayer::process_event (A1, framework-2D).
+  // PT: Guard: descarta eventos quando o engine não está pronto ou o contexto sumiu (mesmo
+  //     formato de todo outro método do Engine — "!ok() -> no-op"). Movido tal-e-qual de
+  //     UiLayer::process_event (A1, framework-2D).
+  if (!impl_->ok) return;
+  Rml::Context* c = impl_->boot.context();
+  if (!c) return;
+
+  using T = UiEvent::Type;
+  switch (ev.type) {
+    case T::None:
+      // EN: Inert event (L1.10-APIDOC) — the default-constructed UiEvent{} value.
+      //     Intentional no-op: a host that forgets to set .type gets silently dropped
+      //     instead of being misinterpreted as a mouse-move to (0, 0).
+      // PT: Evento inerte (L1.10-APIDOC) — valor default-construído UiEvent{}.
+      //     No-op intencional: um host que esquece de definir .type é descartado
+      //     silenciosamente em vez de ser interpretado como mouse-move para (0, 0).
+      break;
+
+    case T::MouseMove:
+      // EN: Pointer position in integer pixels; modifiers rarely set on move but forwarded.
+      //     window-space -> content-space (F3, v0.2.5): subtract the caller-supplied offset
+      //     (0,0 for App; UiLayer's letterbox origin otherwise) before forwarding to RmlUi,
+      //     which only knows its own offset-free content space -- see this method's
+      //     doc-comment in engine.hpp.
+      // PT: Posição do ponteiro em pixels inteiros; modificadores raramente ativados no move
+      //     mas repassados. espaço-janela -> espaço-conteúdo (F3, v0.2.5): subtrai o offset
+      //     fornecido pelo chamador (0,0 para o App; origem de letterbox do UiLayer nos demais
+      //     casos) antes de repassar ao RmlUi, que só conhece o próprio espaço de conteúdo
+      //     offset-free -- ver o doc-comment deste método em engine.hpp.
+      // EN: Guard (AUD-TEC-2): static_cast<int> of a non-finite float is UB ([conv.fpint]).
+      //     A host may forward NaN/inf coords (driver glitch, network replay) -- reject before
+      //     the cast, same rule already enforced by set_element_scroll_top.
+      // PT: Guard (AUD-TEC-2): static_cast<int> de float não-finito é UB ([conv.fpint]). Um
+      //     host pode repassar coords NaN/inf (glitch de driver, replay de rede) -- rejeita
+      //     antes do cast, mesma regra já aplicada em set_element_scroll_top.
+      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
+      c->ProcessMouseMove(static_cast<int>(ev.x) - offset_x, static_cast<int>(ev.y) - offset_y,
+                          to_rml_mods(ev.modifiers));
+      break;
+
+    case T::MouseButton:
+      // EN: button: 0=left, 1=right, 2=middle — matches Rml convention directly.
+      // PT: button: 0=esquerdo, 1=direito, 2=meio — bate diretamente com a convenção Rml.
+      if (ev.pressed)
+        c->ProcessMouseButtonDown(ev.button, to_rml_mods(ev.modifiers));
+      else
+        c->ProcessMouseButtonUp(ev.button, to_rml_mods(ev.modifiers));
+      break;
+
+    case T::Key:
+      // EN: Gamepad nav: Key::Up/Down/Left/Right/Enter/Escape → Rml arrow/Return/Escape.
+      //     RmlUi uses ProcessKeyDown + a subsequent ProcessTextInput for printable chars;
+      //     for nav-only keys (arrows, Return, Escape, Tab) text input is not needed.
+      // PT: Nav por gamepad: Key::Up/Down/Left/Right/Enter/Escape → Rml seta/Return/Escape.
+      //     RmlUi usa ProcessKeyDown + ProcessTextInput para chars imprimíveis;
+      //     para teclas só de navegação (setas, Return, Escape, Tab) text input não é necessário.
+      if (ev.pressed)
+        c->ProcessKeyDown(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
+      else
+        c->ProcessKeyUp(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
+      break;
+
+    case T::Text:
+      // EN: UTF-8 text input — forwarded as-is to RmlUi (handles multi-byte sequences).
+      //     text must remain valid for the duration of this call; caller owns the lifetime.
+      // PT: Entrada de texto UTF-8 — repassado ao RmlUi como-está (lida com sequências multi-byte).
+      //     text deve permanecer válido durante esta chamada; lifetime é do chamador.
+      if (ev.text) c->ProcessTextInput(Rml::String(ev.text));
+      break;
+
+    case T::MouseWheel:
+      // EN: Wheel/trackpad delta forwarding (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven by
+      //     GusWorld's 30-item overflow-y:auto menu list, which could not scroll in embed mode).
+      //     Unlike MouseMove/MouseButton, NO offset translation here: ev.x/ev.y are a DELTA
+      //     (scroll amount), not a window-space position, so there is nothing to subtract
+      //     offset_x/offset_y from -- RmlUi's Context::ProcessMouseWheel(Vector2f, mods) takes
+      //     the delta as-is and scrolls whatever element is currently under `hover` (set by the
+      //     most recent ProcessMouseMove/ProcessMouseButtonDown -- confirmed by reading
+      //     Context.cpp: it reads the `hover` member, resolves
+      //     Element::GetClosestScrollableContainer() from there, and is a no-op when hover is
+      //     null). The Vector2f overload is used, not the deprecated single-float one (see
+      //     Context.h: "@deprecated Please use the Vector2f version").
+      // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven
+      //     pela lista de menu de 30 itens overflow-y:auto do GusWorld, que não conseguia rolar em
+      //     embed mode). Diferente de MouseMove/MouseButton, SEM tradução de offset aqui: ev.x/
+      //     ev.y são um DELTA (quantidade de rolagem), não uma posição espaço-janela, então não
+      //     há nada para subtrair de offset_x/offset_y -- o
+      //     Context::ProcessMouseWheel(Vector2f, mods) do RmlUi recebe o delta como está e rola o
+      //     elemento que estiver sob `hover` no momento (definido pelo ProcessMouseMove/
+      //     ProcessMouseButtonDown mais recente -- confirmado lendo Context.cpp: lê o membro
+      //     `hover`, resolve Element::GetClosestScrollableContainer() a partir dele, e é no-op
+      //     quando hover é nulo). Usa a sobrecarga de Vector2f, não a de float único deprecada
+      //     (ver Context.h: "@deprecated Please use the Vector2f version").
+      // EN: Guard (AUD-TEC-2): a non-finite delta would poison the scroll offset with NaN
+      //     inside RmlUi. Reject before forwarding -- same rule as MouseMove above.
+      // PT: Guard (AUD-TEC-2): um delta não-finito envenenaria o offset de scroll com NaN
+      //     dentro do RmlUi. Rejeita antes de repassar -- mesma regra do MouseMove acima.
+      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
+      c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
+      break;
+
+    case T::Resize:
+      // EN: Deliberately NOT handled here -- Resize mutates facade-owned state (UiLayer's
+      //     letterbox offset, App's window-size cache), not just an RmlUi call. Each caller
+      //     handles it locally; see this method's doc-comment in engine.hpp.
+      // PT: Deliberadamente NÃO tratado aqui -- Resize muta estado de posse da fachada (offset
+      //     de letterbox do UiLayer, cache de tamanho de janela do App), não é só uma chamada
+      //     ao RmlUi. Cada chamador trata localmente; ver o doc-comment deste método em
+      //     engine.hpp.
+      break;
+
+    default:
+      // EN: Unknown/future event types are intentionally ignored — forward compatibility.
+      // PT: Tipos de evento desconhecidos/futuros são ignorados intencionalmente — compatibilidade futura.
+      break;
+  }
 }
 
 void Engine::set_click_callback(std::function<void(const char*)> cb) {

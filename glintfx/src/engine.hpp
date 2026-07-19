@@ -20,6 +20,7 @@ namespace Rml { class Context; class SystemInterface; }
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 
 namespace glintfx {
 
@@ -101,6 +102,38 @@ public:
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().
   Rml::Context* context();
+
+  // EN: Translate a neutral UiEvent into the corresponding Rml::Context::Process* call (A1,
+  //     framework-2D). This is the SHARED route UiLayer::process_event has used since embed
+  //     mode shipped -- moved up from ui_layer.cpp so App can reuse it verbatim instead of
+  //     duplicating the translation (docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
+  //     section 2.1). Handles None/MouseMove/MouseButton/Key/Text/MouseWheel; does NOT handle
+  //     Resize -- that case mutates facade-owned state (UiLayer's letterbox offset, App's
+  //     window-size cache) and stays with each caller (UiLayer::process_event keeps its
+  //     Resize branch; App::process_event treats it as a documented no-op, since App is
+  //     already the window's own size authority).
+  //     `offset_x`/`offset_y` are subtracted from MouseMove's position before forwarding
+  //     (window-space -> content-space, same F3 sub-viewport translation UiLayer::process_event
+  //     already did): UiLayer passes its letterbox origin (impl_->x, impl_->y); App passes
+  //     (0, 0) -- it owns the whole window, same reasoning already used by
+  //     App::get_element_box. MouseWheel ignores the offset (it carries a DELTA, not a
+  //     position -- see UiEvent::Type::MouseWheel's doc-comment). No-op when not ok().
+  // PT: Traduz um UiEvent neutro na chamada Rml::Context::Process* correspondente (A1,
+  //     framework-2D). É a rota COMPARTILHADA que UiLayer::process_event usa desde que o embed
+  //     mode foi lançado -- movida para cá de ui_layer.cpp para que o App a reuse tal-e-qual em
+  //     vez de duplicar a tradução (docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
+  //     seção 2.1). Trata None/MouseMove/MouseButton/Key/Text/MouseWheel; NÃO trata Resize --
+  //     esse caso muta estado de posse da fachada (offset de letterbox do UiLayer, cache de
+  //     tamanho de janela do App) e permanece em cada chamador (UiLayer::process_event mantém
+  //     o próprio branch de Resize; App::process_event o trata como no-op documentado, já que o
+  //     App já é a própria autoridade sobre o tamanho da janela).
+  //     `offset_x`/`offset_y` são subtraídos da posição do MouseMove antes de repassar (espaço-
+  //     janela -> espaço-conteúdo, mesma tradução de sub-viewport F3 que UiLayer::process_event
+  //     já fazia): o UiLayer passa a própria origem de letterbox (impl_->x, impl_->y); o App
+  //     passa (0, 0) -- é dono da janela inteira, mesma racional já usada em
+  //     App::get_element_box. O MouseWheel ignora o offset (carrega um DELTA, não uma posição
+  //     -- ver o doc-comment de UiEvent::Type::MouseWheel). No-op quando não ok().
+  void process_event(const UiEvent& ev, int offset_x = 0, int offset_y = 0);
 
   // EN: Register a click callback -- forwards to Bootstrap::set_click_callback (F1, v0.2.5).
   //     See Bootstrap::set_click_callback for the full ordering/lifetime contract.

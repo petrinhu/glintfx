@@ -39,6 +39,15 @@
 
 #include "decorator_ripple.hpp"
 
+// EN: box-corner quad geometry (QuadCorners/BuildQuadCorners) + raw VAO/VBO/EBO scaffold shared
+//     with decorator_image_tint.cpp -- see decorator_gl_quad.hpp's file header for the
+//     AUD-L1-QUALITY extraction rationale (IMPORTANTE #2, was a byte-identical copy).
+// PT: geometria de quad de cantos de caixa (QuadCorners/BuildQuadCorners) + andaime de VAO/VBO/EBO
+//     crua compartilhado com decorator_image_tint.cpp -- ver o comentário de cabeçalho de
+//     decorator_gl_quad.hpp pra racional da extração AUD-L1-QUALITY (IMPORTANTE #2, era cópia
+//     byte-idêntica).
+#include "decorator_gl_quad.hpp"
+
 #include <RmlUi/Core/CompiledFilterShader.h>  // EN: complete Rml::CompiledShader type. PT: tipo Rml::CompiledShader completo.
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/Geometry.h>
@@ -51,7 +60,6 @@
 
 #include <algorithm>  // EN: std::max. PT: std::max.
 #include <cmath>      // EN: std::isfinite. PT: std::isfinite.
-#include <cstddef>    // EN: offsetof. PT: offsetof.
 #include <utility>    // EN: std::move. PT: std::move.
 
 namespace glintfx {
@@ -131,33 +139,6 @@ void ResolveRippleState(Rml::Element* element, RippleState& out) {
   out.width = std::max(ReadRippleNumber(element, "ripple-width", out.width), 0.0001f);
 }
 
-// EN: Same box-corner-quad vertex layout as decorator_image_tint.cpp's own QuadCorners/
-//     BuildQuadCorners -- kept as an independent copy (not shared) since these are two
-//     independent, single-purpose translation units and the geometry math is a handful of
-//     lines; see decorator_image_tint.cpp for the identical reference implementation.
-// PT: Mesmo layout de quad de cantos de caixa do próprio QuadCorners/BuildQuadCorners de
-//     decorator_image_tint.cpp -- mantido como cópia independente (não compartilhada) já que
-//     estas são duas translation units independentes de propósito único e a matemática de
-//     geometria é um punhado de linhas; ver decorator_image_tint.cpp pra implementação de
-//     referência idêntica.
-struct QuadCorners {
-  Rml::Vector2f position[4];
-  Rml::Vector2f tex_coord[4];
-};
-
-QuadCorners BuildQuadCorners(Rml::Vector2f offset, Rml::Vector2f size) {
-  QuadCorners q;
-  q.position[0] = offset;
-  q.position[1] = offset + Rml::Vector2f(size.x, 0.f);
-  q.position[2] = offset + size;
-  q.position[3] = offset + Rml::Vector2f(0.f, size.y);
-  q.tex_coord[0] = Rml::Vector2f(0.f, 0.f);
-  q.tex_coord[1] = Rml::Vector2f(1.f, 0.f);
-  q.tex_coord[2] = Rml::Vector2f(1.f, 1.f);
-  q.tex_coord[3] = Rml::Vector2f(0.f, 1.f);
-  return q;
-}
-
 }  // namespace
 
 void RippleDecorator::Initialise(float max_radius) {
@@ -200,48 +181,17 @@ Rml::DecoratorDataHandle RippleDecorator::GenerateElementData(Rml::Element* elem
   auto* data = new RippleElementData{render_manager->MakeGeometry(std::move(mesh)), 0, 0, 0, 0};
 
   // EN: Raw VAO/VBO/EBO -- the ONLY geometry the "glintfx-ripple" fragment shader draws from
-  //     (Gl3RenderInterface::RenderShader's ripple branch, render_gl3.cpp) -- 2 attributes only
-  //     (position @location=0, tex_coord @location=1), identical layout to
-  //     decorator_image_tint.cpp's own TintVertex (see that file for the full attribute-layout
-  //     rationale, which applies verbatim here).
+  //     (Gl3RenderInterface::RenderShader's ripple branch, render_gl3.cpp). Scaffold (vertex
+  //     layout, GL create/bind/upload/attrib/unbind sequence) shared byte-for-byte with
+  //     decorator_image_tint.cpp -- see decorator_gl_quad.hpp (AUD-L1-QUALITY extraction) for the
+  //     full rationale and the exact GL call order this produces.
   // PT: VAO/VBO/EBO crua -- a ÚNICA geometria de onde o shader de fragmento "glintfx-ripple"
-  //     desenha (ramo de ripple de Gl3RenderInterface::RenderShader, render_gl3.cpp) -- só 2
-  //     atributos (posição @location=0, tex_coord @location=1), layout idêntico ao próprio
-  //     TintVertex de decorator_image_tint.cpp (ver aquele arquivo pra racional completa de
-  //     layout de atributo, que se aplica literalmente aqui).
-  struct RippleVertex {
-    float x, y, u, v;
-  };
-  const RippleVertex rv[4] = {
-      {quad.position[0].x, quad.position[0].y, quad.tex_coord[0].x, quad.tex_coord[0].y},
-      {quad.position[1].x, quad.position[1].y, quad.tex_coord[1].x, quad.tex_coord[1].y},
-      {quad.position[2].x, quad.position[2].y, quad.tex_coord[2].x, quad.tex_coord[2].y},
-      {quad.position[3].x, quad.position[3].y, quad.tex_coord[3].x, quad.tex_coord[3].y},
-  };
-  const unsigned int idx[6] = {0, 1, 2, 0, 2, 3};
-
-  glGenVertexArrays(1, &data->vao);
-  glGenBuffers(1, &data->vbo);
-  glGenBuffers(1, &data->ebo);
-
-  glBindVertexArray(data->vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data->vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(rv), rv, GL_STATIC_DRAW);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data->ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(RippleVertex), reinterpret_cast<const void*>(offsetof(RippleVertex, x)));
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(RippleVertex), reinterpret_cast<const void*>(offsetof(RippleVertex, u)));
-  // EN: Unbind the VAO FIRST -- see decorator_image_tint.cpp's identical comment (GL_ELEMENT_
-  //     ARRAY_BUFFER binding is VAO state; unbinding the VAO preserves `data->ebo` as its
-  //     recorded element-buffer binding).
-  // PT: Desvincula a VAO PRIMEIRO -- ver o comentário idêntico de decorator_image_tint.cpp (o
-  //     binding de GL_ELEMENT_ARRAY_BUFFER é estado da VAO; desvincular a VAO preserva
-  //     `data->ebo` como o binding de buffer-de-elemento registrado dela).
-  glBindVertexArray(0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+  //     desenha (ramo de ripple de Gl3RenderInterface::RenderShader, render_gl3.cpp). Andaime
+  //     (layout de vértice, sequência GL de criar/vincular/enviar/attrib/desvincular)
+  //     compartilhado byte a byte com decorator_image_tint.cpp -- ver decorator_gl_quad.hpp
+  //     (extração AUD-L1-QUALITY) pra racional completa e a ordem exata de chamadas GL que isto
+  //     produz.
+  CreateGlQuadBuffers(quad, data->vao, data->vbo, data->ebo);
   data->index_count = 6;
 
   return reinterpret_cast<Rml::DecoratorDataHandle>(data);
@@ -250,17 +200,16 @@ Rml::DecoratorDataHandle RippleDecorator::GenerateElementData(Rml::Element* elem
 void RippleDecorator::ReleaseElementData(Rml::DecoratorDataHandle element_data) const {
   auto* data = reinterpret_cast<RippleElementData*>(element_data);
   // EN: See decorator_image_tint.cpp's identical ReleaseElementData comment -- the VAO/VBO/EBO
-  //     are NOT owned by any CompiledShader wrapper (render_gl3.cpp), released HERE, once per
-  //     element, never per-frame/per-CompileShader-call.
+  //     are NOT owned by any CompiledShader wrapper (render_gl3.cpp). Released HERE, once per
+  //     element, never per-frame/per-CompileShader-call, via DestroyGlQuadBuffers
+  //     (decorator_gl_quad.hpp, shared with decorator_image_tint.cpp -- AUD-L1-QUALITY
+  //     extraction).
   // PT: Ver o comentário idêntico de ReleaseElementData de decorator_image_tint.cpp -- a
-  //     VAO/VBO/EBO NÃO são donas de nenhum wrapper CompiledShader (render_gl3.cpp), liberadas
-  //     AQUI, uma vez por elemento, nunca por-frame/por-chamada-de-CompileShader.
-  if (data->vao)
-    glDeleteVertexArrays(1, &data->vao);
-  if (data->vbo)
-    glDeleteBuffers(1, &data->vbo);
-  if (data->ebo)
-    glDeleteBuffers(1, &data->ebo);
+  //     VAO/VBO/EBO NÃO são donas de nenhum wrapper CompiledShader (render_gl3.cpp). Liberadas
+  //     AQUI, uma vez por elemento, nunca por-frame/por-chamada-de-CompileShader, via
+  //     DestroyGlQuadBuffers (decorator_gl_quad.hpp, compartilhado com
+  //     decorator_image_tint.cpp -- extração AUD-L1-QUALITY).
+  DestroyGlQuadBuffers(data->vao, data->vbo, data->ebo);
   delete data;
 }
 

@@ -2008,3 +2008,19 @@ if(GLINTFX_COVERAGE)
     endif()
   endforeach()
 endif()
+
+# EN: -Wall -Wextra on every authored test/demo-helper target in this directory
+#     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) picks up all targets
+#     defined above + any future one, so a new test never silently escapes the gate.
+#     No -Werror (mirrors the glintfx lib target, commit 45209e5). Third-party/fetched
+#     TUs are not defined here, so they are untouched.
+# PT: -Wall -Wextra em todo alvo autoral de teste/demo-helper deste diretório
+#     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) pega todos os alvos
+#     acima + qualquer futuro, então um teste novo nunca escapa do gate em silêncio.
+#     Sem -Werror (espelha o alvo glintfx, 45209e5). TUs de terceiros/fetchados não
+#     são definidos aqui, então ficam intocados.
+get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+             PROPERTY BUILDSYSTEM_TARGETS)
+foreach(_t IN LISTS _glintfx_test_targets)
+  target_compile_options(${_t} PRIVATE -Wall -Wextra)
+endforeach()

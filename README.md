@@ -95,7 +95,7 @@ RmlUi 6.3 is fetched at configure time; glintfx's own GL loader (generated from 
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.4.0)
+  GIT_TAG        v0.11.2)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -237,7 +237,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Known limitations
 
-`glintfx` v0.4.0 is honest about what is not yet there:
+`glintfx` is honest about what is not yet there:
 
 - **Linux x86-64 only.** No Windows/macOS.
 - **One `App` per process.** GLFW and RmlUi global state make a second instance undefined behaviour.
@@ -360,7 +360,7 @@ RmlUi 6.3 é baixado em tempo de configure; o loader GL próprio do glintfx (ger
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://codeberg.org/petrinhu/glintfx.git
-  GIT_TAG        v0.4.0)
+  GIT_TAG        v0.11.2)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -502,7 +502,7 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 
 ### Limitações conhecidas
 
-A v0.4.0 do `glintfx` é honesta sobre o que ainda não existe:
+O `glintfx` é honesto sobre o que ainda não existe:
 
 - **Apenas Linux x86-64.** Sem Windows/macOS.
 - **Um `App` por processo.** O estado global de GLFW e RmlUi torna uma segunda instância comportamento indefinido.

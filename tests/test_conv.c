@@ -131,6 +131,21 @@ static int t_close_rel(double a, double b, double tol) {
     return t_abs(a - b) <= tol * t_abs(b);
 }
 
+// EN: AUD-SEC-Delta regression helper -- fills `buf` with "0." followed by `n` '9' characters,
+//     NUL-terminated. Local test plumbing only (mirrors the `t_*` helpers above), not part of the
+//     public API under test. Caller sizes `buf` to at least `n + 3` bytes.
+// PT: Auxiliar de regressao do AUD-SEC-Delta -- preenche `buf` com "0." seguido de `n` caracteres
+//     '9', terminado em NUL. Andaime de teste local apenas (espelha os helpers `t_*` acima), nao
+//     faz parte da API publica sob teste. Chamador dimensiona `buf` com pelo menos `n + 3` bytes.
+static void t_fill_point9(char* buf, int n) {
+    buf[0] = '0';
+    buf[1] = '.';
+    for (int k = 0; k < n; k++) {
+        buf[2 + k] = '9';
+    }
+    buf[2 + n] = '\0';
+}
+
 int main(int argc, char** argv, char** envp) {
     (void)argc;
     (void)argv;
@@ -549,6 +564,65 @@ int main(int argc, char** argv, char** envp) {
     {
         TEST_ASSERT(t_is_pos_inf(atof("1e400")));
         TEST_ASSERT(t_is_neg_inf(atof("-1e400")));
+    }
+
+    // ---- atof: AUD-SEC-Delta regression -- a pathological ALL-NINES fractional string must NEVER
+    //     overflow to +Infinity nor round to `>= 1.0` (mathematically always `< 1.0` for any finite
+    //     count of digits) -- proven BROKEN before this fix: `n=300` (well under the OLD
+    //     400-digit cap, already wrong before the fix) returned a value `>= 1.0`; `n=309` (the
+    //     exact string from the audit finding) and `n=400` (the old cap's own boundary) both
+    //     returned `+Inf`. See `src/conv.c`'s `FCONV_MAX_SIG_FRAC_DIGITS` doc-comment for the fix
+    //     mechanism (a separate, geometrically-bounded fractional accumulator that can never
+    //     overflow by construction).
+    // PT: Regressao do AUD-SEC-Delta -- uma string fracionaria TODA-NOVES patologica NUNCA deve
+    //     estourar pra +Infinito nem arredondar pra `>= 1.0` (matematicamente sempre `< 1.0` pra
+    //     qualquer contagem finita de digitos) -- provado QUEBRADO antes deste fix: `n=300`
+    //     (confortavelmente abaixo do ANTIGO limite de 400 digitos, ja errado antes do fix)
+    //     retornava um valor `>= 1.0`; `n=309` (a string exata do achado da auditoria) e `n=400`
+    //     (a propria fronteira do antigo limite) retornavam `+Inf`. Ver o doc-comment do
+    //     `FCONV_MAX_SIG_FRAC_DIGITS` no `src/conv.c` pro mecanismo do fix (um acumulador
+    //     fracionario separado, limitado geometricamente, que nunca consegue estourar por
+    //     construcao).
+    {
+        static const int ns[] = {300, 309, 400};
+        char buf[410];
+        for (size_t vi = 0; vi < sizeof(ns) / sizeof(ns[0]); vi++) {
+            t_fill_point9(buf, ns[vi]);
+            double v = atof(buf);
+            TEST_ASSERT(!t_is_pos_inf(v));
+            TEST_ASSERT(!t_is_nan(v));
+            TEST_ASSERT(v < 1.0);  // THE invariant the audit finding demanded
+            TEST_ASSERT(v > 0.99); // sanity: still a plausible "almost 1" value, not e.g. 0.0
+            TEST_ASSERT_EQ(t_sign(v), 0); // no leading '-' in the input -> positive
+        }
+    }
+
+    // ---- atof: AUD-SEC-Delta sibling case (bonus, found while designing the fix, NOT part of the
+    //     original audit finding) -- a LARGE INTEGER part combined with a fractional part must also
+    //     stay finite when it legitimately should: the OLD "multiply mantissa forward for
+    //     fractional digits too" technique could push a near-DBL_MAX integer part over the edge to
+    //     `+Infinity` purely from appending fractional digits, even though the true combined value
+    //     is comfortably finite. 308 nines ~= 9.99...e307 (well below `DBL_MAX` ~1.798e308);
+    //     appending ".5" must NOT flip the result to `+Infinity`.
+    // PT: Caso irmao do AUD-SEC-Delta (bonus, encontrado ao desenhar o fix, NAO parte do achado
+    //     original da auditoria) -- uma parte INTEIRA GRANDE combinada com uma parte fracionaria
+    //     tambem deve ficar finita quando legitimamente deveria: a tecnica ANTIGA de "multiplicar
+    //     mantissa pra frente tambem pros digitos fracionarios" conseguia empurrar uma parte
+    //     inteira perto de `DBL_MAX` alem da borda pra `+Infinito` so' por anexar digitos
+    //     fracionarios, mesmo o valor combinado verdadeiro sendo confortavelmente finito. 308
+    //     noves ~= 9.99...e307 (bem abaixo de `DBL_MAX` ~1.798e308); anexar ".5" NAO deve virar o
+    //     resultado pra `+Infinito`.
+    {
+        char buf[320];
+        for (int k = 0; k < 308; k++) {
+            buf[k] = '9';
+        }
+        buf[308] = '.';
+        buf[309] = '5';
+        buf[310] = '\0';
+        double v = atof(buf);
+        TEST_ASSERT(!t_is_pos_inf(v));
+        TEST_ASSERT(v > 9.9e307); // still comfortably in the ~1e308 magnitude, not blown to Inf
     }
 
     // ---- atof: exponent UNDERFLOW -- best-effort signed zero/denormal, no crash ---------------

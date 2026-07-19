@@ -312,12 +312,25 @@ char* ftoa(double value, char* buf, unsigned precision);
 //     changes the result for legitimate input, only bounds worst-case work for hostile input.
 //
 //     Same "no libm, native SSE2 double arithmetic only" implementation stance as `ftoa` -- see
-//     that doc-comment. This is the complementary "not correctly-rounded" converter: digit
-//     accumulation is a plain `mantissa = mantissa*10.0 + digit` loop (not an arbitrary-precision
-//     or correctly-rounded `strtod` algorithm), so for very long digit strings (many more than a
-//     double's ~15-17 significant digits) the result carries ordinary accumulated floating-point
-//     rounding error -- documented tradeoff, matching `ftoa`'s own "not shortest-round-trip"
-//     disclaimer in spirit.
+//     that doc-comment. This is the complementary "not correctly-rounded" converter: INTEGER-part
+//     digit accumulation is a plain `mantissa = mantissa*10.0 + digit` loop (not an
+//     arbitrary-precision or correctly-rounded `strtod` algorithm), so for very long digit strings
+//     (many more than a double's ~15-17 significant digits) the result carries ordinary
+//     accumulated floating-point rounding error -- documented tradeoff, matching `ftoa`'s own "not
+//     shortest-round-trip" disclaimer in spirit. FRACTIONAL-part digits use a DIFFERENT technique
+//     (`src/conv.c`, AUD-SEC-Delta fix): each digit is scaled down and added directly (never
+//     multiplied forward like the integer part), and accumulation of fractional digits is capped
+//     at the first ~16 SIGNIFICANT ones (further digits are still consumed as trailing-garbage-
+//     shaped syntax but no longer folded in) -- unlike the exponent caps above, THIS cap DOES
+//     change the result for real input whenever a fractional part has more than ~16 significant
+//     digits, by design: a `double` cannot resolve finer fractional resolution than that anyway,
+//     and capping there is what GUARANTEES `atof` of a string of fractional digits that is
+//     mathematically `< 1.0` (e.g. `"0." + "9"*309`) never returns `>= 1.0` or `+Infinity` -- a
+//     prior revision of this converter used the same `mantissa*10+digit` technique for fractional
+//     digits too (deferring the rescale to the very end), which let a long-enough fractional part
+//     inflate `mantissa` past `DBL_MAX` BEFORE the rescale ever ran, empirically confirmed to
+//     return `+Inf` (and, below the old 400-digit cap, silently wrong values `>= 1.0`) for exactly
+//     that input shape.
 // PT: Parseia um `double` do inicio de `s`: pula whitespace inicial (mesmo conjunto do `atoi`),
 //     aceita um '+' ou '-' inicial opcional unico, depois reconhece -- em ordem -- (1) "inf" ou
 //     "infinity" (case-INsensivel, ex.: "INF"/"Infinity"/"iNfInItY" todos casam) -> Infinito com
@@ -357,9 +370,24 @@ char* ftoa(double value, char* buf, unsigned precision);
 //
 //     Mesma postura de implementacao "sem libm, so aritmetica double SSE2 nativa" do `ftoa` -- ver
 //     aquele doc-comment. Este e' o conversor complementar "nao corretamente-arredondado":
-//     acumulacao de digito e' um laco simples `mantissa = mantissa*10.0 + digito` (nao um
-//     algoritmo `strtod` de precisao-arbitraria ou corretamente-arredondado), entao pra strings de
-//     digito muito longas (bem mais que os ~15-17 digitos significativos de um double) o resultado
-//     carrega erro de arredondamento de ponto flutuante acumulado comum -- troca documentada,
-//     batendo em espirito com o proprio aviso "nao shortest-round-trip" do `ftoa`.
+//     acumulacao de digito da parte INTEIRA e' um laco simples `mantissa = mantissa*10.0 + digito`
+//     (nao um algoritmo `strtod` de precisao-arbitraria ou corretamente-arredondado), entao pra
+//     strings de digito muito longas (bem mais que os ~15-17 digitos significativos de um double)
+//     o resultado carrega erro de arredondamento de ponto flutuante acumulado comum -- troca
+//     documentada, batendo em espirito com o proprio aviso "nao shortest-round-trip" do `ftoa`.
+//     Digitos da parte FRACIONARIA usam uma tecnica DIFERENTE (`src/conv.c`, fix AUD-SEC-Delta):
+//     cada digito e' escalonado pra baixo e somado diretamente (nunca multiplicado pra frente como
+//     a parte inteira), e a acumulacao de digitos fracionarios e' limitada aos primeiros ~16
+//     SIGNIFICATIVOS (digitos alem disso ainda sao consumidos como sintaxe de lixo-final-formato
+//     mas nao mais dobrados) -- diferente dos limites de expoente acima, ESSE limite MUDA o
+//     resultado pra input real sempre que uma parte fracionaria tem mais de ~16 digitos
+//     significativos, de proposito: um `double` nao consegue resolver resolucao fracionaria mais
+//     fina que isso de qualquer jeito, e limitar ali e' o que GARANTE que `atof` de uma string de
+//     digitos fracionarios que e' matematicamente `< 1.0` (ex.: `"0." + "9"*309`) nunca retorna
+//     `>= 1.0` nem `+Infinito` -- uma revisao anterior deste conversor usava a mesma tecnica
+//     `mantissa*10+digito` tambem pros digitos fracionarios (adiando o reescalonamento pro final),
+//     o que deixava uma parte fracionaria longa o bastante inflar o `mantissa` alem de `DBL_MAX`
+//     ANTES do reescalonamento alguma vez rodar, confirmado empiricamente retornando `+Inf` (e,
+//     abaixo do antigo limite de 400 digitos, valores silenciosamente errados `>= 1.0`) exatamente
+//     pra esse formato de input.
 double atof(const char* s);

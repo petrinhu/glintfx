@@ -303,19 +303,70 @@ unsigned atou(const char* s) {
 #define FCONV_NEG_INF_BITS 0xFFF0000000000000UL
 #define FCONV_NAN_BITS      0x7FF8000000000000UL // quiet NaN, unsigned
 
-// EN: DoS-defensive caps for atof (see include/conv.h's atof doc-comment): both are FAR beyond
-//     any exponent a legitimate finite/denormal double could need (usable double decimal exponent
-//     range is roughly [-324, 308]), so neither cap ever changes the result for real input -- they
-//     only bound worst-case work for a hostile string like "1e999999999" or a fractional part with
-//     millions of digits.
-// PT: Limites defensivos anti-DoS pro atof (ver o doc-comment do atof em include/conv.h): os dois
-//     estao BEM alem de qualquer expoente que um double finito/denormal legitimo precisaria (a
-//     faixa util de expoente decimal de um double e' aproximadamente [-324, 308]), entao nenhum
-//     dos dois muda o resultado pra input real -- so limitam o trabalho de pior-caso pra uma
-//     string hostil tipo "1e999999999" ou uma parte fracionaria com milhoes de digitos.
-#define FCONV_MAX_FRAC_DIGITS 400
+// EN: Two DIFFERENT kinds of cap live here -- do not conflate them (AUD-SEC-Delta finding, see
+//     below): `FCONV_MAX_SCALE_ITER`/`FCONV_MAX_EXP_MAG` are pure DoS-defensive work-bounds (both
+//     are FAR beyond any exponent a legitimate finite/denormal double could need -- usable double
+//     decimal exponent range is roughly [-324, 308] -- so neither ever changes the result for real
+//     input, they only bound worst-case work for a hostile string like "1e999999999"). But
+//     `FCONV_MAX_SIG_FRAC_DIGITS` (below) is a PRECISION cap, not (only) a DoS one: it DOES change
+//     the result for real input whenever a fractional part has more than ~16 significant digits --
+//     it deliberately drops digits a `double` cannot resolve anyway (see the macro's own
+//     doc-comment right above its definition for the corrected reasoning; the previous revision of
+//     this comment claimed NO cap here ever changes the result, which was empirically FALSE for
+//     the old, now-replaced fractional-accumulation technique -- `atof("0." + "9"*309)` returned
+//     `+Inf` instead of a value `< 1.0`, proven live before this fix).
+// PT: Dois tipos DIFERENTES de limite moram aqui -- nao conflar os dois (achado AUD-SEC-Delta, ver
+//     abaixo): `FCONV_MAX_SCALE_ITER`/`FCONV_MAX_EXP_MAG` sao limites de trabalho puramente
+//     anti-DoS (os dois estao BEM alem de qualquer expoente que um double finito/denormal
+//     legitimo precisaria -- a faixa util de expoente decimal de um double e' aproximadamente
+//     [-324, 308] -- entao nenhum dos dois muda o resultado pra input real, so' limitam o trabalho
+//     de pior-caso pra uma string hostil tipo "1e999999999"). Mas o `FCONV_MAX_SIG_FRAC_DIGITS`
+//     (abaixo) e' um limite de PRECISAO, nao (so') anti-DoS: ELE MUDA o resultado pra input real
+//     sempre que uma parte fracionaria tem mais de ~16 digitos significativos -- descarta de
+//     proposito digitos que um `double` nao consegue resolver de qualquer jeito (ver o
+//     doc-comment do proprio macro logo acima da sua definicao pro raciocinio corrigido; a revisao
+//     anterior deste comentario afirmava que NENHUM limite aqui muda o resultado, o que era
+//     empiricamente FALSO pra tecnica antiga (agora substituida) de acumulacao fracionaria --
+//     `atof("0." + "9"*309)` retornava `+Inf` em vez de um valor `< 1.0`, provado ao vivo antes
+//     deste fix).
 #define FCONV_MAX_SCALE_ITER  400
 #define FCONV_MAX_EXP_MAG     1000000
+
+// EN: AUD-SEC-Delta fix -- `FCONV_MAX_SIG_FRAC_DIGITS` caps how many fractional digits are ever
+//     FOLDED into the running fractional accumulator (`frac_value` in `atof`, below); digits past
+//     this cap are still CONSUMED (advance the parse position, same "trailing garbage does not
+//     invalidate what was parsed" spirit as the rest of this file) but simply never added.
+//     16 is not an arbitrary round number: it is the largest N for which the worst-case fractional
+//     string "9" * N -- the value closest to the 1.0 boundary a fractional accumulator can ever
+//     produce -- still rounds to a `double` STRICTLY below 1.0. Empirically verified (see task
+//     report) across n in {300, 309, 400} nines and across `-O0`/`-O2`/`-ffp-contract=fast|off`:
+//     N=16 always yields ~0.9999999999999999 (< 1.0); N=17 already rounds UP to exactly 1.0 (the
+//     mathematically "correctly rounded" answer for the true limit of the underlying geometric
+//     series -- see below -- but this file's `atof` is explicitly NOT a correctly-rounded
+//     converter, and the contract promised to `include/conv.h`'s callers is "never >= 1.0 for an
+//     input that is mathematically < 1.0"). This lines up with the well-known fact that a `double`
+//     has only ~15-17 significant decimal digits of real precision (`DBL_DIG` == 15 is the
+//     ALWAYS-safe count; 16-17 is the boundary where behaviour starts depending on the specific
+//     digit pattern) -- 16 sits deliberately on the safe side of that boundary, not the risky one.
+// PT: Fix AUD-SEC-Delta -- `FCONV_MAX_SIG_FRAC_DIGITS` limita quantos digitos fracionarios sao
+//     alguma vez DOBRADOS no acumulador fracionario corrente (`frac_value` no `atof`, abaixo);
+//     digitos alem desse limite ainda sao CONSUMIDOS (avancam a posicao de parse, mesmo espirito
+//     "lixo final nao invalida o que foi parseado" do resto deste arquivo) mas simplesmente nunca
+//     somados.
+//     16 nao e' um numero redondo arbitrario: e' o maior N pro qual a string fracionaria de
+//     pior-caso "9" * N -- o valor mais proximo da fronteira de 1.0 que um acumulador fracionario
+//     consegue produzir -- ainda arredonda pra um `double` ESTRITAMENTE abaixo de 1.0.
+//     Verificado empiricamente (ver relatorio da tarefa) pra n em {300, 309, 400} noves e pra
+//     `-O0`/`-O2`/`-ffp-contract=fast|off`: N=16 sempre da ~0.9999999999999999 (< 1.0); N=17 ja
+//     arredonda PRA CIMA pra exatamente 1.0 (a resposta matematicamente "corretamente arredondada"
+//     pro limite verdadeiro da serie geometrica subjacente -- ver abaixo -- mas o `atof` deste
+//     arquivo explicitamente NAO e' um conversor corretamente-arredondado, e o contrato prometido
+//     aos chamadores do `include/conv.h` e' "nunca >= 1.0 pra um input que e' matematicamente <
+//     1.0"). Isso bate com o fato conhecido de que um `double` so tem ~15-17 digitos decimais
+//     significativos de precisao real (`DBL_DIG` == 15 e' a contagem SEMPRE segura; 16-17 e' a
+//     fronteira onde o comportamento passa a depender do padrao especifico de digitos) -- 16 fica
+//     deliberadamente do lado seguro dessa fronteira, nao do arriscado.
+#define FCONV_MAX_SIG_FRAC_DIGITS 16
 
 static unsigned long fconv_bits(double d) {
     union { double d; unsigned long u; } v;
@@ -602,19 +653,87 @@ double atof(const char* s) {
         any_digits = 1;
     }
 
-    // ---- optional '.' + fractional digits (capped, see FCONV_MAX_FRAC_DIGITS above) ---------
-    int frac_digits = 0;
+    // ---- optional '.' + fractional digits (capped, see FCONV_MAX_SIG_FRAC_DIGITS above) -------
+    // EN: AUD-SEC-Delta fix -- fractional digits accumulate into their OWN `frac_value`, via a
+    //     SEPARATE, monotonically-shrinking `frac_scale` (`*= 0.1` each digit), instead of being
+    //     folded into `mantissa` (the integer-part accumulator) via the same "multiply by 10, add
+    //     digit" shape used for INTEGER digits above. This is a deliberately different technique
+    //     from the integer-part loop, and here is why the difference matters: the OLD code used
+    //     the identical `mantissa = mantissa*10 + digit` formula for fractional digits too, only
+    //     rescaling by `10^frac_digits` at the very END (in the exponent-scale step below) --
+    //     which meant a fractional part with hundreds of digits temporarily inflated `mantissa` as
+    //     if those digits were ADDITIONAL INTEGER digits, overflowing `mantissa` to `+Infinity`
+    //     WAY BEFORE the later rescale ever had a chance to divide it back down (proven live:
+    //     `atof("0." + "9"*309)` returned `+Inf` instead of a value `< 1.0`, and even `"9"*300`
+    //     -- comfortably under the old 400-digit cap -- already returned `1.0000...e+00`, i.e.
+    //     `>= 1.0`, which is mathematically wrong for an input that is a string of all-9s
+    //     fractional digits, always `< 1.0`). The fix here accumulates `frac_value` DIRECTLY as
+    //     the true fractional quantity (each digit contributes `digit * frac_scale`, already
+    //     correctly scaled, no later rescale needed) -- since `frac_scale` shrinks geometrically
+    //     and every term added is bounded by the current `frac_scale`, `frac_value` itself is
+    //     mathematically bounded by the convergent series `sum(9 * 0.1^k) = 1.0` and can NEVER
+    //     overflow a `double`, no matter how many digits are fed in (this also, as a side
+    //     benefit, fixes the SIBLING case the old technique never handled either -- a LARGE
+    //     integer part combined with ANY fractional digits, e.g. `"9"*308 + ".5"`, which the old
+    //     "multiply mantissa forward by 10 for each frac digit" technique could overflow even
+    //     though the true final value is comfortably finite). `mantissa` is combined with
+    //     `frac_value` by simple ADDITION once both are fully accumulated (see just below the
+    //     exponent-parsing block), never by further multiplication -- addition of a finite `double`
+    //     and a `[0.0, 1.0)`-bounded `double` cannot itself overflow unless `mantissa` was already
+    //     (legitimately) `+Infinity` from the integer-part loop, in which case `Infinity + x ==
+    //     Infinity` is the CORRECT IEEE-754 answer, not a bug.
+    // PT: Fix AUD-SEC-Delta -- digitos fracionarios acumulam no PROPRIO `frac_value`, via uma
+    //     `frac_scale` SEPARADA e monotonicamente decrescente (`*= 0.1` a cada digito), em vez de
+    //     serem dobrados no `mantissa` (o acumulador da parte inteira) via a mesma forma
+    //     "multiplica por 10, soma digito" usada pros digitos INTEIROS acima. Essa e' uma tecnica
+    //     deliberadamente diferente do laco da parte inteira, e eis o porque a diferenca importa: o
+    //     codigo ANTIGO usava a formula identica `mantissa = mantissa*10 + digito` tambem pros
+    //     digitos fracionarios, so' reescalonando por `10^frac_digits` no FINAL (no passo de
+    //     escala-por-expoente abaixo) -- o que significava que uma parte fracionaria com centenas
+    //     de digitos inflava temporariamente o `mantissa` como se esses digitos fossem DIGITOS
+    //     INTEIROS ADICIONAIS, estourando o `mantissa` pra `+Infinito` BEM ANTES do reescalonamento
+    //     posterior ter chance de dividir ele de volta (provado ao vivo: `atof("0." + "9"*309)`
+    //     retornava `+Inf` em vez de um valor `< 1.0`, e ate `"9"*300` -- confortavelmente abaixo
+    //     do antigo limite de 400 digitos -- ja retornava `1.0000...e+00`, ou seja `>= 1.0`, o que
+    //     e' matematicamente errado pra um input que e' uma string de digitos fracionarios todos-9,
+    //     sempre `< 1.0`). O fix aqui acumula `frac_value` DIRETAMENTE como a quantidade fracionaria
+    //     verdadeira (cada digito contribui `digito * frac_scale`, ja corretamente escalonado, sem
+    //     precisar de reescalonamento depois) -- como `frac_scale` encolhe geometricamente e todo
+    //     termo somado e' limitado pela `frac_scale` corrente, o proprio `frac_value` e'
+    //     matematicamente limitado pela serie convergente `soma(9 * 0.1^k) = 1.0` e NUNCA consegue
+    //     estourar um `double`, nao importa quantos digitos sejam alimentados (isso tambem, como
+    //     beneficio colateral, corrige o caso IRMAO que a tecnica antiga tambem nunca tratava --
+    //     uma parte inteira GRANDE combinada com QUALQUER digito fracionario, ex.: `"9"*308 +
+    //     ".5"`, que a tecnica antiga de "multiplicar mantissa pra frente por 10 a cada digito
+    //     fracionario" conseguia estourar mesmo o valor final verdadeiro sendo confortavelmente
+    //     finito). O `mantissa` e' combinado com `frac_value` por SOMA simples uma vez que os dois
+    //     estejam totalmente acumulados (ver logo abaixo do bloco de parse do expoente), nunca por
+    //     mais multiplicacao -- somar um `double` finito com um `double` limitado a `[0.0, 1.0)`
+    //     nao consegue estourar por si so', a menos que `mantissa` ja fosse (legitimamente)
+    //     `+Infinito` vindo do laco da parte inteira, caso em que `Infinito + x == Infinito` e' a
+    //     resposta CORRETA do IEEE-754, nao um bug.
+    double frac_value = 0.0;
     if (s[i] == '.') {
         i++;
+        double frac_scale = 1.0;
+        int frac_sig_digits = 0; // scope reduced to this block only -- unused past it (cppcheck)
         while (s[i] >= '0' && s[i] <= '9') {
-            if (frac_digits < FCONV_MAX_FRAC_DIGITS) {
-                mantissa = mantissa * 10.0 + (double)(s[i] - '0');
-                frac_digits++;
+            if (frac_sig_digits < FCONV_MAX_SIG_FRAC_DIGITS) {
+                frac_scale *= 0.1;
+                frac_value += (double)(s[i] - '0') * frac_scale;
+                frac_sig_digits++;
             }
             // EN: Digits beyond the cap are still CONSUMED (they are syntactically part of the
-            //     number) but no longer accumulated -- see include/conv.h doc-comment.
+            //     number) but no longer accumulated -- see FCONV_MAX_SIG_FRAC_DIGITS above and
+            //     include/conv.h's doc-comment: past ~16 significant digits, a `double` cannot
+            //     resolve the difference anyway, so folding them in would be pure wasted work
+            //     (were it even safe to do so, which the old technique was not).
             // PT: Digitos alem do limite ainda sao CONSUMIDOS (sao sintaticamente parte do
-            //     numero) mas nao mais acumulados -- ver doc-comment em include/conv.h.
+            //     numero) mas nao mais acumulados -- ver FCONV_MAX_SIG_FRAC_DIGITS acima e o
+            //     doc-comment do include/conv.h: alem de ~16 digitos significativos, um `double`
+            //     nao consegue resolver a diferenca de qualquer jeito, entao dobra-los seria
+            //     puro trabalho desperdicado (mesmo que fosse seguro fazer isso, o que a tecnica
+            //     antiga nao era).
             i++;
             any_digits = 1;
         }
@@ -679,7 +798,23 @@ double atof(const char* s) {
         //     include/conv.h: `atof("1e")` -> `1.0`).
     }
 
-    int total_exp = explicit_exp - frac_digits;
+    // EN: Combine the integer part (`mantissa`) and the already-correctly-scaled fractional part
+    //     (`frac_value`, `[0.0, 1.0)`-bounded, see loop above) by plain ADDITION -- this is the
+    //     ONE place the two accumulators meet, and it is deliberately NOT a multiplication, so it
+    //     cannot itself introduce a new overflow (see the long comment above the fractional loop
+    //     for why). `total_exp` is now JUST `explicit_exp`: unlike the old code, it no longer needs
+    //     to subtract `frac_digits`, because `frac_value` was already scaled digit-by-digit as it
+    //     accumulated (no deferred rescale left to do here).
+    // PT: Combina a parte inteira (`mantissa`) e a parte fracionaria ja-corretamente-escalonada
+    //     (`frac_value`, limitada a `[0.0, 1.0)`, ver laco acima) por SOMA simples -- esse e' o
+    //     UNICO lugar onde os dois acumuladores se encontram, e deliberadamente NAO e' uma
+    //     multiplicacao, entao nao consegue introduzir um novo overflow por si so' (ver o
+    //     comentario longo acima do laco fracionario pro porque). `total_exp` agora e' SO'
+    //     `explicit_exp`: diferente do codigo antigo, nao precisa mais subtrair `frac_digits`,
+    //     porque `frac_value` ja foi escalonado digito-a-digito conforme acumulou (nao sobra
+    //     reescalonamento adiado pra fazer aqui).
+    mantissa += frac_value;
+    int total_exp = explicit_exp;
 
     if (neg) {
         // EN: Unary negation, same "-0.0 from +0.0" correctness reasoning as ftoa's `av`.

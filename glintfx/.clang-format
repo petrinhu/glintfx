@@ -1,6 +1,16 @@
 # SPDX-License-Identifier: MPL-2.0
 BasedOnStyle: Google
-ColumnLimit: 100
+# EN: ColumnLimit 0 disables column wrapping on purpose. This codebase uses long
+#     hand-formatted bilingual EN/PT trailing comments everywhere; any finite limit
+#     makes clang-format break the *code* before the comment (e.g. `T arr[4];` split
+#     across lines). 0 gates the things that matter (indent, brace style, pointer
+#     alignment, 1 space before trailing comment) without mangling declarations.
+# PT: ColumnLimit 0 desliga o wrap por coluna de propósito. Este código usa comentários
+#     bilíngues EN/PT longos formatados à mão em todo lugar; qualquer limite finito faz o
+#     clang-format quebrar o *código* antes do comentário (ex.: `T arr[4];` partido em
+#     linhas). 0 gateia o que importa (indent, braces, alinhamento de ponteiro, 1 espaço
+#     antes do comentário trailing) sem estropiar declarações.
+ColumnLimit: 0
 ReflowComments: false
 SortIncludes: Never
 AllowShortIfStatementsOnASingleLine: WithoutElse

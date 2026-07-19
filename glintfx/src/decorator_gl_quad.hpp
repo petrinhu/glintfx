@@ -59,7 +59,7 @@
 
 #include <RmlUi/Core/Types.h>
 
-#include <cstddef>  // EN: offsetof. PT: offsetof.
+#include <cstddef> // EN: offsetof. PT: offsetof.
 
 namespace glintfx {
 
@@ -70,8 +70,8 @@ namespace glintfx {
 //     onde aplicável) QUANTO pela VAO crua (caminho de shader customizado) construída a partir
 //     dele abaixo -- ver BuildQuadCorners.
 struct QuadCorners {
-  Rml::Vector2f position[4];   // EN: border-box-relative, CW from top-left. PT: relativo à border-box, CW a partir do topo-esquerda.
-  Rml::Vector2f tex_coord[4];  // EN: (0,0)..(1,1), same winding. PT: (0,0)..(1,1), mesmo giro.
+  Rml::Vector2f position[4];  // EN: border-box-relative, CW from top-left. PT: relativo à border-box, CW a partir do topo-esquerda.
+  Rml::Vector2f tex_coord[4]; // EN: (0,0)..(1,1), same winding. PT: (0,0)..(1,1), mesmo giro.
 };
 
 // EN: `offset`/`size` come from Rml::RenderBox::GetFillOffset()/GetFillSize() at the caller --
@@ -173,4 +173,4 @@ inline void DestroyGlQuadBuffers(GLuint vao, GLuint vbo, GLuint ebo) {
     glDeleteBuffers(1, &ebo);
 }
 
-}  // namespace glintfx
+} // namespace glintfx

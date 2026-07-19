@@ -15,7 +15,11 @@
 //     adicionado (AUD-L1-QUALITY Item A) para o helper privado find_element() abaixo -- só
 //     forward-declarado, mesma disciplina de Context/SystemInterface, nenhum header do RmlUi
 //     puxado aqui.
-namespace Rml { class Context; class SystemInterface; class Element; }
+namespace Rml {
+class Context;
+class SystemInterface;
+class Element;
+} // namespace Rml
 
 #include <functional>
 #include <glintfx/click_info.hpp>

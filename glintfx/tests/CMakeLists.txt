@@ -94,6 +94,22 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/resize_scene.rcss COPYONLY)
 
+# EN: app_process_event_scene.rml/.rcss (A1, framework-2D) -- shared by app_process_event_smoke
+#     AND app_frame_callback_smoke (both GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR,
+#     addressed there via "tests/" prefix, same convention as resize_scene.*/element_box_scene.*
+#     above). Deliberately NOT click_scene.rml/.rcss -- see the scene's own header comment for
+#     why (tab-index:auto needed for the focus+Enter leg, which click_scene's #btn_a lacks).
+# PT: app_process_event_scene.rml/.rcss (A1, framework-2D) -- compartilhado por
+#     app_process_event_smoke E app_frame_callback_smoke (ambos GLFW-only, WORKING_DIRECTORY=
+#     CMAKE_BINARY_DIR, endereçados lá via prefixo "tests/", mesma convenção de
+#     resize_scene.*/element_box_scene.* acima). Deliberadamente NÃO click_scene.rml/.rcss --
+#     ver o comentário de cabeçalho da própria cena pra entender por quê (tab-index:auto
+#     necessário pra perna focus+Enter, que o #btn_a de click_scene não tem).
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app_process_event_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/app_process_event_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app_process_event_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/app_process_event_scene.rcss COPYONLY)
+
 # ---------------------------------------------------------------------------
 # EN: GLFW-backend-only tests: window_smoke, render_smoke, engine_smoke, app_smoke,
 #     render_sanity. These depend on glintfx::App / glintfx::WindowGlfw which are
@@ -294,6 +310,86 @@ if(GLINTFX_BACKEND_GLFW)
       -DEXE=$<TARGET_FILE:app_resize_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_process_event_smoke (A1, framework-2D) -- verifies App::process_event(const
+  #     UiEvent&), the synthetic/replay channel sharing Engine::process_event with the GLFW
+  #     physical-input callbacks (window_glfw.cpp) and with UiLayer::process_event. See the
+  #     test file's own header for the full oracle (synthetic click, focus+Enter emulated
+  #     click, Resize documented no-op). WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide
+  #     GLFW-block convention); app_process_event_scene.rml is copied once to
+  #     CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/app_process_event_scene.rml".
+  # PT: app_process_event_smoke (A1, framework-2D) -- verifica App::process_event(const
+  #     UiEvent&), o canal sintético/replay que compartilha Engine::process_event com os
+  #     callbacks físicos GLFW (window_glfw.cpp) e com UiLayer::process_event. Ver o cabeçalho
+  #     do próprio arquivo de teste pro oráculo completo (clique sintético, clique emulado por
+  #     focus+Enter, Resize no-op documentado). WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção
+  #     do bloco GLFW em todo o repo); app_process_event_scene.rml é copiado uma vez para
+  #     CMAKE_CURRENT_BINARY_DIR acima, endereçado aqui como
+  #     "tests/app_process_event_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_process_event_smoke app_process_event_smoke.cpp)
+  target_link_libraries(app_process_event_smoke PRIVATE glintfx)
+  add_test(NAME app_process_event_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_process_event_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_frame_callback_smoke (A1, framework-2D) -- verifies App::set_frame_callback(): N
+  #     frames of counter/dt sanity, plus the pixel-proof leg (paint inside the hook, snapshot,
+  #     confirm the UI's own opaque content painted OVER the hook's colour -- proves both
+  #     "scene composes under the UI" and "GL context was current inside the hook"). See the
+  #     test file's own header for the full oracle derivation. Links glloader explicitly for
+  #     gl_loader.h (glScissor/glClearColor/glClear calls inside the test's own hook lambda);
+  #     glloader is a PRIVATE dep of glintfx, not propagated to callers (same rationale as
+  #     golden_test/gl_state_guard above). WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide
+  #     GLFW-block convention); reuses app_process_event_scene.rml copied above.
+  # PT: app_frame_callback_smoke (A1, framework-2D) -- verifica App::set_frame_callback(): N
+  #     frames de sanidade de contador/dt, mais a perna de prova por pixel (pinta dentro do
+  #     hook, tira snapshot, confirma que o próprio conteúdo opaco da UI pintou POR CIMA da cor
+  #     do hook -- prova tanto "a cena compõe sob a UI" quanto "o contexto GL estava corrente
+  #     dentro do hook"). Ver o cabeçalho do próprio arquivo de teste pra derivação completa do
+  #     oráculo. Linka glloader explicitamente para gl_loader.h (chamadas
+  #     glScissor/glClearColor/glClear dentro da própria lambda de hook do teste); glloader é
+  #     dep PRIVATE da glintfx, não propagada a callers (mesma racional de
+  #     golden_test/gl_state_guard acima). WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do
+  #     bloco GLFW em todo o repo); reusa app_process_event_scene.rml copiado acima.
+  # ---------------------------------------------------------------------------
+  add_executable(app_frame_callback_smoke app_frame_callback_smoke.cpp)
+  target_link_libraries(app_frame_callback_smoke PRIVATE glintfx glloader)
+  add_test(NAME app_frame_callback_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_frame_callback_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: glfw_event_translate_sanity (A1, framework-2D) -- PURE unit test for
+  #     glfw_event_translate.hpp: no window, no GL context, no glfwInit() call anywhere in the
+  #     test (only GLFW #define constants are used). Runs the executable DIRECTLY, not through
+  #     run_xvfb.cmake, unlike every other test in this file -- there is nothing display-
+  #     related to isolate here. Links `glfw` for the GLFW header/constants (the imported
+  #     target is header-only at this call site: no glfwInit()/window/context is ever created)
+  #     and `glintfx` for glintfx/ui_event.hpp's public Key/UiEvent/Mod types. See the test
+  #     file's own header for the full "why this file must exist" rationale (the "fórmula de
+  #     conversão sem teste de delta" bug class) and the mutation-testability note for the
+  #     adversarial reviewer.
+  # PT: glfw_event_translate_sanity (A1, framework-2D) -- teste unit PURO para
+  #     glfw_event_translate.hpp: sem janela, sem contexto GL, sem nenhuma chamada a
+  #     glfwInit() no teste (só constantes #define do GLFW são usadas). Roda o executável
+  #     DIRETO, não através de run_xvfb.cmake, diferente de todo outro teste deste arquivo --
+  #     não há nada relacionado a display pra isolar aqui. Linka `glfw` pelo header/constantes
+  #     GLFW (o alvo importado é header-only neste call site: nenhum glfwInit()/janela/contexto
+  #     é criado nunca) e `glintfx` pelos tipos públicos Key/UiEvent/Mod de
+  #     glintfx/ui_event.hpp. Ver o cabeçalho do próprio arquivo de teste pra racional completa
+  #     de "por que este arquivo precisa existir" (a classe de bug "fórmula de conversão sem
+  #     teste de delta") e a nota de mutation-testability pro reviewer adversarial.
+  # ---------------------------------------------------------------------------
+  add_executable(glfw_event_translate_sanity glfw_event_translate_sanity.cpp)
+  target_link_libraries(glfw_event_translate_sanity PRIVATE glintfx glfw)
+  add_test(NAME glfw_event_translate_sanity COMMAND glfw_event_translate_sanity)
 
   # EN: Shared assets for visual tests (render_sanity and golden_test).
   #     Copy showcase RML variants, RCSS, font, and test RML variant so both tests find

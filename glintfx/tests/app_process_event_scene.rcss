@@ -1,0 +1,27 @@
+/* SPDX-License-Identifier: MPL-2.0
+   EN: Dedicated scene for app_process_event_smoke.cpp (A1, framework-2D) -- deliberately NOT
+       click_scene.rcss/.rml (shared by click_callback_sanity/app_click_callback_smoke): this
+       test's second leg needs App::set_focus("btn_a") + a synthetic Key::Enter to emulate a
+       click (RmlUi's ElementDocument::ProcessDefaultAction only does this for an element whose
+       `tab-index` is `auto`; see build/_deps/rmlui-src/Source/Core/ElementDocument.cpp:671-679),
+       which click_scene.rcss's #btn_a does not set. Adding tab-index here, in a private
+       fixture, avoids touching a fixture two other tests already assert exact pixel/hit
+       behaviour against. `focus` stays at its RmlUi-registered default (`auto`) -- no override
+       needed, same reasoning as focus_scene.rcss's #focusable.
+   PT: Cena dedicada para app_process_event_smoke.cpp (A1, framework-2D) -- deliberadamente NÃO
+       click_scene.rcss/.rml (compartilhada por click_callback_sanity/app_click_callback_smoke):
+       a segunda perna deste teste precisa de App::set_focus("btn_a") + um Key::Enter sintético
+       para emular um clique (ElementDocument::ProcessDefaultAction do RmlUi só faz isso para um
+       elemento cujo `tab-index` é `auto`; ver
+       build/_deps/rmlui-src/Source/Core/ElementDocument.cpp:671-679), o que o #btn_a de
+       click_scene.rcss não define. Adicionar tab-index aqui, numa fixture privada, evita tocar
+       numa fixture que outros dois testes já asserram comportamento exato de pixel/hit contra.
+       `focus` fica no default registrado do RmlUi (`auto`) -- sem sobreposição necessária,
+       mesma racional de #focusable em focus_scene.rcss. */
+body { background-color: #101010; }
+div  { display: block; position: absolute; }
+#btn_a {
+  left: 10px; top: 10px; width: 80px; height: 40px;
+  background-color: #ff0000;
+  tab-index: auto;
+}

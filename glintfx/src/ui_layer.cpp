@@ -13,8 +13,6 @@
 #include "engine.hpp"
 #include "system_clock.hpp"
 #include <RmlUi/Core/Context.h>
-#include <RmlUi/Core/Input.h>
-#include <cmath>
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 
 namespace glintfx {
@@ -28,57 +26,6 @@ namespace glintfx {
 //     cálculo de gl_offset_y do set_viewport, abaixo) folgado dentro do range de int, para que
 //     nunca dê overflow com sinal (UB) mesmo com entrada adversarial perto de INT_MAX.
 constexpr int kMaxViewportDim = 32768;
-
-// ---------------------------------------------------------------------------
-// EN: Internal translation helpers — never exposed in public headers.
-// PT: Helpers internos de tradução — nunca expostos nos headers públicos.
-// ---------------------------------------------------------------------------
-
-// EN: Map glintfx::Key to Rml::Input::KeyIdentifier.
-//     Gamepad nav: Up/Down/Left/Right → arrow keys; Enter → Return; Escape stays Escape.
-//     Tab drives RmlUi's built-in focus cycle; Space/Backspace for text widget editing.
-//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
-//     KI_NEXT — names confirmed by grepping the pinned RmlUi source
-//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR is Page Up,
-//     KI_NEXT is Page Down — RmlUi's own naming, not a typo here).
-// PT: Mapeia glintfx::Key para Rml::Input::KeyIdentifier.
-//     Nav por gamepad: Up/Down/Left/Right → setas; Enter → Return; Escape permanece Escape.
-//     Tab aciona o ciclo de foco interno do RmlUi; Space/Backspace para edição em widget de texto.
-//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
-//     KI_NEXT — nomes confirmados grepando o source pinado do RmlUi
-//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR é Page Up,
-//     KI_NEXT é Page Down — nomenclatura do próprio RmlUi, não é erro de digitação aqui).
-static Rml::Input::KeyIdentifier to_rml_key(Key k) noexcept {
-  switch (k) {
-    case Key::Up:        return Rml::Input::KI_UP;
-    case Key::Down:      return Rml::Input::KI_DOWN;
-    case Key::Left:      return Rml::Input::KI_LEFT;
-    case Key::Right:     return Rml::Input::KI_RIGHT;
-    case Key::Enter:     return Rml::Input::KI_RETURN;
-    case Key::Escape:    return Rml::Input::KI_ESCAPE;
-    case Key::Tab:       return Rml::Input::KI_TAB;
-    case Key::Space:     return Rml::Input::KI_SPACE;
-    case Key::Backspace: return Rml::Input::KI_BACK;
-    case Key::Delete:    return Rml::Input::KI_DELETE;
-    case Key::Home:      return Rml::Input::KI_HOME;
-    case Key::End:       return Rml::Input::KI_END;
-    case Key::PageUp:    return Rml::Input::KI_PRIOR;
-    case Key::PageDown:  return Rml::Input::KI_NEXT;
-    default:             return Rml::Input::KI_UNKNOWN;
-  }
-}
-
-// EN: Map glintfx::Mod bitmask to Rml::Input::KeyModifier bitmask.
-//     glintfx::Mod_Shift=1, Mod_Ctrl=2, Mod_Alt=4
-//     Rml::Input::KM_CTRL=1, KM_SHIFT=2, KM_ALT=4
-// PT: Mapeia bitmask de glintfx::Mod para bitmask de Rml::Input::KeyModifier.
-static int to_rml_mods(int mods) noexcept {
-  int result = 0;
-  if (mods & Mod_Shift) result |= Rml::Input::KM_SHIFT;  // EN: Shift. PT: Shift.
-  if (mods & Mod_Ctrl)  result |= Rml::Input::KM_CTRL;   // EN: Ctrl.  PT: Ctrl.
-  if (mods & Mod_Alt)   result |= Rml::Input::KM_ALT;    // EN: Alt.   PT: Alt.
-  return result;
-}
 
 struct UiLayer::Impl {
   SystemClock clock;  // EN: minimal RmlUi SystemInterface (clock only, no GLFW).
@@ -477,133 +424,63 @@ bool UiLayer::get_bool(const char* key, bool& out) const {
 }
 
 void UiLayer::process_event(const UiEvent& ev) {
-  // EN: Guard: drop events when the layer is not ready or context is gone.
-  // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu.
+  // EN: Guard: drop events when the layer is not ready or context is gone. Same shape as
+  //     Engine::process_event's own guard below -- kept here too so the Resize branch (which
+  //     never reaches the Engine) is still guarded.
+  // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu. Mesmo
+  //     formato do guard do próprio Engine::process_event abaixo -- mantido aqui também para
+  //     que o branch de Resize (que nunca chega ao Engine) continue guardado.
   if (!impl_->ok) return;
-  Rml::Context* c = impl_->engine.context();
-  if (!c) return;
 
-  using T = UiEvent::Type;
-  switch (ev.type) {
-    case T::None:
-      // EN: Inert event (L1.10-APIDOC) — the default-constructed UiEvent{} value.
-      //     Intentional no-op: a host that forgets to set .type gets silently dropped
-      //     instead of being misinterpreted as a mouse-move to (0, 0).
-      // PT: Evento inerte (L1.10-APIDOC) — valor default-construído UiEvent{}.
-      //     No-op intencional: um host que esquece de definir .type é descartado
-      //     silenciosamente em vez de ser interpretado como mouse-move para (0, 0).
-      break;
+  // EN: Resize is the ONE case that stays here (A1, framework-2D refactor,
+  //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.1): it mutates
+  //     facade-owned letterbox state (impl_->w/h/gl_offset_y), not just an RmlUi call, so it
+  //     cannot move to the shared Engine::process_event. Every other case (None/MouseMove/
+  //     MouseButton/Key/Text/MouseWheel) is now IDENTICAL behaviour, just delegated -- see
+  //     Engine::process_event's doc-comment in engine.hpp for the moved switch and the two
+  //     AUD-TEC-2 non-finite guards it still enforces.
+  // PT: Resize é o ÚNICO caso que permanece aqui (refactor A1, framework-2D,
+  //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md seção 2.1): muta estado de
+  //     letterbox de posse da fachada (impl_->w/h/gl_offset_y), não é só uma chamada ao RmlUi,
+  //     então não pode mudar para o Engine::process_event compartilhado. Todo outro caso
+  //     (None/MouseMove/MouseButton/Key/Text/MouseWheel) tem comportamento IDÊNTICO agora, só
+  //     delegado -- ver o doc-comment de Engine::process_event em engine.hpp para o switch
+  //     movido e os dois guards AUD-TEC-2 de não-finito que ele ainda enforça.
+  if (ev.type == UiEvent::Type::Resize) {
+    Rml::Context* c = impl_->engine.context();
+    if (!c) return;
+    // EN: Logical viewport resize — update cached dimensions and notify RmlUi.
+    //     The next render_compose() uses the updated impl_->w/h via set_viewport().
+    // PT: Redimensionamento lógico do viewport — atualiza dimensões cacheadas e notifica RmlUi.
+    //     O próximo render_compose() usa o impl_->w/h atualizado via set_viewport().
 
-    case T::MouseMove:
-      // EN: Pointer position in integer pixels; modifiers rarely set on move but forwarded.
-      //     window-space -> content-space (F3, v0.2.5): subtract the sub-viewport offset
-      //     (0,0 in legacy mode) before forwarding to RmlUi, which only knows its own
-      //     offset-free content space -- see set_viewport()'s doc comment.
-      // PT: Posição do ponteiro em pixels inteiros; modificadores raramente ativados no move
-      //     mas repassados. espaço-janela -> espaço-conteúdo (F3, v0.2.5): subtrai o offset da
-      //     sub-viewport (0,0 em modo legado) antes de repassar ao RmlUi, que só conhece o
-      //     próprio espaço de conteúdo offset-free -- ver o doc-comment de set_viewport().
-      // EN: Guard (AUD-TEC-2): static_cast<int> of a non-finite float is UB ([conv.fpint]).
-      //     A host may forward NaN/inf coords (driver glitch, network replay) -- reject before
-      //     the cast, same rule already enforced by set_element_scroll_top.
-      // PT: Guard (AUD-TEC-2): static_cast<int> de float não-finito é UB ([conv.fpint]). Um
-      //     host pode repassar coords NaN/inf (glitch de driver, replay de rede) -- rejeita
-      //     antes do cast, mesma regra já aplicada em set_element_scroll_top.
-      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
-      c->ProcessMouseMove(static_cast<int>(ev.x) - impl_->x, static_cast<int>(ev.y) - impl_->y,
-                          to_rml_mods(ev.modifiers));
-      break;
+    // EN: Guard: zero/negative dimensions are invalid for the layout engine — skip silently.
+    // PT: Guard: dimensões zero/negativas são inválidas para o motor de layout — ignorar silenciosamente.
+    if (ev.width <= 0 || ev.height <= 0) return;
 
-    case T::MouseButton:
-      // EN: button: 0=left, 1=right, 2=middle — matches Rml convention directly.
-      // PT: button: 0=esquerdo, 1=direito, 2=meio — bate diretamente com a convenção Rml.
-      if (ev.pressed)
-        c->ProcessMouseButtonDown(ev.button, to_rml_mods(ev.modifiers));
-      else
-        c->ProcessMouseButtonUp(ev.button, to_rml_mods(ev.modifiers));
-      break;
-
-    case T::Key:
-      // EN: Gamepad nav: Key::Up/Down/Left/Right/Enter/Escape → Rml arrow/Return/Escape.
-      //     RmlUi uses ProcessKeyDown + a subsequent ProcessTextInput for printable chars;
-      //     for nav-only keys (arrows, Return, Escape, Tab) text input is not needed.
-      // PT: Nav por gamepad: Key::Up/Down/Left/Right/Enter/Escape → Rml seta/Return/Escape.
-      //     RmlUi usa ProcessKeyDown + ProcessTextInput para chars imprimíveis;
-      //     para teclas só de navegação (setas, Return, Escape, Tab) text input não é necessário.
-      if (ev.pressed)
-        c->ProcessKeyDown(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
-      else
-        c->ProcessKeyUp(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
-      break;
-
-    case T::Text:
-      // EN: UTF-8 text input — forwarded as-is to RmlUi (handles multi-byte sequences).
-      //     text must remain valid for the duration of this call; caller owns the lifetime.
-      // PT: Entrada de texto UTF-8 — repassado ao RmlUi como-está (lida com sequências multi-byte).
-      //     text deve permanecer válido durante esta chamada; lifetime é do chamador.
-      if (ev.text) c->ProcessTextInput(Rml::String(ev.text));
-      break;
-
-    case T::MouseWheel:
-      // EN: Wheel/trackpad delta forwarding (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven by
-      //     GusWorld's 30-item overflow-y:auto menu list, which could not scroll in embed mode).
-      //     Unlike MouseMove/MouseButton, NO sub-viewport offset translation here: ev.x/ev.y are
-      //     a DELTA (scroll amount), not a window-space position, so there is nothing to subtract
-      //     impl_->x/y from -- RmlUi's Context::ProcessMouseWheel(Vector2f, mods) takes the delta
-      //     as-is and scrolls whatever element is currently under `hover` (set by the most recent
-      //     ProcessMouseMove/ProcessMouseButtonDown -- confirmed by reading Context.cpp: it reads
-      //     the `hover` member, resolves Element::GetClosestScrollableContainer() from there, and
-      //     is a no-op when hover is null). The Vector2f overload is used, not the deprecated
-      //     single-float one (see Context.h: "@deprecated Please use the Vector2f version").
-      // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven
-      //     pela lista de menu de 30 itens overflow-y:auto do GusWorld, que não conseguia rolar em
-      //     embed mode). Diferente de MouseMove/MouseButton, SEM tradução de offset de sub-
-      //     viewport aqui: ev.x/ev.y são um DELTA (quantidade de rolagem), não uma posição
-      //     espaço-janela, então não há nada para subtrair de impl_->x/y -- o
-      //     Context::ProcessMouseWheel(Vector2f, mods) do RmlUi recebe o delta como está e rola o
-      //     elemento que estiver sob `hover` no momento (definido pelo ProcessMouseMove/
-      //     ProcessMouseButtonDown mais recente -- confirmado lendo Context.cpp: lê o membro
-      //     `hover`, resolve Element::GetClosestScrollableContainer() a partir dele, e é no-op
-      //     quando hover é nulo). Usa a sobrecarga de Vector2f, não a de float único deprecada
-      //     (ver Context.h: "@deprecated Please use the Vector2f version").
-      // EN: Guard (AUD-TEC-2): a non-finite delta would poison the scroll offset with NaN
-      //     inside RmlUi. Reject before forwarding -- same rule as MouseMove above.
-      // PT: Guard (AUD-TEC-2): um delta não-finito envenenaria o offset de scroll com NaN
-      //     dentro do RmlUi. Rejeita antes de repassar -- mesma regra do MouseMove acima.
-      if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
-      c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
-      break;
-
-    case T::Resize:
-      // EN: Logical viewport resize — update cached dimensions and notify RmlUi.
-      //     The next render_compose() uses the updated impl_->w/h via set_viewport().
-      // PT: Redimensionamento lógico do viewport — atualiza dimensões cacheadas e notifica RmlUi.
-      //     O próximo render_compose() usa o impl_->w/h atualizado via set_viewport().
-
-      // EN: Guard: zero/negative dimensions are invalid for the layout engine — skip silently.
-      // PT: Guard: dimensões zero/negativas são inválidas para o motor de layout — ignorar silenciosamente.
-      if (ev.width <= 0 || ev.height <= 0) break;
-
-      impl_->w = ev.width;
-      impl_->h = ev.height;
-      c->SetDimensions(Rml::Vector2i(ev.width, ev.height));
-      // EN: F3 (v0.2.5) -- keep gl_offset_y consistent with the new h when in letterbox mode
-      //     (x/target_h stay whatever the last explicit set_viewport(x,y,w,h,target_h) set).
-      //     Legacy mode stays at offset 0 -- unchanged behaviour, gl_offset_x untouched (does
-      //     not depend on h).
-      // PT: F3 (v0.2.5) -- mantém gl_offset_y consistente com o novo h em modo letterbox
-      //     (x/target_h continuam o que o último set_viewport(x,y,w,h,target_h) explícito
-      //     setou). Modo legado permanece em offset 0 -- comportamento inalterado,
-      //     gl_offset_x intocado (não depende de h).
-      if (impl_->letterbox_mode)
-        impl_->gl_offset_y = impl_->target_h - impl_->y - impl_->h;
-      break;
-
-    default:
-      // EN: Unknown/future event types are intentionally ignored — forward compatibility.
-      // PT: Tipos de evento desconhecidos/futuros são ignorados intencionalmente — compatibilidade futura.
-      break;
+    impl_->w = ev.width;
+    impl_->h = ev.height;
+    c->SetDimensions(Rml::Vector2i(ev.width, ev.height));
+    // EN: F3 (v0.2.5) -- keep gl_offset_y consistent with the new h when in letterbox mode
+    //     (x/target_h stay whatever the last explicit set_viewport(x,y,w,h,target_h) set).
+    //     Legacy mode stays at offset 0 -- unchanged behaviour, gl_offset_x untouched (does
+    //     not depend on h).
+    // PT: F3 (v0.2.5) -- mantém gl_offset_y consistente com o novo h em modo letterbox
+    //     (x/target_h continuam o que o último set_viewport(x,y,w,h,target_h) explícito
+    //     setou). Modo legado permanece em offset 0 -- comportamento inalterado,
+    //     gl_offset_x intocado (não depende de h).
+    if (impl_->letterbox_mode)
+      impl_->gl_offset_y = impl_->target_h - impl_->y - impl_->h;
+    return;
   }
+
+  // EN: Every other event type: delegate to the shared Engine route, passing the letterbox
+  //     origin as the offset (impl_->x, impl_->y) -- IDENTICAL to what this method's own
+  //     switch used to subtract inline for MouseMove (F3, v0.2.5).
+  // PT: Todo outro tipo de evento: delega à rota compartilhada do Engine, passando a origem
+  //     de letterbox como offset (impl_->x, impl_->y) -- IDÊNTICO ao que o switch deste
+  //     método subtraía inline para o MouseMove (F3, v0.2.5).
+  impl_->engine.process_event(ev, impl_->x, impl_->y);
 }
 
 } // namespace glintfx

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.11.1)
+project(glintfx LANGUAGES C CXX VERSION 0.12.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
@@ -243,6 +243,204 @@ option(GLINTFX_OWN_FONT_ENGINE
   "Compile glintfx's own SOV-SFNT/SOV-RAST/SOV-HINT font engine (vendored under glintfx/vendor/core/), selectable at runtime alongside RmlUi's FreeType default via Rml::SetFontEngineInterface(), no RmlUi rebuild (L1.19-FONTENG, L1.20-FONTFLIP)"
   ON)
 
+# ===========================================================================
+# EN: ADR-0015 (framework-2D atomized architecture) -- phase A0, the
+#     GLINTFX_MODULE_* flag family. A0's mandate is BUILD-SYSTEM ONLY: zero new
+#     public API, zero change to any .cpp/.hpp LOGIC -- see the ADR and
+#     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md. Every flag
+#     below either (1) is a genuine alias/rename of a flag that ALREADY
+#     compiles-out code and link deps today (window), (2) is a genuinely new
+#     DAG dependency gate over sources that are already cleanly separable via
+#     pure CMake list manipulation (app), or (3) is a RESERVED name for a
+#     module whose real OFF path needs a source-level change this phase
+#     forbids (image, text) -- declared with a FATAL_ERROR on an attempted
+#     OFF instead of a silent no-op, so the gap is loud, not hidden. ui and fx
+#     get NEITHER kind of flag in A0 (see the note further below, next to
+#     where their sources are compiled) -- introducing a flag with nothing
+#     real to gate would be exactly the "pretend the seam exists before it is
+#     built" anti-pattern ADR-0015 (c) forbids for the ui/fx split, and by the
+#     same principle it is not done here for ui/fx as a whole either.
+# PT: ADR-0015 (arquitetura atomizada do framework 2D) -- fase A0, a família
+#     de flags GLINTFX_MODULE_*. O mandato do A0 é SÓ BUILD-SYSTEM: zero API
+#     pública nova, zero mudança de LÓGICA em qualquer .cpp/.hpp -- ver a ADR e
+#     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md. Cada flag
+#     abaixo ou (1) é um alias/rename genuíno de uma flag que JÁ tira código e
+#     dep de link do build hoje (window), (2) é um gate de dependência de DAG
+#     genuinamente novo sobre sources que já são limpamente separáveis via
+#     manipulação pura de lista do CMake (app), ou (3) é um nome RESERVADO
+#     para um módulo cujo caminho OFF real precisa de mudança de nível de
+#     source que esta fase proíbe (image, text) -- declarado com um
+#     FATAL_ERROR numa tentativa de OFF em vez de um no-op silencioso, para
+#     que a lacuna seja alta, não escondida. ui e fx NÃO ganham flag de
+#     nenhum dos dois tipos no A0 (ver a nota mais abaixo, perto de onde os
+#     sources deles são compilados) -- introduzir uma flag sem nada real pra
+#     gatear seria exatamente o anti-padrão "fingir que a costura existe antes
+#     de ela ser construída" que a ADR-0015 (c) proíbe para o split ui/fx, e
+#     pelo mesmo princípio isso também não é feito aqui para ui/fx como um todo.
+# ===========================================================================
+
+# --- GLINTFX_MODULE_WINDOW (alias of GLINTFX_BACKEND_GLFW, ADR-0015 (d)(4)) ---
+# EN: The legacy flag (GLINTFX_BACKEND_GLFW, declared above) keeps working
+#     unchanged for every existing consumer/CI script -- nothing about it is
+#     touched. GLINTFX_MODULE_WINDOW is the new canonical ADR-0015 name for the
+#     SAME on/off switch (window + GL context creation, poll, swap,
+#     should_close, frame step -- ADR-0015 (b)). Whichever of the two the
+#     caller sets explicitly on the configure command line wins and is
+#     mirrored into the other. `DEFINED <name>` is true from the very first
+#     line of this file for any `-D<name>=...` passed at the `cmake`
+#     invocation (CMake pre-populates the cache before running any script
+#     code), so this check reliably distinguishes "the user set it explicitly"
+#     from "still at its option() default" even though both flags default ON.
+# PT: A flag legada (GLINTFX_BACKEND_GLFW, declarada acima) continua
+#     funcionando sem mudança para todo consumidor/script de CI existente --
+#     nada nela é tocado. GLINTFX_MODULE_WINDOW é o novo nome canônico da
+#     ADR-0015 para o MESMO interruptor (janela + criação de contexto GL,
+#     poll, swap, should_close, passo de frame -- ADR-0015 (b)). Qualquer um
+#     dos dois que o chamador definir explicitamente na linha de comando do
+#     configure vence e é espelhado no outro. `DEFINED <nome>` é verdadeiro
+#     desde a primeiríssima linha deste arquivo para qualquer `-D<nome>=...`
+#     passado na invocação do `cmake` (o CMake pré-popula o cache antes de
+#     rodar qualquer código de script), então esta checagem distingue de
+#     forma confiável "o usuário definiu explicitamente" de "ainda no default
+#     do option()" mesmo as duas flags tendo default ON.
+if(DEFINED GLINTFX_MODULE_WINDOW)
+  set(GLINTFX_BACKEND_GLFW ${GLINTFX_MODULE_WINDOW} CACHE BOOL
+    "GLFW window backend + standalone glintfx::App (OFF = embed-only, no GLFW in lib) -- alias target of GLINTFX_MODULE_WINDOW"
+    FORCE)
+endif()
+set(GLINTFX_MODULE_WINDOW ${GLINTFX_BACKEND_GLFW} CACHE BOOL
+  "Window module: window + GL context creation, poll, swap, should_close, frame step (ADR-0015 (b); alias of GLINTFX_BACKEND_GLFW, ADR-0015 (d)(4))"
+  FORCE)
+
+# --- GLINTFX_MODULE_APP (new, ADR-0015 (b): the a-la-carte aggregator) ---
+# EN: app.cpp (the App facade) plus the RmlUi GLFW SystemInterface glue it
+#     itself #includes (${_rml_backends}/RmlUi_Platform_GLFW.cpp -- see
+#     app.cpp's own file header) are the "app" atom, distinct from "window"
+#     (WindowGlfw in window_glfw.cpp: the bare window+GL-context primitive App
+#     composes, see the glintfx_window OBJECT library further below). Defaults
+#     to GLINTFX_MODULE_WINDOW's value -- today App cannot exist without a
+#     window (DAG dependency, ADR-0015 (b)/(d)(1)) -- and a FATAL_ERROR
+#     enforces that dependency instead of silently producing a build that
+#     configures fine and fails at link time if a caller asks for app=ON with
+#     window=OFF.
+# PT: app.cpp (a fachada App) mais a cola SystemInterface GLFW do RmlUi que
+#     ele próprio inclui (${_rml_backends}/RmlUi_Platform_GLFW.cpp -- ver o
+#     próprio cabeçalho de arquivo do app.cpp) são o átomo "app", distinto de
+#     "window" (WindowGlfw em window_glfw.cpp: o primitivo nu de
+#     janela+contexto-GL que a App compõe, ver a biblioteca OBJECT
+#     glintfx_window mais abaixo). Tem default igual ao valor de
+#     GLINTFX_MODULE_WINDOW -- hoje a App não existe sem uma janela
+#     (dependência de DAG, ADR-0015 (b)/(d)(1)) -- e um FATAL_ERROR reforça
+#     essa dependência em vez de produzir silenciosamente um build que
+#     configura bem e falha no link se alguém pedir app=ON com window=OFF.
+option(GLINTFX_MODULE_APP
+  "App module: the App facade composing window(+input/audio, future)+ui into \"the game inside glintfx\" (ADR-0015 (b); requires GLINTFX_MODULE_WINDOW)"
+  ${GLINTFX_MODULE_WINDOW})
+if(GLINTFX_MODULE_APP AND NOT GLINTFX_MODULE_WINDOW)
+  message(FATAL_ERROR
+    "glintfx: GLINTFX_MODULE_APP=ON requires GLINTFX_MODULE_WINDOW=ON (ADR-0015 dependency "
+    "rule (d)(1): app depends on window) -- the App facade cannot exist without the window "
+    "it composes. Pass -DGLINTFX_MODULE_WINDOW=ON or -DGLINTFX_MODULE_APP=OFF.")
+endif()
+
+# --- GLINTFX_MODULE_IMAGE (reserved, ADR-0015 (b): PNG/JPG/TGA decode) ---
+# EN: stb_image_impl.cpp becomes its own OBJECT-library target (glintfx_image,
+#     further below) in this very phase -- real groundwork, not a stub -- but
+#     the flag stays FORCED ON: render_gl3.cpp's GenerateTexture calls
+#     stbi_load_from_memory/stbi_image_free UNCONDITIONALLY, so compiling
+#     glintfx_image out while still compiling render_gl3.cpp (part of ui,
+#     always on) would fail the LINK, not gracefully degrade. Making
+#     GLINTFX_MODULE_IMAGE=OFF actually work needs a compile-time guard INSIDE
+#     render_gl3.cpp's texture loader (falling back to RmlUi's own TGA-only
+#     loader, which the existing code already reaches whenever stb_image
+#     itself fails to decode) -- a source-level change, deferred past A0's
+#     build-system-only mandate to a future phase.
+# PT: stb_image_impl.cpp vira seu próprio alvo de biblioteca OBJECT
+#     (glintfx_image, mais abaixo) já nesta fase -- trabalho real de base, não
+#     um stub -- mas a flag fica FORÇADA ON: o GenerateTexture do
+#     render_gl3.cpp chama stbi_load_from_memory/stbi_image_free
+#     INCONDICIONALMENTE, então compilar glintfx_image fora enquanto ainda se
+#     compila render_gl3.cpp (parte da ui, sempre ligada) falharia o LINK, não
+#     degradaria graciosamente. Fazer GLINTFX_MODULE_IMAGE=OFF funcionar de
+#     verdade precisa de uma guarda em tempo de compilação DENTRO do
+#     carregador de textura do render_gl3.cpp (caindo para o loader TGA-only
+#     do próprio RmlUi, que o código existente já alcança sempre que o
+#     próprio stb_image falha o decode) -- mudança de nível de source, adiada
+#     para além do mandato só-build-system do A0, pra fase futura.
+option(GLINTFX_MODULE_IMAGE
+  "Image module: PNG/JPG/TGA decode via vendored stb_image (ADR-0015 (b); forced ON in A0, see comment above -- OFF needs a render_gl3.cpp texture-loader guard, deferred)"
+  ON)
+if(NOT GLINTFX_MODULE_IMAGE)
+  message(FATAL_ERROR
+    "glintfx: GLINTFX_MODULE_IMAGE=OFF is not yet supported -- render_gl3.cpp's texture "
+    "loader calls stb_image unconditionally; wiring a real OFF path needs a source-level "
+    "guard there, deferred past ADR-0015 phase A0 (build-system skeleton only, zero "
+    "source-logic changes). Tracked in docs/adr/0015-framework-2d-atomized-architecture.md.")
+endif()
+
+# --- GLINTFX_MODULE_TEXT (reserved, ADR-0015 (b): glyph raster + metrics) ---
+# EN: GLINTFX_MODULE_TEXT is the ENCLOSING flag for the whole text subsystem
+#     per ADR-0015 (b) -- including RmlUi's own FreeType-backed DEFAULT engine,
+#     which is a hard `find_package(Freetype REQUIRED)` above (no OFF path
+#     exists for it, nor could one without changing bootstrap.cpp's font-engine
+#     registration) -- so it is forced ON in A0, same FATAL_ERROR-on-OFF
+#     pattern as GLINTFX_MODULE_IMAGE above and for the same reason (a real
+#     OFF path is a source-level change, out of A0's scope). The pre-existing,
+#     genuinely-independent GLINTFX_OWN_FONT_ENGINE selector DECLARED ABOVE
+#     keeps being the toggle INSIDE this module (ADR-0015 (d)(4)) -- it is
+#     untouched; its own sources become the glintfx_text OBJECT-library
+#     target further below, real groundwork same as glintfx_image.
+# PT: GLINTFX_MODULE_TEXT é a flag ENVOLVENTE do subsistema de texto inteiro
+#     conforme a ADR-0015 (b) -- incluindo o motor DEFAULT do RmlUi apoiado em
+#     FreeType, que é um `find_package(Freetype REQUIRED)` duro acima (nenhum
+#     caminho OFF existe para ele, nem poderia existir sem mudar o registro de
+#     motor de fonte do bootstrap.cpp) -- então fica forçada ON no A0, mesmo
+#     padrão de FATAL_ERROR-em-OFF do GLINTFX_MODULE_IMAGE acima e pelo mesmo
+#     motivo (um caminho OFF real é mudança de nível de source, fora do escopo
+#     do A0). O seletor GLINTFX_OWN_FONT_ENGINE pré-existente e genuinamente
+#     independente, DECLARADO ACIMA, continua sendo o interruptor DENTRO deste
+#     módulo (ADR-0015 (d)(4)) -- permanece intocado; os próprios sources dele
+#     viram o alvo de biblioteca OBJECT glintfx_text mais abaixo, trabalho de
+#     base real igual ao glintfx_image.
+option(GLINTFX_MODULE_TEXT
+  "Text module: glyph raster + metrics, encloses RmlUi's mandatory FreeType default engine plus the optional GLINTFX_OWN_FONT_ENGINE selector (ADR-0015 (b); forced ON in A0, see comment above)"
+  ON)
+if(NOT GLINTFX_MODULE_TEXT)
+  message(FATAL_ERROR
+    "glintfx: GLINTFX_MODULE_TEXT=OFF is not yet supported -- RmlUi's default font engine "
+    "requires FreeType unconditionally (find_package(Freetype REQUIRED) above); wiring a "
+    "real OFF path needs source-level changes to bootstrap.cpp's font-engine registration, "
+    "deferred past ADR-0015 phase A0. Tracked in docs/adr/0015-framework-2d-atomized-architecture.md.")
+endif()
+
+# --- ui / fx: NOT introduced in A0 (see the header comment at the top of ---
+# --- this section for the "why", and ADR-0015 (c) for the ratified split) ---
+# EN: GLINTFX_MODULE_UI would gate render_gl3.cpp/bootstrap.cpp/engine.cpp/
+#     data_binder.cpp/ui_layer.cpp/RmlUi itself -- today's whole product, with
+#     no composition yet that needs it OFF (that arrives with A2 gamepad-only
+#     / A3 audio-only, once those modules exist to compose WITHOUT ui).
+#     GLINTFX_MODULE_FX would gate decorator_polygon.cpp/decorator_ripple.cpp/
+#     decorator_image_tint.cpp, but the GL passes those decorators drive are
+#     still FUSED inside render_gl3.cpp (ADR-0015 (c)'s declared, honest
+#     caveat) -- so an fx=OFF today would still ship the effect GL code
+#     unconditionally compiled into ui, making the flag a lie. Both names are
+#     reserved by ADR-0015 (b) and will be introduced for real the moment
+#     their respective gate exists (fx: the render_gl3.cpp carving phase; ui:
+#     the first module that must compose without it).
+# PT: GLINTFX_MODULE_UI gatearia o render_gl3.cpp/bootstrap.cpp/engine.cpp/
+#     data_binder.cpp/ui_layer.cpp/o próprio RmlUi -- o produto inteiro de
+#     hoje, sem nenhuma composição ainda que precise dele OFF (isso chega com
+#     o A2 gamepad-only / A3 audio-only, quando esses módulos existirem para
+#     compor SEM a ui). GLINTFX_MODULE_FX gatearia o decorator_polygon.cpp/
+#     decorator_ripple.cpp/decorator_image_tint.cpp, mas os passes GL que
+#     esses decorators acionam ainda estão FUNDIDOS dentro do render_gl3.cpp
+#     (a ressalva honesta e declarada da ADR-0015 (c)) -- então um fx=OFF hoje
+#     ainda embarcaria o código GL de efeito compilado incondicionalmente na
+#     ui, tornando a flag uma mentira. Os dois nomes são reservados pela
+#     ADR-0015 (b) e serão introduzidos de verdade no momento em que o
+#     respectivo gate existir (fx: a fase de recorte do render_gl3.cpp; ui: o
+#     primeiro módulo que precisar compor sem ela).
+
 if(GLINTFX_OWN_FONT_ENGINE)
   # EN: Vendored paths (L1.20-FONTFLIP Phase 1) -- always present as part of the glintfx/
   #     subtree itself (glintfx/vendor/core/), so no existence guard/FATAL_ERROR is needed
@@ -358,61 +556,62 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/include/glintfx/config.hpp
   @ONLY)
 
-# EN: Core sources — always compiled regardless of GLFW backend option.
-#     Engine + UiLayer + RenderGl3 (plus its GL3 backend) + Bootstrap + SystemClock + version().
-#     version.cpp (L1.9-VERSEMBED) must stay here (not in the GLFW-only block below) so
-#     glintfx::version() is available in embed-only builds (GLINTFX_BACKEND_GLFW=OFF).
-# PT: Sources principais — sempre compilados independente da opção do backend GLFW.
-#     Engine + UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap + SystemClock + version().
-#     version.cpp (L1.9-VERSEMBED) deve ficar aqui (não no bloco GLFW-only abaixo) para que
-#     glintfx::version() esteja disponível em builds embed-only (GLINTFX_BACKEND_GLFW=OFF).
+# EN: Core (ui+fx, still fused per ADR-0015 (c)) sources — always compiled
+#     regardless of the window/app modules. Engine + UiLayer + RenderGl3 (plus
+#     its GL3 backend) + Bootstrap + the fx decorators. version.cpp and
+#     system_clock.cpp (L1.9-VERSEMBED) used to live in this list so
+#     glintfx::version()/SystemClock stayed available in embed-only builds
+#     (GLINTFX_BACKEND_GLFW=OFF); as of ADR-0015 phase A0 they are the
+#     glintfx_core OBJECT-library target instead (see further below,
+#     unconditionally linked into glintfx), which keeps the exact same
+#     guarantee -- glintfx_core has no dependency on any module flag.
+#     stb_image_impl.cpp moved the same way, into the glintfx_image OBJECT
+#     library (also further below, unconditionally linked; GLINTFX_MODULE_IMAGE
+#     is forced ON in A0, see its option() block above).
+# PT: Sources principais (ui+fx, ainda fundidos conforme a ADR-0015 (c)) --
+#     sempre compilados independente dos módulos window/app. Engine + UiLayer +
+#     RenderGl3 (mais o backend GL3 dele) + Bootstrap + os decorators de fx.
+#     version.cpp e system_clock.cpp (L1.9-VERSEMBED) costumavam ficar nesta
+#     lista para que glintfx::version()/SystemClock continuassem disponíveis em
+#     builds embed-only (GLINTFX_BACKEND_GLFW=OFF); a partir da fase A0 da
+#     ADR-0015 eles são o alvo de biblioteca OBJECT glintfx_core (ver mais
+#     abaixo, linkado incondicionalmente na glintfx), o que mantém exatamente
+#     a mesma garantia -- glintfx_core não depende de nenhuma flag de módulo.
+#     stb_image_impl.cpp migrou do mesmo jeito, para a biblioteca OBJECT
+#     glintfx_image (também mais abaixo, linkada incondicionalmente;
+#     GLINTFX_MODULE_IMAGE fica forçada ON no A0, ver o bloco option() acima).
 set(_glintfx_sources
   src/render_gl3.cpp
-  src/stb_image_impl.cpp
   src/bootstrap.cpp
   src/data_binder.cpp
   src/decorator_polygon.cpp
   src/decorator_image_tint.cpp
   src/decorator_ripple.cpp
   src/engine.cpp
-  src/system_clock.cpp
   src/ui_layer.cpp
-  src/version.cpp
   ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
 
-if(GLINTFX_BACKEND_GLFW)
-  # EN: GLFW-backend sources — standalone App + GLFW window + RmlUi GLFW platform adapter.
-  #     Only compiled when GLINTFX_BACKEND_GLFW=ON.
-  # PT: Sources do backend GLFW — App standalone + janela GLFW + adapter de plataforma GLFW do RmlUi.
-  #     Só compilados com GLINTFX_BACKEND_GLFW=ON.
+if(GLINTFX_MODULE_APP)
+  # EN: App-atom sources (ADR-0015 (b)) -- the standalone App facade plus the
+  #     RmlUi GLFW SystemInterface glue app.cpp itself #includes. Gated on
+  #     GLINTFX_MODULE_APP (not directly on GLINTFX_BACKEND_GLFW anymore --
+  #     the two stay in lockstep by default, see the GLINTFX_MODULE_APP
+  #     option() block above). window_glfw.cpp is NOT here: it is the separate
+  #     "window" atom, compiled into the glintfx_window OBJECT library further
+  #     below and linked in whenever GLINTFX_MODULE_WINDOW=ON (a dependency
+  #     GLINTFX_MODULE_APP enforces via its own FATAL_ERROR guard above).
+  # PT: Sources do átomo app (ADR-0015 (b)) -- a fachada App standalone mais a
+  #     cola SystemInterface GLFW do RmlUi que o próprio app.cpp inclui.
+  #     Gateado em GLINTFX_MODULE_APP (não mais diretamente em
+  #     GLINTFX_BACKEND_GLFW -- os dois ficam em lockstep por padrão, ver o
+  #     bloco option() de GLINTFX_MODULE_APP acima). window_glfw.cpp NÃO está
+  #     aqui: é o átomo separado "window", compilado na biblioteca OBJECT
+  #     glintfx_window mais abaixo e linkado sempre que GLINTFX_MODULE_WINDOW=ON
+  #     (dependência que GLINTFX_MODULE_APP reforça via sua própria guarda
+  #     FATAL_ERROR acima).
   list(APPEND _glintfx_sources
     src/app.cpp
-    src/window_glfw.cpp
     ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
-endif()
-
-# EN: L1.19-FONTENG (FT-F3, L1.20-FONTFLIP Phase 1) — the "hosted shell"
-#     (src/font_engine_own.cpp) plus Layer 0's sovereign C "meat", read from the vendored
-#     copy (${_glx_core_src_dir}/sfnt.c, raster.c, hint.c -- glintfx/vendor/core/src/, NOT
-#     ../src), compiled directly as glintfx sources per ADR-0009's "hosted shell + C meat"
-#     pattern -- always core (not GLFW-only), so the own font engine is available in
-#     embed-only builds too. Only added when GLINTFX_OWN_FONT_ENGINE=ON (default ON since
-#     L1.20-FONTFLIP Phase 1; the vendored sources are always present, no existence guard
-#     needed).
-# PT: L1.19-FONTENG (FT-F3, L1.20-FONTFLIP Fase 1) — a "casca hosted"
-#     (src/font_engine_own.cpp) mais a "carne" C soberana da Camada 0, lida da cópia
-#     vendorizada (${_glx_core_src_dir}/sfnt.c, raster.c, hint.c -- glintfx/vendor/core/src/,
-#     NÃO ../src), compiladas diretamente como sources do glintfx conforme o padrão
-#     "casca-hosted + carne-C" da ADR-0009 -- sempre core (não só-GLFW), para que o motor de
-#     fonte próprio esteja disponível também em builds embed-only. Só adicionado quando
-#     GLINTFX_OWN_FONT_ENGINE=ON (padrão ON desde o L1.20-FONTFLIP Fase 1; os sources
-#     vendorizados estão sempre presentes, nenhum guard de existência é necessário).
-if(GLINTFX_OWN_FONT_ENGINE)
-  list(APPEND _glintfx_sources
-    src/font_engine_own.cpp
-    ${_glx_core_src_dir}/sfnt.c
-    ${_glx_core_src_dir}/raster.c
-    ${_glx_core_src_dir}/hint.c)  # EN/PT: SOV-HINT (L1.20-FONTFLIP FT-F4) Y grid-fitter, wired in sub-phase 1.4.
 endif()
 
 add_library(glintfx STATIC ${_glintfx_sources})
@@ -490,6 +689,171 @@ if(GLINTFX_OWN_FONT_ENGINE)
     ${_glx_core_src_dir}/raster.c
     ${_glx_core_src_dir}/hint.c
     PROPERTIES INCLUDE_DIRECTORIES ${_glx_core_include_dir})
+endif()
+
+# ===========================================================================
+# EN: ADR-0015 phase A0 -- per-module OBJECT-library TARGETS (the CMake
+#     mechanics of (d)(5)): one target per module that is cleanly separable
+#     today (core, image, text, window), plus the `glintfx::<module>` alias
+#     each, mirroring the existing `glintfx::glintfx` alias further below.
+#     Positioned here (after config.hpp/RmlUi/glloader/the include-dir
+#     override above, all of which some of these targets need) rather than
+#     earlier next to the flag declarations, which only need the flag VALUES,
+#     not the targets these sources compile against.
+#
+#     Every one of these OBJECT libraries is linked PRIVATE into the
+#     aggregate `glintfx` STATIC target right below via target_link_libraries
+#     (not the older $<TARGET_OBJECTS:...> idiom) specifically so their own
+#     usage requirements (include dirs, and — for glintfx_window — the
+#     transitive glfw/glloader link deps) are inherited automatically; see
+#     CMake's own Object Libraries docs. install(TARGETS glintfx ARCHIVE ...)
+#     further below folds their .o files into libglintfx.a exactly as it did
+#     before this refactor moved them out of the flat `_glintfx_sources` list
+#     -- no install() changes needed for any of the four.
+#
+#     ui and fx are deliberately NOT object libraries here: see the "ui / fx:
+#     NOT introduced in A0" note next to the GLINTFX_MODULE_TEXT option()
+#     block above. Their sources stay directly in `_glintfx_sources` and
+#     compile straight into the `glintfx` target, unchanged from before this
+#     refactor.
+# PT: ADR-0015 fase A0 -- ALVOS de biblioteca OBJECT por módulo (a mecânica
+#     CMake do (d)(5)): um alvo por módulo que é limpamente separável hoje
+#     (core, image, text, window), mais o alias `glintfx::<módulo>` de cada
+#     um, espelhando o alias `glintfx::glintfx` já existente mais abaixo.
+#     Posicionado aqui (depois do config.hpp/RmlUi/glloader/da sobrescrita de
+#     include-dir acima, dos quais alguns destes alvos precisam) em vez de
+#     mais cedo, junto às declarações de flag, que só precisam dos VALORES das
+#     flags, não dos alvos contra os quais estes sources compilam.
+#
+#     Cada uma destas bibliotecas OBJECT é linkada PRIVATE no alvo agregado
+#     `glintfx` STATIC logo abaixo via target_link_libraries (não o idioma
+#     mais antigo $<TARGET_OBJECTS:...>) especificamente para que os próprios
+#     usage requirements delas (include dirs e, para o glintfx_window, as deps
+#     de link transitivas glfw/glloader) sejam herdados automaticamente; ver a
+#     própria documentação de Object Libraries do CMake. O
+#     install(TARGETS glintfx ARCHIVE ...) mais abaixo dobra os arquivos .o
+#     delas em libglintfx.a exatamente como fazia antes deste refactor tirá-los
+#     da lista plana `_glintfx_sources` -- nenhuma mudança de install()
+#     necessária para nenhum dos quatro.
+#
+#     ui e fx deliberadamente NÃO são bibliotecas OBJECT aqui: ver a nota "ui /
+#     fx: NOT introduced in A0" junto ao bloco option() de GLINTFX_MODULE_TEXT
+#     acima. Os sources deles continuam direto na `_glintfx_sources` e
+#     compilam direto pro alvo `glintfx`, sem mudança em relação a antes deste
+#     refactor.
+# ===========================================================================
+
+# --- glintfx_core (always ON, "root" per ADR-0015 (b); no flag needed) ---
+# EN: system_clock.hpp (SystemClock : Rml::SystemInterface) needs
+#     <RmlUi/Core/SystemInterface.h> -- RmlUi::Core is linked PRIVATE here for
+#     that reason (found only once this was actually built: a first attempt
+#     without it failed with "'RmlUi/Core/SystemInterface.h' file not found",
+#     confirming SystemClock is not as RmlUi-independent as the ADR-0015 (b)
+#     module table's own "core ... depends on nothing" entry implies -- the
+#     table describes the ADR's target-state boundary, not every current
+#     implementation detail; A0 does not change SystemClock's actual
+#     dependency, only documents it accurately here).
+# PT: system_clock.hpp (SystemClock : Rml::SystemInterface) precisa de
+#     <RmlUi/Core/SystemInterface.h> -- RmlUi::Core é linkado PRIVATE aqui por
+#     isso (achado só ao efetivamente buildar isto: uma primeira tentativa sem
+#     ele falhou com "'RmlUi/Core/SystemInterface.h' file not found",
+#     confirmando que SystemClock não é tão independente do RmlUi quanto a
+#     própria entrada "core ... depende de nada" da tabela de módulos da
+#     ADR-0015 (b) sugere -- a tabela descreve a fronteira de estado-alvo da
+#     ADR, não todo detalhe de implementação atual; o A0 não muda a
+#     dependência real do SystemClock, só a documenta com exatidão aqui).
+add_library(glintfx_core OBJECT src/system_clock.cpp src/version.cpp)
+target_include_directories(glintfx_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
+target_link_libraries(glintfx_core PRIVATE RmlUi::Core)
+target_compile_options(glintfx_core PRIVATE -Wall -Wextra)
+glintfx_instrument_coverage(glintfx_core)
+add_library(glintfx::core ALIAS glintfx_core)
+
+# --- glintfx_image (GLINTFX_MODULE_IMAGE forced ON in A0, see option() above) ---
+add_library(glintfx_image OBJECT src/stb_image_impl.cpp)
+target_include_directories(glintfx_image PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+target_compile_options(glintfx_image PRIVATE -Wall -Wextra)
+glintfx_instrument_coverage(glintfx_image)
+add_library(glintfx::image ALIAS glintfx_image)
+
+# --- glintfx_text (GLINTFX_MODULE_TEXT forced ON in A0; sources only exist ---
+# --- when the pre-existing GLINTFX_OWN_FONT_ENGINE selector is ON, unchanged ---
+if(GLINTFX_OWN_FONT_ENGINE)
+  add_library(glintfx_text OBJECT
+    src/font_engine_own.cpp
+    ${_glx_core_src_dir}/sfnt.c
+    ${_glx_core_src_dir}/raster.c
+    ${_glx_core_src_dir}/hint.c)  # EN/PT: SOV-HINT (L1.20-FONTFLIP FT-F4) Y grid-fitter, wired in sub-phase 1.4.
+  target_include_directories(glintfx_text PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
+  # EN: RmlUi::Core for <RmlUi/Core/*.h> (font_engine_own.hpp); the vendored
+  #     core/{sfnt,raster,hint}.h include dir is already applied to these exact
+  #     source files via the set_source_files_properties() call right above,
+  #     which is file-scoped (not target-scoped) and therefore still applies
+  #     here unchanged.
+  # PT: RmlUi::Core para <RmlUi/Core/*.h> (font_engine_own.hpp); o include dir
+  #     vendorizado core/{sfnt,raster,hint}.h já é aplicado a estes exatos
+  #     arquivos-fonte via a chamada set_source_files_properties() logo acima,
+  #     que é escopada por arquivo (não por alvo) e por isso continua se
+  #     aplicando aqui sem mudança.
+  target_link_libraries(glintfx_text PRIVATE RmlUi::Core)
+  target_compile_options(glintfx_text PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_text)
+  add_library(glintfx::text ALIAS glintfx_text)
+endif()
+
+# --- glintfx_window (GLINTFX_MODULE_WINDOW, genuinely OFF-able today -- the ---
+# --- "living embryo" ADR-0015 (a) cites, unchanged since v0.2.1) ---
+if(GLINTFX_MODULE_WINDOW)
+  add_library(glintfx_window OBJECT src/window_glfw.cpp)
+  # EN: gl_loader.h comes transitively from linking glloader (INTERFACE); GLFW's
+  #     own headers come transitively from linking the glfw imported target.
+  #     window_glfw.hpp now includes ONE glintfx PUBLIC header, <glintfx/ui_event.hpp>
+  #     (A1, framework-2D: WindowGlfw::set_event_sink/dispatch construct and forward UiEvent
+  #     instances -- docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.2), so
+  #     this target now needs the public include dir explicitly (it previously did not --
+  #     window_glfw.hpp used to be fully self-contained). PRIVATE is enough: only this OBJECT
+  #     library's own compilation resolves the include; downstream consumers of the aggregate
+  #     `glintfx` target already get the public include dir from ITS OWN
+  #     target_include_directories() call, unrelated to this one.
+  # PT: gl_loader.h vem transitivamente de linkar glloader (INTERFACE); os
+  #     próprios headers do GLFW vêm transitivamente de linkar o alvo
+  #     importado glfw. window_glfw.hpp agora inclui UM header PÚBLICO da glintfx,
+  #     <glintfx/ui_event.hpp> (A1, framework-2D: WindowGlfw::set_event_sink/dispatch
+  #     constroem e repassam instâncias de UiEvent --
+  #     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md seção 2.2), então este alvo
+  #     agora precisa do include dir público explicitamente (antes não precisava --
+  #     window_glfw.hpp era totalmente auto-contido). PRIVATE basta: só a compilação desta
+  #     biblioteca OBJECT resolve o include; consumidores do alvo agregado `glintfx` já
+  #     recebem o include dir público da PRÓPRIA chamada target_include_directories() dele,
+  #     sem relação com esta.
+  target_include_directories(glintfx_window PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
+  target_link_libraries(glintfx_window PRIVATE glloader glfw)
+  target_compile_options(glintfx_window PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_window)
+  add_library(glintfx::window ALIAS glintfx_window)
+endif()
+
+# EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
+#     target. glintfx_core/glintfx_image are unconditional (their flags are
+#     forced ON in A0); glintfx_text/glintfx_window mirror the same guard
+#     their own add_library() call above is under.
+# PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
+#     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
+#     são forçadas ON no A0); glintfx_text/glintfx_window espelham a mesma
+#     guarda sob a qual a própria chamada add_library() delas está acima.
+target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
+if(GLINTFX_OWN_FONT_ENGINE)
+  target_link_libraries(glintfx PRIVATE glintfx_text)
+endif()
+if(GLINTFX_MODULE_WINDOW)
+  target_link_libraries(glintfx PRIVATE glintfx_window)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

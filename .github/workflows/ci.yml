@@ -404,6 +404,40 @@ jobs:
       - name: TST-L1-STATIC -- encapsulation gate
         run: ./tools/check_encapsulation.sh glintfx/include/glintfx
 
+      # EN: ADR-0015 phase A0 -- configure-only smoke check for the two named
+      #     CMakePresets.json compositions (glintfx/CMakePresets.json, "full" and
+      #     "embed-only"). Cheap canary: catches the presets file drifting out of
+      #     sync with the GLINTFX_MODULE_* flag family without paying for a second
+      #     full build+test pass (that coverage already exists via build-and-test's
+      #     GLFW=ON/OFF matrix, which this does NOT duplicate). NOT a replacement
+      #     for per-atom isolated builds -- see ADR-0015 (d)(5) ("presets plus each
+      #     atom built alone, NOT the 2^N combination matrix"): image/text/ui/fx
+      #     don't have a real OFF path yet (A0 forces them ON, see CMakeLists.txt),
+      #     so there is nothing to isolate-build for those atoms until their own
+      #     phase lands; window is already exercised alone via the existing
+      #     GLFW=OFF leg below. Directories removed right after so this cheap step
+      #     doesn't leave a second _deps/RmlUi checkout sitting in the runner's
+      #     workspace for no reason.
+      # PT: ADR-0015 fase A0 -- checagem canário só-configure para as duas
+      #     composições nomeadas do CMakePresets.json (glintfx/CMakePresets.json,
+      #     "full" e "embed-only"). Canário barato: pega o arquivo de presets
+      #     desviando da família de flags GLINTFX_MODULE_* sem pagar por uma
+      #     segunda passada de build+teste completa (essa cobertura já existe via
+      #     a matrix GLFW=ON/OFF do build-and-test, que isto NÃO duplica). NÃO é
+      #     substituto de builds isolados por átomo -- ver ADR-0015 (d)(5)
+      #     ("presets mais cada átomo buildado sozinho, NÃO a matriz combinatória
+      #     2^N"): image/text/ui/fx ainda não têm um caminho OFF real (o A0 os
+      #     força ON, ver CMakeLists.txt), então não há nada pra isolar-buildar
+      #     desses átomos até a fase própria deles aterrissar; window já é
+      #     exercitado sozinho via a perna GLFW=OFF existente abaixo. Diretórios
+      #     removidos logo em seguida para que este passo barato não deixe um
+      #     segundo checkout de _deps/RmlUi parado no workspace do runner à toa.
+      - name: ADR-0015 A0 -- CMakePresets.json smoke (configure-only, full + embed-only)
+        run: |
+          cmake --preset full -S glintfx -DGLINTFX_BUILD_TESTS=OFF -DGLINTFX_BUILD_DEMOS=OFF
+          cmake --preset embed-only -S glintfx -DGLINTFX_BUILD_TESTS=OFF -DGLINTFX_BUILD_DEMOS=OFF
+          rm -rf glintfx/build-full glintfx/build-embed-only
+
       # EN: TST-L1-STATIC (2/3) -- clang-tidy. Checks and the WarningsAsErrors policy
       #     live in glintfx/.clang-tidy (only clang-analyzer-* fails the build today;
       #     modernize-*/cppcoreguidelines-* are reported, not gated -- see that file's

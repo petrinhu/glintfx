@@ -22,6 +22,7 @@
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 namespace glintfx {
 
 // EN: Configuration for App construction. Zero-initialize safe; defaults are sane.
@@ -162,6 +163,61 @@ public:
   //     sinal externo de saída ou uma corrida de timeout, e as 3 chamadas que ele compõe já
   //     estão cobertas individualmente. AUD-TEC-7 (2026-07-08).
   void run();
+
+  // EN: Inject a synthetic input event (A1, framework-2D) -- the SAME neutral route the embed
+  //     mode has used since UiLayer shipped (Engine::process_event, shared verbatim -- see
+  //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.1). PHYSICAL window
+  //     input (keyboard/mouse) already arrives automatically once the window has focus -- GLFW
+  //     callbacks translate it and route it through this exact same Engine call (see
+  //     window_glfw.cpp / glfw_event_translate.hpp); this method is the synthetic/replay/test
+  //     channel, parity with UiLayer::process_event(const UiEvent&) (same signature/contract).
+  //     `UiEvent::Type::Resize` is a documented NO-OP here: unlike UiLayer (an embed guest that
+  //     does not own the window and must be told its viewport explicitly), App owns the whole
+  //     window and is already the authority on its own size via the AUD-PUB-1 sync_viewport
+  //     machinery in render()/snapshot() -- injecting a synthetic Resize event here would just
+  //     be overwritten by the next render() call reading the real window size. No-op (does
+  //     nothing, does not crash) when !ok().
+  // PT: Injeta um evento de input sintético (A1, framework-2D) -- a MESMA rota neutra que o
+  //     embed mode usa desde que o UiLayer foi lançado (Engine::process_event, compartilhado
+  //     tal-e-qual -- ver docs/superpowers/plans/2026-07-19-framework2d-A1-input.md seção 2.1).
+  //     Input FÍSICO de janela (teclado/mouse) já chega automaticamente assim que a janela tem
+  //     foco -- callbacks GLFW o traduzem e o roteiam pela mesma chamada de Engine exata (ver
+  //     window_glfw.cpp / glfw_event_translate.hpp); este método é o canal sintético/replay/
+  //     teste, paridade com UiLayer::process_event(const UiEvent&) (mesma assinatura/contrato).
+  //     `UiEvent::Type::Resize` é um NO-OP documentado aqui: diferente do UiLayer (um convidado
+  //     embed que não é dono da janela e precisa ser avisado do próprio viewport
+  //     explicitamente), o App é dono da janela inteira e já é a própria autoridade sobre o
+  //     próprio tamanho via a maquinaria AUD-PUB-1 sync_viewport em render()/snapshot() --
+  //     injetar um evento Resize sintético aqui seria só sobrescrito pela próxima chamada a
+  //     render() lendo o tamanho real da janela. No-op (não faz nada, não crasha) quando !ok().
+  void process_event(const UiEvent& ev);
+
+  // EN: Register the game's per-frame draw hook (A1, framework-2D). Called once per
+  //     render()/run() iteration -- with the GL context current, AFTER the frame clear and
+  //     BEFORE the UI render pass, so a scene drawn inside `cb` composes UNDER the UI -- see
+  //     Engine::render_standalone's doc-comment (engine.hpp) for the exact insertion point and
+  //     the GL-state contract (the hook may leave arbitrary GL state behind; it is
+  //     automatically restored to the RmlUi-established baseline before the UI render pass
+  //     runs, so `cb` never needs to save/restore anything itself). `dt_seconds` is the time
+  //     elapsed since the PREVIOUS call to this hook (0.0f on the very first call -- there is
+  //     no meaningful previous frame to measure against). Passing an empty/null `cb` disables
+  //     the hook (no-op per frame, same cost as before this method was ever called). `run()`
+  //     is exactly the game's frame loop once this is set: `poll_events() -> update() ->
+  //     render()` (the hook fires inside render()), with no change to run()'s own signature.
+  // PT: Registra o hook de desenho por-frame do jogo (A1, framework-2D). Chamado uma vez por
+  //     iteração de render()/run() -- com o contexto GL corrente, APÓS o clear do frame e ANTES
+  //     do passe de render de UI, para que uma cena desenhada dentro de `cb` componha SOB a UI
+  //     -- ver o doc-comment de Engine::render_standalone (engine.hpp) para o ponto de inserção
+  //     exato e o contrato de estado GL (o hook pode deixar estado GL arbitrário para trás; ele
+  //     é automaticamente restaurado à base estabelecida pelo RmlUi antes do passe de render de
+  //     UI rodar, então `cb` nunca precisa salvar/restaurar nada por conta própria).
+  //     `dt_seconds` é o tempo decorrido desde a chamada ANTERIOR a este hook (0.0f na primeira
+  //     chamada -- não há um frame anterior significativo para medir contra). Passar um `cb`
+  //     vazio/nulo desativa o hook (no-op por frame, mesmo custo de antes deste método ter sido
+  //     chamado alguma vez). run() vira exatamente o loop de frame do jogo assim que isto está
+  //     definido: `poll_events() -> update() -> render()` (o hook dispara dentro do render()),
+  //     sem mudança na própria assinatura de run().
+  void set_frame_callback(std::function<void(float dt_seconds)> cb);
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
   //     clicked element that has a non-empty id ("" if none reached before the document root).

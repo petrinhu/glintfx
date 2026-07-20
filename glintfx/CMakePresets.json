@@ -1,0 +1,31 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 16, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "full",
+      "displayName": "full -- window + app + ui/fx + text + image (ADR-0015 phase A0)",
+      "description": "Default composition: every module glintfx has today, including the standalone GLFW-backed App facade. Equivalent to the plain 'cmake -S glintfx -B <dir>' invocation this repo's CI already uses (GLINTFX_BACKEND_GLFW defaults ON) -- this preset just names it. ADR-0015 (d)(5) 'named compositions'.",
+      "binaryDir": "${sourceDir}/build-full",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "GLINTFX_MODULE_WINDOW": "ON",
+        "GLINTFX_MODULE_APP": "ON",
+        "GLINTFX_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "embed-only",
+      "displayName": "embed-only -- no window/app module (ADR-0015 phase A0)",
+      "description": "GLINTFX_MODULE_WINDOW=OFF: no GLFW dependency in the link line, no standalone App facade compiled. This is the composition GusWorld (the only real consumer today) actually ships -- Engine + UiLayer + RenderGl3 + Bootstrap + SystemClock (+ the fx decorators, still fused with ui per ADR-0015 (c)), embedded into a host that already owns the window/GL context. Equivalent to this repo's existing '-DGLINTFX_BACKEND_GLFW=OFF' CI leg -- this preset just names it under the new ADR-0015 flag. ADR-0015 (d)(5) 'named compositions'.",
+      "binaryDir": "${sourceDir}/build-embed-only",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "GLINTFX_MODULE_WINDOW": "OFF",
+        "GLINTFX_BUILD_TESTS": "ON"
+      }
+    }
+  ]
+}

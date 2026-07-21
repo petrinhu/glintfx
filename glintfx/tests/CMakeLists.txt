@@ -2358,6 +2358,101 @@ if(GLINTFX_MODULE_AUDIO)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: A2-GAMEPAD (framework-2D, ADR-0015/ADR-0016 module "gamepad") -- Wave 1 (Agent A) test
+#     suite: the decode core (src/gamepad_decode.{hpp,cpp}) and the mapping module
+#     (src/gamepad_mapping.{hpp,cpp}). Deliberately outside both the `if(GLINTFX_BACKEND_GLFW)`
+#     block above and any Xvfb wrapper (run_xvfb.cmake): both are fed synthetic byte buffers/
+#     capability bitmaps only -- zero `fd`, zero `ioctl`, zero real `/dev/input` device, zero
+#     GL/window/RmlUi dependency -- same independence class as glintfx_i18n/glintfx_audio's own
+#     suites immediately above. Guarded on GLINTFX_MODULE_GAMEPAD (default ON on Linux, forced
+#     OFF elsewhere by the option's own platform gate in CMakeLists.txt) so a consumer that
+#     explicitly configures -DGLINTFX_MODULE_GAMEPAD=OFF (or builds on a non-Linux host) does not
+#     fail the test build over a module it opted out of / cannot have. Targets link `glintfx`
+#     (for the public `<glintfx/gamepad_types.hpp>` GamepadButton/GamepadAxis enums) plus the
+#     internal `src/` include dir (for `gamepad_decode.hpp`/`gamepad_mapping.hpp`, never
+#     installed, per AGENTS.md's encapsulation rule -- these tests deliberately reach past the
+#     public API to unit-test the pure decode/mapping internals directly, same posture as
+#     glfw_event_translate_sanity reaching into glfw_event_translate.hpp).
+# PT: A2-GAMEPAD (framework-2D, módulo "gamepad" da ADR-0015/ADR-0016) -- suíte de teste da Onda
+#     1 (Agente A): o núcleo de decode (src/gamepad_decode.{hpp,cpp}) e o módulo de mapeamento
+#     (src/gamepad_mapping.{hpp,cpp}). Deliberadamente fora tanto do bloco
+#     `if(GLINTFX_BACKEND_GLFW)` acima quanto de qualquer wrapper Xvfb (run_xvfb.cmake): ambos só
+#     são alimentados com buffers de bytes sintéticos/bitmaps de capacidade -- zero `fd`, zero
+#     `ioctl`, zero device `/dev/input` real, zero dependência de GL/janela/RmlUi -- mesma classe
+#     de independência das próprias suítes do glintfx_i18n/glintfx_audio logo acima. Bloqueado
+#     por GLINTFX_MODULE_GAMEPAD (padrão ON no Linux, forçado OFF em outro lugar pelo próprio
+#     gate de plataforma da option no CMakeLists.txt) pra que um consumidor que configure
+#     explicitamente -DGLINTFX_MODULE_GAMEPAD=OFF (ou builde num host não-Linux) não falhe o
+#     build de testes por causa de um módulo do qual ele optou sair / não pode ter. Os alvos
+#     linkam `glintfx` (pelos enums públicos GamepadButton/GamepadAxis de
+#     `<glintfx/gamepad_types.hpp>`) mais o include dir interno de `src/` (por
+#     `gamepad_decode.hpp`/`gamepad_mapping.hpp`, nunca instalados, conforme a regra de
+#     encapsulamento do AGENTS.md -- estes testes deliberadamente alcançam além da API pública
+#     pra unit-testar os internos puros de decode/mapping diretamente, mesma postura do
+#     glfw_event_translate_sanity alcançando dentro de glfw_event_translate.hpp).
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_GAMEPAD)
+  # EN: gamepad_decode_sanity -- well-formed decode: button press/release, autorepeat (value=2)
+  #     no-op, stick axis normalization (-32768..32767 real range), trigger axis normalization
+  #     (0..255 real range), D-pad hat (-1/0/+1), SYN_DROPPED sticky flag, and chunking
+  #     independence (1-byte-at-a-time vs 7+17-byte pieces vs a single call all decode
+  #     identically).
+  # PT: gamepad_decode_sanity -- decode bem-formado: press/release de botão, autorepeat
+  #     (value=2) no-op, normalização de eixo stick (faixa real -32768..32767), normalização de
+  #     eixo gatilho (faixa real 0..255), hat do D-pad (-1/0/+1), flag pegajosa de SYN_DROPPED, e
+  #     independência de fatiamento (1 byte por vez vs pedaços de 7+17 bytes vs uma única
+  #     chamada decodificam identicamente).
+  add_executable(gamepad_decode_sanity gamepad_decode_sanity.cpp)
+  target_link_libraries(gamepad_decode_sanity PRIVATE glintfx)
+  target_include_directories(gamepad_decode_sanity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  add_test(NAME gamepad_decode_sanity COMMAND gamepad_decode_sanity)
+
+  # EN: gamepad_decode_hostile -- random garbage bytes (several seeds), an event truncated at
+  #     the end of the buffer, type/code far out of range (0xFFFF), value=INT32_MIN/MAX for both
+  #     EV_KEY and EV_ABS, and degenerate absinfo ranges (min==max, min>max) -- never a crash,
+  #     never an out-of-bounds read, a degenerate axis normalizes to exactly 0.0f.
+  # PT: gamepad_decode_hostile -- bytes de lixo aleatório (várias seeds), um evento truncado no
+  #     fim do buffer, type/code bem fora da faixa (0xFFFF), value=INT32_MIN/MAX tanto pra
+  #     EV_KEY quanto pra EV_ABS, e faixas absinfo degeneradas (min==max, min>max) -- nunca
+  #     crash, nunca leitura fora dos limites, um eixo degenerado normaliza pra exatamente 0.0f.
+  add_executable(gamepad_decode_hostile gamepad_decode_hostile.cpp)
+  target_link_libraries(gamepad_decode_hostile PRIVATE glintfx)
+  target_include_directories(gamepad_decode_hostile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  add_test(NAME gamepad_decode_hostile COMMAND gamepad_decode_hostile)
+
+  # EN: gamepad_mapping_sanity -- build_guid() against a known real input_id (Xbox 360 USB) plus
+  #     the GUID "2 attempts" match (exact, then CRC-zeroed) MappingDb::find() performs;
+  #     derive_layout() against a synthetic capability bitmap, asserting the exact
+  #     SDL-compatible enumeration ORDER; MappingDb::parse_text() fed a gamecontrollerdb.txt-
+  #     format line for the same pad, resolved end to end through a synthetic evdev event;
+  #     default_kernel_spec_mapping() (D5) for a pad no DB entry matches.
+  # PT: gamepad_mapping_sanity -- build_guid() contra um input_id real conhecido (Xbox 360 USB)
+  #     mais o casamento de "2 tentativas" de GUID (exato, depois CRC-zerado) que
+  #     MappingDb::find() faz; derive_layout() contra um bitmap de capacidade sintético,
+  #     verificando a ORDEM exata de enumeração compatível-SDL; MappingDb::parse_text()
+  #     alimentado com uma linha em formato gamecontrollerdb.txt pro mesmo pad, resolvida ponta a
+  #     ponta através de um evento evdev sintético; default_kernel_spec_mapping() (D5) pra um pad
+  #     que nenhuma entrada de DB casa.
+  add_executable(gamepad_mapping_sanity gamepad_mapping_sanity.cpp)
+  target_link_libraries(gamepad_mapping_sanity PRIVATE glintfx)
+  target_include_directories(gamepad_mapping_sanity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  add_test(NAME gamepad_mapping_sanity COMMAND gamepad_mapping_sanity)
+
+  # EN: gamepad_mapping_hostile -- a line with no commas, GUID short/odd-length/non-hex, fields
+  #     b99999/a-1/h9.99, a ~1 MB single line, text with no trailing '\n', parse_text(nullptr),
+  #     and a mix of well-formed/malformed/wrong-platform lines -- 0 entries or a per-field skip,
+  #     never a crash.
+  # PT: gamepad_mapping_hostile -- uma linha sem vírgulas, GUID curto/tamanho ímpar/não-hex,
+  #     campos b99999/a-1/h9.99, uma única linha de ~1 MB, texto sem '\n' final,
+  #     parse_text(nullptr), e uma mistura de linhas bem-formadas/malformadas/plataforma-errada
+  #     -- 0 entradas ou um skip por-campo, nunca crash.
+  add_executable(gamepad_mapping_hostile gamepad_mapping_hostile.cpp)
+  target_link_libraries(gamepad_mapping_hostile PRIVATE glintfx)
+  target_include_directories(gamepad_mapping_hostile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  add_test(NAME gamepad_mapping_hostile COMMAND gamepad_mapping_hostile)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

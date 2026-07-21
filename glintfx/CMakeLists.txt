@@ -458,6 +458,39 @@ option(GLINTFX_MODULE_AUDIO
   "Audio module: sound-effect/music playback via vendored miniaudio (ADR-0015 (b); depends on core ONLY, genuinely OFF-able)"
   ON)
 
+# --- GLINTFX_MODULE_GAMEPAD (real ON/OFF, framework-2D slice A2-GAMEPAD; Linux-only) ---
+# EN: Same independence class as GLINTFX_MODULE_I18N/AUDIO above: src/gamepad_{decode,mapping,*}.cpp
+#     have zero caller anywhere else in the library (ADR-0015 (b), consumer-only -- a game reads
+#     `glintfx::Gamepads` from its own frame loop, alongside `App::set_frame_callback`, A1).
+#     Depends on `core` ONLY (no GL, no window, no RmlUi type). UNLIKE i18n/audio, this module is
+#     Linux-only BY NATURE: raw evdev (`<linux/input.h>`, `/dev/input/eventN`) is a Linux kernel
+#     interface, not a portable one -- there is no cross-platform substitute to fall back to, so
+#     the option is forced OFF (gracefully, `message(STATUS ...)`, never FATAL_ERROR) on any
+#     non-Linux `CMAKE_SYSTEM_NAME` immediately below, mirroring GLINTFX_MODULE_WINDOW/APP's own
+#     "shadow the cache variable so every guard below sees the effective value" pattern. See
+#     ADR-0016 (docs/adr/, D1: gamepad ships as its OWN atom, not folded into the reserved
+#     GLINTFX_MODULE_INPUT name) and the A2-GAMEPAD plan
+#     (docs/superpowers/plans/2026-07-21-framework2d-A2-gamepad.md) section 2.6.
+# PT: Mesma classe de independência do GLINTFX_MODULE_I18N/AUDIO acima: src/gamepad_{decode,
+#     mapping,*}.cpp não têm NENHUM chamador em outro lugar da biblioteca (ADR-0015 (b),
+#     só-consumidor -- um jogo lê `glintfx::Gamepads` do próprio frame loop dele, junto de
+#     `App::set_frame_callback`, A1). Depende só de `core` (zero GL, zero janela, zero tipo do
+#     RmlUi). DIFERENTE de i18n/audio, este módulo é Linux-only POR NATUREZA: evdev cru
+#     (`<linux/input.h>`, `/dev/input/eventN`) é uma interface do kernel Linux, não portável --
+#     não há substituto cross-platform pro qual cair, então a option é forçada OFF (graciosamente,
+#     `message(STATUS ...)`, nunca FATAL_ERROR) em qualquer `CMAKE_SYSTEM_NAME` não-Linux logo
+#     abaixo, espelhando o próprio padrão "sombreia a variável de cache pra que toda guarda abaixo
+#     veja o valor efetivo" do GLINTFX_MODULE_WINDOW/APP. Ver ADR-0016 (docs/adr/, D1: gamepad
+#     entregue como átomo PRÓPRIO, não dobrado no nome reservado GLINTFX_MODULE_INPUT) e o plano
+#     A2-GAMEPAD (docs/superpowers/plans/2026-07-21-framework2d-A2-gamepad.md) seção 2.6.
+option(GLINTFX_MODULE_GAMEPAD
+  "Gamepad module: raw-evdev pads + SDL-db mapping (ADR-0015/ADR-0016; core ONLY; Linux-only)"
+  ON)
+if(GLINTFX_MODULE_GAMEPAD AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(STATUS "glintfx: gamepad module is Linux-only (raw evdev) -- forcing GLINTFX_MODULE_GAMEPAD=OFF on ${CMAKE_SYSTEM_NAME}")
+  set(GLINTFX_MODULE_GAMEPAD OFF) # EN: shadow local: every guard below sees this. PT: sombra local: toda guarda abaixo enxerga isto.
+endif()
+
 # --- GLINTFX_MODULE_FX (real ON/OFF, FX-CARVE-1) ---
 # EN: Carves the fx AUTHORED by glintfx (tint + ripple GLSL programs, their CompileShader/
 #     RenderShader/ReleaseShader dispatch, the backdrop-capture machinery, and the 3 decorator
@@ -1023,14 +1056,39 @@ if(GLINTFX_MODULE_AUDIO)
   add_library(glintfx::audio ALIAS glintfx_audio)
 endif()
 
+# --- glintfx_gamepad (GLINTFX_MODULE_GAMEPAD, real ON/OFF -- see its option() block above) ---
+# EN: Wave 1 (Agent A) compiles only the decode+mapping pair below -- src/gamepad_decode.cpp
+#     (byte-stream reassembly + state) and src/gamepad_mapping.cpp (GUID/layout/DB-parser/
+#     default-kernel-spec). Wave 2 (Agent B) appends src/gamepad.cpp (the device layer: fd scan,
+#     ioctl, inotify hotplug) to THIS SAME add_library() source list -- do not create a second
+#     OBJECT library for it. No PRIVATE link deps at all (same "core ONLY" shape as glintfx_i18n
+#     above): evdev/inotify are kernel UAPI headers + syscalls, not a linkable system library.
+# PT: A onda 1 (Agente A) compila só o par decode+mapping abaixo -- src/gamepad_decode.cpp
+#     (reagrupamento de byte-stream + estado) e src/gamepad_mapping.cpp (GUID/layout/parser de
+#     DB/default kernel-spec). A onda 2 (Agente B) acrescenta src/gamepad.cpp (a camada de
+#     device: varredura de fd, ioctl, hotplug via inotify) a ESTA MESMA lista de sources do
+#     add_library() -- não cria uma segunda biblioteca OBJECT pra ele. Nenhuma dep de link
+#     PRIVATE (mesma forma "só core" do glintfx_i18n acima): evdev/inotify são headers UAPI do
+#     kernel + syscalls, não uma biblioteca de sistema linkável.
+if(GLINTFX_MODULE_GAMEPAD)
+  add_library(glintfx_gamepad OBJECT src/gamepad_decode.cpp src/gamepad_mapping.cpp)
+  target_include_directories(glintfx_gamepad PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gamecontrollerdb)
+  target_compile_options(glintfx_gamepad PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_gamepad)
+  add_library(glintfx::gamepad ALIAS glintfx_gamepad)
+endif()
+
 # EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
 #     target. glintfx_core/glintfx_image are unconditional (their flags are
-#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/glintfx_audio
-#     mirror the same guard their own add_library() call above is under.
+#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/glintfx_audio/
+#     glintfx_gamepad mirror the same guard their own add_library() call above is under.
 # PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
 #     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
 #     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/
-#     glintfx_audio espelham a mesma guarda sob a qual a própria chamada
+#     glintfx_audio/glintfx_gamepad espelham a mesma guarda sob a qual a própria chamada
 #     add_library() delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
 if(GLINTFX_OWN_FONT_ENGINE)
@@ -1047,6 +1105,9 @@ if(GLINTFX_MODULE_FX)
 endif()
 if(GLINTFX_MODULE_AUDIO)
   target_link_libraries(glintfx PRIVATE glintfx_audio)
+endif()
+if(GLINTFX_MODULE_GAMEPAD)
+  target_link_libraries(glintfx PRIVATE glintfx_gamepad)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

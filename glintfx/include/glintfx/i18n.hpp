@@ -41,9 +41,13 @@
 //     PLURALS (a subset of ICU MessageFormat's `plural`, NOT the full ICU grammar -- see
 //     the vision doc's anti-over-engineering section 3.3, "not the whole CLDR"): a pluralizable
 //     concept is stored as TWO catalog entries under a shared base key, `<key>.one` and
-//     `<key>.other` (ICU-lite category names; this module supports exactly these two -- no
-//     `few`/`many`/`zero`/`two` categories, because neither locale shipped in i18n-1, en/pt,
-//     uses them -- CLDR chart v48, cited in i18n.cpp). Inside a `.one`/`.other` value, every
+//     `<key>.other` (ICU-lite category names; this module supports exactly these two, BY SCOPE
+//     CHOICE, not because the shipped locales lack the others -- en genuinely has only one/other,
+//     but pt DOES define a `many` category in CLDR v48 (exact multiples of 1,000,000, e.g.
+//     n=1000000), which this module deliberately does not implement: a HUD showing "1,000,000
+//     lives" is not a real game scenario (ADR-0015 anti-OE principle #1), so `many` collapses
+//     into `other` here by design, not by omission. `few`/`zero`/`two` genuinely do not apply to
+//     either en or pt in CLDR v48, cited in i18n.cpp). Inside a `.one`/`.other` value, every
 //     literal '#' character is the COUNT PLACEHOLDER (ICU convention) -- tr_plural() replaces
 //     every '#' with the decimal digits of the count passed in. Because of this, a `.one`/
 //     `.other` value cannot contain a literal '#' as ordinary text; use tr() for strings that
@@ -118,12 +122,16 @@
 //     ver a seção anti-over-engineering 3.3 do doc de visão, "não o CLDR inteiro"): um conceito
 //     pluralizável é guardado como DUAS entradas de catálogo sob uma chave-base compartilhada,
 //     `<chave>.one` e `<chave>.other` (nomes de categoria ICU-lite; este módulo suporta
-//     exatamente estas duas -- sem categorias `few`/`many`/`zero`/`two`, porque nenhum locale
-//     shipado no i18n-1, en/pt, as usa -- gráfico CLDR v48, citado em i18n.cpp). Dentro de um
-//     valor `.one`/`.other`, todo caractere '#' literal é o PLACEHOLDER DE CONTAGEM (convenção
-//     ICU) -- tr_plural() substitui todo '#' pelos dígitos decimais da contagem passada. Por
-//     causa disso, um valor `.one`/`.other` não pode conter um '#' literal como texto comum;
-//     use tr() para strings que precisem de um.
+//     exatamente estas duas, por ESCOLHA DE ESCOPO, não porque os locales shipados careçam das
+//     outras -- o en de fato só tem one/other, mas o pt TEM uma categoria `many` no CLDR v48
+//     (múltiplos exatos de 1.000.000, ex.: n=1000000), que este módulo deliberadamente não
+//     implementa: um HUD mostrando "1.000.000 vidas" não é um cenário real de jogo (princípio
+//     anti-OE #1 da ADR-0015), então `many` colapsa em `other` aqui por design, não por omissão.
+//     `few`/`zero`/`two` de fato não se aplicam nem a en nem a pt no CLDR v48, citado em
+//     i18n.cpp). Dentro de um valor `.one`/`.other`, todo caractere '#' literal é o PLACEHOLDER
+//     DE CONTAGEM (convenção ICU) -- tr_plural() substitui todo '#' pelos dígitos decimais da
+//     contagem passada. Por causa disso, um valor `.one`/`.other` não pode conter um '#' literal
+//     como texto comum; use tr() para strings que precisem de um.
 //
 //     Exemplo de catálogo (dois locales, uma chave simples, uma chave pluralizada):
 //

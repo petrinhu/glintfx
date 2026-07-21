@@ -23,6 +23,7 @@
 #include <glintfx/i18n.hpp>
 
 #include <cstdio>
+#include <filesystem>
 
 namespace {
 int g_failures = 0;
@@ -174,6 +175,49 @@ int main() {
 
     i18n.set_locale("en");
     check(i18n.tr("k") == "kept", "prior catalog state untouched by the three failed loads above");
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: Directory-as-path hardening (review adversarial finding, i18n-1) -- opening a directory
+  //     with std::ifstream "succeeds" at is_open() on Linux (the open() syscall accepts a
+  //     directory fd for reading), so is_open() alone cannot tell a directory apart from a real
+  //     file; without the peek() probe in load_catalog_file(), this used to return {.ok = true,
+  //     .entries_loaded = 0}, indistinguishable from a legitimately empty catalog file. Uses a
+  //     freshly created temp directory (not a hardcoded system path like "/tmp", which may not
+  //     exist/be readable on every CI runner) so this test is self-contained; cleaned up
+  //     regardless of pass/fail via the RAII guard below.
+  // PT: Hardening de diretório-como-caminho (achado do review adversarial, i18n-1) -- abrir um
+  //     diretório com std::ifstream "funciona" no is_open() no Linux (a syscall open() aceita um
+  //     fd de diretório pra leitura), então is_open() sozinho não distingue um diretório de um
+  //     arquivo de verdade; sem a sondagem peek() em load_catalog_file(), isso retornava
+  //     {.ok = true, .entries_loaded = 0}, indistinguível de um catálogo legitimamente vazio.
+  //     Usa um diretório temporário recém-criado (não um caminho de sistema fixo tipo "/tmp", que
+  //     pode não existir/ser legível em todo runner de CI) pra este teste ser autocontido;
+  //     limpo independente de pass/fail via o guard RAII abaixo.
+  // ---------------------------------------------------------------------------
+  {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "glintfx-i18n-catalog-sanity-dir-test";
+    std::error_code ec;
+    fs::remove_all(dir, ec); // EN: clean slate from a possible prior crashed run. PT: estado limpo de uma execução anterior que possa ter crashado.
+    fs::create_directory(dir, ec);
+    check(!ec, "test setup: temp directory created");
+
+    struct DirGuard {
+      fs::path path;
+      ~DirGuard() {
+        std::error_code cleanup_ec;
+        fs::remove_all(path, cleanup_ec);
+      }
+    } dir_guard{dir};
+
+    I18n i18n;
+    i18n.load_catalog_string("[en]\nk = kept\n");
+    I18nLoadResult r = i18n.load_catalog_file(dir.c_str());
+    check(!r.ok, "load_catalog_file(directory): ok == false, not confused with an empty file");
+    check(r.entries_loaded == 0, "load_catalog_file(directory): entries_loaded == 0");
+    i18n.set_locale("en");
+    check(i18n.tr("k") == "kept", "prior catalog state untouched by the failed directory load");
   }
 
   if (g_failures > 0) {

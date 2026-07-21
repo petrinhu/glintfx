@@ -21,7 +21,10 @@
 //     ever receives a whole `long long`, so `i` == the (absolute value of the) count directly --
 //     v is always 0, matching both rules' "v = 0"/implicit-integer condition exactly; CLDR
 //     defines cardinal categories on the ABSOLUTE VALUE of the operand (negative counts are not
-//     a separate case), hence std::llabs() below.
+//     a separate case), hence the absolute value below -- computed WITHOUT `std::llabs()`/
+//     unary `-`, both of which are undefined behaviour on `LLONG_MIN` (there is no positive
+//     `long long` that represents its magnitude): see plural_category_for()'s
+//     `absolute_value_of()`.
 // PT: Implementação do I18n -- parser de catálogo, lookup com consciência de locale e fallback,
 //     seleção de categoria de plural CLDR-lite. Ver glintfx/i18n.hpp pro formato do catálogo,
 //     escapes, convenção de plural, e ordem de resolução (o contrato público inteiro do módulo).
@@ -44,7 +47,9 @@
 //     `long long` inteiro, então `i` == a (valor absoluto da) contagem diretamente -- v é sempre
 //     0, batendo exatamente com a condição "v = 0"/inteiro-implícito das duas regras; o CLDR
 //     define categorias cardinais sobre o VALOR ABSOLUTO do operando (contagens negativas não
-//     são um caso separado), daí o std::llabs() abaixo.
+//     são um caso separado), daí o valor absoluto abaixo -- calculado SEM `std::llabs()`/unário
+//     `-`, ambos comportamento indefinido em `LLONG_MIN` (não existe `long long` positivo que
+//     represente a magnitude dele): ver `absolute_value_of()` em plural_category_for().
 // Copyright (c) 2026 Petrus Silva Costa
 
 #include <glintfx/i18n.hpp>
@@ -125,6 +130,25 @@ std::string unescape_value(const std::string& raw) {
 //     de cabeçalho deste arquivo pro texto de regra CLDR v48 citado e o raciocínio "v é sempre 0").
 enum class PluralCategory { One, Other };
 
+// EN: Absolute value of `n` as an unsigned long long, safe for the whole `long long` range
+//     including `LLONG_MIN` -- unlike `std::llabs(n)` or unary `-n`, which are undefined
+//     behaviour exactly there (confirmed live by UBSan: "negation of -9223372036854775808 cannot
+//     be represented in type 'long long'"). Converting a negative `long long` to an unsigned type
+//     is well-defined (wraps modulo 2^64), and unsigned subtraction from 0 is well-defined too,
+//     so `0ULL - static_cast<unsigned long long>(n)` recovers the true magnitude for every `n`,
+//     LLONG_MIN included, without ever computing the value in signed arithmetic.
+// PT: Valor absoluto de `n` como unsigned long long, seguro para o range inteiro de `long long`
+//     inclusive `LLONG_MIN` -- diferente de `std::llabs(n)` ou unário `-n`, que são comportamento
+//     indefinido exatamente ali (confirmado ao vivo pelo UBSan: "negation of
+//     -9223372036854775808 cannot be represented in type 'long long'"). Converter um `long long`
+//     negativo pra um tipo sem sinal é bem-definido (dá a volta módulo 2^64), e subtração sem
+//     sinal a partir de 0 também é bem-definida, então `0ULL - static_cast<unsigned long long>(n)`
+//     recupera a magnitude real pra todo `n`, LLONG_MIN incluso, sem nunca calcular o valor em
+//     aritmética com sinal.
+unsigned long long absolute_value_of(long long n) {
+  return n < 0 ? (0ULL - static_cast<unsigned long long>(n)) : static_cast<unsigned long long>(n);
+}
+
 // EN: Selects the plural category for `base_lang` (already lower-cased, already stripped of any
 //     region subtag -- callers pass base_language(active_locale_lc)) and count `n`. Unknown
 //     locales fall back to the English rule (n==1 -> One): "other" is CLDR's universal
@@ -140,14 +164,14 @@ enum class PluralCategory { One, Other };
 //     com a própria postura do motor de fonte próprio de "começar pequeno, estender por demanda
 //     real, nunca chutar uma tabela inteira especulativamente" (ADR-0015 seção 6 item anti-OE 1).
 PluralCategory plural_category_for(const std::string& base_lang, long long n) {
-  const long long an = n < 0 ? -n : n; // EN: CLDR cardinal rules key off |n|. PT: regras cardinais do CLDR usam |n|.
+  const unsigned long long an = absolute_value_of(n); // EN: CLDR cardinal rules key off |n|. PT: regras cardinais do CLDR usam |n|.
   if (base_lang == "en") {
-    return an == 1 ? PluralCategory::One : PluralCategory::Other;
+    return an == 1ULL ? PluralCategory::One : PluralCategory::Other;
   }
   if (base_lang == "pt") {
-    return (an == 0 || an == 1) ? PluralCategory::One : PluralCategory::Other;
+    return (an == 0ULL || an == 1ULL) ? PluralCategory::One : PluralCategory::Other;
   }
-  return an == 1 ? PluralCategory::One : PluralCategory::Other;
+  return an == 1ULL ? PluralCategory::One : PluralCategory::Other;
 }
 
 } // namespace
@@ -223,6 +247,34 @@ I18nLoadResult I18n::load_catalog_file(const char* path) {
   if (path == nullptr) return I18nLoadResult{};
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) return I18nLoadResult{};
+  // EN: is_open() alone is not enough -- on Linux it is also true for a DIRECTORY path (opening
+  //     a directory as an ifstream "succeeds" at the open() syscall level). Without this probe,
+  //     `buffer << file.rdbuf()` below reads zero bytes from a directory (the underlying read()
+  //     syscall fails with EISDIR, confirmed via strace) and returns {.ok = true,
+  //     .entries_loaded = 0} -- indistinguishable from a legitimate empty (0-byte) catalog file.
+  //     NOTE: checking file.good()/fail() AFTER `buffer << file.rdbuf()` does NOT work here --
+  //     `ostream& operator<<(ostream&, streambuf*)` extracts through the streambuf pointer
+  //     directly, bypassing `file`'s own istream sentry, so `file`'s failbit is never set by that
+  //     read, empirically confirmed identical (good=1, eof=0, size=0) for a directory and an
+  //     empty file. `peek()` goes through the sentry and DOES distinguish them: a directory sets
+  //     failbit+badbit (eofbit stays clear); a genuinely empty file sets ONLY eofbit. peek() does
+  //     not consume the byte it reads, so the character (if any) is still there for the real read
+  //     below via the shared streambuf.
+  // PT: is_open() sozinho não basta -- no Linux também é true para um caminho de DIRETÓRIO (abrir
+  //     um diretório como ifstream "funciona" no nível da syscall open()). Sem esta sondagem, o
+  //     `buffer << file.rdbuf()` abaixo lê zero bytes de um diretório (a syscall read() por baixo
+  //     falha com EISDIR, confirmado via strace) e retorna {.ok = true, .entries_loaded = 0} --
+  //     indistinguível de um arquivo de catálogo legitimamente vazio (0 bytes). NOTA: checar
+  //     file.good()/fail() DEPOIS de `buffer << file.rdbuf()` NÃO funciona aqui -- o
+  //     `ostream& operator<<(ostream&, streambuf*)` extrai direto pelo ponteiro do streambuf,
+  //     contornando o sentry do próprio istream `file`, então o failbit de `file` nunca é setado
+  //     por essa leitura, confirmado empiricamente idêntico (good=1, eof=0, size=0) tanto pra um
+  //     diretório quanto pra um arquivo vazio. `peek()` passa pelo sentry e DISTINGUE os dois: um
+  //     diretório seta failbit+badbit (eofbit fica limpo); um arquivo genuinamente vazio seta SÓ
+  //     eofbit. peek() não consome o byte que lê, então o caractere (se houver) continua
+  //     disponível pra leitura real abaixo via o streambuf compartilhado.
+  file.peek();
+  if (file.fail() && !file.eof()) return I18nLoadResult{};
   std::ostringstream buffer;
   buffer << file.rdbuf();
   return parse_and_merge(buffer.str());

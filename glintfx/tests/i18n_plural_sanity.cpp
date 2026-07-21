@@ -25,6 +25,8 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/i18n.hpp>
 
+#include <climits>
+#include <cstdint>
 #include <cstdio>
 
 namespace {
@@ -130,6 +132,45 @@ int main() {
     I18n i4;
     i4.set_locale("en"); // EN: nothing loaded at all. PT: nada carregado.
     check(i4.tr_plural("nowhere.defined", 3) == "nowhere.defined", "last resort: bare key, unmodified, no '#' substitution attempted");
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: LLONG_MIN/INT64_MIN hardening (review adversarial finding, i18n-1) -- unary `-` on
+  //     LLONG_MIN is signed-integer-overflow undefined behaviour (there is no positive `long
+  //     long` that represents its magnitude), confirmed live by UBSan before the fix:
+  //     "negation of -9223372036854775808 cannot be represented in type 'long long'". This must
+  //     NOT crash/UB and must resolve to a real category ("other" for both en and pt, since
+  //     |LLONG_MIN| is nowhere near 0 or 1). Mutation-testability note: reverting
+  //     absolute_value_of() in i18n.cpp back to a plain `n < 0 ? -n : n` ternary must turn this
+  //     UBSan-clean under `-fsanitize=undefined` (see AGENT_REPORT.md/PR for the before/after
+  //     UBSan transcript -- this assertion alone cannot observe UB that does not also change the
+  //     result, so the sanitizer run is the real proof, this is the behavioural companion).
+  // PT: Hardening de LLONG_MIN/INT64_MIN (achado do review adversarial, i18n-1) -- `-` unário em
+  //     LLONG_MIN é overflow de inteiro com sinal, comportamento indefinido (não existe `long
+  //     long` positivo que represente a magnitude dele), confirmado ao vivo pelo UBSan antes do
+  //     fix: "negation of -9223372036854775808 cannot be represented in type 'long long'". Isso
+  //     NÃO pode crashar/UB e precisa resolver pra uma categoria real ("other" tanto pra en
+  //     quanto pra pt, já que |LLONG_MIN| está longe de 0 ou 1). Nota de mutation-testability:
+  //     reverter absolute_value_of() em i18n.cpp de volta pro ternário simples `n < 0 ? -n : n`
+  //     precisa deixar isso UBSan-sujo sob `-fsanitize=undefined` (ver o transcript UBSan antes/
+  //     depois no relatório -- esta asserção sozinha não observa UB que não muda o resultado, a
+  //     execução sob sanitizer é a prova real, isto é a companhia comportamental).
+  // ---------------------------------------------------------------------------
+  {
+    I18n i5;
+    i5.load_catalog_string(
+        "[en]\nhud.lives.one = # life\nhud.lives.other = # lives\n"
+        "[pt]\nhud.lives.one = # vida\nhud.lives.other = # vidas\n");
+
+    i5.set_locale("en");
+    check(i5.tr_plural("hud.lives", LLONG_MIN) == "-9223372036854775808 lives",
+          "en: n=LLONG_MIN does not UB, resolves to \"other\"");
+    check(i5.tr_plural("hud.lives", INT64_MIN) == "-9223372036854775808 lives",
+          "en: n=INT64_MIN does not UB, resolves to \"other\"");
+
+    i5.set_locale("pt");
+    check(i5.tr_plural("hud.lives", LLONG_MIN) == "-9223372036854775808 vidas",
+          "pt: n=LLONG_MIN does not UB, resolves to \"other\"");
   }
 
   if (g_failures > 0) {

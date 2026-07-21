@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdio>
+#include <iterator>
 
 namespace glintfx {
 
@@ -202,13 +203,24 @@ bool lookup_control_target(const std::string& key, ControlTarget& out) {
       {"lefttrigger", {false, GamepadButton::Count, GamepadAxis::LeftTrigger}},
       {"righttrigger", {false, GamepadButton::Count, GamepadAxis::RightTrigger}},
   };
-  for (const auto& entry : kTable) {
-    if (key == entry.first) {
-      out = entry.second;
-      return true;
-    }
+  // EN: std::find_if over the raw loop -- review-adversarial finding (cppcheck's
+  //     `useStlAlgorithm`, gate `lint-and-scan`): a hand-rolled linear scan with an early
+  //     `return true` inside the loop body is exactly the shape cppcheck's style check flags,
+  //     even though the two compile to the same code here (21-entry fixed table, no hot path).
+  // PT: std::find_if em vez do loop cru -- achado do review adversarial (`useStlAlgorithm` do
+  //     cppcheck, gate `lint-and-scan`): uma varredura linear escrita à mão com um
+  //     `return true` antecipado dentro do corpo do loop é exatamente a forma que o check de
+  //     estilo do cppcheck acusa, mesmo os dois compilando pro mesmo código aqui (tabela fixa
+  //     de 21 entradas, não é hot path).
+  const auto it = std::find_if(std::begin(kTable), std::end(kTable),
+                                [&key](const std::pair<const char*, ControlTarget>& entry) {
+                                  return key == entry.first;
+                                });
+  if (it == std::end(kTable)) {
+    return false;
   }
-  return false;
+  out = it->second;
+  return true;
 }
 
 // EN: Parses one line of gamecontrollerdb.txt-format text into `guid`+`mapping`. Returns `false`

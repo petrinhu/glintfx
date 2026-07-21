@@ -380,8 +380,23 @@ public:
   //     faixa.
   std::int32_t raw_axis_value(int pad, int index) const;
 
-  // EN: The raw evdev `ABS_*` code backing `index`. `0` when `index` is out of range.
-  // PT: O código evdev `ABS_*` cru por trás de `index`. `0` quando `index` está fora de faixa.
+  // EN: The raw evdev `ABS_*` code backing `index`. `0` when `index` is out of range -- BUT,
+  //     unlike `raw_button_code()` above, `0` is ALSO `ABS_X` itself (the most common analog
+  //     stick axis), a perfectly real, frequently-enumerated evdev code -- there is no unused
+  //     "0 means invalid" sentinel value in the `ABS_*` code space the way `KEY_RESERVED == 0`
+  //     gives one for `BTN_*`/`KEY_*`. A consumer MUST NOT treat a `0` return from this function
+  //     as "index was invalid": the only reliable validity gate is `index` being in
+  //     `[0, raw_axis_count(pad))` BEFORE calling this (checked via `raw_axis_count()`), never
+  //     the return value itself (review-adversarial finding, A2-GAMEPAD).
+  // PT: O código evdev `ABS_*` cru por trás de `index`. `0` quando `index` está fora de faixa --
+  //     MAS, diferente do `raw_button_code()` acima, `0` TAMBÉM é o próprio `ABS_X` (o eixo de
+  //     stick analógico mais comum), um código evdev perfeitamente real e frequentemente
+  //     enumerado -- não existe um valor-sentinela "0 significa inválido" não-usado no espaço de
+  //     códigos `ABS_*` do jeito que `KEY_RESERVED == 0` dá pro `BTN_*`/`KEY_*`. Um consumidor
+  //     NÃO PODE tratar um retorno `0` desta função como "index era inválido": o único portão de
+  //     validade confiável é `index` estar em `[0, raw_axis_count(pad))` ANTES de chamar isto
+  //     (checado via `raw_axis_count()`), nunca o próprio valor de retorno (achado do review
+  //     adversarial, A2-GAMEPAD).
   std::uint16_t raw_axis_code(int pad, int index) const;
 
   // --- mappings ---

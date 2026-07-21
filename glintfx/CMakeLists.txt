@@ -440,33 +440,76 @@ option(GLINTFX_MODULE_I18N
   "i18n module: translation catalog + locale-aware lookup + CLDR-lite plurals (ADR-0015 (b); depends on core ONLY, genuinely OFF-able)"
   ON)
 
-# --- ui / fx: NOT introduced in A0 (see the header comment at the top of ---
-# --- this section for the "why", and ADR-0015 (c) for the ratified split) ---
+# --- GLINTFX_MODULE_FX (real ON/OFF, FX-CARVE-1) ---
+# EN: Carves the fx AUTHORED by glintfx (tint + ripple GLSL programs, their CompileShader/
+#     RenderShader/ReleaseShader dispatch, the backdrop-capture machinery, and the 3 decorator
+#     TUs decorator_polygon/image_tint/ripple.cpp) out of the ui module into their own
+#     src/fx/effects_gl3.cpp OBJECT library, reached from render_gl3.cpp through the FxHook seam
+#     (src/fx_hook.hpp). OFF removes the fx TU and every fx symbol from the binary for real (`nm`
+#     proof: zero "Ripple"/"ImageTint"/"PolygonDecorator"/"Gl3FxHook" matches) -- an unrecognised
+#     "decorator: polygon(...)"/"image-tint(...)"/"ripple(...)" in RCSS is then just ignored by
+#     RmlUi (fail-high, bootstrap.cpp).
+#     HONEST BOUNDARY (declared, not disguised -- ADR-0015 (c)'s own caveat, now narrowed by
+#     FX-CARVE-1 instead of removed): glow/box-shadow/drop-shadow/blur/backdrop-blur/mask and
+#     gradients are native RCSS features rendered by RmlUi's OWN upstream backend
+#     (Backends/RmlUi_Renderer_GL3.cpp, compiled straight from the FetchContent tree) -- this
+#     flag does NOT remove those shaders from the binary; doing so would require patching a
+#     third-party file, real but low-ROI work deferred to a possible future FX-CARVE-2, only if
+#     a consumer asks for a genuinely minimal binary. What IS glintfx-authored -- tint, ripple,
+#     and polygon()'s own decorator wiring (polygon reuses RmlUi's stock gradient shader, no
+#     custom GLSL of its own) -- is carved completely by this flag.
+# PT: Recorta o fx AUTORAL da glintfx (programas GLSL de tint + ripple, o despacho deles de
+#     CompileShader/RenderShader/ReleaseShader, a maquinaria de captura de backdrop, e as 3 TUs
+#     de decorator decorator_polygon/image_tint/ripple.cpp) pra fora do módulo ui, numa
+#     biblioteca OBJECT própria src/fx/effects_gl3.cpp, alcançada de render_gl3.cpp pela costura
+#     FxHook (src/fx_hook.hpp). OFF remove a TU de fx e todo símbolo de fx do binário de verdade
+#     (prova via `nm`: zero ocorrências de "Ripple"/"ImageTint"/"PolygonDecorator"/"Gl3FxHook")
+#     -- um "decorator: polygon(...)"/"image-tint(...)"/"ripple(...)" não reconhecido no RCSS aí
+#     é só ignorado pelo RmlUi (fail-high, bootstrap.cpp).
+#     FRONTEIRA HONESTA (declarada, não disfarçada -- a própria ressalva da ADR-0015 (c), agora
+#     estreitada pelo FX-CARVE-1 em vez de removida): glow/box-shadow/drop-shadow/blur/
+#     backdrop-blur/mask e gradientes são features RCSS nativas renderizadas pelo PRÓPRIO backend
+#     upstream do RmlUi (Backends/RmlUi_Renderer_GL3.cpp, compilado direto da árvore
+#     FetchContent) -- esta flag NÃO remove esses shaders do binário; fazer isso exigiria patch
+#     num arquivo de terceiro, trabalho real mas de baixo ROI, adiado pra um possível FX-CARVE-2
+#     futuro, só se um consumidor pedir um binário genuinamente mínimo. O que É autoral da
+#     glintfx -- tint, ripple, e a fiação de decorator do próprio polygon() (o polygon reusa o
+#     shader de gradiente de fábrica do RmlUi, sem GLSL customizado próprio) -- é recortado por
+#     completo por esta flag.
+option(GLINTFX_MODULE_FX
+  "Fx module: glintfx-AUTHORED shader effects (tint/ripple GLSL + backdrop-capture + the 3 decorator TUs), genuinely OFF-able (FX-CARVE-1); RmlUi's own upstream filter/gradient shaders are NOT gated (see doc string above, FX-CARVE-2 candidate)"
+  ON)
+
+# --- GLINTFX_MODULE_FX (real ON/OFF since FX-CARVE-1 -- see the option() block below) ---
+# EN: FX-CARVE-1 carved the fx gate for real: the "glintfx-tint"/"glintfx-ripple" GLSL programs +
+#     their CompileShader/RenderShader/ReleaseShader dispatch + the backdrop-capture machinery
+#     (previously fused inside render_gl3.cpp) now live in the new src/fx/effects_gl3.cpp,
+#     reached from ui through the FxHook seam (src/fx_hook.hpp). See GLINTFX_MODULE_FX's own
+#     option() block further below for the honest boundary this carve stops at (RmlUi's own
+#     upstream filter/gradient shaders are NOT gated -- see that option's doc string).
+# PT: O FX-CARVE-1 recortou o gate de fx de verdade: os programas GLSL "glintfx-tint"/
+#     "glintfx-ripple" + o despacho deles de CompileShader/RenderShader/ReleaseShader + a
+#     maquinaria de captura de backdrop (antes fundidos dentro de render_gl3.cpp) agora moram no
+#     novo src/fx/effects_gl3.cpp, alcançados pela ui através da costura FxHook
+#     (src/fx_hook.hpp). Ver o próprio bloco option() de GLINTFX_MODULE_FX mais abaixo pra
+#     fronteira honesta onde este recorte para (os próprios shaders upstream de filtro/gradiente
+#     do RmlUi NÃO são gateados -- ver a doc string daquela option).
+
+# --- ui: NOT introduced in A0 (see the header comment at the top of this ---
+# --- section for the "why", and ADR-0015 (c) for the ratified split) ---
 # EN: GLINTFX_MODULE_UI would gate render_gl3.cpp/bootstrap.cpp/engine.cpp/
 #     data_binder.cpp/ui_layer.cpp/RmlUi itself -- today's whole product, with
 #     no composition yet that needs it OFF (that arrives with A2 gamepad-only
-#     / A3 audio-only, once those modules exist to compose WITHOUT ui).
-#     GLINTFX_MODULE_FX would gate decorator_polygon.cpp/decorator_ripple.cpp/
-#     decorator_image_tint.cpp, but the GL passes those decorators drive are
-#     still FUSED inside render_gl3.cpp (ADR-0015 (c)'s declared, honest
-#     caveat) -- so an fx=OFF today would still ship the effect GL code
-#     unconditionally compiled into ui, making the flag a lie. Both names are
-#     reserved by ADR-0015 (b) and will be introduced for real the moment
-#     their respective gate exists (fx: the render_gl3.cpp carving phase; ui:
-#     the first module that must compose without it).
+#     / A3 audio-only, once those modules exist to compose WITHOUT ui). The
+#     name is reserved by ADR-0015 (b) and will be introduced for real the
+#     moment the first module exists that must compose without ui.
 # PT: GLINTFX_MODULE_UI gatearia o render_gl3.cpp/bootstrap.cpp/engine.cpp/
 #     data_binder.cpp/ui_layer.cpp/o próprio RmlUi -- o produto inteiro de
 #     hoje, sem nenhuma composição ainda que precise dele OFF (isso chega com
 #     o A2 gamepad-only / A3 audio-only, quando esses módulos existirem para
-#     compor SEM a ui). GLINTFX_MODULE_FX gatearia o decorator_polygon.cpp/
-#     decorator_ripple.cpp/decorator_image_tint.cpp, mas os passes GL que
-#     esses decorators acionam ainda estão FUNDIDOS dentro do render_gl3.cpp
-#     (a ressalva honesta e declarada da ADR-0015 (c)) -- então um fx=OFF hoje
-#     ainda embarcaria o código GL de efeito compilado incondicionalmente na
-#     ui, tornando a flag uma mentira. Os dois nomes são reservados pela
-#     ADR-0015 (b) e serão introduzidos de verdade no momento em que o
-#     respectivo gate existir (fx: a fase de recorte do render_gl3.cpp; ui: o
-#     primeiro módulo que precisar compor sem ela).
+#     compor SEM a ui). O nome é reservado pela ADR-0015 (b) e será
+#     introduzido de verdade no momento em que existir o primeiro módulo que
+#     precisar compor sem a ui.
 
 if(GLINTFX_OWN_FONT_ENGINE)
   # EN: Vendored paths (L1.20-FONTFLIP Phase 1) -- always present as part of the glintfx/
@@ -583,37 +626,34 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/include/glintfx/config.hpp
   @ONLY)
 
-# EN: Core (ui+fx, still fused per ADR-0015 (c)) sources — always compiled
-#     regardless of the window/app modules. Engine + UiLayer + RenderGl3 (plus
-#     its GL3 backend) + Bootstrap + the fx decorators. version.cpp and
-#     system_clock.cpp (L1.9-VERSEMBED) used to live in this list so
-#     glintfx::version()/SystemClock stayed available in embed-only builds
-#     (GLINTFX_BACKEND_GLFW=OFF); as of ADR-0015 phase A0 they are the
-#     glintfx_core OBJECT-library target instead (see further below,
-#     unconditionally linked into glintfx), which keeps the exact same
-#     guarantee -- glintfx_core has no dependency on any module flag.
-#     stb_image_impl.cpp moved the same way, into the glintfx_image OBJECT
-#     library (also further below, unconditionally linked; GLINTFX_MODULE_IMAGE
-#     is forced ON in A0, see its option() block above).
-# PT: Sources principais (ui+fx, ainda fundidos conforme a ADR-0015 (c)) --
-#     sempre compilados independente dos módulos window/app. Engine + UiLayer +
-#     RenderGl3 (mais o backend GL3 dele) + Bootstrap + os decorators de fx.
-#     version.cpp e system_clock.cpp (L1.9-VERSEMBED) costumavam ficar nesta
-#     lista para que glintfx::version()/SystemClock continuassem disponíveis em
-#     builds embed-only (GLINTFX_BACKEND_GLFW=OFF); a partir da fase A0 da
-#     ADR-0015 eles são o alvo de biblioteca OBJECT glintfx_core (ver mais
-#     abaixo, linkado incondicionalmente na glintfx), o que mantém exatamente
-#     a mesma garantia -- glintfx_core não depende de nenhuma flag de módulo.
-#     stb_image_impl.cpp migrou do mesmo jeito, para a biblioteca OBJECT
-#     glintfx_image (também mais abaixo, linkada incondicionalmente;
+# EN: Core ui sources — always compiled regardless of the window/app modules. Engine + UiLayer +
+#     RenderGl3 (plus its GL3 backend) + Bootstrap. The 3 fx decorator TUs (decorator_polygon/
+#     image_tint/ripple.cpp) moved OUT of this flat list, FX-CARVE-1: they are now the
+#     glintfx_fx OBJECT-library target (further below, linked in only when GLINTFX_MODULE_FX=ON)
+#     alongside the new src/fx/effects_gl3.cpp. version.cpp and system_clock.cpp
+#     (L1.9-VERSEMBED) used to live in this list so glintfx::version()/SystemClock stayed
+#     available in embed-only builds (GLINTFX_BACKEND_GLFW=OFF); as of ADR-0015 phase A0 they are
+#     the glintfx_core OBJECT-library target instead (see further below, unconditionally linked
+#     into glintfx), which keeps the exact same guarantee -- glintfx_core has no dependency on
+#     any module flag. stb_image_impl.cpp moved the same way, into the glintfx_image OBJECT
+#     library (also further below, unconditionally linked; GLINTFX_MODULE_IMAGE is forced ON in
+#     A0, see its option() block above).
+# PT: Sources principais de ui -- sempre compilados independente dos módulos window/app. Engine +
+#     UiLayer + RenderGl3 (mais o backend GL3 dele) + Bootstrap. As 3 TUs de decorator de fx
+#     (decorator_polygon/image_tint/ripple.cpp) SAÍRAM desta lista plana, FX-CARVE-1: agora são o
+#     alvo de biblioteca OBJECT glintfx_fx (mais abaixo, linkado só quando GLINTFX_MODULE_FX=ON)
+#     junto do novo src/fx/effects_gl3.cpp. version.cpp e system_clock.cpp (L1.9-VERSEMBED)
+#     costumavam ficar nesta lista para que glintfx::version()/SystemClock continuassem
+#     disponíveis em builds embed-only (GLINTFX_BACKEND_GLFW=OFF); a partir da fase A0 da
+#     ADR-0015 eles são o alvo de biblioteca OBJECT glintfx_core (ver mais abaixo, linkado
+#     incondicionalmente na glintfx), o que mantém exatamente a mesma garantia -- glintfx_core
+#     não depende de nenhuma flag de módulo. stb_image_impl.cpp migrou do mesmo jeito, para a
+#     biblioteca OBJECT glintfx_image (também mais abaixo, linkada incondicionalmente;
 #     GLINTFX_MODULE_IMAGE fica forçada ON no A0, ver o bloco option() acima).
 set(_glintfx_sources
   src/render_gl3.cpp
   src/bootstrap.cpp
   src/data_binder.cpp
-  src/decorator_polygon.cpp
-  src/decorator_image_tint.cpp
-  src/decorator_ripple.cpp
   src/engine.cpp
   src/ui_layer.cpp
   ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
@@ -893,13 +933,60 @@ if(GLINTFX_MODULE_I18N)
   add_library(glintfx::i18n ALIAS glintfx_i18n)
 endif()
 
+# --- glintfx_fx (GLINTFX_MODULE_FX, real ON/OFF, FX-CARVE-1 -- see its option() block above) ---
+# EN: The glintfx-AUTHORED shader effects: src/fx/effects_gl3.cpp (tint + ripple GLSL programs,
+#     their CompileShader/RenderShader/ReleaseShader dispatch, the backdrop-capture machinery --
+#     moved verbatim out of render_gl3.cpp) plus the 3 decorator TUs (polygon/image_tint/ripple)
+#     that were previously flat in `_glintfx_sources`. Needs RmlUi::Core (Element/Geometry/
+#     Property/RenderManager/StyleSheetSpecification/... headers, all 3 decorators) and glloader
+#     (gl_loader.h + the Khronos include dir it carries transitively, every source in this
+#     target). The ${_rml_backends} include dir resolves effects_gl3.cpp's own
+#     "RmlUi_Renderer_GL3.h" include (needed for the full RenderInterface_GL3 definition the
+#     qualified `ri.RenderInterface_GL3::...` calls require, ADR-0010 Decision (a)) -- the same
+#     path render_gl3.cpp itself already uses via its own PRIVATE target_include_directories()
+#     call further below. Public+binary include dirs mirror every sibling per-module OBJECT
+#     library in this file even though nothing in this module currently #includes a public
+#     <glintfx/*.hpp> header -- kept for consistency/forward-compat with glintfx_window/
+#     glintfx_text's own shape, cheap to carry.
+# PT: Os efeitos de shader AUTORAIS da glintfx: src/fx/effects_gl3.cpp (programas GLSL de tint +
+#     ripple, o despacho deles de CompileShader/RenderShader/ReleaseShader, a maquinaria de
+#     captura de backdrop -- movidos literalmente pra fora de render_gl3.cpp) mais as 3 TUs de
+#     decorator (polygon/image_tint/ripple) que antes ficavam planas em `_glintfx_sources`.
+#     Precisa de RmlUi::Core (headers Element/Geometry/Property/RenderManager/
+#     StyleSheetSpecification/..., todos os 3 decorators) e glloader (gl_loader.h + o include dir
+#     Khronos que ele carrega transitivamente, todo source deste alvo). O include dir
+#     ${_rml_backends} resolve o próprio #include "RmlUi_Renderer_GL3.h" de effects_gl3.cpp
+#     (necessário pra definição completa de RenderInterface_GL3 que as chamadas qualificadas
+#     `ri.RenderInterface_GL3::...` exigem, Decisão (a) do ADR-0010) -- o mesmo path que o próprio
+#     render_gl3.cpp já usa via sua própria chamada target_include_directories() PRIVATE mais
+#     abaixo. Include dirs public+binary espelham toda biblioteca OBJECT por-módulo irmã deste
+#     arquivo mesmo que nada neste módulo hoje inclua um header público <glintfx/*.hpp> -- mantido
+#     por consistência/forward-compat com a própria forma do glintfx_window/glintfx_text, barato
+#     de carregar.
+if(GLINTFX_MODULE_FX)
+  add_library(glintfx_fx OBJECT
+    src/fx/effects_gl3.cpp
+    src/decorator_polygon.cpp
+    src/decorator_image_tint.cpp
+    src/decorator_ripple.cpp)
+  target_include_directories(glintfx_fx PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    PRIVATE
+    ${_rml_backends})
+  target_link_libraries(glintfx_fx PRIVATE RmlUi::Core glloader)
+  target_compile_options(glintfx_fx PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_fx)
+  add_library(glintfx::fx ALIAS glintfx_fx)
+endif()
+
 # EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
 #     target. glintfx_core/glintfx_image are unconditional (their flags are
-#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n mirror the
+#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx mirror the
 #     same guard their own add_library() call above is under.
 # PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
 #     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
-#     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n
+#     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx
 #     espelham a mesma guarda sob a qual a própria chamada add_library()
 #     delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
@@ -911,6 +998,9 @@ if(GLINTFX_MODULE_WINDOW)
 endif()
 if(GLINTFX_MODULE_I18N)
   target_link_libraries(glintfx PRIVATE glintfx_i18n)
+endif()
+if(GLINTFX_MODULE_FX)
+  target_link_libraries(glintfx PRIVATE glintfx_fx)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

@@ -60,6 +60,36 @@
 //        guarda-chuva glintfx.hpp.
 #cmakedefine01 GLINTFX_MODULE_I18N
 
+// EN: 1  (default, FX-CARVE-1) when the glintfx-AUTHORED shader fx module is compiled in: the
+//        "glintfx-tint"/"glintfx-ripple" GLSL programs + their CompileShader/RenderShader/
+//        ReleaseShader dispatch + the backdrop-capture machinery (src/fx/effects_gl3.cpp) and
+//        the 3 decorator TUs (polygon/image-tint/ripple) are all present. Used internally by
+//        render_gl3.cpp's Gl3RenderInterface constructor to gate the one call site that
+//        constructs its `fx_` seam member (`CreateGl3FxHook()`, src/fx_hook.hpp) -- never
+//        referenced from a public glintfx header, since this is a build-composition detail, not
+//        an API surface consumers branch on.
+//     0  the fx module is not compiled in: `decorator: polygon(...)`/`image-tint(...)`/
+//        `ripple(...)` in RCSS are unrecognised and ignored by RmlUi (fail-high) -- RmlUi's own
+//        upstream filter/gradient shaders (glow/box-shadow/drop-shadow/blur/backdrop-blur/mask/
+//        gradients) are UNAFFECTED (see GLINTFX_MODULE_FX's own CMakeLists.txt doc string for
+//        the honest boundary this flag stops at).
+// PT: 1  (padrão, FX-CARVE-1) quando o módulo de shader fx AUTORAL da glintfx é compilado: os
+//        programas GLSL "glintfx-tint"/"glintfx-ripple" + o despacho deles de CompileShader/
+//        RenderShader/ReleaseShader + a maquinaria de captura de backdrop
+//        (src/fx/effects_gl3.cpp) e as 3 TUs de decorator (polygon/image-tint/ripple) estão
+//        todos presentes. Usado internamente pelo construtor de Gl3RenderInterface de
+//        render_gl3.cpp pra gatear o único call site que constrói o membro de costura `fx_`
+//        (`CreateGl3FxHook()`, src/fx_hook.hpp) -- nunca referenciado de um header público da
+//        glintfx, já que isto é um detalhe de composição de build, não uma superfície de API
+//        que consumidores ramificam.
+//     0  o módulo fx não é compilado: `decorator: polygon(...)`/`image-tint(...)`/
+//        `ripple(...)` no RCSS ficam não-reconhecidos e são ignorados pelo RmlUi (fail-high) --
+//        os próprios shaders upstream de filtro/gradiente do RmlUi (glow/box-shadow/
+//        drop-shadow/blur/backdrop-blur/mask/gradientes) NÃO são afetados (ver a própria doc
+//        string de GLINTFX_MODULE_FX no CMakeLists.txt pra fronteira honesta onde esta flag
+//        para).
+#cmakedefine01 GLINTFX_MODULE_FX
+
 // EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
 //     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
 // PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()

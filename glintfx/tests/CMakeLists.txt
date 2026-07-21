@@ -1517,6 +1517,36 @@ add_test(NAME viewport_origin_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: FX-CARVE-1 -- polygon_sanity/polygon_gradient_sanity/image_tint_sanity/echo_sanity
+#     all exercise glintfx-AUTHORED fx (the polygon()/image-tint() decorators and their
+#     registration, now inside the GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library) --
+#     gated here so a lean-ui (GLINTFX_MODULE_FX=OFF) build's test suite does not try to
+#     link against a decorator surface that was never compiled in (an unrecognised
+#     "decorator: polygon(...)"/"image-tint(...)" is ignored by RmlUi, fail-high --
+#     bootstrap.cpp). All 4 .cpp files are BYTE-UNMODIFIED by FX-CARVE-1 (only this CMake
+#     gating changed) -- they remain the pixel-equivalence regression proof for the carve.
+#     echo_sanity (L1.21-ECHO) is included here too even though its own header comment never
+#     mentions "fx" by name: it is built ENTIRELY on top of the "image-tint(<url>)" decorator
+#     (auditoria-dominó finding, FX-CARVE-1 -- confirmed by grep against echo_scene.rcss:
+#     every box uses `decorator: image-tint(...)`), so it would silently render wrong (no
+#     tint at all, decorator ignored fail-high) rather than fail loudly if left ungated.
+# PT: FX-CARVE-1 -- polygon_sanity/polygon_gradient_sanity/image_tint_sanity/echo_sanity
+#     todos exercitam fx AUTORAL da glintfx (os decorators polygon()/image-tint() e o
+#     registro deles, agora dentro da biblioteca OBJECT glintfx_fx gateada por
+#     GLINTFX_MODULE_FX) -- gateados aqui pra que a suíte de teste de um build lean-ui
+#     (GLINTFX_MODULE_FX=OFF) não tente linkar contra uma superfície de decorator que nunca
+#     foi compilada (um "decorator: polygon(...)"/"image-tint(...)" não reconhecido é
+#     ignorado pelo RmlUi, fail-high -- bootstrap.cpp). Os 4 arquivos .cpp são
+#     BYTE-INALTERADOS pelo FX-CARVE-1 (só este gating de CMake mudou) -- permanecem a prova
+#     de regressão de equivalência-de-pixel da carve. O echo_sanity (L1.21-ECHO) entra aqui
+#     também mesmo o próprio comentário de cabeçalho dele nunca citando "fx" pelo nome: ele é
+#     construído INTEIRAMENTE em cima do decorator "image-tint(<url>)" (achado de
+#     auditoria-dominó, FX-CARVE-1 -- confirmado via grep contra echo_scene.rcss: toda caixa
+#     usa `decorator: image-tint(...)`), então renderizaria errado silenciosamente (nenhum
+#     tingimento, decorator ignorado fail-high) em vez de falhar alto se deixado sem gate.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_FX)
+# ---------------------------------------------------------------------------
 # EN: polygon_sanity -- verifies the "polygon(<sides>, <color>[, <rotation>])" decorator
 #     (v0.2.6, decorator_polygon.{hpp,cpp}, consumer-driven by GusWorld's hex slider node):
 #     alpha-shape proof (box centre opaque, box corner transparent -- distinguishes a polygon
@@ -1665,6 +1695,7 @@ add_test(NAME echo_sanity
     -DEXE=$<TARGET_FILE:echo_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()  # GLINTFX_MODULE_FX
 
 # ---------------------------------------------------------------------------
 # EN: input_hardening_sanity -- proves the three v0.3.0 input-surface hardening fixes (security
@@ -1708,12 +1739,16 @@ add_test(NAME input_hardening_sanity
 #     targets; glintfx's own code around it is ~6 lines). Runs in BOTH build configs (embed-mode,
 #     links ${_embed_dep} glloader -- same pair as input_hardening_sanity above; glloader is
 #     needed for offscreen.hpp's own <gl_loader.h> include even though this test has no
-#     GL-entry-point spy, unlike ripple_sanity). Depends on image_tint_fixture.png, already copied to
-#     CMAKE_CURRENT_BINARY_DIR by the image_tint_sanity/ripple_stress_sanity blocks above for the
-#     final "still usable" real-asset check. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (repo-
-#     wide embed-test convention) so "image_tint_fixture.png" resolves by bare relative name;
-#     hostile fixtures themselves are written at runtime under /var/tmp (NOT /tmp -- tmpfs on the
-#     dev machine, see the project's own CLAUDE.md gotcha), not checked into the build tree.
+#     GL-entry-point spy, unlike ripple_sanity). Depends on circle_rgba.png (flat, at
+#     CMAKE_CURRENT_BINARY_DIR/circle_rgba.png -- see asset_decode_hostile_sanity.cpp's own final
+#     "still usable" check, which reuses circle_rgba.png + texture_png_alpha.cpp's own red-pixel
+#     oracle, NOT image_tint_fixture.png as a since-corrected comment here used to claim; the
+#     flat copy previously came from the echo_sanity block below, FX-CARVE-1 fixed the
+#     resulting dangling dependency, see that fix's own comment right below). WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (repo-wide embed-test convention) so "circle_rgba.png" resolves by
+#     bare relative name; hostile fixtures themselves are written at runtime under /var/tmp (NOT
+#     /tmp -- tmpfs on the dev machine, see the project's own CLAUDE.md gotcha), not checked into
+#     the build tree.
 # PT: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE, onda LW-AUD) -- teste de corpus
 #     fixo de 5 casos para Gl3RenderInterface::LoadTexture (render_gl3.cpp) contra arquivos de
 #     asset malformados/hostis: PNG truncado no meio do IDAT, bytes de lixo puro, um PNG com
@@ -1727,14 +1762,44 @@ add_test(NAME input_hardening_sanity
 #     linhas). Roda em AMBAS as configs de build (embed-mode, linka ${_embed_dep} glloader --
 #     mesmo par de input_hardening_sanity acima; glloader é necessário pro próprio
 #     <gl_loader.h> de offscreen.hpp mesmo este teste não tendo espião de GL-entry-point,
-#     diferente do ripple_sanity). Depende de image_tint_fixture.png, já copiado para
-#     CMAKE_CURRENT_BINARY_DIR pelos blocos
-#     image_tint_sanity/ripple_stress_sanity acima para o check final "ainda usável" de asset
-#     real. WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (convenção repo-wide de teste embed) para
-#     "image_tint_fixture.png" resolver por nome relativo simples; as fixtures hostis em si são
-#     escritas em runtime sob /var/tmp (NÃO /tmp -- tmpfs na máquina de dev, ver o gotcha do
+#     diferente do ripple_sanity). Depende de circle_rgba.png (plano, em
+#     CMAKE_CURRENT_BINARY_DIR/circle_rgba.png -- ver o próprio check final "ainda usável" de
+#     asset_decode_hostile_sanity.cpp, que reusa circle_rgba.png + o mesmo oráculo de pixel
+#     vermelho de texture_png_alpha.cpp, NÃO image_tint_fixture.png como um comentário aqui,
+#     agora corrigido, afirmava antes; a cópia plana vinha antes do bloco echo_sanity abaixo, o
+#     FX-CARVE-1 corrigiu a dependência pendurada resultante, ver o próprio comentário deste fix
+#     logo abaixo). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (convenção repo-wide de teste
+#     embed) para "circle_rgba.png" resolver por nome relativo simples; as fixtures hostis em si
+#     são escritas em runtime sob /var/tmp (NÃO /tmp -- tmpfs na máquina de dev, ver o gotcha do
 #     CLAUDE.md deste projeto), não versionadas na árvore de build.
 # ---------------------------------------------------------------------------
+# EN: FX-CARVE-1 auditoria-dominó fix -- asset_decode_hostile_sanity is NOT an fx test (it
+#     exercises LoadTexture, always compiled), but its own final "still usable" real-asset check
+#     (asset_decode_hostile_sanity.cpp) resolves "circle_rgba.png" by bare relative name against
+#     WORKING_DIRECTORY, relying on the FLAT copy the (now fx-gated) echo_sanity block below used
+#     to provide unconditionally -- CONFIRMED BY RUNNING THE SUITE, not just by reading: this
+#     exact gap made the test fail for real in a first `lean-ui` run (`red_count=0 < 500`, no
+#     crash, silently wrong texture pipeline state) before this fix landed. Without an
+#     UNCONDITIONAL copy here too, this test fails to find its fixture in a `lean-ui`
+#     (GLINTFX_MODULE_FX=OFF) build -- a real regression the fx gate would otherwise introduce
+#     for an fx-unrelated test. Harmless to duplicate against texture_png_alpha's own copy above
+#     (different destination, `ui/circle_rgba.png` vs. this flat one) and against echo_sanity's
+#     own copy when fx=ON (same COPYONLY destination, configure-time, no conflict).
+# PT: fix de auditoria-dominó do FX-CARVE-1 -- asset_decode_hostile_sanity NÃO é um teste de fx
+#     (exercita o LoadTexture, sempre compilado), mas o próprio check final "ainda usável" de
+#     asset real dele (asset_decode_hostile_sanity.cpp) resolve "circle_rgba.png" por nome
+#     relativo simples contra o WORKING_DIRECTORY, dependendo da cópia PLANA que o bloco
+#     echo_sanity (agora gateado por fx) abaixo fornecia incondicionalmente -- CONFIRMADO
+#     RODANDO A SUÍTE, não só lendo: essa lacuna exata fez o teste falhar de verdade numa
+#     primeira rodada `lean-ui` (`red_count=0 < 500`, sem crash, estado da pipeline de textura
+#     silenciosamente errado) antes deste fix pousar. Sem uma cópia INCONDICIONAL aqui também,
+#     este teste falha em achar a própria fixture num build `lean-ui` (GLINTFX_MODULE_FX=OFF) --
+#     uma regressão real que o gate de fx introduziria de outra forma pra um teste sem relação
+#     com fx. Inofensivo duplicar contra a própria cópia do texture_png_alpha acima (destino
+#     diferente, `ui/circle_rgba.png` vs. esta plana) e contra a própria cópia do echo_sanity
+#     quando fx=ON (mesmo destino COPYONLY, em tempo de configure, sem conflito).
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ui/circle_rgba.png
+               ${CMAKE_CURRENT_BINARY_DIR}/circle_rgba.png COPYONLY)
 add_executable(asset_decode_hostile_sanity asset_decode_hostile_sanity.cpp)
 target_link_libraries(asset_decode_hostile_sanity PRIVATE ${_embed_dep} glloader)
 add_test(NAME asset_decode_hostile_sanity
@@ -1993,6 +2058,23 @@ add_test(NAME form_events_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
+#     "ripple()" decorator + its backdrop-capture machinery (both now inside the
+#     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated
+#     here so a lean-ui (GLINTFX_MODULE_FX=OFF) build's test suite does not try to link
+#     against a decorator/shader-injection surface that was never compiled in. Both .cpp
+#     files are BYTE-UNMODIFIED by FX-CARVE-1 (only this CMake gating changed) -- they remain
+#     the pixel-equivalence regression proof for the carve.
+# PT: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercitam o decorator "ripple()"
+#     AUTORAL da glintfx + a própria maquinaria de captura de backdrop (ambos agora dentro
+#     da biblioteca OBJECT glintfx_fx gateada por GLINTFX_MODULE_FX, src/fx/effects_gl3.cpp)
+#     -- gateados aqui pra que a suíte de teste de um build lean-ui (GLINTFX_MODULE_FX=OFF)
+#     não tente linkar contra uma superfície de decorator/injeção-de-shader que nunca foi
+#     compilada. Os dois arquivos .cpp são BYTE-INALTERADOS pelo FX-CARVE-1 (só este gating
+#     de CMake mudou) -- permanecem a prova de regressão de equivalência-de-pixel da carve.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_FX)
+# ---------------------------------------------------------------------------
 # EN: ripple_sanity -- ADVERSARIAL GATE for the "ripple([<max-radius>])" FBO-0 backdrop-refraction
 #     decorator (L1.22-WAVE, decorator_ripple.{hpp,cpp}) and its capture (L1.22-CAPTURE,
 #     Gl3RenderInterface::CaptureBackdrop, render_gl3.cpp). Proves (1) capture+refraction are
@@ -2059,6 +2141,7 @@ add_test(NAME ripple_stress_sanity
     -DEXE=$<TARGET_FILE:ripple_stress_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()  # GLINTFX_MODULE_FX
 
 # ---------------------------------------------------------------------------
 # EN: contract_consume (TST-L1-CONTRACT) — proves the consumer-side contract end-to-end from

@@ -1,6 +1,6 @@
 # Gamepad (A2-GAMEPAD reference and how-to)
 
-> **EN:** `glintfx::Gamepads` API reference, permissions/degradation contract, mapping model
+> **EN:** `glintfx::Gamepads` API reference, permission and degradation behavior, mapping model
 > (built-in database + runtime overrides), and the raw evdev surface. Diátaxis type:
 > **how-to / reference**. Audience: a developer wiring gamepad input into a glintfx-based game
 > or app, on Linux.

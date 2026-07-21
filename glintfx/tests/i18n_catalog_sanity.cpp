@@ -213,7 +213,19 @@ int main() {
 
     I18n i18n;
     i18n.load_catalog_string("[en]\nk = kept\n");
-    I18nLoadResult r = i18n.load_catalog_file(dir.c_str());
+    // EN: dir.string().c_str() (not dir.c_str()) -- std::filesystem::path::value_type is
+    //     platform-dependent: `char` on POSIX (Linux), `wchar_t` on Windows, so dir.c_str()
+    //     returns a `const wchar_t*` on MSVC, which does not implicitly convert to the
+    //     `const char*` load_catalog_file() expects (MSVC error C2664, caught live by the
+    //     win-atoms CI job -- .string() is the portable narrow-string conversion on every
+    //     platform).
+    // PT: dir.string().c_str() (não dir.c_str()) -- std::filesystem::path::value_type depende
+    //     de plataforma: `char` no POSIX (Linux), `wchar_t` no Windows, então dir.c_str()
+    //     devolve um `const wchar_t*` no MSVC, que não converte implicitamente pro
+    //     `const char*` que load_catalog_file() espera (erro MSVC C2664, capturado ao vivo
+    //     pelo job de CI win-atoms -- .string() é a conversão portável pra string estreita em
+    //     toda plataforma).
+    I18nLoadResult r = i18n.load_catalog_file(dir.string().c_str());
     check(!r.ok, "load_catalog_file(directory): ok == false, not confused with an empty file");
     check(r.entries_loaded == 0, "load_catalog_file(directory): entries_loaded == 0");
     i18n.set_locale("en");

@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.12.0](https://img.shields.io/badge/Version-0.12.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.13.0](https://img.shields.io/badge/Version-0.13.0-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -249,9 +249,9 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.12.0** (stable, tagged), 2026-07-19. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below. v0.12.0 opens the **2D game framework** direction ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): atomized module skeleton + the standalone `App`'s own input.
+> **Current release: v0.13.0** (stable, tagged), 2026-07-21. Full history in [`CHANGELOG.md`](CHANGELOG.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below. The **2D game framework** direction ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)) opened at v0.12.0 (atomized module skeleton + the standalone `App`'s own input); v0.13.0 adds the **i18n module** (multi-language: catalogs, plurals, runtime locale switch), a genuinely opt-in atom.
 
-**Delivered (v0.2.x-v0.12.0):**
+**Delivered (v0.2.x-v0.13.0):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** the `UiLayer` facade **attaches to a host-owned GL context** (game / engine) instead of creating its own window -- compose-only render, injected events, full GL state save/restore (`GlStateGuard`). Enables using glintfx **inside** a game without owning the window. First consumer: GusWorld / GusEngine (SDL3). The standalone `App` stays intact for UI-only apps. Integration contract: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Optional GLFW backend, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builds an embed-only library (`UiLayer` only) with no GLFW dependency, for SDL3/X11 hosts.
@@ -514,9 +514,9 @@ O `glintfx` é honesto sobre o que ainda não existe:
 
 ### Roadmap e visão
 
-> **Lançamento atual: v0.12.0** (estável, taggeada), 2026-07-19. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo. A v0.12.0 abre a direção **framework de jogos 2D** ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): esqueleto de módulos atomizado + o input próprio do `App` standalone.
+> **Lançamento atual: v0.13.0** (estável, taggeada), 2026-07-21. Histórico completo em [`CHANGELOG.md`](CHANGELOG.md). Testada na prática por um consumidor real (GusWorld, um jogo SDL3) ao longo das versões abaixo. A direção **framework de jogos 2D** ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)) abriu na v0.12.0 (esqueleto de módulos atomizado + input próprio do `App` standalone); a v0.13.0 adiciona o **módulo i18n** (multi-idioma: catálogos, plurais, troca de locale em runtime), um átomo genuinamente opt-in.
 
-**Entregue (v0.2.x-v0.12.0):**
+**Entregue (v0.2.x-v0.13.0):**
 
 - **Embed / guest mode ([ADR-0008](docs/adr/0008-embed-guest-mode.md)), v0.2.0:** a fachada `UiLayer` **anexa ao contexto GL de um host** (jogo / engine) em vez de criar a própria janela -- render compose-only, eventos injetados, save/restore completo do estado GL (`GlStateGuard`). Permite usar o glintfx **dentro** de um jogo sem ser dono da janela. Primeiro consumidor: GusWorld / GusEngine (SDL3). O `App` standalone permanece intacto para apps só-de-UI. Contrato de integração: [`docs/embed-integration.md`](docs/embed-integration.md).
 - **Backend GLFW opcional, v0.2.1:** `GLINTFX_BACKEND_GLFW=OFF` builda uma lib embed-only (só `UiLayer`) sem dependência de GLFW, para hosts SDL3/X11.

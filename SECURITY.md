@@ -13,8 +13,8 @@
 
 | Version | Supported |
 | :--- | :--- |
-| 0.12.x | Yes |
-| < 0.12.0 | No |
+| 0.13.x | Yes |
+| < 0.13.0 | No |
 
 > **Process note (AUD-L1-PARSE, 2026-07-16):** this table drifted for several minor releases (it named `0.4.x` while the project had already reached `0.11.0` -- the same drift class as `AUD-TEC-8`). **Bump this table's version line on every release** (whichever tag is current becomes the sole "Yes" row) as part of the release checklist, not as an afterthought caught by a later audit.
 
@@ -61,8 +61,8 @@ O `glintfx` está em estágio inicial. Apenas a última linha de release recebe 
 
 | Versão | Suportada |
 | :--- | :--- |
-| 0.12.x | Sim |
-| < 0.12.0 | Não |
+| 0.13.x | Sim |
+| < 0.13.0 | Não |
 
 > **Nota de processo (AUD-L1-PARSE, 2026-07-16):** esta tabela desalinhou por várias releases minor (nomeava `0.4.x` enquanto o projeto já estava em `0.11.0` -- a mesma classe de drift do `AUD-TEC-8`). **Atualize a linha de versão desta tabela a cada release** (a tag corrente vira a única linha "Sim") como parte do checklist de release, não como algo pego depois por uma auditoria futura.
 

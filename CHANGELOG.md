@@ -8,6 +8,15 @@
 
 ---
 
+## [0.13.0] - 2026-07-21 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.13.0)
+
+### Added / Adicionado
+
+- **EN:** **i18n module** (`GLINTFX_MODULE_I18N`), first slice (i18n-1, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): `glintfx::I18n` (`glintfx/include/glintfx/i18n.hpp`) provides translation catalogs in an own zero-dependency text format (`[locale]` sections, `key = value`, `#` comments, `.one`/`.other` plural sub-keys with `#` as the count placeholder), key lookup with a 5-step locale fallback chain, CLDR-v48 plural selection for `en` and `pt` (Portuguese `one: 0..1` differs from English `one: 1` at n=0), and runtime language switch. Depends ONLY on `core`, zero link deps, no third-party type on its public boundary, testable without GL/window (three pure test suites). Feeds the UI via the existing `bind_string`/`set_string`. `GLINTFX_MODULE_I18N=OFF` removes both code and symbol from the binary, the proof of the atomized architecture. Complex-script shaping (Arabic/Indic bidi) is explicitly deferred.
+- **PT:** **Módulo i18n** (`GLINTFX_MODULE_I18N`), primeira fatia (i18n-1, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): `glintfx::I18n` (`glintfx/include/glintfx/i18n.hpp`) oferece catálogos de tradução em formato de texto próprio zero-dependência (seções `[locale]`, `chave = valor`, comentário `#`, sub-chaves de plural `.one`/`.other` com `#` como placeholder de contagem), lookup de chave com cadeia de fallback de locale em 5 passos, seleção de plural CLDR-v48 para `en` e `pt` (o `one: 0..1` do português diverge do `one: 1` do inglês em n=0), e troca de idioma em runtime. Depende SÓ de `core`, zero deps de link, nenhum tipo de terceiro na fronteira pública, testável sem GL/janela (três suítes puras). Alimenta a UI pelos `bind_string`/`set_string` que já existem. `GLINTFX_MODULE_I18N=OFF` remove código e símbolo do binário, a prova da arquitetura atomizada. Shaping de script complexo (bidi árabe/índico) fica explicitamente adiado.
+
+---
+
 ## [0.12.0] - 2026-07-19 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.12.0)
 
 **EN:** First release of the **2D game framework** direction ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)): glintfx begins evolving from an embeddable UI layer into a batteries-included 2D game framework for Linux x86-64, on an atomized-by-subsystem architecture. This release lands the modular foundation (A0) and the standalone `App`'s own input (A1). Embed mode (`UiLayer`) is untouched; the framework additions sit on top of `App`. Drop-in from 0.11.2 (additive public surface only).

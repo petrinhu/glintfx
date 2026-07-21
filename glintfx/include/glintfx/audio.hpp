@@ -147,8 +147,29 @@ public:
   //     desligado -- shutdown() é idempotente).
   ~Audio();
 
+  // EN: Rule-of-5, explicit (clang-analyzer/cppcoreguidelines-special-member-functions): a
+  //     user-declared destructor above suppresses the implicit move members, so copy alone
+  //     would leave move ambiguous/half-declared. Spelling out all 4 states the actual policy
+  //     instead of leaving it implicit: copying an `Audio` makes no sense (it owns a live
+  //     device/engine and a table of native sound handles -- there is no sane "duplicate this
+  //     open device" semantics), and moving one out from under a live engine is unsafe by the
+  //     same RAII-ordering argument as shutdown() itself (a moved-from `Audio` would need its
+  //     own well-defined "is this the one that still owns the device" state, not needed by any
+  //     consumer of this module today -- revisit only if a real use case asks for it).
+  // PT: Regra dos 5, explícita (clang-analyzer/cppcoreguidelines-special-member-functions): um
+  //     destrutor declarado pelo usuário acima suprime os membros de move implícitos, então só
+  //     deletar o copy deixaria o move ambíguo/meio-declarado. Explicitar os 4 estados diz a
+  //     política de verdade em vez de deixar implícito: copiar um `Audio` não faz sentido (ele
+  //     é dono de um device/engine vivo e de uma tabela de handles nativos de som -- não há
+  //     semântica sã de "duplicar este device aberto"), e mover um de baixo de um engine vivo é
+  //     inseguro pelo mesmo argumento de ordem de RAII do próprio shutdown() (um `Audio`
+  //     movido-de precisaria do próprio estado bem definido de "este ainda é dono do device",
+  //     não necessário por nenhum consumidor deste módulo hoje -- revisitar só se um caso de
+  //     uso real pedir).
   Audio(const Audio&)            = delete;
   Audio& operator=(const Audio&) = delete;
+  Audio(Audio&&)                 = delete;
+  Audio& operator=(Audio&&)      = delete;
 
   // EN: Opens the miniaudio engine (and, for null_backend=true, a private null-backend
   //     context). Returns false on any miniaudio failure, OR when this instance is already

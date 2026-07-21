@@ -2304,6 +2304,59 @@ if(GLINTFX_MODULE_I18N)
   add_test(NAME i18n_plural_sanity COMMAND i18n_plural_sanity)
 endif()
 
+# EN: A3-AUDIO (framework-2D, ADR-0015 module "audio") -- glintfx_audio's own test suite.
+#     Deliberately outside both the `if(GLINTFX_BACKEND_GLFW)` block above and the Xvfb
+#     wrapper (run_xvfb.cmake): glintfx::Audio has zero GL/window/RmlUi dependency (ADR-0015
+#     (b), "audio depends on core ONLY"), same independence class as glintfx_i18n's own suite
+#     immediately above -- these are pure unit tests, no display server needed. Uses
+#     AudioConfig::null_backend=true throughout (see docs/audio.md), so no ALSA/PulseAudio
+#     dependency either -- these run in any CI container, headless.
+# PT: A3-AUDIO (framework-2D, módulo "audio" da ADR-0015) -- suíte de testes própria do
+#     glintfx_audio. Deliberadamente FORA tanto do bloco `if(GLINTFX_BACKEND_GLFW)` acima
+#     quanto do wrapper Xvfb (run_xvfb.cmake): glintfx::Audio tem zero dependência de
+#     GL/janela/RmlUi (ADR-0015 (b), "audio depende SÓ de core"), mesma classe de
+#     independência da própria suíte do glintfx_i18n logo acima -- são testes unit puros,
+#     sem servidor de display necessário. Usa AudioConfig::null_backend=true o tempo todo
+#     (ver docs/audio.md), então também sem dependência de ALSA/PulseAudio -- rodam em
+#     qualquer container de CI, headless.
+if(GLINTFX_MODULE_AUDIO)
+  # EN: audio_lifecycle_sanity -- init/shutdown/is_initialized state transitions, shutdown()
+  #     idempotency (2x + via dtor), init() called twice without an intervening shutdown(),
+  #     every op before init()/after shutdown() returning false/0, re-init after a clean
+  #     shutdown().
+  # PT: audio_lifecycle_sanity -- transições de estado init/shutdown/is_initialized,
+  #     idempotência do shutdown() (2x + via dtor), init() chamado duas vezes sem shutdown()
+  #     no meio, toda op antes de init()/depois de shutdown() retornando false/0, re-init
+  #     depois de um shutdown() limpo.
+  add_executable(audio_lifecycle_sanity audio_lifecycle_sanity.cpp)
+  target_link_libraries(audio_lifecycle_sanity PRIVATE glintfx)
+  add_test(NAME audio_lifecycle_sanity COMMAND audio_lifecycle_sanity)
+
+  # EN: audio_playback_sanity -- a minimal PCM16 WAV generated IN CODE (no binary fixture in
+  #     the repo) to a temp path; load -> play -> stop -> set_volume on a real sound; volume
+  #     hardening (NaN/Inf/negative rejected); unknown SoundId failing every per-sound op;
+  #     load_sound() of a missing path returning 0.
+  # PT: audio_playback_sanity -- um WAV PCM16 mínimo gerado EM CÓDIGO (sem fixture binária no
+  #     repo) num caminho temporário; load -> play -> stop -> set_volume num som real;
+  #     hardening de volume (NaN/Inf/negativo rejeitados); SoundId desconhecido falhando toda
+  #     operação por-som; load_sound() de um caminho ausente retornando 0.
+  add_executable(audio_playback_sanity audio_playback_sanity.cpp)
+  target_link_libraries(audio_playback_sanity PRIVATE glintfx)
+  add_test(NAME audio_playback_sanity COMMAND audio_playback_sanity)
+
+  # EN: audio_hostile_sanity -- WAV truncated mid-header/mid-data, random garbage bytes, an
+  #     empty file, a WAV lying about its data-chunk size, load_sound(nullptr) -- every case
+  #     must return 0/false and never crash (auditoria-dominó: same robustness class as
+  #     i18n_catalog_sanity/decorator_polygon).
+  # PT: audio_hostile_sanity -- WAV truncado no meio do header/data, bytes de lixo aleatório,
+  #     arquivo vazio, um WAV mentindo sobre o tamanho do chunk de data, load_sound(nullptr)
+  #     -- todo caso precisa retornar 0/false e nunca crashar (auditoria-dominó: mesma classe
+  #     de robustez do i18n_catalog_sanity/decorator_polygon).
+  add_executable(audio_hostile_sanity audio_hostile_sanity.cpp)
+  target_link_libraries(audio_hostile_sanity PRIVATE glintfx)
+  add_test(NAME audio_hostile_sanity COMMAND audio_hostile_sanity)
+endif()
+
 # ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here

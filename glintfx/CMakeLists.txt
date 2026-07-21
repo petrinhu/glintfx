@@ -440,6 +440,24 @@ option(GLINTFX_MODULE_I18N
   "i18n module: translation catalog + locale-aware lookup + CLDR-lite plurals (ADR-0015 (b); depends on core ONLY, genuinely OFF-able)"
   ON)
 
+# --- GLINTFX_MODULE_AUDIO (real ON/OFF, framework-2D slice A3-AUDIO) ---
+# EN: Sound-effect/music playback via vendored miniaudio. Same independence class as
+#     GLINTFX_MODULE_I18N above: src/audio.cpp has zero callers anywhere else in the library
+#     (nothing in render_gl3.cpp/bootstrap.cpp/engine.cpp/ui_layer.cpp/app.cpp calls into
+#     glintfx::Audio -- ADR-0015 (b), consumer-only). Depends on `core` ONLY (no GL, no
+#     window, no RmlUi type). No `audio-only` preset yet (would need GLINTFX_MODULE_UI=OFF,
+#     which does not exist as a real flag yet -- see the "ui / fx" comment further below).
+# PT: Reprodução de efeito sonoro/música via miniaudio vendorizado. Mesma classe de
+#     independência do GLINTFX_MODULE_I18N acima: src/audio.cpp não tem NENHUM chamador em
+#     outro lugar da biblioteca (nada em render_gl3.cpp/bootstrap.cpp/engine.cpp/
+#     ui_layer.cpp/app.cpp chama glintfx::Audio -- ADR-0015 (b), só-consumidor). Depende só de
+#     `core` (zero GL, zero janela, zero tipo do RmlUi). Ainda sem preset `audio-only` (exigiria
+#     GLINTFX_MODULE_UI=OFF, que ainda não existe como flag real -- ver o comentário "ui / fx"
+#     mais abaixo).
+option(GLINTFX_MODULE_AUDIO
+  "Audio module: sound-effect/music playback via vendored miniaudio (ADR-0015 (b); depends on core ONLY, genuinely OFF-able)"
+  ON)
+
 # --- GLINTFX_MODULE_FX (real ON/OFF, FX-CARVE-1) ---
 # EN: Carves the fx AUTHORED by glintfx (tint + ripple GLSL programs, their CompileShader/
 #     RenderShader/ReleaseShader dispatch, the backdrop-capture machinery, and the 3 decorator
@@ -980,15 +998,40 @@ if(GLINTFX_MODULE_FX)
   add_library(glintfx::fx ALIAS glintfx_fx)
 endif()
 
+# --- glintfx_audio (GLINTFX_MODULE_AUDIO, real ON/OFF -- see its option() block above) ---
+# EN: src/audio.cpp (ours, -Wall -Wextra) + src/miniaudio_impl.c (third-party, -w below).
+#     Threads::Threads + CMAKE_DL_LIBS + m: miniaudio dlopen's ALSA/PulseAudio/etc at
+#     runtime -- zero system audio link dependency, same "no hard link dep, discover at
+#     runtime" spirit as glloader's own OpenGL::GL + CMAKE_DL_LIBS pattern above.
+# PT: src/audio.cpp (nosso, -Wall -Wextra) + src/miniaudio_impl.c (terceiro, -w abaixo).
+#     Threads::Threads + CMAKE_DL_LIBS + m: o miniaudio faz dlopen de ALSA/PulseAudio/etc em
+#     runtime -- zero dependência de link de sistema de áudio, mesmo espírito "sem dep de
+#     link rígida, descoberta em runtime" do próprio padrão OpenGL::GL + CMAKE_DL_LIBS do
+#     glloader acima.
+if(GLINTFX_MODULE_AUDIO)
+  find_package(Threads REQUIRED)
+  set_source_files_properties(src/miniaudio_impl.c PROPERTIES COMPILE_OPTIONS "-w")
+  add_library(glintfx_audio OBJECT src/audio.cpp src/miniaudio_impl.c)
+  target_include_directories(glintfx_audio PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio)
+  target_link_libraries(glintfx_audio PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
+  target_compile_options(glintfx_audio PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_audio)
+  add_library(glintfx::audio ALIAS glintfx_audio)
+endif()
+
 # EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
 #     target. glintfx_core/glintfx_image are unconditional (their flags are
-#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx mirror the
-#     same guard their own add_library() call above is under.
+#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/glintfx_audio
+#     mirror the same guard their own add_library() call above is under.
 # PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
 #     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
-#     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx
-#     espelham a mesma guarda sob a qual a própria chamada add_library()
-#     delas está acima.
+#     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/
+#     glintfx_audio espelham a mesma guarda sob a qual a própria chamada
+#     add_library() delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
 if(GLINTFX_OWN_FONT_ENGINE)
   target_link_libraries(glintfx PRIVATE glintfx_text)
@@ -1001,6 +1044,9 @@ if(GLINTFX_MODULE_I18N)
 endif()
 if(GLINTFX_MODULE_FX)
   target_link_libraries(glintfx PRIVATE glintfx_fx)
+endif()
+if(GLINTFX_MODULE_AUDIO)
+  target_link_libraries(glintfx PRIVATE glintfx_audio)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

@@ -60,6 +60,24 @@
 //        guarda-chuva glintfx.hpp.
 #cmakedefine01 GLINTFX_MODULE_I18N
 
+// EN: 1  (default) when the audio module (ADR-0015 module "audio", framework-2D slice
+//        A3-AUDIO) is compiled in: glintfx::Audio is available (glintfx/audio.hpp), backed by
+//        the vendored miniaudio. Depends on `core` only -- no GL, no window, no RmlUi type --
+//        same independence class as GLINTFX_MODULE_I18N above, so it costs nothing to leave
+//        ON; OFF genuinely removes the translation-units and their symbols (ADR-0015 (a): flag
+//        OFF removes code, not just a no-op stub).
+//     0  glintfx::Audio is not compiled in; #include <glintfx/audio.hpp> is skipped by the
+//        umbrella header glintfx.hpp.
+// PT: 1  (padrão) quando o módulo audio (módulo "audio" da ADR-0015, fatia framework-2D
+//        A3-AUDIO) é compilado: glintfx::Audio está disponível (glintfx/audio.hpp), apoiado no
+//        miniaudio vendorizado. Depende só de `core` -- zero GL, zero janela, zero tipo do
+//        RmlUi -- mesma classe de independência do GLINTFX_MODULE_I18N acima, então não custa
+//        nada deixar ON; OFF remove de verdade as unidades de tradução e os símbolos delas
+//        (ADR-0015 (a): flag OFF remove código, não é só um stub no-op).
+//     0  glintfx::Audio não é compilado; #include <glintfx/audio.hpp> é pulado pelo header
+//        guarda-chuva glintfx.hpp.
+#cmakedefine01 GLINTFX_MODULE_AUDIO
+
 // EN: 1  (default, FX-CARVE-1) when the glintfx-AUTHORED shader fx module is compiled in: the
 //        "glintfx-tint"/"glintfx-ripple" GLSL programs + their CompileShader/RenderShader/
 //        ReleaseShader dispatch + the backdrop-capture machinery (src/fx/effects_gl3.cpp) and

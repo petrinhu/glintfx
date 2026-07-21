@@ -1,7 +1,7 @@
 # ADR-0016 — Gamepad ships as its own atom (`GLINTFX_MODULE_GAMEPAD`), `input` stays reserved / Gamepad entregue como átomo próprio (`GLINTFX_MODULE_GAMEPAD`), `input` segue reservado
 
-- **Status:** Accepted (2026-07-21) — ⚑ autonomous engineering decision by Caetano/CTO within the A2-GAMEPAD execution plan, pending the leader's retroactive confirmation (per the plan's open question #2; not yet an explicit go from petrus). / decisão de engenharia autônoma de Caetano/CTO dentro do plano de execução A2-GAMEPAD, pendente de confirmação retroativa do líder (pergunta aberta #2 do plano; ainda não é um "sim" explícito de petrus).
-- **Deciders:** Caetano (CTO, plan author) — ⚑ pending petrus's retroactive confirmation.
+- **Status:** Accepted (2026-07-21) — originally an autonomous engineering decision by Caetano/CTO within the A2-GAMEPAD execution plan (open question #2); **retroactively confirmed by the leader (petrus) on 2026-07-21**, alongside the embedded SDL-database decision (D6), clearing the way for the v0.15.0 release. / originalmente uma decisão de engenharia autônoma de Caetano/CTO dentro do plano de execução A2-GAMEPAD (pergunta aberta #2); **confirmada retroativamente pelo líder (petrus) em 2026-07-21**, junto da decisão do banco SDL embutido (D6), liberando o caminho para a release v0.15.0.
+- **Deciders:** Caetano (CTO, plan author); petrus (líder, retroactive confirmation / confirmação retroativa).
 - **Tags:** architecture, build-system, framework-mode, modularity, naming, additive, two-way-door
 - **Relates to:** [[0015-framework-2d-atomized-architecture]] (b) (the module map this ADR refines — `input` was originally described as ONE module covering both the keyboard/mouse backend and the gamepad backend), `docs/superpowers/plans/2026-07-21-framework2d-A2-gamepad.md` (the plan whose decision D1 this ADR formalizes), `TODO.md` item `A2-GAMEPAD`.
 
@@ -119,12 +119,14 @@ ordenação) fica intocada.
   understand the `input` family's final shape) for anyone auditing the module map.
 
 **Risks / points of attention:**
-- This is an autonomous engineering decision (⚑, per the plan's own convention for calls made
-  without a synchronous `AskUserQuestion` to the leader) — retroactive confirmation from petrus
-  is the open item, not a blocker to starting A2-GAMEPAD (per the plan's explicit framing:
-  "nenhuma [pergunta] bloqueia o início"). If the leader's retroactive review prefers folding
-  gamepad into a single future `GLINTFX_MODULE_INPUT` after all, this ADR is superseded by a new
-  one — not hand-edited, per the project's ADR immutability rule.
+- This started as an autonomous engineering decision (per the plan's own convention for calls
+  made without a synchronous `AskUserQuestion` to the leader, since the plan's open questions
+  explicitly did not block starting A2-GAMEPAD). **Retroactively confirmed by petrus on
+  2026-07-21** — the risk this section originally tracked (the leader preferring a folded,
+  single future `GLINTFX_MODULE_INPUT`) did not materialize; the own-atom shape is now the
+  leader-endorsed one, not a provisional one awaiting review. Should a future need ever justify
+  revisiting this shape, the project's ADR immutability rule still applies: a new ADR
+  supersedes this one, it is not hand-edited.
 
 **PT:**
 
@@ -147,12 +149,14 @@ ordenação) fica intocada.
   entender a forma final da família `input`) pra quem audita o mapa de módulos.
 
 **Riscos / pontos de atenção:**
-- Esta é uma decisão de engenharia autônoma (⚑, conforme a convenção do próprio plano pra
-  chamadas feitas sem um `AskUserQuestion` síncrono ao líder) — a confirmação retroativa de
-  petrus é o item aberto, não um bloqueio pra iniciar o A2-GAMEPAD (conforme a moldura explícita
-  do plano: "nenhuma [pergunta] bloqueia o início"). Se a revisão retroativa do líder preferir
-  dobrar o gamepad num futuro `GLINTFX_MODULE_INPUT` único afinal, este ADR é substituído por um
-  novo — não editado à mão, conforme a regra de imutabilidade de ADR do projeto.
+- Isto começou como uma decisão de engenharia autônoma (conforme a convenção do próprio plano
+  pra chamadas feitas sem um `AskUserQuestion` síncrono ao líder, já que as perguntas abertas do
+  plano explicitamente não bloqueavam o início do A2-GAMEPAD). **Confirmada retroativamente por
+  petrus em 2026-07-21** — o risco que esta seção originalmente rastreava (o líder preferir um
+  `GLINTFX_MODULE_INPUT` futuro único, dobrado) não se materializou; a forma de átomo próprio
+  agora é a endossada pelo líder, não uma provisória aguardando revisão. Caso uma necessidade
+  futura algum dia justifique revisitar esta forma, a regra de imutabilidade de ADR do projeto
+  continua valendo: um ADR novo substitui este, não é editado à mão.
 
 ## Options considered / Opções consideradas
 

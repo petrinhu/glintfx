@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] - 2026-07-21 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.15.0)
+
 ### Added / Adicionado
 
 - **EN:** **Gamepad module** (`GLINTFX_MODULE_GAMEPAD`, A2-GAMEPAD, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md) (b), [ADR-0016](docs/adr/0016-gamepad-atom.md)): `glintfx::Gamepads` (`glintfx/include/glintfx/gamepad.hpp`) talks to `/dev/input/event*` directly via raw evdev -- **zero new dependency** (no `libSDL`/`libudev`/`libevdev`). Depends on `core` ONLY, same independence class as `audio`/`i18n`; **Linux-only by nature** (evdev is a Linux kernel interface), the CMake option force-disables itself on any other `CMAKE_SYSTEM_NAME` with a `STATUS` message. Up to 8 simultaneous pads (`kMaxPads`), hotplug via raw `inotify` (`IN_CREATE`/`IN_ATTRIB`/`IN_DELETE` -- `IN_ATTRIB` specifically catches the udev permission-application race on a freshly-created device node), graceful `EACCES` degradation (no root required, 0 reachable pads is a valid, non-crashing outcome, never a hard failure). Normalized `GamepadButton`/`GamepadAxis` layout resolved via an embedded, Linux-filtered subset of the community [SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB) (vendored as DATA only, `glintfx/third_party/gamecontrollerdb/`, parsed by glintfx's own clean-room parser -- no SDL code involved) with a kernel-gamepad-spec fallback for unmatched devices, plus `load_mappings_file`/`load_mappings_text` for runtime overrides. **Full raw surface exposed too** (leader's explicit decision: do not restrict input to the standard button/axis layout) -- every raw button/axis a device reports is queryable by index. `GLINTFX_MODULE_GAMEPAD=OFF` removes both code and every symbol from the binary. See `docs/gamepad.md` for the full contract, permissions troubleshooting, and this slice's honest limits (no rumble/force-feedback, no imposed deadzone, no `App`/`AppConfig` integration yet).

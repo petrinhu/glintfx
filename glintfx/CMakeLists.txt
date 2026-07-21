@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.12.0)
+project(glintfx LANGUAGES C CXX VERSION 0.13.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
@@ -412,6 +412,33 @@ if(NOT GLINTFX_MODULE_TEXT)
     "real OFF path needs source-level changes to bootstrap.cpp's font-engine registration, "
     "deferred past ADR-0015 phase A0. Tracked in docs/adr/0015-framework-2d-atomized-architecture.md.")
 endif()
+
+# --- GLINTFX_MODULE_I18N (real ON/OFF, framework-2D slice i18n-1) ---
+# EN: Unlike GLINTFX_MODULE_IMAGE/TEXT above (reserved, forced ON because a real OFF path needs
+#     source-level guards elsewhere), i18n genuinely costs nothing to gate for real, same as
+#     GLINTFX_MODULE_WINDOW's "living embryo": src/i18n.cpp has zero callers anywhere else in
+#     the library (nothing in render_gl3.cpp/bootstrap.cpp/engine.cpp/ui_layer.cpp/app.cpp calls
+#     into glintfx::I18n -- ADR-0015 (b): "i18n" feeds the UI only via the pre-existing
+#     bind_string/set_string surface, from the CONSUMER's code, never from glintfx's own
+#     sources), so compiling it out drops both the translation unit and its symbols cleanly, no
+#     FATAL_ERROR guard needed. Depends on `core` only (no GL, no window, no RmlUi type) -- see
+#     glintfx_i18n's own add_library() block further below, which needs NEITHER glloader NOR any
+#     find_package() result, unlike every other per-module OBJECT library in this file.
+# PT: Diferente de GLINTFX_MODULE_IMAGE/TEXT acima (reservadas, forçadas ON porque um caminho
+#     OFF real precisa de guardas em nível de source em outro lugar), o i18n genuinamente não
+#     custa nada pra gatear de verdade, igual ao "embrião vivo" do GLINTFX_MODULE_WINDOW:
+#     src/i18n.cpp não tem NENHUM chamador em outro lugar da biblioteca (nada em
+#     render_gl3.cpp/bootstrap.cpp/engine.cpp/ui_layer.cpp/app.cpp chama glintfx::I18n --
+#     ADR-0015 (b): o "i18n" alimenta a ui só via a superfície pré-existente bind_string/
+#     set_string, a partir do código do CONSUMIDOR, nunca dos próprios sources da glintfx),
+#     então compilar ele fora tira tanto a unidade de tradução quanto os símbolos dela de forma
+#     limpa, sem precisar de guarda FATAL_ERROR. Depende só de `core` (zero GL, zero janela,
+#     zero tipo do RmlUi) -- ver o próprio bloco add_library() do glintfx_i18n mais abaixo, que
+#     não precisa NEM de glloader NEM de nenhum resultado de find_package(), diferente de toda
+#     outra biblioteca OBJECT por-módulo deste arquivo.
+option(GLINTFX_MODULE_I18N
+  "i18n module: translation catalog + locale-aware lookup + CLDR-lite plurals (ADR-0015 (b); depends on core ONLY, genuinely OFF-able)"
+  ON)
 
 # --- ui / fx: NOT introduced in A0 (see the header comment at the top of ---
 # --- this section for the "why", and ADR-0015 (c) for the ratified split) ---
@@ -840,20 +867,50 @@ if(GLINTFX_MODULE_WINDOW)
   add_library(glintfx::window ALIAS glintfx_window)
 endif()
 
+# --- glintfx_i18n (GLINTFX_MODULE_I18N, real ON/OFF -- see its option() block above) ---
+# EN: The leanest OBJECT library in this file: one source, one PUBLIC include dir (for
+#     <glintfx/i18n.hpp> itself), no PRIVATE link deps at all -- i18n.cpp #includes only its own
+#     public header plus <cstdlib>/<fstream>/<sstream> from the C++ standard library (confirmed
+#     by reading the file: no RmlUi, no GL, no glloader, no third-party header of any kind).
+#     This is the concrete proof of ADR-0015 (b)'s "i18n depends on core ONLY" claim, not just a
+#     table entry -- unlike glintfx_core (needs RmlUi::Core for SystemClock) or glintfx_text
+#     (needs RmlUi::Core + the vendored core/ include dir), glintfx_i18n links against nothing.
+# PT: A biblioteca OBJECT mais enxuta deste arquivo: um source, um include dir PUBLIC (pro
+#     próprio <glintfx/i18n.hpp>), nenhuma dep de link PRIVATE — i18n.cpp inclui só o próprio
+#     header público mais <cstdlib>/<fstream>/<sstream> da biblioteca padrão C++ (confirmado
+#     lendo o arquivo: sem RmlUi, sem GL, sem glloader, sem header de terceiro de nenhum tipo).
+#     Esta é a prova concreta da alegação "i18n depende SÓ de core" da ADR-0015 (b), não só uma
+#     entrada de tabela -- diferente do glintfx_core (precisa de RmlUi::Core pro SystemClock) ou
+#     do glintfx_text (precisa de RmlUi::Core + o include dir vendorizado core/), o glintfx_i18n
+#     não linka contra nada.
+if(GLINTFX_MODULE_I18N)
+  add_library(glintfx_i18n OBJECT src/i18n.cpp)
+  target_include_directories(glintfx_i18n PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
+  target_compile_options(glintfx_i18n PRIVATE -Wall -Wextra)
+  glintfx_instrument_coverage(glintfx_i18n)
+  add_library(glintfx::i18n ALIAS glintfx_i18n)
+endif()
+
 # EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
 #     target. glintfx_core/glintfx_image are unconditional (their flags are
-#     forced ON in A0); glintfx_text/glintfx_window mirror the same guard
-#     their own add_library() call above is under.
+#     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n mirror the
+#     same guard their own add_library() call above is under.
 # PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
 #     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
-#     são forçadas ON no A0); glintfx_text/glintfx_window espelham a mesma
-#     guarda sob a qual a própria chamada add_library() delas está acima.
+#     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n
+#     espelham a mesma guarda sob a qual a própria chamada add_library()
+#     delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
 if(GLINTFX_OWN_FONT_ENGINE)
   target_link_libraries(glintfx PRIVATE glintfx_text)
 endif()
 if(GLINTFX_MODULE_WINDOW)
   target_link_libraries(glintfx PRIVATE glintfx_window)
+endif()
+if(GLINTFX_MODULE_I18N)
+  target_link_libraries(glintfx PRIVATE glintfx_i18n)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

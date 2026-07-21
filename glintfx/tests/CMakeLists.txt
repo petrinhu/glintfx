@@ -2141,6 +2141,87 @@ if(GLINTFX_CONTRACT_TEST AND NOT GLINTFX_SANITIZE AND CMAKE_PROJECT_NAME STREQUA
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: i18n-1 (framework-2D, ADR-0015 module "i18n") -- glintfx_i18n's own test suite.
+#     Deliberately OUTSIDE both the `if(GLINTFX_BACKEND_GLFW)` block above and any Xvfb wrapper
+#     (run_xvfb.cmake): glintfx::I18n has zero GL/window/RmlUi dependency (ADR-0015 (b), "i18n
+#     depends on core ONLY"), so these are PURE unit tests, run directly as plain executables --
+#     same class of test as glfw_event_translate_sanity (pure formula/unit, no display to
+#     isolate), except this one does not even need to link `glfw` for header constants, since it
+#     touches nothing GLFW-shaped at all. Runs identically in BOTH GLINTFX_BACKEND_GLFW configs
+#     (ON/OFF) and proves the module builds+passes isolated per ADR-0015 (e)'s "each module ships
+#     with its own test suite that passes with all other optional modules OFF" -- there is no
+#     other optional module glintfx_i18n could possibly depend on to turn OFF here (see the
+#     zero-link-deps comment on glintfx_i18n's own add_library() block in CMakeLists.txt).
+#     Guarded on GLINTFX_MODULE_I18N (default ON) so a consumer that explicitly configures
+#     -DGLINTFX_MODULE_I18N=OFF does not fail the test build over a module it opted out of.
+# PT: i18n-1 (framework-2D, módulo "i18n" da ADR-0015) -- suíte de testes própria do
+#     glintfx_i18n. Deliberadamente FORA tanto do bloco `if(GLINTFX_BACKEND_GLFW)` acima quanto
+#     de qualquer wrapper Xvfb (run_xvfb.cmake): glintfx::I18n não tem NENHUMA dependência de
+#     GL/janela/RmlUi (ADR-0015 (b), "i18n depende SÓ de core"), então estes são testes unit
+#     PUROS, rodados direto como executáveis simples -- mesma classe de teste do
+#     glfw_event_translate_sanity (unit/fórmula puro, sem nada de display pra isolar), exceto
+#     que este nem precisa linkar `glfw` pelas constantes de header, já que não toca em nada com
+#     formato GLFW. Roda identicamente nas DUAS configs de GLINTFX_BACKEND_GLFW (ON/OFF) e prova
+#     que o módulo builda+passa isolado conforme a ADR-0015 (e), "cada módulo entrega a própria
+#     suíte de testes, que passa com todos os outros módulos opcionais OFF" -- não há nenhum
+#     outro módulo opcional do qual o glintfx_i18n pudesse depender pra desligar aqui (ver o
+#     comentário de zero-deps-de-link no próprio bloco add_library() do glintfx_i18n no
+#     CMakeLists.txt). Bloqueado por GLINTFX_MODULE_I18N (padrão ON) pra que um consumidor que
+#     configure explicitamente -DGLINTFX_MODULE_I18N=OFF não falhe o build de testes por causa
+#     de um módulo do qual ele optou sair.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_I18N)
+  # EN: i18n_catalog_sanity -- catalog parsing: well-formed multi-locale load, malformed-line
+  #     robustness (lines_skipped > 0, never a crash/abort), key=value-before-any-[locale]
+  #     rejection, last-write-wins on a repeated key, and load_catalog_string(nullptr)/
+  #     load_catalog_file(missing path) hardening (ok=false, no touch to the catalog).
+  # PT: i18n_catalog_sanity -- parsing de catálogo: carga multi-locale bem-formada, robustez a
+  #     linha malformada (lines_skipped > 0, nunca crash/abort), rejeição de key=value antes de
+  #     qualquer [locale], último-escreve-vence numa chave repetida, e hardening de
+  #     load_catalog_string(nullptr)/load_catalog_file(caminho inexistente) (ok=false, catálogo
+  #     intocado).
+  add_executable(i18n_catalog_sanity i18n_catalog_sanity.cpp)
+  target_link_libraries(i18n_catalog_sanity PRIVATE glintfx)
+  add_test(NAME i18n_catalog_sanity COMMAND i18n_catalog_sanity)
+
+  # EN: i18n_lookup_fallback_sanity -- tr()/tr_plural() RESOLUTION ORDER (i18n.hpp): exact-locale
+  #     hit, region->base-language fallback (pt-BR miss -> pt hit), explicit fallback_locale
+  #     (+ ITS base-language step), and the final bare-key last resort when nothing resolves
+  #     anywhere in the chain -- plus runtime locale switching (T1: same key, two different
+  #     set_locale() calls, two different resolved strings, no reload/re-create needed).
+  # PT: i18n_lookup_fallback_sanity -- ORDEM DE RESOLUÇÃO de tr()/tr_plural() (i18n.hpp): acerto
+  #     de locale exato, fallback região->idioma-base (miss em pt-BR -> acerto em pt), fallback
+  #     explícito fallback_locale (+ o passo de idioma-base DELE), e o último recurso de chave
+  #     crua quando nada resolve em nenhum ponto da cadeia -- mais troca de locale em runtime
+  #     (T1: mesma chave, duas chamadas set_locale() diferentes, duas strings resolvidas
+  #     diferentes, sem precisar recarregar/recriar nada).
+  add_executable(i18n_lookup_fallback_sanity i18n_lookup_fallback_sanity.cpp)
+  target_link_libraries(i18n_lookup_fallback_sanity PRIVATE glintfx)
+  add_test(NAME i18n_lookup_fallback_sanity COMMAND i18n_lookup_fallback_sanity)
+
+  # EN: i18n_plural_sanity -- CLDR-lite plural category selection for en/pt (i18n.cpp's cited
+  #     CLDR v48 chart rules), asserted by COUNT, not just presence: en one={1}/other={0,2,3,...};
+  #     pt one={0,1}/other={2,3,...} (the actual divergence between the two locales' rules, and
+  #     therefore the case most likely to silently break if the rule table is ever "simplified"
+  #     back to a single shared formula -- the exact "fórmula de conversão sem teste de delta"
+  #     bug class the glfw_event_translate_sanity header comment names). Also asserts the '#'
+  #     count-placeholder substitution (both single and multiple '#' occurrences) and negative-n
+  #     sign handling.
+  # PT: i18n_plural_sanity -- seleção de categoria de plural CLDR-lite para en/pt (regras do
+  #     gráfico CLDR v48 citado em i18n.cpp), verificada por CONTAGEM, não só presença: en
+  #     one={1}/other={0,2,3,...}; pt one={0,1}/other={2,3,...} (a divergência real entre as
+  #     regras dos dois locales, e portanto o caso mais provável de quebrar silenciosamente se a
+  #     tabela de regra algum dia for "simplificada" de volta pra uma fórmula única compartilhada
+  #     -- exatamente a classe de bug "fórmula de conversão sem teste de delta" que o comentário
+  #     de cabeçalho do glfw_event_translate_sanity nomeia). Também verifica a substituição do
+  #     placeholder de contagem '#' (tanto uma ocorrência única quanto múltiplas) e o tratamento
+  #     de sinal para n negativo.
+  add_executable(i18n_plural_sanity i18n_plural_sanity.cpp)
+  target_link_libraries(i18n_plural_sanity PRIVATE glintfx)
+  add_test(NAME i18n_plural_sanity COMMAND i18n_plural_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

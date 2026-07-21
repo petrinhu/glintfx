@@ -35,6 +35,8 @@ RmlUi 6.3 styling looks like CSS but differs in important ways. Keep these rules
 
 `box-shadow` and `filter: drop-shadow` differ: `box-shadow` is a rectangular (raster-box) shadow, while `drop-shadow` follows the element's alpha shape (e.g. rounded corners). They are independent and can be combined.
 
+> **`lean-ui` note:** `box-shadow`/`filter: drop-shadow`/`blur`/`backdrop-filter`/`mask-image`, and `linear-gradient`/`radial-gradient` themselves, are **native RCSS styling rendered by RmlUi's own upstream backend**, not glintfx effects -- they stay available even when the framework is built with `GLINTFX_MODULE_FX=OFF` (the `lean-ui` preset). Only the glintfx-AUTHORED decorators -- `polygon()`, `image-tint()`, `ripple()` -- are gated by `GLINTFX_MODULE_FX` (see ADR-0015 addendum, `docs/adr/0015-framework-2d-atomized-architecture.md`).
+
 ### How-to: a cyan glow
 
 Use `box-shadow` for a prominent rectangular halo, optionally combined with `drop-shadow` for a shape-accurate glow. A dark background maximises contrast.
@@ -509,6 +511,8 @@ A estilização do RmlUi 6.3 parece CSS mas difere de formas importantes. Lembre
 | Onda screen-space (refração de backdrop) | `decorator: ripple([<raio-max>])` + `ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width` | `raio-max` (opcional, default `0` = auto) / número (px, sem unidade) cada | `decorator: ripple(); ripple-strength: 18px; ripple-width: 40px;` |
 
 `box-shadow` e `filter: drop-shadow` diferem: `box-shadow` é uma sombra retangular (box-raster), enquanto `drop-shadow` segue a forma do alpha do elemento (ex.: cantos arredondados). São independentes e podem ser combinados.
+
+> **Nota `lean-ui`:** `box-shadow`/`filter: drop-shadow`/`blur`/`backdrop-filter`/`mask-image`, e os próprios `linear-gradient`/`radial-gradient`, são **estilização RCSS nativa renderizada pelo próprio backend upstream do RmlUi**, não efeitos da glintfx -- continuam disponíveis mesmo com o framework buildado com `GLINTFX_MODULE_FX=OFF` (preset `lean-ui`). Só os decorators AUTORAIS da glintfx -- `polygon()`, `image-tint()`, `ripple()` -- são gateados por `GLINTFX_MODULE_FX` (ver adendo da ADR-0015, `docs/adr/0015-framework-2d-atomized-architecture.md`).
 
 ### How-to: um glow ciano
 

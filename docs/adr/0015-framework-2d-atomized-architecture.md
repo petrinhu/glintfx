@@ -121,3 +121,25 @@ Contra essa meta o líder impôs UMA restrição arquitetural dura, confirmada e
 - Deriva de granularidade nas DUAS direções: flag por função (explosão combinatória) e "junta tudo de volta por conveniência" (regressão a monolito) são ambas proibidas por este ADR; a lista de módulos em (b) só muda por novo ADR.
 - A sequência canônica põe a fase A0 (esqueleto modular de build, sem API nova) ANTES do A1 (doc de visão, Opção A); se o líder adiantar uma fatia de capacidade à frente do A0, o código dela aterrissa sob o gate existente `GLINTFX_BACKEND_GLFW` e a regra (f) é a mitigação (posicionado pra que o split de flag seja movimento de arquivo de build).
 - Gamepad (A2) introduz superfície de input NÃO-CONFIÁVEL nova (arquivo de DB de mapeamento, devices); o gatilho (d) do `.bigtech-porte` fica de vigília (Narciso/CISO).
+
+## Addendum (2026-07-21): FX-CARVE-2 evaluated and deferred / Adendo (2026-07-21): FX-CARVE-2 avaliada e adiada
+
+**EN:** FX-CARVE-2 -- the candidate flagged by (c)'s honest caveat and by FX-CARVE-1's own doc string (`glintfx/CMakeLists.txt`, `GLINTFX_MODULE_FX` block): removing RmlUi's own upstream filter shaders (`Backends/RmlUi_Renderer_GL3.cpp`) from the `lean-ui` preset (`GLINTFX_MODULE_FX=OFF`), completing the narrowing FX-CARVE-1 (v0.14.0) started -- was evaluated by the CTO and **DEFERRED by the leader's decision**.
+
+Reframing that drove the call: those "filters" include `linear-gradient`/`radial-gradient`/`mask-image`, which are **standard RCSS styling**, not glintfx-authorial effects. Stripping them from a preset named lean-*ui* would be a **UI feature regression**, not atomization -- FX-CARVE-1 already drew the correct line: `fx` = what is authorial to glintfx (tint/ripple/backdrop-capture).
+
+No good path exists today: (1) RmlUi's renderer has no native option to disable filters (monolithic, ~10 shaders compiled eager in `Gfx::CreateShaders()`); (2) a `PATCH_COMMAND` fork of upstream (~1000 lines) would be exactly the "silent fork, re-resolved every RmlUi bump" that `patches/README.md` forbids; (3) intercepting at the glintfx layer (~50 lines) saves zero bytes -- the shaders stay linked either way.
+
+ROI does not close: ~25-30 KB (< 1% of a stripped binary) plus ~3ms init, against perpetual fork maintenance and visual-regression risk across every RmlUi filter.
+
+Reopening triggers (either one revives the phase): (i) a real `lean-ui` consumer with a numeric footprint requirement (none today -- GusWorld consumes fx FULL); (ii) upstream RmlUi shipping a minimal-build option (e.g. an `RMLUI_GL3_MINIMAL`-shaped toggle) -- the sustainable path, to be pursued as a feature request if (i) fires.
+
+**PT:** A FX-CARVE-2 -- a candidata sinalizada pela ressalva honesta de (c) e pela própria doc string da FX-CARVE-1 (`glintfx/CMakeLists.txt`, bloco `GLINTFX_MODULE_FX`): remover os próprios shaders de filtro do backend upstream do RmlUi (`Backends/RmlUi_Renderer_GL3.cpp`) do preset `lean-ui` (`GLINTFX_MODULE_FX=OFF`), completando o estreitamento que a FX-CARVE-1 (v0.14.0) começou -- foi avaliada pelo CTO e **ADIADA por decisão do líder**.
+
+Reenquadramento que motivou a decisão: esses "filtros" incluem `linear-gradient`/`radial-gradient`/`mask-image`, que são **estilização RCSS PADRÃO**, não efeito autoral do glintfx. Removê-los de um preset chamado lean-*ui* seria **regressão de feature de UI**, não atomização -- a FX-CARVE-1 já traçou a fronteira certa: `fx` = o que é autoral do glintfx (tint/ripple/backdrop-capture).
+
+Nenhuma via boa existe hoje: (1) o RmlUi não tem option nativa pra desligar filtros (renderer monolítico, ~10 shaders compilados eager no ctor `Gfx::CreateShaders()`); (2) um `PATCH_COMMAND` seria um fork de ~1000 linhas re-resolvido a cada bump do RmlUi -- exatamente o "fork silencioso" que o `patches/README.md` proíbe; (3) interceptar na camada glintfx (~50 linhas) economiza 0 bytes -- os shaders continuam linkados de qualquer forma.
+
+O ROI não fecha: ~25-30 KB (< 1% de um binário stripped) mais ~3ms de init, contra manutenção perpétua de fork e risco de regressão visual em todos os filtros do RmlUi.
+
+Gatilhos de reabertura (qualquer um dos dois revive a fase): (i) um consumidor real do `lean-ui` com requisito de footprint com número (hoje ninguém consome lean-ui em produção; o GusWorld usa fx FULL); (ii) o upstream do RmlUi passar a oferecer uma option de build mínimo (ex.: um toggle no formato `RMLUI_GL3_MINIMAL`) -- o caminho sustentável, a ser perseguido como feature-request se (i) disparar.

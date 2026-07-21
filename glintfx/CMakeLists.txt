@@ -504,11 +504,20 @@ endif()
 #     FX-CARVE-1 instead of removed): glow/box-shadow/drop-shadow/blur/backdrop-blur/mask and
 #     gradients are native RCSS features rendered by RmlUi's OWN upstream backend
 #     (Backends/RmlUi_Renderer_GL3.cpp, compiled straight from the FetchContent tree) -- this
-#     flag does NOT remove those shaders from the binary; doing so would require patching a
-#     third-party file, real but low-ROI work deferred to a possible future FX-CARVE-2, only if
-#     a consumer asks for a genuinely minimal binary. What IS glintfx-authored -- tint, ripple,
-#     and polygon()'s own decorator wiring (polygon reuses RmlUi's stock gradient shader, no
-#     custom GLSL of its own) -- is carved completely by this flag.
+#     flag does NOT remove those shaders from the binary. That is BY DESIGN, not a gap: those
+#     filters/gradients/masks are standard UI styling, not glintfx effects, so `lean-ui` (fx
+#     OFF) keeps them on purpose -- removing them would be a UI feature regression, not
+#     atomization. The natural next carve (FX-CARVE-2) was evaluated by the CTO and DEFERRED by
+#     the leader's decision (2026-07-21): no good path exists (RmlUi has no native minimal-build
+#     toggle; a PATCH_COMMAND fork of ~1000 lines is the "silent fork" patches/README.md
+#     forbids; intercepting at the glintfx layer saves zero bytes, the shaders stay linked
+#     either way) and the ROI does not close (~25-30 KB, <1% of a stripped binary) against
+#     perpetual fork-maintenance and visual-regression risk. See ADR-0015 addendum
+#     (docs/adr/0015-framework-2d-atomized-architecture.md) for the full rationale and the 2
+#     reopening triggers (a real lean-ui consumer with a numeric footprint requirement, or an
+#     upstream RmlUi minimal-build option). What IS glintfx-authored -- tint, ripple, and
+#     polygon()'s own decorator wiring (polygon reuses RmlUi's stock gradient shader, no custom
+#     GLSL of its own) -- is carved completely by this flag.
 # PT: Recorta o fx AUTORAL da glintfx (programas GLSL de tint + ripple, o despacho deles de
 #     CompileShader/RenderShader/ReleaseShader, a maquinaria de captura de backdrop, e as 3 TUs
 #     de decorator decorator_polygon/image_tint/ripple.cpp) pra fora do módulo ui, numa
@@ -521,12 +530,22 @@ endif()
 #     estreitada pelo FX-CARVE-1 em vez de removida): glow/box-shadow/drop-shadow/blur/
 #     backdrop-blur/mask e gradientes são features RCSS nativas renderizadas pelo PRÓPRIO backend
 #     upstream do RmlUi (Backends/RmlUi_Renderer_GL3.cpp, compilado direto da árvore
-#     FetchContent) -- esta flag NÃO remove esses shaders do binário; fazer isso exigiria patch
-#     num arquivo de terceiro, trabalho real mas de baixo ROI, adiado pra um possível FX-CARVE-2
-#     futuro, só se um consumidor pedir um binário genuinamente mínimo. O que É autoral da
-#     glintfx -- tint, ripple, e a fiação de decorator do próprio polygon() (o polygon reusa o
-#     shader de gradiente de fábrica do RmlUi, sem GLSL customizado próprio) -- é recortado por
-#     completo por esta flag.
+#     FetchContent) -- esta flag NÃO remove esses shaders do binário. Isso é DE PROPÓSITO, não
+#     lacuna: esses filtros/gradientes/máscaras são estilização de UI PADRÃO, não efeito
+#     glintfx, então o `lean-ui` (fx OFF) os mantém deliberadamente -- removê-los seria
+#     regressão de feature de UI, não atomização. O próximo recorte natural (FX-CARVE-2) foi
+#     avaliado pelo CTO e ADIADO por decisão do líder (2026-07-21): nenhuma via boa existe (o
+#     RmlUi não tem toggle nativo de build mínimo; um fork via PATCH_COMMAND de ~1000 linhas é
+#     o "fork silencioso" que o patches/README.md proíbe; interceptar na camada glintfx
+#     economiza 0 bytes, os shaders continuam linkados de qualquer forma) e o ROI não fecha
+#     (~25-30 KB, <1% de um binário stripped) contra manutenção perpétua de fork e risco de
+#     regressão visual. Ver o adendo da ADR-0015
+#     (docs/adr/0015-framework-2d-atomized-architecture.md) pro racional completo e os 2
+#     gatilhos de reabertura (um consumidor real do lean-ui com requisito de footprint com
+#     número, ou uma option de build mínimo do RmlUi upstream). O que É autoral da glintfx --
+#     tint, ripple, e a fiação de decorator do próprio polygon() (o polygon reusa o shader de
+#     gradiente de fábrica do RmlUi, sem GLSL customizado próprio) -- é recortado por completo
+#     por esta flag.
 option(GLINTFX_MODULE_FX
   "Fx module: glintfx-AUTHORED shader effects (tint/ripple GLSL + backdrop-capture + the 3 decorator TUs), genuinely OFF-able (FX-CARVE-1); RmlUi's own upstream filter/gradient shaders are NOT gated (see doc string above, FX-CARVE-2 candidate)"
   ON)

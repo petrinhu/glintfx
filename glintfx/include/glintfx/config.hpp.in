@@ -42,6 +42,24 @@
 //        setado quando um consumidor configura explicitamente -DGLINTFX_OWN_FONT_ENGINE=OFF).
 #cmakedefine01 GLINTFX_OWN_FONT_ENGINE
 
+// EN: 1  (default) when the i18n module (ADR-0015 module "i18n", framework-2D slice i18n-1) is
+//        compiled in: glintfx::I18n is available (glintfx/i18n.hpp). Depends on `core` only --
+//        no GL, no window, no RmlUi type -- so it costs nothing to leave ON; OFF genuinely
+//        removes the translation-unit and its symbols (ADR-0015 (a): flag OFF removes code, not
+//        just a no-op stub), the same "living embryo" pattern GLINTFX_MODULE_WINDOW already
+//        proves for a module built this cheaply outside phase A0.
+//     0  glintfx::I18n is not compiled in; #include <glintfx/i18n.hpp> is skipped by the
+//        umbrella header glintfx.hpp.
+// PT: 1  (padrão) quando o módulo i18n (módulo "i18n" da ADR-0015, fatia framework-2D i18n-1)
+//        é compilado: glintfx::I18n está disponível (glintfx/i18n.hpp). Depende só de `core` --
+//        zero GL, zero janela, zero tipo do RmlUi -- então não custa nada deixar ON; OFF remove
+//        de verdade a unidade de tradução e os símbolos dela (ADR-0015 (a): flag OFF remove
+//        código, não é só um stub no-op), o mesmo padrão "embrião vivo" que GLINTFX_MODULE_WINDOW
+//        já prova pra um módulo construído tão barato fora da fase A0.
+//     0  glintfx::I18n não é compilado; #include <glintfx/i18n.hpp> é pulado pelo header
+//        guarda-chuva glintfx.hpp.
+#cmakedefine01 GLINTFX_MODULE_I18N
+
 // EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
 //     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
 // PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()

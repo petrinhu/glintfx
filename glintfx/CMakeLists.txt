@@ -1071,7 +1071,7 @@ endif()
 #     PRIVATE (mesma forma "só core" do glintfx_i18n acima): evdev/inotify são headers UAPI do
 #     kernel + syscalls, não uma biblioteca de sistema linkável.
 if(GLINTFX_MODULE_GAMEPAD)
-  add_library(glintfx_gamepad OBJECT src/gamepad_decode.cpp src/gamepad_mapping.cpp)
+  add_library(glintfx_gamepad OBJECT src/gamepad_decode.cpp src/gamepad_mapping.cpp src/gamepad.cpp)
   target_include_directories(glintfx_gamepad PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>

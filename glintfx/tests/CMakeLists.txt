@@ -2450,6 +2450,31 @@ if(GLINTFX_MODULE_GAMEPAD)
   target_link_libraries(gamepad_mapping_hostile PRIVATE glintfx)
   target_include_directories(gamepad_mapping_hostile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
   add_test(NAME gamepad_mapping_hostile COMMAND gamepad_mapping_hostile)
+
+  # EN: Wave 2 (Agent B) test suite: the device layer (src/gamepad.cpp), reached only through the
+  #     public glintfx::Gamepads facade (glintfx/gamepad.hpp) -- no internal src/ include needed
+  #     for these three, unlike the Wave 1 tests above. `dev_dir` is always overridden to a
+  #     throwaway temp directory (GamepadsConfig::dev_dir, see gamepad.hpp's own doc-comment) --
+  #     these tests never touch the host's real /dev/input devices, so they are just as
+  #     Xvfb-free/headless-safe as the Wave 1 pair above.
+  # PT: Suíte de teste da Onda 2 (Agente B): a camada de device (src/gamepad.cpp), alcançada só
+  #     pela fachada pública glintfx::Gamepads (glintfx/gamepad.hpp) -- nenhum include interno de
+  #     src/ é necessário pra estes três, diferente dos testes da Onda 1 acima. `dev_dir` é
+  #     sempre sobrescrito pra um diretório temporário descartável (GamepadsConfig::dev_dir, ver o
+  #     próprio doc-comment do gamepad.hpp) -- estes testes nunca tocam nos devices reais de
+  #     /dev/input do host, então são tão livres de Xvfb/seguros pra headless quanto o par da
+  #     Onda 1 acima.
+  add_executable(gamepad_device_sanity gamepad_device_sanity.cpp)
+  target_link_libraries(gamepad_device_sanity PRIVATE glintfx)
+  add_test(NAME gamepad_device_sanity COMMAND gamepad_device_sanity)
+
+  add_executable(gamepad_hotplug_smoke gamepad_hotplug_smoke.cpp)
+  target_link_libraries(gamepad_hotplug_smoke PRIVATE glintfx)
+  add_test(NAME gamepad_hotplug_smoke COMMAND gamepad_hotplug_smoke)
+
+  add_executable(gamepad_api_hardening gamepad_api_hardening.cpp)
+  target_link_libraries(gamepad_api_hardening PRIVATE glintfx)
+  add_test(NAME gamepad_api_hardening COMMAND gamepad_api_hardening)
 endif()
 
 # ---------------------------------------------------------------------------

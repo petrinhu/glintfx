@@ -41,6 +41,15 @@ audio.shutdown();                     // or just let `audio` go out of scope
   lifetime of one `Audio` object, so a stale id simply fails the lookup, safely.
 - Re-`init()` after a clean `shutdown()` is fully supported (a level transition in a real game
   is exactly this cycle).
+- **The sounds-before-engine order is an ASan blind spot (review adversarial finding, not a bug
+  today):** `shutdown()`'s ordering is correct as shipped, but flipping it would NOT be caught
+  by AddressSanitizer. `ma_engine_uninit()` never `free()`s the `ma_engine` itself (it is a
+  plain member owned by `Audio`, not a separate heap allocation miniaudio owns) -- it only tears
+  down what is *inside* it. A hypothetical future refactor that ran `ma_engine_uninit()` before
+  the per-sound `ma_sound_uninit()` calls would touch memory that is still live and
+  un-poisoned, so no sanitizer flags it; the breakage would be silent, undefined-behaviour-class
+  reads of a half-torn-down engine. This is documented at the exact call site in
+  `glintfx/src/audio.cpp`'s `shutdown()` -- read that comment before touching the ordering.
 
 ### API reference
 
@@ -142,6 +151,16 @@ audio.shutdown();                     // ou simplesmente deixe `audio` sair de e
   com segurança.
 - Re-`init()` depois de um `shutdown()` limpo é totalmente suportado (uma transição de nível
   num jogo de verdade é exatamente esse ciclo).
+- **A ordem sons-antes-do-engine é um ponto cego do ASan (achado do review adversarial, não é
+  bug hoje):** a ordem do `shutdown()` está correta como entregue, mas invertê-la NÃO seria
+  pega pelo AddressSanitizer. `ma_engine_uninit()` nunca dá `free()` no próprio `ma_engine` (ele
+  é um membro simples possuído pelo `Audio`, não uma alocação de heap separada que o miniaudio
+  possui) -- só desmonta o que está *dentro* dele. Um refactor futuro hipotético que rodasse
+  `ma_engine_uninit()` antes das chamadas `ma_sound_uninit()` por-som tocaria memória ainda viva
+  e não-envenenada, então nenhum sanitizer acusa; a quebra seria silenciosa, leituras classe
+  undefined-behaviour de um engine meio-desmontado. Isto está documentado no ponto exato de
+  chamada em `glintfx/src/audio.cpp`, no `shutdown()` -- leia aquele comentário antes de mexer
+  na ordem.
 
 ### Referência de API
 

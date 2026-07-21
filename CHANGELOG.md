@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.14.0] - 2026-07-21 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.14.0)
+
 ### Added / Adicionado
 
 - **EN:** **Fx module carve** (`GLINTFX_MODULE_FX`, FX-CARVE-1, framework 2D, [ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md) (c)): the glintfx-AUTHORED shader effects -- the "glintfx-tint"/"glintfx-ripple" GLSL programs, their `CompileShader`/`RenderShader`/`ReleaseShader` dispatch, the backdrop-capture machinery ([ADR-0010](docs/adr/0010-image-tint-luminance-key.md), [ADR-0012](docs/adr/0012-backdrop-capture.md)), and the 3 decorator translation units (`polygon()`/`image-tint()`/`ripple()`) -- move out of `render_gl3.cpp`/`bootstrap.cpp` into a new `glintfx_fx` OBJECT library (`src/fx/effects_gl3.cpp` + the 3 decorators), reached from `ui` through a new seam header (`src/fx_hook.hpp`, abstract `FxHook`). `GLINTFX_MODULE_FX=OFF` removes the fx translation unit and every fx symbol from the binary for real (`nm` proof: zero `Ripple`/`ImageTint`/`PolygonDecorator`/`Gl3FxHook` matches) -- an unrecognised `decorator: polygon(...)`/`image-tint(...)`/`ripple(...)` in RCSS is then just ignored by RmlUi (fail-high). New named preset `lean-ui` (`CMakePresets.json`, `GLINTFX_MODULE_FX=OFF`). Honest boundary, declared not disguised: RmlUi's own upstream `glow`/`box-shadow`/`drop-shadow`/`blur`/`backdrop-blur`/`mask`/gradient shaders (`Backends/RmlUi_Renderer_GL3.cpp`) are native RCSS features rendered by RmlUi's own backend and are **not** removed by this flag -- doing so would need a patch to a third-party file, real but low-ROI, deferred to a possible future `FX-CARVE-2`. No public API change; the 5 pre-existing fx sanity tests (`polygon_sanity`, `polygon_gradient_sanity`, `image_tint_sanity`, `ripple_sanity`, `ripple_stress_sanity`) plus `echo_sanity` (auditoria-dominó finding: it is built entirely on `image-tint()`, previously ungated) stay byte-unmodified and CMake-gated on the new flag.

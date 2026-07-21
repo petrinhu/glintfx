@@ -159,9 +159,41 @@ void Audio::shutdown() {
   // EN: THE non-negotiable ordering (see audio.hpp's header comment): every ma_sound is
   //     uninitialized BEFORE ma_engine_uninit() tears down the device/context a live ma_sound
   //     would otherwise still be referencing.
+  //
+  //     ASAN BLIND SPOT (review adversarial finding #1, S4, non-blocking but load-bearing to
+  //     know): this ordering canNOT be verified by flipping it and expecting ASan to go red.
+  //     `impl_->engine` is a plain member of `Impl` (stack/heap-embedded by whoever owns the
+  //     `Audio`, e.g. via `std::make_unique<Impl>()`), NOT a separately heap-allocated object
+  //     `ma_engine_uninit()` itself `free()`s -- miniaudio's teardown releases the engine's
+  //     INTERNAL resources (device, resource-manager link, node graph) but never returns the
+  //     `ma_engine*` memory to the allocator, because it never owned that memory in the first
+  //     place. So a future refactor that swaps this to "engine first, then sounds" would NOT
+  //     produce a use-after-free ASan can catch: `ma_sound_uninit()` called after
+  //     `ma_engine_uninit()` still touches perfectly live, un-poisoned memory (the `ma_sound`
+  //     struct and the `ma_engine` struct it points back into are both still allocated, just
+  //     torn down internally) -- the bug would be silent memory-safety-tool-invisible breakage
+  //     (undefined/backend-dependent behaviour reading a half-torn-down engine, not a crash),
+  //     caught only by manual code review of this exact ordering. If you touch this function,
+  //     re-read this comment before moving a single line.
   // PT: A ordem inegociável (ver o comentário de cabeçalho do audio.hpp): todo ma_sound é
   //     desinicializado ANTES de ma_engine_uninit() derrubar o device/contexto que um ma_sound
   //     vivo estaria referenciando.
+  //
+  //     PONTO CEGO DO ASAN (achado #1 do review adversarial, S4, não-bloqueante mas importante
+  //     de saber): esta ordem NÃO pode ser verificada invertendo-a e esperando o ASan acusar.
+  //     `impl_->engine` é um membro simples de `Impl` (embutido em stack/heap por quem for dono
+  //     do `Audio`, ex.: via `std::make_unique<Impl>()`), NÃO um objeto alocado separadamente no
+  //     heap que o próprio `ma_engine_uninit()` dá `free()` -- o teardown do miniaudio libera os
+  //     recursos INTERNOS do engine (device, ligação com o resource manager, node graph) mas
+  //     nunca devolve a memória do `ma_engine*` pro alocador, porque ele nunca foi dono dessa
+  //     memória. Então um refactor futuro que trocar pra "engine primeiro, depois os sons" NÃO
+  //     produziria um use-after-free que o ASan pega: `ma_sound_uninit()` chamado depois de
+  //     `ma_engine_uninit()` ainda toca memória perfeitamente viva e não-envenenada (a struct
+  //     `ma_sound` e a struct `ma_engine` pra qual ela aponta de volta continuam alocadas, só
+  //     desmontadas internamente) -- o bug seria uma quebra silenciosa, invisível pra ferramenta
+  //     de memory-safety (comportamento indefinido/dependente-de-backend lendo um engine
+  //     meio-desmontado, não um crash), pega só por review manual desta ordem exata. Se você
+  //     mexer nesta função, releia este comentário antes de mover uma linha sequer.
   for (auto& entry : impl_->sounds) {
     ma_sound_uninit(entry.second.get());
   }

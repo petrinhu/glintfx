@@ -22,6 +22,7 @@
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/window_mode.hpp>  // EN: window mode (A4-WINMODES, framework-2D). PT: modo de janela (A4-WINMODES, framework-2D).
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 namespace glintfx {
 
@@ -52,6 +53,22 @@ struct AppConfig {
   //     defina FontEngine::FreeType para um rollback de uma linha, sem rebuild, ao motor
   //     embutido do RmlUi.
   FontEngine font_engine = FontEngine::Own;
+
+  // EN: Initial window mode (A4-WINMODES, framework-2D; consumer-driven -- GusWorld's maximized
+  //     window was invading the KDE taskbar). An invalid value (e.g. an out-of-range
+  //     static_cast) falls back to WindowMode::Windowed -- validated by App's constructor
+  //     BEFORE the window is created, so create() never fails because of this field. See
+  //     window_mode.hpp for the per-mode semantics (Maximized respects the WM work area;
+  //     FullscreenDesktop covers everything, panels included, BY DESIGN) and
+  //     App::set_window_mode() below for the runtime equivalent.
+  // PT: Modo inicial da janela (A4-WINMODES, framework-2D; consumer-driven -- a janela
+  //     maximizada do GusWorld invadia a barra de tarefas do KDE). Um valor inválido (ex.: um
+  //     static_cast fora de faixa) cai pra WindowMode::Windowed -- validado pelo construtor do
+  //     App ANTES da janela ser criada, então create() nunca falha por causa deste campo. Ver
+  //     window_mode.hpp para a semântica por modo (Maximized respeita a work area do WM;
+  //     FullscreenDesktop cobre tudo, painéis inclusive, BY DESIGN) e App::set_window_mode()
+  //     abaixo para o equivalente em runtime.
+  WindowMode window_mode = WindowMode::Windowed;
 };
 
 // EN: RAII application facade. Owns the window, renderer, and UI bootstrap.
@@ -129,6 +146,63 @@ public:
   // PT: Sobrepõe o base URL para resolução de assets (paridade com UiLayer).
   //     Caminhos relativos de assets são prefixados com base_url/. Chame antes de load().
   void set_asset_base_url(const char* url);
+
+  // EN: Switch window mode at runtime (A4-WINMODES, framework-2D; D1 -- table-stakes for a
+  //     game's options menu / Alt+Enter fullscreen toggle). Returns false (no-op, window
+  //     untouched) when !ok() or `mode` is not a valid enumerator (an out-of-range
+  //     static_cast); true when the request was issued to the window system -- the WM/
+  //     compositor has final say, query window_mode() for the LIVE result afterwards.
+  //     Re-requesting the current mode is a safe no-op returning true.
+  //     Transition mechanics (D7): leaving Windowed saves the current position+size so a later
+  //     return to Windowed restores it (a window that was never windowed restores to
+  //     AppConfig's construction width×height at position (64,64) -- documented default).
+  //     Fullscreen -> Maximized restores windowed FIRST, then maximizes (D8, mandatory order --
+  //     GLFW has no direct fullscreen->maximized transition).
+  //     Wayland (D10): FullscreenExclusive is compositor-EMULATED (no real mode-set, the
+  //     compositor scales -- GLFW's documented behaviour); restore position is best-effort
+  //     (window position is not readable/settable under native Wayland). Primary monitor only
+  //     in this slice (multi-monitor selection -- INBOX). See docs/window-modes.md for the
+  //     full per-platform breakdown.
+  // PT: Troca o modo de janela em runtime (A4-WINMODES, framework-2D; D1 -- table-stakes pra
+  //     menu de opções de jogo / toggle de fullscreen Alt+Enter). Retorna false (no-op, janela
+  //     intocada) quando !ok() ou `mode` não é um enumerador válido (um static_cast fora de
+  //     faixa); true quando o pedido foi emitido ao sistema de janelas -- o WM/compositor tem a
+  //     palavra final, consulte window_mode() pelo resultado VIVO depois. Repedir o modo
+  //     corrente é um no-op seguro que retorna true.
+  //     Mecânica de transição (D7): sair de Windowed salva a posição+tamanho corrente para que
+  //     um retorno posterior a Windowed os restaure (uma janela que nunca foi windowed restaura
+  //     pro width×height de construção do AppConfig na posição (64,64) -- default documentado).
+  //     Fullscreen -> Maximized restaura windowed PRIMEIRO, depois maximiza (D8, ordem
+  //     obrigatória -- o GLFW não tem transição direta fullscreen->maximizada).
+  //     Wayland (D10): FullscreenExclusive é EMULADO pelo compositor (sem troca de modo real,
+  //     o compositor escala -- comportamento documentado do GLFW); a restauração de posição é
+  //     best-effort (posição de janela não é legível/gravável sob Wayland nativo). Só monitor
+  //     primário nesta fatia (seleção multi-monitor -- INBOX). Ver docs/window-modes.md para o
+  //     detalhamento completo por plataforma.
+  bool set_window_mode(WindowMode mode);
+
+  // EN: Query the LIVE window mode, derived from the window system -- NOT an echo of the last
+  //     set_window_mode()/AppConfig::window_mode request (A4-WINMODES, D4). Returns
+  //     WindowMode::Windowed when !ok(). The user (or the WM) can maximize/restore the window
+  //     through means glintfx never sees (a taskbar button, a WM keybinding); an echo would
+  //     lie in that case. Headless consequence (documented, not a bug): under Xvfb (no window
+  //     manager) a Maximized request may not be honoured, and this call can report Windowed --
+  //     query it after a render()/poll_events() cycle if the live value matters.
+  // PT: Consulta o modo de janela VIVO, derivado do sistema de janelas -- NÃO um eco do último
+  //     pedido set_window_mode()/AppConfig::window_mode (A4-WINMODES, D4). Retorna
+  //     WindowMode::Windowed quando !ok(). O usuário (ou o WM) pode maximizar/restaurar a
+  //     janela por meios que a glintfx nunca vê (um botão da barra de tarefas, um atalho do
+  //     WM); um eco mentiria nesse caso. Consequência headless (documentada, não é bug): sob
+  //     Xvfb (sem window manager) um pedido Maximized pode não ser honrado, e esta chamada pode
+  //     reportar Windowed -- consulte após um ciclo de render()/poll_events() se o valor vivo
+  //     importar.
+  WindowMode window_mode() const;
+
+  // EN: Query the current framebuffer size, in physical pixels -- the same size render()/
+  //     snapshot() compose at (A4-WINMODES). w=h=0 when !ok().
+  // PT: Consulta o tamanho corrente do framebuffer, em pixels físicos -- o mesmo tamanho em
+  //     que render()/snapshot() compõem (A4-WINMODES). w=h=0 quando !ok().
+  void get_window_size(int& w, int& h) const;
 
   // EN: Returns false if the window was closed or initialization failed.
   //     To distinguish the two cases check ok() once after construction.

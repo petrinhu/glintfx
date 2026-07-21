@@ -104,11 +104,53 @@ struct App::Impl {
 App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   impl_->w = cfg.width;
   impl_->h = cfg.height;
-  if (!impl_->window.create(cfg.title, cfg.width, cfg.height)) return;
+  // EN: A4-WINMODES (D5) -- validate window_mode ONCE, here, before create() ever sees it: an
+  //     out-of-range static_cast falls back to Windowed, so the fallback is decided in exactly
+  //     one place (not duplicated in WindowGlfw::create() too, even though create() ALSO
+  //     defends against an invalid enum reaching it directly -- see its own doc-comment).
+  // PT: A4-WINMODES (D5) -- valida window_mode UMA VEZ, aqui, antes do create() sequer vê-lo:
+  //     um static_cast fora de faixa cai pra Windowed, então o fallback é decidido em exatamente
+  //     um lugar (não duplicado também em WindowGlfw::create(), embora o create() TAMBÉM se
+  //     defenda contra um enum inválido chegando direto nele -- ver o próprio doc-comment).
+  WindowMode initial_mode = cfg.window_mode;
+  switch (initial_mode) {
+    case WindowMode::Windowed:
+    case WindowMode::Maximized:
+    case WindowMode::FullscreenDesktop:
+    case WindowMode::FullscreenExclusive:
+      break;
+    default:
+      initial_mode = WindowMode::Windowed;
+      break;
+  }
+  if (!impl_->window.create(cfg.title, cfg.width, cfg.height, initial_mode)) return;
   // EN: Window::create() makes the GL context current — required by Engine::attach().
   // PT: Window::create() torna o contexto GL corrente — exigido por Engine::attach().
   impl_->system = std::make_unique<SystemInterface_GLFW>(impl_->window.handle());
-  impl_->ok = impl_->engine.attach(impl_->system.get(), cfg.width, cfg.height, cfg.font_engine);
+  // EN: A4-WINMODES (D6) -- attach with the REAL post-create framebuffer size, not the raw
+  //     cfg.width/height: a window born Maximized/Fullscreen has a DIFFERENT real framebuffer
+  //     at frame 0 (the WM/monitor decides the actual size, not AppConfig), so seeding
+  //     Engine::attach()/the AUD-PUB-1 resize cache with cfg dims would render the first frame
+  //     with a WRONG layout until sync_viewport() catches up on the next render()/snapshot()
+  //     call. Reading window.size() here closes that gap at frame 0 directly, and as a side
+  //     effect also fixes a latent HiDPI mismatch for plain Windowed mode (framebuffer size can
+  //     differ from the requested window size on a scaled display even without any window-mode
+  //     involvement). Windowed at 1x/no HiDPI: real_w/real_h == cfg.width/cfg.height, so this is
+  //     a no-op versus the pre-A4-WINMODES behaviour.
+  // PT: A4-WINMODES (D6) -- anexa com o tamanho REAL do framebuffer pós-create, não o
+  //     cfg.width/height cru: uma janela nascida Maximized/Fullscreen tem um framebuffer REAL
+  //     diferente no frame 0 (o WM/monitor decide o tamanho de fato, não o AppConfig), então
+  //     semear o Engine::attach()/o cache de resize AUD-PUB-1 com as dims do cfg renderizaria o
+  //     1º frame com um layout ERRADO até o sync_viewport() alcançar no próximo render()/
+  //     snapshot(). Ler window.size() aqui fecha essa lacuna já no frame 0, e de quebra também
+  //     corrige um descasamento latente de HiDPI pro modo Windowed comum (o tamanho do
+  //     framebuffer pode diferir do tamanho de janela pedido numa tela escalada mesmo sem
+  //     nenhum envolvimento de modo de janela). Windowed em 1x/sem HiDPI: real_w/real_h ==
+  //     cfg.width/cfg.height, então isto é um no-op versus o comportamento pré-A4-WINMODES.
+  int real_w = 0, real_h = 0;
+  impl_->window.size(real_w, real_h);
+  if (real_w <= 0 || real_h <= 0) { real_w = cfg.width; real_h = cfg.height; }
+  impl_->ok = impl_->engine.attach(impl_->system.get(), real_w, real_h, cfg.font_engine);
   // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
   // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
   if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
@@ -137,16 +179,22 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
       impl_raw->engine.process_event(ev, 0, 0);
     });
   }
-  // EN: Seed the resize-tracking cache (AUD-PUB-1 fix) with the dims Engine::attach() just
-  //     used to construct the Rml::Context. render() only re-applies set_viewport() when the
-  //     window size differs from this cache, so the first frame does not redo the identical
-  //     SetDimensions() call attach() already made.
-  // PT: Semeia o cache de rastreio de resize (fix AUD-PUB-1) com as dims que Engine::attach()
-  //     acabou de usar para construir o Rml::Context. render() só reaplica set_viewport()
-  //     quando o tamanho da janela difere deste cache, então o 1º frame não repete a mesma
-  //     chamada SetDimensions() que attach() já fez.
-  impl_->last_render_w = cfg.width;
-  impl_->last_render_h = cfg.height;
+  // EN: Seed the resize-tracking cache (AUD-PUB-1 fix) with the SAME real_w/real_h dims
+  //     Engine::attach() just used to construct the Rml::Context (D6 above -- NOT cfg.width/
+  //     height, which can differ for a Maximized/Fullscreen-born window or under HiDPI).
+  //     render() only re-applies set_viewport() when the window size differs from this cache,
+  //     so the first frame does not redo the identical SetDimensions() call attach() already
+  //     made -- seeding with the wrong (cfg) dims here would make frame 1 immediately re-issue
+  //     a redundant (harmless, but pointless) set_viewport() call to the SAME real dims.
+  // PT: Semeia o cache de rastreio de resize (fix AUD-PUB-1) com as MESMAS dims real_w/real_h
+  //     que Engine::attach() acabou de usar para construir o Rml::Context (D6 acima -- NÃO
+  //     cfg.width/height, que pode diferir pra uma janela nascida Maximized/Fullscreen ou sob
+  //     HiDPI). render() só reaplica set_viewport() quando o tamanho da janela difere deste
+  //     cache, então o 1º frame não repete a mesma chamada SetDimensions() que attach() já fez
+  //     -- semear com as dims (cfg) erradas aqui faria o frame 1 reemitir imediatamente uma
+  //     chamada set_viewport() redundante (inofensiva, mas inútil) para as MESMAS dims reais.
+  impl_->last_render_w = real_w;
+  impl_->last_render_h = real_h;
 }
 
 App::~App() = default;
@@ -216,6 +264,27 @@ void App::set_dp_ratio(float ratio) {
 void App::set_asset_base_url(const char* url) {
   if (!impl_->ok) return;
   impl_->engine.set_asset_base_url(url);
+}
+
+// EN: A4-WINMODES -- thin forwards to WindowGlfw with the App-wide !ok() guard (same pattern
+//     as every other method in this file). WindowGlfw::set_mode()/mode() carry the real logic
+//     (D4/D7/D8) -- see window_glfw.cpp/.hpp.
+// PT: A4-WINMODES -- repasses finos a WindowGlfw com a guarda !ok() de todo o App (mesmo padrão
+//     de todo outro método deste arquivo). WindowGlfw::set_mode()/mode() carregam a lógica de
+//     fato (D4/D7/D8) -- ver window_glfw.cpp/.hpp.
+bool App::set_window_mode(WindowMode mode) {
+  if (!impl_->ok) return false;
+  return impl_->window.set_mode(mode);
+}
+
+WindowMode App::window_mode() const {
+  if (!impl_->ok) return WindowMode::Windowed;
+  return impl_->window.mode();
+}
+
+void App::get_window_size(int& w, int& h) const {
+  if (!impl_->ok) { w = 0; h = 0; return; }
+  impl_->window.size(w, h);
 }
 
 bool App::ok() const noexcept {

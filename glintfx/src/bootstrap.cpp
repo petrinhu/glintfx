@@ -7,11 +7,27 @@
 #include "bootstrap.hpp"
 #include "render_gl3.hpp"
 #include "base_url_file_interface.hpp"
+#include "ua_stylesheet.hpp"
+#include <glintfx/config.hpp>
+// EN: FX-CARVE-1 -- the 3 decorator instancer headers (polygon/image-tint/ripple) are only
+//     pulled in when the fx module is compiled; with GLINTFX_MODULE_FX=OFF, none of
+//     PolygonDecoratorInstancer/ImageTintDecoratorInstancer/RippleDecoratorInstancer are named
+//     anywhere in this file (the Impl members + init()'s construct+register block below share
+//     this same gate) -- an unknown "decorator: polygon(...)"/"image-tint(...)"/"ripple(...)"
+//     in RCSS is then just ignored by RmlUi (fail-high, same idiom every other unrecognised
+//     RCSS construct already gets).
+// PT: FX-CARVE-1 -- os 3 headers de instancer de decorator (polygon/image-tint/ripple) só são
+//     puxados quando o módulo fx é compilado; com GLINTFX_MODULE_FX=OFF, nenhum de
+//     PolygonDecoratorInstancer/ImageTintDecoratorInstancer/RippleDecoratorInstancer é nomeado
+//     em lugar nenhum deste arquivo (os membros do Impl + o bloco de construção+registro do
+//     init() abaixo compartilham este mesmo gate) -- um "decorator: polygon(...)"/
+//     "image-tint(...)"/"ripple(...)" desconhecido no RCSS aí é só ignorado pelo RmlUi
+//     (fail-high, o mesmo idioma que toda outra construção RCSS não-reconhecida já recebe).
+#if GLINTFX_MODULE_FX
 #include "decorator_polygon.hpp"
 #include "decorator_image_tint.hpp"
 #include "decorator_ripple.hpp"
-#include "ua_stylesheet.hpp"
-#include <glintfx/config.hpp>
+#endif
 #if GLINTFX_OWN_FONT_ENGINE
 // EN: L1.19-FONTENG (FT-F3) A/B gate -- only pulled in (and only pulls in Layer 0's
 //     include/core/sfnt.h + raster.h, transitively) when GLINTFX_OWN_FONT_ENGINE=ON. See
@@ -69,6 +85,17 @@ struct PendingButtonDown {
 struct Bootstrap::Impl {
   BaseUrlFileInterface file_iface;  // EN: installed before Rml::Initialise(); mutable base_url.
                                     // PT: instalado antes de Rml::Initialise(); base_url mutável.
+  // EN: FX-CARVE-1 -- the 3 decorator instancer members below (polygon/image-tint/ripple)
+  //     only exist when the fx module is compiled; each instancer's own doc comment further
+  //     down explains its individual lifetime rule (allocate-after-Rml::Initialise(),
+  //     outlive-Rml::Shutdown()) -- this #if only decides whether the 3 members exist at
+  //     all, not their lifetime discipline once they do.
+  // PT: FX-CARVE-1 -- os 3 membros de instancer de decorator abaixo (polygon/image-tint/
+  //     ripple) só existem quando o módulo fx é compilado; o próprio doc-comment de cada
+  //     instancer mais abaixo explica a regra de lifetime individual dele (alocar-após-
+  //     Rml::Initialise(), sobreviver-ao-Rml::Shutdown()) -- este #if só decide se os 3
+  //     membros existem, não a disciplina de lifetime deles quando existem.
+#if GLINTFX_MODULE_FX
   // EN: "polygon(<sides>, <color>[, <rotation>])" decorator instancer (v0.2.6). Held as an
   //     UniquePtr, DEFAULT-CONSTRUCTED TO NULL HERE and only allocated AFTER Rml::Initialise()
   //     returns true (see init() below) -- this is NOT the same lifetime pattern as file_iface
@@ -138,17 +165,20 @@ struct Bootstrap::Impl {
   //     tint_instancer immediately above (see polygon_instancer's long doc comment for the full
   //     ordering rationale, which applies identically here). Does NOT carry any L1.22-CAPTURE
   //     gate counter (a prior revision, commit 647350f, did -- removed as part of the cold-start
-  //     fix; see render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured doc comment and
-  //     decorator_ripple.hpp's own doc comment for why the gate no longer needs one).
+  //     fix; see src/fx/effects_gl3.cpp's Gl3FxHook::arm_backdrop_capture/EnsureBackdropCaptured
+  //     doc comment (FX-CARVE-1) and decorator_ripple.hpp's own doc comment for why the gate no
+  //     longer needs one).
   // PT: L1.22-WAVE -- instancer do decorator "ripple([<raio-max>])". Mesma disciplina de
   //     lifetime alocar-após-Rml::Initialise()/sobrevive-ao-Rml::Shutdown() de
   //     polygon_instancer/tint_instancer logo acima (ver o doc-comment longo de
   //     polygon_instancer pra racional completa de ordenação, que se aplica identicamente
   //     aqui). NÃO carrega nenhum contador de gate do L1.22-CAPTURE (uma revisão anterior,
   //     commit 647350f, carregava -- removido como parte do fix de cold-start; ver o
-  //     doc-comment de ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp e o próprio
-  //     doc-comment de decorator_ripple.hpp pro motivo do gate não precisar mais de um).
+  //     doc-comment de Gl3FxHook::arm_backdrop_capture/EnsureBackdropCaptured de
+  //     src/fx/effects_gl3.cpp (FX-CARVE-1) e o próprio doc-comment de decorator_ripple.hpp pro
+  //     motivo do gate não precisar mais de um).
   Rml::UniquePtr<glintfx::RippleDecoratorInstancer> ripple_instancer;
+#endif
   Rml::Context* ctx = nullptr;
   Rml::ElementDocument* doc = nullptr;  // NEW (F1/F2, v0.2.5): last-loaded document.
   bool initialised  = false;
@@ -1027,6 +1057,15 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   }
   impl_->initialised = true;
 
+  // EN: FX-CARVE-1 -- the whole construct+register block below (all 3 decorator instancers)
+  //     only compiles when the fx module is on; with GLINTFX_MODULE_FX=OFF none of
+  //     impl_->polygon_instancer/tint_instancer/ripple_instancer exist (see the Impl struct's
+  //     own #if above), so nothing here would even compile without this matching gate.
+  // PT: FX-CARVE-1 -- o bloco de construção+registro inteiro abaixo (os 3 instancers de
+  //     decorator) só compila quando o módulo fx está ligado; com GLINTFX_MODULE_FX=OFF nenhum
+  //     de impl_->polygon_instancer/tint_instancer/ripple_instancer existe (ver o próprio #if
+  //     da struct Impl acima), então nada aqui sequer compilaria sem este gate correspondente.
+#if GLINTFX_MODULE_FX
   // EN: Construct + register the "polygon" decorator instancer -- MUST happen AFTER
   //     Rml::Initialise() returns true (see the long Impl comment above for why: its
   //     constructor needs the "number"/"color"/"angle" parser registry that Initialise() just
@@ -1064,20 +1103,21 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
   //     own doc comment). Registered as "ripple" so "decorator: ripple(200);" /
   //     "decorator: ripple;" both resolve. NO extra gate-counter wiring needed here (unlike a
   //     prior revision, commit 647350f) -- the L1.22-CAPTURE cost-zero-when-inactive gate is now
-  //     structural, entirely inside render_gl3.cpp's ArmBackdropCapture/EnsureBackdropCaptured
-  //     pair; see decorator_ripple.hpp's own doc comment for the fix and why the earlier
-  //     counter-based gate had a cold-start bug.
+  //     structural, entirely inside src/fx/effects_gl3.cpp's Gl3FxHook::arm_backdrop_capture/
+  //     EnsureBackdropCaptured pair (FX-CARVE-1); see decorator_ripple.hpp's own doc comment for
+  //     the fix and why the earlier counter-based gate had a cold-start bug.
   // PT: L1.22-WAVE -- constrói + registra o instancer do decorator "ripple", mesma restrição de
   //     ordenação de "polygon"/"image-tint" logo acima (ver o próprio doc-comment de
   //     impl_->ripple_instancer). Registrado como "ripple" para que "decorator: ripple(200);" /
   //     "decorator: ripple;" ambos resolvam. NENHUMA conexão extra de contador de gate
   //     necessária aqui (diferente de uma revisão anterior, commit 647350f) -- o gate de
   //     custo-zero-quando-inativo do L1.22-CAPTURE agora é estrutural, inteiramente dentro do
-  //     par ArmBackdropCapture/EnsureBackdropCaptured de render_gl3.cpp; ver o próprio
-  //     doc-comment de decorator_ripple.hpp pro fix e por que o gate baseado em contador
-  //     anterior tinha um bug de cold-start.
+  //     par Gl3FxHook::arm_backdrop_capture/EnsureBackdropCaptured de src/fx/effects_gl3.cpp
+  //     (FX-CARVE-1); ver o próprio doc-comment de decorator_ripple.hpp pro fix e por que o
+  //     gate baseado em contador anterior tinha um bug de cold-start.
   impl_->ripple_instancer = Rml::MakeUnique<glintfx::RippleDecoratorInstancer>();
   Rml::Factory::RegisterDecoratorInstancer("ripple", impl_->ripple_instancer.get());
+#endif  // GLINTFX_MODULE_FX
 
   // EN: Parse the UA stylesheet once. It is never compiled directly (never attached
   //     alone to a document) so it stays reusable as a merge base for every load().

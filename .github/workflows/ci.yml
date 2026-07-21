@@ -442,12 +442,28 @@ jobs:
       #     live in glintfx/.clang-tidy (only clang-analyzer-* fails the build today;
       #     modernize-*/cppcoreguidelines-* are reported, not gated -- see that file's
       #     header comment for the sempre-verde rationale).
+      #     Recursive glob (`shopt -s globstar` + `src/**/*.cpp`) instead of the flat
+      #     `src/*.cpp` used before FX-CARVE-1 -- the flat glob silently skipped
+      #     `glintfx/src/fx/*.cpp` (effects_gl3.cpp, the new fx OBJECT-lib TU carved
+      #     out of render_gl3.cpp), a lint-coverage gap found during A3-AUDIO/
+      #     FX-CARVE-1 CI integration (S3). `bash -c` wraps the shell so `globstar`
+      #     takes effect (the workflow's default `run:` shell already is bash on
+      #     ubuntu-latest, but the option must be set explicitly in-line).
       # PT: TST-L1-STATIC (2/3) -- clang-tidy. Checks e a politica de WarningsAsErrors
       #     vivem em glintfx/.clang-tidy (so clang-analyzer-* falha o build hoje;
       #     modernize-*/cppcoreguidelines-* sao reportados, nao gateados -- ver o
       #     comentario de cabecalho daquele arquivo para o motivo do sempre-verde).
+      #     Glob recursivo (`shopt -s globstar` + `src/**/*.cpp`) em vez do `src/*.cpp`
+      #     plano usado antes do FX-CARVE-1 -- o glob plano pulava em silencio
+      #     `glintfx/src/fx/*.cpp` (effects_gl3.cpp, a nova TU da OBJECT-lib fx
+      #     recortada de render_gl3.cpp), um buraco de cobertura de lint achado durante
+      #     a integracao de CI do A3-AUDIO/FX-CARVE-1 (S3). `bash -c` embrulha o shell
+      #     para o `globstar` valer (o shell default do `run:` ja e bash no
+      #     ubuntu-latest, mas a option precisa ser setada explicitamente in-line).
       - name: TST-L1-STATIC -- clang-tidy
-        run: clang-tidy -p glintfx/build-lint glintfx/src/*.cpp
+        run: |
+          shopt -s globstar
+          clang-tidy -p glintfx/build-lint glintfx/src/**/*.cpp
 
       # EN: TST-L1-STATIC (3/3) -- cppcheck, restricted to our own src/ (--file-filter)
       #     with vendored/fetched code suppressed (third_party/, _deps/) -- those are

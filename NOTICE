@@ -38,6 +38,19 @@ These files are committed directly into the repository source tree.
   Used for: PNG, JPG, and TGA texture decode in the GL3 render backend
             (glintfx/src/render_gl3.cpp + glintfx/src/stb_image_impl.cpp).
 
+- miniaudio v0.11.25 (commit 9634bedb5b5a2ca38c1ee7108a9358a4e233f14d, 2026-03-04) — MIT No
+  Attribution (MIT-0) / public domain (dual-licensed; used here as MIT-0).
+  Original author: David Reid (mackron@gmail.com, https://miniaud.io).
+  File: glintfx/third_party/miniaudio/miniaudio.h
+  Used for: audio decode/playback (WAV/FLAC/MP3) in the GLINTFX_MODULE_AUDIO atom
+            (glintfx/src/audio.cpp + glintfx/src/miniaudio_impl.c).
+  NOTE: carries one disclosed, reviewed one-line patch fixing a genuine upstream
+        heap-use-after-free (ma_resource_manager_data_buffer_node_acquire, epilogue
+        dereferenced a just-freed node on the synchronous-decode-failure path) — found via
+        this module's own ASan test pass. Full writeup:
+        glintfx/third_party/miniaudio/README.md. Same disclosure discipline as the RmlUi
+        patch below (glintfx/patches/README.md).
+
 - glcorearb.h — MIT License.
   Copyright 2013-2026 The Khronos Group Inc.
   SPDX-License-Identifier: MIT

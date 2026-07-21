@@ -1,0 +1,112 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: Pragmatic Windows CI for glintfx -- A3-AUDIO/FX-CARVE-1 CI integration (S3). Validates
+#     ONLY the pure atoms that have zero GL/window/RmlUi/Freetype dependency: i18n (module
+#     "i18n") and audio (module "audio", vendored miniaudio), plus a compile-only smoke of the
+#     image decode atom (stb_image_impl.cpp). Full-Windows glintfx (RmlUi+Freetype+GLFW+GL via
+#     vcpkg, ~10+ min/job plus ongoing maintenance cost) is deliberately deferred -- the
+#     framework stays Linux-first (see .github/workflows/ci.yml's own header, and the plan this
+#     job implements: glintfx/docs/superpowers/plans/2026-07-20-framework2d-A3-audio-e-carving-
+#     uifx.md section 5). This file is intentionally SEPARATE from ci.yml -- ci.yml is NOT
+#     touched by this addition.
+#     Harness: glintfx/tests/win-atoms/CMakeLists.txt, a standalone CMake project (own header
+#     comment has the full rationale) -- compiles src/i18n.cpp + src/audio.cpp +
+#     src/miniaudio_impl.c + src/stb_image_impl.cpp against include/ + third_party/{miniaudio,
+#     stb}, no FetchContent, no find_package beyond Threads. Runs the SAME 6 pure-unit sanity
+#     .cpp files (3 i18n_*, 3 audio_*) the main Linux suite registers in tests/CMakeLists.txt --
+#     referenced by relative path, not forked/copied.
+#     Compiler: MSVC default on windows-latest (no toolchain override -- this is the ONE
+#     compiler this job exists to validate against; the main build is clang-pinned on Linux,
+#     see ci.yml, so this is deliberately the first-ever MSVC exposure for these two atoms).
+#     Cost/risk: ~2-3 min/run; low risk (miniaudio is first-class on MSVC, i18n is pure std-lib
+#     -- confirmed via `grep ^#include` on both .cpp files before this workflow was written: no
+#     POSIX-only header anywhere in the atom sources or their 6 test files). Gate is BLOCKING
+#     (cheap enough to justify it); if it demonstrates flakiness in practice, the líder decides
+#     whether to downgrade it to informational.
+#     Triggers mirror ci.yml's push/PR shape (push to `main` + `v*` tags, PR targeting `main`),
+#     paths-filtered to what this job actually touches: glintfx/src/{i18n,audio,miniaudio_impl,
+#     stb_image_impl}.*, glintfx/include/glintfx/{i18n,audio}.hpp, glintfx/tests/{i18n,audio}_*.
+#     cpp, the harness itself, and this workflow file -- NOT the whole glintfx/** ci.yml uses,
+#     since this job is a narrow slice of the tree and re-running it on an unrelated glintfx
+#     change (e.g. a render_gl3.cpp edit) would just burn CI minutes for zero signal.
+# PT: CI Windows pragmático para o glintfx -- integração de CI do A3-AUDIO/FX-CARVE-1 (S3).
+#     Valida SÓ os átomos puros com zero dependência de GL/janela/RmlUi/Freetype: i18n (módulo
+#     "i18n") e audio (módulo "audio", miniaudio vendorizado), mais um smoke compile-only do
+#     átomo de decode de imagem (stb_image_impl.cpp). O glintfx completo no Windows
+#     (RmlUi+Freetype+GLFW+GL via vcpkg, ~10+ min/job mais custo de manutenção contínua) fica
+#     deliberadamente adiado -- o framework continua Linux-first (ver o próprio cabeçalho de
+#     .github/workflows/ci.yml, e o plano que este job implementa:
+#     glintfx/docs/superpowers/plans/2026-07-20-framework2d-A3-audio-e-carving-uifx.md seção 5).
+#     Este arquivo é deliberadamente SEPARADO do ci.yml -- o ci.yml NÃO é tocado por esta adição.
+#     Harness: glintfx/tests/win-atoms/CMakeLists.txt, um projeto CMake standalone (o próprio
+#     comentário de cabeçalho tem o racional completo) -- compila src/i18n.cpp + src/audio.cpp +
+#     src/miniaudio_impl.c + src/stb_image_impl.cpp contra include/ + third_party/{miniaudio,
+#     stb}, sem FetchContent, sem find_package além de Threads. Roda os MESMOS 6 arquivos .cpp
+#     de sanity unit pura (3 i18n_*, 3 audio_*) que a suíte Linux principal registra em
+#     tests/CMakeLists.txt -- referenciados por caminho relativo, não forkados/copiados.
+#     Compilador: MSVC default no windows-latest (sem override de toolchain -- este É o
+#     compilador que este job existe para validar; o build principal é fixado em clang no
+#     Linux, ver ci.yml, então esta é deliberadamente a primeira exposição a MSVC destes dois
+#     átomos).
+#     Custo/risco: ~2-3 min/run; risco baixo (miniaudio é first-class no MSVC, i18n é std-lib
+#     pura -- confirmado via `grep ^#include` nos dois .cpp antes deste workflow ser escrito:
+#     nenhum header só-POSIX em nenhum dos fontes dos átomos nem nos 6 arquivos de teste). Gate
+#     é BLOQUEANTE (barato o bastante para justificar); se demonstrar flakiness na prática, o
+#     líder decide rebaixar para informativo.
+#     Triggers espelham o formato push/PR do ci.yml (push na `main` + tags `v*`, PR mirando
+#     `main`), filtrados por paths ao que este job de fato toca: glintfx/src/{i18n,audio,
+#     miniaudio_impl,stb_image_impl}.*, glintfx/include/glintfx/{i18n,audio}.hpp, glintfx/tests/
+#     {i18n,audio}_*.cpp, o próprio harness, e este arquivo de workflow -- NÃO o glintfx/**
+#     inteiro que o ci.yml usa, já que este job é uma fatia estreita da árvore e rodar de novo
+#     numa mudança não-relacionada do glintfx (ex.: uma edição em render_gl3.cpp) só queimaria
+#     minutos de CI por zero sinal.
+name: windows-atoms
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+    paths:
+      - "glintfx/src/i18n.cpp"
+      - "glintfx/src/audio.cpp"
+      - "glintfx/src/miniaudio_impl.c"
+      - "glintfx/src/stb_image_impl.cpp"
+      - "glintfx/include/glintfx/i18n.hpp"
+      - "glintfx/include/glintfx/audio.hpp"
+      - "glintfx/tests/i18n_*.cpp"
+      - "glintfx/tests/audio_*.cpp"
+      - "glintfx/tests/win-atoms/**"
+      - "glintfx/third_party/miniaudio/**"
+      - "glintfx/third_party/stb/**"
+      - ".github/workflows/windows-atoms.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "glintfx/src/i18n.cpp"
+      - "glintfx/src/audio.cpp"
+      - "glintfx/src/miniaudio_impl.c"
+      - "glintfx/src/stb_image_impl.cpp"
+      - "glintfx/include/glintfx/i18n.hpp"
+      - "glintfx/include/glintfx/audio.hpp"
+      - "glintfx/tests/i18n_*.cpp"
+      - "glintfx/tests/audio_*.cpp"
+      - "glintfx/tests/win-atoms/**"
+      - "glintfx/third_party/miniaudio/**"
+      - "glintfx/third_party/stb/**"
+      - ".github/workflows/windows-atoms.yml"
+
+jobs:
+  win-atoms:
+    name: win atoms (windows-latest, MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: configure
+        run: cmake -S glintfx/tests/win-atoms -B build
+
+      - name: build
+        run: cmake --build build --config Release
+
+      - name: test
+        run: ctest --test-dir build -C Release --output-on-failure

@@ -26,6 +26,18 @@
         "GLINTFX_MODULE_WINDOW": "OFF",
         "GLINTFX_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "lean-ui",
+      "displayName": "lean-ui -- ui without glintfx-authored fx (FX-CARVE-1, ADR-0015 (c)/(d)(5))",
+      "description": "GLINTFX_MODULE_FX=OFF: the glintfx-tint/glintfx-ripple GLSL programs, their CompileShader/RenderShader/ReleaseShader dispatch, the backdrop-capture machinery, and the 3 decorator TUs (polygon/image-tint/ripple) are compiled out for real -- nm proof: zero 'Ripple'/'ImageTint'/'PolygonDecorator'/'Gl3FxHook' symbol matches in libglintfx.a. Honest boundary (declared, not disguised): RmlUi's OWN upstream filter/gradient shaders (glow/box-shadow/drop-shadow/blur/backdrop-blur/mask/gradients, Backends/RmlUi_Renderer_GL3.cpp) are NOT removed by this preset -- see GLINTFX_MODULE_FX's own doc string in CMakeLists.txt for why, and the low-ROI FX-CARVE-2 that would be needed to go further. This is the composition ADR-0015 (c)/(d)(5) exists to serve: the leanest ui-only build available today.",
+      "binaryDir": "${sourceDir}/build-lean-ui",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "GLINTFX_MODULE_FX": "OFF",
+        "GLINTFX_BUILD_TESTS": "ON"
+      }
     }
   ]
 }

@@ -78,6 +78,31 @@
 //        guarda-chuva glintfx.hpp.
 #cmakedefine01 GLINTFX_MODULE_AUDIO
 
+// EN: 1  (default on Linux; forced 0 elsewhere -- see CMakeLists.txt's platform gate) when the
+//        gamepad module (ADR-0015 (b)/ADR-0016 module "gamepad", framework-2D slice A2-GAMEPAD)
+//        is compiled in: glintfx::Gamepads is available (glintfx/gamepad.hpp), backed by raw
+//        evdev (no libevdev/libudev/SDL dependency). Depends on `core` only -- no GL, no window,
+//        no RmlUi type -- same independence class as GLINTFX_MODULE_I18N/AUDIO above. UNLIKE
+//        those two, this module is Linux-only BY NATURE (evdev is a Linux kernel interface, not a
+//        portable one), so the CMake option forces this to 0 on any non-Linux
+//        CMAKE_SYSTEM_NAME -- there is no cross-platform fallback to compile instead.
+//     0  glintfx::Gamepads is not compiled in; #include <glintfx/gamepad.hpp> is skipped by the
+//        umbrella header glintfx.hpp (and #errors if included directly -- see gamepad.hpp's own
+//        guard).
+// PT: 1  (padrão no Linux; forçado 0 em qualquer outro lugar -- ver o gate de plataforma do
+//        CMakeLists.txt) quando o módulo gamepad (módulo "gamepad" da ADR-0015 (b)/ADR-0016,
+//        fatia framework-2D A2-GAMEPAD) é compilado: glintfx::Gamepads está disponível
+//        (glintfx/gamepad.hpp), apoiado em evdev cru (sem dependência de libevdev/libudev/SDL).
+//        Depende só de `core` -- zero GL, zero janela, zero tipo do RmlUi -- mesma classe de
+//        independência do GLINTFX_MODULE_I18N/AUDIO acima. DIFERENTE desses dois, este módulo é
+//        Linux-only POR NATUREZA (evdev é uma interface do kernel Linux, não portável), então a
+//        option do CMake força isto pra 0 em qualquer CMAKE_SYSTEM_NAME não-Linux -- não há
+//        fallback cross-platform pra compilar no lugar.
+//     0  glintfx::Gamepads não é compilado; #include <glintfx/gamepad.hpp> é pulado pelo header
+//        guarda-chuva glintfx.hpp (e dá #error se incluído diretamente -- ver a própria guarda do
+//        gamepad.hpp).
+#cmakedefine01 GLINTFX_MODULE_GAMEPAD
+
 // EN: 1  (default, FX-CARVE-1) when the glintfx-AUTHORED shader fx module is compiled in: the
 //        "glintfx-tint"/"glintfx-ripple" GLSL programs + their CompileShader/RenderShader/
 //        ReleaseShader dispatch + the backdrop-capture machinery (src/fx/effects_gl3.cpp) and

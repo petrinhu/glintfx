@@ -6,7 +6,10 @@
 //     i18n.hpp is included when GLINTFX_MODULE_I18N is enabled (default ON, ADR-0015 module
 //     "i18n" -- depends on core only, independent of GLINTFX_BACKEND_GLFW either way); audio.hpp
 //     is included when GLINTFX_MODULE_AUDIO is enabled (default ON, ADR-0015 module "audio",
-//     framework-2D slice A3-AUDIO -- same independence class as i18n).
+//     framework-2D slice A3-AUDIO -- same independence class as i18n); gamepad.hpp is included
+//     when GLINTFX_MODULE_GAMEPAD is enabled (default ON on Linux, forced OFF elsewhere -- see
+//     CMakeLists.txt's platform gate -- ADR-0015 (b)/ADR-0016 module "gamepad", framework-2D
+//     slice A2-GAMEPAD; same independence class as i18n/audio, but Linux-only by nature).
 // PT: Header público guarda-chuva — inclua este em vez dos headers individuais.
 //     version.hpp sempre incluído (L1.9-VERSEMBED: glintfx::version() deve estar disponível
 //     independente do backend); app.hpp só é incluído quando GLINTFX_BACKEND_GLFW está
@@ -14,7 +17,11 @@
 //     i18n.hpp é incluído quando GLINTFX_MODULE_I18N está habilitado (padrão ON, módulo "i18n"
 //     da ADR-0015 -- depende só de core, independente de GLINTFX_BACKEND_GLFW de qualquer jeito);
 //     audio.hpp é incluído quando GLINTFX_MODULE_AUDIO está habilitado (padrão ON, módulo
-//     "audio" da ADR-0015, fatia framework-2D A3-AUDIO -- mesma classe de independência do i18n).
+//     "audio" da ADR-0015, fatia framework-2D A3-AUDIO -- mesma classe de independência do i18n);
+//     gamepad.hpp é incluído quando GLINTFX_MODULE_GAMEPAD está habilitado (padrão ON no Linux,
+//     forçado OFF em outro lugar -- ver o gate de plataforma do CMakeLists.txt -- módulo
+//     "gamepad" da ADR-0015 (b)/ADR-0016, fatia framework-2D A2-GAMEPAD; mesma classe de
+//     independência do i18n/audio, porém Linux-only por natureza).
 #pragma once
 #include <glintfx/config.hpp>
 #include <glintfx/version.hpp>
@@ -27,4 +34,7 @@
 #endif
 #if GLINTFX_MODULE_AUDIO
 #include <glintfx/audio.hpp>
+#endif
+#if GLINTFX_MODULE_GAMEPAD
+#include <glintfx/gamepad.hpp>
 #endif

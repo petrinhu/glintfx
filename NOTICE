@@ -51,6 +51,19 @@ These files are committed directly into the repository source tree.
         glintfx/third_party/miniaudio/README.md. Same disclosure discipline as the RmlUi
         patch below (glintfx/patches/README.md).
 
+- SDL_GameControllerDB (Linux subset, vendored as DATA, not code) — zlib License.
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>.
+  Source: https://github.com/mdqinc/SDL_GameControllerDB (formerly gabomdq/SDL_GameControllerDB)
+  Pinned commit: 8d9fefd7b810f2541f78cc7a8ccbd185bc84c7a5 (2026-07-15).
+  File: glintfx/third_party/gamecontrollerdb/gamecontrollerdb_linux.txt (filtered to
+        platform:Linux entries only, 728 of the upstream's 2244 platform-tagged lines) +
+        gamecontrollerdb_linux.inc (generated from the .txt by tools/gen_gamepad_db.py).
+  Used for: gamepad button/axis mapping resolution in the GLINTFX_MODULE_GAMEPAD atom
+            (glintfx/src/gamepad_mapping.cpp). Consumed purely as TEXT DATA by glintfx's own
+            clean-room parser -- no SDL header or source file is read, compiled, or linked
+            anywhere in this repository. See glintfx/third_party/gamecontrollerdb/README.md
+            for full provenance, license text, and the re-sync recipe.
+
 - glcorearb.h — MIT License.
   Copyright 2013-2026 The Khronos Group Inc.
   SPDX-License-Identifier: MIT

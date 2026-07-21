@@ -1,0 +1,26 @@
+# EN: gitleaks (TST-L1-SECRETS, .github/workflows/ci.yml `lint-and-scan` job) confirmed
+#     false-positive allowlist. gitleaks scans the FULL git history (`gitleaks detect --source .`
+#     on a git repo, no `--no-git`), so a since-reworded line still trips the rule against the
+#     historical commit that first introduced it -- rewording alone (done in a later commit)
+#     cannot clear this without rewriting history, which this project does not do for already-
+#     visible commits. One entry per confirmed false positive; NEVER add a real secret here.
+#
+# PT: allowlist de falso-positivo confirmado do gitleaks (TST-L1-SECRETS, job `lint-and-scan` de
+#     .github/workflows/ci.yml). O gitleaks escaneia o histórico git INTEIRO (`gitleaks detect
+#     --source .` num repo git, sem `--no-git`), então uma linha já reformulada continua
+#     disparando a regra contra o commit histórico que a introduziu primeiro -- reformular
+#     sozinho (feito num commit posterior) não limpa isso sem reescrever história, o que este
+#     projeto não faz em commits já visíveis. Uma entrada por falso-positivo confirmado; NUNCA
+#     adicione um segredo real aqui.
+
+# A2-GAMEPAD -- docs/gamepad.md:3 (commit 433f3ac, onda 1): gitleaks's `generic-api-key` rule
+# (regex requires an "API"/"key"/"token"/... keyword, then a comma, then a slash-containing
+# lowercase token with entropy >= 3.5) matched ordinary doc prose -- "`glintfx::Gamepads` API
+# reference, permissions/degradation contract, mapping model" -- reading "permissions/degradation"
+# as the "secret". Reworded to "permission and degradation behavior" in a later commit (removes
+# the `/`), but the original commit's blob still trips the scan; this entry allowlists that one
+# historical finding. Confirmed via local reproduction with the CI's exact gitleaks version
+# (8.30.0) and invocation (`gitleaks detect --source . --redact -v`) -- 0 other findings anywhere
+# in the tree or history, including the 728 hex GUIDs in
+# glintfx/third_party/gamecontrollerdb/gamecontrollerdb_linux.{txt,inc}.
+433f3acb0d5f3f0afbe6e2751e834dc689eaad3c:docs/gamepad.md:generic-api-key:3

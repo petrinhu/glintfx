@@ -21,3 +21,4 @@
 | [0013](0013-gl-symbol-boundary.md) | GL loader symbol boundary: `glx_` prefix on every exported pointer / Fronteira de símbolo do loader GL: prefixo `glx_` em todo ponteiro exportado | Accepted |
 | 0014 | (retired -- abandoned on a deleted branch, number not reused / aposentado -- abandonado em branch deletado, número não reutilizado) | Abandoned |
 | [0015](0015-framework-2d-atomized-architecture.md) | Framework 2D: atomized-by-subsystem architecture / Framework 2D: arquitetura atomizada por subsistema | Accepted |
+| [0016](0016-gamepad-atom.md) | Gamepad ships as its own atom, `input` stays reserved / Gamepad entregue como átomo próprio, `input` segue reservado | Accepted |

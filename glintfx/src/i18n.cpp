@@ -54,6 +54,7 @@
 
 #include <glintfx/i18n.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -70,9 +71,9 @@ namespace {
 //     completo está fora de escopo (seria uma dependência real, classe ICU, pra um problema que
 //     este formato não tem).
 std::string to_lower_ascii(std::string s) {
-  for (char& c : s) {
-    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-  }
+  std::transform(s.begin(), s.end(), s.begin(), [](char c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+  });
   return s;
 }
 
@@ -280,17 +281,17 @@ I18nLoadResult I18n::load_catalog_file(const char* path) {
   return parse_and_merge(buffer.str());
 }
 
-bool I18n::set_locale(const char* locale) {
-  if (locale == nullptr || locale[0] == '\0') return false;
-  active_locale_ = locale;
+bool I18n::set_locale(const char* locale_code) {
+  if (locale_code == nullptr || locale_code[0] == '\0') return false;
+  active_locale_ = locale_code;
   return true;
 }
 
 const std::string& I18n::locale() const { return active_locale_; }
 
-bool I18n::set_fallback_locale(const char* locale) {
-  if (locale == nullptr || locale[0] == '\0') return false;
-  fallback_locale_ = locale;
+bool I18n::set_fallback_locale(const char* locale_code) {
+  if (locale_code == nullptr || locale_code[0] == '\0') return false;
+  fallback_locale_ = locale_code;
   return true;
 }
 
@@ -335,9 +336,7 @@ const std::string* I18n::resolve_candidates(const std::vector<std::string>& cand
   std::vector<std::string> locale_steps;
   auto add_step = [&locale_steps](const std::string& candidate) {
     if (candidate.empty()) return;
-    for (const auto& existing : locale_steps) {
-      if (existing == candidate) return;
-    }
+    if (std::find(locale_steps.begin(), locale_steps.end(), candidate) != locale_steps.end()) return;
     locale_steps.push_back(candidate);
   };
   add_step(active_lc);
@@ -345,10 +344,27 @@ const std::string* I18n::resolve_candidates(const std::vector<std::string>& cand
   add_step(fallback_lc);
   add_step(base_language(fallback_lc));
 
+  // EN: The inner search is `std::find_if` over candidate_keys, predicate = "this key exists in
+  //     locale_lc" (checked via lookup_raw, discarding the pointer -- only membership matters
+  //     here). A second lookup_raw() retrieves the actual pointer once find_if has located the
+  //     matching key; both calls hit the same small per-locale std::map (a handful of keys in
+  //     realistic catalogs), so the repeat lookup is not a measured hot path, and this keeps the
+  //     predicate pure (no captured-by-reference output parameter smuggled through a "side-
+  //     effecting predicate", a well-known algorithm-abuse anti-pattern).
+  // PT: A busca interna é `std::find_if` sobre candidate_keys, predicado = "esta chave existe em
+  //     locale_lc" (checado via lookup_raw, descartando o ponteiro -- só a existência importa
+  //     aqui). Um segundo lookup_raw() recupera o ponteiro de fato depois que find_if localiza a
+  //     chave correspondente; as duas chamadas batem no mesmo std::map pequeno por-locale (um
+  //     punhado de chaves em catálogos realistas), então o lookup repetido não é um hot path
+  //     medido, e isso mantém o predicado puro (sem parâmetro de saída capturado por referência
+  //     contrabandeado por um "predicado com efeito colateral", um anti-padrão conhecido de uso
+  //     de algoritmo).
   for (const auto& locale_lc : locale_steps) {
-    for (const auto& candidate_key : candidate_keys) {
-      if (const std::string* found = lookup_raw(locale_lc, candidate_key)) return found;
-    }
+    const auto match = std::find_if(candidate_keys.begin(), candidate_keys.end(),
+                                     [this, &locale_lc](const std::string& candidate_key) {
+                                       return lookup_raw(locale_lc, candidate_key) != nullptr;
+                                     });
+    if (match != candidate_keys.end()) return lookup_raw(locale_lc, *match);
   }
   return nullptr;
 }

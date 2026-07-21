@@ -228,17 +228,17 @@ public:
   // EN: Sets the active locale used by tr()/tr_plural() (see RESOLUTION ORDER above). Matched
   //     case-insensitively against loaded [locale] sections at lookup time -- the exact string
   //     passed here is preserved verbatim for locale()/locales(). Returns false (no change) when
-  //     `locale` is nullptr or empty; the locale need not already exist in a loaded catalog
+  //     `locale_code` is nullptr or empty; the locale need not already exist in a loaded catalog
   //     (resolution simply falls through to fallback/the bare key until a matching catalog is
   //     loaded, e.g. across a runtime language pack download).
   // PT: Define o locale ativo usado por tr()/tr_plural() (ver ORDEM DE RESOLUÇÃO acima).
   //     Comparado sem diferenciar maiúsculas/minúsculas contra as seções [locale] carregadas em
   //     tempo de lookup -- a string exata passada aqui é preservada ao pé da letra para
-  //     locale()/locales(). Retorna false (sem mudança) quando `locale` é nulo ou vazio; o
+  //     locale()/locales(). Retorna false (sem mudança) quando `locale_code` é nulo ou vazio; o
   //     locale não precisa já existir num catálogo carregado (a resolução simplesmente cai para
   //     o fallback/a chave crua até um catálogo correspondente ser carregado, ex.: por um
   //     download de pacote de idioma em runtime).
-  bool set_locale(const char* locale);
+  bool set_locale(const char* locale_code);
 
   // EN: The active locale string as last set via set_locale(), or "" if never set.
   // PT: A string do locale ativo tal como definida por set_locale(), ou "" se nunca definida.
@@ -253,7 +253,7 @@ public:
   //     locale ativo não tem uma chave. Opcional: se nunca definido, a resolução pula direto do
   //     passo 2 pro último recurso da chave crua (passo 5). Mesmas regras de validação/
   //     comparação de set_locale().
-  bool set_fallback_locale(const char* locale);
+  bool set_fallback_locale(const char* locale_code);
 
   // EN: The fallback locale string as last set via set_fallback_locale(), or "" if never set.
   // PT: A string do locale de fallback tal como definida por set_fallback_locale(), ou "" se

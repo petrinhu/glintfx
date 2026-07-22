@@ -1134,11 +1134,46 @@ endif()
 #     Threads::Threads + CMAKE_DL_LIBS + m: miniaudio dlopen's ALSA/PulseAudio/etc at
 #     runtime -- zero system audio link dependency, same "no hard link dep, discover at
 #     runtime" spirit as glloader's own OpenGL::GL + CMAKE_DL_LIBS pattern above.
+#     PLATFORM GUARD on `m` only (QW-MSVCLINK, PROG-1 -- GusWorld consumer CI regression):
+#     `m` is the Unix libm archive; MSVC's cl.exe/link.exe has no such thing (there is no
+#     `m.lib` -- libm's functions live in the CRT already) and fails an EXECUTABLE link with
+#     "LNK1181: cannot open input file 'm.lib'" the moment some consumer actually links one
+#     against glintfx_audio -- this file's own `windows msvc build` CI job never caught it
+#     because it only builds the `glintfx` STATIC target (lib.exe/ar archive objects, they
+#     do not resolve symbols or usage requirements; see the glintfx_link_smoke executable
+#     further below, added specifically to close this gap). Threads::Threads and
+#     ${CMAKE_DL_LIBS} need NO guard -- both are already portable: CMake documents
+#     CMAKE_DL_LIBS as resolving to an empty list on platforms (Windows included) where
+#     dlopen()-family functions are not a separate linkable library, and
+#     find_package(Threads) + Threads::Threads is itself the cross-platform abstraction
+#     (MSVC's CRT is thread-safe by default, no separate pthread-alike lib to link). `m`
+#     alone is the bare Unix-only name -- domino sweep (PROG-1) confirmed it is the ONLY
+#     unguarded raw system-library name in glintfx/CMakeLists.txt, tests/CMakeLists.txt and
+#     tests/win-atoms/CMakeLists.txt (that harness's own header already documents omitting
+#     CMAKE_DL_LIBS/m on Windows for the same reason).
 # PT: src/audio.cpp (nosso, -Wall -Wextra) + src/miniaudio_impl.c (terceiro, -w abaixo).
 #     Threads::Threads + CMAKE_DL_LIBS + m: o miniaudio faz dlopen de ALSA/PulseAudio/etc em
 #     runtime -- zero dependência de link de sistema de áudio, mesmo espírito "sem dep de
 #     link rígida, descoberta em runtime" do próprio padrão OpenGL::GL + CMAKE_DL_LIBS do
 #     glloader acima.
+#     GUARD DE PLATAFORMA só no `m` (QW-MSVCLINK, PROG-1 -- regressão no CI do consumidor
+#     GusWorld): `m` é o archive libm do Unix; o cl.exe/link.exe do MSVC não tem isso (não
+#     existe `m.lib` -- as funções da libm já vivem na CRT) e falha o link de um EXECUTÁVEL
+#     com "LNK1181: cannot open input file 'm.lib'" no momento em que algum consumidor de
+#     verdade linka um contra glintfx_audio -- o próprio job de CI `windows msvc build` deste
+#     arquivo nunca pegou isso porque só builda o alvo STATIC `glintfx` (lib.exe/ar arquivam
+#     objetos, não resolvem símbolo nem usage requirement; ver o executável
+#     glintfx_link_smoke mais abaixo, acrescentado especificamente para fechar esta lacuna).
+#     Threads::Threads e ${CMAKE_DL_LIBS} NÃO precisam de guard -- os dois já são portáveis:
+#     o CMake documenta CMAKE_DL_LIBS como resolvendo pra uma lista vazia em plataformas
+#     (Windows incluso) onde as funções da família dlopen() não são uma biblioteca linkável
+#     separada, e find_package(Threads) + Threads::Threads é ele mesmo a abstração
+#     cross-platform (a CRT do MSVC já é thread-safe por padrão, sem lib tipo-pthread
+#     separada pra linkar). Só o `m` é o nome cru Unix-only -- a varredura dominó (PROG-1)
+#     confirmou que é o ÚNICO nome de biblioteca de sistema cru sem guard em
+#     glintfx/CMakeLists.txt, tests/CMakeLists.txt e tests/win-atoms/CMakeLists.txt (aquele
+#     harness já documenta no próprio cabeçalho omitir CMAKE_DL_LIBS/m no Windows pelo mesmo
+#     motivo).
 if(GLINTFX_MODULE_AUDIO)
   find_package(Threads REQUIRED)
   set_source_files_properties(src/miniaudio_impl.c PROPERTIES COMPILE_OPTIONS "-w")
@@ -1148,7 +1183,8 @@ if(GLINTFX_MODULE_AUDIO)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio)
-  target_link_libraries(glintfx_audio PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
+  target_link_libraries(glintfx_audio PRIVATE Threads::Threads ${CMAKE_DL_LIBS}
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:m>)
   target_compile_options(glintfx_audio PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_audio)
   add_library(glintfx::audio ALIAS glintfx_audio)
@@ -1301,6 +1337,55 @@ glintfx_instrument_coverage(glintfx)
 #     Posicionado aqui (antes dos subdirs de DEMOS/TESTS) para que o alias esteja sempre
 #     disponível independentemente de demos ou testes estarem habilitados.
 add_library(glintfx::glintfx ALIAS glintfx)
+
+# EN: GLINTFX_BUILD_LINK_SMOKE (QW-MSVCLINK, PROG-1) -- a minimal executable that LINKS against
+#     glintfx::glintfx, added specifically to close the CI gap the `m`/`m.lib` MSVC regression
+#     exposed: the `windows msvc build` job (.github/workflows/ci.yml) only ever builds the
+#     `glintfx` STATIC target (`--target glintfx`), and a static-library archiver (lib.exe/ar)
+#     packs object files without ever resolving symbols or PRIVATE usage requirements against
+#     them -- so a Unix-only library name leaking into one of glintfx's module OBJECT
+#     libraries (e.g. the bare `m` in glintfx_audio's target_link_libraries(), see the guard
+#     comment there) can sail through that job green while still breaking every REAL consumer
+#     the instant they link an executable. OFF by default (never affects a normal build, dev or
+#     CI): this is a diagnostic smoke, not a feature, and does not belong to
+#     GLINTFX_BUILD_TESTS's ~50-target suite (most of which assumes a GLFW/Xvfb-capable
+#     environment this job's own GLINTFX_BACKEND_GLFW=OFF configuration deliberately lacks --
+#     see that job's own header comment in ci.yml). Depends only on the two `core`-ONLY modules
+#     (ADR-0015 (b)) exercised by tests/link_smoke.cpp -- glintfx::Audio (where the bug was
+#     actually found) and glintfx::I18n -- so it configures/links fine even under this job's
+#     degraded (GLFW=OFF) build; if a future consumer disables one of those two modules, the
+#     smoke is skipped with a STATUS message rather than a hard failure (this target's whole
+#     job is to catch a link-time regression, not to enforce that every module stays ON).
+# PT: GLINTFX_BUILD_LINK_SMOKE (QW-MSVCLINK, PROG-1) -- um executável mínimo que LINKA contra
+#     glintfx::glintfx, acrescentado especificamente para fechar a lacuna de CI que a regressão
+#     MSVC do `m`/`m.lib` expôs: o job `windows msvc build` (.github/workflows/ci.yml) sempre
+#     builda só o alvo STATIC `glintfx` (`--target glintfx`), e um arquivador de biblioteca
+#     estática (lib.exe/ar) empacota arquivos-objeto sem nunca resolver símbolo nem usage
+#     requirement PRIVATE contra eles -- então um nome de biblioteca Unix-only vazando pra uma
+#     das bibliotecas OBJECT de módulo da glintfx (ex.: o `m` cru no target_link_libraries() do
+#     glintfx_audio, ver o comentário de guard lá) pode passar por aquele job verde e ainda
+#     assim quebrar todo consumidor DE VERDADE no instante em que linka um executável. OFF por
+#     padrão (nunca afeta um build normal, dev ou CI): isto é um smoke diagnóstico, não uma
+#     feature, e não pertence à suíte de ~50 alvos do GLINTFX_BUILD_TESTS (a maioria assume um
+#     ambiente capaz de GLFW/Xvfb que a própria configuração GLINTFX_BACKEND_GLFW=OFF deste job
+#     deliberadamente não tem -- ver o próprio comentário de cabeçalho daquele job no ci.yml).
+#     Depende só dos dois módulos SÓ-`core` (ADR-0015 (b)) exercitados por
+#     tests/link_smoke.cpp -- glintfx::Audio (onde o bug foi de fato encontrado) e glintfx::I18n
+#     -- então configura/linka bem mesmo sob o build degradado (GLFW=OFF) deste job; se um
+#     futuro consumidor desligar um desses dois módulos, o smoke é pulado com mensagem STATUS
+#     em vez de falha dura (o trabalho inteiro deste alvo é pegar uma regressão de link-time,
+#     não impor que todo módulo fique ON).
+option(GLINTFX_BUILD_LINK_SMOKE
+  "Build glintfx_link_smoke, a minimal executable linking glintfx::glintfx (Audio + I18n) to catch link-time-only dependency leaks such as a Unix-only library linked into a static-lib-only CI build (QW-MSVCLINK, PROG-1)"
+  OFF)
+if(GLINTFX_BUILD_LINK_SMOKE)
+  if(GLINTFX_MODULE_AUDIO AND GLINTFX_MODULE_I18N)
+    add_executable(glintfx_link_smoke tests/link_smoke.cpp)
+    target_link_libraries(glintfx_link_smoke PRIVATE glintfx::glintfx)
+  else()
+    message(STATUS "glintfx: GLINTFX_BUILD_LINK_SMOKE=ON but GLINTFX_MODULE_AUDIO/GLINTFX_MODULE_I18N is OFF -- link smoke skipped (tests/link_smoke.cpp needs both).")
+  endif()
+endif()
 
 # EN: Default demos and tests ON only when glintfx is the top-level project.
 #     When consumed via FetchContent/add_subdirectory the default is OFF so that

@@ -1472,9 +1472,71 @@ glx_sfnt_result glx_sfnt_colr_layers(const glx_sfnt_face* face, uint32_t gid,
     //      same KERN-BSEARCH shape glx_sfnt_kern already uses: bisect, never scan. The two
     //      bounds_ok calls above already prove every index `m` in `[0, num_base_glyph_records)`
     //      has its whole 6-byte record inside `[colr_off, colr_end)` REGARDLESS of the byte
-    //      values there, sorted or not -- a hostile/unsorted table can only ever make this MISS a
-    //      gid that IS present (falls through to the "not a colour glyph" `GLX_SFNT_OK`/count==0
-    //      return below), never read out of bounds or return a WRONG match. -------------------
+    //      values there, sorted or not -- memory safety is unconditional here, independent of the
+    //      search strategy walking over the array.
+    //
+    //      TWO DIFFERENT CORRUPTION CLASSES, TWO DIFFERENT GUARANTEES (QW-COLRDOC, MINOR finding
+    //      from the A4-EMOJI review adversarial S3 -- the prior wording here blanket-claimed
+    //      "never a wrong match", conflating the two): (a) RECORD-level corruption -- whole
+    //      6-byte records reordered/duplicated/shuffled, each one's own 3 fields (glyphID,
+    //      firstLayerIndex, numLayers) still physically together at whatever offset it landed on
+    //      -- can only ever make bisection MISS a gid that IS present in the table (falls through
+    //      to the ordinary "not a colour glyph" `GLX_SFNT_OK`/count==0 return below), never a
+    //      cross-record mismatch: a match fires ONLY on `have == want` immediately below, and
+    //      every field this function then reads (`first_layer_index`/`num_layers` at
+    //      `rec_off+2`/`rec_off+4`, right after) comes from that SAME `rec_off` slot the match
+    //      itself was found at, never from wherever a correctly-sorted table would have put the
+    //      "real" record for this gid. (b) FIELD-level corruption -- one record's OWN `glyphID`
+    //      sub-field altered independently of its own `firstLayerIndex`/`numLayers` siblings
+    //      (e.g. a bit-flip inside a single 6-byte record, not a swap between two records) -- is a
+    //      DIFFERENT, orthogonal risk this function cannot detect or distinguish from a
+    //      well-formed table, and neither could a hypothetical linear scan reading the exact same
+    //      bytes: the triple returned is still byte-for-byte physically self-consistent (all 3
+    //      fields genuinely sit together in one 6-byte record this table's own header declares to
+    //      exist), but the SEMANTIC claim "this layer range was authored for this gid" is a
+    //      data-integrity property no in-bounds structural parser can verify from the bytes
+    //      alone -- still memory-safe (still inside `[colr_off, colr_end)`, still `GLX_SFNT_OK`),
+    //      just not a claim this function ever made or could make. In short: the SORTEDNESS
+    //      assumption bisection adds on top of a linear scan can only cost a false MISS;
+    //      per-record byte corruption (a risk any parser has, bisection or not) can cost a
+    //      semantically-bogus but memory-safe HIT -- kept as two separate claims here on purpose,
+    //      not one blanket guarantee. -------------------------------------------------------------
+    // PT: ---- FT-COLR-BSEARCH -- BaseGlyphRecords são EXIGIDOS pela spec de estarem ordenados
+    //      ascendente por glyphID, mesma forma KERN-BSEARCH que o glx_sfnt_kern já usa: bisecta,
+    //      nunca varre. As duas chamadas `bounds_ok` acima já provam que todo índice `m` em
+    //      `[0, num_base_glyph_records)` tem seu registro inteiro de 6 bytes dentro de
+    //      `[colr_off, colr_end)` INDEPENDENTE dos valores de byte ali, ordenados ou não --
+    //      segurança de memória é incondicional aqui, independente da estratégia de busca que
+    //      percorre por cima do array.
+    //
+    //      DUAS CLASSES DE CORRUPÇÃO DIFERENTES, DUAS GARANTIAS DIFERENTES (QW-COLRDOC, achado
+    //      MINOR do review adversarial do A4-EMOJI, S3 -- a redação anterior aqui alegava em bloco
+    //      "nunca um match errado", misturando as duas): (a) corrupção em nível de REGISTRO --
+    //      registros inteiros de 6 bytes reordenados/duplicados/embaralhados, cada um com seus
+    //      próprios 3 campos (glyphID, firstLayerIndex, numLayers) ainda fisicamente juntos em
+    //      qualquer offset onde caiu -- só consegue, no máximo, fazer a bisecção PERDER um gid que
+    //      ESTÁ presente na tabela (cai no retorno comum "não é glyph colorido"
+    //      `GLX_SFNT_OK`/count==0 abaixo), nunca um cruzamento entre registros: um match só
+    //      dispara na igualdade exata `have == want` logo abaixo, e todo campo que esta função lê
+    //      depois (`first_layer_index`/`num_layers` em `rec_off+2`/`rec_off+4`, logo em seguida)
+    //      vem do MESMO slot `rec_off` onde o próprio match foi achado, nunca de onde uma tabela
+    //      corretamente ordenada teria posto o registro "de verdade" pra este gid. (b) corrupção
+    //      em nível de CAMPO -- o próprio sub-campo `glyphID` de um registro alterado
+    //      independentemente dos próprios irmãos `firstLayerIndex`/`numLayers` (ex.: um bit
+    //      invertido dentro de um único registro de 6 bytes, não uma troca entre dois registros)
+    //      -- é um risco DIFERENTE, ortogonal, que esta função não consegue detectar nem distinguir
+    //      de uma tabela bem-formada, e nem uma varredura linear hipotética lendo os mesmos bytes
+    //      conseguiria: a tripla retornada ainda é fisicamente auto-consistente byte-a-byte (os 3
+    //      campos genuinamente moram juntos num registro de 6 bytes que o próprio header desta
+    //      tabela declara existir), mas a alegação SEMÂNTICA "esta faixa de layer foi autorada
+    //      pra este gid" é uma propriedade de integridade-de-dado que nenhum parser estrutural
+    //      dentro-dos-limites consegue verificar só pelos bytes -- ainda seguro de memória (ainda
+    //      dentro de `[colr_off, colr_end)`, ainda `GLX_SFNT_OK`), só não é uma alegação que esta
+    //      função algum dia fez ou poderia fazer. Resumindo: a suposição de ORDENAÇÃO que a
+    //      bisecção acrescenta sobre uma varredura linear só pode custar uma PERDA falsa;
+    //      corrupção de byte por-registro (um risco que qualquer parser tem, bisecção ou não) pode
+    //      custar um HIT semanticamente bogus mas seguro de memória -- mantidas como duas
+    //      alegações separadas aqui de propósito, não uma garantia em bloco. -----------------------
     uint16_t want = (uint16_t)gid; // gid < num_glyphs <= 0xFFFF already proven above
     size_t lo = 0, hi = num_base_glyph_records;
     size_t found_idx = SIZE_MAX; // sentinel: "not found yet" (a real index is always < hi <= 0xFFFF)

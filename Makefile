@@ -20,8 +20,35 @@ LD  := ld
 AR  := ar
 CXX := clang++
 
+# EN: QW-MKDEP (INBOX drain, Onda 1) -- `-MMD -MP` emits a `.d` header-dependency file alongside
+#     every `.o` (GCC/clang-compatible flag, no external tool). `-MMD` (not `-MD`): tracks only
+#     THIS project's own headers (include/*.h), not system headers -- there are none of the
+#     latter to track anyway (-ffreestanding/-nostdlib), so this is purely defensive precision,
+#     matching the rest of this Makefile's "no libc assumption, ever" posture. `-MP` adds a
+#     phony target per header, so a DELETED/RENAMED header does not leave `make` erroring on a
+#     stale dependency ("No rule to make target"). Without this, editing a shared header
+#     (e.g. include/conv.h) silently rebuilds NOTHING unless the .c files that #include it are
+#     also touched -- a real footgun this project already paid for once: a stale-object false
+#     positive of "ABI desalinhada" during the A4-EMOJI slice, traced back to exactly this gap.
+#     The generated .d files are `-include`d near the end of this file (see DEPS below); `make
+#     clean`'s `rm -rf $(BUILD)` already sweeps them away with everything else, no separate rule
+#     needed.
+# PT: QW-MKDEP (esvaziamento da INBOX, Onda 1) -- `-MMD -MP` emite um arquivo `.d` de
+#     dependência-de-header ao lado de todo `.o` (flag compatível GCC/clang, sem ferramenta
+#     externa). `-MMD` (não `-MD`): rastreia só os headers DESTE projeto (include/*.h), não
+#     headers de sistema -- não há nenhum destes últimos pra rastrear de qualquer jeito
+#     (-ffreestanding/-nostdlib), então isto é precisão puramente defensiva, casando com a
+#     postura de "nenhuma suposição de libc, nunca" do resto deste Makefile. `-MP` acrescenta um
+#     alvo fantasma por header, então um header DELETADO/RENOMEADO não deixa o `make` errar numa
+#     dependência obsoleta ("No rule to make target"). Sem isso, editar um header compartilhado
+#     (ex.: include/conv.h) não rebuilda NADA em silêncio a menos que os .c que o `#include`iam
+#     também sejam tocados -- um footgun real que este projeto já pagou uma vez: um falso-positivo
+#     de "ABI desalinhada" com objeto obsoleto durante a fatia A4-EMOJI, rastreado exatamente até
+#     esta lacuna. Os .d gerados são `-include`ados perto do fim deste arquivo (ver DEPS abaixo);
+#     o `rm -rf $(BUILD)` do `make clean` já varre eles junto com tudo o mais, nenhuma regra
+#     separada necessária.
 CFLAGS  := -std=c23 -ffreestanding -nostdlib -fno-pic -fno-stack-protector \
-           -fno-builtin -fno-asynchronous-unwind-tables -m64 -Wall -Wextra -Iinclude
+           -fno-builtin -fno-asynchronous-unwind-tables -m64 -Wall -Wextra -Iinclude -MMD -MP
 ASFLAGS := -f elf64 -Iinclude/
 LDFLAGS := -nostdlib -static -no-pie -e _start
 
@@ -71,11 +98,21 @@ RUNTIME_OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(RUNTIME_C_SRCS)) \
 #     rodado pelo próprio alvo dedicado `sanitize-sfnt` abaixo em vez disso (mesmo padrão que o
 #     `tests/libcore_consumer.cpp` já usa, só que via exclusão baseada em extensão lá em vez de um
 #     filter-out explícito).
-PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c tests/sanitize_raster.c tests/sanitize_hint.c,$(wildcard tests/*.c))
+# EN: `tests/probe_iabs32.c` is EXCLUDED here for the SAME reason as the three sanitize_*.c files
+#     above -- see that file's own header ("WHY THIS IS A SEPARATE PROGRAM") -- it #includes
+#     src/raster.c TEXTUALLY to reach the `static iabs32`, so linking it against $(RUNTIME_OBJS)
+#     (which already provides src/raster.c's object) would be a hard duplicate-symbol error. Built/
+#     run by its own dedicated `probe-iabs32` target below instead.
+# PT: `tests/probe_iabs32.c` é EXCLUÍDO aqui pelo MESMO motivo que os três sanitize_*.c acima --
+#     ver o cabeçalho próprio daquele arquivo ("POR QUE ISTO É UM PROGRAMA SEPARADO") -- ele
+#     `#include`ia o src/raster.c TEXTUALMENTE pra alcançar o `iabs32` `static`, então linká-lo
+#     contra $(RUNTIME_OBJS) (que já fornece o objeto do src/raster.c) seria um erro rígido de
+#     símbolo duplicado. Buildado/rodado pelo próprio alvo dedicado `probe-iabs32` abaixo.
+PROGRAM_SRCS := $(filter-out tests/sanitize_sfnt.c tests/sanitize_raster.c tests/sanitize_hint.c tests/probe_iabs32.c,$(wildcard tests/*.c))
 PROGRAMS     := $(patsubst tests/%.c,$(BIN)/%,$(PROGRAM_SRCS))
 
 .PHONY: build test test-negative check-static test-mem clean run libcore libcore-test sanitize-sfnt \
-        sanitize-raster sanitize-hint
+        sanitize-raster sanitize-hint probe-iabs32
 
 build: $(PROGRAMS)
 
@@ -312,8 +349,12 @@ run: build
 #       (a) cppcheck in freestanding mode (no missingIncludeSystem noise -- there IS no libc to
 #           find headers for, that "gap" is the whole point of this codebase);
 #       (b) clang --analyze with the EXACT same freestanding flags as the real build (CFLAGS,
-#           minus warnings/paths that do not apply to single-TU analysis) -- catches UB/misuse
-#           classes cppcheck does not (e.g. deeper interprocedural null-deref paths);
+#           minus flags that do not apply to single-TU analysis -- QW-MKDEP's `-MMD -MP` is one:
+#           `--analyze -o /dev/null` would try to write a sibling `/dev/null.d`, which fails
+#           with "Permission denied" rather than silently doing nothing, so `-MMD -MP` is
+#           filtered OUT here via $(ANALYZE_CFLAGS), never carried into this analysis-only,
+#           no-real-object-file invocation) -- catches UB/misuse classes cppcheck does not (e.g.
+#           deeper interprocedural null-deref paths);
 #       (c) tools/check_spdx.sh (STD-SPDX, TODO.md) -- every code file carries the license header;
 #       (d) tools/check_syscall_nums_sync.sh (AUD-C0 finding) -- the C/NASM syscall-number
 #           mirrors have not drifted apart.
@@ -330,10 +371,13 @@ run: build
 #     que esta precisamente provando o comportamento do nosso strcmp()):
 #       (a) cppcheck em modo freestanding (sem ruido de missingIncludeSystem -- NAO HA libc pra
 #           achar headers, essa "lacuna" e' o ponto inteiro deste codigo-base);
-#       (b) clang --analyze com as MESMAS flags freestanding do build real (CFLAGS, menos
-#           avisos/caminhos que nao se aplicam a analise de uma unica TU) -- pega classes de
-#           UB/uso indevido que o cppcheck nao pega (ex.: caminhos de null-deref interprocedurais
-#           mais profundos);
+#       (b) clang --analyze com as MESMAS flags freestanding do build real (CFLAGS, menos flags
+#           que nao se aplicam a analise de uma unica TU -- o `-MMD -MP` do QW-MKDEP e' uma
+#           delas: `--analyze -o /dev/null` tentaria escrever um `/dev/null.d` irmao, o que falha
+#           com "Permission denied" em vez de simplesmente nao fazer nada, entao o `-MMD -MP` e'
+#           filtrado FORA daqui via $(ANALYZE_CFLAGS), nunca carregado pra esta invocacao
+#           so-de-analise, sem arquivo-objeto real) -- pega classes de UB/uso indevido que o
+#           cppcheck nao pega (ex.: caminhos de null-deref interprocedurais mais profundos);
 #       (c) tools/check_spdx.sh (STD-SPDX, TODO.md) -- todo arquivo de codigo carrega o header
 #           de licenca;
 #       (d) tools/check_syscall_nums_sync.sh (achado AUD-C0) -- os espelhos C/NASM dos numeros
@@ -343,6 +387,13 @@ run: build
 #     ponto de chamada exato (`// cppcheck-suppress <id>` com comentario de racional logo acima
 #     -- ver src/sys_mmap.c / src/sys_read.c pra dois exemplos reais), nunca desligando a
 #     checagem inteira.
+# EN: QW-MKDEP addendum -- see check-static's own "(b)" comment above for why $(CFLAGS)'s
+#     `-MMD -MP` cannot be carried, unmodified, into the `--analyze -o /dev/null` invocation.
+# PT: Adendo do QW-MKDEP -- ver o comentário "(b)" próprio do check-static acima pro porquê o
+#     `-MMD -MP` do $(CFLAGS) não pode ser carregado, sem modificação, pra invocação
+#     `--analyze -o /dev/null`.
+ANALYZE_CFLAGS := $(filter-out -MMD -MP,$(CFLAGS))
+
 check-static:
 	@echo "--- (a) cppcheck (freestanding, src/) ---"
 	cppcheck --enable=warning,style,performance,portability --std=c23 --platform=unix64 \
@@ -350,7 +401,7 @@ check-static:
 	@echo "--- (b) clang --analyze (freestanding, src/*.c) ---"
 	@status=0; \
 	for f in src/*.c; do \
-		out=$$(clang --analyze -Xclang -analyzer-output=text $(CFLAGS) "$$f" -o /dev/null 2>&1); \
+		out=$$(clang --analyze -Xclang -analyzer-output=text $(ANALYZE_CFLAGS) "$$f" -o /dev/null 2>&1); \
 		if [ -n "$$out" ]; then echo "$$out"; status=1; fi; \
 	done; \
 	if [ "$$status" -eq 0 ]; then echo "clang --analyze: OK (0 findings across src/*.c)"; else exit 1; fi
@@ -647,6 +698,46 @@ SANITIZE_HINT_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=address,undef
 sanitize-hint: | $(BIN)
 	$(CC) $(SANITIZE_HINT_FLAGS) -o $(BIN)/sanitize_hint tests/sanitize_hint.c src/hint.c
 	$(BIN)/sanitize_hint
+
+# EN: QW-IABS32 (INBOX drain, Onda 1) -- hosted-companion PROBE target for the `static iabs32`
+#     guard in src/raster.c (tests/probe_iabs32.c's own file header has the full rationale for
+#     WHY a textual #include, not a link, is the only honest way to reach a `static` helper).
+#     `-fsanitize=undefined` (not address -- this probe touches no buffers, only scalar
+#     arithmetic) is what makes reverting the one-line guard in src/raster.c turn this target
+#     RED: without the guard, `iabs32(INT32_MIN)`'s `-v` is signed-integer-overflow, and UBSan
+#     aborts on it immediately, proving the guard fixes a real UB, not a cosmetic one.
+# PT: Alvo de SONDA hosted-companion do QW-IABS32 (esvaziamento da INBOX, Onda 1) pra guarda do
+#     `iabs32` `static` no src/raster.c (o cabeçalho próprio do tests/probe_iabs32.c tem o
+#     racional completo do PORQUÊ um `#include` textual, não um link, é o único jeito honesto de
+#     alcançar um helper `static`). `-fsanitize=undefined` (não address -- esta sonda não toca
+#     buffer nenhum, só aritmética escalar) é o que faz reverter a guarda de uma linha no
+#     src/raster.c virar este alvo VERMELHO: sem a guarda, o `-v` do `iabs32(INT32_MIN)` é
+#     overflow de inteiro com sinal, e o UBSan aborta nele imediatamente, provando que a guarda
+#     conserta um UB de verdade, não cosmético.
+PROBE_IABS32_FLAGS := -std=c23 -Wall -Wextra -Iinclude -fsanitize=undefined -fno-sanitize-recover=all -g -O1
+
+probe-iabs32: | $(BIN)
+	$(CC) $(PROBE_IABS32_FLAGS) -o $(BIN)/probe_iabs32 tests/probe_iabs32.c
+	$(BIN)/probe_iabs32
+
+# EN: QW-MKDEP -- pulls in every generated `.d` file (both object trees, $(OBJ)/ and
+#     $(OBJCORE)/), so a header edit correctly invalidates every `.o` that `#include`s it,
+#     transitively, on the NEXT `make build`/`make libcore`/etc. `-include` (not `include`):
+#     silently tolerates the files not existing yet (first build, or right after `make clean`) --
+#     `make`'s ordinary behaviour for a missing prerequisite-generating file. Placed at the very
+#     end of this Makefile on purpose: GNU Make re-parses/restarts after including any file that
+#     one of its own rules can (re)build, and by this point every pattern rule that PRODUCES a
+#     `.d` (the `$(OBJ)/%.o`/`$(OBJCORE)/%.o` rules above, via `-MMD`) is already defined.
+# PT: QW-MKDEP -- puxa todo `.d` gerado (as duas árvores de objeto, $(OBJ)/ e $(OBJCORE)/), então
+#     uma edição de header invalida corretamente todo `.o` que o `#include`ia, transitivamente, no
+#     PRÓXIMO `make build`/`make libcore`/etc. `-include` (não `include`): tolera em silêncio os
+#     arquivos ainda não existirem (primeiro build, ou logo após `make clean`) -- o comportamento
+#     comum do `make` pra um arquivo-pré-requisito-gerável ausente. Colocado bem no fim deste
+#     Makefile de propósito: o GNU Make re-parseia/reinicia depois de incluir qualquer arquivo que
+#     uma das próprias regras dele consiga (re)construir, e a esta altura toda regra de padrão que
+#     PRODUZ um `.d` (as regras `$(OBJ)/%.o`/`$(OBJCORE)/%.o` acima, via `-MMD`) já está definida.
+DEPS := $(wildcard $(OBJ)/*.d) $(wildcard $(OBJCORE)/*.d)
+-include $(DEPS)
 
 clean:
 	rm -rf $(BUILD)

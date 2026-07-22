@@ -50,6 +50,9 @@ audio.shutdown();                     // or just let `audio` go out of scope
   un-poisoned, so no sanitizer flags it; the breakage would be silent, undefined-behaviour-class
   reads of a half-torn-down engine. This is documented at the exact call site in
   `glintfx/src/audio.cpp`'s `shutdown()` -- read that comment before touching the ordering.
+  **The same blind spot now also covers the voice table (`AUDIO-F2`):** every oneshot copy
+  (`Impl::voices`) must be uninitialized before the primaries, for the same refcounted
+  data-buffer-node reason.
 
 ### API reference
 
@@ -59,11 +62,23 @@ audio.shutdown();                     // or just let `audio` go out of scope
 | `shutdown()` | `void` | Idempotent; tears down sounds, then the engine. |
 | `is_initialized()` | `bool` | |
 | `load_sound(const char* path)` | `SoundId` (`0` = failure) | Synchronous full decode (see "Formats" below). `nullptr`/missing/corrupt file -> `0`, never crashes. |
-| `play(SoundId id)` | `bool` | Always restarts from frame 0 (see "Polyphony" below). `false` if `id` unknown or `0`. |
-| `stop(SoundId id)` | `bool` | Does not unload the sound. |
-| `set_volume(SoundId id, float v)` | `bool` | Rejects non-finite/negative `v` (keeps the previous volume); clamps an accepted value to `[0, 1]`. |
+| `play(SoundId id, bool loop = false, float fade_in_s = 0.0f)` | `bool` | Acts on the PRIMARY instance only; always restarts from frame 0. `loop` sets the looping state before starting. `fade_in_s > 0` ramps in from silence up to the sound's current volume, and resets any previously scheduled `stop(id, fade_out_s)` first (a fresh `play()` always wins over a stale scheduled stop). `fade_in_s` hardened like every duration below. `false` if `id` unknown/0 or `fade_in_s` rejected. |
+| `stop(SoundId id, float fade_out_s = 0.0f)` | `bool` | Stops the PRIMARY instance AND every live oneshot copy; does not unload the sound. `fade_out_s == 0` (default) stops immediately. `> 0` schedules a fade-out instead -- **`is_playing(id)` stays `true` while it fades** (that is the deliberate observable). `false` if `id` unknown/0 or `fade_out_s` rejected. |
+| `set_looping(SoundId id, bool loop)` | `bool` | Live toggle on the PRIMARY instance only, no restart needed. Copies never loop (see "Loop, fade, and polyphony" below). `false` if `id` unknown/0. |
+| `play_oneshot(SoundId id)` | `bool` | Fire-and-forget overlapping copy of `id` (see "Loop, fade, and polyphony" below). Never loops, no per-call volume in this slice. `false` if `id` unknown/0 or the copy fails to start (never due to the voice cap -- the oldest copy is stolen instead). |
+| `is_playing(SoundId id)` | `bool` (`const`) | `true` if the PRIMARY instance OR any live oneshot copy of `id` is playing. |
+| `voice_count(SoundId id)` | `std::uint32_t` (`const`) | Number of instances of `id` (primary + copies) CURRENTLY PLAYING; an ended-but-unreaped copy does not count. |
+| `set_volume(SoundId id, float v)` | `bool` | Rejects non-finite/negative `v` (keeps the previous volume); clamps an accepted value to `[0, 1]`. Applies to the PRIMARY AND every currently-live copy of `id`; a copy created afterwards inherits the primary's volume at *its own* creation time, not retroactively. |
 | `set_master_volume(float v)` | `void` | Same validation as `set_volume`, engine-wide. |
-| `stop_all()` | `void` | Stops every loaded sound; does not unload any of them. |
+| `stop_all()` | `void` | Stops every loaded sound -- every primary AND every live oneshot copy; does not unload any of them. |
+
+### Threading contract
+
+The `Audio` API is **single-threaded**: every call (`play`/`stop`/`play_oneshot`/`is_playing`/...)
+must come from one thread. miniaudio's own getters (`ma_sound_is_playing`, `ma_sound_at_end`, ...)
+are safe to call concurrently with the internal mixer thread by miniaudio's own design, but this
+module's internal voice table is a plain `std::unordered_map` with no lock in this slice -- it is
+not safe to call from two application threads at once.
 
 ### Formats
 
@@ -79,15 +94,57 @@ silent gap).
 `load_sound()` performs a **full, synchronous decode at call time** (`MA_SOUND_FLAG_DECODE`).
 This means the audio device's callback thread only ever reads already-decoded PCM from memory --
 this module installs no callback of its own, so nothing glintfx-authored runs on the audio
-thread. There is no streaming/async decode in this slice; a large music track is decoded
-entirely into memory on `load_sound()`, same as a sound effect.
+thread. **This is also this slice's known limitation:** there is no streaming/async decode --
+a large music track is decoded entirely into memory on `load_sound()`, same as a sound effect.
+Streaming (`MA_SOUND_FLAG_STREAM`, for long music without the full-RAM cost) is tracked as a
+future item (`AUDIO-STREAM`, see `TODO.md` INBOX), not a silent gap.
 
-### Polyphony (not yet supported, by design)
+### Loop, fade, and polyphony (`AUDIO-F2`)
 
-One live instance per `SoundId`. Calling `play()` on a sound that is already playing restarts
-it from frame 0 -- it does **not** layer a second overlapping instance. Overlapping instances of
-the *same* sound effect (e.g. rapid-fire gunshots) needs `ma_sound_init_copy`, which is a future
-slice, not a half-implemented feature here.
+Four behaviours a real consumer (GusWorld) already had in production before migrating to
+`glintfx::Audio` -- all four map to native miniaudio calls, and all four are backwards compatible
+at the source level: existing `play(id)`/`stop(id)` calls keep compiling with their exact
+original semantics (a single "primary" instance per `SoundId`, restart from frame 0).
+
+- **Gapless loop:** `play(id, /*loop=*/true)` or `set_looping(id, true)` at any time (live toggle,
+  no restart). Applies to the PRIMARY instance only.
+- **Fade in/out:** `play(id, loop, fade_in_s)` ramps in from silence up to the sound's *current*
+  volume (so a prior `set_volume()` survives the fade); `stop(id, fade_out_s)` ramps out instead
+  of stopping immediately. `fade_in_s`/`fade_out_s` are hardened the same way as every duration in
+  this module: rejected (`false`, state untouched) when `!std::isfinite(v) || v < 0`; an accepted
+  value is clamped to `[0, 3600]` s. **While a `stop(id, fade_out_s)` fade is running,
+  `is_playing(id)` keeps returning `true`** -- that is the deliberate, documented observable (the
+  sound is still audible, just ramping down). A `play()` issued during a scheduled fade-out always
+  wins (it resets the pending stop before restarting).
+- **SFX polyphony (`play_oneshot`):** each `SoundId` has ONE "primary" instance (the one
+  `play()`/`stop()`/`set_looping()` act on) plus a pool of "oneshot copies" created by
+  `play_oneshot()` for overlapping playback of the *same* effect (e.g. rapid-fire gunshots).
+  Copies are fire-and-forget: they never loop (a looping orphan copy could never be reaped by
+  construction -- a deliberate footgun removal), they inherit the primary's volume at the moment
+  they are created (not live-linked to it afterwards), and they are lazily reaped only from
+  inside `play_oneshot()` itself once a copy has finished playing -- no timer, no background
+  thread, so the reap cannot race `shutdown()` (both run on the caller's single thread). A hard
+  cap of **32 live copies per `SoundId`** applies; once at the cap (after reaping), the OLDEST
+  copy is stolen so the newest hit is always audible -- standard, deterministic audio
+  voice-stealing, never a rejected `play_oneshot()` call due to the cap.
+- **`is_playing`/`voice_count`:** both consider the primary AND every live copy. An
+  ended-but-not-yet-reaped copy counts as NOT playing (both read `ma_sound_is_playing()`).
+
+**Not provable headless, by construction:** fade-in AUDIBILITY and loop GAPLESSNESS (the headless
+null backend advances a timer but has no PCM tap). Covered by code review of the exact miniaudio
+calls plus a manual smoke test on a real audio device -- see the migration relay note below if
+you are the GusWorld consumer.
+
+### Migrating from direct miniaudio: the ODR warning
+
+`glintfx` ships its own `MINIAUDIO_IMPLEMENTATION` translation unit (`glintfx/src/audio.cpp`
+compiles `miniaudio.h`'s implementation once, inside the `glintfx_audio` object library). **If
+your project already used miniaudio directly and defined `MINIAUDIO_IMPLEMENTATION` in its own
+translation unit, you MUST delete that TU** when you switch to `GLINTFX_MODULE_AUDIO=ON` --
+otherwise the link fails (or, worse, silently picks one definition) because of duplicate `ma_*`
+symbols across the two implementation TUs. This is inherent to how miniaudio's single-header
+model works, not a glintfx bug: two `MINIAUDIO_IMPLEMENTATION` translation units in one binary
+is always an ODR violation, regardless of who wrote either of them.
 
 ### Null backend (headless / CI)
 
@@ -160,7 +217,9 @@ audio.shutdown();                     // ou simplesmente deixe `audio` sair de e
   e não-envenenada, então nenhum sanitizer acusa; a quebra seria silenciosa, leituras classe
   undefined-behaviour de um engine meio-desmontado. Isto está documentado no ponto exato de
   chamada em `glintfx/src/audio.cpp`, no `shutdown()` -- leia aquele comentário antes de mexer
-  na ordem.
+  na ordem. **O mesmo ponto cego agora também cobre a tabela de vozes (`AUDIO-F2`):** toda cópia
+  oneshot (`Impl::voices`) precisa ser desinicializada antes das primárias, pelo mesmo motivo de
+  data-buffer-node refcontado.
 
 ### Referência de API
 
@@ -170,11 +229,23 @@ audio.shutdown();                     // ou simplesmente deixe `audio` sair de e
 | `shutdown()` | `void` | Idempotente; destrói sons, depois o engine. |
 | `is_initialized()` | `bool` | |
 | `load_sound(const char* path)` | `SoundId` (`0` = falha) | Decode completo síncrono (ver "Formatos" abaixo). `nullptr`/arquivo ausente/corrompido -> `0`, nunca crasha. |
-| `play(SoundId id)` | `bool` | Sempre reinicia do frame 0 (ver "Polifonia" abaixo). `false` se `id` desconhecido ou `0`. |
-| `stop(SoundId id)` | `bool` | Não descarrega o som. |
-| `set_volume(SoundId id, float v)` | `bool` | Rejeita `v` não-finito/negativo (mantém o volume anterior); clampeia um valor aceito em `[0, 1]`. |
+| `play(SoundId id, bool loop = false, float fade_in_s = 0.0f)` | `bool` | Age só na instância PRIMÁRIA; sempre reinicia do frame 0. `loop` define o estado de loop antes de iniciar. `fade_in_s > 0` faz rampa a partir do silêncio até o volume atual do som, e reseta primeiro qualquer `stop(id, fade_out_s)` agendado antes (um `play()` novo sempre vence um stop agendado obsoleto). `fade_in_s` tem o mesmo hardening de duração abaixo. `false` se `id` desconhecido/0 ou `fade_in_s` rejeitado. |
+| `stop(SoundId id, float fade_out_s = 0.0f)` | `bool` | Para a instância PRIMÁRIA E toda cópia oneshot viva; não descarrega o som. `fade_out_s == 0` (padrão) para imediatamente. `> 0` agenda um fade-out -- **`is_playing(id)` continua `true` enquanto o fade roda** (esse é o observável deliberado). `false` se `id` desconhecido/0 ou `fade_out_s` rejeitado. |
+| `set_looping(SoundId id, bool loop)` | `bool` | Toggle ao vivo só na instância PRIMÁRIA, sem precisar reiniciar. Cópia nunca loopa (ver "Loop, fade e polifonia" abaixo). `false` se `id` desconhecido/0. |
+| `play_oneshot(SoundId id)` | `bool` | Cópia sobreposta fire-and-forget de `id` (ver "Loop, fade e polifonia" abaixo). Nunca loopa, sem volume por-chamada nesta fatia. `false` se `id` desconhecido/0 ou a cópia falha ao iniciar (nunca por causa do teto de vozes -- a cópia mais antiga é roubada em vez disso). |
+| `is_playing(SoundId id)` | `bool` (`const`) | `true` se a instância PRIMÁRIA OU alguma cópia oneshot viva de `id` está tocando. |
+| `voice_count(SoundId id)` | `std::uint32_t` (`const`) | Número de instâncias de `id` (primária + cópias) TOCANDO NO MOMENTO; uma cópia terminada-mas-não-reapada não conta. |
+| `set_volume(SoundId id, float v)` | `bool` | Rejeita `v` não-finito/negativo (mantém o volume anterior); clampeia um valor aceito em `[0, 1]`. Aplica na PRIMÁRIA E em toda cópia viva de `id` no momento; uma cópia criada depois herda o volume da primária no MOMENTO dela própria, não retroativamente. |
 | `set_master_volume(float v)` | `void` | Mesma validação do `set_volume`, no engine inteiro. |
-| `stop_all()` | `void` | Para todo som carregado; não descarrega nenhum. |
+| `stop_all()` | `void` | Para todo som carregado -- toda primária E toda cópia oneshot viva; não descarrega nenhum. |
+
+### Contrato de threading
+
+A API do `Audio` é **single-thread**: toda chamada (`play`/`stop`/`play_oneshot`/`is_playing`/...)
+precisa vir de uma thread. Os próprios getters do miniaudio (`ma_sound_is_playing`,
+`ma_sound_at_end`, ...) são seguros pra chamar concorrentemente com a thread interna do mixer por
+design do próprio miniaudio, mas a tabela de vozes interna deste módulo é um `std::unordered_map`
+comum, sem lock nesta fatia -- não é seguro chamar de duas threads da aplicação ao mesmo tempo.
 
 ### Formatos
 
@@ -190,16 +261,59 @@ futuro rastreado, não uma lacuna silenciosa).
 `load_sound()` faz um **decode completo e síncrono no momento da chamada**
 (`MA_SOUND_FLAG_DECODE`). Isso significa que a thread de callback do device de áudio só lê PCM
 já decodificado da memória -- este módulo não instala nenhum callback próprio, então nada
-autoral do glintfx roda na audio thread. Não há decode em streaming/assíncrono nesta fatia; uma
-faixa de música grande é decodificada inteira na memória em `load_sound()`, igual a um efeito
-sonoro.
+autoral do glintfx roda na audio thread. **Esta é também a limitação conhecida desta fatia:** não
+há decode em streaming/assíncrono -- uma faixa de música grande é decodificada inteira na memória
+em `load_sound()`, igual a um efeito sonoro. Streaming (`MA_SOUND_FLAG_STREAM`, pra música longa
+sem o custo de RAM cheia) está rastreado como item futuro (`AUDIO-STREAM`, ver INBOX do
+`TODO.md`), não uma lacuna silenciosa.
 
-### Polifonia (ainda não suportada, por design)
+### Loop, fade e polifonia (`AUDIO-F2`)
 
-Uma instância viva por `SoundId`. Chamar `play()` num som que já está tocando reinicia do frame
-0 -- **não** empilha uma segunda instância sobreposta. Instâncias sobrepostas do *mesmo* efeito
-sonoro (ex.: tiros em rajada) precisam de `ma_sound_init_copy`, que é uma fatia futura, não uma
-feature meio-implementada aqui.
+Quatro comportamentos que um consumidor real (GusWorld) já tinha em produção antes de migrar pro
+`glintfx::Audio` -- os 4 mapeiam pra chamadas nativas do miniaudio, e os 4 são retrocompatíveis em
+nível de fonte: as chamadas `play(id)`/`stop(id)` existentes continuam compilando com a MESMA
+semântica original (uma instância "primária" por `SoundId`, reinício do frame 0).
+
+- **Loop gapless:** `play(id, /*loop=*/true)` ou `set_looping(id, true)` a qualquer momento
+  (toggle ao vivo, sem reinício). Aplica só na instância PRIMÁRIA.
+- **Fade in/out:** `play(id, loop, fade_in_s)` faz rampa a partir do silêncio até o volume
+  *atual* do som (pra um `set_volume()` anterior sobreviver ao fade); `stop(id, fade_out_s)` faz
+  rampa de saída em vez de parar imediatamente. `fade_in_s`/`fade_out_s` têm o mesmo hardening de
+  toda duração deste módulo: rejeitados (`false`, estado intocado) quando
+  `!std::isfinite(v) || v < 0`; um valor aceito é clampeado em `[0, 3600]` s. **Enquanto um fade
+  de `stop(id, fade_out_s)` roda, `is_playing(id)` continua retornando `true`** -- esse é o
+  observável deliberado e documentado (o som ainda está audível, só decaindo). Um `play()`
+  disparado durante um fade-out agendado sempre vence (reseta o stop pendente antes de reiniciar).
+- **Polifonia de SFX (`play_oneshot`):** cada `SoundId` tem UMA instância "primária" (a que
+  `play()`/`stop()`/`set_looping()` afetam) mais um pool de "cópias oneshot" criadas por
+  `play_oneshot()` pra reprodução sobreposta do *mesmo* efeito (ex.: tiros em rajada). Cópias são
+  fire-and-forget: nunca loopam (uma cópia órfã em loop jamais seria reapada por construção --
+  remoção deliberada de footgun), herdam o volume da primária no momento em que são criadas (não
+  ficam ligadas ao vivo depois), e são reapadas preguiçosamente só de dentro do próprio
+  `play_oneshot()` quando uma cópia termina de tocar -- sem timer, sem thread de fundo, então o
+  reap não pode correr com o `shutdown()` (ambos rodam na única thread chamadora). Um teto rígido
+  de **32 cópias vivas por `SoundId`** se aplica; ao atingir o teto (depois do reap), a cópia MAIS
+  ANTIGA é roubada pra que o hit mais novo sempre soe -- voice-stealing de áudio padrão e
+  determinístico, nunca uma chamada `play_oneshot()` rejeitada por causa do teto.
+- **`is_playing`/`voice_count`:** ambos consideram a primária E toda cópia viva. Uma cópia
+  terminada-mas-ainda-não-reapada conta como NÃO tocando (ambos leem `ma_sound_is_playing()`).
+
+**Não-provável headless, por construção:** AUDIBILIDADE do fade-in e o GAPLESS do loop (o backend
+null headless avança um timer mas não tem tap de PCM). Coberto por review de código das chamadas
+exatas do miniaudio mais um smoke manual num device de áudio real -- ver a nota de relay de
+migração abaixo se você é o consumidor GusWorld.
+
+### Migrando do miniaudio direto: o aviso ODR
+
+A glintfx já embarca a própria unidade de tradução `MINIAUDIO_IMPLEMENTATION`
+(`glintfx/src/audio.cpp` compila a implementação do `miniaudio.h` uma vez, dentro da object
+library `glintfx_audio`). **Se seu projeto já usava o miniaudio direto e definia
+`MINIAUDIO_IMPLEMENTATION` na própria TU, você DEVE apagar essa TU** ao migrar pra
+`GLINTFX_MODULE_AUDIO=ON` -- senão o link falha (ou, pior, escolhe uma definição em silêncio) por
+causa de símbolos `ma_*` duplicados entre as duas TUs de implementação. Isso é inerente a como o
+modelo single-header do miniaudio funciona, não um bug da glintfx: duas TUs
+`MINIAUDIO_IMPLEMENTATION` num mesmo binário sempre são uma violação de ODR, não importa quem
+escreveu qual delas.
 
 ### Backend null (headless / CI)
 

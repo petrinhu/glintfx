@@ -243,7 +243,21 @@ public:
   void update();
 
   // EN: Render one frame (begin_frame → UI render pass → end_frame → swap).
+  //     VSYNC HONESTY (D9, Onda 2, v0.19.0 -- docs/superpowers/plans/2026-07-22-onda2-input-
+  //     host.md): glintfx does not call glfwSwapInterval anywhere in its own source (verified by
+  //     grep across glintfx/src/) -- the swap step above neither enables nor disables vsync, the
+  //     platform driver/compositor's own default governs entirely. Do not read a frame-paced
+  //     `dt` as a glintfx guarantee: it is whatever the default happens to be on the host
+  //     machine. A runtime setter is scheduled for the window-modes finish wave (WM-EXTRAS); none
+  //     exists yet.
   // PT: Renderiza um frame (begin_frame → passe de render de UI → end_frame → swap).
+  //     HONESTIDADE DE VSYNC (D9, Onda 2, v0.19.0 -- docs/superpowers/plans/2026-07-22-onda2-
+  //     input-host.md): a glintfx não chama glfwSwapInterval em lugar nenhum do próprio source
+  //     (verificado por grep em todo glintfx/src/) -- o passo de swap acima não liga nem desliga
+  //     vsync, o default do driver/compositor da plataforma governa por inteiro. Não leia um `dt`
+  //     ritmado por frame como garantia da glintfx: é o que o default acontecer de ser na máquina
+  //     do host. Um setter em runtime está agendado pra onda de fechamento de window-modes
+  //     (WM-EXTRAS); nenhum existe ainda.
   void render();
 
   // EN: Convenience loop: poll + update + render until !running() (blocking; returns only
@@ -260,6 +274,10 @@ public:
   //     em si não tem teste próprio porque um laço bloqueante não dá pra verificar sem um
   //     sinal externo de saída ou uma corrida de timeout, e as 3 chamadas que ele compõe já
   //     estão cobertas individualmente. AUD-TEC-7 (2026-07-08).
+  //     VSYNC: same honesty note as render() above -- run()'s per-iteration pacing is whatever
+  //     the platform default gives render()'s swap, not a rate glintfx governs.
+  //     VSYNC: mesma nota de honestidade do render() acima -- o ritmo por-iteração do run() é o
+  //     que o default da plataforma der ao swap do render(), não uma taxa que a glintfx governa.
   void run();
 
   // EN: Inject a synthetic input event (A1, framework-2D) -- the SAME neutral route the embed
@@ -427,6 +445,20 @@ public:
   //     the hook (no-op per frame, same cost as before this method was ever called). `run()`
   //     is exactly the game's frame loop once this is set: `poll_events() -> update() ->
   //     render()` (the hook fires inside render()), with no change to run()'s own signature.
+  //
+  //     HOSTING YOUR OWN RENDERER (DOC-HOSTIN, Onda 2, v0.19.0). Building a COMPLETE, independent
+  //     GL renderer inside `cb` -- own shaders, own VAOs/VBOs, own texture loader -- is a
+  //     supported pattern, not just a place for a couple of draw calls: validated in production
+  //     by the GusWorld consumer, whose own OpenGL renderer runs entirely inside this hook,
+  //     alongside its own GL loader, with zero conflict against glintfx's internal one (measured
+  //     over 8633 frames, `dt_seconds`'s own error against a wall-clock oracle had a p95 of 20.8
+  //     microseconds). The GL loader is the HOST's job: glintfx's own GL function-pointer table
+  //     is private (never installed publicly) and every symbol it exports is prefixed `glx_`
+  //     specifically so it cannot collide with a host's own loader at static-link time -- see
+  //     ADR-0013 (docs/adr/0013-gl-symbol-boundary.md) for the SIGSEGV-class bug this closes. A
+  //     host hosting its own renderer here brings and initialises its OWN loader (glad, GLEW,
+  //     hand-rolled, whatever); it never needs, and cannot reach, glintfx's internal one. See
+  //     docs/embed-integration.md for the full write-up.
   // PT: Registra o hook de desenho por-frame do jogo (A1, framework-2D). Chamado uma vez por
   //     iteração de render()/run() -- com o contexto GL corrente, APÓS o clear do frame e ANTES
   //     do passe de render de UI, para que uma cena desenhada dentro de `cb` componha SOB a UI
@@ -440,6 +472,21 @@ public:
   //     chamado alguma vez). run() vira exatamente o loop de frame do jogo assim que isto está
   //     definido: `poll_events() -> update() -> render()` (o hook dispara dentro do render()),
   //     sem mudança na própria assinatura de run().
+  //
+  //     HOSPEDANDO O PRÓPRIO RENDERER (DOC-HOSTIN, Onda 2, v0.19.0). Construir um renderer GL
+  //     COMPLETO e independente dentro de `cb` -- shaders próprios, VAOs/VBOs próprios, loader de
+  //     textura próprio -- é um padrão suportado, não só um lugar pra algumas chamadas de desenho:
+  //     validado em produção pelo consumidor GusWorld, cujo próprio renderer OpenGL roda
+  //     inteiramente dentro deste hook, ao lado do próprio loader GL dele, sem conflito nenhum
+  //     contra o loader interno da glintfx (medido em 8633 frames, o erro do próprio `dt_seconds`
+  //     contra um oráculo de relógio de parede teve p95 de 20,8 microssegundos). O loader GL é
+  //     trabalho do HOST: a tabela de ponteiros de função GL da própria glintfx é privada (nunca
+  //     instalada publicamente) e todo símbolo que ela exporta é prefixado com `glx_`
+  //     especificamente para não poder colidir com o loader do próprio host em tempo de link
+  //     estático -- ver a ADR-0013 (docs/adr/0013-gl-symbol-boundary.md) pra classe de bug
+  //     SIGSEGV que isso fecha. Um host que hospeda o próprio renderer aqui traz e inicializa o
+  //     PRÓPRIO loader (glad, GLEW, feito à mão, o que for); ele nunca precisa, e não consegue
+  //     alcançar, o loader interno da glintfx. Ver docs/embed-integration.md pro relato completo.
   void set_frame_callback(std::function<void(float dt_seconds)> cb);
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the

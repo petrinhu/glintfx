@@ -366,6 +366,84 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_window_mode_smoke (A4-WINMODES, v0.16.0) -- ONE binary, parameterized by the
+  #     GLINTFX_TEST_WINDOW_MODE environment variable, registered 6x below (App's N3 contract
+  #     forbids 4+ App instances in one process, so per-config isolation happens at the ctest
+  #     level, not inside main() -- see the test file's own header for the full rationale).
+  #     Each of the 6 runs constructs ONE App in that config, proves ok()==true, renders 2
+  #     frames, asserts get_window_size() is sane and snapshot()'s own PPM header dims match it,
+  #     and checks the LIVE App::window_mode() query -- exact match for windowed/fullscreen_*,
+  #     tolerant of either Maximized or Windowed for "maximized" (Xvfb has no WM to honour the
+  #     request -- D4, NOT machine-verifiable, see docs/window-modes.md's manual smoke).
+  #     "negative_size" (review MAJOR #2, 2026-07-21) hardens against a non-positive
+  #     AppConfig::width/height, which used to SIGABRT the whole host process in EVERY mode.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention, "tests/min.rml").
+  # PT: app_window_mode_smoke (A4-WINMODES, v0.16.0) -- UM binário, parametrizado pela variável
+  #     de ambiente GLINTFX_TEST_WINDOW_MODE, registrado 6x abaixo (o contrato N3 do App proíbe
+  #     4+ instâncias de App num processo, então o isolamento por-config acontece no nível do
+  #     ctest, não dentro do main() -- ver o cabeçalho do próprio arquivo de teste pra racional
+  #     completa). Cada uma das 6 corridas constrói UM App naquela config, prova ok()==true,
+  #     renderiza 2 frames, afirma que get_window_size() é são e que as dims do próprio
+  #     cabeçalho PPM do snapshot() batem com ele, e checa a query VIVA App::window_mode() --
+  #     match exato pra windowed/fullscreen_*, tolerante a Maximized OU Windowed pra "maximized"
+  #     (Xvfb não tem WM pra honrar o pedido -- D4, NÃO verificável por máquina, ver a seção de
+  #     smoke manual de docs/window-modes.md). "negative_size" (MAJOR #2 do review, 2026-07-21)
+  #     endurece contra AppConfig::width/height não-positivo, que dava SIGABRT no processo host
+  #     inteiro em QUALQUER modo. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do bloco GLFW
+  #     em todo o repo, "tests/min.rml").
+  # ---------------------------------------------------------------------------
+  add_executable(app_window_mode_smoke app_window_mode_smoke.cpp)
+  target_link_libraries(app_window_mode_smoke PRIVATE glintfx)
+  foreach(_glintfx_wm_case windowed maximized fullscreen_desktop fullscreen_exclusive invalid_config negative_size)
+    add_test(NAME app_window_mode_smoke_${_glintfx_wm_case}
+      COMMAND ${CMAKE_COMMAND}
+        -DEXE=$<TARGET_FILE:app_window_mode_smoke>
+        -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(app_window_mode_smoke_${_glintfx_wm_case} PROPERTIES
+      ENVIRONMENT "GLINTFX_TEST_WINDOW_MODE=${_glintfx_wm_case}")
+  endforeach()
+
+  # ---------------------------------------------------------------------------
+  # EN: app_window_mode_transitions_smoke (A4-WINMODES, v0.16.0) -- ONE App instance (N3),
+  #     cycles App::set_window_mode() through every pairwise transition class D7/D8
+  #     (window_glfw.cpp) implements a distinct code path for (Windowed<->Maximized,
+  #     Windowed<->Fullscreen, Fullscreen->Maximized's D8-mandatory restore-then-maximize
+  #     order), asserting get_window_size() stays sane between EVERY step; then a same-mode
+  #     re-request no-op, 2 out-of-range-enum hardening calls that must leave the live mode
+  #     untouched (D5), and 2 review regressions (2026-07-21): MAJOR #1 (back-to-back
+  #     Maximized->Windowed, zero poll/render between the calls -- the dispatched_mode_ fix's
+  #     headless-provable half; the real-display 3/3 proof is manual, see the test file's
+  #     header) and MINOR (d) (an OS-level resize while Windowed must survive a
+  #     fullscreen-and-back round trip -- forces glfwSetWindowSize(), same test-only-GLFW-
+  #     dependency idiom as app_resize_smoke.cpp, hence the `glfw` link below). See the test
+  #     file's own header for the exact sequence and rationale.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention, "tests/min.rml").
+  # PT: app_window_mode_transitions_smoke (A4-WINMODES, v0.16.0) -- UMA instância de App (N3),
+  #     cicla App::set_window_mode() por toda classe de transição par-a-par que D7/D8
+  #     (window_glfw.cpp) implementa um caminho de código distinto (Windowed<->Maximized,
+  #     Windowed<->Fullscreen, a ordem restaurar-depois-maximizar OBRIGATÓRIA pelo D8 de
+  #     Fullscreen->Maximized), afirmando que get_window_size() continua são entre TODO passo;
+  #     depois um no-op de repedido-do-mesmo-modo, 2 chamadas de hardening com enum fora de
+  #     faixa que precisam deixar o modo vivo intocado (D5), e 2 regressões do review
+  #     (2026-07-21): MAJOR #1 (Maximized->Windowed nas costas uma da outra, zero poll/render
+  #     entre as chamadas -- a metade provável-headless do fix dispatched_mode_; a prova 3/3 no
+  #     display real é manual, ver o cabeçalho do arquivo de teste) e MINOR (d) (um resize no
+  #     nível do SO enquanto Windowed precisa sobreviver a uma ida-e-volta de fullscreen --
+  #     força glfwSetWindowSize(), mesmo idioma de dependência-de-GLFW-só-de-teste do
+  #     app_resize_smoke.cpp, daí o link `glfw` abaixo). Ver o cabeçalho do próprio arquivo de
+  #     teste pra sequência exata e racional. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do
+  #     bloco GLFW em todo o repo, "tests/min.rml").
+  # ---------------------------------------------------------------------------
+  add_executable(app_window_mode_transitions_smoke app_window_mode_transitions_smoke.cpp)
+  target_link_libraries(app_window_mode_transitions_smoke PRIVATE glintfx glfw)
+  add_test(NAME app_window_mode_transitions_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_window_mode_transitions_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
   # EN: glfw_event_translate_sanity (A1, framework-2D) -- PURE unit test for
   #     glfw_event_translate.hpp: no window, no GL context, no glfwInit() call anywhere in the
   #     test (only GLFW #define constants are used). Runs the executable DIRECTLY, not through
@@ -2517,10 +2595,35 @@ endif()
 #         terceiro (ver cabeçalho daquele arquivo — hoje só o vptr:ElementDocument
 #         do teardown do RmlUi pinado; NUNCA um padrão que também case com
 #         código autoral glintfx).
+#
+#     A4-WINMODES DOMINO FIX (v0.16.0): this used to be a plain (non-APPEND)
+#     set_tests_properties(... PROPERTIES ENVIRONMENT ...) call, which REPLACES a test's
+#     entire ENVIRONMENT property rather than merging into it -- silently wiping out the
+#     GLINTFX_TEST_WINDOW_MODE=<mode> variable app_window_mode_smoke_* sets earlier in this
+#     file (its ENVIRONMENT is registered per-test, ABOVE, before this DIRECTORY-wide block
+#     runs). Under a GLINTFX_SANITIZE=ON build every one of those 5 tests would have failed
+#     at startup ("GLINTFX_TEST_WINDOW_MODE not set") the moment the nightly ASan gate ran --
+#     found by auditing every existing consumer of ENVIRONMENT in this file, not just the new
+#     one, per the house's "auditoria-dominó" discipline. Fixed by switching to
+#     set_property(... APPEND PROPERTY ENVIRONMENT ...), which appends to whatever
+#     per-test ENVIRONMENT entries already exist instead of clobbering them (a no-op append
+#     for the many tests here with no prior ENVIRONMENT set).
+# PT: FIX DE DOMINÓ A4-WINMODES (v0.16.0): isto costumava ser uma chamada simples (sem APPEND)
+#     de set_tests_properties(... PROPERTIES ENVIRONMENT ...), que SUBSTITUI a propriedade
+#     ENVIRONMENT inteira de um teste em vez de mesclar nela -- apagando silenciosamente a
+#     variável GLINTFX_TEST_WINDOW_MODE=<modo> que app_window_mode_smoke_* define mais acima
+#     neste arquivo (o ENVIRONMENT dele é registrado por-teste, ACIMA, antes deste bloco
+#     de escopo de DIRECTORY rodar). Sob um build GLINTFX_SANITIZE=ON, cada um daqueles 5
+#     testes teria falhado na largada ("GLINTFX_TEST_WINDOW_MODE not set") assim que o gate
+#     noturno de ASan rodasse -- achado auditando TODO consumidor existente de ENVIRONMENT
+#     neste arquivo, não só o novo, conforme a disciplina da casa de "auditoria-dominó".
+#     Corrigido trocando para set_property(... APPEND PROPERTY ENVIRONMENT ...), que anexa às
+#     entradas ENVIRONMENT por-teste que já existirem em vez de sobrescrevê-las (um append
+#     no-op pros muitos testes aqui que não têm ENVIRONMENT prévio nenhum).
 # ---------------------------------------------------------------------------
 if(GLINTFX_SANITIZE)
   get_property(_glintfx_all_tests DIRECTORY PROPERTY TESTS)
-  set_tests_properties(${_glintfx_all_tests} PROPERTIES ENVIRONMENT
+  set_property(TEST ${_glintfx_all_tests} APPEND PROPERTY ENVIRONMENT
     "LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan_suppressions.txt;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:suppressions=${CMAKE_CURRENT_SOURCE_DIR}/ubsan_suppressions.txt")
 endif()
 

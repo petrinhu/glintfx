@@ -461,6 +461,68 @@ void App::process_event(const UiEvent& ev) {
   impl_->engine.process_event(ev, 0, 0);
 }
 
+// EN: HOSTIN-1/2 (Onda 2, v0.19.0) -- thin forwards to WindowGlfw with the App-wide !ok() guard
+//     (same pattern as every other method in this file). WindowGlfw carries the real state
+//     table + callback plumbing (D2, window_glfw.cpp/.hpp).
+// PT: HOSTIN-1/2 (Onda 2, v0.19.0) -- repasses finos a WindowGlfw com a guarda !ok() de todo o
+//     App (mesmo padrão de todo outro método deste arquivo). WindowGlfw carrega a tabela de
+//     estado + plomberia de callback de fato (D2, window_glfw.cpp/.hpp).
+bool App::is_key_down(Key k) const {
+  if (!impl_->ok) return false;
+  return impl_->window.is_key_down(k);
+}
+
+bool App::is_mouse_button_down(int button) const {
+  if (!impl_->ok) return false;
+  return impl_->window.is_mouse_button_down(button);
+}
+
+void App::get_cursor_pos(float& x, float& y) const {
+  if (!impl_->ok) {
+    x = 0.f;
+    y = 0.f;
+    return;
+  }
+  impl_->window.get_cursor_pos(x, y);
+}
+
+void App::set_key_callback(std::function<void(Key, KeyAction, int)> cb) {
+  if (!impl_->ok) return;
+  impl_->window.set_key_callback(std::move(cb));
+}
+
+// EN: HOSTIN-3/4/5 (Onda 2, v0.19.0) -- same thin-forward pattern as above.
+// PT: HOSTIN-3/4/5 (Onda 2, v0.19.0) -- mesmo padrão de repasse fino de acima.
+void App::request_close() {
+  if (!impl_->ok) return;
+  impl_->window.request_close();
+}
+
+void App::set_close_request_callback(std::function<bool()> cb) {
+  if (!impl_->ok) return;
+  impl_->window.set_close_request_callback(std::move(cb));
+}
+
+void App::set_window_focus_callback(std::function<void(bool)> cb) {
+  if (!impl_->ok) return;
+  impl_->window.set_window_focus_callback(std::move(cb));
+}
+
+void App::set_window_iconify_callback(std::function<void(bool)> cb) {
+  if (!impl_->ok) return;
+  impl_->window.set_window_iconify_callback(std::move(cb));
+}
+
+bool App::is_window_focused() const {
+  if (!impl_->ok) return false;
+  return impl_->window.is_window_focused();
+}
+
+bool App::is_window_iconified() const {
+  if (!impl_->ok) return false;
+  return impl_->window.is_window_iconified();
+}
+
 void App::set_frame_callback(std::function<void(float)> cb) {
   if (!impl_->ok) return;
   impl_->frame_cb = std::move(cb);

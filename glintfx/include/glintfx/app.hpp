@@ -290,6 +290,131 @@ public:
   //     render() lendo o tamanho real da janela. No-op (não faz nada, não crasha) quando !ok().
   void process_event(const UiEvent& ev);
 
+  // -------------------------------------------------------------------------
+  // EN: Physical input STATE + edge channel (HOSTIN-1/2, Onda 2, v0.19.0 --
+  //     docs/superpowers/plans/2026-07-22-onda2-input-host.md). This is what unblocks a host
+  //     game scene from reading WASD/mouse without linking GLFW itself or reaching into
+  //     glintfx's own internals: the SAME 5 GLFW callbacks that already feed process_event's
+  //     synthetic-parity route (window_glfw.cpp) ALSO update a private input-state table before
+  //     dispatching to the UI -- these 3 queries read that table directly. Fail-high (false/0/
+  //     (0,0)) when !ok(); an invalid Key (out-of-range static_cast) or a mouse button outside
+  //     [0,7] behaves the same way. `App::process_event()` above -- the SYNTHETIC/replay/test
+  //     channel -- deliberately does NOT write here: a replay harness must never leave phantom
+  //     "held" keys behind in the channel a game reads for its own movement (D5).
+  // PT: Canal de ESTADO físico de input + borda (HOSTIN-1/2, Onda 2, v0.19.0 --
+  //     docs/superpowers/plans/2026-07-22-onda2-input-host.md). É isto que destrava uma cena de
+  //     jogo do host ler WASD/mouse sem linkar o próprio GLFW ou mexer nas entranhas da
+  //     glintfx: os MESMOS 5 callbacks GLFW que já alimentam a rota de paridade sintética do
+  //     process_event (window_glfw.cpp) TAMBÉM atualizam uma tabela privada de estado de input
+  //     antes de despachar para a UI -- estas 3 consultas leem aquela tabela direto. Fail-high
+  //     (false/0/(0,0)) quando !ok(); uma Key inválida (static_cast fora de faixa) ou um botão
+  //     de mouse fora de [0,7] se comporta igual. O App::process_event() acima -- o canal
+  //     SINTÉTICO/replay/teste -- deliberadamente NÃO escreve aqui: um harness de replay nunca
+  //     pode deixar teclas "seguradas" fantasmas no canal que um jogo lê pro próprio movimento
+  //     (D5).
+  // -------------------------------------------------------------------------
+
+  // EN: Level state -- true for as long as the physical key stays held. GLFW's own auto-repeat
+  //     (holding a key down) does not change this: it was already true from the initial press.
+  //     `k` is a POSITION token (US-layout physical key), not a label -- see Key::Count's
+  //     doc-comment (ui_event.hpp) for the ABNT2 layout consequences.
+  // PT: Estado de nível -- true enquanto a tecla física continuar segurada. O próprio
+  //     auto-repeat do GLFW (segurar uma tecla) não muda isto: já era true desde o pressionar
+  //     inicial. `k` é um token de POSIÇÃO (tecla física do layout US), não um rótulo -- ver o
+  //     doc-comment de Key::Count (ui_event.hpp) pras consequências no layout ABNT2.
+  bool is_key_down(Key k) const;
+
+  // EN: `button` in [0, 7] -- GLFW's OWN honest ceiling (GLFW_MOUSE_BUTTON_LAST == 7), NOT
+  //     restricted to the UI route's 3-button (left/right/middle) contract (D3, leader
+  //     requirement, memory feedback_input_multibutton_teclados). A mouse with more than 8
+  //     buttons has its extra buttons invisible to GLFW itself -- this is a documented upstream
+  //     limitation, not a glintfx restriction (seeded follow-up: an evdev side-channel, same
+  //     pattern as the Gamepads module, gamepad.hpp -- trigger: a consumer needs button >= 8).
+  //     Out-of-range `button` (including negative) returns false, fail-high.
+  // PT: `button` em [0, 7] -- o próprio teto honesto do GLFW (GLFW_MOUSE_BUTTON_LAST == 7), NÃO
+  //     restrito ao contrato de 3 botões (esquerdo/direito/meio) da rota de UI (D3, requisito
+  //     do líder, memória feedback_input_multibutton_teclados). Um mouse com mais de 8 botões
+  //     tem os botões extras invisíveis para o próprio GLFW -- é uma limitação upstream
+  //     documentada, não uma restrição da glintfx (desdobramento semeado: um canal lateral via
+  //     evdev, mesmo padrão do módulo Gamepads, gamepad.hpp -- gatilho: um consumidor precisar
+  //     do botão >= 8). `button` fora de faixa (inclusive negativo) retorna false, fail-high.
+  bool is_mouse_button_down(int button) const;
+
+  // EN: Framebuffer physical pixels, top-left origin, y-down -- the SAME coordinate space as
+  //     UiEvent::MouseMove and get_element_box (AUD-PUB-1). (0, 0) when !ok() or before the
+  //     window has ever received a cursor-position event.
+  // PT: Pixels físicos de framebuffer, origem superior-esquerda, y pra baixo -- o MESMO espaço
+  //     de coordenadas de UiEvent::MouseMove e get_element_box (AUD-PUB-1). (0, 0) quando !ok()
+  //     ou antes da janela ter recebido algum evento de posição de cursor.
+  void get_cursor_pos(float& x, float& y) const;
+
+  // EN: Edge-detected key callback (HOSTIN-2) -- `cb(key, action, modifiers)` fires once per
+  //     physical Press/Release, and once per OS auto-repeat tick (KeyAction::Repeat) while a
+  //     key stays held. Fires from inside poll_events() (AUD-TEC-3 copy-before-invoke, same
+  //     discipline as every other callback family in this class). Null/empty `cb` is a safe
+  //     no-op, replacing any previously-registered callback. No-op when !ok().
+  // PT: Callback de tecla edge-detectado (HOSTIN-2) -- `cb(key, action, modifiers)` dispara uma
+  //     vez por Press/Release físico, e uma vez por tick de auto-repeat do SO
+  //     (KeyAction::Repeat) enquanto uma tecla continua segurada. Dispara de dentro de
+  //     poll_events() (cópia-antes-de-invocar AUD-TEC-3, mesma disciplina de toda outra família
+  //     de callback desta classe). `cb` nulo/vazio é um no-op seguro, substituindo qualquer
+  //     callback registrado antes. No-op quando !ok().
+  void set_key_callback(std::function<void(Key key, KeyAction action, int modifiers)> cb);
+
+  // -------------------------------------------------------------------------
+  // EN: Window lifecycle -- programmatic quit + user-close veto + focus/iconify observation
+  //     (HOSTIN-3/4/5, Onda 2, v0.19.0).
+  // PT: Ciclo de vida da janela -- saída programática + veto de close do usuário + observação
+  //     de focus/iconify (HOSTIN-3/4/5, Onda 2, v0.19.0).
+  // -------------------------------------------------------------------------
+
+  // EN: Programmatic quit -- the code that owns the loop (e.g. a "Sair" menu item confirmed by
+  //     the player) asks the window to close. BYPASSES the veto below entirely (D6): this is an
+  //     intentional act by the owning code, not a user click on the X button, and routing it
+  //     through the veto would deadlock a confirmation dialog against its own confirm action.
+  //     No-op when !ok().
+  // PT: Saída programática -- o código dono do loop (ex.: um item de menu "Sair" confirmado
+  //     pelo jogador) pede pra janela fechar. BYPASSA o veto abaixo inteiramente (D6): é um ato
+  //     intencional do código dono, não um clique do usuário no botão X, e roteá-lo pelo veto
+  //     travaria um diálogo de confirmação contra a própria ação de confirmar. No-op quando
+  //     !ok().
+  void request_close();
+
+  // EN: Veto for a USER-initiated close attempt (X button, Alt+F4) -- `cb()` returning `false`
+  //     keeps the window open (e.g. to show "save before exit?"); any other outcome (`true`, or
+  //     no callback registered at all) lets the close proceed, matching the pre-HOSTIN-4
+  //     behaviour. NEVER fires for request_close() above (D6). Fires from inside poll_events()
+  //     (AUD-TEC-3 copy-before-invoke). No-op when !ok().
+  // PT: Veto para uma tentativa de close INICIADA PELO USUÁRIO (botão X, Alt+F4) -- `cb()`
+  //     retornando `false` mantém a janela aberta (ex.: pra mostrar "salvar antes de sair?");
+  //     qualquer outro resultado (`true`, ou nenhum callback registrado) deixa o close
+  //     prosseguir, batendo com o comportamento pré-HOSTIN-4. NUNCA dispara para o
+  //     request_close() acima (D6). Dispara de dentro de poll_events() (cópia-antes-de-invocar
+  //     AUD-TEC-3). No-op quando !ok().
+  void set_close_request_callback(std::function<bool()> cb);
+
+  // EN: WINDOW focus/iconify (minimize) observation -- prefixed `window_` so these never
+  //     collide with the pre-existing DOM element focus concept (set_focus_callback above: a
+  //     completely different thing, a keyboard-input-focused RmlUi element vs. this OS-level
+  //     window having input focus at all). Typical use: auto-pause or duck audio volume on
+  //     alt-tab/minimize. Fires from inside poll_events(). No-op (callbacks) / false (queries)
+  //     when !ok(). Headless honesty: under Xvfb (no window manager) iconify may never be
+  //     honoured and focus reporting can be degenerate -- see docs/window-modes.md's own Xvfb
+  //     note for the same class of headless limitation.
+  // PT: Observação de focus/iconify (minimizar) de JANELA -- prefixado `window_` pra nunca
+  //     colidir com o conceito pré-existente de foco de elemento DOM (set_focus_callback acima:
+  //     uma coisa completamente diferente, um elemento RmlUi com foco de input de teclado vs.
+  //     esta janela no nível do SO ter foco de input). Uso típico: auto-pausar ou abafar o
+  //     volume de áudio no alt-tab/minimizar. Dispara de dentro de poll_events(). No-op
+  //     (callbacks) / false (consultas) quando !ok(). Honestidade headless: sob Xvfb (sem
+  //     window manager) iconify pode nunca ser honrado e o relato de focus pode ser degenerado
+  //     -- ver a própria nota de Xvfb de docs/window-modes.md pra mesma classe de limitação
+  //     headless.
+  void set_window_focus_callback(std::function<void(bool focused)> cb);
+  void set_window_iconify_callback(std::function<void(bool iconified)> cb);
+  bool is_window_focused() const;
+  bool is_window_iconified() const;
+
   // EN: Register the game's per-frame draw hook (A1, framework-2D). Called once per
   //     render()/run() iteration -- with the GL context current, AFTER the frame clear and
   //     BEFORE the UI render pass, so a scene drawn inside `cb` composes UNDER the UI -- see

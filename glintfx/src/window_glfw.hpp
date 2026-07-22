@@ -4,6 +4,7 @@
 #include <functional>
 #include <glintfx/ui_event.hpp>
 #include <glintfx/window_mode.hpp>  // EN: A4-WINMODES. PT: A4-WINMODES.
+#include "input_state.hpp"          // EN: HOSTIN-1, Onda 2. PT: HOSTIN-1, Onda 2.
 struct GLFWwindow;
 namespace glintfx {
 class WindowGlfw {
@@ -124,6 +125,89 @@ public:
   //     poll() já tinha antes do A1.
   void set_event_sink(std::function<void(const UiEvent&)> sink);
 
+  // EN: HOSTIN-1 (Onda 2) -- physical input STATE queries, fed by the SAME 5 GLFW callbacks
+  //     above (D2: the state is updated FIRST, inside handle_key/handle_mouse_button/
+  //     handle_cursor_pos, then the UiEvent sink is dispatched, so a sink callback that reads
+  //     one of these mid-frame sees fresh state). Fail-high: false/(0,0) before the window ever
+  //     receives a matching physical event, or for an out-of-range Key/button (see
+  //     input_state.hpp for the exact guard). `App::process_event()` (the SYNTHETIC channel)
+  //     never writes here (D5) -- see this file's own header comment.
+  // PT: HOSTIN-1 (Onda 2) -- consultas de ESTADO de input físico, alimentadas pelos MESMOS 5
+  //     callbacks GLFW acima (D2: o estado é atualizado PRIMEIRO, dentro de handle_key/
+  //     handle_mouse_button/handle_cursor_pos, e só então o sink de UiEvent é despachado, então
+  //     um callback do sink que lê uma destas no meio do frame vê estado já fresco). Fail-high:
+  //     false/(0,0) antes da janela receber algum evento físico correspondente, ou para um
+  //     Key/botão fora de faixa (ver input_state.hpp pro guard exato). `App::process_event()`
+  //     (o canal SINTÉTICO) nunca escreve aqui (D5) -- ver o próprio comentário de cabeçalho
+  //     deste arquivo.
+  bool is_key_down(Key k) const { return input_state_.is_key_down(k); }
+  bool is_mouse_button_down(int button) const { return input_state_.is_mouse_button_down(button); }
+  void get_cursor_pos(float& x, float& y) const { input_state_.get_cursor_pos(x, y); }
+
+  // EN: HOSTIN-2 (Onda 2) -- edge-detected key callback, registerable/replaceable at any point;
+  //     null/empty is a safe no-op (same convention as set_event_sink above). Fires from inside
+  //     handle_key(), which runs synchronously from glfwPollEvents() (i.e. inside App::
+  //     poll_events()) -- copy-before-invoke discipline (AUD-TEC-3) applies, same as every other
+  //     callback in this library: a callback that re-registers a new key callback from within
+  //     its own invocation cannot destroy the std::function object currently running it.
+  // PT: HOSTIN-2 (Onda 2) -- callback de tecla edge-detectado, registrável/substituível a
+  //     qualquer momento; nulo/vazio é um no-op seguro (mesma convenção do set_event_sink
+  //     acima). Dispara de dentro de handle_key(), que roda sincronamente a partir de
+  //     glfwPollEvents() (ou seja, dentro de App::poll_events()) -- disciplina de
+  //     cópia-antes-de-invocar (AUD-TEC-3) se aplica, igual a todo outro callback desta
+  //     biblioteca: um callback que reregistra um novo callback de tecla de dentro da própria
+  //     invocação não consegue destruir o objeto std::function que o está rodando agora.
+  void set_key_callback(std::function<void(Key key, KeyAction action, int modifiers)> cb);
+
+  // EN: HOSTIN-3 (Onda 2, D6) -- programmatic quit. BYPASSES the close-request veto below
+  //     entirely: this is glfwSetWindowShouldClose(win_, GLFW_TRUE) directly, which does NOT
+  //     invoke the GLFW close callback (that callback only fires for a USER-initiated close
+  //     attempt -- X button, Alt+F4). No-op when win_ is null.
+  // PT: HOSTIN-3 (Onda 2, D6) -- saída programática. BYPASSA o veto de pedido-de-close abaixo
+  //     inteiramente: isto é glfwSetWindowShouldClose(win_, GLFW_TRUE) direto, que NÃO invoca o
+  //     callback de close do GLFW (aquele callback só dispara pra uma tentativa de close
+  //     INICIADA PELO USUÁRIO -- botão X, Alt+F4). No-op quando win_ é nulo.
+  void request_close();
+
+  // EN: HOSTIN-4 (Onda 2, D6) -- registers the USER-initiated close veto: `cb()` is invoked
+  //     from inside handle_window_close() (fired by the GLFW close callback, itself triggered
+  //     only by the window system -- X button, Alt+F4 -- never by request_close() above);
+  //     `false` resets glfwWindowShouldClose back to GLFW_FALSE (window stays open, veto), any
+  //     other outcome (`true`, or no callback registered at all) lets the close proceed. See
+  //     glfw_decide_window_close() (glfw_event_translate.hpp) for the extracted pure decision
+  //     this wraps, and this file's own header comment for the copy-before-invoke discipline.
+  // PT: HOSTIN-4 (Onda 2, D6) -- registra o veto de close INICIADO PELO USUÁRIO: `cb()` é
+  //     invocado de dentro de handle_window_close() (disparado pelo callback de close do GLFW,
+  //     ele mesmo disparado só pelo sistema de janelas -- botão X, Alt+F4 -- nunca pelo
+  //     request_close() acima); `false` reseta glfwWindowShouldClose de volta a GLFW_FALSE
+  //     (janela fica aberta, veto), qualquer outro resultado (`true`, ou nenhum callback
+  //     registrado) deixa o close prosseguir. Ver glfw_decide_window_close()
+  //     (glfw_event_translate.hpp) pra decisão pura extraída que isto encapsula, e o próprio
+  //     comentário de cabeçalho deste arquivo pra disciplina de cópia-antes-de-invocar.
+  void set_close_request_callback(std::function<bool()> cb);
+
+  // EN: HOSTIN-5 (Onda 2, D7) -- WINDOW focus/iconify observation. Prefixed `window_` so these
+  //     never collide with the pre-existing DOM element focus concept (App::set_focus_callback,
+  //     app.hpp -- a completely different thing: keyboard-input-focused RmlUi element vs. this
+  //     OS-level window having input focus at all). Fail-high: false when !win_. Headless
+  //     honesty (documented, same class as WindowMode::mode()'s own Xvfb note): under Xvfb
+  //     there is no window manager, so iconify may never be honoured and focus reporting can be
+  //     degenerate -- the callbacks/queries are exercised for real only in the nested-compositor
+  //     manual QA leg (see docs/superpowers/plans/2026-07-22-onda2-input-host.md section 4.3).
+  // PT: HOSTIN-5 (Onda 2, D7) -- observação de focus/iconify de JANELA. Prefixado `window_` pra
+  //     nunca colidir com o conceito pré-existente de foco de elemento DOM
+  //     (App::set_focus_callback, app.hpp -- uma coisa completamente diferente: elemento RmlUi
+  //     com foco de input de teclado vs. esta janela no nível do SO ter foco de input). Fail-
+  //     high: false quando !win_. Honestidade headless (documentada, mesma classe da própria
+  //     nota de Xvfb de WindowMode::mode()): sob Xvfb não há window manager, então iconify pode
+  //     nunca ser honrado e o relato de focus pode ser degenerado -- os callbacks/queries são
+  //     exercitados de verdade só na perna manual de QA em compositor aninhado (ver
+  //     docs/superpowers/plans/2026-07-22-onda2-input-host.md seção 4.3).
+  void set_window_focus_callback(std::function<void(bool focused)> cb);
+  void set_window_iconify_callback(std::function<void(bool iconified)> cb);
+  bool is_window_focused() const;
+  bool is_window_iconified() const;
+
 private:
   GLFWwindow* win_        = nullptr;
   bool        glfw_inited_ = false; // EN: true only after glfwInit() succeeds. PT: true somente após glfwInit() com sucesso.
@@ -242,6 +326,26 @@ private:
   //     (glfw_active_modifiers, RmlUi_Backend_GLFW_GL3.cpp).
   int active_mods_ = 0;
 
+  // EN: HOSTIN-1 (Onda 2) -- the physical input state table, updated by handle_key/
+  //     handle_mouse_button/handle_cursor_pos BEFORE they dispatch to sink_ (D2). Never touched
+  //     by App::process_event() (the synthetic channel, D5).
+  // PT: HOSTIN-1 (Onda 2) -- a tabela de estado de input físico, atualizada por handle_key/
+  //     handle_mouse_button/handle_cursor_pos ANTES de despacharem para sink_ (D2). Nunca
+  //     tocada por App::process_event() (o canal sintético, D5).
+  InputState input_state_;
+
+  // EN: HOSTIN-2/4/5 (Onda 2) -- optional host callbacks. All null/empty by default (safe
+  //     no-op, same convention as sink_ above); all invoked via a LOCAL COPY first (AUD-TEC-3
+  //     reentrancy discipline, same as every other callback family in this library).
+  // PT: HOSTIN-2/4/5 (Onda 2) -- callbacks opcionais do host. Todos nulos/vazios por padrão
+  //     (no-op seguro, mesma convenção do sink_ acima); todos invocados via uma CÓPIA LOCAL
+  //     primeiro (disciplina de reentrância AUD-TEC-3, igual a toda outra família de callback
+  //     desta biblioteca).
+  std::function<void(Key, KeyAction, int)> key_callback_;
+  std::function<bool()> close_request_callback_;
+  std::function<void(bool)> window_focus_callback_;
+  std::function<void(bool)> window_iconify_callback_;
+
   // EN: One-line static trampolines registered with glfwSet*Callback -- resolve the
   //     WindowGlfw* from glfwGetWindowUserPointer and call into the corresponding instance
   //     method below, which does the actual translation (via glfw_event_translate.hpp) and
@@ -257,6 +361,12 @@ private:
   static void on_mouse_button(GLFWwindow* w, int button, int action, int mods);
   static void on_cursor_pos(GLFWwindow* w, double xpos, double ypos);
   static void on_scroll(GLFWwindow* w, double xoffset, double yoffset);
+  // EN: HOSTIN-3/4/5 (Onda 2) -- the 3 new trampolines this wave adds, same one-line contract.
+  // PT: HOSTIN-3/4/5 (Onda 2) -- os 3 trampolins novos que esta onda adiciona, mesmo contrato
+  //     de uma linha.
+  static void on_window_close(GLFWwindow* w);
+  static void on_window_focus(GLFWwindow* w, int focused);
+  static void on_window_iconify(GLFWwindow* w, int iconified);
 
   void dispatch(const UiEvent& ev);
   void handle_key(int key, int scancode, int action, int mods);
@@ -264,5 +374,8 @@ private:
   void handle_mouse_button(int button, int action, int mods);
   void handle_cursor_pos(double xpos, double ypos);
   void handle_scroll(double xoffset, double yoffset);
+  void handle_window_close();
+  void handle_window_focus(int focused);
+  void handle_window_iconify(int iconified);
 };
 }

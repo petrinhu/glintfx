@@ -44,8 +44,168 @@ enum class Key {
   Home,      // EN: line/document start.      PT: início de linha/documento.
   End,       // EN: line/document end.        PT: fim de linha/documento.
   PageUp,    // EN: scroll/page up.           PT: rolar/página acima.
-  PageDown   // EN: scroll/page down.         PT: rolar/página abaixo.
+  PageDown,  // EN: scroll/page down.         PT: rolar/página abaixo.
+
+  // EN: HOSTIN-1 (Onda 2, v0.19.0) -- APPEND-ONLY extension for the host's PHYSICAL input
+  //     state channel (App::is_key_down/App::set_key_callback -- docs/superpowers/plans/
+  //     2026-07-22-onda2-input-host.md, decision D1). Mirrors GLFW's own nameable key set so a
+  //     game can read WASD/letters/digits/F-keys/modifiers/numpad/punctuation directly, without
+  //     a second key vocabulary for the whole library. The pre-existing entries above
+  //     (None..PageDown) keep their EXACT numeric values forever -- enforced by the
+  //     static_asserts immediately below this enum -- and every entry from here on is appended
+  //     AFTER them, ending with the Count sentinel: Count is NEVER a real key (never emitted in
+  //     a UiEvent, an edge callback, or an is_key_down query); any FUTURE key addition goes
+  //     BEFORE Count, never after it. These tokens are POSITION-based (named after the physical
+  //     key on a US layout), not label-based -- see glfw_translate_key's doc-comment
+  //     (src/glfw_event_translate.hpp) for the ABNT2 consequences (ç arrives as the Semicolon
+  //     position; the second "/" key -- scancode 97 -- has no GLFW token at all, a documented
+  //     upstream gap; World1/World2 cover the ISO extra key some ABNT2/European boards report).
+  // PT: HOSTIN-1 (Onda 2, v0.19.0) -- extensão APPEND-ONLY para o canal de estado de input
+  //     FÍSICO do host (App::is_key_down/App::set_key_callback -- docs/superpowers/plans/
+  //     2026-07-22-onda2-input-host.md, decisão D1). Espelha o próprio conjunto nomeável de
+  //     teclas do GLFW para que um jogo leia WASD/letras/dígitos/F-teclas/modificadores/numpad/
+  //     pontuação diretamente, sem um segundo vocabulário de tecla pra biblioteca inteira. As
+  //     entradas pré-existentes acima (None..PageDown) mantêm seus valores numéricos EXATOS pra
+  //     sempre -- reforçado pelos static_asserts logo abaixo deste enum -- e toda entrada a
+  //     partir daqui é anexada DEPOIS delas, terminando no sentinela Count: Count NUNCA é uma
+  //     tecla de verdade (nunca emitido numa UiEvent, num callback de edge, ou numa consulta
+  //     is_key_down); qualquer adição FUTURA de tecla entra ANTES de Count, nunca depois. Estes
+  //     tokens são baseados em POSIÇÃO (nomeados pela tecla física de um layout US), não em
+  //     rótulo -- ver o doc-comment de glfw_translate_key (src/glfw_event_translate.hpp) para as
+  //     consequências no ABNT2 (ç chega como a posição Semicolon; a segunda tecla "/" --
+  //     scancode 97 -- não tem token GLFW nenhum, uma lacuna upstream documentada; World1/World2
+  //     cobrem a tecla extra ISO que alguns teclados ABNT2/europeus reportam).
+  A,
+  B,
+  C,
+  D,
+  E,
+  F,
+  G,
+  H,
+  I,
+  J,
+  K,
+  L,
+  M,
+  N,
+  O,
+  P,
+  Q,
+  R,
+  S,
+  T,
+  U,
+  V,
+  W,
+  X,
+  Y,
+  Z,
+  Digit0,
+  Digit1,
+  Digit2,
+  Digit3,
+  Digit4,
+  Digit5,
+  Digit6,
+  Digit7,
+  Digit8,
+  Digit9,
+  F1,
+  F2,
+  F3,
+  F4,
+  F5,
+  F6,
+  F7,
+  F8,
+  F9,
+  F10,
+  F11,
+  F12,
+  LeftShift,
+  RightShift,
+  LeftControl,
+  RightControl,
+  LeftAlt,
+  RightAlt,
+  LeftSuper,
+  RightSuper,
+  Insert,
+  CapsLock,
+  ScrollLock,
+  NumLock,
+  PrintScreen,
+  Pause,
+  Menu,
+  Apostrophe,
+  Comma,
+  Minus,
+  Period,
+  Slash,
+  Semicolon,
+  Equal,
+  LeftBracket,
+  Backslash,
+  RightBracket,
+  GraveAccent,
+  World1,
+  World2,
+  Kp0,
+  Kp1,
+  Kp2,
+  Kp3,
+  Kp4,
+  Kp5,
+  Kp6,
+  Kp7,
+  Kp8,
+  Kp9,
+  KpDecimal,
+  KpDivide,
+  KpMultiply,
+  KpSubtract,
+  KpAdd,
+  KpEqual,
+
+  // EN: Sentinel -- one past the last real key. Never a valid key value on its own; used only
+  //     for array sizing (src/input_state.hpp) and range checks. NEVER add an enumerator after
+  //     this one -- new keys are inserted BEFORE it (see this enum's own doc-comment above).
+  // PT: Sentinela -- um após a última tecla de verdade. Nunca um valor de tecla válido por si
+  //     só; usado só para dimensionar array (src/input_state.hpp) e checagens de faixa. NUNCA
+  //     adicione um enumerador depois deste -- teclas novas entram ANTES dele (ver o próprio
+  //     doc-comment deste enum acima).
+  Count
 };
+
+// EN: D1 append-only freeze (HOSTIN-1) -- these MUST equal today's numeric values forever. If
+//     any of these fails to compile, someone inserted/removed/reordered an enumerator inside
+//     None..PageDown, or shuffled the append order -- both forbidden by this enum's own
+//     doc-comment above. Machine-enforced so the append-only rule is never just "reviewed by
+//     eye" (mutation-testability note for the adversarial reviewer: reordering PageUp/PageDown,
+//     or inserting a new key before PageDown instead of after it, MUST turn one of these red).
+// PT: Congelamento append-only do D1 (HOSTIN-1) -- estes PRECISAM valer os valores numéricos de
+//     hoje pra sempre. Se algum destes falhar ao compilar, alguém inseriu/removeu/reordenou um
+//     enumerador dentro de None..PageDown, ou embaralhou a ordem de anexação -- ambos proibidos
+//     pelo próprio doc-comment deste enum acima. Reforçado por máquina para que a regra
+//     append-only nunca seja só "revisada a olho" (nota de mutation-testability pro reviewer
+//     adversarial: reordenar PageUp/PageDown, ou inserir uma tecla nova antes de PageDown em vez
+//     de depois, TEM que deixar algum destes vermelho).
+static_assert(static_cast<int>(Key::None) == 0, "Key::None must stay 0 (append-only, D1)");
+static_assert(static_cast<int>(Key::Up) == 1, "Key::Up must stay 1 (append-only, D1)");
+static_assert(static_cast<int>(Key::Down) == 2, "Key::Down must stay 2 (append-only, D1)");
+static_assert(static_cast<int>(Key::Left) == 3, "Key::Left must stay 3 (append-only, D1)");
+static_assert(static_cast<int>(Key::Right) == 4, "Key::Right must stay 4 (append-only, D1)");
+static_assert(static_cast<int>(Key::Enter) == 5, "Key::Enter must stay 5 (append-only, D1)");
+static_assert(static_cast<int>(Key::Escape) == 6, "Key::Escape must stay 6 (append-only, D1)");
+static_assert(static_cast<int>(Key::Tab) == 7, "Key::Tab must stay 7 (append-only, D1)");
+static_assert(static_cast<int>(Key::Space) == 8, "Key::Space must stay 8 (append-only, D1)");
+static_assert(static_cast<int>(Key::Backspace) == 9, "Key::Backspace must stay 9 (append-only, D1)");
+static_assert(static_cast<int>(Key::Delete) == 10, "Key::Delete must stay 10 (append-only, D1)");
+static_assert(static_cast<int>(Key::Home) == 11, "Key::Home must stay 11 (append-only, D1)");
+static_assert(static_cast<int>(Key::End) == 12, "Key::End must stay 12 (append-only, D1)");
+static_assert(static_cast<int>(Key::PageUp) == 13, "Key::PageUp must stay 13 (append-only, D1)");
+static_assert(static_cast<int>(Key::PageDown) == 14, "Key::PageDown must stay 14 (append-only, D1)");
 
 // EN: Keyboard/gamepad modifier bitmask — combine with bitwise-OR.
 // PT: Bitmask de modificadores de teclado/gamepad — combinar com bitwise-OR.
@@ -55,6 +215,21 @@ enum Mod {
   Mod_Ctrl  = 2,
   Mod_Alt   = 4
 };
+
+// EN: Edge-detected key action (HOSTIN-2, Onda 2) -- App::set_key_callback's payload. Press and
+//     Release each fire exactly once per physical transition; Repeat fires once per OS
+//     auto-repeat tick while a key stays held (GLFW_REPEAT), forwarded verbatim -- most games
+//     only care about Press/Release, Repeat is here for completeness/parity with GLFW's own
+//     action space, never synthesised for anything glintfx itself does not receive from GLFW.
+// PT: Ação de tecla edge-detectada (HOSTIN-2, Onda 2) -- payload de App::set_key_callback.
+//     Press e Release disparam cada um exatamente uma vez por transição física; Repeat dispara
+//     uma vez por tick de auto-repeat do SO enquanto uma tecla continua segurada (GLFW_REPEAT),
+//     repassado tal-e-qual -- a maioria dos jogos só se importa com Press/Release, Repeat está
+//     aqui por completude/paridade com o próprio espaço de ação do GLFW, nunca sintetizado para
+//     nada que a própria glintfx não receba do GLFW.
+enum class KeyAction { Press,
+                       Release,
+                       Repeat };
 
 // EN: Host-agnostic input event. Use designated initializers (C++20) for clarity:
 //       UiEvent{ .type = UiEvent::Type::MouseMove, .x = 100.f, .y = 80.f }

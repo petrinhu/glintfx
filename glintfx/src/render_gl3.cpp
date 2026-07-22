@@ -349,8 +349,48 @@ public:
   // -------------------------------------------------------------------------
 
   Rml::CompiledShaderHandle CompileShader(const Rml::String& name, const Rml::Dictionary& parameters) override {
-    if (fx_)
+    if (fx_) {
+      // EN: QW-RIPPLEAPP (v0.18.1) -- one-time (not per-frame) warning: "glintfx-ripple" refracts
+      //     the HOST's backdrop (L1.22-CAPTURE, arm_backdrop() below), which only ever runs from
+      //     RenderGl3::begin_frame_compose -- the UiLayer/embed entry point. A standalone App only
+      //     ever calls RenderGl3::begin_frame (never begin_frame_compose, see engine.cpp's
+      //     render_standalone/render_compose split), so backdrop_armed_ is still false the first
+      //     time this compiles here: the decorator is by-design inert (ADR-0012 -- there is no
+      //     host backdrop for a standalone App to refract), but silently so, which is confusing
+      //     for an author who copy-pasted a ripple() rule from embed-mode docs. Checked here
+      //     (not in begin_frame/begin_frame_compose) because this is the one place that already
+      //     sees the plain shader NAME before it gets wrapped by fx_ -- see decorator_ripple.hpp's
+      //     own doc-comment and app.hpp's set_frame_callback doc-comment for the public-facing
+      //     note. Guarded by warned_ripple_standalone_ so this fires AT MOST once per
+      //     Gl3RenderInterface instance (one App lifetime), never once per frame -- RmlUi may
+      //     recompile the same named shader more than once across a session (style recalcs), and
+      //     a game loop redrawing hundreds of frames a second must not flood stderr.
+      // PT: QW-RIPPLEAPP (v0.18.1) -- aviso ÚNICO (não por-frame): "glintfx-ripple" refrata o
+      //     backdrop do HOST (L1.22-CAPTURE, arm_backdrop() abaixo), que só roda a partir de
+      //     RenderGl3::begin_frame_compose -- o ponto de entrada UiLayer/embed. Um App standalone
+      //     só chama RenderGl3::begin_frame (nunca begin_frame_compose, ver a divisão
+      //     render_standalone/render_compose de engine.cpp), então backdrop_armed_ ainda é falso
+      //     na primeira vez que isto compila aqui: o decorator é inerte por design (ADR-0012 --
+      //     não há backdrop de host pra um App standalone refratar), mas silenciosamente, o que
+      //     confunde um autor que copiou uma regra ripple() da doc de embed mode. Checado aqui
+      //     (não em begin_frame/begin_frame_compose) porque este é o único ponto que já vê o NOME
+      //     cru do shader antes de ser embrulhado por fx_ -- ver o próprio doc-comment de
+      //     decorator_ripple.hpp e o doc-comment de App::set_frame_callback em app.hpp pra nota
+      //     pública. Guardado por warned_ripple_standalone_ pra disparar NO MÁXIMO uma vez por
+      //     instância de Gl3RenderInterface (uma vida de App), nunca uma vez por frame -- o RmlUi
+      //     pode recompilar o mesmo shader nomeado mais de uma vez na sessão (recálculos de
+      //     estilo), e um game loop redesenhando centenas de frames por segundo não pode inundar o
+      //     stderr.
+      if (name == "glintfx-ripple" && !backdrop_armed_ && !warned_ripple_standalone_) {
+        Rml::Log::Message(Rml::Log::LT_WARNING,
+                          "decorator: ripple(...) compiled, but this glintfx::App appears to be running "
+                          "standalone -- ripple() refracts the HOST's backdrop and only has visible effect in "
+                          "embed/UiLayer mode (ADR-0012); in a standalone App there is no host backdrop, so the "
+                          "effect is inert here (logged once).");
+        warned_ripple_standalone_ = true;
+      }
       return fx_->compile_shader(*this, name, parameters);
+    }
     return RenderInterface_GL3::CompileShader(name, parameters);
   }
 
@@ -383,8 +423,24 @@ public:
   //     arm_backdrop_capture de fx_hook.hpp pro mecanismo completo do L1.22-CAPTURE, agora dono
   //     de src/fx/effects_gl3.cpp.
   void arm_backdrop(int offset_x, int offset_y, int w, int h) {
-    if (fx_)
+    if (fx_) {
+      // EN: QW-RIPPLEAPP -- records that the compose-only (embed) backdrop-arming path has run at
+      //     least once on THIS instance; see CompileShader's own doc-comment above for how this
+      //     flag distinguishes a standalone App (never reaches here) from a UiLayer/embed host
+      //     (always reaches here, and always BEFORE the first CompileShader("glintfx-ripple") of
+      //     the same frame -- begin_frame_compose calls arm_backdrop() before SetViewport()+
+      //     BeginFrame(), and Context::Render() -- which triggers CompileShader -- only runs
+      //     after those return, see engine.cpp's render_compose).
+      // PT: QW-RIPPLEAPP -- registra que o caminho de armamento de backdrop compose-only (embed)
+      //     rodou ao menos uma vez NESTA instância; ver o próprio doc-comment de CompileShader
+      //     acima pra como esta flag distingue um App standalone (nunca chega aqui) de um host
+      //     UiLayer/embed (sempre chega aqui, e sempre ANTES do primeiro
+      //     CompileShader("glintfx-ripple") do mesmo frame -- begin_frame_compose chama
+      //     arm_backdrop() antes de SetViewport()+BeginFrame(), e Context::Render() -- que dispara
+      //     CompileShader -- só roda depois que eles retornam, ver engine.cpp's render_compose).
+      backdrop_armed_ = true;
       fx_->arm_backdrop_capture(offset_x, offset_y, w, h);
+    }
   }
 
 private:
@@ -396,6 +452,13 @@ private:
   //     contrário. Ver o próprio construtor/destrutor desta classe acima pro timing de
   //     construção/desmonte.
   std::unique_ptr<glintfx::FxHook> fx_;
+
+  // EN: QW-RIPPLEAPP (v0.18.1) -- one-time standalone-App ripple-inert warning state. See
+  //     CompileShader's/arm_backdrop's own doc comments above for the full derivation.
+  // PT: QW-RIPPLEAPP (v0.18.1) -- estado do aviso único de ripple-inerte em App standalone. Ver
+  //     os próprios doc-comments de CompileShader/arm_backdrop acima pra derivação completa.
+  bool backdrop_armed_ = false;
+  bool warned_ripple_standalone_ = false;
 };
 
 namespace glintfx {

@@ -13,6 +13,8 @@
 #include "engine.hpp"
 #include "system_clock.hpp"
 #include <RmlUi/Core/Context.h>
+#include <RmlUi/Core/Log.h> // EN: QW-GUARDLOG (v0.18.1) -- set_viewport's own pre-guard now warns.
+                            // PT: QW-GUARDLOG (v0.18.1) -- pre-guard do set_viewport agora avisa.
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 
 namespace glintfx {
@@ -117,7 +119,22 @@ void UiLayer::set_viewport(int w, int h) {
   //     5-arg overload below so both reject the same range.
   // PT: Guard (AUD-TEC-4): também limita w/h a um teto são -- kMaxViewportDim é compartilhado
   //     com a sobrecarga de 5 args abaixo para que ambas rejeitem o mesmo range.
-  if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim) return;
+  // EN: QW-GUARDLOG (v0.18.1) -- this pre-guard short-circuits BEFORE Engine::set_viewport is ever
+  //     called, so logging only at that common Engine point (as done for App's direct callers)
+  //     would leave every embed-mode host (UiLayer's own callers) silently unwarned -- this is the
+  //     actually-reachable rejection point for them, so it gets its own warning too.
+  // PT: QW-GUARDLOG (v0.18.1) -- este pre-guard intercepta ANTES de Engine::set_viewport sequer
+  //     ser chamado, então logar só naquele ponto comum do Engine (como feito para os callers
+  //     diretos do App) deixaria todo host em embed mode (callers do próprio UiLayer) sem aviso
+  //     algum em silêncio -- este é o ponto de rejeição de fato alcançável por eles, então também
+  //     ganha aviso próprio.
+  if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+                      "set_viewport(%d, %d) ignored -- dimensions must be positive and at most %d "
+                      "(previous viewport kept).",
+                      w, h, kMaxViewportDim);
+    return;
+  }
   impl_->w = w;
   impl_->h = h;
   impl_->x = impl_->y = impl_->gl_offset_x = impl_->gl_offset_y = 0;
@@ -148,10 +165,20 @@ void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
   //     positivos (> 0, target_h é a altura total da janela, mesma regra do w/h da sobrecarga
   //     de 2 args); só x/y podem legitimamente ser negativos (origem de letterbox) mas não
   //     adversarialmente enormes em nenhuma direção.
+  // EN: QW-GUARDLOG (v0.18.1) -- same rationale as the 2-arg overload's guard above: this
+  //     pre-guard is the actually-reachable rejection point for embed-mode hosts (it never lets an
+  //     out-of-range call reach Engine::set_viewport), so it warns here too.
+  // PT: QW-GUARDLOG (v0.18.1) -- mesma racional do guard da sobrecarga de 2 args acima: este
+  //     pre-guard é o ponto de rejeição de fato alcançável por hosts em embed mode (nunca deixa
+  //     uma chamada fora do range chegar a Engine::set_viewport), então também avisa aqui.
   if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim ||
       x < -kMaxViewportDim || x > kMaxViewportDim ||
       y < -kMaxViewportDim || y > kMaxViewportDim ||
       target_h <= 0 || target_h > kMaxViewportDim) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+                      "set_viewport(%d, %d, %d, %d, %d) ignored -- w/h/target_h must be positive, all five "
+                      "values within [-%d, %d] (previous viewport kept).",
+                      x, y, w, h, target_h, kMaxViewportDim, kMaxViewportDim);
     return;
   }
   impl_->x = x;

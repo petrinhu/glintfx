@@ -25,3 +25,37 @@ div  { display: block; position: absolute; }
   background-color: #ff0000;
   tab-index: auto;
 }
+
+/* EN: VF-APPWHEEL (v0.18.1) -- overflow-y:auto scroller, placed at top:60px so its 100px-tall
+     border-box (60..160) never overlaps #btn_a (10..50) in this 300x200 window -- see the
+     .rml's own comment for the geometry/oracle this mirrors from scroll_scene.rcss.
+   PT: VF-APPWHEEL (v0.18.1) -- scroller overflow-y:auto, posicionado em top:60px pra que seu
+     border-box de 100px de altura (60..160) nunca sobreponha #btn_a (10..50) nesta janela
+     300x200 -- ver o comentário do próprio .rml pra geometria/oráculo espelhado de
+     scroll_scene.rcss. */
+#scroller {
+  display: block;
+  position: absolute;
+  left: 10px; top: 60px;
+  width: 120px; height: 100px;
+  margin: 0; padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #202020;
+}
+
+/* EN: Overrides the file-wide `div { position: absolute; }` rule above -- the item rows must
+     stay in NORMAL flow (position: static) inside #scroller for overflow-y:auto to scroll them
+     at all; scroll_scene.rcss's own items have no such override to fight because that file never
+     declares a blanket `div { position: absolute; }` rule in the first place.
+   PT: Sobrepõe a regra geral `div { position: absolute; }` acima -- as linhas de item precisam
+     ficar em fluxo NORMAL (position: static) dentro de #scroller pro overflow-y:auto rolá-las --
+     os próprios itens de scroll_scene.rcss não têm essa sobreposição pra brigar porque aquele
+     arquivo nunca declara uma regra geral `div { position: absolute; }`. */
+#scroller > div {
+  display: block;
+  position: static;
+  width: 100%; height: 30px;
+  margin: 0; padding: 0;
+  background-color: #303030;
+}

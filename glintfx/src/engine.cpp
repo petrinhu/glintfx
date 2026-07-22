@@ -115,11 +115,28 @@ void Engine::set_viewport(int w, int h) {
   //     guards before reaching here, but validating at this common Engine point too means no
   //     current or future caller can push a zero/negative dimension into
   //     Rml::Context::SetDimensions (degenerate layout). Same rationale as set_dp_ratio's guard.
+  //     QW-GUARDLOG (v0.18.1): this is the common Engine-level gate App relies on directly (see
+  //     app.cpp's sync_viewport, which calls engine.set_viewport(w, h) with no local pre-guard of
+  //     its own) -- unlike set_dp_ratio, this guard used to reject silently. Logging here fixes
+  //     that for App and for any future direct Engine caller; UiLayer's own pre-guard (ui_layer.cpp)
+  //     is logged separately, since it short-circuits before ever reaching this point.
   // PT: Guard de w/h em defesa-em-profundidade (auditoria de hardening, v0.3.0). UiLayer::
   //     set_viewport já valida antes de chegar aqui, mas validar também neste ponto comum do
   //     Engine garante que nenhum caller atual ou futuro empurre uma dimensão zero/negativa para
   //     Rml::Context::SetDimensions (layout degenerado). Mesma racional do guard do set_dp_ratio.
-  if (w <= 0 || h <= 0) return;
+  //     QW-GUARDLOG (v0.18.1): este é o gate comum de nível Engine do qual o App depende
+  //     diretamente (ver o sync_viewport de app.cpp, que chama engine.set_viewport(w, h) sem
+  //     pre-guard próprio) -- diferente do set_dp_ratio, este guard rejeitava em silêncio. Logar
+  //     aqui corrige isso para o App e para qualquer caller futuro direto do Engine; o pre-guard
+  //     próprio do UiLayer (ui_layer.cpp) é logado separadamente, já que ele intercepta antes de
+  //     sequer chegar até aqui.
+  if (w <= 0 || h <= 0) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+                      "set_viewport(%d, %d) ignored -- viewport dimensions must both be positive "
+                      "(previous viewport kept).",
+                      w, h);
+    return;
+  }
   if (auto* c = impl_->boot.context()) {
     c->SetDimensions(Rml::Vector2i(w, h));
   }

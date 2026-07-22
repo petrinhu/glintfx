@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-07-22 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.18.1)
+
 ### Fixed / Corrigido
 
 - **EN:** **Camada 0 `iabs32(INT32_MIN)` defensive guard** (`QW-IABS32`, PROG-1 Wave 1 INBOX sweep): `iabs32` (`src/raster.c`) negated its input without guarding the one value whose negation overflows a signed 32-bit int (`INT32_MIN`) -- unreachable today (the only callers, `dx`/`dy` in `flatten_quad`, already operate on `saturate_fx`-limited differences far from that value), so this is defence-in-depth, not a live-bug fix. A one-line guard (`if (v == INT32_MIN) return INT32_MAX;`) closes it; proven by a new hosted-companion probe (`tests/probe_iabs32.c`, `make probe-iabs32`, `-fsanitize=undefined`) -- reverting the guard makes UBSan abort live with "negation of -2147483648 cannot be represented", confirmed manually before this fix landed.

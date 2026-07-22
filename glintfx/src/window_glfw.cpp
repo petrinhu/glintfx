@@ -203,6 +203,19 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
   glfwSetMouseButtonCallback(win_, &WindowGlfw::on_mouse_button);
   glfwSetCursorPosCallback(win_, &WindowGlfw::on_cursor_pos);
   glfwSetScrollCallback(win_, &WindowGlfw::on_scroll);
+  // EN: HOSTIN-3/4/5 (Onda 2) -- registered unconditionally, same "no-op until a callback is
+  //     installed" contract as the 5 input callbacks above. on_window_close fires on EVERY
+  //     user-initiated close attempt regardless of whether set_close_request_callback() was
+  //     ever called (handle_window_close() itself no-ops when close_request_callback_ is empty
+  //     -- see its own doc-comment below).
+  // PT: HOSTIN-3/4/5 (Onda 2) -- registrados incondicionalmente, mesmo contrato "no-op até um
+  //     callback ser instalado" dos 5 callbacks de input acima. on_window_close dispara em TODA
+  //     tentativa de close iniciada pelo usuário independente de set_close_request_callback()
+  //     ter sido chamado alguma vez (handle_window_close() em si vira no-op quando
+  //     close_request_callback_ está vazio -- ver o próprio doc-comment abaixo).
+  glfwSetWindowCloseCallback(win_, &WindowGlfw::on_window_close);
+  glfwSetWindowFocusCallback(win_, &WindowGlfw::on_window_focus);
+  glfwSetWindowIconifyCallback(win_, &WindowGlfw::on_window_iconify);
   return true;
 }
 
@@ -395,6 +408,42 @@ void WindowGlfw::dispatch(const UiEvent& ev) {
   if (sink_) sink_(ev);
 }
 
+// EN: HOSTIN-2/3/4/5 (Onda 2) -- thin setters, same "just store it" pattern as
+//     set_event_sink() above; the real logic lives in the handle_* methods below.
+// PT: HOSTIN-2/3/4/5 (Onda 2) -- setters finos, mesmo padrão "só guarda" do set_event_sink()
+//     acima; a lógica de fato mora nos métodos handle_* abaixo.
+void WindowGlfw::set_key_callback(std::function<void(Key, KeyAction, int)> cb) {
+  key_callback_ = std::move(cb);
+}
+
+void WindowGlfw::request_close() {
+  // EN: D6 -- bypasses handle_window_close()/the veto entirely: this does not go through the
+  //     GLFW close callback at all (glfwSetWindowShouldClose does not invoke it).
+  // PT: D6 -- bypassa handle_window_close()/o veto inteiramente: isto não passa pelo callback
+  //     de close do GLFW nenhuma vez (glfwSetWindowShouldClose não o invoca).
+  if (win_) glfwSetWindowShouldClose(win_, GLFW_TRUE);
+}
+
+void WindowGlfw::set_close_request_callback(std::function<bool()> cb) {
+  close_request_callback_ = std::move(cb);
+}
+
+void WindowGlfw::set_window_focus_callback(std::function<void(bool)> cb) {
+  window_focus_callback_ = std::move(cb);
+}
+
+void WindowGlfw::set_window_iconify_callback(std::function<void(bool)> cb) {
+  window_iconify_callback_ = std::move(cb);
+}
+
+bool WindowGlfw::is_window_focused() const {
+  return win_ && glfwGetWindowAttrib(win_, GLFW_FOCUSED);
+}
+
+bool WindowGlfw::is_window_iconified() const {
+  return win_ && glfwGetWindowAttrib(win_, GLFW_ICONIFIED);
+}
+
 // ---------------------------------------------------------------------------
 // EN: Static trampolines -- one line each, per the plan's testability contract (section 2.2):
 //     resolve `this` from the GLFW user pointer and forward to the instance method that does
@@ -419,6 +468,15 @@ void WindowGlfw::on_cursor_pos(GLFWwindow* w, double xpos, double ypos) {
 void WindowGlfw::on_scroll(GLFWwindow* w, double xoffset, double yoffset) {
   static_cast<WindowGlfw*>(glfwGetWindowUserPointer(w))->handle_scroll(xoffset, yoffset);
 }
+void WindowGlfw::on_window_close(GLFWwindow* w) {
+  static_cast<WindowGlfw*>(glfwGetWindowUserPointer(w))->handle_window_close();
+}
+void WindowGlfw::on_window_focus(GLFWwindow* w, int focused) {
+  static_cast<WindowGlfw*>(glfwGetWindowUserPointer(w))->handle_window_focus(focused);
+}
+void WindowGlfw::on_window_iconify(GLFWwindow* w, int iconified) {
+  static_cast<WindowGlfw*>(glfwGetWindowUserPointer(w))->handle_window_iconify(iconified);
+}
 
 // ---------------------------------------------------------------------------
 // EN: Instance handlers -- translate (glfw_event_translate.hpp) then dispatch(). Unmapped
@@ -437,6 +495,41 @@ void WindowGlfw::handle_key(int key, int /*scancode*/, int action, int mods) {
   active_mods_ = glfw_translate_mods(mods);
   Key k;
   if (!glfw_translate_key(key, k)) return;
+
+  // EN: HOSTIN-1 (D2) -- update the physical state table FIRST, before anything else touches
+  //     this key. GLFW_REPEAT does not re-set an already-down key (level state, not edge --
+  //     the key is already true from the preceding PRESS, so there is nothing to change).
+  // PT: HOSTIN-1 (D2) -- atualiza a tabela de estado físico PRIMEIRO, antes de qualquer outra
+  //     coisa tocar esta tecla. GLFW_REPEAT não re-seta uma tecla já segurada (estado de
+  //     nível, não de borda -- a tecla já é true desde o PRESS anterior, então não há nada pra
+  //     mudar).
+  if (action != GLFW_REPEAT) {
+    input_state_.set_key_down(k, action == GLFW_PRESS);
+  }
+
+  // EN: HOSTIN-2 -- edge-detected callback, fires for EVERY key this translation understands
+  //     (the full HOSTIN-1 vocabulary), independent of whether the key also reaches the UI
+  //     route below. Copy-before-invoke (AUD-TEC-3): a callback that re-registers a new key
+  //     callback from inside its own invocation cannot destroy the std::function running it.
+  // PT: HOSTIN-2 -- callback edge-detectado, dispara para TODA tecla que esta tradução entende
+  //     (o vocabulário HOSTIN-1 inteiro), independente da tecla também alcançar a rota de UI
+  //     abaixo. Cópia-antes-de-invocar (AUD-TEC-3): um callback que reregistra um novo callback
+  //     de tecla de dentro da própria invocação não consegue destruir o std::function que o
+  //     está rodando.
+  if (key_callback_) {
+    const KeyAction ka = (action == GLFW_PRESS)     ? KeyAction::Press
+                         : (action == GLFW_RELEASE) ? KeyAction::Release
+                                                    : KeyAction::Repeat;
+    auto cb = key_callback_;
+    cb(k, ka, active_mods_);
+  }
+
+  // EN: D10 -- UI routing UNCHANGED this wave: only the pre-existing nav-oriented subset
+  //     reaches the UiEvent/RmlUi sink, exactly as before HOSTIN-1 grew the Key vocabulary.
+  // PT: D10 -- roteamento de UI INALTERADO nesta onda: só o subconjunto pré-existente
+  //     orientado a navegação alcança o sink UiEvent/RmlUi, exatamente como antes do HOSTIN-1
+  //     fazer o vocabulário Key crescer.
+  if (!glfw_key_is_ui_forwardable(k)) return;
   UiEvent ev{};
   ev.type      = UiEvent::Type::Key;
   ev.key       = k;
@@ -456,6 +549,16 @@ void WindowGlfw::handle_char(unsigned int codepoint) {
 
 void WindowGlfw::handle_mouse_button(int button, int action, int mods) {
   active_mods_ = glfw_translate_mods(mods);
+  // EN: HOSTIN-1 (D3) -- the STATE table tracks ALL 8 buttons GLFW itself can report
+  //     ([0, GLFW_MOUSE_BUTTON_LAST]), a WIDER range than the UI route's 3-button filter below
+  //     -- GLFW_MOUSE_BUTTON_1..8 already ARE 0..7 (1-based aliasing, no translation needed).
+  // PT: HOSTIN-1 (D3) -- a tabela de ESTADO rastreia TODOS os 8 botões que o próprio GLFW pode
+  //     reportar ([0, GLFW_MOUSE_BUTTON_LAST]), uma faixa MAIS AMPLA que o filtro de 3 botões
+  //     da rota de UI abaixo -- GLFW_MOUSE_BUTTON_1..8 já SÃO 0..7 (aliasing base-1, sem
+  //     tradução necessária).
+  if (button >= 0 && button <= GLFW_MOUSE_BUTTON_LAST) {
+    input_state_.set_mouse_button_down(button, action == GLFW_PRESS);
+  }
   int b;
   if (!glfw_translate_mouse_button(button, b)) return;
   UiEvent ev{};
@@ -473,8 +576,50 @@ void WindowGlfw::handle_cursor_pos(double xpos, double ypos) {
   UiEvent ev{};
   ev.type      = UiEvent::Type::MouseMove;
   glfw_translate_cursor_pos(xpos, ypos, win_w, win_h, fb_w, fb_h, ev.x, ev.y);
+  // EN: HOSTIN-1 (D2) -- state updated BEFORE dispatch, same ordering as handle_key above.
+  // PT: HOSTIN-1 (D2) -- estado atualizado ANTES do dispatch, mesma ordem de handle_key acima.
+  input_state_.set_cursor_pos(ev.x, ev.y);
   ev.modifiers = active_mods_;
   dispatch(ev);
+}
+
+// EN: HOSTIN-4 (D6) -- fires only on a USER-initiated close attempt (X button, Alt+F4); GLFW
+//     has already set the should-close flag to true BEFORE calling this callback (its own
+//     documented default action) -- a `false` veto result resets it back to GLFW_FALSE. No
+//     callback registered: no-op, the default action stands (close proceeds), matching the
+//     pre-HOSTIN-4 behaviour exactly. Copy-before-invoke (AUD-TEC-3).
+// PT: HOSTIN-4 (D6) -- dispara só numa tentativa de close INICIADA PELO USUÁRIO (botão X,
+//     Alt+F4); o GLFW já setou a flag should-close para true ANTES de chamar este callback
+//     (a própria ação default documentada dele) -- um resultado de veto `false` a reseta de
+//     volta a GLFW_FALSE. Nenhum callback registrado: no-op, a ação default permanece (close
+//     prossegue), batendo exatamente com o comportamento pré-HOSTIN-4. Cópia-antes-de-invocar
+//     (AUD-TEC-3).
+void WindowGlfw::handle_window_close() {
+  if (!close_request_callback_) return;
+  auto cb = close_request_callback_;
+  const bool allow = cb();
+  if (!glfw_decide_window_close(/*has_callback=*/true, allow)) {
+    glfwSetWindowShouldClose(win_, GLFW_FALSE);
+  }
+}
+
+// EN: HOSTIN-5 (D7) -- fires whenever the WM/compositor changes this window's focus/iconify
+//     state, including transitions the host never asked for (alt-tab, taskbar minimize). No
+//     callback registered: no-op (same convention as every other callback family here).
+// PT: HOSTIN-5 (D7) -- dispara sempre que o WM/compositor muda o estado de focus/iconify desta
+//     janela, inclusive transições que o host nunca pediu (alt-tab, minimizar pela barra de
+//     tarefas). Nenhum callback registrado: no-op (mesma convenção de toda outra família de
+//     callback aqui).
+void WindowGlfw::handle_window_focus(int focused) {
+  if (!window_focus_callback_) return;
+  auto cb = window_focus_callback_;
+  cb(focused != 0);
+}
+
+void WindowGlfw::handle_window_iconify(int iconified) {
+  if (!window_iconify_callback_) return;
+  auto cb = window_iconify_callback_;
+  cb(iconified != 0);
 }
 
 void WindowGlfw::handle_scroll(double xoffset, double yoffset) {

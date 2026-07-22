@@ -744,7 +744,73 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: app_input_query_smoke (HOSTIN-1..4, Onda 2, v0.19.0) -- App-level smoke for the
+  #     physical input state channel (is_key_down/is_mouse_button_down/get_cursor_pos),
+  #     set_key_callback, request_close()/running()/run(), and the D5 synthetic-vs-physical
+  #     channel separation. See the test file's own header for the full oracle, including the
+  #     honest E2E downgrade (close-veto round-trip is a nested-compositor manual QA leg, not
+  #     Xvfb-automatable -- section 4.2/4.3 of docs/superpowers/plans/
+  #     2026-07-22-onda2-input-host.md). WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml"
+  #     resolves (copied unconditionally at the top of this file).
+  # PT: app_input_query_smoke (HOSTIN-1..4, Onda 2, v0.19.0) -- smoke em nível de App pro canal
+  #     de estado de input físico (is_key_down/is_mouse_button_down/get_cursor_pos),
+  #     set_key_callback, request_close()/running()/run(), e a separação de canal
+  #     físico-vs-sintético do D5. Ver o cabeçalho do próprio arquivo de teste pro oráculo
+  #     completo, incluindo o downgrade E2E honesto (o ida-e-volta do veto de close é uma perna
+  #     manual de QA em compositor aninhado, não automatizável sob Xvfb -- seção 4.2/4.3 de
+  #     docs/superpowers/plans/2026-07-22-onda2-input-host.md). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR para que "tests/min.rml" resolva (copiado no topo deste arquivo).
+  # ---------------------------------------------------------------------------
+  add_executable(app_input_query_smoke app_input_query_smoke.cpp)
+  target_link_libraries(app_input_query_smoke PRIVATE glintfx)
+  add_test(NAME app_input_query_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_input_query_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 endif() # GLINTFX_BACKEND_GLFW
+
+# ---------------------------------------------------------------------------
+# EN: input_state_sanity (HOSTIN-1, Onda 2, v0.19.0) -- PURE unit test for
+#     src/input_state.hpp: no window, no GL context, no GLFW dependency AT ALL (InputState is a
+#     plain struct over glintfx/ui_event.hpp's public Key enum only). Registered UNCONDITIONALLY
+#     (unlike glfw_event_translate_sanity, which needs actual GLFW #define constants) -- runs in
+#     BOTH build configurations, same "no display to isolate here" reasoning as
+#     glfw_event_translate_sanity. See the test file's own header for the full oracle.
+# PT: input_state_sanity (HOSTIN-1, Onda 2, v0.19.0) -- teste unit PURO para
+#     src/input_state.hpp: sem janela, sem contexto GL, sem dependência de GLFW NENHUMA
+#     (InputState é uma struct simples sobre o enum público Key de glintfx/ui_event.hpp só).
+#     Registrado INCONDICIONALMENTE (diferente do glfw_event_translate_sanity, que precisa de
+#     constantes #define reais do GLFW) -- roda em AMBAS as configurações de build, mesma
+#     racional "nada relacionado a display pra isolar aqui" do glfw_event_translate_sanity. Ver
+#     o cabeçalho do próprio arquivo de teste pro oráculo completo.
+# ---------------------------------------------------------------------------
+add_executable(input_state_sanity input_state_sanity.cpp)
+target_link_libraries(input_state_sanity PRIVATE glintfx)
+add_test(NAME input_state_sanity COMMAND input_state_sanity)
+
+# ---------------------------------------------------------------------------
+# EN: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- PURE unit test for src/log_dedup.hpp: no
+#     window, no GL context, no RmlUi/GLFW dependency AT ALL (LogDedup is a plain in-memory
+#     table). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as
+#     input_state_sanity right above -- runs in BOTH build configurations. See the test file's
+#     own header for the full oracle (first-print, 10/100/1000 summary boundary, per-message
+#     independence, is_error bypass, LRU cap under 10k distinct hostile messages, empty/huge
+#     message safety).
+# PT: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- teste unit PURO para src/log_dedup.hpp:
+#     sem janela, sem contexto GL, sem dependência de RmlUi/GLFW NENHUMA (LogDedup é uma tabela
+#     simples em memória). Registrado INCONDICIONALMENTE, mesma racional "nada relacionado a
+#     display pra isolar aqui" do input_state_sanity logo acima -- roda em AMBAS as
+#     configurações de build. Ver o cabeçalho do próprio arquivo de teste pro oráculo completo
+#     (1ª impressão, fronteira de sumário 10/100/1000, independência entre mensagens, bypass de
+#     is_error, teto LRU sob 10 mil mensagens hostis distintas, segurança de mensagem
+#     vazia/enorme).
+# ---------------------------------------------------------------------------
+add_executable(log_dedup_sanity log_dedup_sanity.cpp)
+target_link_libraries(log_dedup_sanity PRIVATE glintfx)
+add_test(NAME log_dedup_sanity COMMAND log_dedup_sanity)
 
 # ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
@@ -911,6 +977,39 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
 add_test(NAME ui_layer_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: log_throttle_embed_sanity (LOGTHR-1, Onda 2, v0.19.0) -- integration proof that the
+#     dedup/throttle LogMessage override (src/system_clock.hpp's SystemClock, D8) is actually
+#     wired into the embed SystemInterface path, not just unit-tested in isolation
+#     (log_dedup_sanity above). Registered here (OUTSIDE if(GLINTFX_BACKEND_GLFW), via
+#     ${_embed_dep}, same pattern as ui_layer_sanity right above) so it builds and runs in BOTH
+#     configs -- the ONLY real consumer (GusWorld) attaches embed-only (GLFW=OFF). No glloader
+#     link: unlike ui_layer_sanity, this test never calls a raw GL function itself (no
+#     glReadPixels/glClear -- it only drives ui.update()/ui.render() and reads back stderr). See
+#     the test file's own header for the full oracle and the POSIX-only justification
+#     (dup/dup2/fileno; safe because this .cpp is a test binary, never compiled by the MSVC job).
+# PT: log_throttle_embed_sanity (LOGTHR-1, Onda 2, v0.19.0) -- prova de integração de que o
+#     override de LogMessage com dedup/throttle (SystemClock de src/system_clock.hpp, D8) está
+#     de fato ligado ao caminho de SystemInterface do embed, não só testado isolado em unidade
+#     (log_dedup_sanity acima). Registrado aqui (FORA de if(GLINTFX_BACKEND_GLFW), via
+#     ${_embed_dep}, mesmo padrão de ui_layer_sanity logo acima) para buildar e rodar nas DUAS
+#     configs -- o ÚNICO consumidor real (GusWorld) anexa embed-only (GLFW=OFF). Sem link de
+#     glloader: diferente de ui_layer_sanity, este teste nunca chama uma função GL crua ele
+#     mesmo (sem glReadPixels/glClear -- só conduz ui.update()/ui.render() e lê de volta o
+#     stderr). Ver o cabeçalho do próprio arquivo de teste pro oráculo completo e a justificativa
+#     só-POSIX (dup/dup2/fileno; seguro porque este .cpp é um binário de teste, nunca compilado
+#     pelo job MSVC).
+# ---------------------------------------------------------------------------
+add_executable(log_throttle_embed_sanity log_throttle_embed_sanity.cpp)
+target_link_libraries(log_throttle_embed_sanity PRIVATE ${_embed_dep})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/log_throttle_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/log_throttle_scene.rml COPYONLY)
+add_test(NAME log_throttle_embed_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:log_throttle_embed_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

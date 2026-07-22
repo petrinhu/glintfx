@@ -73,13 +73,19 @@ int main() {
     check(glfw_translate_key(GLFW_KEY_PAGE_UP, k)   && k == Key::PageUp,    "GLFW_KEY_PAGE_UP -> Key::PageUp");
     check(glfw_translate_key(GLFW_KEY_PAGE_DOWN, k) && k == Key::PageDown,  "GLFW_KEY_PAGE_DOWN -> Key::PageDown");
 
-    // EN: A letter key (outside the nav-oriented subset) must be DISCARDED (false), not
-    //     mapped to some default -- proves the "do not synthesise an event" contract.
-    // PT: Uma tecla de letra (fora do subconjunto orientado a nav) precisa ser DESCARTADA
-    //     (false), não mapeada para algum default -- prova o contrato "não sintetizar evento".
-    k = Key::Up;  // EN: sentinel -- must stay untouched. PT: sentinela -- precisa ficar intocado.
-    check(!glfw_translate_key(GLFW_KEY_A, k), "GLFW_KEY_A must be discarded (outside nav subset)");
-    check(k == Key::Up, "glfw_translate_key must not touch out_key on a discarded key");
+    // EN: HOSTIN-1 (Onda 2, v0.19.0) note -- a letter key (GLFW_KEY_A) USED TO be the "outside
+    //     the mapped subset, must be discarded" example here, back when glfw_translate_key only
+    //     understood the 14 nav-oriented keys. HOSTIN-1 EXTENDS the mapped subset to include
+    //     letters/digits/F-keys/modifiers/etc. (see the dedicated HOSTIN-1 block below), so
+    //     GLFW_KEY_A now translates successfully -- the "must be discarded" negative case moved
+    //     to GLFW_KEY_UNKNOWN there, the input that is STILL genuinely unmapped after this wave.
+    // PT: Nota HOSTIN-1 (Onda 2, v0.19.0) -- uma tecla de letra (GLFW_KEY_A) COSTUMAVA ser o
+    //     exemplo de "fora do subconjunto mapeado, precisa ser descartada" aqui, de quando
+    //     glfw_translate_key só entendia as 14 teclas orientadas a nav. O HOSTIN-1 ESTENDE o
+    //     subconjunto mapeado para incluir letras/dígitos/F-teclas/modificadores/etc. (ver o
+    //     bloco dedicado HOSTIN-1 abaixo), então GLFW_KEY_A agora traduz com sucesso -- o caso
+    //     negativo "precisa ser descartado" mudou para GLFW_KEY_UNKNOWN lá, o input que AINDA é
+    //     genuinamente não-mapeado depois desta onda.
   }
 
   // ---------------------------------------------------------------------------
@@ -226,6 +232,135 @@ int main() {
     n = glfw_encode_utf8(0x110000, buf);  // one past the Unicode ceiling 0x10FFFF
     check(n == 0, "codepoint 0x110000 (past the Unicode ceiling) must be rejected (n == 0)");
   }
+
+  // ---------------------------------------------------------------------------
+  // EN: HOSTIN-1 (Onda 2, v0.19.0, D1) -- glfw_translate_key's ~92-entry extension. Every
+  //     named GLFW key added this wave must round-trip to its enumerator; a handful of
+  //     representative spot-checks per category (not literally all 92 -- the append-only
+  //     static_asserts in ui_event.hpp already pin the numeric layout, and the switch itself is
+  //     mechanical/exhaustive by construction) plus the two negative cases that matter: an
+  //     unmapped GLFW_KEY_UNKNOWN-shaped input stays discarded, and KP_ENTER keeps folding into
+  //     Key::Enter (unchanged since before this wave).
+  // PT: HOSTIN-1 (Onda 2, v0.19.0, D1) -- extensão de ~92 entradas do glfw_translate_key. Toda
+  //     tecla GLFW nomeada adicionada nesta onda precisa fazer round-trip pro próprio
+  //     enumerador; um punhado de checagens representativas por categoria (não literalmente as
+  //     92 -- os static_asserts append-only em ui_event.hpp já fixam o layout numérico, e o
+  //     próprio switch é mecânico/exaustivo por construção) mais os dois casos negativos que
+  //     importam: um input com formato GLFW_KEY_UNKNOWN não-mapeado continua descartado, e
+  //     KP_ENTER continua dobrando em Key::Enter (inalterado desde antes desta onda).
+  // ---------------------------------------------------------------------------
+  {
+    Key k;
+    check(glfw_translate_key(GLFW_KEY_A, k) && k == Key::A, "GLFW_KEY_A -> Key::A");
+    check(glfw_translate_key(GLFW_KEY_W, k) && k == Key::W, "GLFW_KEY_W -> Key::W (WASD)");
+    check(glfw_translate_key(GLFW_KEY_Z, k) && k == Key::Z, "GLFW_KEY_Z -> Key::Z (last letter)");
+    check(glfw_translate_key(GLFW_KEY_0, k) && k == Key::Digit0, "GLFW_KEY_0 -> Key::Digit0");
+    check(glfw_translate_key(GLFW_KEY_9, k) && k == Key::Digit9, "GLFW_KEY_9 -> Key::Digit9");
+    check(glfw_translate_key(GLFW_KEY_F1, k) && k == Key::F1, "GLFW_KEY_F1 -> Key::F1");
+    check(glfw_translate_key(GLFW_KEY_F12, k) && k == Key::F12, "GLFW_KEY_F12 -> Key::F12");
+    check(glfw_translate_key(GLFW_KEY_LEFT_SHIFT, k) && k == Key::LeftShift, "GLFW_KEY_LEFT_SHIFT -> Key::LeftShift");
+    check(glfw_translate_key(GLFW_KEY_RIGHT_SHIFT, k) && k == Key::RightShift, "GLFW_KEY_RIGHT_SHIFT -> Key::RightShift");
+    check(glfw_translate_key(GLFW_KEY_LEFT_CONTROL, k) && k == Key::LeftControl, "GLFW_KEY_LEFT_CONTROL -> Key::LeftControl");
+    check(glfw_translate_key(GLFW_KEY_RIGHT_CONTROL, k) && k == Key::RightControl, "GLFW_KEY_RIGHT_CONTROL -> Key::RightControl");
+    check(glfw_translate_key(GLFW_KEY_LEFT_ALT, k) && k == Key::LeftAlt, "GLFW_KEY_LEFT_ALT -> Key::LeftAlt");
+    check(glfw_translate_key(GLFW_KEY_RIGHT_ALT, k) && k == Key::RightAlt, "GLFW_KEY_RIGHT_ALT -> Key::RightAlt");
+    check(glfw_translate_key(GLFW_KEY_LEFT_SUPER, k) && k == Key::LeftSuper, "GLFW_KEY_LEFT_SUPER -> Key::LeftSuper");
+    check(glfw_translate_key(GLFW_KEY_RIGHT_SUPER, k) && k == Key::RightSuper, "GLFW_KEY_RIGHT_SUPER -> Key::RightSuper");
+    check(glfw_translate_key(GLFW_KEY_INSERT, k) && k == Key::Insert, "GLFW_KEY_INSERT -> Key::Insert");
+    check(glfw_translate_key(GLFW_KEY_CAPS_LOCK, k) && k == Key::CapsLock, "GLFW_KEY_CAPS_LOCK -> Key::CapsLock");
+    check(glfw_translate_key(GLFW_KEY_SCROLL_LOCK, k) && k == Key::ScrollLock, "GLFW_KEY_SCROLL_LOCK -> Key::ScrollLock");
+    check(glfw_translate_key(GLFW_KEY_NUM_LOCK, k) && k == Key::NumLock, "GLFW_KEY_NUM_LOCK -> Key::NumLock");
+    check(glfw_translate_key(GLFW_KEY_PRINT_SCREEN, k) && k == Key::PrintScreen, "GLFW_KEY_PRINT_SCREEN -> Key::PrintScreen");
+    check(glfw_translate_key(GLFW_KEY_PAUSE, k) && k == Key::Pause, "GLFW_KEY_PAUSE -> Key::Pause");
+    check(glfw_translate_key(GLFW_KEY_MENU, k) && k == Key::Menu, "GLFW_KEY_MENU -> Key::Menu");
+    check(glfw_translate_key(GLFW_KEY_APOSTROPHE, k) && k == Key::Apostrophe, "GLFW_KEY_APOSTROPHE -> Key::Apostrophe");
+    check(glfw_translate_key(GLFW_KEY_COMMA, k) && k == Key::Comma, "GLFW_KEY_COMMA -> Key::Comma");
+    check(glfw_translate_key(GLFW_KEY_MINUS, k) && k == Key::Minus, "GLFW_KEY_MINUS -> Key::Minus");
+    check(glfw_translate_key(GLFW_KEY_PERIOD, k) && k == Key::Period, "GLFW_KEY_PERIOD -> Key::Period");
+    check(glfw_translate_key(GLFW_KEY_SLASH, k) && k == Key::Slash, "GLFW_KEY_SLASH -> Key::Slash");
+    check(glfw_translate_key(GLFW_KEY_SEMICOLON, k) && k == Key::Semicolon, "GLFW_KEY_SEMICOLON -> Key::Semicolon (ABNT2 'c cedilha' position)");
+    check(glfw_translate_key(GLFW_KEY_EQUAL, k) && k == Key::Equal, "GLFW_KEY_EQUAL -> Key::Equal");
+    check(glfw_translate_key(GLFW_KEY_LEFT_BRACKET, k) && k == Key::LeftBracket, "GLFW_KEY_LEFT_BRACKET -> Key::LeftBracket");
+    check(glfw_translate_key(GLFW_KEY_BACKSLASH, k) && k == Key::Backslash, "GLFW_KEY_BACKSLASH -> Key::Backslash");
+    check(glfw_translate_key(GLFW_KEY_RIGHT_BRACKET, k) && k == Key::RightBracket, "GLFW_KEY_RIGHT_BRACKET -> Key::RightBracket");
+    check(glfw_translate_key(GLFW_KEY_GRAVE_ACCENT, k) && k == Key::GraveAccent, "GLFW_KEY_GRAVE_ACCENT -> Key::GraveAccent");
+    check(glfw_translate_key(GLFW_KEY_WORLD_1, k) && k == Key::World1, "GLFW_KEY_WORLD_1 -> Key::World1 (ABNT2/ISO extra key)");
+    check(glfw_translate_key(GLFW_KEY_WORLD_2, k) && k == Key::World2, "GLFW_KEY_WORLD_2 -> Key::World2");
+    check(glfw_translate_key(GLFW_KEY_KP_0, k) && k == Key::Kp0, "GLFW_KEY_KP_0 -> Key::Kp0");
+    check(glfw_translate_key(GLFW_KEY_KP_9, k) && k == Key::Kp9, "GLFW_KEY_KP_9 -> Key::Kp9");
+    check(glfw_translate_key(GLFW_KEY_KP_DECIMAL, k) && k == Key::KpDecimal, "GLFW_KEY_KP_DECIMAL -> Key::KpDecimal");
+    check(glfw_translate_key(GLFW_KEY_KP_DIVIDE, k) && k == Key::KpDivide, "GLFW_KEY_KP_DIVIDE -> Key::KpDivide");
+    check(glfw_translate_key(GLFW_KEY_KP_MULTIPLY, k) && k == Key::KpMultiply, "GLFW_KEY_KP_MULTIPLY -> Key::KpMultiply");
+    check(glfw_translate_key(GLFW_KEY_KP_SUBTRACT, k) && k == Key::KpSubtract, "GLFW_KEY_KP_SUBTRACT -> Key::KpSubtract");
+    check(glfw_translate_key(GLFW_KEY_KP_ADD, k) && k == Key::KpAdd, "GLFW_KEY_KP_ADD -> Key::KpAdd");
+    check(glfw_translate_key(GLFW_KEY_KP_EQUAL, k) && k == Key::KpEqual, "GLFW_KEY_KP_EQUAL -> Key::KpEqual");
+
+    // EN: KP_ENTER must STILL fold into Key::Enter, not a separate Kp-prefixed enumerator --
+    //     this pre-existing behaviour (v0.4.0) must survive the HOSTIN-1 enum growth unchanged.
+    // PT: KP_ENTER precisa CONTINUAR dobrando em Key::Enter, não um enumerador separado com
+    //     prefixo Kp -- este comportamento pré-existente (v0.4.0) precisa sobreviver ao
+    //     crescimento do enum do HOSTIN-1 sem mudança.
+    check(glfw_translate_key(GLFW_KEY_KP_ENTER, k) && k == Key::Enter, "GLFW_KEY_KP_ENTER still folds into Key::Enter (unchanged)");
+
+    // EN: An input with no matching case (any unassigned integer GLFW itself would report as
+    //     GLFW_KEY_UNKNOWN) must still be discarded, exactly like the pre-HOSTIN-1 letter-key
+    //     rejection above -- the switch growing to ~106 cases does not turn the default branch
+    //     into dead code.
+    // PT: Um input sem case correspondente (qualquer inteiro não atribuído que o próprio GLFW
+    //     reportaria como GLFW_KEY_UNKNOWN) ainda precisa ser descartado, exatamente como a
+    //     rejeição de tecla-letra pré-HOSTIN-1 acima -- o switch crescer para ~106 casos não
+    //     transforma o ramo default em código morto.
+    k = Key::A; // EN: sentinel. PT: sentinela.
+    check(!glfw_translate_key(GLFW_KEY_UNKNOWN, k), "GLFW_KEY_UNKNOWN must be discarded");
+    check(k == Key::A, "glfw_translate_key must not touch out_key on GLFW_KEY_UNKNOWN");
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: glfw_key_is_ui_forwardable (D10) -- exactly the pre-existing 14 nav-oriented keys are
+  //     forwarded to the UI/RmlUi route; none of the ~92 HOSTIN-1 additions are. Mutation-
+  //     testability note: flipping this predicate to `true` for ANY key below (e.g. Key::A) --
+  //     or to `false` for any of the pre-existing 14 -- must turn one of these assertions red.
+  // PT: glfw_key_is_ui_forwardable (D10) -- exatamente as 14 teclas pré-existentes orientadas a
+  //     navegação são encaminhadas à rota de UI/RmlUi; nenhuma das ~92 adições do HOSTIN-1 é.
+  //     Nota de mutation-testability: virar este predicado para `true` em QUALQUER tecla abaixo
+  //     (ex.: Key::A) -- ou para `false` em qualquer uma das 14 pré-existentes -- precisa
+  //     deixar alguma destas asserções vermelha.
+  // ---------------------------------------------------------------------------
+  check(glfw_key_is_ui_forwardable(Key::Up) == true, "Key::Up is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Down) == true, "Key::Down is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Left) == true, "Key::Left is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Right) == true, "Key::Right is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Enter) == true, "Key::Enter is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Escape) == true, "Key::Escape is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Tab) == true, "Key::Tab is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Space) == true, "Key::Space is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Backspace) == true, "Key::Backspace is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Delete) == true, "Key::Delete is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::Home) == true, "Key::Home is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::End) == true, "Key::End is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::PageUp) == true, "Key::PageUp is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::PageDown) == true, "Key::PageDown is UI-forwardable (pre-existing)");
+  check(glfw_key_is_ui_forwardable(Key::A) == false, "Key::A is NOT UI-forwardable (HOSTIN-1 addition, D10)");
+  check(glfw_key_is_ui_forwardable(Key::W) == false, "Key::W is NOT UI-forwardable (WASD, HOSTIN-1 addition, D10)");
+  check(glfw_key_is_ui_forwardable(Key::Digit0) == false, "Key::Digit0 is NOT UI-forwardable (D10)");
+  check(glfw_key_is_ui_forwardable(Key::F1) == false, "Key::F1 is NOT UI-forwardable (D10)");
+  check(glfw_key_is_ui_forwardable(Key::LeftShift) == false, "Key::LeftShift is NOT UI-forwardable (D10)");
+  check(glfw_key_is_ui_forwardable(Key::Kp0) == false, "Key::Kp0 is NOT UI-forwardable (D10)");
+  check(glfw_key_is_ui_forwardable(Key::None) == false, "Key::None is NOT UI-forwardable");
+  check(glfw_key_is_ui_forwardable(Key::Count) == false, "Key::Count (sentinel) is NOT UI-forwardable");
+
+  // ---------------------------------------------------------------------------
+  // EN: glfw_decide_window_close (HOSTIN-4, D6) -- pure decision seam for the user-initiated
+  //     close veto. Mutation-testability note: inverting either branch below must turn one of
+  //     these red.
+  // PT: glfw_decide_window_close (HOSTIN-4, D6) -- seam de decisão pura pro veto de close
+  //     iniciado pelo usuário. Nota de mutation-testability: inverter qualquer um dos ramos
+  //     abaixo precisa deixar alguma destas vermelha.
+  // ---------------------------------------------------------------------------
+  check(glfw_decide_window_close(false, false) == true, "no callback registered -> close proceeds (default GLFW behaviour)");
+  check(glfw_decide_window_close(false, true) == true, "no callback registered -> close proceeds regardless of the unused 2nd arg");
+  check(glfw_decide_window_close(true, true) == true, "callback returned true -> close proceeds");
+  check(glfw_decide_window_close(true, false) == false, "callback returned false -> close is VETOED");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "glfw_event_translate_sanity: %d assertion(s) FAILED\n", g_failures);

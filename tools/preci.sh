@@ -17,6 +17,9 @@
 #         (e.g. before tagging a release), not every push -- it is slower by design.
 #         Local-first: everything here runs offline except the one-time RmlUi
 #         FetchContent fetch on a clean glintfx build directory.
+#       Both modes also always run the cheap, no-build gates: the .clang-format
+#       lines-changed check and tools/check_doc_line_refs.sh (DOC-HOSTIN follow-up --
+#       doc `` `symbol` (`file:line`) `` citations still point at the right symbol).
 #
 # PT: Gate de pré-CI local (TST-L1-PRECI, TESTES.md). Espelha a fatia rápida do dia a dia
 #     do CI ANTES do código ficar visível num remoto (decisão do líder 2026-07-10:
@@ -36,6 +39,10 @@
 #         ocasionais (ex.: antes de taggear um release), não a cada push -- é mais lento
 #         por design. Local-first: tudo aqui roda offline exceto o fetch único do RmlUi
 #         via FetchContent num diretório de build limpo do glintfx.
+#       Os dois modos também sempre rodam os gates baratos, sem build: o check de
+#       .clang-format por linhas alteradas e o tools/check_doc_line_refs.sh (follow-up
+#       do DOC-HOSTIN -- citações de doc `` `símbolo` (`arquivo:linha`) `` ainda
+#       apontam pro símbolo certo).
 #
 # Usage / Uso:
 #   tools/preci.sh              # fast mode: only the layer(s) actually touched
@@ -290,6 +297,26 @@ run_format_gate() {
 }
 
 # -----------------------------------------------------------------------------
+# EN: 3.6) DOC-HOSTIN follow-up -- tools/check_doc_line_refs.sh. Cheap (no build, no
+#     network), doc-only gate: fails if a `` `SYMBOL` (`file:line`) `` citation in
+#     docs/*.md (+ adr/, wiki/ -- see the script's own header comment for the excluded
+#     dirs and why) no longer contains the symbol it claims to document. Runs in BOTH
+#     fast and full mode, same rationale as the format gate above (cheap enough to
+#     never be worth gating behind --full).
+# PT: 3.6) Follow-up do DOC-HOSTIN -- tools/check_doc_line_refs.sh. Gate barato (sem
+#     build, sem rede), só de doc: falha se uma citação `` `SÍMBOLO` (`arquivo:linha`) ``
+#     em docs/*.md (+ adr/, wiki/ -- ver o próprio comentário de cabeçalho do script pros
+#     dirs excluídos e o porquê) não contiver mais o símbolo que afirma documentar. Roda
+#     nos DOIS modos, rápido e --full, mesmo racional do gate de formatação acima
+#     (barato demais pra valer a pena gatear atrás de --full).
+# -----------------------------------------------------------------------------
+run_doc_line_refs_gate() {
+  section "DOC-HOSTIN follow-up -- tools/check_doc_line_refs.sh"
+  "${SCRIPT_DIR}/check_doc_line_refs.sh"
+  ran_anything=1
+}
+
+# -----------------------------------------------------------------------------
 # EN: 4) --full extras: TST-L1-STATIC's encapsulation sub-check + TST-L1-SECRETS
 #     (gitleaks). Both are cheap and always-green per TESTES.md's adoption order, so
 #     they only run in --full (fast mode stays focused on build+test of the touched
@@ -323,11 +350,13 @@ if [[ "${MODE}" == "fast" ]]; then
   [[ "${layer0_touched}" -eq 1 ]] && run_layer0
   [[ "${layer1_touched}" -eq 1 ]] && run_layer1_fast
   run_format_gate
+  run_doc_line_refs_gate
 else
   run_layer0
   run_layer1_full
   run_full_extras
   run_format_gate
+  run_doc_line_refs_gate
 fi
 
 if [[ "${ran_anything}" -eq 0 ]]; then

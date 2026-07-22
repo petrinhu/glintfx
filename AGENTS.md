@@ -110,6 +110,51 @@ NOTICE, LICENSE          MPL-2.0 + third-party attributions
 
 The public API lives in two headers under `glintfx/include/glintfx/`: [`app.hpp`](glintfx/include/glintfx/app.hpp) (the standalone facade `glintfx::App`, RAII move-only, plus `AppConfig` and `version()`) and [`ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp) (the embed/guest facade `glintfx::UiLayer`, plus `UiLayerConfig`; events via [`ui_event.hpp`](glintfx/include/glintfx/ui_event.hpp)). Both expose the same data-model API (`create_data_model`/`bind_*`/`set_*`) and the same `set_dp_ratio`/`set_asset_base_url` methods -- see `docs/embed-integration.md` for the full contract. There is **no imperative effect API**: effects are declared in `.rcss`. Do not document or call methods that are not in those two headers.
 
+### Where to run window/input verification (canonical, DOC-HOSTIN follow-up)
+
+**WARNING, the single most important point of this section (more than the table below): bringing up the nested compositor is NOT enough. `-u WAYLAND_DISPLAY` does not protect you.** This is not theoretical -- it happened in this exact repository, in real time, while this very section was being written: a `qa-engineer` brought up nested KWin correctly, PROVED the nested display was `:1`, separate from the leader's `:0`, and its probe still opened a real window in the leader's LIVE session for 2 to 3 minutes.
+
+- **Why:** libwayland's `wl_display_connect(NULL)` falls back to the BUILT-IN name `"wayland-0"` the moment the env var is absent, and it resolves that name INSIDE `$XDG_RUNTIME_DIR` -- which is still the real session's `/run/user/1000` unless you changed it too. Unsetting `WAYLAND_DISPLAY` only removes the override; it does not stop the connection.
+- **The real protection is on the APP under test ONLY, not on the nested compositor itself.** The nested compositor must INHERIT the normal environment on purpose (it needs to find the real `wayland-0` to nest inside it); it is the app under test that gets an isolated `XDG_RUNTIME_DIR` (`chmod 700`), so that no `wayland-0` socket exists anywhere inside its own runtime dir for the fallback to find.
+- **The validated invocation (this actually ran, corrected after a first draft got it wrong):**
+  ```sh
+  mkdir -p /var/tmp/glx-xdgrun && chmod 700 /var/tmp/glx-xdgrun
+  # nested compositor: INHERITS the normal env on purpose (needs the real wayland-0 to nest into)
+  # note: `--windowed` does NOT exist (confirmed via `kwin_wayland --help`) -- windowed IS the
+  # default the moment you pass --wayland-display/--x11-display; `--virtual` is the headless mode
+  kwin_wayland --wayland-display wayland-0 --width 640 --height 480 --xwayland --socket <unique-name>
+  # find the new :N in /tmp/.X11-unix/ (X0 = the leader's session; the new one = the nested one)
+  # app under test: THIS is where the isolated env goes
+  env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 XDG_RUNTIME_DIR=/var/tmp/glx-xdgrun DISPLAY=:N <binary>
+  # prove it BEFORE interacting with anything:
+  lsof -p <pid> | grep -c libwayland   # must be 0
+  ss -xp | grep <fd's inode>           # must point at @/tmp/.X11-unix/X<N>, never X0/wayland-0
+  ```
+- **`GLFW_PLATFORM` is not an env var** -- it is the `glfwInitHint()` constant (which does exist and works, called from application code, not from the shell). The env var GLFW actually honours during backend auto-selection is **`XDG_SESSION_TYPE=x11`** (with `WAYLAND_DISPLAY` unset), confirmed in isolation via `glfwGetPlatform()`. Also worth recording, because it saves the next person a detour: **this repo's own `App`/`WindowGlfw` calls neither `glfwInitHint` nor anything platform-selecting** (empty `grep` across `glintfx/src`/`glintfx/include`) -- so this is an invocation trap, not a product finding.
+- **Prove it, do not assume it:** `lsof -p <pid>` or `/proc/<pid>/fd` showing the socket inside the isolated directory -- BEFORE launching and AGAIN after the app comes up. If the proof does not close cleanly, KILL the process immediately; do not adjust anything in the dark.
+- **The parent lesson, which outlives this one case:** the house's own canonical recipe already had the antidote -- the standard ctest line is `env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/var/tmp/fake_xdg_runtime xvfb-run -a ctest ...` (e.g. `docs/superpowers/plans/2026-07-19-framework2d-A1-input.md:231`), and it is the **`XDG_RUNTIME_DIR` swap that does the actual work, not the `-u`**. It got copied halfway. **When a canonical invocation already exists in the project, copy it WHOLE, then adapt** -- every piece is there because someone already got burned.
+
+Factual record, kept sober (this is engineering documentation, not a scolding): the incident was CONTAINED -- no input was ever injected into `:0`, only read-only probes, and it was one of those very probes that revealed the leak; the process was killed and the cleanup confirmed. The value of documenting this is the trap, not whoever fell into it.
+
+| | Xvfb (CI's own) | Xephyr | Nested KWin (the house's choice) |
+| :--- | :--- | :--- | :--- |
+| Display | phantom, memory-only | real window in the session | real window in the session |
+| Window manager | **none** | **none** (it is just the X server) | **yes, full** |
+| X button / alt-tab / minimize | do not exist | do not exist by themselves | exist |
+| Installed on this machine | yes | **no** | **yes** (`/usr/bin/kwin_wayland`) |
+
+**Canonical choice: `kwin_wayland --wayland-display wayland-0 --xwayland` (windowed is the default; see the validated invocation above -- `--windowed` is not a real flag).** Reasons, in this order: zero install (Xephyr would need two packages, because it is **not** a window manager, it is only the display server), and it is the **same compositor as the leader's own session**, hence more faithful to the real environment than a minimalist WM nobody actually uses.
+
+**What only the nested compositor proves.** Without a window manager there is no title bar, hence no real click on the X button, alt-tab, or minimize -- so close veto (`set_close_request_callback`), window focus, and iconify only get end-to-end coverage there. Under Xvfb the honest maximum is testing the pure decision seam (e.g. `glfw_decide_window_close()`, `glintfx/src/glfw_event_translate.hpp:608` -- cite the real `file:line`, and `tools/check_doc_line_refs.sh` now exists to confirm that citation has not rotted) and DECLARING that as a downgrade, never selling it as end-to-end.
+
+`xdotool`/XTest **works under Xvfb** for physical key and mouse input (this is how callback reentrancy was proven with a real keystroke in Onda 2, `HOSTIN-2`); what is actually missing under Xvfb is only the window manager.
+
+**What did NOT work in the nested-compositor leg (KWin-nested-over-Wayland + its internal Xwayland): keyboard injection via `xdotool`/XTest is FLAKY on this exact stack.** Delivery is intermittent even with X11 focus confirmed, and one case produced a double toggle from a single call (suspected X11 auto-repeat, not confirmed). What DID work reliably there: window-manager actions (`windowminimize`, `windowactivate`) and an ICCCM `ClientMessage` (`WM_DELETE_WINDOW` via `python-xlib`) for the close-veto e2e. The recorded recommendation for a future keyboard-injection round is raw `uinput`, which bypasses X11/XTest entirely.
+
+**Hard rule: never on the leader's live session.** Input injection always targets the **nested** display, **never** `:0`. The reason is on record, not hypothetical: a burst of window-mode switching once froze his touchpad until a reboot was required (see the memory `feedback_nunca_stress_janela_sessao_viva`).
+
+**An agent does not install a system package on its own initiative** -- ask for authorization first. Reporting "not executed, needs `<package>` installed" is an honest negative result, and a better one than improvising around a missing tool.
+
 ---
 
 ## Para o Claude Code (português)
@@ -168,3 +213,48 @@ Regra prática para agents: reproduza primeiro (`tools/ci/Containerfile.f42` par
 - **`GLINTFX_OWN_FONT_ENGINE` (`L1.19-FONTENG`) -- include path deve ser por-arquivo, não de alvo inteiro.** A raiz `include/` da Camada 0 contém um `limits.h` próprio (freestanding, só `INT_MAX`/`INT_MIN`/`UINT_MAX`) que SOMBREIA o `<limits.h>` de sistema (sem `SHRT_MAX`/`SHRT_MIN`) se virar `-I` de escopo de alvo inteiro no `glintfx` -- quebrou o `stb_image.h` vendorizado (`stb_image_impl.cpp`), unidade de tradução sem nenhuma relação com font engine. Fix: `set_source_files_properties(... PROPERTIES INCLUDE_DIRECTORIES ...)` restrito SÓ aos 3 arquivos que precisam (`font_engine_own.cpp`, `bootstrap.cpp`, `sfnt.c`/`raster.c` da Camada 0), nunca `target_include_directories()` de alvo inteiro. Ver `glintfx/CMakeLists.txt`.
 - **`GLINTFX_OWN_FONT_ENGINE` -- `Rml::CallbackTexture` precisa ser liberado ANTES do `Rml::Shutdown()`.** `Rml::Shutdown()` chama `contexts.clear()` (destruindo o `RenderManager` de cada `Context`) ANTES de chamar `font_interface->Shutdown()` -- confiar só no hook `FontEngineInterface::Shutdown()` pra liberar o atlas GPU do nosso motor de fonte crasha em todo teardown ("Leaking CallbackTexture detected... will likely result in memory corruption"). `Bootstrap::shutdown()` chama `FontEngineOwn::Shutdown()` EXPLICITAMENTE, antes da própria chamada a `Rml::Shutdown()`. Ver `glintfx/src/bootstrap.cpp`/`font_engine_own.{hpp,cpp}` e `docs/embed-integration.md` seção 17.
 - **CI Codeberg (Forgejo Actions) -- paridade mínima, não bloqueia.** Runner `codeberg-medium` (4 CPU/8 GB/10 min) + container `ghcr.io/catthehacker/ubuntu:act-latest`; deps de sistema instaladas a cada job (sem stack pré-instalada), incluindo os pacotes `-dev` de GL/EGL/xkbcommon. **Desde a Onda 3 da reestruturação de CI (poda, 2026-07-11)** este workflow roda **um único job** (`build & test (codeberg-medium / GLFW=ON, minimal parity)`) -- **sem matriz**, só `GLINTFX_BACKEND_GLFW=ON`, em `push` para `main` apenas -- como sinal voluntário de "ainda builda no Codeberg", **não** gate de release. A perna `GLFW=OFF`, o `lint-and-scan`, o `coverage` e o `nightly.forgejo` foram removidos deste arquivo (cobertos pelo GitHub e pelo `claudio`/`heavy.yml`); um job preso em `waiting` no `codeberg-medium` nunca segura merge/tag/release (ver "Política de CI: ordem de gate" acima -- `github > claudio > codeberg`). Validar mudanças no workflow localmente com `forgejo-runner exec` antes de empurrar -- ver o cabeçalho de `.forgejo/workflows/ci.yml`.
+
+### Onde rodar teste de janela/input (canônico, follow-up do DOC-HOSTIN)
+
+**ATENÇÃO, o ponto mais importante desta seção (mais que a tabela abaixo): subir o compositor aninhado NÃO basta. `-u WAYLAND_DISPLAY` não protege.** Isto não é teórico -- aconteceu de verdade neste repositório, em tempo real, enquanto esta própria seção estava sendo escrita: um `qa-engineer` subiu o KWin aninhado corretamente, PROVOU que o display aninhado era o `:1`, separado do `:0` do líder, e mesmo assim a sonda dele abriu uma janela real na sessão VIVA do líder por 2 a 3 minutos.
+
+- **Por quê:** o `wl_display_connect(NULL)` do libwayland cai no nome EMBUTIDO `"wayland-0"` no instante em que a env var some, e resolve esse nome DENTRO do `$XDG_RUNTIME_DIR` -- que continua sendo o `/run/user/1000` da sessão real, a menos que ele também tenha sido trocado. Remover `WAYLAND_DISPLAY` só tira o *override*, não impede a conexão.
+- **A proteção real é SÓ do APP sob teste, não do compositor aninhado.** O compositor aninhado precisa HERDAR o env normal de propósito (precisa achar o `wayland-0` real pra se aninhar dentro dele); é o app sob teste que recebe um `XDG_RUNTIME_DIR` isolado (`chmod 700`), de forma que não exista nenhum socket `wayland-0` dentro do próprio runtime dir dele pro fallback encontrar.
+- **A invocação validada (esta de fato rodou, corrigida depois que um primeiro rascunho errou):**
+  ```sh
+  mkdir -p /var/tmp/glx-xdgrun && chmod 700 /var/tmp/glx-xdgrun
+  # compositor aninhado: HERDA o env normal de propósito (precisa do wayland-0 real pra se aninhar)
+  # nota: `--windowed` NÃO existe (confirmado por `kwin_wayland --help`) -- o modo em janela É o
+  # default no instante em que se passa --wayland-display/--x11-display; `--virtual` é o headless
+  kwin_wayland --wayland-display wayland-0 --width 640 --height 480 --xwayland --socket <nome-unico>
+  # descobrir o novo :N em /tmp/.X11-unix/ (X0 = sessão do líder; o novo = o aninhado)
+  # app sob teste: AQUI sim vai o env isolado
+  env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 XDG_RUNTIME_DIR=/var/tmp/glx-xdgrun DISPLAY=:N <binário>
+  # provar ANTES de interagir com qualquer coisa:
+  lsof -p <pid> | grep -c libwayland   # tem que ser 0
+  ss -xp | grep <inode do fd>          # tem que apontar pra @/tmp/.X11-unix/X<N>, nunca X0/wayland-0
+  ```
+- **`GLFW_PLATFORM` não é env var** -- é a constante de `glfwInitHint()` (que existe e funciona, chamada do código da aplicação, não do shell). A env var que o GLFW de fato honra na auto-seleção de backend é **`XDG_SESSION_TYPE=x11`** (com `WAYLAND_DISPLAY` removida), confirmado isoladamente via `glfwGetPlatform()`. Vale registrar também, porque poupa a próxima pessoa de um desvio: **o `App`/`WindowGlfw` deste repo NÃO chama `glfwInitHint` nem nada que selecione plataforma** (grep vazio em `glintfx/src`/`glintfx/include`) -- então isto é armadilha de invocação, não achado de produto.
+- **Provar, não presumir:** `lsof -p <pid>` ou `/proc/<pid>/fd` mostrando o socket dentro do diretório isolado -- ANTES de lançar e DE NOVO depois de o app subir. Se a prova não fechar limpa, MATAR o processo na hora; não ajustar nada no escuro.
+- **A lição mãe, que vale além deste caso:** a receita canônica da própria casa já tinha o antídoto -- a linha padrão de ctest é `env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/var/tmp/fake_xdg_runtime xvfb-run -a ctest ...` (ex.: `docs/superpowers/plans/2026-07-19-framework2d-A1-input.md:231`), e é a **troca do `XDG_RUNTIME_DIR` que faz o trabalho de verdade, não o `-u`**. Foi copiada pela metade. **Quando já existe invocação canônica no projeto, copie-a INTEIRA e só então adapte** -- cada pedaço está lá porque alguém já se queimou.
+
+Registro factual, mantido sóbrio (é doc de engenharia, não bronca): o incidente foi CONTIDO -- nenhum input foi injetado no `:0`, só buscas read-only, e foi justamente uma dessas buscas que revelou o vazamento; o processo foi morto e a limpeza confirmada. O valor de documentar isto é a armadilha, não quem caiu nela.
+
+| | Xvfb (o do CI) | Xephyr | KWin aninhado (o da casa) |
+| :--- | :--- | :--- | :--- |
+| Tela | fantasma, só memória | janela real na sessão | janela real na sessão |
+| Window manager | **nenhum** | **nenhum** (é só o servidor X) | **sim, completo** |
+| Botão X / alt-tab / minimizar | não existem | não existem sozinhos | existem |
+| Instalado nesta máquina | sim | **não** | **sim** (`/usr/bin/kwin_wayland`) |
+
+**Escolha canônica: `kwin_wayland --wayland-display wayland-0 --xwayland` (em janela é o default; ver a invocação validada acima -- `--windowed` não é uma flag real).** Motivos, nessa ordem: zero instalação (o Xephyr exigiria dois pacotes, porque **não** é window manager, é só a tela) e é o **mesmo compositor da sessão do líder**, logo mais fiel ao ambiente real do que um WM minimalista que ninguém usa.
+
+**O que só o aninhado prova.** Sem window manager não há barra de título, logo não há clique real no botão X, alt-tab nem minimizar -- então o veto de close (`set_close_request_callback`), o focus e o iconify de janela só têm cobertura ponta-a-ponta lá. Sob Xvfb o máximo honesto é testar o *seam* puro de decisão (ex.: `glfw_decide_window_close()`, `glintfx/src/glfw_event_translate.hpp:608` -- cite o `arquivo:linha` real, e o `tools/check_doc_line_refs.sh` agora existe justamente pra confirmar que essa citação não apodreceu) e **declarar isso como downgrade**, nunca vender como e2e.
+
+`xdotool`/XTest **funciona sob Xvfb** para tecla e mouse físicos (foi assim que a reentrância de callback foi provada com uma tecla real na Onda 2, `HOSTIN-2`); o que de fato falta no Xvfb é só o window manager.
+
+**O que NÃO funcionou na perna do compositor aninhado (KWin aninhado sobre Wayland + o Xwayland interno dele): injeção de teclado via `xdotool`/XTest é FLAKY exatamente nesta pilha.** A entrega é intermitente mesmo com foco X11 confirmado, e houve um caso de toggle duplo numa única chamada (suspeita de auto-repeat do X11, não confirmada). O que FUNCIONOU de forma confiável ali: ações de window manager (`windowminimize`, `windowactivate`) e um `ClientMessage` ICCCM (`WM_DELETE_WINDOW` via `python-xlib`) para o e2e do veto de close. A recomendação registrada para uma próxima rodada de injeção de teclado é `uinput` bruto, que faz bypass do X11/XTest inteiro.
+
+**Regra dura: nunca na sessão viva do líder.** A injeção de input mira **sempre** o display aninhado, **nunca** o `:0`. O motivo está registrado, não é hipotético: uma rajada de troca de modo de janela já travou o touchpad dele até precisar de reboot (ver a memória `feedback_nunca_stress_janela_sessao_viva`).
+
+**Agente não instala pacote de sistema por conta própria** -- pede autorização primeiro. Reportar "não executado, precisa instalar `<pacote>`" é um resultado negativo honesto, e melhor do que improvisar em cima de uma ferramenta ausente.

@@ -61,7 +61,346 @@ inline bool glfw_translate_key(int glfw_key, Key& out_key) noexcept {
     case GLFW_KEY_END:       out_key = Key::End;       return true;
     case GLFW_KEY_PAGE_UP:   out_key = Key::PageUp;    return true;
     case GLFW_KEY_PAGE_DOWN: out_key = Key::PageDown;  return true;
+
+    // EN: HOSTIN-1 (Onda 2, v0.19.0, D1) -- append-only extension mirroring GLFW's own nameable
+    //     key set, for App's PHYSICAL input state channel (is_key_down/set_key_callback). These
+    //     are POSITION tokens (named after the US-layout physical key), not label tokens -- see
+    //     Key::Count's own doc-comment (ui_event.hpp) for the ABNT2 consequences (ç arrives as
+    //     Semicolon; the ABNT2 second "/" -- scancode 97 -- has no GLFW token, a documented
+    //     upstream gap, seeded as SEED-SCANCODE/is_scancode_down). Unmapped by design: anything
+    //     GLFW itself reports as GLFW_KEY_UNKNOWN (no case matches, falls to default below).
+    // PT: HOSTIN-1 (Onda 2, v0.19.0, D1) -- extensão append-only espelhando o próprio conjunto
+    //     nomeável de teclas do GLFW, para o canal de estado de input FÍSICO do App
+    //     (is_key_down/set_key_callback). Estes são tokens de POSIÇÃO (nomeados pela tecla
+    //     física do layout US), não de rótulo -- ver o próprio doc-comment de Key::Count
+    //     (ui_event.hpp) para as consequências no ABNT2 (ç chega como Semicolon; a segunda "/"
+    //     do ABNT2 -- scancode 97 -- não tem token GLFW, uma lacuna upstream documentada,
+    //     semeada como SEED-SCANCODE/is_scancode_down). Não mapeado por desenho: o que o
+    //     próprio GLFW reporta como GLFW_KEY_UNKNOWN (nenhum case casa, cai no default abaixo).
+    case GLFW_KEY_A:
+      out_key = Key::A;
+      return true;
+    case GLFW_KEY_B:
+      out_key = Key::B;
+      return true;
+    case GLFW_KEY_C:
+      out_key = Key::C;
+      return true;
+    case GLFW_KEY_D:
+      out_key = Key::D;
+      return true;
+    case GLFW_KEY_E:
+      out_key = Key::E;
+      return true;
+    case GLFW_KEY_F:
+      out_key = Key::F;
+      return true;
+    case GLFW_KEY_G:
+      out_key = Key::G;
+      return true;
+    case GLFW_KEY_H:
+      out_key = Key::H;
+      return true;
+    case GLFW_KEY_I:
+      out_key = Key::I;
+      return true;
+    case GLFW_KEY_J:
+      out_key = Key::J;
+      return true;
+    case GLFW_KEY_K:
+      out_key = Key::K;
+      return true;
+    case GLFW_KEY_L:
+      out_key = Key::L;
+      return true;
+    case GLFW_KEY_M:
+      out_key = Key::M;
+      return true;
+    case GLFW_KEY_N:
+      out_key = Key::N;
+      return true;
+    case GLFW_KEY_O:
+      out_key = Key::O;
+      return true;
+    case GLFW_KEY_P:
+      out_key = Key::P;
+      return true;
+    case GLFW_KEY_Q:
+      out_key = Key::Q;
+      return true;
+    case GLFW_KEY_R:
+      out_key = Key::R;
+      return true;
+    case GLFW_KEY_S:
+      out_key = Key::S;
+      return true;
+    case GLFW_KEY_T:
+      out_key = Key::T;
+      return true;
+    case GLFW_KEY_U:
+      out_key = Key::U;
+      return true;
+    case GLFW_KEY_V:
+      out_key = Key::V;
+      return true;
+    case GLFW_KEY_W:
+      out_key = Key::W;
+      return true;
+    case GLFW_KEY_X:
+      out_key = Key::X;
+      return true;
+    case GLFW_KEY_Y:
+      out_key = Key::Y;
+      return true;
+    case GLFW_KEY_Z:
+      out_key = Key::Z;
+      return true;
+
+    case GLFW_KEY_0:
+      out_key = Key::Digit0;
+      return true;
+    case GLFW_KEY_1:
+      out_key = Key::Digit1;
+      return true;
+    case GLFW_KEY_2:
+      out_key = Key::Digit2;
+      return true;
+    case GLFW_KEY_3:
+      out_key = Key::Digit3;
+      return true;
+    case GLFW_KEY_4:
+      out_key = Key::Digit4;
+      return true;
+    case GLFW_KEY_5:
+      out_key = Key::Digit5;
+      return true;
+    case GLFW_KEY_6:
+      out_key = Key::Digit6;
+      return true;
+    case GLFW_KEY_7:
+      out_key = Key::Digit7;
+      return true;
+    case GLFW_KEY_8:
+      out_key = Key::Digit8;
+      return true;
+    case GLFW_KEY_9:
+      out_key = Key::Digit9;
+      return true;
+
+    case GLFW_KEY_F1:
+      out_key = Key::F1;
+      return true;
+    case GLFW_KEY_F2:
+      out_key = Key::F2;
+      return true;
+    case GLFW_KEY_F3:
+      out_key = Key::F3;
+      return true;
+    case GLFW_KEY_F4:
+      out_key = Key::F4;
+      return true;
+    case GLFW_KEY_F5:
+      out_key = Key::F5;
+      return true;
+    case GLFW_KEY_F6:
+      out_key = Key::F6;
+      return true;
+    case GLFW_KEY_F7:
+      out_key = Key::F7;
+      return true;
+    case GLFW_KEY_F8:
+      out_key = Key::F8;
+      return true;
+    case GLFW_KEY_F9:
+      out_key = Key::F9;
+      return true;
+    case GLFW_KEY_F10:
+      out_key = Key::F10;
+      return true;
+    case GLFW_KEY_F11:
+      out_key = Key::F11;
+      return true;
+    case GLFW_KEY_F12:
+      out_key = Key::F12;
+      return true;
+
+    case GLFW_KEY_LEFT_SHIFT:
+      out_key = Key::LeftShift;
+      return true;
+    case GLFW_KEY_RIGHT_SHIFT:
+      out_key = Key::RightShift;
+      return true;
+    case GLFW_KEY_LEFT_CONTROL:
+      out_key = Key::LeftControl;
+      return true;
+    case GLFW_KEY_RIGHT_CONTROL:
+      out_key = Key::RightControl;
+      return true;
+    case GLFW_KEY_LEFT_ALT:
+      out_key = Key::LeftAlt;
+      return true;
+    case GLFW_KEY_RIGHT_ALT:
+      out_key = Key::RightAlt;
+      return true;
+    case GLFW_KEY_LEFT_SUPER:
+      out_key = Key::LeftSuper;
+      return true;
+    case GLFW_KEY_RIGHT_SUPER:
+      out_key = Key::RightSuper;
+      return true;
+
+    case GLFW_KEY_INSERT:
+      out_key = Key::Insert;
+      return true;
+    case GLFW_KEY_CAPS_LOCK:
+      out_key = Key::CapsLock;
+      return true;
+    case GLFW_KEY_SCROLL_LOCK:
+      out_key = Key::ScrollLock;
+      return true;
+    case GLFW_KEY_NUM_LOCK:
+      out_key = Key::NumLock;
+      return true;
+    case GLFW_KEY_PRINT_SCREEN:
+      out_key = Key::PrintScreen;
+      return true;
+    case GLFW_KEY_PAUSE:
+      out_key = Key::Pause;
+      return true;
+    case GLFW_KEY_MENU:
+      out_key = Key::Menu;
+      return true;
+
+    case GLFW_KEY_APOSTROPHE:
+      out_key = Key::Apostrophe;
+      return true;
+    case GLFW_KEY_COMMA:
+      out_key = Key::Comma;
+      return true;
+    case GLFW_KEY_MINUS:
+      out_key = Key::Minus;
+      return true;
+    case GLFW_KEY_PERIOD:
+      out_key = Key::Period;
+      return true;
+    case GLFW_KEY_SLASH:
+      out_key = Key::Slash;
+      return true;
+    case GLFW_KEY_SEMICOLON:
+      out_key = Key::Semicolon;
+      return true;
+    case GLFW_KEY_EQUAL:
+      out_key = Key::Equal;
+      return true;
+    case GLFW_KEY_LEFT_BRACKET:
+      out_key = Key::LeftBracket;
+      return true;
+    case GLFW_KEY_BACKSLASH:
+      out_key = Key::Backslash;
+      return true;
+    case GLFW_KEY_RIGHT_BRACKET:
+      out_key = Key::RightBracket;
+      return true;
+    case GLFW_KEY_GRAVE_ACCENT:
+      out_key = Key::GraveAccent;
+      return true;
+
+    case GLFW_KEY_WORLD_1:
+      out_key = Key::World1;
+      return true;
+    case GLFW_KEY_WORLD_2:
+      out_key = Key::World2;
+      return true;
+
+    case GLFW_KEY_KP_0:
+      out_key = Key::Kp0;
+      return true;
+    case GLFW_KEY_KP_1:
+      out_key = Key::Kp1;
+      return true;
+    case GLFW_KEY_KP_2:
+      out_key = Key::Kp2;
+      return true;
+    case GLFW_KEY_KP_3:
+      out_key = Key::Kp3;
+      return true;
+    case GLFW_KEY_KP_4:
+      out_key = Key::Kp4;
+      return true;
+    case GLFW_KEY_KP_5:
+      out_key = Key::Kp5;
+      return true;
+    case GLFW_KEY_KP_6:
+      out_key = Key::Kp6;
+      return true;
+    case GLFW_KEY_KP_7:
+      out_key = Key::Kp7;
+      return true;
+    case GLFW_KEY_KP_8:
+      out_key = Key::Kp8;
+      return true;
+    case GLFW_KEY_KP_9:
+      out_key = Key::Kp9;
+      return true;
+    case GLFW_KEY_KP_DECIMAL:
+      out_key = Key::KpDecimal;
+      return true;
+    case GLFW_KEY_KP_DIVIDE:
+      out_key = Key::KpDivide;
+      return true;
+    case GLFW_KEY_KP_MULTIPLY:
+      out_key = Key::KpMultiply;
+      return true;
+    case GLFW_KEY_KP_SUBTRACT:
+      out_key = Key::KpSubtract;
+      return true;
+    case GLFW_KEY_KP_ADD:
+      out_key = Key::KpAdd;
+      return true;
+    case GLFW_KEY_KP_EQUAL:
+      out_key = Key::KpEqual;
+      return true;
+
     default:                 return false;
+  }
+}
+
+// EN: D10 -- the subset of Key that App's physical-key callback ALSO forwards into the neutral
+//     UiEvent/RmlUi route, UNCHANGED by HOSTIN-1's enum growth: exactly the pre-existing
+//     nav-oriented 14 keys (Up..PageDown), the same subset Engine::to_rml_key (engine.cpp) has
+//     understood since before this wave. None of the ~92 keys added above (letters, digits,
+//     F-keys, modifiers, numpad, punctuation) are forwarded to the UI engine by this wave --
+//     forwarding them for UI shortcuts is a separate, deliberate, future change (SEED-UIKEYFWD),
+//     not smuggled in here. Pinned by tests/glfw_event_translate_sanity.cpp so a future edit
+//     cannot silently widen (or narrow) what reaches RmlUi.
+// PT: D10 -- o subconjunto de Key que o callback físico de tecla do App TAMBÉM encaminha para a
+//     rota neutra UiEvent/RmlUi, INALTERADO pelo crescimento do enum do HOSTIN-1: exatamente as
+//     14 teclas pré-existentes orientadas a navegação (Up..PageDown), o mesmo subconjunto que
+//     Engine::to_rml_key (engine.cpp) já entendia antes desta onda. Nenhuma das ~92 teclas
+//     adicionadas acima (letras, dígitos, F-teclas, modificadores, numpad, pontuação) é
+//     encaminhada ao motor de UI por esta onda -- encaminhá-las para atalhos de UI é uma
+//     mudança futura separada e deliberada (SEED-UIKEYFWD), não contrabandeada aqui. Fixado por
+//     tests/glfw_event_translate_sanity.cpp para que uma edição futura não alargue (nem
+//     estreite) silenciosamente o que chega ao RmlUi.
+inline bool glfw_key_is_ui_forwardable(Key k) noexcept {
+  switch (k) {
+    case Key::Up:
+    case Key::Down:
+    case Key::Left:
+    case Key::Right:
+    case Key::Enter:
+    case Key::Escape:
+    case Key::Tab:
+    case Key::Space:
+    case Key::Backspace:
+    case Key::Delete:
+    case Key::Home:
+    case Key::End:
+    case Key::PageUp:
+    case Key::PageDown:
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -245,6 +584,29 @@ inline int glfw_encode_utf8(unsigned int codepoint, char out_buf[5]) noexcept {
   out_buf[3] = static_cast<char>(0x80u | (codepoint & 0x3Fu));
   out_buf[4] = '\0';
   return 4;
+}
+
+// EN: HOSTIN-4 (Onda 2, v0.19.0, D6) -- pure decision seam for the user-initiated close veto,
+//     extracted so the branch is directly unit-testable without ever creating a window (see
+//     tests/glfw_event_translate_sanity.cpp). `has_callback=false` means no veto was ever registered --
+//     the window's default GLFW behaviour applies and the close always proceeds (returns true),
+//     matching the pre-HOSTIN-4 behaviour exactly. `has_callback=true` defers entirely to
+//     `callback_allows_close` (the registered `std::function<bool()>`'s return value): `true` ->
+//     close proceeds, `false` -> WindowGlfw::handle_window_close() resets
+//     glfwWindowShouldClose back to GLFW_FALSE (the veto). request_close() (HOSTIN-3) never
+//     calls into this seam at all -- it BYPASSES the veto entirely by design (D6).
+// PT: HOSTIN-4 (Onda 2, v0.19.0, D6) -- seam de decisão pura para o veto de close iniciado pelo
+//     usuário, extraído para que o ramo seja diretamente testável por unidade sem nunca criar
+//     uma janela (ver tests/glfw_event_translate_sanity.cpp). `has_callback=false` significa que nenhum
+//     veto foi registrado -- o comportamento default do GLFW se aplica e o close sempre
+//     prossegue (retorna true), batendo exatamente com o comportamento pré-HOSTIN-4.
+//     `has_callback=true` defere inteiramente a `callback_allows_close` (o valor de retorno do
+//     `std::function<bool()>` registrado): `true` -> o close prossegue, `false` ->
+//     WindowGlfw::handle_window_close() reseta glfwWindowShouldClose de volta a GLFW_FALSE (o
+//     veto). request_close() (HOSTIN-3) nunca chama este seam -- ele BYPASSA o veto inteiramente
+//     por desenho (D6).
+inline bool glfw_decide_window_close(bool has_callback, bool callback_allows_close) noexcept {
+  return !has_callback || callback_allows_close;
 }
 
 } // namespace glintfx

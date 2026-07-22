@@ -55,6 +55,12 @@ pads.shutdown();                            // or just let `pads` go out of scop
 - `shutdown()` is idempotent (closes every fd + the inotify watch); the destructor calls it.
   Re-`init()` after a clean `shutdown()` is fully supported.
 
+### Coexistence with `App` (`DOC-HOSTIN`, Onda 2, v0.19.0)
+
+**Init order is free.** `Gamepads` never touches GLFW -- it talks to the kernel directly via raw evdev (`/dev/input/event*` + `inotify`), and `App` is the one that owns `glfwInit()`. Construct and `init()` a `Gamepads` before, after, or interleaved with constructing an `App`; neither has any dependency on the other's construction order. See `glintfx::Gamepads`'s own doc-comment ("FRAME-LOOP INTEGRATION", `glintfx/include/glintfx/gamepad.hpp:32-36`) for the full independence rationale (D10 of the A2-GAMEPAD plan) -- this note only adds the explicit "no ordering constraint against `App`" statement, which that comment implies but does not spell out verbatim.
+
+**`poll()` goes in the same per-frame hook.** As the lifecycle example above already shows, call `pads.poll()` from inside `App::set_frame_callback`'s callback -- the same hook that can also host a complete, independent GL renderer (`docs/embed-integration.md` section 21). The two are unrelated concerns sharing one call site of convenience, not a coupling: `Gamepads::poll()` never touches GL or the window, and the frame-callback's GL-state guard has nothing to do with gamepad polling.
+
 ### Permissions (read this before filing a "0 pads" bug)
 
 A raw evdev node (`/dev/input/eventN`) is owned by `root:input` with mode `0660` on virtually
@@ -169,6 +175,8 @@ RightBumper, LeftStick, RightStick, Start, Back, Guide` (+ `Count`).
   vs. folding into the reserved `GLINTFX_MODULE_INPUT`).
 - `docs/adr/0015-framework-2d-atomized-architecture.md` -- the atomized-module architecture this
   module is a slice of.
+- `docs/embed-integration.md` section 22 -- the `App`-only physical keyboard/mouse state channel
+  and window lifecycle (`HOSTIN-1..5`, v0.19.0), a separate atom from gamepad input.
 
 ---
 
@@ -207,6 +215,12 @@ pads.shutdown();                            // ou simplesmente deixe `pads` sair
   todo outro átomo da casa (`Audio`, `I18n`).
 - `shutdown()` é idempotente (fecha todo fd + o watch inotify); o destrutor chama. Re-`init()`
   depois de um `shutdown()` limpo é totalmente suportado.
+
+### Coexistência com o `App` (`DOC-HOSTIN`, Onda 2, v0.19.0)
+
+**A ordem de init é livre.** O `Gamepads` nunca toca no GLFW -- fala direto com o kernel via evdev cru (`/dev/input/event*` + `inotify`), e é o `App` quem é dono do `glfwInit()`. Construa e chame `init()` num `Gamepads` antes, depois, ou intercalado com a construção de um `App`; nenhum dos dois depende da ordem de construção do outro. Ver o próprio doc-comment de `glintfx::Gamepads` ("FRAME-LOOP INTEGRATION", `glintfx/include/glintfx/gamepad.hpp:32-36`) pro racional de independência completo (D10 do plano A2-GAMEPAD) -- esta nota só acrescenta a afirmação explícita de "sem restrição de ordem vs. `App`", que aquele comentário implica mas não escreve tal-e-qual.
+
+**`poll()` vai no mesmo hook por-frame.** Como o exemplo de ciclo de vida acima já mostra, chame `pads.poll()` de dentro do callback de `App::set_frame_callback` -- o mesmo hook que também pode hospedar um renderer GL completo e independente (`docs/embed-integration.md` seção 21). As duas são preocupações não-relacionadas compartilhando um mesmo ponto de chamada por conveniência, não um acoplamento: `Gamepads::poll()` nunca toca GL nem a janela, e o guard de estado GL do frame-callback não tem nada a ver com o polling de gamepad.
 
 ### Permissões (leia isto antes de abrir um bug de "0 pads")
 
@@ -327,3 +341,5 @@ RightBumper, LeftStick, RightStick, Start, Back, Guide` (+ `Count`).
   átomo próprio vs. dobrar no `GLINTFX_MODULE_INPUT` reservado).
 - `docs/adr/0015-framework-2d-atomized-architecture.md` -- a arquitetura de módulos atomizados da
   qual este módulo é uma fatia.
+- `docs/embed-integration.md` seção 22 -- o canal de estado físico de teclado/mouse (só `App`) e
+  o ciclo de vida da janela (`HOSTIN-1..5`, v0.19.0), um átomo separado do input de gamepad.

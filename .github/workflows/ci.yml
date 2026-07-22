@@ -163,6 +163,10 @@ jobs:
       #     create a hidden GLFW window as a test-only GL context fixture; the library
       #     itself does not link GLFW in that config.
       #     libgl1-mesa-dri: llvmpipe (Mesa software GL renderer required by Xvfb).
+      #     libxkbcommon-dev: GLFW keyboard-layout header (QW-XKB, parity with
+      #     .forgejo/workflows/ci.yml -- the Codeberg runner's minimal container needed it
+      #     explicit since ubuntu-latest's preinstalled stack silently covered the same
+      #     dependency here; adding it is a defensive no-op today, closes the drift).
       # PT: Instala dependencias de build e runtime do sistema.
       #     clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
       #     de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
@@ -171,13 +175,17 @@ jobs:
       #     criam uma janela GLFW oculta como fixture de contexto GL so-de-teste; a biblioteca
       #     em si nao linka GLFW nessa config.
       #     libgl1-mesa-dri: llvmpipe (renderer software GL do Mesa necessario pelo Xvfb).
+      #     libxkbcommon-dev: header de layout de teclado do GLFW (QW-XKB, paridade com
+      #     .forgejo/workflows/ci.yml -- o container minimo do runner Codeberg precisava
+      #     dele explicito porque a stack pre-instalada do ubuntu-latest ja cobria a mesma
+      #     dependencia aqui; adiciona-lo e um no-op defensivo hoje, fecha o desvio).
       - name: install deps
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
             cmake clang \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       # EN: Configure with the matrix backend flag. Demos OFF -- the showcase requires the
@@ -288,7 +296,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake clang \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       - name: configure
@@ -379,7 +387,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake g++ clang-tidy cppcheck \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev
 
       # EN: Configure-only (no `cmake --build`): compile_commands.json and the
       #     generated config.hpp are both produced at configure time; clang-tidy and
@@ -609,7 +617,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake clang llvm \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       # EN: tools/coverage_report.sh wraps its own ctest invocation in `xvfb-run -a`

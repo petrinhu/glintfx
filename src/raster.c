@@ -138,7 +138,37 @@
 //     o src/sfnt.c já estabeleceu (a forma guarda-NaN-depois-satura do round_and_saturate_i16).
 // ================================================================================================
 
-static int32_t iabs32(int32_t v) { return (v < 0) ? -v : v; }
+// EN: QW-IABS32 (INBOX drain, Onda 1) -- INT32_MIN guard, same guard-then-operate shape as
+//     `round_and_saturate_i16`'s NaN-guard above (this file's header note). `-v` on `v ==
+//     INT32_MIN` is signed-integer-overflow (the mathematical result, `+2147483648`, does not
+//     fit back into `int32_t`) -- UB per C 6.5p5, not merely "implementation-defined" like the
+//     narrowing casts elsewhere in this trio. REACHABILITY, stated honestly: this file's only two
+//     call sites (`flatten_quad`'s `iabs32(dx)`/`iabs32(dy)`) feed `dx = p2x - p0x`/`dy = p2y -
+//     p0y` where both operands are already `saturate_fx`-bounded to `[-GLX_RASTER_FX_MAX,
+//     GLX_RASTER_FX_MAX]`, far from INT32_MIN -- `tests/sanitize_hint.c`'s own header already
+//     recorded this exact domino finding as "confirmed unreachable". The guard below is
+//     therefore defense in depth for a `static` helper with no unbounded caller TODAY, proven
+//     (not merely argued) by the hosted-companion probe `tests/probe_iabs32.c` (`make
+//     probe-iabs32`), which #includes this file to reach `iabs32` directly and would abort under
+//     `-fsanitize=undefined` if this guard were ever removed.
+// PT: Guarda de INT32_MIN do QW-IABS32 (esvaziamento da INBOX, Onda 1) -- mesma forma
+//     guarda-depois-opera da guarda de NaN do `round_and_saturate_i16` acima (nota do cabeçalho
+//     deste arquivo). `-v` com `v == INT32_MIN` é overflow de inteiro com sinal (o resultado
+//     matemático, `+2147483648`, não cabe de volta em `int32_t`) -- UB pelo C 6.5p5, não meramente
+//     "definido-pela-implementação" como os casts de estreitamento em outros pontos deste trio.
+//     ALCANÇABILIDADE, dita com honestidade: os dois únicos pontos de chamada deste arquivo
+//     (`iabs32(dx)`/`iabs32(dy)` do `flatten_quad`) alimentam `dx = p2x - p0x`/`dy = p2y - p0y`
+//     onde os dois operandos já são limitados por `saturate_fx` a `[-GLX_RASTER_FX_MAX,
+//     GLX_RASTER_FX_MAX]`, longe de INT32_MIN -- o próprio cabeçalho do `tests/sanitize_hint.c` já
+//     registrou esse achado dominó exato como "confirmada inalcançável". A guarda abaixo é
+//     portanto defesa-em-profundidade pra um helper `static` sem chamador não-limitado HOJE,
+//     provada (não só argumentada) pela sonda hosted-companion `tests/probe_iabs32.c` (`make
+//     probe-iabs32`), que `#include`ia este arquivo pra alcançar o `iabs32` direto e abortaria sob
+//     `-fsanitize=undefined` se esta guarda algum dia fosse removida.
+static int32_t iabs32(int32_t v) {
+    if (v == INT32_MIN) return INT32_MAX;
+    return (v < 0) ? -v : v;
+}
 
 static float fabs_f(float v) { return (v < 0.0f) ? -v : v; }
 

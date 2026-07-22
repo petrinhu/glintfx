@@ -98,10 +98,12 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "core/core.h"
 
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -132,6 +134,33 @@ void check(bool cond, const char* what) {
     }
 }
 
+// EN: QW-NOCORE (INBOX drain, Onda 1) -- signal handler that turns a fatal `SIGABRT` into a
+//     plain, non-signalled process exit. See `run_in_forked_child`'s own comment (right below)
+//     for the full rationale of WHY this is needed on top of `setrlimit(RLIMIT_CORE, ...)`
+//     (short version: `RLIMIT_CORE` alone only suppresses the core FILE, not the
+//     `systemd-coredump`/DrKonqi pipeline itself, which still fires on any UNCAUGHT fatal
+//     signal regardless of the rlimit). `_exit(128 + sig)` (not `exit`): the conventional
+//     "died from signal N" shell exit-code convention, `_exit` (not `std::exit`) because this
+//     runs inside a signal handler in a forked child -- skipping atexit handlers/stdio flushing
+//     here is correct, not a shortcut (the parent's own buffered stdout must never be touched by
+//     the child, exactly the same reasoning `_exit(0)` at the end of `run_in_forked_child`
+//     already uses). `extern "C"` linkage: `sigaction`'s `sa_handler` is a C function pointer
+//     type; POSIX signal handlers are always installed with C linkage.
+// PT: Handler de sinal do QW-NOCORE (esvaziamento da INBOX, Onda 1) que transforma um `SIGABRT`
+//     fatal num exit de processo comum, sem sinal. Ver o comentário próprio do
+//     `run_in_forked_child` (logo abaixo) pro racional completo do PORQUÊ disto ser necessário
+//     em cima do `setrlimit(RLIMIT_CORE, ...)` (versão curta: o `RLIMIT_CORE` sozinho só
+//     suprime o ARQUIVO de core, não o próprio pipeline `systemd-coredump`/DrKonqi, que ainda
+//     dispara em qualquer sinal fatal NÃO-CAPTURADO independente do rlimit). `_exit(128 + sig)`
+//     (não `exit`): a convenção comum de exit-code de shell "morreu do sinal N", `_exit` (não
+//     `std::exit`) porque isto roda dentro de um handler de sinal num filho forkado -- pular
+//     handlers de atexit/flush de stdio aqui é correto, não um atalho (o próprio stdout
+//     bufferizado do PAI nunca pode ser tocado pelo filho, exatamente o mesmo raciocínio que o
+//     `_exit(0)` no fim do `run_in_forked_child` já usa). Linkage `extern "C"`: o `sa_handler`
+//     do `sigaction` é um tipo de ponteiro-de-função C; handlers de sinal POSIX são sempre
+//     instalados com linkage C.
+extern "C" void child_exit_on_abort(int sig) { _exit(128 + sig); }
+
 // EN: Runs `fn` in a forked child, waits for it, and returns the raw `waitpid` status word for
 //     the CALLER to interpret (different misuse directions expect different termination shapes
 //     -- see file header). Isolates a deliberately-crashing/aborting scenario from this test
@@ -148,6 +177,76 @@ int run_in_forked_child(Fn fn) {
         std::exit(97);
     }
     if (pid == 0) {
+        // EN: QW-NOCORE (INBOX drain, Onda 1) -- TWO layers, applied to EVERY forked child (not
+        //     scattered per call site), BEFORE running `fn`, so a scenario that deliberately
+        //     aborts/crashes never wakes systemd-coredump/DrKonqi or writes a core file. Neither
+        //     layer changes which signal is delivered, whether the child is terminated by a
+        //     signal at all (for the OTHER, uncaught-signal case layer 1 alone would still leave
+        //     that true), or the `waitpid` status word the PARENT inspects afterwards -- every
+        //     assertion in cases 3a/3b/3c keeps checking EXACTLY the same contract, just without
+        //     the disk/journal/DrKonqi side effect:
+        //       1. `setrlimit(RLIMIT_CORE, {0, 0})` -- disables the kernel's core-FILE-writing
+        //          step for this process. Necessary but NOT sufficient on its own (verified
+        //          live, not assumed): with only this layer, `coredumpctl list` correctly showed
+        //          `COREFILE: none`, but `journalctl` STILL showed a fresh `ANOM_ABEND`/SIGABRT
+        //          audit entry AND a `drkonqi-coredump-processor`/`drkonqi-coredump-launcher`
+        //          service pair being started -- because the kernel's `core_pattern` pipes EVERY
+        //          fatal, uncaught signal to `systemd-coredump` regardless of `RLIMIT_CORE` (the
+        //          rlimit only tells `systemd-coredump` whether to PERSIST the core, not whether
+        //          to be invoked at all). Kept anyway as defense in depth for any FUTURE misuse
+        //          scenario whose fatal signal this file does not explicitly catch (layer 2 below
+        //          only targets the one signal actually raised by TODAY's scenarios, `SIGABRT`).
+        //       2. `sigaction(SIGABRT, child_exit_on_abort, ...)` -- the layer that actually
+        //          closes the gap layer 1 leaves open for case 3b (glibc's own chunk-consistency
+        //          check calling `abort()` on `std::free()` of a `glx_malloc` pointer -- this
+        //          file's own header, item 3(b); that abort is the EXPECTED, PASSING outcome of
+        //          this test, not a real crash). A CAUGHT signal is, by definition, never an
+        //          "uncaught fatal signal" from the kernel's point of view, so `core_pattern`'s
+        //          pipe to `systemd-coredump` is never triggered for it at all (verified live,
+        //          see child_exit_on_abort's own comment for what this converts the termination
+        //          into) -- confirmed AFTER adding this layer: `coredumpctl list --since` shows
+        //          NO new entry whatsoever (not even a `COREFILE: none` one) for a fresh `make
+        //          libcore-test` run, and `journalctl` carries no `ANOM_ABEND`/DrKonqi lines for
+        //          it either.
+        // PT: QW-NOCORE (esvaziamento da INBOX, Onda 1) -- DUAS camadas, aplicadas a TODO filho
+        //     forkado (não espalhadas por ponto de chamada), ANTES de rodar `fn`, pra que um
+        //     cenário que aborta/crasha de propósito nunca acorde o systemd-coredump/DrKonqi nem
+        //     escreva um arquivo de core. Nenhuma das duas camadas muda qual sinal é entregue, se
+        //     o filho é terminado por sinal ou não (pro OUTRO caso, o de sinal-não-capturado, a
+        //     camada 1 sozinha ainda deixaria isso verdadeiro), nem a palavra de status do
+        //     `waitpid` que o PAI inspeciona depois -- toda asserção dos casos 3a/3b/3c continua
+        //     checando EXATAMENTE o mesmo contrato, só sem o efeito colateral de
+        //     disco/journal/DrKonqi:
+        //       1. `setrlimit(RLIMIT_CORE, {0, 0})` -- desliga o passo do kernel de escrever o
+        //          ARQUIVO de core pra este processo. Necessário mas NÃO suficiente sozinho
+        //          (verificado ao vivo, não suposto): só com esta camada, o `coredumpctl list`
+        //          mostrava corretamente `COREFILE: none`, mas o `journalctl` AINDA mostrava uma
+        //          entrada de auditoria `ANOM_ABEND`/SIGABRT fresca E um par de serviços
+        //          `drkonqi-coredump-processor`/`drkonqi-coredump-launcher` sendo iniciado --
+        //          porque o `core_pattern` do kernel envia por pipe TODO sinal fatal
+        //          não-capturado pro `systemd-coredump` independente do `RLIMIT_CORE` (o rlimit
+        //          só diz ao `systemd-coredump` se deve PERSISTIR o core, não se deve ser
+        //          invocado). Mantido mesmo assim como defesa-em-profundidade pra qualquer
+        //          cenário FUTURO de mau-uso cujo sinal fatal este arquivo não capture
+        //          explicitamente (a camada 2 abaixo só mira o único sinal de fato levantado
+        //          pelos cenários de HOJE, `SIGABRT`).
+        //       2. `sigaction(SIGABRT, child_exit_on_abort, ...)` -- a camada que de fato fecha a
+        //          lacuna que a camada 1 deixa aberta pro caso 3b (a própria checagem de
+        //          consistência de chunk da glibc chamando `abort()` no `std::free()` de um
+        //          ponteiro do `glx_malloc` -- cabeçalho próprio deste arquivo, item 3(b); aquele
+        //          abort é o resultado ESPERADO, de teste PASSANDO, não um crash de verdade). Um
+        //          sinal CAPTURADO nunca é, por definição, um "sinal fatal não-capturado" do
+        //          ponto de vista do kernel, então o pipe do `core_pattern` pro `systemd-coredump`
+        //          nunca sequer dispara pra ele (verificado ao vivo, ver o comentário próprio do
+        //          child_exit_on_abort pro que isto transforma a terminação) -- confirmado DEPOIS
+        //          de acrescentar esta camada: `coredumpctl list --since` não mostra NENHUMA
+        //          entrada nova (nem uma de `COREFILE: none`) pra uma rodada fresca de `make
+        //          libcore-test`, e o `journalctl` não carrega linha `ANOM_ABEND`/DrKonqi pra ela
+        //          tampouco.
+        struct rlimit no_core = {0, 0};
+        setrlimit(RLIMIT_CORE, &no_core);
+        std::signal(SIGABRT, child_exit_on_abort);
+
         fn();
         _exit(0); // EN/PT: only reached if `fn` returned without crashing/exiting itself.
     }

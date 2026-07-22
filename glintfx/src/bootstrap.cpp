@@ -1166,7 +1166,21 @@ bool Bootstrap::load(const char* rml_path) {
   //     chamador deve falhar suave (retornar false), nunca abortar o host. Espelha os null-guards
   //     já presentes na API (DataBinder::create/bind_*, Bootstrap::get_element_box,
   //     BaseUrlFileInterface::set_base_url) -- load() era o único ponto de entrada sem ele.
-  if (!rml_path) return false;
+  // EN: QW-GUARDLOG (v0.18.1) -- this guard used to reject silently, the only input-hardening
+  //     guard in the public surface without a diagnostic (set_dp_ratio already warns; see
+  //     Engine::set_viewport/UiLayer::set_viewport for the other two standardised here). A host
+  //     passing nullptr almost certainly has a bug upstream (e.g. a failed path-join); silently
+  //     returning false with no trace makes that bug much harder to find.
+  // PT: QW-GUARDLOG (v0.18.1) -- este guard rejeitava em silêncio, o único guard de hardening de
+  //     entrada na superfície pública sem diagnóstico (set_dp_ratio já avisa; ver
+  //     Engine::set_viewport/UiLayer::set_viewport para os outros dois padronizados aqui). Um host
+  //     que passa nullptr quase certamente tem um bug a montante (ex.: um path-join que falhou);
+  //     retornar false em silêncio, sem rastro, torna esse bug muito mais difícil de achar.
+  if (!rml_path) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+                      "load(nullptr) ignored -- rml_path must not be null (no document loaded).");
+    return false;
+  }
   Rml::ElementDocument* doc = impl_->ctx->LoadDocument(rml_path);
   if (!doc) return false;
 

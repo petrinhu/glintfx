@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
-// EN: Embed/guest facade — attaches the UI+effects engine to a GL context the HOST owns.
+// EN: Embed/guest facade -- attaches the UI+effects engine to a GL context the HOST owns.
 //     Does not create a window; render() is compose-only (no clear, no swap).
-// PT: Fachada embed/guest — anexa o motor de UI+efeitos a um contexto GL do HOST.
+// PT: Fachada embed/guest -- anexa o motor de UI+efeitos a um contexto GL do HOST.
 //     Não cria janela; render() é compose-only (sem clear, sem swap).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
@@ -16,10 +16,10 @@
 
 namespace glintfx {
 
-// EN: Configuration for UiLayer — specifies logical viewport dimensions and GL loader policy.
+// EN: Configuration for UiLayer -- specifies logical viewport dimensions and GL loader policy.
 //     Declared at namespace scope so it is a complete type when used as a default argument
 //     in the UiLayer constructor (inner-class default-args hit a C++ language restriction).
-// PT: Configuração para UiLayer — especifica dimensões lógicas do viewport e política do GL loader.
+// PT: Configuração para UiLayer -- especifica dimensões lógicas do viewport e política do GL loader.
 //     Declarada em namespace scope para ser tipo completo ao ser usada como argumento padrão
 //     no construtor do UiLayer (default-args de inner-class atingem uma restrição da linguagem C++).
 struct UiLayerConfig {
@@ -56,20 +56,20 @@ struct UiLayerConfig {
 
 // EN: MOVED-FROM STATE (L1.10-APIDOC): after `UiLayer b = std::move(a);` (or
 //     `b = std::move(a);`), `a` is left in a moved-from state. Calling ANY method on `a`
-//     other than ok() or the destructor is undefined behaviour — same convention as
+//     other than ok() or the destructor is undefined behaviour -- same convention as
 //     std::unique_ptr. ok() on a moved-from UiLayer returns false (impl_ is null), which is
 //     the only state query that is safe to make; destruction of a moved-from UiLayer is
 //     always safe (no-op, impl_ is null).
 // PT: ESTADO MOVIDO-DE (L1.10-APIDOC): após `UiLayer b = std::move(a);` (ou
 //     `b = std::move(a);`), `a` fica em estado movido-de. Chamar QUALQUER método em `a`
-//     além de ok() ou o destrutor é comportamento indefinido — mesma convenção do
+//     além de ok() ou o destrutor é comportamento indefinido -- mesma convenção do
 //     std::unique_ptr. ok() num UiLayer movido-de retorna false (impl_ é nulo), sendo a
 //     única consulta de estado segura; destruir um UiLayer movido-de é sempre seguro
 //     (no-op, impl_ é nulo).
 class UiLayer {
 public:
-  // EN: Inner alias so callers can write UiLayer::Config{...} — matches the spec interface.
-  // PT: Alias interno para que chamadores possam escrever UiLayer::Config{...} — segue a spec.
+  // EN: Inner alias so callers can write UiLayer::Config{...} -- matches the spec interface.
+  // PT: Alias interno para que chamadores possam escrever UiLayer::Config{...} -- segue a spec.
   using Config = UiLayerConfig;
 
   // EN: Requires a CURRENT GL context owned by the host.
@@ -79,9 +79,9 @@ public:
   explicit UiLayer(Config cfg = Config{});
   ~UiLayer();
 
-  // EN: Move leaves the source in a moved-from state — see the class-level comment above
+  // EN: Move leaves the source in a moved-from state -- see the class-level comment above
   //     for the exact contract (only ok() and ~UiLayer() remain valid on the source afterwards).
-  // PT: O move deixa a origem em estado movido-de — ver o comentário de nível de classe
+  // PT: O move deixa a origem em estado movido-de -- ver o comentário de nível de classe
   //     acima para o contrato exato (só ok() e ~UiLayer() permanecem válidos na origem depois).
   UiLayer(UiLayer&&) noexcept;
   UiLayer& operator=(UiLayer&&) noexcept;
@@ -186,8 +186,8 @@ public:
   //     o render() em si nunca limpa.
   void render();
 
-  // EN: Inject a host input event — translated to engine input calls internally (T4).
-  // PT: Injeta evento de entrada do host — traduzido para chamadas de input do motor internamente (T4).
+  // EN: Inject a host input event -- translated to engine input calls internally (T4).
+  // PT: Injeta evento de entrada do host -- traduzido para chamadas de input do motor internamente (T4).
   void process_event(const UiEvent& ev);
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
@@ -625,11 +625,11 @@ public:
   bool set_property(const char* id, const char* prop, const char* value) const;
 
   // -------------------------------------------------------------------------
-  // EN: Data-model API (T1) — parity with App. Call order: create_data_model
+  // EN: Data-model API (T1) -- parity with App. Call order: create_data_model
   //     -> bind_* -> load() -> set_*. All methods forward to Engine; the Engine
   //     enforces the ordering constraint (bind_* after load() returns false).
   //     API uses only plain C types (const char*, double, bool, size_t).
-  // PT: API de data-model (T1) — paridade com App. Ordem de chamada:
+  // PT: API de data-model (T1) -- paridade com App. Ordem de chamada:
   //     create_data_model -> bind_* -> load() -> set_*(). Todos os métodos
   //     encaminham ao Engine; o Engine enforça a restrição de ordem (bind_*
   //     após load() retorna false). API usa apenas tipos C simples

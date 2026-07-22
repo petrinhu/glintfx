@@ -132,7 +132,21 @@ public:
   bool ok() const noexcept;
 
   // EN: Load an .rml document and show it. Returns true on success.
+  //     QW-RIPPLEAPP (v0.18.1): a `decorator: ripple(...)` (ADR-0012) used in a document loaded
+  //     by a standalone App is visually INERT BY DESIGN -- ripple() refracts the HOST's own
+  //     backdrop, and a standalone App has no host underneath it (it owns the window and its own
+  //     FBO 0 contents outright, nothing to refract). The effect only does something in
+  //     embed/UiLayer mode, where a real host has already drawn its own scene into FBO 0 before
+  //     handing control over. A one-time warning is logged the first time such a decorator
+  //     compiles in a standalone App, so this is silent-but-diagnosed, never silent-and-mysterious.
   // PT: Carrega um documento .rml e exibe. Retorna true em caso de sucesso.
+  //     QW-RIPPLEAPP (v0.18.1): um `decorator: ripple(...)` (ADR-0012) usado num documento
+  //     carregado por um App standalone é INERTE POR DESIGN -- ripple() refrata o próprio
+  //     backdrop do HOST, e um App standalone não tem host embaixo dele (é dono da janela e do
+  //     próprio conteúdo do FBO 0, nada para refratar). O efeito só faz algo em modo embed/
+  //     UiLayer, onde um host real já desenhou a própria cena no FBO 0 antes de entregar o
+  //     controle. Um aviso único é logado na primeira vez que tal decorator compila num App
+  //     standalone, então isto é silencioso-mas-diagnosticado, nunca silencioso-e-misterioso.
   bool load(const char* rml_path);
 
   // EN: Update the density-independent pixel ratio at runtime (parity with UiLayer).

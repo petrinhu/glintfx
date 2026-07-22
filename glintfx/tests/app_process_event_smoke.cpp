@@ -32,8 +32,54 @@
 //     precisa manter ok() true.
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/glintfx.hpp>
+#include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <string>
+#include <thread>
+
+namespace {
+
+// EN: VF-APPWHEEL (v0.18.1) -- same settle_scroll() idiom as scroll_sanity.cpp (see that file's
+//     own doc-comment for the full derivation): RmlUi's default wheel-driven scroll is a
+//     SMOOTHSCROLL animation advanced by real wall-clock time (ScrollController::
+//     UpdateSmoothscroll), not synchronous like set_element_scroll_top -- so a single update()
+//     call right after process_event(MouseWheel) would very likely observe an in-flight,
+//     partially-animated value, not the settled one. Pumps update() with real sleeps until 3
+//     consecutive polls agree (animation has settled) or a wall-clock budget runs out.
+// PT: VF-APPWHEEL (v0.18.1) -- mesmo idioma settle_scroll() de scroll_sanity.cpp (ver o próprio
+//     doc-comment daquele arquivo pra derivação completa): o scroll guiado por wheel do RmlUi por
+//     padrão é uma animação SMOOTHSCROLL avançada por tempo real de relógio (ScrollController::
+//     UpdateSmoothscroll), não síncrono como set_element_scroll_top -- então uma única chamada a
+//     update() logo após process_event(MouseWheel) muito provavelmente observaria um valor em
+//     voo, parcialmente animado, não o assentado. Bombeia update() com sleeps reais até 3 polls
+//     consecutivos concordarem (animação assentou) ou um orçamento de tempo de relógio se esgotar.
+bool approx(float a, float b, float tol) { return std::fabs(a - b) <= tol; }
+
+float settle_scroll(glintfx::App& app, const char* id, int budget_ms = 1500, int poll_ms = 15) {
+  float last = 0.f;
+  app.get_element_scroll_top(id, last);
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget_ms);
+  int stable_polls = 0;
+  while (std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(poll_ms));
+    app.update();
+    float now = 0.f;
+    app.get_element_scroll_top(id, now);
+    if (approx(now, last, 0.05f)) {
+      if (++stable_polls >= 3) {
+        last = now;
+        break;
+      }
+    } else {
+      stable_polls = 0;
+    }
+    last = now;
+  }
+  return last;
+}
+
+} // namespace
 
 int main() {
   glintfx::App app({ .title = "app_process_event_smoke", .width = 300, .height = 200 });
@@ -110,8 +156,61 @@ int main() {
     return 9;
   }
 
+  // ---------------------------------------------------------------------------
+  // EN: (4) VF-APPWHEEL (v0.18.1) -- proves the INBOX seed "App has no MouseWheel path" is
+  //     stale: App::process_event(UiEvent::Type::MouseWheel) shares the exact
+  //     Engine::process_event route window_glfw.cpp's physical scroll callback feeds (see
+  //     glfw_event_translate.hpp), the same route UiLayer has always used. This is a VALUE
+  //     assertion (get_element_scroll_top), not a "did not crash" smoke -- it goes RED if the
+  //     wheel delta is not actually applied, exactly what the INBOX item asked to prove before
+  //     being struck. #scroller is the same 900px-content/100px-client geometry
+  //     scroll_sanity.cpp already established for UiLayer (see app_process_event_scene.rml's own
+  //     comment), so the same oracle applies: a positive-y delta increases scroll_top.
+  // PT: (4) VF-APPWHEEL (v0.18.1) -- prova que a semente da INBOX "App não tem caminho de
+  //     MouseWheel" está desatualizada: App::process_event(UiEvent::Type::MouseWheel)
+  //     compartilha a MESMA rota Engine::process_event que o callback físico de scroll de
+  //     window_glfw.cpp alimenta (ver glfw_event_translate.hpp), a mesma rota que o UiLayer
+  //     sempre usou. Esta é uma asserção de VALOR (get_element_scroll_top), não uma fumaça de
+  //     "não crashou" -- fica VERMELHA se o delta de wheel não for de fato aplicado, exatamente o
+  //     que o item da INBOX pediu pra provar antes de ser riscado. #scroller é a mesma geometria
+  //     900px-de-conteúdo/100px-de-cliente que scroll_sanity.cpp já estabeleceu para o UiLayer
+  //     (ver o próprio comentário de app_process_event_scene.rml), então o mesmo oráculo se
+  //     aplica: um delta y positivo aumenta o scroll_top.
+  // ---------------------------------------------------------------------------
+  float scroll_top = -1.f;
+  if (!app.get_element_scroll_top("scroller", scroll_top)) {
+    std::puts("FAIL: get_scroll_top(scroller) baseline");
+    return 10;
+  }
+  if (!approx(scroll_top, 0.f, 0.5f)) {
+    std::fprintf(stderr, "FAIL: baseline scroll_top=%.2f expected ~0\n", scroll_top);
+    return 11;
+  }
+
+  // Hover over #scroller (border-box window-space (10,60)-(130,160); (70,110) is well inside),
+  // then a positive-y wheel delta must increase scroll_top -- same hover-then-wheel idiom
+  // scroll_sanity.cpp uses for UiLayer (Context::ProcessMouseWheel scrolls whatever is under the
+  // CURRENT hover target, set by the immediately-preceding MouseMove).
+  app.process_event({.type = glintfx::UiEvent::Type::MouseMove, .x = 70.f, .y = 110.f});
+  app.process_event({.type = glintfx::UiEvent::Type::MouseWheel, .x = 0.f, .y = 2.f});
+  const float top_after_wheel = settle_scroll(app, "scroller");
+  if (!(top_after_wheel > 20.f)) {
+    std::fprintf(stderr,
+                 "FAIL: scroll_top=%.2f after positive wheel delta via App::process_event, expected "
+                 "clearly > 0 -- the MouseWheel delta was not applied (VF-APPWHEEL regression)\n",
+                 top_after_wheel);
+    return 12;
+  }
+  if (!app.ok()) {
+    std::puts("FAIL: ok() false after wheel scroll");
+    return 13;
+  }
+
   app.render();
-  if (!app.ok()) { std::puts("FAIL: ok() false after final render"); return 10; }
+  if (!app.ok()) {
+    std::puts("FAIL: ok() false after final render");
+    return 14;
+  }
 
   std::puts("app_process_event_smoke: PASS");
   return 0;

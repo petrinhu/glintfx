@@ -2,5 +2,45 @@
 <head><link type="text/rcss" href="app_process_event_scene.rcss"/></head>
 <body>
   <div id="btn_a">&nbsp;</div>
+  <!-- EN: VF-APPWHEEL (v0.18.1) -- overflow-y:auto scroller, SAME 30x30px-item geometry as
+       scroll_scene.rml (900px content vs. 100px client -> deterministic [0,800] scrollable
+       range) so this scene's wheel proof reuses the exact oracle scroll_sanity.cpp already
+       established for UiLayer, now exercised through App::process_event instead.
+       PT: VF-APPWHEEL (v0.18.1) -- scroller overflow-y:auto, MESMA geometria de item 30x30px de
+       scroll_scene.rml (900px de conteúdo vs. 100px de cliente -> intervalo rolável
+       determinístico [0,800]), reusando o oráculo exato que scroll_sanity.cpp já estabeleceu
+       para o UiLayer, agora exercitado por App::process_event. -->
+  <div id="scroller">
+    <div id="item-0">&nbsp;</div>
+    <div id="item-1">&nbsp;</div>
+    <div id="item-2">&nbsp;</div>
+    <div id="item-3">&nbsp;</div>
+    <div id="item-4">&nbsp;</div>
+    <div id="item-5">&nbsp;</div>
+    <div id="item-6">&nbsp;</div>
+    <div id="item-7">&nbsp;</div>
+    <div id="item-8">&nbsp;</div>
+    <div id="item-9">&nbsp;</div>
+    <div id="item-10">&nbsp;</div>
+    <div id="item-11">&nbsp;</div>
+    <div id="item-12">&nbsp;</div>
+    <div id="item-13">&nbsp;</div>
+    <div id="item-14">&nbsp;</div>
+    <div id="item-15">&nbsp;</div>
+    <div id="item-16">&nbsp;</div>
+    <div id="item-17">&nbsp;</div>
+    <div id="item-18">&nbsp;</div>
+    <div id="item-19">&nbsp;</div>
+    <div id="item-20">&nbsp;</div>
+    <div id="item-21">&nbsp;</div>
+    <div id="item-22">&nbsp;</div>
+    <div id="item-23">&nbsp;</div>
+    <div id="item-24">&nbsp;</div>
+    <div id="item-25">&nbsp;</div>
+    <div id="item-26">&nbsp;</div>
+    <div id="item-27">&nbsp;</div>
+    <div id="item-28">&nbsp;</div>
+    <div id="item-29">&nbsp;</div>
+  </div>
 </body>
 </rml>

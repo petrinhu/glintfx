@@ -163,6 +163,10 @@ jobs:
       #     create a hidden GLFW window as a test-only GL context fixture; the library
       #     itself does not link GLFW in that config.
       #     libgl1-mesa-dri: llvmpipe (Mesa software GL renderer required by Xvfb).
+      #     libxkbcommon-dev: GLFW keyboard-layout header (QW-XKB, parity with
+      #     .forgejo/workflows/ci.yml -- the Codeberg runner's minimal container needed it
+      #     explicit since ubuntu-latest's preinstalled stack silently covered the same
+      #     dependency here; adding it is a defensive no-op today, closes the drift).
       # PT: Instala dependencias de build e runtime do sistema.
       #     clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
       #     de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
@@ -171,13 +175,17 @@ jobs:
       #     criam uma janela GLFW oculta como fixture de contexto GL so-de-teste; a biblioteca
       #     em si nao linka GLFW nessa config.
       #     libgl1-mesa-dri: llvmpipe (renderer software GL do Mesa necessario pelo Xvfb).
+      #     libxkbcommon-dev: header de layout de teclado do GLFW (QW-XKB, paridade com
+      #     .forgejo/workflows/ci.yml -- o container minimo do runner Codeberg precisava
+      #     dele explicito porque a stack pre-instalada do ubuntu-latest ja cobria a mesma
+      #     dependencia aqui; adiciona-lo e um no-op defensivo hoje, fecha o desvio).
       - name: install deps
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
             cmake clang \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       # EN: Configure with the matrix backend flag. Demos OFF -- the showcase requires the
@@ -288,7 +296,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake clang \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       - name: configure
@@ -379,7 +387,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake g++ clang-tidy cppcheck \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev
 
       # EN: Configure-only (no `cmake --build`): compile_commands.json and the
       #     generated config.hpp are both produced at configure time; clang-tidy and
@@ -609,7 +617,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake clang llvm \
             libglfw3-dev libfreetype-dev \
-            libgl1-mesa-dev libgl1-mesa-dri \
+            libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-dev \
             xvfb
 
       # EN: tools/coverage_report.sh wraps its own ctest invocation in `xvfb-run -a`
@@ -780,9 +788,44 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DGLINTFX_BACKEND_GLFW=OFF `
             -DGLINTFX_BUILD_TESTS=OFF `
-            -DGLINTFX_BUILD_DEMOS=OFF
+            -DGLINTFX_BUILD_DEMOS=OFF `
+            -DGLINTFX_BUILD_LINK_SMOKE=ON
         shell: pwsh
 
       - name: build (glintfx target only)
         run: cmake --build glintfx/build-msvc --config Release --target glintfx
+        shell: pwsh
+
+      # EN: glintfx_link_smoke (QW-MSVCLINK, PROG-1) -- builds and RUNS a minimal executable
+      #     that LINKS against glintfx::glintfx. This is the step that actually closes the gap
+      #     documented in this job's own header comment above: `cmake --build --target glintfx`
+      #     alone only archives object files (lib.exe/ar), which never resolves symbols or
+      #     PRIVATE usage requirements -- that is exactly how a bare `m` (Unix libm) leaking
+      #     into glintfx_audio's target_link_libraries() shipped unnoticed until the GusWorld
+      #     consumer's own Windows CI hit "LNK1181: cannot open input file 'm.lib'" linking a
+      #     REAL executable. Do NOT simplify this step back to `--target glintfx` alone --
+      #     doing so silently reopens this exact hole for the next Unix-only dependency that
+      #     leaks into any glintfx module (also the natural place to extend link-smoke coverage
+      #     when gamepad support lands on Windows -- see GLINTFX_MODULE_GAMEPAD's Linux-only
+      #     comment in glintfx/CMakeLists.txt). See glintfx/tests/link_smoke.cpp and the
+      #     GLINTFX_BUILD_LINK_SMOKE option block in glintfx/CMakeLists.txt for the full
+      #     rationale.
+      # PT: glintfx_link_smoke (QW-MSVCLINK, PROG-1) -- builda e RODA um executável mínimo que
+      #     LINKA contra glintfx::glintfx. Este é o passo que fecha de fato a lacuna documentada
+      #     no próprio comentário de cabeçalho deste job acima: `cmake --build --target glintfx`
+      #     sozinho só arquiva arquivos-objeto (lib.exe/ar), o que nunca resolve símbolo nem
+      #     usage requirement PRIVATE -- foi exatamente assim que um `m` cru (libm do Unix)
+      #     vazando pro target_link_libraries() do glintfx_audio foi lançado sem ser notado até
+      #     o próprio CI Windows do consumidor GusWorld bater em "LNK1181: cannot open input
+      #     file 'm.lib'" ao linkar um executável DE VERDADE. NÃO simplifique este passo de
+      #     volta pra só `--target glintfx` -- fazer isso reabre silenciosamente este exato
+      #     buraco pra próxima dependência Unix-only que vazar em qualquer módulo da glintfx
+      #     (também o lugar natural para estender a cobertura do link-smoke quando suporte a
+      #     gamepad chegar no Windows -- ver o comentário Linux-only do GLINTFX_MODULE_GAMEPAD
+      #     em glintfx/CMakeLists.txt). Ver glintfx/tests/link_smoke.cpp e o bloco da option
+      #     GLINTFX_BUILD_LINK_SMOKE em glintfx/CMakeLists.txt para a racional completa.
+      - name: build + run glintfx_link_smoke (consumer-style executable link)
+        run: |
+          cmake --build glintfx/build-msvc --config Release --target glintfx_link_smoke
+          .\glintfx\build-msvc\Release\glintfx_link_smoke.exe
         shell: pwsh

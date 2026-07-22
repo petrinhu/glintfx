@@ -483,24 +483,80 @@ int main() {
 
   // ===========================================================================================
   // Proof 4 -- READ-FRAMEBUFFER RESTORE (GlStateGuard's L1.22-CAPTURE addition, gl_state.hpp).
-  //   After render_once() above (which internally invokes CaptureBackdrop's
-  //   glBindFramebuffer(GL_READ_FRAMEBUFFER,0)+glReadBuffer(GL_BACK), deliberately un-restored by
-  //   CaptureBackdrop itself -- see that function's own doc comment), the READ framebuffer
-  //   binding observed from OUTSIDE UiLayer::render() must be back to whatever this test itself
-  //   had bound (0 -- this test never binds any other read-fb) -- proving GlStateGuard's dtor
-  //   (engine.cpp's render_compose) actually restores it, not just that the visible pixels happen
-  //   to look right.
+  //   QW-PROOF4 (v0.18.1): this proof used to check GL_READ_FRAMEBUFFER_BINDING == 0 after
+  //   render() -- a BLIND SPOT, adopted from ripple_stress_sanity.cpp's own host-state sentinel
+  //   idiom (see that file's "Host-state sentinel" block for the full derivation): CaptureBackdrop
+  //   /EnsureBackdropCaptured's OWN capture ends with GL_READ_FRAMEBUFFER bound to 0 (that is what
+  //   it reads FBO 0 through), so a check of "still 0 after render()" cannot discriminate "the
+  //   restore actually ran" from "the capture's own leftover binding happens to coincide with 0" --
+  //   a mutated/removed GlStateGuard read-fb restore would leave this exact assertion PASSING
+  //   (confirmed empirically writing ripple_stress_sanity.cpp for the identical reason). Binding a
+  //   REAL, NON-ZERO sentinel FBO to GL_READ_FRAMEBUFFER BEFORE calling render() (ripple still
+  //   ACTIVE, per Proof 1 part B above -- EnsureBackdropCaptured's glBindFramebuffer(
+  //   GL_READ_FRAMEBUFFER,0)+glReadBuffer(GL_BACK) must actually fire this frame for the restore to
+  //   be worth proving) closes that blind spot: the ONLY way GL_READ_FRAMEBUFFER_BINDING reads back
+  //   as this sentinel afterwards is if GlStateGuard's dtor (engine.cpp's render_compose) genuinely
+  //   restored it.
+  //
+  //   Deliberately calls ui.update()+ui.render() DIRECTLY here (NOT render_once()) -- that helper's
+  //   own glReadPixels prologue ends with glBindFramebuffer(GL_FRAMEBUFFER, 0), which would
+  //   unconditionally clobber the read target right back to 0 after render() returns, defeating the
+  //   whole point of the non-zero sentinel (same gotcha ripple_stress_sanity.cpp's own comment
+  //   documents for the identical reason).
+  // PT: Prova 4 -- RESTAURAÇÃO DO READ-FRAMEBUFFER (adição L1.22-CAPTURE do GlStateGuard,
+  //   gl_state.hpp). QW-PROOF4 (v0.18.1): esta prova checava GL_READ_FRAMEBUFFER_BINDING == 0
+  //   depois do render() -- um PONTO CEGO, adotado o idioma de sentinela de estado de host do
+  //   próprio ripple_stress_sanity.cpp (ver o bloco "Host-state sentinel" daquele arquivo pra
+  //   derivação completa): a própria captura de CaptureBackdrop/EnsureBackdropCaptured termina com
+  //   GL_READ_FRAMEBUFFER vinculado a 0 (é através dele que lê o FBO 0), então um check de "ainda 0
+  //   depois do render()" não consegue discriminar "a restauração de fato rodou" de "o binding
+  //   remanescente da própria captura coincide com 0" -- uma restauração de read-fb do GlStateGuard
+  //   mutada/removida deixaria esta asserção exata PASSANDO (confirmado empiricamente ao escrever
+  //   ripple_stress_sanity.cpp pelo motivo idêntico). Vincular um FBO sentinela REAL, NÃO-ZERO a
+  //   GL_READ_FRAMEBUFFER ANTES de chamar render() (ripple ainda ATIVO, conforme a Prova 1 parte B
+  //   acima -- EnsureBackdropCaptured's glBindFramebuffer(GL_READ_FRAMEBUFFER,0)+
+  //   glReadBuffer(GL_BACK) precisa de fato disparar neste frame pra a restauração valer a pena
+  //   provar) fecha esse ponto cego: a ÚNICA forma de GL_READ_FRAMEBUFFER_BINDING ler de volta como
+  //   este sentinela depois é se o dtor do GlStateGuard (render_compose de engine.cpp) de fato o
+  //   restaurou.
+  //
+  //   Chama ui.update()+ui.render() DIRETO aqui (NÃO render_once()) -- o próprio prólogo
+  //   glReadPixels daquele helper termina com glBindFramebuffer(GL_FRAMEBUFFER, 0), que
+  //   sobrescreveria o alvo de leitura de volta pra 0 logo após o render() retornar, anulando o
+  //   propósito inteiro do sentinela não-zero (mesma pegadinha que o próprio comentário de
+  //   ripple_stress_sanity.cpp documenta pelo motivo idêntico).
   // ===========================================================================================
   {
-    GLint read_fbo = -1;
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fbo);
-    std::printf("ripple_sanity [read-fbo restore]: GL_READ_FRAMEBUFFER_BINDING after render = %d\n", read_fbo);
-    if (read_fbo != 0) {
-      std::puts("ripple_sanity FAIL [4]: GL_READ_FRAMEBUFFER_BINDING was not restored to 0 after "
-                 "UiLayer::render() -- GlStateGuard's read-framebuffer restore (L1.22-CAPTURE "
-                 "addition, gl_state.hpp) is missing or broken");
+    GLuint sentinel_rbo = 0, sentinel_read_fbo = 0;
+    glGenRenderbuffers(1, &sentinel_rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, sentinel_rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 4, 4);
+    glGenFramebuffers(1, &sentinel_read_fbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, sentinel_read_fbo);
+    glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, sentinel_rbo);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+    ui.update();
+    ui.render(); // EN: ripple still active (zone2 origin from Proof 1 part B) -- capture recurs.
+                 // PT: ripple ainda ativo (origem da zona2 da Prova 1 parte B) -- captura se repete.
+
+    GLint read_fbo_after = -1;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fbo_after);
+    std::printf(
+        "ripple_sanity [read-fbo restore]: GL_READ_FRAMEBUFFER_BINDING after render = %d "
+        "(expect %u = non-zero sentinel_read_fbo)\n",
+        read_fbo_after, sentinel_read_fbo);
+    if (static_cast<GLuint>(read_fbo_after) != sentinel_read_fbo) {
+      std::printf(
+          "ripple_sanity FAIL [4]: GL_READ_FRAMEBUFFER_BINDING was %d, expected this test's "
+          "own non-zero sentinel FBO %u -- GlStateGuard's read-framebuffer restore "
+          "(L1.22-CAPTURE addition, gl_state.hpp) is missing or broken\n",
+          read_fbo_after, sentinel_read_fbo);
       ++failures;
     }
+
+    glDeleteFramebuffers(1, &sentinel_read_fbo);
+    glDeleteRenderbuffers(1, &sentinel_rbo);
   }
 
   glCopyTexSubImage2D = g_real_copy_tex_sub_image_2d;  // EN: restore, good hygiene.

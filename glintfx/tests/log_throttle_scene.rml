@@ -1,0 +1,30 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- EN: LOGTHR-1 (Onda 2) fixture -- deliberately carries NO font-family anywhere (no <style>,
+     no <link> to an .rcss, and the UA stylesheet embedded in Bootstrap::load() only sets
+     `display: block` defaults, never font-family -- see CLAUDE.md's "UA-stylesheet embutida"
+     note). A text element under these conditions has an empty font-family property, so RmlUi
+     core (ElementText.cpp:86, upstream, pinned) logs the EXACT "No font face defined. Missing
+     'font-family' property. On element ..." flood line this slice throttles.
+     The label text is bound to a data-model number ({{ frame_counter }}, DataViewText,
+     Source/Core/DataViewDefault.h) that tests/log_throttle_embed_sanity.cpp mutates every
+     iteration via set_number("frame_counter", i) -- exactly what reproduces the real flood: a
+     text element re-dirtied/re-formatted every frame (a HUD counter, in the consumer's actual
+     scene), not a static label RmlUi would format once and then leave alone. Used by
+     tests/log_throttle_embed_sanity.cpp only. -->
+<!-- PT: Fixture do LOGTHR-1 (Onda 2) -- deliberadamente sem font-family em lugar nenhum (sem
+     <style>, sem <link> a .rcss, e a UA stylesheet embutida em Bootstrap::load() só define
+     defaults de `display: block`, nunca font-family -- ver a nota "UA-stylesheet embutida" do
+     CLAUDE.md). Um elemento de texto nessas condições tem a propriedade font-family vazia,
+     então o núcleo do RmlUi (ElementText.cpp:86, upstream, pinado) loga exatamente a linha de
+     flood "No font face defined. Missing 'font-family' property. On element ..." que esta
+     fatia throttla.
+     O texto do label é ligado a um número de data-model ({{ frame_counter }}, DataViewText,
+     Source/Core/DataViewDefault.h) que tests/log_throttle_embed_sanity.cpp muta a cada
+     iteração via set_number("frame_counter", i) -- exatamente o que reproduz o flood real: um
+     elemento de texto re-sujado/re-formatado a cada frame (um contador de HUD, na cena real do
+     consumidor), não um label estático que o RmlUi formataria uma vez e deixaria em paz. Usado
+     só por tests/log_throttle_embed_sanity.cpp. -->
+<rml>
+<head><title>log throttle fixture</title></head>
+<body data-model="flood">frame {{ frame_counter }}</body>
+</rml>

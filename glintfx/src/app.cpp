@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: App facade implementation — RAII wrapper over WindowGlfw + SystemInterface_GLFW + Engine.
 //     Engine owns RenderGl3 + Bootstrap. SystemInterface_GLFW lives here because it requires a
-//     GLFWwindow* at construction time (available only after WindowGlfw::create()).
+//     GLFWwindow* at construction time (available only after WindowGlfw::create()). LOGTHR-1
+//     (Onda 2, D8): the concrete type constructed below is SystemInterfaceGlfwDedup, a thin
+//     subclass adding a dedup/throttle LogMessage override -- see src/system_glfw_dedup.hpp.
 // PT: Implementação da fachada App — wrapper RAII sobre WindowGlfw + SystemInterface_GLFW + Engine.
 //     Engine possui RenderGl3 + Bootstrap. SystemInterface_GLFW vive aqui pois exige
-//     GLFWwindow* na construção (disponível apenas após WindowGlfw::create()).
+//     GLFWwindow* na construção (disponível apenas após WindowGlfw::create()). LOGTHR-1
+//     (Onda 2, D8): o tipo concreto construído abaixo é SystemInterfaceGlfwDedup, subclasse fina
+//     que acrescenta um override de LogMessage com dedup/throttle -- ver src/system_glfw_dedup.hpp.
 // Copyright (c) 2026 Petrus Silva Costa
 // EN: gl_loader.h for GL function pointers used in snapshot() (glReadPixels, glBindFramebuffer, etc.).
 // PT: gl_loader.h para ponteiros de função GL usados em snapshot() (glReadPixels, glBindFramebuffer, etc.).
@@ -20,6 +24,11 @@
 // EN: RmlUi_Platform_GLFW.h migrated from bootstrap.cpp — SystemInterface_GLFW now lives here.
 // PT: RmlUi_Platform_GLFW.h migrou de bootstrap.cpp — SystemInterface_GLFW agora vive aqui.
 #include "RmlUi_Platform_GLFW.h"
+// EN: LOGTHR-1 (D8) -- SystemInterfaceGlfwDedup, the dedup/throttle subclass App constructs
+//     below instead of the bare upstream SystemInterface_GLFW.
+// PT: LOGTHR-1 (D8) -- SystemInterfaceGlfwDedup, a subclasse de dedup/throttle que o App
+//     constrói abaixo em vez do SystemInterface_GLFW upstream cru.
+#include "system_glfw_dedup.hpp"
 
 namespace glintfx {
 
@@ -38,8 +47,12 @@ namespace glintfx {
 //     window → system → engine = ordem de construção; engine → system → window = ordem de destruição.
 struct App::Impl {
   WindowGlfw                            window;
-  std::unique_ptr<SystemInterface_GLFW> system;  // EN: heap; deleted after engine (RmlUi shutdown).
-                                                  // PT: heap; deletado após engine (shutdown RmlUi).
+  // EN: LOGTHR-1 (D8) -- SystemInterfaceGlfwDedup, not the bare SystemInterface_GLFW (adds the
+  //     dedup/throttle LogMessage override; every other method is inherited unchanged).
+  // PT: LOGTHR-1 (D8) -- SystemInterfaceGlfwDedup, não o SystemInterface_GLFW cru (acrescenta o
+  //     override de LogMessage com dedup/throttle; todo outro método é herdado sem mudança).
+  std::unique_ptr<SystemInterfaceGlfwDedup> system; // EN: heap; deleted after engine (RmlUi shutdown).
+                                                    // PT: heap; deletado após engine (shutdown RmlUi).
   Engine                                engine;
   int  w  = 0;
   int  h  = 0;
@@ -126,7 +139,7 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   if (!impl_->window.create(cfg.title, cfg.width, cfg.height, initial_mode)) return;
   // EN: Window::create() makes the GL context current — required by Engine::attach().
   // PT: Window::create() torna o contexto GL corrente — exigido por Engine::attach().
-  impl_->system = std::make_unique<SystemInterface_GLFW>(impl_->window.handle());
+  impl_->system = std::make_unique<SystemInterfaceGlfwDedup>(impl_->window.handle());
   // EN: A4-WINMODES (D6) -- attach with the REAL post-create framebuffer size, not the raw
   //     cfg.width/height: a window born Maximized/Fullscreen has a DIFFERENT real framebuffer
   //     at frame 0 (the WM/monitor decides the actual size, not AppConfig), so seeding

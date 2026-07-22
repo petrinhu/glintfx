@@ -792,6 +792,27 @@ target_link_libraries(input_state_sanity PRIVATE glintfx)
 add_test(NAME input_state_sanity COMMAND input_state_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- PURE unit test for src/log_dedup.hpp: no
+#     window, no GL context, no RmlUi/GLFW dependency AT ALL (LogDedup is a plain in-memory
+#     table). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as
+#     input_state_sanity right above -- runs in BOTH build configurations. See the test file's
+#     own header for the full oracle (first-print, 10/100/1000 summary boundary, per-message
+#     independence, is_error bypass, LRU cap under 10k distinct hostile messages, empty/huge
+#     message safety).
+# PT: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- teste unit PURO para src/log_dedup.hpp:
+#     sem janela, sem contexto GL, sem dependência de RmlUi/GLFW NENHUMA (LogDedup é uma tabela
+#     simples em memória). Registrado INCONDICIONALMENTE, mesma racional "nada relacionado a
+#     display pra isolar aqui" do input_state_sanity logo acima -- roda em AMBAS as
+#     configurações de build. Ver o cabeçalho do próprio arquivo de teste pro oráculo completo
+#     (1ª impressão, fronteira de sumário 10/100/1000, independência entre mensagens, bypass de
+#     is_error, teto LRU sob 10 mil mensagens hostis distintas, segurança de mensagem
+#     vazia/enorme).
+# ---------------------------------------------------------------------------
+add_executable(log_dedup_sanity log_dedup_sanity.cpp)
+target_link_libraries(log_dedup_sanity PRIVATE glintfx)
+add_test(NAME log_dedup_sanity COMMAND log_dedup_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #
@@ -956,6 +977,39 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/embed_scene.rcss
 add_test(NAME ui_layer_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: log_throttle_embed_sanity (LOGTHR-1, Onda 2, v0.19.0) -- integration proof that the
+#     dedup/throttle LogMessage override (src/system_clock.hpp's SystemClock, D8) is actually
+#     wired into the embed SystemInterface path, not just unit-tested in isolation
+#     (log_dedup_sanity above). Registered here (OUTSIDE if(GLINTFX_BACKEND_GLFW), via
+#     ${_embed_dep}, same pattern as ui_layer_sanity right above) so it builds and runs in BOTH
+#     configs -- the ONLY real consumer (GusWorld) attaches embed-only (GLFW=OFF). No glloader
+#     link: unlike ui_layer_sanity, this test never calls a raw GL function itself (no
+#     glReadPixels/glClear -- it only drives ui.update()/ui.render() and reads back stderr). See
+#     the test file's own header for the full oracle and the POSIX-only justification
+#     (dup/dup2/fileno; safe because this .cpp is a test binary, never compiled by the MSVC job).
+# PT: log_throttle_embed_sanity (LOGTHR-1, Onda 2, v0.19.0) -- prova de integração de que o
+#     override de LogMessage com dedup/throttle (SystemClock de src/system_clock.hpp, D8) está
+#     de fato ligado ao caminho de SystemInterface do embed, não só testado isolado em unidade
+#     (log_dedup_sanity acima). Registrado aqui (FORA de if(GLINTFX_BACKEND_GLFW), via
+#     ${_embed_dep}, mesmo padrão de ui_layer_sanity logo acima) para buildar e rodar nas DUAS
+#     configs -- o ÚNICO consumidor real (GusWorld) anexa embed-only (GLFW=OFF). Sem link de
+#     glloader: diferente de ui_layer_sanity, este teste nunca chama uma função GL crua ele
+#     mesmo (sem glReadPixels/glClear -- só conduz ui.update()/ui.render() e lê de volta o
+#     stderr). Ver o cabeçalho do próprio arquivo de teste pro oráculo completo e a justificativa
+#     só-POSIX (dup/dup2/fileno; seguro porque este .cpp é um binário de teste, nunca compilado
+#     pelo job MSVC).
+# ---------------------------------------------------------------------------
+add_executable(log_throttle_embed_sanity log_throttle_embed_sanity.cpp)
+target_link_libraries(log_throttle_embed_sanity PRIVATE ${_embed_dep})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/log_throttle_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/log_throttle_scene.rml COPYONLY)
+add_test(NAME log_throttle_embed_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:log_throttle_embed_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

@@ -110,6 +110,25 @@ NOTICE, LICENSE          MPL-2.0 + third-party attributions
 
 The public API lives in two headers under `glintfx/include/glintfx/`: [`app.hpp`](glintfx/include/glintfx/app.hpp) (the standalone facade `glintfx::App`, RAII move-only, plus `AppConfig` and `version()`) and [`ui_layer.hpp`](glintfx/include/glintfx/ui_layer.hpp) (the embed/guest facade `glintfx::UiLayer`, plus `UiLayerConfig`; events via [`ui_event.hpp`](glintfx/include/glintfx/ui_event.hpp)). Both expose the same data-model API (`create_data_model`/`bind_*`/`set_*`) and the same `set_dp_ratio`/`set_asset_base_url` methods -- see `docs/embed-integration.md` for the full contract. There is **no imperative effect API**: effects are declared in `.rcss`. Do not document or call methods that are not in those two headers.
 
+### Where to run window/input verification (canonical, DOC-HOSTIN follow-up)
+
+| | Xvfb (CI's own) | Xephyr | Nested KWin (the house's choice) |
+| :--- | :--- | :--- | :--- |
+| Display | phantom, memory-only | real window in the session | real window in the session |
+| Window manager | **none** | **none** (it is just the X server) | **yes, full** |
+| X button / alt-tab / minimize | do not exist | do not exist by themselves | exist |
+| Installed on this machine | yes | **no** | **yes** (`/usr/bin/kwin_wayland`) |
+
+**Canonical choice: `kwin_wayland --windowed --xwayland`.** Reasons, in this order: zero install (Xephyr would need two packages, because it is **not** a window manager, it is only the display server), and it is the **same compositor as the leader's own session**, hence more faithful to the real environment than a minimalist WM nobody actually uses.
+
+**What only the nested compositor proves.** Without a window manager there is no title bar, hence no real click on the X button, alt-tab, or minimize -- so close veto (`set_close_request_callback`), window focus, and iconify only get end-to-end coverage there. Under Xvfb the honest maximum is testing the pure decision seam (e.g. `glfw_decide_window_close()`, `glintfx/src/glfw_event_translate.hpp:608` -- cite the real `file:line`, and `tools/check_doc_line_refs.sh` now exists to confirm that citation has not rotted) and DECLARING that as a downgrade, never selling it as end-to-end.
+
+`xdotool`/XTest **works under Xvfb** for physical key and mouse input (this is how callback reentrancy was proven with a real keystroke in Onda 2, `HOSTIN-2`); what is actually missing under Xvfb is only the window manager.
+
+**Hard rule: never on the leader's live session.** Input injection always targets the **nested** display, **never** `:0`. The reason is on record, not hypothetical: a burst of window-mode switching once froze his touchpad until a reboot was required (see the memory `feedback_nunca_stress_janela_sessao_viva`).
+
+**An agent does not install a system package on its own initiative** -- ask for authorization first. Reporting "not executed, needs `<package>` installed" is an honest negative result, and a better one than improvising around a missing tool.
+
 ---
 
 ## Para o Claude Code (português)
@@ -168,3 +187,22 @@ Regra prática para agents: reproduza primeiro (`tools/ci/Containerfile.f42` par
 - **`GLINTFX_OWN_FONT_ENGINE` (`L1.19-FONTENG`) -- include path deve ser por-arquivo, não de alvo inteiro.** A raiz `include/` da Camada 0 contém um `limits.h` próprio (freestanding, só `INT_MAX`/`INT_MIN`/`UINT_MAX`) que SOMBREIA o `<limits.h>` de sistema (sem `SHRT_MAX`/`SHRT_MIN`) se virar `-I` de escopo de alvo inteiro no `glintfx` -- quebrou o `stb_image.h` vendorizado (`stb_image_impl.cpp`), unidade de tradução sem nenhuma relação com font engine. Fix: `set_source_files_properties(... PROPERTIES INCLUDE_DIRECTORIES ...)` restrito SÓ aos 3 arquivos que precisam (`font_engine_own.cpp`, `bootstrap.cpp`, `sfnt.c`/`raster.c` da Camada 0), nunca `target_include_directories()` de alvo inteiro. Ver `glintfx/CMakeLists.txt`.
 - **`GLINTFX_OWN_FONT_ENGINE` -- `Rml::CallbackTexture` precisa ser liberado ANTES do `Rml::Shutdown()`.** `Rml::Shutdown()` chama `contexts.clear()` (destruindo o `RenderManager` de cada `Context`) ANTES de chamar `font_interface->Shutdown()` -- confiar só no hook `FontEngineInterface::Shutdown()` pra liberar o atlas GPU do nosso motor de fonte crasha em todo teardown ("Leaking CallbackTexture detected... will likely result in memory corruption"). `Bootstrap::shutdown()` chama `FontEngineOwn::Shutdown()` EXPLICITAMENTE, antes da própria chamada a `Rml::Shutdown()`. Ver `glintfx/src/bootstrap.cpp`/`font_engine_own.{hpp,cpp}` e `docs/embed-integration.md` seção 17.
 - **CI Codeberg (Forgejo Actions) -- paridade mínima, não bloqueia.** Runner `codeberg-medium` (4 CPU/8 GB/10 min) + container `ghcr.io/catthehacker/ubuntu:act-latest`; deps de sistema instaladas a cada job (sem stack pré-instalada), incluindo os pacotes `-dev` de GL/EGL/xkbcommon. **Desde a Onda 3 da reestruturação de CI (poda, 2026-07-11)** este workflow roda **um único job** (`build & test (codeberg-medium / GLFW=ON, minimal parity)`) -- **sem matriz**, só `GLINTFX_BACKEND_GLFW=ON`, em `push` para `main` apenas -- como sinal voluntário de "ainda builda no Codeberg", **não** gate de release. A perna `GLFW=OFF`, o `lint-and-scan`, o `coverage` e o `nightly.forgejo` foram removidos deste arquivo (cobertos pelo GitHub e pelo `claudio`/`heavy.yml`); um job preso em `waiting` no `codeberg-medium` nunca segura merge/tag/release (ver "Política de CI: ordem de gate" acima -- `github > claudio > codeberg`). Validar mudanças no workflow localmente com `forgejo-runner exec` antes de empurrar -- ver o cabeçalho de `.forgejo/workflows/ci.yml`.
+
+### Onde rodar teste de janela/input (canônico, follow-up do DOC-HOSTIN)
+
+| | Xvfb (o do CI) | Xephyr | KWin aninhado (o da casa) |
+| :--- | :--- | :--- | :--- |
+| Tela | fantasma, só memória | janela real na sessão | janela real na sessão |
+| Window manager | **nenhum** | **nenhum** (é só o servidor X) | **sim, completo** |
+| Botão X / alt-tab / minimizar | não existem | não existem sozinhos | existem |
+| Instalado nesta máquina | sim | **não** | **sim** (`/usr/bin/kwin_wayland`) |
+
+**Escolha canônica: `kwin_wayland --windowed --xwayland`.** Motivos, nessa ordem: zero instalação (o Xephyr exigiria dois pacotes, porque **não** é window manager, é só a tela) e é o **mesmo compositor da sessão do líder**, logo mais fiel ao ambiente real do que um WM minimalista que ninguém usa.
+
+**O que só o aninhado prova.** Sem window manager não há barra de título, logo não há clique real no botão X, alt-tab nem minimizar -- então o veto de close (`set_close_request_callback`), o focus e o iconify de janela só têm cobertura ponta-a-ponta lá. Sob Xvfb o máximo honesto é testar o *seam* puro de decisão (ex.: `glfw_decide_window_close()`, `glintfx/src/glfw_event_translate.hpp:608` -- cite o `arquivo:linha` real, e o `tools/check_doc_line_refs.sh` agora existe justamente pra confirmar que essa citação não apodreceu) e **declarar isso como downgrade**, nunca vender como e2e.
+
+`xdotool`/XTest **funciona sob Xvfb** para tecla e mouse físicos (foi assim que a reentrância de callback foi provada com uma tecla real na Onda 2, `HOSTIN-2`); o que de fato falta no Xvfb é só o window manager.
+
+**Regra dura: nunca na sessão viva do líder.** A injeção de input mira **sempre** o display aninhado, **nunca** o `:0`. O motivo está registrado, não é hipotético: uma rajada de troca de modo de janela já travou o touchpad dele até precisar de reboot (ver a memória `feedback_nunca_stress_janela_sessao_viva`).
+
+**Agente não instala pacote de sistema por conta própria** -- pede autorização primeiro. Reportar "não executado, precisa instalar `<pacote>`" é um resultado negativo honesto, e melhor do que improvisar em cima de uma ferramenta ausente.

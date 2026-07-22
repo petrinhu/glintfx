@@ -123,6 +123,45 @@ live query then reports `Windowed` -- see "Headless / Xvfb" below.
 - **Primary monitor only.** This slice always targets `glfwGetPrimaryMonitor()`; there is no
   `monitor_index` or monitor-enumeration API yet. See "Out of scope" below.
 
+### Call cost, and the historical `FullscreenExclusive` incident (read before wiring this to input)
+
+`set_window_mode()` is not free, and one specific mode has a real incident behind it worth
+knowing before you decide when and how often to call it.
+
+1. **Per-call cost.** Every successful call blocks the caller for up to ~150ms while
+   `settle_window_system_request()` waits (bounded: 3 x 50ms, not a blind sleep) for the
+   compositor to confirm the state change; the one path that issues two internal requests,
+   `Fullscreen(Desktop or Exclusive) -> Maximized`, blocks up to ~300ms. This is deliberate --
+   skipping the wait lets a request race the WM's confirmation of the previous one (see point 2).
+   **Practical consequence: treat `set_window_mode()` as a rare, user-initiated action -- an
+   options-menu button, an Alt+Enter shortcut -- never a per-frame call, never inside a loop.**
+2. **`FullscreenExclusive` is the historically risky path.** Under XWayland it triggers a real
+   mode-set via XRandR, which the compositor has to emulate -- this is the exact mechanism
+   involved in a real incident found during this slice's development: a **pre-fix** build
+   (without `settle_window_system_request()`) fired 27 `set_window_mode()` calls in a rapid
+   burst, 4 of them `FullscreenExclusive`, on a real KDE/Wayland session, and the compositor's
+   input routing froze (the touchpad stopped responding until reboot, nothing in the journal).
+   **Recommendation: on Wayland, prefer `FullscreenDesktop`** (borderless at the current video
+   mode, no mode-set) over `FullscreenExclusive` for the common "cover the whole screen" case.
+   `FullscreenExclusive` is still fully supported and legitimate when you actually need a
+   resolution change -- it just asks more of the compositor, so reserve it for that case.
+3. **What the evidence actually supports (no overclaiming).** The incident happened on a
+   version that was **never released** -- without the settle wait. The released version has the
+   settle wait and passed a manual smoke test 3/3 on a real desktop session. A separate attempt
+   to reproduce the original bad case on a **nested compositor** (sandboxed) did **not**
+   reproduce it, even across 18 rounds with the pre-fix build -- but that is a limitation of the
+   sandbox, not evidence of safety: a nested compositor has a real WM but a **virtual** output,
+   so mode-set confirmation resolves near-synchronously, without the hardware latency
+   (DRM/vblank round-trip) that opened the race on real hardware. So neither "confirmed
+   reproducible" nor "confirmed safe" is an honest claim here. What we do claim: the settle wait
+   attacks the actual mechanism (an unconfirmed request racing the next one), the cost it adds
+   is bounded, and the guidance above (`FullscreenDesktop` over `Exclusive` on Wayland) removes
+   the specific pattern that triggered the incident.
+4. **Testing rule for your own integration.** If you stress-test mode switching (fuzzing input,
+   automated UI tests that toggle fullscreen), run it in a **nested compositor or a disposable
+   session**, never your working desktop session -- the failure mode observed here was a frozen
+   input router that needed a reboot to clear, with nothing logged to diagnose it after the fact.
+
 ### API reference
 
 | Symbol | Notes |
@@ -267,6 +306,49 @@ honrado, e a query viva então reporta `Windowed` -- ver "Headless / Xvfb" abaix
   sessão de desktop de verdade.
 - **Só monitor primário.** Esta fatia sempre mira `glfwGetPrimaryMonitor()`; não há
   `monitor_index` nem API de enumeração de monitores ainda. Ver "Fora de escopo" abaixo.
+
+### Custo da chamada, e o incidente histórico do `FullscreenExclusive` (leia antes de ligar isto a input)
+
+`set_window_mode()` não é de graça, e um modo específico tem um incidente real por trás que vale
+conhecer antes de decidir quando e com que frequência chamá-lo.
+
+1. **Custo por chamada.** Toda chamada bem-sucedida bloqueia o chamador por até ~150ms enquanto
+   `settle_window_system_request()` espera (limitado: 3 x 50ms, não um sleep cego) o compositor
+   confirmar a mudança de estado; o único caminho que emite dois pedidos internos,
+   `Fullscreen(Desktop ou Exclusive) -> Maximized`, bloqueia até ~300ms. Isto é deliberado --
+   pular a espera deixa um pedido entrar em race com a confirmação do anterior pelo WM (ver ponto
+   2). **Consequência prática: trate `set_window_mode()` como uma ação rara, iniciada pelo
+   usuário -- um botão de menu de opções, um atalho Alt+Enter -- nunca uma chamada por-frame,
+   nunca dentro de um laço.**
+2. **`FullscreenExclusive` é o caminho historicamente arriscado.** Sob XWayland ele dispara um
+   mode-set real via XRandR, que o compositor precisa emular -- este é exatamente o mecanismo
+   envolvido num incidente real encontrado durante o desenvolvimento desta fatia: uma versão
+   **pré-fix** (sem `settle_window_system_request()`) disparou 27 chamadas de
+   `set_window_mode()` em rajada, 4 delas `FullscreenExclusive`, numa sessão KDE/Wayland real, e
+   o roteamento de input do compositor travou (o touchpad parou de responder até reboot, nada
+   no journal). **Recomendação: no Wayland, prefira `FullscreenDesktop`** (borderless no video
+   mode atual, sem mode-set) em vez de `FullscreenExclusive` pro caso comum de "cobrir a tela
+   toda". `FullscreenExclusive` continua totalmente suportado e legítimo quando você realmente
+   precisa de uma troca de resolução -- só exige mais do compositor, então reserve-o pra esse
+   caso.
+3. **O que a evidência realmente sustenta (sem alarde além do que se sabe).** O incidente
+   aconteceu numa versão que **nunca foi lançada** -- sem a espera de assentamento. A versão
+   lançada tem a espera e passou um smoke test manual 3/3 numa sessão de desktop real. Uma
+   tentativa separada de reproduzir o caso ruim original num **compositor aninhado**
+   (sandboxed) **não** reproduziu, mesmo em 18 rodadas com a versão pré-fix -- mas isso é uma
+   limitação do sandbox, não evidência de segurança: um compositor aninhado tem um WM real mas
+   uma saída **virtual**, então a confirmação do mode-set resolve quase sincronamente, sem a
+   latência de hardware (ida-e-volta DRM/vblank) que abriu a race no hardware real. Então nem
+   "confirmadamente reproduzível" nem "confirmadamente seguro" é uma afirmação honesta aqui. O
+   que afirmamos: a espera de assentamento ataca o mecanismo de fato (um pedido não confirmado
+   entrando em race com o próximo), o custo que ela adiciona é limitado, e a orientação acima
+   (`FullscreenDesktop` em vez de `Exclusive` no Wayland) remove o padrão específico que disparou
+   o incidente.
+4. **Regra de teste pra sua própria integração.** Se você faz stress test de troca de modo
+   (fuzzing de input, testes automatizados de UI que alternam fullscreen), rode num
+   **compositor aninhado ou numa sessão descartável**, nunca na sua sessão de trabalho -- o modo
+   de falha observado aqui foi um roteador de input congelado que precisou de reboot pra
+   limpar, sem nada logado pra diagnosticar depois.
 
 ### Referência de API
 

@@ -126,7 +126,8 @@ status=0
 #     `glx_sfnt_`-prefixed symbol still fails this gate instead of silently riding along.
 #     `glx_sfnt_kern` (SOV-SFNT `kern`-table amadurecimento pro L1.20) joins this same explicit
 #     list for the identical reason -- already namespaced by construction, added by name, not by
-#     widening the glob.
+#     widening the glob. `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` (A4-EMOJI's own `COLR`/`CPAL`
+#     v0 slice) join it too, same reasoning, same explicit-not-glob discipline.
 # PT: A porta-da-frente pública `glx_*` (include/core/core.h) -- OBRIGATÓRIA de estar presente
 #     (faltar uma significa que o archive está incompleto/quebrado, um modo de falha separado de
 #     uma colisão mas pego pelo mesmo laço abaixo). O SOV-SFNT (FT-F1, include/core/sfnt.h)
@@ -138,7 +139,9 @@ status=0
 #     prefixado com `glx_sfnt_` ainda falhe este gate em vez de viajar junto em silêncio.
 #     `glx_sfnt_kern` (amadurecimento da tabela `kern` do SOV-SFNT pro L1.20) entra na mesma lista
 #     explícita pelo mesmo motivo -- já namespaced por construção, acrescentado por nome, não
-#     alargando o glob.
+#     alargando o glob. `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` (a própria fatia `COLR`/`CPAL`
+#     v0 do A4-EMOJI) entram na mesma lista explícita, mesmo raciocínio, mesma disciplina
+#     explícita-não-glob.
 # EN: SOV-RAST (FT-F2) adds its own front door here -- `glx_rasterize_outline`/
 #     `glx_raster_scratch_floats` are ALREADY namespaced by construction (no `$(CORE_RENAME_FLAGS)`
 #     entry needed, same reasoning as SOV-SFNT's own `glx_sfnt_*` names above -- see
@@ -163,7 +166,7 @@ status=0
 #     src/hint.c), listado explicitamente (não via um glob `glx_hint_*`) pra que um futuro helper
 #     interno acidental vazando um símbolo com o mesmo prefixo ainda falhe este gate em vez de viajar
 #     junto em silêncio.
-required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline glx_sfnt_kern glx_rasterize_outline glx_raster_scratch_floats glx_hint_outline"
+required="glx_malloc glx_free glx_realloc glx_memcpy glx_memset glx_sfnt_open glx_sfnt_glyph_id glx_sfnt_hmetrics glx_sfnt_glyph_outline glx_sfnt_kern glx_sfnt_colr_layers glx_sfnt_cpal_rgba glx_rasterize_outline glx_raster_scratch_floats glx_hint_outline"
 
 # EN: Everything else this archive is allowed to export: the small ASM/wrapper set that was never
 #     libc-shaped to begin with (_start, the syscall*N* trampolines, the sys_* one-line wrappers)

@@ -352,6 +352,115 @@ static const unsigned char kSyntheticFontSimpleDeltaOverflow[284] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x50, 0x00, 0x00, 0x01
 };
 
+// ================================================================================================
+// EN: Synthetic font E -- A4-EMOJI's own `COLR` v0 + `CPAL` v0 fixture. Hand-built per the public
+//     OpenType spec (COLR/CPAL clause), same technique as `kSyntheticFontF12` above: sfntVersion
+//     0x00010000, 9 tables (COLR/CPAL/cmap/glyf/head/hhea/hmtx/loca/maxp), unitsPerEm=1000,
+//     numGlyphs=5 -- `.notdef` (gid0, empty), a triangle (gid1, simple glyph, 3 on-curve points --
+//     REUSED verbatim as a `COLR` layer shape, `COLR` layers are spec-defined to be ordinary
+//     `glyf` outlines, no new raster feature needed), a square (gid2, simple glyph, 4 on-curve
+//     points, also reused as a layer shape), and TWO colour base glyphs with no outline of their
+//     own (`glyf` empty, same "not directly rendered" shape as `.notdef` -- real colour fonts
+//     commonly leave the base glyph blank since `COLR` layers are what actually paints): gid3
+//     ("two solid layers") = triangle tinted palette entry 0 (opaque red) UNDER square tinted
+//     palette entry 1 (opaque blue); gid4 ("foreground sentinel") = triangle tinted palette index
+//     `0xFFFF`, the spec sentinel for "use the text/foreground colour, not a palette entry" (see
+//     `glx_sfnt_colr_layer`'s own doc, include/core/sfnt.h) -- exercising the "um glifo usando
+//     paleta 0xFFFF" fixture requirement this ticket's brief names explicitly.
+//
+//     ORACLE CROSS-CHECK (per this file's header's "só p/ gerar os esperados, nunca código"):
+//     assembled byte-by-byte with a throwaway Python `struct`-based writer (not committed, same
+//     "the exact derivation commands/scripts are not committed" posture this file's own header
+//     already states for the OTHER synthetic fonts above), then independently round-tripped
+//     through `fontTools.ttLib.TTFont` (MIT-licensed, unrelated to FreeType -- see this file's
+//     header for the clean-room statement) before being transcribed here -- `fontTools` reports
+//     back EXACTLY the fixture as designed: `glyph00001`/`glyph00002` (gid1/gid2) with coordinates
+//     `[(0,0),(100,0),(50,100)]`/`[(0,0),(100,0),(100,100),(0,100)]`; `COLR.ColorLayers['glyph00003']
+//     == [('glyph00001', 0), ('glyph00002', 1)]`; `COLR.ColorLayers['glyph00004'] ==
+//     [('glyph00001', 65535)]`; `CPAL.palettes[0] == [RGBA(255,0,0,255), RGBA(0,0,255,255)]` --
+//     confirming both the `glyf`/`loca` layout AND every `COLR`/`CPAL` field below independently,
+//     the same two-reading-agreement bar this file's header sets for every other expected value.
+// PT: Fonte sintética E -- a própria fixture `COLR` v0 + `CPAL` v0 do A4-EMOJI. Construída à mão
+//     conforme a spec OpenType pública (cláusula COLR/CPAL), mesma técnica do `kSyntheticFontF12`
+//     acima: sfntVersion 0x00010000, 9 tabelas (COLR/CPAL/cmap/glyf/head/hhea/hmtx/loca/maxp),
+//     unitsPerEm=1000, numGlyphs=5 -- `.notdef` (gid0, vazio), um triângulo (gid1, glyph simples,
+//     3 pontos on-curve -- REUSADO ao pé da letra como forma de camada `COLR`, camadas `COLR` são,
+//     pela spec, outlines `glyf` comuns, nenhuma feature de raster nova necessária), um quadrado
+//     (gid2, glyph simples, 4 pontos on-curve, também reusado como forma de camada), e DOIS
+//     glyphs-base coloridos sem outline próprio (`glyf` vazio, mesmo formato "não renderizado
+//     diretamente" do `.notdef` -- fontes coloridas reais comumente deixam o glyph-base em branco
+//     já que quem de fato pinta são as camadas `COLR`): gid3 ("duas camadas sólidas") = triângulo
+//     tingido com a entrada de paleta 0 (vermelho opaco) SOB o quadrado tingido com a entrada de
+//     paleta 1 (azul opaco); gid4 ("sentinela de foreground") = triângulo tingido com o índice de
+//     paleta `0xFFFF`, o sentinela da spec pra "usa a cor de texto/foreground, não uma entrada de
+//     paleta" (ver o doc próprio do `glx_sfnt_colr_layer`, include/core/sfnt.h) -- exercitando o
+//     requisito de fixture "um glifo usando paleta 0xFFFF" que o brief desta tarefa nomeia
+//     explicitamente.
+//
+//     CRUZAMENTO DE ORÁCULO (conforme o "só p/ gerar os esperados, nunca código" do cabeçalho
+//     deste arquivo): montada byte a byte com um escritor Python baseado em `struct`, descartável
+//     (não commitado, mesma postura "os scripts/comandos exatos de derivação não são commitados"
+//     que o cabeçalho deste arquivo já declara pras OUTRAS fontes sintéticas acima), depois
+//     cruzada independentemente fazendo o caminho de volta pelo `fontTools.ttLib.TTFont` (licença
+//     MIT, não-relacionado ao FreeType -- ver o cabeçalho deste arquivo pra declaração clean-room)
+//     antes de ser transcrita aqui -- o `fontTools` reporta de volta EXATAMENTE a fixture como
+//     desenhada: `glyph00001`/`glyph00002` (gid1/gid2) com coordenadas
+//     `[(0,0),(100,0),(50,100)]`/`[(0,0),(100,0),(100,100),(0,100)]`;
+//     `COLR.ColorLayers['glyph00003'] == [('glyph00001', 0), ('glyph00002', 1)]`;
+//     `COLR.ColorLayers['glyph00004'] == [('glyph00001', 65535)]`;
+//     `CPAL.palettes[0] == [RGBA(255,0,0,255), RGBA(0,0,255,255)]` -- confirmando tanto o layout
+//     `glyf`/`loca` QUANTO todo campo `COLR`/`CPAL` abaixo independentemente, a mesma barra de
+//     concordância-de-duas-leituras que o cabeçalho deste arquivo estabelece pra todo outro valor
+//     esperado.
+static const unsigned char kSyntheticFontColr[452] = {
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x00, 0x80, 0x00, 0x03, 0x00, 0x10, 0x43, 0x4f, 0x4c, 0x52,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x9c, 0x00, 0x00, 0x00, 0x26, 0x43, 0x50, 0x41, 0x4c,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x00, 0x00, 0x16, 0x63, 0x6d, 0x61, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xdc, 0x00, 0x00, 0x00, 0x24, 0x67, 0x6c, 0x79, 0x66,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x40, 0x68, 0x65, 0x61, 0x64,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x40, 0x00, 0x00, 0x00, 0x36, 0x68, 0x68, 0x65, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x78, 0x00, 0x00, 0x00, 0x24, 0x68, 0x6d, 0x74, 0x78,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x9c, 0x00, 0x00, 0x00, 0x14, 0x6c, 0x6f, 0x63, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xb0, 0x00, 0x00, 0x00, 0x0c, 0x6d, 0x61, 0x78, 0x70,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xbc, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x1a, 0x00, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x04, 0x00, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x01,
+    0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0e,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x04, 0x00, 0x18, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0x01, 0x00, 0x00,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x64, 0x00, 0x02, 0x00, 0x00, 0x01, 0x01,
+    0x01, 0x00, 0x00, 0x00, 0x64, 0xff, 0xce, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x64, 0x00, 0x03, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01,
+    0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0xff, 0x9c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x0f, 0x3c, 0xf5,
+    0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0xe8, 0xff, 0x38,
+    0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x03, 0xe8, 0x00, 0x00,
+    0x03, 0xe8, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x20, 0x00, 0x20, 0x00, 0x20, 0x00, 0x00, 0x50, 0x00,
+    0x00, 0x05, 0x00, 0x00,
+};
+
+// EN: Byte offsets into `kSyntheticFontColr` for the hostile byte-patch tests below (mirrors this
+//     file's own `patch_u16_be`/`patch_u32_be` pattern already used on the real Open Sans fixture
+//     above) -- located by construction (this fixture's own Python builder script, see the
+//     ORACLE CROSS-CHECK comment above), not by manual byte-counting.
+// PT: Offsets de byte em `kSyntheticFontColr` pros testes hostis de remendo-de-byte abaixo
+//     (espelha o próprio padrão `patch_u16_be`/`patch_u32_be` deste arquivo já usado na fixture
+//     Open Sans real acima) -- localizados por construção (o próprio script Python que constrói
+//     esta fixture, ver o comentário CRUZAMENTO DE ORÁCULO acima), não por contagem manual de
+//     byte.
+#define COLR_FIXTURE_DIR_COLR_LEN_OFF 24 // COLR's own table-directory record, `length` field
+#define COLR_FIXTURE_DIR_CPAL_LEN_OFF 40 // CPAL's own table-directory record, `length` field
+#define COLR_FIXTURE_NUM_BASE_RECORDS_OFF 158 // COLR.numBaseGlyphRecords
+#define COLR_FIXTURE_BASE_REC0_GID_OFF 170 // COLR.BaseGlyphRecords[0].glyphID (== 3)
+#define COLR_FIXTURE_BASE_REC0_NUMLAYERS_OFF 174 // COLR.BaseGlyphRecords[0].numLayers (== 2)
+#define COLR_FIXTURE_BASE_REC1_GID_OFF 176 // COLR.BaseGlyphRecords[1].glyphID (== 4)
+#define CPAL_FIXTURE_NUM_COLOR_RECORDS_OFF 202 // CPAL.numColorRecords
+
 // EN: Scratch buffer for the byte-patch hostile tests against the REAL 217360-byte Open Sans
 //     fixture (BAD_VERSION, a lying `numGlyphs`, an out-of-blob table offset, a malformed
 //     `cmap`) -- static storage duration (.bss), not the stack (217KB would be an unreasonable
@@ -1139,6 +1248,216 @@ int main(int argc, char** argv, char** envp) {
         TEST_ASSERT_EQ(r, GLX_SFNT_OK);
         TEST_ASSERT_EQ(glx_sfnt_kern(&face_ms_kern, 36 /* A */, 57 /* V */), (short)0);
         memcpy(g_patch_buf, real_blob, real_len);
+    }
+
+    // ============================================================================================
+    // ---- A4-EMOJI: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba (kSyntheticFontColr) --------------
+    // ============================================================================================
+    {
+        glx_sfnt_face face_colr;
+        glx_sfnt_result r =
+            glx_sfnt_open(kSyntheticFontColr, sizeof(kSyntheticFontColr), &face_colr);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(face_colr.num_glyphs, (unsigned short)5);
+        TEST_ASSERT_EQ(face_colr.colr_len, (size_t)38);
+        TEST_ASSERT_EQ(face_colr.cpal_len, (size_t)22);
+
+        // ---- happy path: gid1 (triangle) is NOT a colour glyph -- ordinary, most common case --
+        glx_sfnt_colr_layer layers[4];
+        unsigned short count;
+        r = glx_sfnt_colr_layers(&face_colr, 1, layers, 4, &count);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(count, (unsigned short)0);
+
+        // ---- happy path: gid3 -- 2 solid layers (triangle@palette0=red, square@palette1=blue) --
+        count = 0xFFFF; // poison -- must be overwritten by the call below
+        r = glx_sfnt_colr_layers(&face_colr, 3, layers, 4, &count);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(count, (unsigned short)2);
+        TEST_ASSERT_EQ(layers[0].gid, (unsigned short)1);
+        TEST_ASSERT_EQ(layers[0].palette_index, (unsigned short)0);
+        TEST_ASSERT_EQ(layers[1].gid, (unsigned short)2);
+        TEST_ASSERT_EQ(layers[1].palette_index, (unsigned short)1);
+
+        // ---- happy path: gid4 -- 1 layer, palette index 0xFFFF (foreground-colour sentinel) ----
+        r = glx_sfnt_colr_layers(&face_colr, 4, layers, 4, &count);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(count, (unsigned short)1);
+        TEST_ASSERT_EQ(layers[0].gid, (unsigned short)1);
+        TEST_ASSERT_EQ(layers[0].palette_index, (unsigned short)0xFFFF);
+
+        // ---- BUFFER_TOO_SMALL: count_out is ALWAYS the true count on this result (unlike
+        //      glx_sfnt_glyph_outline's own BUFFER_TOO_SMALL contract -- see this function's own
+        //      doc comment in include/core/sfnt.h) -----------------------------------------------
+        glx_sfnt_colr_layer small_layers[1];
+        r = glx_sfnt_colr_layers(&face_colr, 3, small_layers, 1, &count);
+        TEST_ASSERT_EQ(r, GLX_SFNT_ERR_BUFFER_TOO_SMALL);
+        TEST_ASSERT_EQ(count, (unsigned short)2);
+
+        // ---- HOSTILE: bad args -- NULL face/count_out, non-zero cap paired with NULL out, gid
+        //      >= num_glyphs -------------------------------------------------------------------
+        TEST_ASSERT_EQ(glx_sfnt_colr_layers(NULL, 3, layers, 4, &count), GLX_SFNT_ERR_INVALID_ARG);
+        TEST_ASSERT_EQ(glx_sfnt_colr_layers(&face_colr, 3, layers, 4, NULL),
+                       GLX_SFNT_ERR_INVALID_ARG);
+        TEST_ASSERT_EQ(glx_sfnt_colr_layers(&face_colr, 3, NULL, 4, &count),
+                       GLX_SFNT_ERR_INVALID_ARG);
+        TEST_ASSERT_EQ(glx_sfnt_colr_layers(&face_colr, 999999, layers, 4, &count),
+                       GLX_SFNT_ERR_INVALID_ARG);
+
+        // ---- happy path: glx_sfnt_cpal_rgba, palette 0's own 2 entries (BGRA wire -> RGBA out) -
+        unsigned char rgba[4];
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_colr, 0, rgba), GLX_SFNT_OK);
+        TEST_ASSERT_EQ(rgba[0], (unsigned char)255); // R
+        TEST_ASSERT_EQ(rgba[1], (unsigned char)0);   // G
+        TEST_ASSERT_EQ(rgba[2], (unsigned char)0);   // B
+        TEST_ASSERT_EQ(rgba[3], (unsigned char)255); // A -- opaque red
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_colr, 1, rgba), GLX_SFNT_OK);
+        TEST_ASSERT_EQ(rgba[0], (unsigned char)0);   // R
+        TEST_ASSERT_EQ(rgba[1], (unsigned char)0);   // G
+        TEST_ASSERT_EQ(rgba[2], (unsigned char)255); // B
+        TEST_ASSERT_EQ(rgba[3], (unsigned char)255); // A -- opaque blue
+
+        // ---- HOSTILE: bad args -- NULL face/rgba_out --------------------------------------------
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(NULL, 0, rgba), GLX_SFNT_ERR_INVALID_ARG);
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_colr, 0, NULL), GLX_SFNT_ERR_INVALID_ARG);
+
+        // ---- HOSTILE: "índice de cor fora de faixa" -- an ordinary out-of-range index AND the
+        //      spec 0xFFFF foreground-colour sentinel BOTH resolve to the same clean
+        //      GLX_SFNT_ERR_INVALID_ARG (see glx_sfnt_colr_layer's own doc: the CALLER, not this
+        //      function, must special-case 0xFFFF before ever reaching here) -------------------
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_colr, 5 /* numPaletteEntries == 2 */, rgba),
+                       GLX_SFNT_ERR_INVALID_ARG);
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_colr, 0xFFFF, rgba), GLX_SFNT_ERR_INVALID_ARG);
+    }
+
+    // ============================================================================================
+    // ---- A4-EMOJI: font genuinely WITHOUT COLR/CPAL at all (kSyntheticFontF12) -----------------
+    // ============================================================================================
+    {
+        glx_sfnt_face face_no_colr;
+        glx_sfnt_result r =
+            glx_sfnt_open(kSyntheticFontF12, sizeof(kSyntheticFontF12), &face_no_colr);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(face_no_colr.colr_len, (size_t)0);
+        TEST_ASSERT_EQ(face_no_colr.cpal_len, (size_t)0);
+
+        glx_sfnt_colr_layer layers[4];
+        unsigned short count = 0xFFFF; // poison -- must be reset to 0 by the call below
+        r = glx_sfnt_colr_layers(&face_no_colr, 1, layers, 4, &count);
+        TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+        TEST_ASSERT_EQ(count, (unsigned short)0);
+
+        unsigned char rgba[4];
+        TEST_ASSERT_EQ(glx_sfnt_cpal_rgba(&face_no_colr, 0, rgba), GLX_SFNT_ERR_TABLE_MISSING);
+    }
+
+    // ============================================================================================
+    // ---- HOSTILE: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba byte-patch attacks on
+    //      kSyntheticFontColr -- same patch_u16_be/patch_u32_be pattern already used against the
+    //      real Open Sans fixture above, this time on a small stack scratch buffer (452 bytes,
+    //      no .bss needed unlike OPENSANS_LEN) -------------------------------------------------
+    // ============================================================================================
+    {
+        unsigned char colr_patch_buf[sizeof(kSyntheticFontColr)];
+        glx_sfnt_face pf;
+        glx_sfnt_colr_layer layers[4];
+        unsigned short count;
+        unsigned char rgba[4];
+
+        // ---- HOSTILE 1: "COLR truncado" -- COLR's own directory record `length` shrunk from 38
+        //      to 14 (just the 14-byte header, no BaseGlyphRecords/LayerRecords array) -- the
+        //      physical bytes for both arrays still exist right after (this is the SAME blob,
+        //      CPAL/cmap/glyf/... still follow), so this proves the bound is checked against the
+        //      TABLE's own declared length, not merely "does it fit somewhere before the blob
+        //      ends" (same reasoning hmtx/loca/kern's own pair array already document in
+        //      src/sfnt.c) -- must NOT silently read past COLR's own truncated span. ------------
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u32_be(colr_patch_buf, COLR_FIXTURE_DIR_COLR_LEN_OFF, 14);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK); // glx_sfnt_open itself still succeeds -- COLR is optional
+            count = 0xFFFF; // poison
+            r = glx_sfnt_colr_layers(&pf, 3, layers, 4, &count);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            TEST_ASSERT_EQ(count, (unsigned short)0);
+        }
+
+        // ---- HOSTILE 2: "CPAL truncado" -- CPAL's own directory record `length` shrunk from 22
+        //      to 12 (just the fixed 12-byte header, no colorRecordIndices/colorRecordsArray) --
+        //      same "bound against the table's own span" proof as HOSTILE 1, this time on the
+        //      function that returns a real ERROR (not a soft 0) for a missing/truncated CPAL. --
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u32_be(colr_patch_buf, COLR_FIXTURE_DIR_CPAL_LEN_OFF, 12);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            r = glx_sfnt_cpal_rgba(&pf, 0, rgba);
+            TEST_ASSERT_EQ(r, GLX_SFNT_ERR_TRUNCATED);
+        }
+
+        // ---- HOSTILE 3: "counts mentirosos" -- COLR.numBaseGlyphRecords patched from 2 to
+        //      0xFFFF (65535) -- the BaseGlyphRecords array this implies (65535*6 bytes) does not
+        //      fit within COLR's own declared span, same class as the real-Open-Sans "lying
+        //      numGlyphs" hostile test above. -----------------------------------------------------
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u16_be(colr_patch_buf, COLR_FIXTURE_NUM_BASE_RECORDS_OFF, 0xFFFFu);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            count = 0xFFFF; // poison
+            r = glx_sfnt_colr_layers(&pf, 3, layers, 4, &count);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            TEST_ASSERT_EQ(count, (unsigned short)0);
+        }
+
+        // ---- HOSTILE 4: "índice de layer fora de faixa" -- gid3's own BaseGlyphRecord.numLayers
+        //      patched from 2 to 10, so `firstLayerIndex(0) + numLayers(10) == 10` exceeds
+        //      `numLayerRecords == 3` -- must be caught cleanly, never read past the LayerRecords
+        //      array. -----------------------------------------------------------------------------
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u16_be(colr_patch_buf, COLR_FIXTURE_BASE_REC0_NUMLAYERS_OFF, 10);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            count = 0xFFFF; // poison
+            r = glx_sfnt_colr_layers(&pf, 3, layers, 4, &count);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            TEST_ASSERT_EQ(count, (unsigned short)0);
+        }
+
+        // ---- HOSTILE 5: "records desordenados" -- BaseGlyphRecords[0]/[1].glyphID SWAPPED
+        //      (3<->4, descending instead of the spec-required ascending) -- FT-COLR-BSEARCH's own
+        //      doc comment (include/core/sfnt.h) predicts a hostile-unsorted table can only ever
+        //      make the bisection MISS a gid that IS present, never read out of bounds or return a
+        //      wrong match: searching for gid=4 here bisects to index 1 (glyphID patched to 3),
+        //      `3 < 4` steers right past the record actually holding gid=4 (at index 0) -- a clean
+        //      miss, not a crash. --------------------------------------------------------------
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u16_be(colr_patch_buf, COLR_FIXTURE_BASE_REC0_GID_OFF, 4);
+            patch_u16_be(colr_patch_buf, COLR_FIXTURE_BASE_REC1_GID_OFF, 3);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            count = 0xFFFF; // poison
+            r = glx_sfnt_colr_layers(&pf, 4, layers, 4, &count);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            TEST_ASSERT_EQ(count, (unsigned short)0); // bisection miss -- clean, not a crash
+        }
+
+        // ---- HOSTILE 6: "índice de cor fora de faixa" (lying numColorRecords) -- CPAL's own
+        //      numColorRecords patched from 2 to 0 -- entry_index 0 now resolves to
+        //      `rec_index (0) >= num_color_records (0)`, an internally-inconsistent header (the
+        //      colorRecordIndices[0]/colour bytes still physically exist -- this is the
+        //      GLX_SFNT_ERR_BAD_OFFSET class, "bytes exist, relationship does not make sense",
+        //      not GLX_SFNT_ERR_TRUNCATED). ------------------------------------------------------
+        {
+            memcpy(colr_patch_buf, kSyntheticFontColr, sizeof(kSyntheticFontColr));
+            patch_u16_be(colr_patch_buf, CPAL_FIXTURE_NUM_COLOR_RECORDS_OFF, 0);
+            glx_sfnt_result r = glx_sfnt_open(colr_patch_buf, sizeof(colr_patch_buf), &pf);
+            TEST_ASSERT_EQ(r, GLX_SFNT_OK);
+            r = glx_sfnt_cpal_rgba(&pf, 0, rgba);
+            TEST_ASSERT_EQ(r, GLX_SFNT_ERR_BAD_OFFSET);
+        }
     }
 
     TEST_PASS();

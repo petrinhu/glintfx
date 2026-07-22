@@ -266,6 +266,47 @@ glx_sfnt_result glx_sfnt_open(const uint8_t* blob, size_t len, glx_sfnt_face* ou
     kern_t.found = 0;
     int kern_found = find_table(blob, len, dir_off, num_tables, "kern", &kern_t) && kern_t.found;
 
+    // ---- COLR/CPAL: OPTIONAL tables (A4-EMOJI) -- same soft-fail posture as `kern` above -------
+    // EN: `COLR`/`CPAL` are exactly as optional as `kern` (a font with no colour glyphs is still
+    //     a fully valid font -- see `glx_sfnt_face::colr_len`'s own doc), so the same reasoning
+    //     applies verbatim: absent, OR present-but-a-hostile/malformed directory entry (a
+    //     `[offset, length)` that does not itself fit `blob`), both fold into `*_len == 0` rather
+    //     than aborting `glx_sfnt_open` over a non-critical table. Field-by-field zero-init, NOT
+    //     an aggregate `= {0, 0, 0}` -- see `kern_t`'s own comment above for why (the
+    //     `build/objcore/sfnt.o` bare-`memset`-import lesson this codebase already learned once).
+    //     `glx_sfnt_open` deliberately does NOT peek at either table's OWN internal header here
+    //     (version, record counts, ...) -- unlike the 7 REQUIRED tables' size cross-checks above,
+    //     `COLR`/`CPAL`'s internal structure is validated lazily, per-call, by
+    //     `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` themselves (same division of labour `kern`'s
+    //     own version/subtable-format checks already live entirely inside `glx_sfnt_kern`, not
+    //     here).
+    // PT: `COLR`/`CPAL` são exatamente tão opcionais quanto `kern` (uma fonte sem glyph colorido
+    //     nenhum ainda é uma fonte plenamente válida -- ver o doc próprio do
+    //     `glx_sfnt_face::colr_len`), então o mesmo raciocínio se aplica ao pé da letra: ausente,
+    //     OU presente-mas-com-entrada-de-diretório-hostil/malformada (um `[offset, length)` que
+    //     não cabe no próprio `blob`), ambos dobram em `*_len == 0` em vez de abortar o
+    //     `glx_sfnt_open` por causa de uma tabela não-crítica. Zero-init campo-a-campo, NÃO um
+    //     agregado `= {0, 0, 0}` -- ver o comentário próprio do `kern_t` acima pro porquê (a
+    //     lição do `memset` cru importado no `build/objcore/sfnt.o` que este código-base já
+    //     aprendeu uma vez). O `glx_sfnt_open` deliberadamente NÃO espia o próprio header interno
+    //     de nenhuma das duas tabelas aqui (versão, contagens de registro, ...) -- diferente das
+    //     checagens cruzadas de tamanho das 7 tabelas OBRIGATÓRIAS acima, a estrutura interna do
+    //     `COLR`/`CPAL` é validada preguiçosamente, por-chamada, pelo próprio
+    //     `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` (mesma divisão de trabalho que as próprias
+    //     checagens de versão/formato-de-subtable do `kern` já vivem inteiramente dentro do
+    //     `glx_sfnt_kern`, não aqui).
+    table_slot_t colr_t;
+    colr_t.off = 0;
+    colr_t.len = 0;
+    colr_t.found = 0;
+    int colr_found = find_table(blob, len, dir_off, num_tables, "COLR", &colr_t) && colr_t.found;
+
+    table_slot_t cpal_t;
+    cpal_t.off = 0;
+    cpal_t.len = 0;
+    cpal_t.found = 0;
+    int cpal_found = find_table(blob, len, dir_off, num_tables, "CPAL", &cpal_t) && cpal_t.found;
+
     // ---- head: unitsPerEm @18, indexToLocFormat @50 -----------------------------------------
     uint16_t units_per_em;
     int16_t index_to_loc_format;
@@ -393,6 +434,17 @@ glx_sfnt_result glx_sfnt_open(const uint8_t* blob, size_t len, glx_sfnt_face* ou
     //     `glx_sfnt_face::kern_len` do include/core/sfnt.h.
     out->kern_off = kern_found ? kern_t.off : 0;
     out->kern_len = kern_found ? kern_t.len : 0;
+    // EN: `colr_len`/`cpal_len == 0` are the sentinels `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba`
+    //     check for "no COLR"/"no CPAL" -- see this function's own `colr_t`/`cpal_t` comment above
+    //     and include/core/sfnt.h's `glx_sfnt_face::colr_len`/`cpal_len` doc.
+    // PT: `colr_len`/`cpal_len == 0` são os sentinelas que o `glx_sfnt_colr_layers`/
+    //     `glx_sfnt_cpal_rgba` checam pra "sem COLR"/"sem CPAL" -- ver o comentário próprio
+    //     `colr_t`/`cpal_t` desta função acima e o doc do `glx_sfnt_face::colr_len`/`cpal_len` do
+    //     include/core/sfnt.h.
+    out->colr_off = colr_found ? colr_t.off : 0;
+    out->colr_len = colr_found ? colr_t.len : 0;
+    out->cpal_off = cpal_found ? cpal_t.off : 0;
+    out->cpal_len = cpal_found ? cpal_t.len : 0;
     return GLX_SFNT_OK;
 }
 
@@ -1341,4 +1393,255 @@ int16_t glx_sfnt_kern(const glx_sfnt_face* face, uint32_t left_gid, uint32_t rig
     }
 
     return 0; // exhausted every subtable without finding a usable format-0 horizontal one
+}
+
+// ============================================================================================
+// EN: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba -- 'COLR' v0 / 'CPAL' v0 lookup (A4-EMOJI). Public
+//     API contract, the `0xFFFF`-sentinel/caller-handled-foreground-colour design, and every
+//     hostile-case shape are all documented on each function's own declaration in
+//     include/core/sfnt.h -- this comment block only adds the LOCAL "how" (byte layout, the exact
+//     bounds-check shape chosen and why), not re-derived "why"/scope that already lives there.
+// PT: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba -- lookup de 'COLR' v0 / 'CPAL' v0 (A4-EMOJI). O
+//     contrato de API pública, o desenho do sentinela `0xFFFF`/cor-de-foreground-tratada-por-
+//     quem-chama, e todo formato de caso hostil estão documentados na declaração própria de cada
+//     função no include/core/sfnt.h -- este bloco de comentário só acrescenta o "como" LOCAL
+//     (layout de byte, a forma exata de checagem de limite escolhida e por quê), não o
+//     "porquê"/escopo já re-derivado que mora lá.
+// ============================================================================================
+
+glx_sfnt_result glx_sfnt_colr_layers(const glx_sfnt_face* face, uint32_t gid,
+                                      glx_sfnt_colr_layer* out, uint16_t cap,
+                                      uint16_t* count_out) {
+    if (face == NULL || count_out == NULL) return GLX_SFNT_ERR_INVALID_ARG;
+    if (cap != 0 && out == NULL) return GLX_SFNT_ERR_INVALID_ARG;
+    if (gid >= face->num_glyphs) return GLX_SFNT_ERR_INVALID_ARG;
+
+    // EN: Default answer, set BEFORE any of the soft-fail early returns below -- every one of
+    //     them (no COLR table, bad version, truncated header/arrays, gid not a base glyph,
+    //     hostile layer range) is documented to report "0 layers, GLX_SFNT_OK", not leave
+    //     `*count_out` stale/indeterminate.
+    // PT: Resposta padrão, ajustada ANTES de qualquer um dos retornos antecipados de falha-suave
+    //     abaixo -- cada um deles (sem tabela COLR, versão ruim, header/arrays truncados, gid não
+    //     é glyph-base, faixa de layer hostil) é documentado pra reportar "0 camadas,
+    //     GLX_SFNT_OK", não deixar `*count_out` obsoleto/indeterminado.
+    *count_out = 0;
+
+    if (face->colr_len == 0) return GLX_SFNT_OK; // no COLR table -- a valid, common case
+
+    const uint8_t* blob = face->blob;
+    size_t len = face->len;
+    size_t colr_off = face->colr_off;
+    size_t colr_end = colr_off + face->colr_len;
+
+    // ---- COLR header (v0): version(2) numBaseGlyphRecords(2) baseGlyphRecordsOffset(4)
+    //      layerRecordsOffset(4) numLayerRecords(2) = 14 bytes -- header fields read against the
+    //      WHOLE blob (`len`), same "outer struct header" shape `kern`'s own version/nTables read
+    //      uses; only the two RECORD ARRAYS below are bound against `colr_end` (the table's own
+    //      span) -----------------------------------------------------------------------------
+    uint16_t version;
+    if (!rd_u16(blob, len, colr_off, &version)) return GLX_SFNT_OK; // truncated -> soft "no COLR"
+    if (version != 0) return GLX_SFNT_OK; // COLRv1+ (paint DAG) out of scope -- soft, not an error
+
+    uint16_t num_base_glyph_records, num_layer_records;
+    uint32_t base_glyph_records_offset, layer_records_offset;
+    if (!rd_u16(blob, len, colr_off + 2, &num_base_glyph_records)) return GLX_SFNT_OK;
+    if (!rd_u32(blob, len, colr_off + 4, &base_glyph_records_offset)) return GLX_SFNT_OK;
+    if (!rd_u32(blob, len, colr_off + 8, &layer_records_offset)) return GLX_SFNT_OK;
+    if (!rd_u16(blob, len, colr_off + 12, &num_layer_records)) return GLX_SFNT_OK;
+
+    // EN: Both offsets are COLR-table-relative per spec -- `colr_off + offsetN` cannot wrap on a
+    //     64-bit `size_t` from any `uint32_t` value in practice (see cmap's own `sub_abs <
+    //     cmap_t.off` comment above for the identical, mostly-defensive-documentation reasoning),
+    //     kept anyway for the same "invariant enforced here, not merely trusted" discipline.
+    // PT: Os dois offsets são relativos-à-tabela-COLR pela spec -- `colr_off + offsetN` não
+    //     consegue dar a volta num `size_t` de 64 bits a partir de nenhum valor `uint32_t` na
+    //     prática (ver o comentário próprio `sub_abs < cmap_t.off` do cmap acima pro raciocínio
+    //     idêntico, majoritariamente documentação-defensiva), mantido assim mesmo pela mesma
+    //     disciplina de "invariante reforçado aqui, não meramente confiado".
+    size_t base_recs_off = colr_off + (size_t)base_glyph_records_offset;
+    if (base_recs_off < colr_off) return GLX_SFNT_OK; // overflow guard, unreachable on 64-bit
+    size_t base_recs_need = (size_t)num_base_glyph_records * 6u; // BaseGlyphRecord = 6 bytes
+    if (!bounds_ok(colr_end, base_recs_off, base_recs_need)) return GLX_SFNT_OK; // "counts mentirosos"
+
+    size_t layer_recs_off = colr_off + (size_t)layer_records_offset;
+    if (layer_recs_off < colr_off) return GLX_SFNT_OK; // overflow guard, unreachable on 64-bit
+    size_t layer_recs_need = (size_t)num_layer_records * 4u; // LayerRecord = 4 bytes
+    if (!bounds_ok(colr_end, layer_recs_off, layer_recs_need)) return GLX_SFNT_OK; // "COLR truncado"
+
+    // ---- FT-COLR-BSEARCH -- BaseGlyphRecords are spec-REQUIRED sorted ascending by glyphID,
+    //      same KERN-BSEARCH shape glx_sfnt_kern already uses: bisect, never scan. The two
+    //      bounds_ok calls above already prove every index `m` in `[0, num_base_glyph_records)`
+    //      has its whole 6-byte record inside `[colr_off, colr_end)` REGARDLESS of the byte
+    //      values there, sorted or not -- a hostile/unsorted table can only ever make this MISS a
+    //      gid that IS present (falls through to the "not a colour glyph" `GLX_SFNT_OK`/count==0
+    //      return below), never read out of bounds or return a WRONG match. -------------------
+    uint16_t want = (uint16_t)gid; // gid < num_glyphs <= 0xFFFF already proven above
+    size_t lo = 0, hi = num_base_glyph_records;
+    size_t found_idx = SIZE_MAX; // sentinel: "not found yet" (a real index is always < hi <= 0xFFFF)
+    while (lo < hi) {
+        size_t m = lo + (hi - lo) / 2; // anti-overflow idiom, never `(lo + hi) / 2`
+        size_t rec_off = base_recs_off + m * 6u;
+        uint16_t have;
+        if (!rd_u16(blob, len, rec_off, &have)) return GLX_SFNT_OK; // unreachable, bounds already proven
+        if (have == want) {
+            found_idx = m;
+            break;
+        }
+        if (have < want) {
+            lo = m + 1;
+        } else {
+            hi = m;
+        }
+    }
+    if (found_idx == SIZE_MAX) return GLX_SFNT_OK; // gid is not a COLR base glyph -- ordinary case
+
+    size_t rec_off = base_recs_off + found_idx * 6u;
+    uint16_t first_layer_index, num_layers;
+    if (!rd_u16(blob, len, rec_off + 2, &first_layer_index)) return GLX_SFNT_OK; // unreachable, bounds proven
+    if (!rd_u16(blob, len, rec_off + 4, &num_layers)) return GLX_SFNT_OK; // unreachable, bounds proven
+
+    // EN: "índice de layer fora de faixa" hostile shape: a BaseGlyphRecord whose own
+    //     `firstLayerIndex + numLayers` reaches past the LayerRecords array this SAME COLR table
+    //     declares. `uint32_t` arithmetic is overflow-safe here (both operands are `uint16_t`,
+    //     max sum ~0x1FFFE, nowhere near UINT32_MAX). `numLayers == 0` is folded into the same
+    //     "not usable" answer -- a spec-legitimate base glyph record always has >= 1 layer, but a
+    //     hostile one claiming 0 is not memory-unsafe, just a degenerate glyph this function
+    //     reports as "not a colour glyph" rather than an empty-but-technically-COLR one.
+    // PT: Formato hostil "índice de layer fora de faixa": um BaseGlyphRecord cujo próprio
+    //     `firstLayerIndex + numLayers` alcança além do array LayerRecords que esta MESMA tabela
+    //     COLR declara. Aritmética `uint32_t` é segura-contra-overflow aqui (os dois operandos
+    //     são `uint16_t`, soma máxima ~0x1FFFE, longe de UINT32_MAX). `numLayers == 0` é dobrado
+    //     na mesma resposta "não utilizável" -- um registro de glyph-base espec-legítimo sempre
+    //     tem >= 1 camada, mas um hostil alegando 0 não é insegurança-de-memória, só um glyph
+    //     degenerado que esta função reporta como "não é glyph colorido" em vez de um
+    //     tecnicamente-COLR-mas-vazio.
+    if (num_layers == 0) return GLX_SFNT_OK;
+    if ((uint32_t)first_layer_index + (uint32_t)num_layers > (uint32_t)num_layer_records) {
+        return GLX_SFNT_OK;
+    }
+
+    // EN: Found, and the layer RANGE is internally consistent -- report the true count BEFORE
+    //     the capacity check (see this function's own doc comment in include/core/sfnt.h for why
+    //     this differs from glx_sfnt_glyph_outline's BUFFER_TOO_SMALL contract).
+    // PT: Achado, e a FAIXA de layer é internamente consistente -- reporta a contagem verdadeira
+    //     ANTES da checagem de capacidade (ver o comentário de doc próprio desta função no
+    //     include/core/sfnt.h pro porquê disso diferir do contrato BUFFER_TOO_SMALL do
+    //     glx_sfnt_glyph_outline).
+    *count_out = num_layers;
+    if (num_layers > cap) return GLX_SFNT_ERR_BUFFER_TOO_SMALL;
+
+    for (uint16_t i = 0; i < num_layers; i++) {
+        size_t lrec_off = layer_recs_off + (size_t)(first_layer_index + i) * 4u;
+        uint16_t layer_gid, palette_index;
+        // EN: Unreachable in practice -- `layer_recs_off .. + layer_recs_need` was already
+        //     proven to fit `[colr_off, colr_end)` above, and `first_layer_index + i <
+        //     num_layer_records` by the range check just above -- kept as a real, checked read
+        //     (not an assert) anyway, this file's own house style throughout (defense in depth
+        //     over trusting an invariant proven a few lines up).
+        // PT: Inalcançável na prática -- `layer_recs_off .. + layer_recs_need` já foi provado
+        //     caber em `[colr_off, colr_end)` acima, e `first_layer_index + i < num_layer_records`
+        //     pela checagem de faixa logo acima -- mantido como uma leitura real, checada (não um
+        //     assert) assim mesmo, o próprio estilo de casa deste arquivo do início ao fim (defesa
+        //     em profundidade sobre confiar num invariante provado poucas linhas acima).
+        if (!rd_u16(blob, len, lrec_off, &layer_gid)) return GLX_SFNT_ERR_TRUNCATED;
+        if (!rd_u16(blob, len, lrec_off + 2, &palette_index)) return GLX_SFNT_ERR_TRUNCATED;
+        out[i].gid = layer_gid;
+        out[i].palette_index = palette_index;
+    }
+    return GLX_SFNT_OK;
+}
+
+glx_sfnt_result glx_sfnt_cpal_rgba(const glx_sfnt_face* face, uint16_t entry_index,
+                                    uint8_t rgba_out[4]) {
+    if (face == NULL || rgba_out == NULL) return GLX_SFNT_ERR_INVALID_ARG;
+    // EN: Unlike glx_sfnt_colr_layers' soft "0 layers" contract, a caller only ever reaches this
+    //     function after already confirming a real COLR layer exists -- CPAL's own absence at
+    //     that point is a real, reportable failure (see this function's own doc in
+    //     include/core/sfnt.h for the full rationale).
+    // PT: Diferente do contrato suave "0 camadas" do glx_sfnt_colr_layers, quem chama só chega
+    //     nesta função depois de já ter confirmado que uma camada COLR real existe -- a própria
+    //     ausência do CPAL nesse ponto é uma falha real, reportável (ver o doc próprio desta
+    //     função no include/core/sfnt.h pro racional completo).
+    if (face->cpal_len == 0) return GLX_SFNT_ERR_TABLE_MISSING;
+
+    const uint8_t* blob = face->blob;
+    size_t len = face->len;
+    size_t cpal_off = face->cpal_off;
+    size_t cpal_end = cpal_off + face->cpal_len;
+
+    // ---- CPAL header (v0): version(2) numPaletteEntries(2) numPalettes(2) numColorRecords(2)
+    //      colorRecordsArrayOffset(4) = 12 bytes -- read against the WHOLE blob (`len`), same
+    //      "outer struct header" shape COLR's own header / kern's version/nTables read use ------
+    uint16_t version;
+    if (!rd_u16(blob, len, cpal_off, &version)) return GLX_SFNT_ERR_TRUNCATED;
+    if (version != 0) return GLX_SFNT_ERR_UNSUPPORTED; // CPALv1+ (label tables) out of scope
+
+    uint16_t num_palette_entries, num_palettes, num_color_records;
+    uint32_t color_records_array_offset;
+    if (!rd_u16(blob, len, cpal_off + 2, &num_palette_entries)) return GLX_SFNT_ERR_TRUNCATED;
+    if (!rd_u16(blob, len, cpal_off + 4, &num_palettes)) return GLX_SFNT_ERR_TRUNCATED;
+    if (!rd_u16(blob, len, cpal_off + 6, &num_color_records)) return GLX_SFNT_ERR_TRUNCATED;
+    if (!rd_u32(blob, len, cpal_off + 8, &color_records_array_offset)) return GLX_SFNT_ERR_TRUNCATED;
+
+    // EN: `numPalettes == 0` is internally inconsistent (there is no palette 0 to read
+    //     `colorRecordIndices[0]` from, even though CPAL's own fixed 12-byte header parsed fine)
+    //     -- same GLX_SFNT_ERR_BAD_OFFSET class `loca[gid] > loca[gid+1]` already uses for
+    //     "bytes exist, relationship does not make sense".
+    // PT: `numPalettes == 0` é internamente inconsistente (não há paleta 0 pra ler o próprio
+    //     `colorRecordIndices[0]`, mesmo o header fixo de 12 bytes do CPAL tendo parseado bem)
+    //     -- mesma classe GLX_SFNT_ERR_BAD_OFFSET que `loca[gid] > loca[gid+1]` já usa pra "bytes
+    //     existem, a relação não faz sentido".
+    if (num_palettes == 0) return GLX_SFNT_ERR_BAD_OFFSET;
+    // EN: Caller-supplied index past the table's own declared bound -- same INVALID_ARG posture
+    //     glx_sfnt_hmetrics' own `gid >= num_glyphs` check uses (a programming-error-shaped input,
+    //     not a font-content problem).
+    // PT: Índice fornecido por quem chama além do limite próprio declarado da tabela -- mesma
+    //     postura INVALID_ARG que o próprio `gid >= num_glyphs` do glx_sfnt_hmetrics usa (um
+    //     input em formato de erro-de-programação, não um problema de conteúdo-de-fonte).
+    if (entry_index >= num_palette_entries) return GLX_SFNT_ERR_INVALID_ARG;
+
+    // ---- colorRecordIndices[0]: palette 0's own starting index into colorRecordsArray -- bound
+    //      against `cpal_end` (the TABLE's own span), NOT merely `len` (the whole blob), so a
+    //      CPAL directory entry trimmed down to just the 12-byte fixed header cannot silently
+    //      read a NEIGHBOURING table's bytes as if they were this array -- the "CPAL truncado"
+    //      hostile shape, same `hmtx`/`loca`/`kern` pair array reasoning applied here. Only
+    //      palette 0 is ever read (see this file's SCOPE note) -----------------------------------
+    size_t indices_off = cpal_off + 12;
+    if (!bounds_ok(cpal_end, indices_off, 2)) return GLX_SFNT_ERR_TRUNCATED;
+    uint16_t palette0_first_index;
+    if (!rd_u16(blob, len, indices_off, &palette0_first_index)) return GLX_SFNT_ERR_TRUNCATED;
+
+    // EN: `rec_index >= num_color_records` catches a lying `numColorRecords` (bytes for the
+    //     record MAY still exist physically, per the bounds check further below, but the header
+    //     itself declares this index does not belong to any real colour record) -- same
+    //     GLX_SFNT_ERR_BAD_OFFSET class as the `numPalettes == 0` check above, "internally
+    //     inconsistent, not (necessarily) out-of-blob".
+    // PT: `rec_index >= num_color_records` pega um `numColorRecords` mentiroso (os bytes do
+    //     registro PODEM ainda existir fisicamente, pela checagem de limite mais abaixo, mas o
+    //     próprio header declara que este índice não pertence a registro de cor real nenhum) --
+    //     mesma classe GLX_SFNT_ERR_BAD_OFFSET da checagem `numPalettes == 0` acima, "internamente
+    //     inconsistente, não (necessariamente) fora do blob".
+    uint32_t rec_index = (uint32_t)palette0_first_index + (uint32_t)entry_index;
+    if (rec_index >= (uint32_t)num_color_records) return GLX_SFNT_ERR_BAD_OFFSET;
+
+    size_t rec_off = cpal_off + (size_t)color_records_array_offset + (size_t)rec_index * 4u;
+    if (rec_off < cpal_off) return GLX_SFNT_ERR_TRUNCATED; // overflow guard, unreachable on 64-bit
+    if (!bounds_ok(cpal_end, rec_off, 4)) return GLX_SFNT_ERR_TRUNCATED; // "CPAL truncado"
+
+    // EN: ColorRecord wire order is BGRA (blue, green, red, alpha), per spec -- converted to the
+    //     ordinary RGBA order this function's own contract promises (see include/core/sfnt.h).
+    // PT: A ordem de fio do ColorRecord é BGRA (azul, verde, vermelho, alfa), pela spec --
+    //     convertida pra ordem RGBA comum que o próprio contrato desta função promete (ver
+    //     include/core/sfnt.h).
+    uint8_t blue, green, red, alpha;
+    if (!rd_u8(blob, len, rec_off, &blue)) return GLX_SFNT_ERR_TRUNCATED; // unreachable, bounds proven
+    if (!rd_u8(blob, len, rec_off + 1, &green)) return GLX_SFNT_ERR_TRUNCATED; // unreachable, bounds proven
+    if (!rd_u8(blob, len, rec_off + 2, &red)) return GLX_SFNT_ERR_TRUNCATED; // unreachable, bounds proven
+    if (!rd_u8(blob, len, rec_off + 3, &alpha)) return GLX_SFNT_ERR_TRUNCATED; // unreachable, bounds proven
+
+    rgba_out[0] = red;
+    rgba_out[1] = green;
+    rgba_out[2] = blue;
+    rgba_out[3] = alpha;
+    return GLX_SFNT_OK;
 }

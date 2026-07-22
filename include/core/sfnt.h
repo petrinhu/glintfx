@@ -48,8 +48,13 @@
 //     accented glyphs `á`/`ç`/`ã`, all composites in Open Sans), `kern` FORMAT 0, HORIZONTAL
 //     SUBTABLE ONLY (`glx_sfnt_kern` -- the classic Apple/Microsoft-classic `version == 0` header;
 //     Open Sans ships exactly one such subtable, 18694 pairs, and is this feature's own oracle --
-//     see `tests/test_sfnt.c`'s ORACLE METHOD section). SOV-SFNT amadurecimento pro L1.20 ticket
-//     (kerning, glintfx's text-layout consumer). Deliberately OUT of scope (YAGNI, same
+//     see `tests/test_sfnt.c`'s ORACLE METHOD section), and `COLR` v0 + `CPAL` v0 ONLY
+//     (`glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` -- flat-layer, solid-colour vector emoji;
+//     COLRv1's paint DAG, palettes beyond palette 0, and CPALv1's label tables are deliberately
+//     out of scope, see each function's own doc below and
+//     `glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md`). SOV-SFNT
+//     amadurecimento pro L1.20 ticket (kerning, glintfx's text-layout consumer) and A4-EMOJI
+//     (COLRv0, glintfx's colour-glyph consumer). Deliberately OUT of scope (YAGNI, same
 //     anti-over-engineering discipline this whole codebase applies): CFF/OTF outlines (PostScript
 //     cubics -- `sfntVersion == 'OTTO'` is rejected with `GLX_SFNT_ERR_BAD_VERSION`), `GPOS`
 //     (the MODERN, lookup-table-based kerning/positioning mechanism -- Open Sans ships BOTH `kern`
@@ -131,9 +136,14 @@
 //     -- necessário pros glyphs acentuados pt-br `á`/`ç`/`ã`, todos compostos na Open Sans), `kern`
 //     FORMATO 0, SÓ SUBTABLE HORIZONTAL (`glx_sfnt_kern` -- o header clássico Apple/Microsoft-
 //     clássico `version == 0`; a Open Sans embarca exatamente uma dessas subtables, 18694 pares, e
-//     é o próprio oráculo deste recurso -- ver a seção MÉTODO DO ORÁCULO do `tests/test_sfnt.c`).
+//     é o próprio oráculo deste recurso -- ver a seção MÉTODO DO ORÁCULO do `tests/test_sfnt.c`),
+//     e `COLR` v0 + `CPAL` v0 SÓ (`glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` -- emoji vetorial de
+//     camada plana + cor sólida; o grafo de paint do COLRv1, paletas além da 0, e as tabelas de
+//     rótulo do CPALv1 estão deliberadamente fora de escopo, ver o doc próprio de cada função
+//     abaixo e `glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md`).
 //     Amadurecimento SOV-SFNT pro ticket L1.20 (kerning, o consumidor de layout-de-texto do
-//     glintfx). Fora de escopo de propósito (YAGNI, mesma disciplina anti over-engineering deste
+//     glintfx) e pro A4-EMOJI (COLRv0, o consumidor de emoji colorido do FontEngineOwn). Fora de
+//     escopo de propósito (YAGNI, mesma disciplina anti over-engineering deste
 //     código-base inteiro): outlines CFF/OTF (cúbicas PostScript -- `sfntVersion == 'OTTO'` é
 //     rejeitado com `GLX_SFNT_ERR_BAD_VERSION`), `GPOS` (o mecanismo MODERNO de
 //     kerning/posicionamento baseado em lookup-table -- a Open Sans embarca TANTO `kern` QUANTO
@@ -360,6 +370,37 @@ typedef struct {
     //     src/sfnt.c).
     size_t kern_off;
     size_t kern_len;
+
+    // EN: Absolute byte offset/length of the `COLR`/`CPAL` tables WITHIN `blob`, same soft-fail
+    //     posture as `kern_off`/`kern_len` above (OPTIONAL tables; `glx_sfnt_open` folds "absent"
+    //     AND "present but a hostile/malformed directory entry" into `*_len == 0` here rather than
+    //     failing the whole font -- see `glx_sfnt_open`'s own `colr_t`/`cpal_t` comment in
+    //     src/sfnt.c). Unlike `kern`, `glx_sfnt_open` does NOT even peek at either table's own
+    //     internal header (version, record counts, ...) -- ALL of that is deferred to
+    //     `glx_sfnt_colr_layers`/`glx_sfnt_cpal_rgba` at call time, same division of labour `kern`
+    //     already established (`glx_sfnt_open` only proves the table's `[offset, length)` span
+    //     itself fits `blob`; everything inside that span is validated lazily, per-call).
+    //     `colr_len == 0` means "no `COLR` table" -- a font with no colour glyphs at all is a
+    //     fully valid `glx_sfnt_open` success, `glx_sfnt_colr_layers` then always reports 0 layers
+    //     for every gid, same "absent feature, not an error" posture as `kern_len == 0`.
+    // PT: Offset/tamanho de byte absoluto das tabelas `COLR`/`CPAL` DENTRO de `blob`, mesma
+    //     postura de falha-suave do `kern_off`/`kern_len` acima (tabelas OPCIONAIS;
+    //     `glx_sfnt_open` dobra "ausente" E "presente mas com entrada de diretório
+    //     hostil/malformada" em `*_len == 0` aqui em vez de falhar a fonte inteira -- ver o
+    //     comentário próprio `colr_t`/`cpal_t` do `glx_sfnt_open` no src/sfnt.c). Diferente do
+    //     `kern`, o `glx_sfnt_open` NEM espia o próprio header interno de nenhuma das duas tabelas
+    //     (versão, contagens de registro, ...) -- TUDO isso é adiado pro `glx_sfnt_colr_layers`/
+    //     `glx_sfnt_cpal_rgba` em tempo de chamada, mesma divisão de trabalho que o `kern` já
+    //     estabeleceu (o `glx_sfnt_open` só prova que o próprio vão `[offset, length)` da tabela
+    //     cabe no `blob`; tudo dentro desse vão é validado preguiçosamente, por-chamada).
+    //     `colr_len == 0` significa "sem tabela `COLR`" -- uma fonte sem glyph colorido nenhum é
+    //     um sucesso `glx_sfnt_open` plenamente válido, o `glx_sfnt_colr_layers` então sempre
+    //     reporta 0 camadas pra todo gid, mesma postura de "recurso ausente, não é erro" do
+    //     `kern_len == 0`.
+    size_t colr_off;
+    size_t colr_len;
+    size_t cpal_off;
+    size_t cpal_len;
 } glx_sfnt_face;
 
 // EN: Parses the SFNT table directory + `head`/`maxp`/`hhea`/`hmtx`-size/`loca`-size/`cmap`
@@ -575,6 +616,208 @@ glx_sfnt_result glx_sfnt_glyph_outline(const glx_sfnt_face* face, uint32_t gid,
 //     resolvem pra um retorno `0` limpo, nunca uma leitura fora de limite (ver o cabeçalho de
 //     arquivo do `include/core/sfnt.h`, POSTURA DE HARDENING).
 int16_t glx_sfnt_kern(const glx_sfnt_face* face, uint32_t left_gid, uint32_t right_gid);
+
+// ============================================================================================
+// EN: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba -- `COLR` v0 (flat base-glyph -> ordered layer
+//     list) + `CPAL` v0 (BGRA colour palette) lookup, A4-EMOJI's own SOV-SFNT slice. See this
+//     file's SCOPE note above for what COLRv1/CPALv1/multi-palette leave out, and
+//     `glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md` for the product-
+//     level rationale (S1's own brief, section 6).
+// PT: glx_sfnt_colr_layers / glx_sfnt_cpal_rgba -- lookup de `COLR` v0 (glyph-base plano ->
+//     lista ordenada de camada) + `CPAL` v0 (paleta de cor BGRA), a própria fatia SOV-SFNT do
+//     A4-EMOJI. Ver a nota de ESCOPO deste arquivo acima pro que COLRv1/CPALv1/multi-paleta
+//     deixam de fora, e `glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md`
+//     pro racional em nível de produto (o próprio brief do S1, seção 6).
+// ============================================================================================
+
+// EN: One COLR layer: `gid` is a PLAIN glyph id (feed it into `glx_sfnt_glyph_outline` exactly
+//     like any other gid -- a COLR layer is spec-defined to be an ordinary `glyf` outline, no new
+//     raster feature needed), `palette_index` is either a valid index into `CPAL`'s palette 0
+//     (`< glx_sfnt_cpal_rgba`'s own `numPaletteEntries` bound) or the spec sentinel `0xFFFF`
+//     meaning "use the text/foreground colour, not a palette entry" -- `glx_sfnt_cpal_rgba` does
+//     NOT special-case `0xFFFF` (no real `CPAL` ever declares 65536 entries, so passing it
+//     through unconditionally already resolves to a clean `GLX_SFNT_ERR_INVALID_ARG`); the
+//     CALLER is expected to check `palette_index == 0xFFFF` BEFORE ever calling
+//     `glx_sfnt_cpal_rgba`, and substitute whatever colour it considers "foreground" itself (see
+//     A4-EMOJI's plan, section 5, "Known limitations" -- FontEngineOwn bakes this case as opaque
+//     white, a decision made at the CONSUMER layer, not here).
+// PT: Uma camada de COLR: `gid` é um id de glyph PURO (alimenta ele no `glx_sfnt_glyph_outline`
+//     exatamente como qualquer outro gid -- uma camada COLR é, pela spec, um outline `glyf`
+//     comum, nenhuma feature de raster nova necessária), `palette_index` é ou um índice válido na
+//     paleta 0 do `CPAL` (`<` o próprio limite `numPaletteEntries` que o `glx_sfnt_cpal_rgba`
+//     checa) ou o sentinela da spec `0xFFFF` significando "usa a cor de texto/foreground, não uma
+//     entrada de paleta" -- o `glx_sfnt_cpal_rgba` NÃO trata `0xFFFF` como caso especial (nenhum
+//     `CPAL` real algum dia declara 65536 entradas, então passar ele adiante sem checagem
+//     especial já resolve pra um `GLX_SFNT_ERR_INVALID_ARG` limpo); quem CHAMA tem a expectativa
+//     de checar `palette_index == 0xFFFF` ANTES de algum dia chamar `glx_sfnt_cpal_rgba`, e
+//     substituir pela cor que considerar "foreground" por conta própria (ver o plano do
+//     A4-EMOJI, seção 5, "Limitações documentadas" -- o FontEngineOwn baka este caso como branco
+//     opaco, uma decisão tomada na camada CONSUMIDORA, não aqui).
+typedef struct {
+    uint16_t gid;
+    uint16_t palette_index;
+} glx_sfnt_colr_layer;
+
+// EN: Enumerates `gid`'s `COLR` v0 layers (spec order, bottom-to-top paint order) into the
+//     caller-owned `out` array (capacity `cap`), always reporting the TRUE layer count in
+//     `*count_out` -- unlike `glx_sfnt_glyph_outline`'s `GLX_SFNT_ERR_BUFFER_TOO_SMALL` contract
+//     (where the true size is genuinely unknown until composite-flattening finishes, so it is
+//     left unspecified on that result), COLR's layer count is read directly off the
+//     `BaseGlyphRecord` BEFORE writing a single `glx_sfnt_colr_layer`, so this function can
+//     always hand it back -- a caller that under-sized `out` can size a retry buffer from
+//     `*count_out` without a second probing call.
+//
+//     Returns `GLX_SFNT_ERR_INVALID_ARG` for a NULL `face`/`count_out`, a non-zero `cap` paired
+//     with a NULL `out`, or `gid >= face->num_glyphs` (same bounds contract
+//     `glx_sfnt_hmetrics`/`glx_sfnt_glyph_outline` already use for their own `gid` argument);
+//     `GLX_SFNT_ERR_BUFFER_TOO_SMALL` if `cap < *count_out` for a gid that IS a COLR base glyph.
+//     Every OTHER outcome -- no `COLR` table at all (`face->colr_len == 0`); a `COLR` table
+//     present but with an unsupported version (COLRv1+, `version != 0`); a truncated/malformed
+//     `COLR` header or `BaseGlyphRecord`/`LayerRecord` array (declared counts that do not fit the
+//     table's own `[colr_off, colr_off+colr_len)` span, the "COLR truncado"/"counts mentirosos"
+//     hostile shapes); `gid` simply not present among the `BaseGlyphRecord`s (the ordinary "this
+//     is not a colour glyph, render it as an outline like any other" case, by far the most common
+//     non-error outcome even on a font that DOES ship `COLR`); or a found record whose own
+//     `firstLayerIndex + numLayers` exceeds `numLayerRecords` (the "índice de layer fora de
+//     faixa" hostile shape) -- ALL resolve to `GLX_SFNT_OK` with `*count_out == 0`, the neutral
+//     "not (usably) a colour glyph" answer a caller can always fall back on, same "clean
+//     degradation, never a loud failure for a non-critical/optional feature" posture `kern_len ==
+//     0`/an absent kerning pair already use in this file.
+//
+//     HARDENING: every multi-byte field goes through the same `rd_u8`/`rd_u16`/`rd_u32` bounds-
+//     checked primitives (src/sfnt.c) every other function in this file uses. The
+//     `BaseGlyphRecord`/`LayerRecord` arrays are bounds-checked against the `COLR` TABLE's own
+//     `[colr_off, colr_off+colr_len)` span (not the whole blob), same "do not silently bleed into
+//     a neighbouring table" reasoning `hmtx`/`loca`/`kern`'s own pair array already document in
+//     src/sfnt.c. `BaseGlyphRecord`s are spec-REQUIRED to be sorted ascending by `glyphID`; this
+//     lookup ASSUMES that (bisects `[0, numBaseGlyphRecords)`, same `KERN-BSEARCH` shape
+//     `glx_sfnt_kern` already uses) rather than scanning linearly -- the bounds check above
+//     already proves every index the bisection can ever touch is inside `[colr_off,
+//     colr_off+colr_len)` regardless of the byte values found there, so a hostile/malformed,
+//     genuinely-unsorted `COLR` can only ever make the bisection MISS a `gid` that IS present
+//     (this function then reports the ordinary "not a colour glyph" `*count_out == 0` -- cosmetic,
+//     not a correctness break, the exact same residual-risk shape `glx_sfnt_kern`'s own doc
+//     comment already accepts for an unsorted `kern` pair array), never an out-of-bounds read or
+//     a WRONG (but present) match.
+// PT: Enumera as camadas `COLR` v0 do `gid` (ordem da spec, ordem de pintura de-baixo-pra-cima)
+//     no array `out` possuído por quem chama (capacidade `cap`), sempre reportando a contagem
+//     VERDADEIRA de camada em `*count_out` -- diferente do contrato
+//     `GLX_SFNT_ERR_BUFFER_TOO_SMALL` do `glx_sfnt_glyph_outline` (onde o tamanho verdadeiro é
+//     genuinamente desconhecido até o achatamento-de-composto terminar, então fica não-
+//     especificado nesse resultado), a contagem de camada do COLR é lida direto do
+//     `BaseGlyphRecord` ANTES de escrever um único `glx_sfnt_colr_layer`, então esta função sempre
+//     consegue devolvê-la -- quem chama e subdimensionou `out` consegue dimensionar um buffer de
+//     nova tentativa a partir de `*count_out` sem uma segunda chamada de sondagem.
+//
+//     Retorna `GLX_SFNT_ERR_INVALID_ARG` pra um `face`/`count_out` NULL, uma `cap` não-zero
+//     pareada com um `out` NULL, ou `gid >= face->num_glyphs` (mesmo contrato de limite que
+//     `glx_sfnt_hmetrics`/`glx_sfnt_glyph_outline` já usam pro próprio argumento `gid`);
+//     `GLX_SFNT_ERR_BUFFER_TOO_SMALL` se `cap < *count_out` pra um gid que É um glyph-base COLR.
+//     TODO outro resultado -- nenhuma tabela `COLR` (`face->colr_len == 0`); uma tabela `COLR`
+//     presente mas com versão não suportada (COLRv1+, `version != 0`); um header `COLR`
+//     truncado/malformado ou array `BaseGlyphRecord`/`LayerRecord` (contagens declaradas que não
+//     cabem no próprio vão `[colr_off, colr_off+colr_len)` da tabela, os formatos hostis "COLR
+//     truncado"/"counts mentirosos"); o `gid` simplesmente não presente entre os
+//     `BaseGlyphRecord`s (o caso comum "isto não é um glyph colorido, renderiza como um outline
+//     igual qualquer outro", de longe o resultado não-erro mais comum mesmo numa fonte que TEM
+//     `COLR`); ou um registro achado cujo próprio `firstLayerIndex + numLayers` excede
+//     `numLayerRecords` (o formato hostil "índice de layer fora de faixa") -- TODOS resolvem pra
+//     `GLX_SFNT_OK` com `*count_out == 0`, a resposta neutra "não é (utilizavelmente) um glyph
+//     colorido" que quem chama sempre pode cair de volta, mesma postura de "degradação limpa,
+//     nunca uma falha alta pra um recurso não-crítico/opcional" que `kern_len == 0`/um par de
+//     kerning ausente já usam neste arquivo.
+//
+//     HARDENING: todo campo multi-byte passa pelas mesmas primitivas com checagem de limite
+//     `rd_u8`/`rd_u16`/`rd_u32` (src/sfnt.c) que toda outra função deste arquivo usa. Os arrays
+//     `BaseGlyphRecord`/`LayerRecord` são checados de limite contra o vão `[colr_off,
+//     colr_off+colr_len)` da PRÓPRIA tabela `COLR` (não o blob inteiro), mesmo raciocínio de "não
+//     sangrar em silêncio pra dentro de uma tabela vizinha" que o array de par do
+//     `hmtx`/`loca`/`kern` já documentam no src/sfnt.c. `BaseGlyphRecord`s são EXIGIDOS pela spec
+//     de estarem ordenados ascendente por `glyphID`; este lookup ASSUME isso (bisecta `[0,
+//     numBaseGlyphRecords)`, mesmo formato `KERN-BSEARCH` que o `glx_sfnt_kern` já usa) em vez de
+//     varrer linearmente -- a checagem de limite acima já prova que todo índice que a bisecção
+//     algum dia consegue tocar está dentro de `[colr_off, colr_off+colr_len)` independente dos
+//     valores de byte achados ali, então um `COLR` hostil/malformado, genuinamente desordenado só
+//     pode, no máximo, fazer a bisecção PERDER um `gid` que ESTÁ presente (esta função então
+//     reporta o "não é glyph colorido" comum `*count_out == 0` -- cosmético, não uma quebra de
+//     corretude, exatamente a mesma forma de risco residual que o próprio comentário de doc do
+//     `glx_sfnt_kern` já aceita pra um array de par `kern` desordenado), nunca uma leitura fora de
+//     limite ou um match ERRADO (mas presente).
+glx_sfnt_result glx_sfnt_colr_layers(const glx_sfnt_face* face, uint32_t gid,
+                                      glx_sfnt_colr_layer* out, uint16_t cap,
+                                      uint16_t* count_out);
+
+// EN: Reads `CPAL` palette 0's colour record at `entry_index` as straight-alpha (not
+//     premultiplied) sRGB `rgba_out[4] = {r, g, b, a}` -- `CPAL`'s own wire order is BGRA (see
+//     src/sfnt.c's implementation comment for the byte-for-byte derivation), converted to the
+//     ordinary RGBA order this codebase's other colour-adjacent surfaces expect. Only palette 0
+//     is supported (see this file's SCOPE note) -- `entry_index` indexes directly into palette
+//     0's own entries, `[0, numPaletteEntries)`; it is NOT a raw `colorRecordsArray` index and it
+//     is NOT a `glx_sfnt_colr_layer::palette_index` value passed through unchecked (a caller with
+//     a `palette_index == 0xFFFF` layer must special-case it itself, see
+//     `glx_sfnt_colr_layer`'s own doc above -- passing `0xFFFF` here is not a crash, it cleanly
+//     resolves to `GLX_SFNT_ERR_INVALID_ARG` for any spec-realistic `CPAL`, but it is never the
+//     RIGHT thing to do).
+//
+//     Returns `GLX_SFNT_ERR_INVALID_ARG` for a NULL `face`/`rgba_out`, or `entry_index >=
+//     numPaletteEntries` (same "caller-supplied index past the table's own declared bound"
+//     posture `glx_sfnt_hmetrics`'s own `gid >= num_glyphs` check uses); `GLX_SFNT_ERR_TABLE_
+//     MISSING` if `face->cpal_len == 0` (no `CPAL` table at all -- a `COLR`-only font with a
+//     missing/malformed `CPAL` directory entry cannot resolve ANY colour, so this is reported as
+//     a real failure here, unlike `glx_sfnt_colr_layers`'s own softer "0 layers" contract, because
+//     a caller only ever reaches this function AFTER already confirming a real layer exists);
+//     `GLX_SFNT_ERR_UNSUPPORTED` for a `CPAL` version other than `0` (CPALv1's label tables are
+//     out of scope, see this file's SCOPE note); `GLX_SFNT_ERR_BAD_OFFSET` for an internally-
+//     inconsistent header even though the bytes involved DO exist (`numPalettes == 0`, or the
+//     resolved `colorRecordsArray` index falls at/past a lying `numColorRecords` -- same
+//     `GLX_SFNT_ERR_BAD_OFFSET` class `loca[gid] > loca[gid+1]` already uses for "internally
+//     inconsistent, not merely out-of-blob"); `GLX_SFNT_ERR_TRUNCATED` for a `CPAL` header, the
+//     `colorRecordIndices` array, or the resolved colour record that does not fit the table's own
+//     `[cpal_off, cpal_off+cpal_len)` span (the "CPAL truncado" hostile shape -- same "bound
+//     against the TABLE's own declared length, not merely the whole blob" reasoning `hmtx`/`loca`/
+//     `kern`'s pair array/this file's own `glx_sfnt_colr_layers` above already document, so a
+//     `CPAL` directory entry trimmed down to just its 12-byte fixed header cannot silently read a
+//     NEIGHBOURING table's bytes as if they were `colorRecordIndices`/`colorRecordsArray`).
+//     `*rgba_out`'s contents are unspecified on any non-`GLX_SFNT_OK` result (same convention
+//     `glx_sfnt_glyph_outline` already uses).
+// PT: Lê o registro de cor da paleta 0 do `CPAL` em `entry_index` como sRGB alpha-reto (NÃO
+//     premultiplicado) `rgba_out[4] = {r, g, b, a}` -- a própria ordem de fio do `CPAL` é BGRA
+//     (ver o comentário de implementação do src/sfnt.c pra derivação byte-a-byte), convertida pra
+//     ordem RGBA comum que as outras superfícies deste código-base relacionadas a cor esperam.
+//     Só a paleta 0 é suportada (ver a nota de ESCOPO deste arquivo) -- `entry_index` indexa
+//     direto nas próprias entradas da paleta 0, `[0, numPaletteEntries)`; NÃO é um índice cru do
+//     `colorRecordsArray` e NÃO é um valor `glx_sfnt_colr_layer::palette_index` repassado sem
+//     checagem (quem chama com uma camada `palette_index == 0xFFFF` precisa tratar esse caso por
+//     conta própria, ver o doc próprio do `glx_sfnt_colr_layer` acima -- passar `0xFFFF` aqui não
+//     é um crash, resolve de forma limpa pra `GLX_SFNT_ERR_INVALID_ARG` pra qualquer `CPAL`
+//     espec-realista, mas nunca é a coisa CERTA a fazer).
+//
+//     Retorna `GLX_SFNT_ERR_INVALID_ARG` pra um `face`/`rgba_out` NULL, ou `entry_index >=
+//     numPaletteEntries` (mesma postura de "índice fornecido por quem chama além do limite
+//     próprio declarado da tabela" que o próprio `gid >= num_glyphs` do `glx_sfnt_hmetrics` usa);
+//     `GLX_SFNT_ERR_TABLE_MISSING` se `face->cpal_len == 0` (nenhuma tabela `CPAL`, de jeito
+//     nenhum -- uma fonte só-`COLR` com uma entrada de diretório `CPAL` ausente/malformada não
+//     consegue resolver cor NENHUMA, então isto é reportado como uma falha de verdade aqui,
+//     diferente do próprio contrato mais suave "0 camadas" do `glx_sfnt_colr_layers`, porque quem
+//     chama só chega nesta função DEPOIS de já ter confirmado que uma camada real existe);
+//     `GLX_SFNT_ERR_UNSUPPORTED` pra uma versão `CPAL` diferente de `0` (as tabelas de rótulo do
+//     CPALv1 estão fora de escopo, ver a nota de ESCOPO deste arquivo); `GLX_SFNT_ERR_BAD_OFFSET`
+//     pra um header internamente inconsistente mesmo os bytes envolvidos EXISTINDO
+//     (`numPalettes == 0`, ou o índice resolvido do `colorRecordsArray` cai em/além de um
+//     `numColorRecords` mentiroso -- mesma classe `GLX_SFNT_ERR_BAD_OFFSET` que
+//     `loca[gid] > loca[gid+1]` já usa pra "internamente inconsistente, não meramente fora do
+//     blob"); `GLX_SFNT_ERR_TRUNCATED` pro header `CPAL`, o array `colorRecordIndices`, ou o
+//     registro de cor resolvido que não cabe no próprio vão `[cpal_off, cpal_off+cpal_len)` da
+//     tabela (o formato hostil "CPAL truncado" -- mesmo raciocínio de "checa limite contra o
+//     PRÓPRIO tamanho declarado da TABELA, não meramente o blob inteiro" que o array de par do
+//     `hmtx`/`loca`/`kern`/o próprio `glx_sfnt_colr_layers` deste arquivo acima já documentam,
+//     então uma entrada de diretório `CPAL` cortada até só o próprio header fixo de 12 bytes não
+//     consegue ler em silêncio os bytes de uma tabela VIZINHA como se fossem
+//     `colorRecordIndices`/`colorRecordsArray`). O conteúdo de `*rgba_out` fica não-especificado
+//     em qualquer resultado diferente de `GLX_SFNT_OK` (mesma convenção que o
+//     `glx_sfnt_glyph_outline` já usa).
+glx_sfnt_result glx_sfnt_cpal_rgba(const glx_sfnt_face* face, uint16_t entry_index,
+                                    uint8_t rgba_out[4]);
 
 #ifdef __cplusplus
 }

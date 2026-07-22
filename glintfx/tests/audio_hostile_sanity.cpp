@@ -7,7 +7,12 @@
 //     to every module that parses attacker-reachable input, not just the ones that happened to
 //     get audited first). Every case below must return 0/false and MUST NOT crash -- if this
 //     binary segfaults/aborts, ctest reports it as a failure on its own, no assertion needed to
-//     detect that class of bug.
+//     detect that class of bug. AUDIO-F2 additions: play()/stop()'s fade_in_s/fade_out_s given
+//     NaN/+Inf/-Inf/a huge finite value (1e30f) -- all rejected, none crash, none silently
+//     overflow the ma_uint64 millisecond cast (the exact bug class the audit-domino memory
+//     names); play_oneshot() on hostile ids (unknown/0); a play_oneshot() SPAM (past the 32-per-
+//     id cap) proving voice-stealing keeps the call succeeding and the count bounded, never a
+//     crash or an unbounded voice table.
 // PT: Teste unit puro para a robustez a input hostil do glintfx::Audio (A3-AUDIO,
 //     framework-2D) -- sem GL, sem janela, sem RmlUi, sem Xvfb (ver o comentário "por que fora
 //     do GLFW/Xvfb" em tests/CMakeLists.txt). Mesma disciplina da cobertura de input malformado
@@ -16,7 +21,13 @@
 //     módulo que faz parse de input alcançável por atacante, não só aos que calharam de ser
 //     auditados primeiro). Todo caso abaixo precisa retornar 0/false e NÃO PODE crashar -- se
 //     este binário segfaultar/abortar, o ctest já reporta isso como falha por conta própria,
-//     nenhuma asserção extra é necessária pra detectar essa classe de bug.
+//     nenhuma asserção extra é necessária pra detectar essa classe de bug. Adições do AUDIO-F2:
+//     fade_in_s/fade_out_s do play()/stop() recebendo NaN/+Inf/-Inf/um valor finito enorme
+//     (1e30f) -- todos rejeitados, nenhum crasha, nenhum estoura silenciosamente o cast pra
+//     milissegundos ma_uint64 (exatamente a classe de bug que a memória de auditoria-dominó
+//     nomeia); play_oneshot() em ids hostis (desconhecido/0); um SPAM de play_oneshot() (além do
+//     teto de 32-por-id) provando que o voice-stealing mantém a chamada com sucesso e a contagem
+//     limitada, nunca um crash ou uma tabela de vozes sem limite.
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/audio.hpp>
 
@@ -24,6 +35,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -217,6 +229,87 @@ int main() {
     //     retorna (não trava/crasha), e o SoundId que ela retorna (0 ou não) é seguro de
     //     desligar imediatamente depois, provado por chegar ao fim do main() abaixo.
     (void)audio.load_sound(lying_path.string().c_str());
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- fade hardening: NaN/+Inf/-Inf/negative are REJECTED (false, state untouched)
+  //     as play()'s fade_in_s / stop()'s fade_out_s. A huge but FINITE value (1e30f) is a
+  //     DIFFERENT case: it is ACCEPTED and silently clamped to 3600s (per audio.hpp's contract --
+  //     only non-finite/negative are rejected outright) -- the point of this sub-case is that
+  //     validate_fade_seconds() clamps it in FLOAT strictly before any ma_uint64 millisecond
+  //     cast, so it never overflows (the exact bug class the audit-domino memory names), even
+  //     though it is not itself a rejected value. Needs a real, successfully-decoded sound (the
+  //     garbage/truncated files above never register one), so load a fresh well-formed WAV here.
+  // PT: AUDIO-F2 -- hardening de fade: NaN/+Inf/-Inf/negativo são REJEITADOS (false, estado
+  //     intocado) como fade_in_s do play() / fade_out_s do stop(). Um valor enorme mas FINITO
+  //     (1e30f) é um caso DIFERENTE: é ACEITO e clampeado silenciosamente em 3600s (conforme o
+  //     contrato do audio.hpp -- só não-finito/negativo são rejeitados de cara) -- o ponto deste
+  //     subcaso é que o validate_fade_seconds() clampeia em FLOAT estritamente antes de qualquer
+  //     cast pra milissegundos ma_uint64, então nunca estoura (exatamente a classe de bug que a
+  //     memória de auditoria-dominó nomeia), mesmo não sendo ele próprio um valor rejeitado.
+  //     Precisa de um som real e decodificado com sucesso (os arquivos lixo/truncados acima
+  //     nunca registram um), então carrega um WAV bem-formado novo aqui.
+  // ---------------------------------------------------------------------------
+  {
+    const fs::path fade_wav_path = dir / "fade_hardening.wav";
+    write_file(fade_wav_path, build_well_formed_wav());
+    const Audio::SoundId fade_id = audio.load_sound(fade_wav_path.string().c_str());
+    check(fade_id != 0, "AUDIO-F2 fade hardening: load_sound(well-formed WAV) returns non-zero id");
+
+    const float rejected_fades[] = {
+        std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(),
+        -1.0f,
+    };
+    for (float f : rejected_fades) {
+      check(!audio.play(fade_id, /*loop=*/false, f), "AUDIO-F2 fade hardening: play(fade_id, false, rejected fade): returns false");
+      check(!audio.stop(fade_id, f), "AUDIO-F2 fade hardening: stop(fade_id, rejected fade): returns false");
+    }
+
+    // EN: 1e30f is finite and non-negative -- accepted (clamped to 3600s internally), never a
+    //     crash/hang and never a silent ma_uint64 overflow. Immediately stop with fade_out_s=0
+    //     afterwards so the huge accepted fade does not bleed into the rest of this test.
+    // PT: 1e30f é finito e não-negativo -- aceito (clampeado em 3600s internamente), nunca um
+    //     crash/travamento e nunca um estouro silencioso do ma_uint64. Para imediatamente com
+    //     fade_out_s=0 depois pra que o fade enorme aceito não vaze pro resto deste teste.
+    check(audio.play(fade_id, /*loop=*/false, 1e30f), "AUDIO-F2 fade hardening: play(fade_id, false, 1e30f): accepted (finite, clamped), returns true");
+    check(audio.stop(fade_id, 1e30f), "AUDIO-F2 fade hardening: stop(fade_id, 1e30f): accepted (finite, clamped), returns true");
+    check(audio.stop(fade_id), "AUDIO-F2 fade hardening: stop(fade_id) (immediate) cleans up after the huge accepted fade");
+
+    // EN: State untouched by every rejected call above -- a normal play/stop still works.
+    // PT: Estado intocado por toda chamada rejeitada acima -- um play/stop normal ainda funciona.
+    check(audio.play(fade_id), "AUDIO-F2 fade hardening: play(fade_id) after the rejected calls still returns true");
+    check(audio.stop(fade_id), "AUDIO-F2 fade hardening: stop(fade_id) after the rejected calls still returns true");
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- play_oneshot() on hostile ids (unknown, 0) -- never crashes, always false.
+  // PT: AUDIO-F2 -- play_oneshot() em ids hostis (desconhecido, 0) -- nunca crasha, sempre false.
+  // ---------------------------------------------------------------------------
+  check(!audio.play_oneshot(424242), "AUDIO-F2: play_oneshot(unknown id): returns false");
+  check(!audio.play_oneshot(0), "AUDIO-F2: play_oneshot(0): returns false");
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- play_oneshot() SPAM well past the 32-per-id cap: every call still succeeds
+  //     (voice-stealing, never a rejection due to the cap) and voice_count() never exceeds the
+  //     cap -- no crash, no unbounded growth of the internal voice table under hostile/bursty
+  //     use (a rapid-fire weapon in a real game is exactly this shape).
+  // PT: AUDIO-F2 -- SPAM de play_oneshot() bem além do teto de 32-por-id: toda chamada ainda tem
+  //     sucesso (voice-stealing, nunca uma rejeição por causa do teto) e voice_count() nunca
+  //     excede o teto -- sem crash, sem crescimento sem limite da tabela de vozes interna sob uso
+  //     hostil/em rajada (uma arma automática num jogo de verdade é exatamente essa forma).
+  // ---------------------------------------------------------------------------
+  {
+    const fs::path spam_wav_path = dir / "spam.wav";
+    write_file(spam_wav_path, build_well_formed_wav()); // EN: short (100 samples @ 8kHz) -- some copies may naturally end and get reaped mid-spam; irrelevant to the <= 32 assertion below either way. PT: curto (100 amostras @ 8kHz) -- algumas cópias podem terminar naturalmente e ser reapadas no meio do spam; irrelevante pra asserção <= 32 abaixo de qualquer forma.
+    const Audio::SoundId spam_id = audio.load_sound(spam_wav_path.string().c_str());
+    check(spam_id != 0, "AUDIO-F2 oneshot spam: load_sound() returns non-zero id");
+
+    for (int i = 0; i < 40; ++i) {
+      check(audio.play_oneshot(spam_id), "AUDIO-F2 oneshot spam: play_oneshot() call never fails due to the voice cap");
+    }
+    check(audio.voice_count(spam_id) <= 32, "AUDIO-F2 oneshot spam: voice_count() never exceeds the 32-per-id cap");
   }
 
   audio.shutdown(); // EN: must not crash regardless of what the hostile loads above did. PT: não pode crashar independente do que os loads hostis acima fizeram.

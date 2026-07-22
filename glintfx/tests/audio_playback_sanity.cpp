@@ -7,7 +7,12 @@
 //     applies to its directory-as-path test) and exercises: load -> play -> stop -> set_volume
 //     on a real, successfully-decoded sound; set_volume() hardening (NaN/Inf/negative rejected,
 //     valid values accepted); an unknown SoundId on every per-sound operation returning false;
-//     load_sound() of a path that does not exist on disk returning 0.
+//     load_sound() of a path that does not exist on disk returning 0. AUDIO-F2 additions:
+//     is_playing()/voice_count() basics on the primary; play()/stop()'s extended signature
+//     (loop, fade_in_s/fade_out_s) and set_looping() accepting valid values; negative-fade
+//     rejection; the new ops (set_looping/play_oneshot/is_playing/voice_count) on an
+//     unknown/0 id (loop-twin/fade-out/cap/reap proofs live in audio_loop_fade_sanity.cpp and
+//     audio_polyphony_sanity.cpp instead -- this file stays about the non-time-based contract).
 // PT: Teste unit puro para a superfície de decode/reprodução/volume do glintfx::Audio
 //     (A3-AUDIO, framework-2D) -- sem GL, sem janela, sem RmlUi, sem Xvfb (ver o comentário
 //     "por que fora do GLFW/Xvfb" em tests/CMakeLists.txt). Usa AudioConfig::null_backend=true
@@ -17,7 +22,13 @@
 //     diretório-como-caminho) e exercita: load -> play -> stop -> set_volume num som real,
 //     decodificado com sucesso; hardening do set_volume() (NaN/Inf/negativo rejeitados, valores
 //     válidos aceitos); um SoundId desconhecido em toda operação por-som retornando false;
-//     load_sound() de um caminho que não existe em disco retornando 0.
+//     load_sound() de um caminho que não existe em disco retornando 0. Adições do AUDIO-F2:
+//     básico de is_playing()/voice_count() na primária; assinatura estendida do play()/stop()
+//     (loop, fade_in_s/fade_out_s) e set_looping() aceitando valores válidos; rejeição de fade
+//     negativo; as operações novas (set_looping/play_oneshot/is_playing/voice_count) num id
+//     desconhecido/0 (as provas de gêmeo-de-loop/fade-out/teto/reap vivem no
+//     audio_loop_fade_sanity.cpp e no audio_polyphony_sanity.cpp -- este arquivo continua sobre
+//     o contrato não-temporal).
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/audio.hpp>
 
@@ -139,6 +150,64 @@ int main() {
   check(id != 0, "load_sound(valid WAV): returns a non-zero SoundId");
   check(audio.play(id), "play(valid id): returns true");
   check(audio.stop(id), "stop(valid id): returns true");
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- is_playing()/voice_count() basics on the primary instance only (no oneshot
+  //     copy involved here -- see audio_polyphony_sanity.cpp for copy-aware cases).
+  // PT: AUDIO-F2 -- básico de is_playing()/voice_count() só na instância primária (nenhuma
+  //     cópia oneshot envolvida aqui -- ver audio_polyphony_sanity.cpp pros casos com cópia).
+  // ---------------------------------------------------------------------------
+  check(!audio.is_playing(id), "is_playing(id) after the play/stop above: false");
+  check(audio.voice_count(id) == 0, "voice_count(id) after the play/stop above: 0");
+  check(audio.play(id), "play(id) again: returns true");
+  check(audio.is_playing(id), "is_playing(id) right after play(): true");
+  check(audio.voice_count(id) == 1, "voice_count(id) right after play(): 1 (primary only)");
+  check(audio.stop(id), "stop(id) (default fade_out_s=0): returns true");
+  check(!audio.is_playing(id), "is_playing(id) right after stop(id, 0): false");
+  check(audio.voice_count(id) == 0, "voice_count(id) right after stop(id, 0): 0");
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- play()/stop()'s extended signature (loop, fade_in_s/fade_out_s) and
+  //     set_looping() accept valid values. Audibility/gaplessness are NOT provable headless
+  //     (see docs/audio.md) -- the loop-twin/fade-out-observable behaviour proofs live in
+  //     audio_loop_fade_sanity.cpp; this is just the "valid values are accepted" contract.
+  // PT: AUDIO-F2 -- a assinatura estendida do play()/stop() (loop, fade_in_s/fade_out_s) e o
+  //     set_looping() aceitam valores válidos. Audibilidade/gapless NÃO são prováveis headless
+  //     (ver docs/audio.md) -- as provas de comportamento do gêmeo de loop/observável do
+  //     fade-out vivem em audio_loop_fade_sanity.cpp; isto é só o contrato "valores válidos são
+  //     aceitos".
+  // ---------------------------------------------------------------------------
+  check(audio.play(id, /*loop=*/false, /*fade_in_s=*/0.01f), "play(id, false, 0.01f): returns true");
+  check(audio.set_looping(id, true), "set_looping(id, true): returns true");
+  check(audio.set_looping(id, false), "set_looping(id, false): returns true");
+  check(audio.stop(id, /*fade_out_s=*/0.01f), "stop(id, 0.01f): returns true");
+  // EN: is_playing(id) is expected to STILL read true right here -- a fade-out keeps the sound
+  //     audible/playing throughout its window (see audio_loop_fade_sanity.cpp's dedicated
+  //     "fade-out observable" proof); an IMMEDIATE stop(id, 0) below forces a known, fade-free
+  //     state before the hardening block that follows.
+  // PT: is_playing(id) é ESPERADO continuar lendo true bem aqui -- um fade-out mantém o som
+  //     audível/tocando durante toda a janela dele (ver a prova dedicada "fade-out observável"
+  //     do audio_loop_fade_sanity.cpp); um stop(id, 0) IMEDIATO abaixo força um estado conhecido,
+  //     sem fade, antes do bloco de hardening que segue.
+  check(audio.stop(id), "stop(id) (immediate, fade_out_s=0): returns true -- forces a known fade-free state");
+  check(!audio.is_playing(id), "is_playing(id): false after the immediate stop() above");
+
+  // ---------------------------------------------------------------------------
+  // EN: AUDIO-F2 -- fade hardening: a negative fade_in_s/fade_out_s is rejected (false), the
+  //     primary is left untouched (still stopped from the line above -- not resurrected by the
+  //     rejected call). NaN/Inf/a huge finite value (1e30f, accepted+clamped, not rejected) are
+  //     audio_hostile_sanity.cpp's job (auditoria-dominó: same robustness class, different file
+  //     per this slice's plan).
+  // PT: AUDIO-F2 -- hardening de fade: um fade_in_s/fade_out_s negativo é rejeitado (false), a
+  //     primária fica intocada (ainda parada da linha acima -- não ressuscitada pela chamada
+  //     rejeitada). NaN/Inf/um valor finito enorme (1e30f, aceito+clampeado, não rejeitado) são
+  //     trabalho do audio_hostile_sanity.cpp (auditoria-dominó: mesma classe de robustez, arquivo
+  //     diferente conforme o plano desta fatia).
+  // ---------------------------------------------------------------------------
+  check(!audio.play(id, false, -0.5f), "play(id, false, -0.5f): returns false (negative fade rejected)");
+  check(!audio.is_playing(id), "is_playing(id): still false -- the rejected play() did not start it");
+  check(!audio.stop(id, -0.5f), "stop(id, -0.5f): returns false (negative fade rejected)");
+
   check(audio.set_volume(id, 0.5f), "set_volume(valid id, 0.5f): returns true");
   check(audio.set_volume(id, 1.0f), "set_volume(valid id, 1.0f): returns true (upper bound, no clamp needed)");
   check(audio.set_volume(id, 0.0f), "set_volume(valid id, 0.0f): returns true (lower bound)");
@@ -175,6 +244,18 @@ int main() {
   check(!audio.stop(unknown_id), "stop(unknown id): returns false");
   check(!audio.set_volume(unknown_id, 0.5f), "set_volume(unknown id): returns false");
   check(!audio.play(0), "play(0): returns false (0 is reserved as invalid)");
+
+  // EN: AUDIO-F2's new ops on an unknown id / id 0 -- same false/0 contract as every op above.
+  // PT: As operações novas do AUDIO-F2 num id desconhecido / id 0 -- mesmo contrato false/0 de
+  //     toda operação acima.
+  check(!audio.set_looping(unknown_id, true), "set_looping(unknown id, true): returns false");
+  check(!audio.play_oneshot(unknown_id), "play_oneshot(unknown id): returns false");
+  check(!audio.is_playing(unknown_id), "is_playing(unknown id): returns false");
+  check(audio.voice_count(unknown_id) == 0, "voice_count(unknown id): returns 0");
+  check(!audio.is_playing(0), "is_playing(0): returns false");
+  check(audio.voice_count(0) == 0, "voice_count(0): returns 0");
+  check(!audio.set_looping(0, true), "set_looping(0, true): returns false");
+  check(!audio.play_oneshot(0), "play_oneshot(0): returns false");
 
   // ---------------------------------------------------------------------------
   // EN: load_sound() of a path that does not exist on disk returns 0.

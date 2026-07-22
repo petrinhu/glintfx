@@ -112,6 +112,15 @@ The public API lives in two headers under `glintfx/include/glintfx/`: [`app.hpp`
 
 ### Where to run window/input verification (canonical, DOC-HOSTIN follow-up)
 
+**WARNING, the single most important point of this section (more than the table below): bringing up the nested compositor is NOT enough. `-u WAYLAND_DISPLAY` does not protect you.** This is not theoretical -- it happened in this exact repository, in real time, while this very section was being written: a `qa-engineer` brought up nested KWin correctly, PROVED the nested display was `:1`, separate from the leader's `:0`, and its probe still opened a real window in the leader's LIVE session for 2 to 3 minutes.
+
+- **Why:** libwayland's `wl_display_connect(NULL)` falls back to the BUILT-IN name `"wayland-0"` the moment the env var is absent, and it resolves that name INSIDE `$XDG_RUNTIME_DIR` -- which is still the real session's `/run/user/1000` unless you changed it too. Unsetting `WAYLAND_DISPLAY` only removes the override; it does not stop the connection.
+- **The real protection:** your OWN `XDG_RUNTIME_DIR` (`chmod 700`), exported BEFORE bringing up the nested compositor and used by BOTH the nested compositor AND the app under test, so that no `wayland-0` socket exists anywhere for the fallback to find.
+- **Prove it, do not assume it:** `lsof -p <pid>` or `/proc/<pid>/fd` showing the socket inside the isolated directory -- BEFORE launching and AGAIN after the app comes up. If the proof does not close cleanly, KILL the process immediately; do not adjust anything in the dark.
+- **The parent lesson, which outlives this one case:** the house's own canonical recipe already had the antidote -- the standard ctest line is `env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/var/tmp/fake_xdg_runtime xvfb-run -a ctest ...` (e.g. `docs/superpowers/plans/2026-07-19-framework2d-A1-input.md:231`), and it is the **`XDG_RUNTIME_DIR` swap that does the actual work, not the `-u`**. It got copied halfway. **When a canonical invocation already exists in the project, copy it WHOLE, then adapt** -- every piece is there because someone already got burned.
+
+Factual record, kept sober (this is engineering documentation, not a scolding): the incident was CONTAINED -- no input was ever injected into `:0`, only read-only probes, and it was one of those very probes that revealed the leak; the process was killed and the cleanup confirmed. The value of documenting this is the trap, not whoever fell into it.
+
 | | Xvfb (CI's own) | Xephyr | Nested KWin (the house's choice) |
 | :--- | :--- | :--- | :--- |
 | Display | phantom, memory-only | real window in the session | real window in the session |
@@ -189,6 +198,15 @@ Regra prática para agents: reproduza primeiro (`tools/ci/Containerfile.f42` par
 - **CI Codeberg (Forgejo Actions) -- paridade mínima, não bloqueia.** Runner `codeberg-medium` (4 CPU/8 GB/10 min) + container `ghcr.io/catthehacker/ubuntu:act-latest`; deps de sistema instaladas a cada job (sem stack pré-instalada), incluindo os pacotes `-dev` de GL/EGL/xkbcommon. **Desde a Onda 3 da reestruturação de CI (poda, 2026-07-11)** este workflow roda **um único job** (`build & test (codeberg-medium / GLFW=ON, minimal parity)`) -- **sem matriz**, só `GLINTFX_BACKEND_GLFW=ON`, em `push` para `main` apenas -- como sinal voluntário de "ainda builda no Codeberg", **não** gate de release. A perna `GLFW=OFF`, o `lint-and-scan`, o `coverage` e o `nightly.forgejo` foram removidos deste arquivo (cobertos pelo GitHub e pelo `claudio`/`heavy.yml`); um job preso em `waiting` no `codeberg-medium` nunca segura merge/tag/release (ver "Política de CI: ordem de gate" acima -- `github > claudio > codeberg`). Validar mudanças no workflow localmente com `forgejo-runner exec` antes de empurrar -- ver o cabeçalho de `.forgejo/workflows/ci.yml`.
 
 ### Onde rodar teste de janela/input (canônico, follow-up do DOC-HOSTIN)
+
+**ATENÇÃO, o ponto mais importante desta seção (mais que a tabela abaixo): subir o compositor aninhado NÃO basta. `-u WAYLAND_DISPLAY` não protege.** Isto não é teórico -- aconteceu de verdade neste repositório, em tempo real, enquanto esta própria seção estava sendo escrita: um `qa-engineer` subiu o KWin aninhado corretamente, PROVOU que o display aninhado era o `:1`, separado do `:0` do líder, e mesmo assim a sonda dele abriu uma janela real na sessão VIVA do líder por 2 a 3 minutos.
+
+- **Por quê:** o `wl_display_connect(NULL)` do libwayland cai no nome EMBUTIDO `"wayland-0"` no instante em que a env var some, e resolve esse nome DENTRO do `$XDG_RUNTIME_DIR` -- que continua sendo o `/run/user/1000` da sessão real, a menos que ele também tenha sido trocado. Remover `WAYLAND_DISPLAY` só tira o *override*, não impede a conexão.
+- **A proteção real:** um `XDG_RUNTIME_DIR` PRÓPRIO (`chmod 700`), exportado ANTES de subir o compositor aninhado e usado tanto pelo compositor aninhado QUANTO pelo app sob teste, de forma que não exista nenhum socket `wayland-0` em lugar nenhum pro fallback encontrar.
+- **Provar, não presumir:** `lsof -p <pid>` ou `/proc/<pid>/fd` mostrando o socket dentro do diretório isolado -- ANTES de lançar e DE NOVO depois de o app subir. Se a prova não fechar limpa, MATAR o processo na hora; não ajustar nada no escuro.
+- **A lição mãe, que vale além deste caso:** a receita canônica da própria casa já tinha o antídoto -- a linha padrão de ctest é `env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/var/tmp/fake_xdg_runtime xvfb-run -a ctest ...` (ex.: `docs/superpowers/plans/2026-07-19-framework2d-A1-input.md:231`), e é a **troca do `XDG_RUNTIME_DIR` que faz o trabalho de verdade, não o `-u`**. Foi copiada pela metade. **Quando já existe invocação canônica no projeto, copie-a INTEIRA e só então adapte** -- cada pedaço está lá porque alguém já se queimou.
+
+Registro factual, mantido sóbrio (é doc de engenharia, não bronca): o incidente foi CONTIDO -- nenhum input foi injetado no `:0`, só buscas read-only, e foi justamente uma dessas buscas que revelou o vazamento; o processo foi morto e a limpeza confirmada. O valor de documentar isto é a armadilha, não quem caiu nela.
 
 | | Xvfb (o do CI) | Xephyr | KWin aninhado (o da casa) |
 | :--- | :--- | :--- | :--- |

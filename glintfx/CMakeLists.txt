@@ -904,7 +904,32 @@ target_include_directories(glintfx_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 target_link_libraries(glintfx_core PRIVATE RmlUi::Core)
-target_compile_options(glintfx_core PRIVATE -Wall -Wextra)
+# EN: MSVC guard (AUDIO-F2 / gusworld Windows CI regression, S3-CI) -- -Wall/-Wextra below (and at
+#     the other 8 target_compile_options() call sites in this file that carry the same two flags)
+#     are GCC/Clang spellings; cl.exe (MSVC) does not understand them and aborts configure/build
+#     with "D8021: invalid numeric argument '/Wextra'". Confirmed: this broke the GusWorld Windows
+#     consumer build (add_subdirectory/FetchContent of this exact CMakeLists.txt) since ~v0.16.0,
+#     when these flags were first applied with no compiler guard -- windows-atoms.yml's own CI job
+#     never exercises THIS file on MSVC (it builds a standalone harness under tests/win-atoms/
+#     instead, see that job's own header comment), so the regression shipped unnoticed. Closed on
+#     the CI side by the new `windows-msvc-build` job in .github/workflows/ci.yml, added alongside
+#     this fix. The $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:...> generator expression applies -Wall
+#     -Wextra on every compiler EXCEPT MSVC, per-target (no directory-wide add_compile_options()
+#     change), so Linux/clang/gcc builds keep the exact same warning coverage as before this fix.
+# PT: Guarda do MSVC (regressão de CI Windows do AUDIO-F2 / gusworld, S3-CI) -- -Wall/-Wextra
+#     abaixo (e nos outros 8 pontos de target_compile_options() deste arquivo que carregam as
+#     mesmas duas flags) são grafias GCC/Clang; o cl.exe (MSVC) não entende e aborta configure/
+#     build com "D8021: invalid numeric argument '/Wextra'". Confirmado: isso quebrou o build do
+#     consumidor Windows GusWorld (add_subdirectory/FetchContent deste exato CMakeLists.txt) desde
+#     ~v0.16.0, quando estas flags foram aplicadas pela primeira vez sem guarda de compilador -- o
+#     próprio job windows-atoms.yml nunca exercita ESTE arquivo no MSVC (ele builda um harness
+#     standalone sob tests/win-atoms/, ver o próprio comentário de cabeçalho daquele job), então a
+#     regressão foi lançada sem ser notada. Fechado do lado do CI pelo novo job `windows-msvc-build`
+#     em .github/workflows/ci.yml, adicionado junto com este fix. A generator expression
+#     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:...> aplica -Wall -Wextra em todo compilador EXCETO MSVC,
+#     por-alvo (sem mudar o add_compile_options() de diretório inteiro), então os builds Linux/
+#     clang/gcc mantêm exatamente a mesma cobertura de warning de antes deste fix.
+target_compile_options(glintfx_core PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
 glintfx_instrument_coverage(glintfx_core)
 add_library(glintfx::core ALIAS glintfx_core)
 
@@ -912,7 +937,7 @@ add_library(glintfx::core ALIAS glintfx_core)
 add_library(glintfx_image OBJECT src/stb_image_impl.cpp)
 target_include_directories(glintfx_image PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
-target_compile_options(glintfx_image PRIVATE -Wall -Wextra)
+target_compile_options(glintfx_image PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
 glintfx_instrument_coverage(glintfx_image)
 add_library(glintfx::image ALIAS glintfx_image)
 
@@ -938,7 +963,7 @@ if(GLINTFX_OWN_FONT_ENGINE)
   #     que é escopada por arquivo (não por alvo) e por isso continua se
   #     aplicando aqui sem mudança.
   target_link_libraries(glintfx_text PRIVATE RmlUi::Core)
-  target_compile_options(glintfx_text PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_text PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_text)
   add_library(glintfx::text ALIAS glintfx_text)
 endif()
@@ -972,7 +997,7 @@ if(GLINTFX_MODULE_WINDOW)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
   target_link_libraries(glintfx_window PRIVATE glloader glfw)
-  target_compile_options(glintfx_window PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_window PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_window)
   add_library(glintfx::window ALIAS glintfx_window)
 endif()
@@ -998,7 +1023,7 @@ if(GLINTFX_MODULE_I18N)
   target_include_directories(glintfx_i18n PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
-  target_compile_options(glintfx_i18n PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_i18n PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_i18n)
   add_library(glintfx::i18n ALIAS glintfx_i18n)
 endif()
@@ -1045,7 +1070,7 @@ if(GLINTFX_MODULE_FX)
     PRIVATE
     ${_rml_backends})
   target_link_libraries(glintfx_fx PRIVATE RmlUi::Core glloader)
-  target_compile_options(glintfx_fx PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_fx PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_fx)
   add_library(glintfx::fx ALIAS glintfx_fx)
 endif()
@@ -1070,7 +1095,7 @@ if(GLINTFX_MODULE_AUDIO)
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio)
   target_link_libraries(glintfx_audio PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
-  target_compile_options(glintfx_audio PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_audio PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_audio)
   add_library(glintfx::audio ALIAS glintfx_audio)
 endif()
@@ -1095,7 +1120,7 @@ if(GLINTFX_MODULE_GAMEPAD)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gamecontrollerdb)
-  target_compile_options(glintfx_gamepad PRIVATE -Wall -Wextra)
+  target_compile_options(glintfx_gamepad PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_gamepad)
   add_library(glintfx::gamepad ALIAS glintfx_gamepad)
 endif()
@@ -1174,7 +1199,7 @@ target_compile_features(glintfx PUBLIC cxx_std_17)
 #     ruído de código de terceiro/gerado que não controlamos. Ainda sem -Werror: 87 achados de
 #     clang-tidy já são débito rastreado fora de escopo (ver AUDITORIAS.md); promover
 #     -Wall/-Wextra a gate duro é uma decisão futura separada, não incluída aqui.
-target_compile_options(glintfx PRIVATE -Wall -Wextra)
+target_compile_options(glintfx PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
 
 # EN: The two RmlUi_*.cpp Backends files (${_rml_backends}/RmlUi_Renderer_GL3.cpp always,
 #     RmlUi_Platform_GLFW.cpp only when GLINTFX_BACKEND_GLFW=ON) are compiled directly as

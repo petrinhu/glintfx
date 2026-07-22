@@ -261,6 +261,52 @@ std::vector<uint32_t> BuildBakeSet() {
 constexpr uint16_t kMaxOutlinePoints = 768;
 constexpr uint16_t kMaxOutlineContours = 48;
 
+// EN: (A4-EMOJI) Generous fixed cap for glx_sfnt_colr_layers()'s caller-owned `out` array -- see
+//     that function's own doc-comment in include/core/sfnt.h for the BUFFER_TOO_SMALL/degrade
+//     contract RasterizeColorGlyph() (.cpp, below) relies on. Real COLRv0 emoji glyphs use a
+//     handful of layers (base shape + a few accents/highlights, typically 2-6); 64 is generous
+//     headroom while keeping the stack-scoped array this small (glx_sfnt_colr_layer is 4 bytes, so
+//     256 bytes of stack). A hostile/pathological glyph declaring more layers than this degrades
+//     cleanly to "not (usably) a colour glyph" (RasterizeColorGlyph() falls through, the caller
+//     bakes `gid`'s plain outline instead) -- never a crash/OOB, same fail-high posture
+//     kMaxOutlinePoints/kMaxOutlineContours above already use for the outline buffers.
+// PT: (A4-EMOJI) Teto fixo generoso pro array `out` possuído-por-quem-chama do
+//     glx_sfnt_colr_layers() -- ver o doc-comment próprio daquela função no include/core/sfnt.h pro
+//     contrato BUFFER_TOO_SMALL/degradação de que o RasterizeColorGlyph() (.cpp, abaixo) depende.
+//     Glyphs de emoji COLRv0 reais usam um punhado de camadas (forma base + alguns
+//     acentos/realces, tipicamente 2-6); 64 é folga generosa mantendo o array de escopo de pilha
+//     pequeno (glx_sfnt_colr_layer tem 4 bytes, então 256 bytes de pilha). Um glyph
+//     hostil/patológico declarando mais camadas do que isto degrada limpo pra "não é (utilizavelmente)
+//     um glyph colorido" (RasterizeColorGlyph() cai através, quem chama empacota o outline puro do
+//     `gid` em vez disso) -- nunca um crash/OOB, mesma postura fail-high que
+//     kMaxOutlinePoints/kMaxOutlineContours acima já usam pros buffers de outline.
+constexpr uint16_t kMaxColorLayers = 64;
+
+// EN: (A4-EMOJI) U+FE0E (VS15, "render as text") / U+FE0F (VS16, "render as emoji-presentation")
+//     -- Unicode variation SELECTORS, spec-defined ZERO-WIDTH, never a glyph a font is expected to
+//     render standalone. EnsureGlyphs()/IterateGlyphs() (.cpp, both) skip any codepoint this
+//     returns true for as if it were not in the string at all -- not baked/negative-cached, no
+//     advance, no quad, kerning/has_prev untouched -- so a variation-selected emoji (`☺️` ==
+//     U+263A U+FE0F) renders as its base emoji alone instead of base-glyph-then-tofu (the artifact
+//     this ticket's plan §6 names as the point of this skip). This codebase does not otherwise
+//     shape/select COLOUR vs. TEXT presentation from the selector (out of scope, see this ticket's
+//     plan §3/§5) -- the selector is simply erased from the walk, whichever presentation the base
+//     codepoint's own glyph happens to have (COLR if the face has one, grayscale outline
+//     otherwise) is what renders.
+// PT: (A4-EMOJI) U+FE0E (VS15, "renderiza como texto") / U+FE0F (VS16, "renderiza como
+//     apresentação-emoji") -- SELETORES de variação Unicode, definidos pela spec como
+//     ZERO-LARGURA, nunca um glyph que uma fonte é esperada a renderizar sozinho. EnsureGlyphs()/
+//     IterateGlyphs() (.cpp, ambos) pulam todo codepoint pro qual isto retorna true como se nem
+//     estivesse na string -- não empacotado/cache-negativado, sem avanço, sem quad,
+//     kerning/has_prev intocados -- então um emoji com seletor de variação (`☺️` == U+263A U+FE0F)
+//     renderiza só como o próprio emoji base em vez de glyph-base-depois-tofu (o artefato que o §6
+//     do plano desta tarefa nomeia como o motivo deste skip). Este código-base não faz de outro
+//     jeito shaping/seleção de apresentação COR vs. TEXTO a partir do seletor (fora de escopo, ver
+//     §3/§5 do plano desta tarefa) -- o seletor é simplesmente apagado da caminhada, qualquer
+//     apresentação que o próprio glyph do codepoint base tiver (COLR se a face tiver uma, outline
+//     em tons de cinza senão) é o que renderiza.
+bool IsVariationSelector(uint32_t cp) { return cp == 0xFE0E || cp == 0xFE0F; }
+
 // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 1.5) STEM-DARKENING gamma for a given pixel size.
 //     WHY: grayscale-AA coverage c in [0,1] is the fraction of a pixel the glyph covers. The GL3
 //     renderer composites white text with a straight (GL_ONE, GL_ONE_MINUS_SRC_ALPHA) blend using c
@@ -856,6 +902,23 @@ bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32
   //     pré-snap).
   out.advance = pen_snap ? (float)std::lround((double)advance_units * scale) : (float)advance_units * scale;
 
+  // EN: (A4-EMOJI) COLR v0 colour-glyph bake, tried BEFORE the grayscale outline path below --
+  //     `out.advance`/`out.cp`/`out.gid` above are shared by both paths (hmtx does not distinguish
+  //     colour glyphs), everything else (gw/gh/offset_x/offset_y/is_color/color_rgba OR coverage) is
+  //     exclusively either this call's or the grayscale path's. See RasterizeColorGlyph()'s own
+  //     doc-comment (header) for the full degrade contract -- `false` here means "not (usably) a
+  //     colour glyph", `out` left untouched by that call, so falling through into the ordinary
+  //     grayscale path on the SAME `gid` is always correct.
+  // PT: (A4-EMOJI) Bake de glyph colorido COLR v0, tentado ANTES do caminho de outline em tons de
+  //     cinza abaixo -- `out.advance`/`out.cp`/`out.gid` acima são compartilhados pelos dois
+  //     caminhos (o hmtx não distingue glyph colorido), todo o resto
+  //     (gw/gh/offset_x/offset_y/is_color/color_rgba OU coverage) é exclusivo de um ou do outro.
+  //     Ver o doc-comment próprio do RasterizeColorGlyph() (header) pro contrato completo de
+  //     degradação -- `false` aqui significa "não é (utilizavelmente) um glyph colorido", `out`
+  //     deixado intocado por aquela chamada, então cair pro caminho comum em tons de cinza no MESMO
+  //     `gid` é sempre correto.
+  if (RasterizeColorGlyph(sf, gid, inst.pixel_size, pen_snap, v_snap, scale, out)) return true;
+
   std::vector<glx_sfnt_point> points(kMaxOutlinePoints);
   std::vector<uint16_t> contour_ends(kMaxOutlineContours);
   glx_sfnt_outline outline{};
@@ -1036,6 +1099,159 @@ bool FontEngineOwn::RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32
   return true; // gid resolved + hmetrics OK -- a real, "baked" glyph (possibly zero-size).
 }
 
+// EN: (A4-EMOJI) See this method's long doc-comment on its declaration in font_engine_own.hpp for
+//     the full contract/degrade posture.
+// PT: (A4-EMOJI) Ver o doc-comment longo deste método na sua declaração em font_engine_own.hpp pro
+//     contrato/postura de degradação completos.
+bool FontEngineOwn::RasterizeColorGlyph(const glx_sfnt_face& sf, uint32_t base_gid, int pixel_size,
+                                         bool pen_snap, bool v_snap, float scale, Baked& out) const {
+  glx_sfnt_colr_layer layers[kMaxColorLayers];
+  uint16_t layer_count = 0;
+  const glx_sfnt_result cr = glx_sfnt_colr_layers(&sf, base_gid, layers, kMaxColorLayers, &layer_count);
+  if (cr != GLX_SFNT_OK || layer_count == 0) return false; // not a (usably) colour glyph -- see doc.
+
+  std::vector<glx_sfnt_point> points(kMaxOutlinePoints);
+  std::vector<uint16_t> contour_ends(kMaxOutlineContours);
+
+  // EN: Pass 1 -- union bbox (font units -> px, THIS `sf`'s own units_per_em/`scale`) across every
+  //     layer whose outline fetches cleanly and is non-empty. A layer that fails here is simply
+  //     excluded from the union (and, below, from the composite) -- one bad layer never aborts the
+  //     whole glyph.
+  // PT: Passe 1 -- bbox de união (unidade-de-fonte -> px, o PRÓPRIO units_per_em/`scale` deste
+  //     `sf`) através de toda camada cujo outline busca limpo e não-vazio. Uma camada que falha
+  //     aqui é simplesmente excluída da união (e, abaixo, do composite) -- uma camada ruim nunca
+  //     aborta o glyph inteiro.
+  float ux_min = 0.f, ux_max = 0.f, uy_min = 0.f, uy_max = 0.f;
+  bool any = false;
+  for (uint16_t i = 0; i < layer_count; ++i) {
+    glx_sfnt_outline o{};
+    if (glx_sfnt_glyph_outline(&sf, layers[i].gid, points.data(), (uint16_t)points.size(), contour_ends.data(),
+                                (uint16_t)contour_ends.size(), &o) != GLX_SFNT_OK)
+      continue;
+    if (o.num_points == 0 || o.num_contours == 0) continue;
+    const float lx_min = (float)o.x_min * scale, lx_max = (float)o.x_max * scale;
+    const float ly_min = (float)o.y_min * scale, ly_max = (float)o.y_max * scale;
+    if (!any) {
+      ux_min = lx_min;
+      ux_max = lx_max;
+      uy_min = ly_min;
+      uy_max = ly_max;
+      any = true;
+    } else {
+      ux_min = std::min(ux_min, lx_min);
+      ux_max = std::max(ux_max, lx_max);
+      uy_min = std::min(uy_min, ly_min);
+      uy_max = std::max(uy_max, ly_max);
+    }
+  }
+  if (!any) return false; // every layer failed to rasterise -- degrade to "not a colour glyph".
+
+  constexpr int kPad = 1; // same 1px transparent border every other baked glyph uses.
+  const int gw = (int)std::ceil(ux_max - ux_min) + kPad * 2;
+  const int gh = (int)std::ceil(uy_max - uy_min) + kPad * 2;
+  if (gw <= 0 || gh <= 0 || gw > 4096 || gh > 4096) return false; // same sanity cap RasterizeGlyph() itself uses.
+
+  std::vector<uint8_t> canvas((size_t)gw * (size_t)gh * 4, 0); // transparent black, premultiplied -- OVER-composited below.
+
+  const int32_t scale_num = (int32_t)std::lround((double)pixel_size * 64.0);
+  const int32_t scale_den = (int32_t)sf.units_per_em;
+  const int32_t origin_x_26_6 = (int32_t)std::lround(((double)-ux_min + kPad) * 64.0);
+  const int32_t origin_y_26_6 = v_snap ? ((int32_t)std::lround((double)uy_max) + kPad) * 64
+                                        : (int32_t)std::lround(((double)uy_max + kPad) * 64.0);
+
+  // EN: Pass 2 -- rasterize + tint + premultiplied-OVER composite each layer, spec order (layers
+  //     enumerate bottom-to-top, so compositing in array order paints later layers ON TOP of
+  //     earlier ones, exactly the spec's own paint order).
+  // PT: Passe 2 -- rasteriza + tinge + compõe cada camada OVER-premultiplicado, ordem da spec (as
+  //     camadas enumeram de-baixo-pra-cima, então compor na ordem do array pinta camadas
+  //     posteriores POR CIMA das anteriores, exatamente a própria ordem de pintura da spec).
+  bool any_painted = false;
+  for (uint16_t i = 0; i < layer_count; ++i) {
+    glx_sfnt_outline o{};
+    if (glx_sfnt_glyph_outline(&sf, layers[i].gid, points.data(), (uint16_t)points.size(), contour_ends.data(),
+                                (uint16_t)contour_ends.size(), &o) != GLX_SFNT_OK)
+      continue;
+    if (o.num_points == 0 || o.num_contours == 0) continue;
+
+    // EN: Resolve the layer's tint -- the spec sentinel 0xFFFF ("use foreground/text colour") is
+    //     THIS caller's job to substitute (glx_sfnt_cpal_rgba() deliberately does not special-case
+    //     it, see its own doc-comment) -- opaque white, a documented limitation (this ticket's plan
+    //     §5): the atlas is baked colour-INDEPENDENT (one bake serves every text colour a caller
+    //     might later render with), so a genuinely PER-TEXT-COLOUR foreground bake would break the
+    //     atlas cache. A hostile/OOB `palette_index` (glx_sfnt_cpal_rgba() failing) skips just this
+    //     LAYER, not the whole glyph.
+    // PT: Resolve o tingimento da camada -- o sentinela da spec 0xFFFF ("usa a cor de
+    //     texto/foreground") é trabalho de QUEM CHAMA substituir (o glx_sfnt_cpal_rgba()
+    //     deliberadamente não trata como caso especial, ver o doc-comment próprio dele) -- branco
+    //     opaco, uma limitação documentada (§5 do plano desta tarefa): o atlas é empacotado
+    //     INDEPENDENTE-de-cor (um bake serve toda cor de texto que quem chama algum dia renderizar
+    //     com), então um bake genuinamente POR-COR-DE-TEXTO de foreground quebraria o cache do
+    //     atlas. Um `palette_index` hostil/fora-de-faixa (glx_sfnt_cpal_rgba() falhando) pula só
+    //     esta CAMADA, não o glyph inteiro.
+    uint8_t tint[4];
+    if (layers[i].palette_index == 0xFFFF) {
+      tint[0] = tint[1] = tint[2] = tint[3] = 255;
+    } else if (glx_sfnt_cpal_rgba(&sf, layers[i].palette_index, tint) != GLX_SFNT_OK) {
+      continue;
+    }
+
+    std::vector<uint8_t> cov((size_t)gw * (size_t)gh, 0);
+    const size_t scratch_n = glx_raster_scratch_floats(gw, gh);
+    if (scratch_n == 0) continue;
+    std::vector<float> scratch(scratch_n);
+    const glx_raster_result rr =
+        glx_rasterize_outline(points.data(), o.num_points, contour_ends.data(), o.num_contours, scale_num,
+                               scale_den, origin_x_26_6, origin_y_26_6, cov.data(), gw, gh, gw, scratch.data(),
+                               scratch.size());
+    if (rr != GLX_RASTER_OK) continue;
+
+    // EN: Premultiplied-OVER, per texel: `dst' = src + dst*(1-src_a)`, both operands already
+    //     premultiplied -- `src` here is the layer's OWN straight-alpha tint scaled down TWICE (by
+    //     its own straight alpha AND by this pixel's rasterised coverage), the standard
+    //     "coverage-as-a-second-alpha-channel" composite every AA rasteriser uses.
+    // PT: OVER-premultiplicado, por texel: `dst' = src + dst*(1-src_a)`, os dois operandos já
+    //     premultiplicados -- `src` aqui é o próprio tingimento alpha-reto da camada escalado DUAS
+    //     vezes (pelo próprio alpha reto E pela cobertura rasterizada deste pixel), o composite
+    //     padrão "cobertura-como-2º-canal-de-alpha" que todo rasterizador AA usa.
+    for (size_t p = 0; p < (size_t)gw * (size_t)gh; ++p) {
+      const uint8_t cov8 = cov[p];
+      if (cov8 == 0) continue;
+      const float src_a = ((float)tint[3] / 255.0f) * ((float)cov8 / 255.0f);
+      if (src_a <= 0.0f) continue;
+      const float src_r = ((float)tint[0] / 255.0f) * src_a;
+      const float src_g = ((float)tint[1] / 255.0f) * src_a;
+      const float src_b = ((float)tint[2] / 255.0f) * src_a;
+      uint8_t* d = &canvas[p * 4];
+      const float inv_src_a = 1.0f - src_a;
+      const float dst_r = (float)d[0] / 255.0f, dst_g = (float)d[1] / 255.0f;
+      const float dst_b = (float)d[2] / 255.0f, dst_a = (float)d[3] / 255.0f;
+      d[0] = (uint8_t)std::lround(std::clamp(src_r + dst_r * inv_src_a, 0.0f, 1.0f) * 255.0f);
+      d[1] = (uint8_t)std::lround(std::clamp(src_g + dst_g * inv_src_a, 0.0f, 1.0f) * 255.0f);
+      d[2] = (uint8_t)std::lround(std::clamp(src_b + dst_b * inv_src_a, 0.0f, 1.0f) * 255.0f);
+      d[3] = (uint8_t)std::lround(std::clamp(src_a + dst_a * inv_src_a, 0.0f, 1.0f) * 255.0f);
+    }
+    any_painted = true;
+  }
+  if (!any_painted) return false; // every layer's tint/rasterisation failed -- degrade cleanly.
+
+  out.is_color = true;
+  out.gw = gw;
+  out.gh = gh;
+  out.color_rgba = std::move(canvas);
+  // EN: Same pen-snap/vsnap placement convention RasterizeGlyph()'s own grayscale path uses (see
+  //     its doc-comment) -- offset_x tied to `pen_snap`, offset_y tied to `v_snap`, both derived
+  //     from the SAME (ux_min, uy_max) this function already rounded into origin_x_26_6/
+  //     origin_y_26_6 above, so the quad's placement and the canvas's rasterised content agree.
+  // PT: Mesma convenção de posicionamento pen-snap/vsnap que o próprio caminho em tons de cinza do
+  //     RasterizeGlyph() usa (ver o doc-comment dele) -- offset_x atado ao `pen_snap`, offset_y
+  //     atado ao `v_snap`, ambos derivados do MESMO (ux_min, uy_max) que esta função já
+  //     arredondou em origin_x_26_6/origin_y_26_6 acima, então o posicionamento do quad e o
+  //     conteúdo rasterizado da tela concordam.
+  out.offset_x = (pen_snap ? (float)std::lround((double)ux_min) : ux_min) - kPad;
+  out.offset_y = v_snap ? -((float)std::lround((double)uy_max) + kPad) : -(uy_max + kPad);
+  return true;
+}
+
 void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
   const glx_sfnt_face& sf = inst.face->sfnt;
   const float scale = (float)inst.pixel_size / (float)sf.units_per_em; // caller already guards units_per_em>0.
@@ -1207,6 +1423,7 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
     //     primária da FaceInstance.
     gi.src_face = inst.face;
     gi.advance = b.advance;
+    gi.is_color = b.is_color; // A4-EMOJI -- see GlyphInfo::is_color's own doc-comment.
     if (b.gw > 0 && b.gh > 0) {
       gi.atlas_x = b.atlas_x;
       gi.atlas_y = b.atlas_y;
@@ -1214,36 +1431,57 @@ void FontEngineOwn::BakeFaceInstance(FaceInstance& inst) const {
       gi.h = b.gh;
       gi.offset_x = b.offset_x;
       gi.offset_y = b.offset_y;
-      // EN: Blit coverage -> RGBA8 as (cov,cov,cov,cov) -- "premultiplied white": a fully
-      //     covered texel is opaque white (255,255,255,255); a text colour vertex, itself
-      //     premultiplied (ColourbPremultiplied), multiplied component-wise against this in the
-      //     fragment shader (RmlUi_Renderer_GL3's own text-quad blend, GL_ONE,
-      //     GL_ONE_MINUS_SRC_ALPHA) yields the correctly coverage-modulated premultiplied
-      //     colour -- the same trick every coverage-atlas text renderer uses (stb_truetype's
-      //     STBTT_bitmap included), not FreeType-specific.
-      // PT: Blita cobertura -> RGBA8 como (cov,cov,cov,cov) -- "branco premultiplicado": um
-      //     texel totalmente coberto é branco opaco (255,255,255,255); um vértice de cor de
-      //     texto, ele mesmo premultiplicado (ColourbPremultiplied), multiplicado
-      //     componente-a-componente contra isto no fragment shader (blend próprio de quad de
-      //     texto do RmlUi_Renderer_GL3, GL_ONE, GL_ONE_MINUS_SRC_ALPHA) resulta na cor
-      //     premultiplicada corretamente modulada por cobertura -- o mesmo truque que todo
-      //     renderizador de texto por atlas-de-cobertura usa (STBTT_bitmap do stb_truetype
-      //     incluso), não específico do FreeType.
-      for (int y = 0; y < b.gh; ++y) {
-        const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
-        uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * atlas_w + (size_t)b.atlas_x) * 4];
-        for (int x = 0; x < b.gw; ++x) {
-          // EN: (sub-phase 1.5) coverage -> darkened coverage via the per-instance LUT (identity
-          //     when darkening is bypassed or the size is >= kPxHi). Still (cov,cov,cov,cov)
-          //     premultiplied-white -- the darkening only reshapes the coverage byte, not the trick.
-          // PT: (sub-fase 1.5) cobertura -> cobertura escurecida via a LUT por-instância (identidade
-          //     quando o darkening é pulado ou o tamanho é >= kPxHi). Continua (cov,cov,cov,cov)
-          //     branco-premultiplicado -- o darkening só remodela o byte de cobertura, não o truque.
-          const uint8_t cov = inst.cov_lut[src_row[x]];
-          dst_row[x * 4 + 0] = cov;
-          dst_row[x * 4 + 1] = cov;
-          dst_row[x * 4 + 2] = cov;
-          dst_row[x * 4 + 3] = cov;
+      if (b.is_color) {
+        // EN: (A4-EMOJI) Colour glyph -- `b.color_rgba` is already the final, premultiplied RGBA
+        //     RasterizeColorGlyph() composited (real emoji colours, not coverage), so the blit is a
+        //     straight row-by-row copy -- no cov_lut (that curve is a grayscale-coverage darkening
+        //     tool, meaningless for already-composited colour). GenerateString() (.cpp) reads
+        //     gi.is_color to pick this glyph's quad a WHITE-scaled-by-alpha vertex colour instead of
+        //     the text colour, so this atlas content passes through untinted.
+        // PT: (A4-EMOJI) Glyph colorido -- `b.color_rgba` já é o RGBA final, premultiplicado, que o
+        //     RasterizeColorGlyph() compôs (cores reais do emoji, não cobertura), então o blit é
+        //     uma cópia direta linha-a-linha -- sem cov_lut (aquela curva é ferramenta de
+        //     escurecimento de cobertura-em-tons-de-cinza, sem sentido pra algo já composto). O
+        //     GenerateString() (.cpp) lê gi.is_color pra escolher pra este glyph uma cor de vértice
+        //     BRANCO-escalado-por-alpha em vez da cor de texto, então este conteúdo de atlas passa
+        //     sem tingir.
+        for (int y = 0; y < b.gh; ++y) {
+          const uint8_t* src_row = &b.color_rgba[(size_t)y * (size_t)b.gw * 4];
+          uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * atlas_w + (size_t)b.atlas_x) * 4];
+          std::copy(src_row, src_row + (size_t)b.gw * 4, dst_row);
+        }
+      } else {
+        // EN: Blit coverage -> RGBA8 as (cov,cov,cov,cov) -- "premultiplied white": a fully
+        //     covered texel is opaque white (255,255,255,255); a text colour vertex, itself
+        //     premultiplied (ColourbPremultiplied), multiplied component-wise against this in the
+        //     fragment shader (RmlUi_Renderer_GL3's own text-quad blend, GL_ONE,
+        //     GL_ONE_MINUS_SRC_ALPHA) yields the correctly coverage-modulated premultiplied
+        //     colour -- the same trick every coverage-atlas text renderer uses (stb_truetype's
+        //     STBTT_bitmap included), not FreeType-specific.
+        // PT: Blita cobertura -> RGBA8 como (cov,cov,cov,cov) -- "branco premultiplicado": um
+        //     texel totalmente coberto é branco opaco (255,255,255,255); um vértice de cor de
+        //     texto, ele mesmo premultiplicado (ColourbPremultiplied), multiplicado
+        //     componente-a-componente contra isto no fragment shader (blend próprio de quad de
+        //     texto do RmlUi_Renderer_GL3, GL_ONE, GL_ONE_MINUS_SRC_ALPHA) resulta na cor
+        //     premultiplicada corretamente modulada por cobertura -- o mesmo truque que todo
+        //     renderizador de texto por atlas-de-cobertura usa (STBTT_bitmap do stb_truetype
+        //     incluso), não específico do FreeType.
+        for (int y = 0; y < b.gh; ++y) {
+          const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
+          uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * atlas_w + (size_t)b.atlas_x) * 4];
+          for (int x = 0; x < b.gw; ++x) {
+            // EN: (sub-phase 1.5) coverage -> darkened coverage via the per-instance LUT (identity
+            //     when darkening is bypassed or the size is >= kPxHi). Still (cov,cov,cov,cov)
+            //     premultiplied-white -- the darkening only reshapes the coverage byte, not the trick.
+            // PT: (sub-fase 1.5) cobertura -> cobertura escurecida via a LUT por-instância (identidade
+            //     quando o darkening é pulado ou o tamanho é >= kPxHi). Continua (cov,cov,cov,cov)
+            //     branco-premultiplicado -- o darkening só remodela o byte de cobertura, não o truque.
+            const uint8_t cov = inst.cov_lut[src_row[x]];
+            dst_row[x * 4 + 0] = cov;
+            dst_row[x * 4 + 1] = cov;
+            dst_row[x * 4 + 2] = cov;
+            dst_row[x * 4 + 3] = cov;
+          }
         }
       }
     }
@@ -1314,6 +1552,7 @@ void FontEngineOwn::BakeGlyph(FaceInstance& inst, uint32_t cp) const {
   gi.gid = b.gid;
   gi.src_face = src; // primary or the resolving fallback face -- see GlyphInfo::src_face.
   gi.advance = b.advance;
+  gi.is_color = b.is_color; // A4-EMOJI -- see GlyphInfo::is_color's own doc-comment.
 
   if (b.gw > 0 && b.gh > 0) {
     // EN: Persistent shelf cursor -- see FaceInstance::pen_x/pen_y/shelf_h's own doc-comment. Same
@@ -1346,20 +1585,34 @@ void FontEngineOwn::BakeGlyph(FaceInstance& inst, uint32_t cp) const {
     gi.offset_x = b.offset_x;
     gi.offset_y = b.offset_y;
 
-    // EN: Same premultiplied-white coverage blit as BakeFaceInstance()'s warm-set loop, through the
-    //     SAME per-instance inst.cov_lut -- see that function's own comment for the full rationale.
-    // PT: Mesmo blit de cobertura branco-premultiplicado do laço do warm set do BakeFaceInstance(),
-    //     pela MESMA inst.cov_lut por-instância -- ver o comentário próprio daquela função pro
-    //     racional completo.
-    for (int y = 0; y < b.gh; ++y) {
-      const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
-      uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * inst.atlas_w + (size_t)b.atlas_x) * 4];
-      for (int x = 0; x < b.gw; ++x) {
-        const uint8_t cov = inst.cov_lut[src_row[x]];
-        dst_row[x * 4 + 0] = cov;
-        dst_row[x * 4 + 1] = cov;
-        dst_row[x * 4 + 2] = cov;
-        dst_row[x * 4 + 3] = cov;
+    if (b.is_color) {
+      // EN: (A4-EMOJI) Colour glyph, lazy top-up -- same straight copy BakeFaceInstance()'s
+      //     warm-set loop uses for `b.color_rgba` (see that comment for the full rationale); no
+      //     cov_lut, `b.color_rgba` is already the final premultiplied RGBA.
+      // PT: (A4-EMOJI) Glyph colorido, top-up preguiçoso -- mesma cópia direta que o laço do warm
+      //     set do BakeFaceInstance() usa pra `b.color_rgba` (ver aquele comentário pro racional
+      //     completo); sem cov_lut, `b.color_rgba` já é o RGBA final premultiplicado.
+      for (int y = 0; y < b.gh; ++y) {
+        const uint8_t* src_row = &b.color_rgba[(size_t)y * (size_t)b.gw * 4];
+        uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * inst.atlas_w + (size_t)b.atlas_x) * 4];
+        std::copy(src_row, src_row + (size_t)b.gw * 4, dst_row);
+      }
+    } else {
+      // EN: Same premultiplied-white coverage blit as BakeFaceInstance()'s warm-set loop, through the
+      //     SAME per-instance inst.cov_lut -- see that function's own comment for the full rationale.
+      // PT: Mesmo blit de cobertura branco-premultiplicado do laço do warm set do BakeFaceInstance(),
+      //     pela MESMA inst.cov_lut por-instância -- ver o comentário próprio daquela função pro
+      //     racional completo.
+      for (int y = 0; y < b.gh; ++y) {
+        const uint8_t* src_row = &b.coverage[(size_t)y * b.gw];
+        uint8_t* dst_row = &inst.atlas_rgba[((size_t)(b.atlas_y + y) * inst.atlas_w + (size_t)b.atlas_x) * 4];
+        for (int x = 0; x < b.gw; ++x) {
+          const uint8_t cov = inst.cov_lut[src_row[x]];
+          dst_row[x * 4 + 0] = cov;
+          dst_row[x * 4 + 1] = cov;
+          dst_row[x * 4 + 2] = cov;
+          dst_row[x * 4 + 3] = cov;
+        }
       }
     }
   }
@@ -1413,6 +1666,7 @@ void FontEngineOwn::EnsureGlyphs(FaceInstance& inst, Rml::StringView string) con
   bool baked_any_real = false;
   for (Rml::StringIteratorU8 it(string.begin(), string.begin(), string.end()); it; ++it) {
     const uint32_t cp = (uint32_t)(*it);
+    if (IsVariationSelector(cp)) continue; // A4-EMOJI -- VS15/16, zero-width, never baked/cached.
     if (inst.glyphs.find(cp) != inst.glyphs.end()) continue; // already tried (real or negative-cached).
     BakeGlyph(inst, cp);
     const auto found = inst.glyphs.find(cp);
@@ -1473,6 +1727,17 @@ float FontEngineOwn::IterateGlyphs(const FaceInstance& inst, Rml::StringView str
   for (Rml::StringIteratorU8 it(string.begin(), string.begin(), string.end()); it; ++it) {
     const Rml::Character c = *it;
     const uint32_t cp = (uint32_t)c;
+    // EN: (A4-EMOJI) VS15/16 (U+FE0E/U+FE0F) skipped as if absent from the string entirely -- no
+    //     emit(), no pen advance, has_prev/prev_g untouched -- see IsVariationSelector()'s own
+    //     doc-comment. Mirrors the SAME skip EnsureGlyphs() applies (both share this walk's own
+    //     codepoint stream by construction), preserving the width==mesh invariance this method's
+    //     doc-comment above already guarantees.
+    // PT: (A4-EMOJI) VS15/16 (U+FE0E/U+FE0F) pulado como se estivesse ausente da string por
+    //     completo -- sem emit(), sem avanço de pena, has_prev/prev_g intocados -- ver o
+    //     doc-comment próprio do IsVariationSelector(). Espelha o MESMO skip que o EnsureGlyphs()
+    //     aplica (ambos compartilham o mesmo fluxo de codepoint desta caminhada por construção),
+    //     preservando a invariância width==mesh que o doc-comment deste método acima já garante.
+    if (IsVariationSelector(cp)) continue;
     const GlyphInfo* g = FindGlyph(inst, cp);
 
     // EN: Kerning applies ONLY between two CONSECUTIVE baked glyphs (both have a real gid) SOURCED
@@ -1655,10 +1920,11 @@ int FontEngineOwn::GenerateString(Rml::RenderManager& render_manager, Rml::FontF
   const float atlas_w_f = (float)inst->atlas_w;
   const float atlas_h_f = (float)inst->atlas_h;
 
-  auto push_quad = [&](float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1) {
+  auto push_quad = [&](float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1,
+                        Rml::ColourbPremultiplied quad_colour) {
     const int base = (int)mesh.vertices.size();
     Rml::Vertex v;
-    v.colour = colour;
+    v.colour = quad_colour;
     v.position = Rml::Vector2f(x0, y0);
     v.tex_coord = Rml::Vector2f(u0, v0);
     mesh.vertices.push_back(v);
@@ -1690,7 +1956,26 @@ int FontEngineOwn::GenerateString(Rml::RenderManager& render_manager, Rml::FontF
         const float v0 = (float)g->atlas_y / atlas_h_f;
         const float u1 = (float)(g->atlas_x + g->w) / atlas_w_f;
         const float v1 = (float)(g->atlas_y + g->h) / atlas_h_f;
-        push_quad(x0, y0, x1, y1, u0, v0, u1, v1);
+        // EN: (A4-EMOJI) A colour glyph's atlas cell already holds its REAL premultiplied RGBA
+        //     (see GlyphInfo::is_color's own doc-comment) -- multiplying it by the ordinary text
+        //     `colour` would tint the emoji, so its quad instead gets a WHITE vertex colour scaled
+        //     by `colour`'s own alpha: `white_premul(a) * emoji_rgba == emoji_rgba` (fully opaque
+        //     texels pass through untouched), while `colour.alpha` still carries whatever
+        //     fade/opacity the caller baked into it, so a fading/translucent emoji still fades. A
+        //     non-colour glyph is untouched -- the ordinary text `colour`, exactly as before A4-EMOJI.
+        // PT: (A4-EMOJI) A célula de atlas de um glyph colorido já guarda o próprio RGBA
+        //     premultiplicado REAL (ver o doc-comment próprio de GlyphInfo::is_color) --
+        //     multiplicá-la pela `colour` de texto comum tingiria o emoji, então o quad dele recebe
+        //     em vez disso uma cor de vértice BRANCA escalada pelo próprio alpha de `colour`:
+        //     `branco_premul(a) * emoji_rgba == emoji_rgba` (texels totalmente opacos passam
+        //     intocados), enquanto `colour.alpha` continua carregando qualquer fade/opacidade que
+        //     quem chama tenha embutido nela, então um emoji esmaecendo/translúcido ainda esmaece.
+        //     Um glyph não-colorido fica intocado -- a `colour` de texto comum, exatamente como
+        //     antes do A4-EMOJI.
+        const Rml::ColourbPremultiplied quad_colour =
+            g->is_color ? Rml::ColourbPremultiplied(colour.alpha, colour.alpha, colour.alpha, colour.alpha)
+                        : colour;
+        push_quad(x0, y0, x1, y1, u0, v0, u1, v1, quad_colour);
       });
 
   if (!mesh.indices.empty()) {

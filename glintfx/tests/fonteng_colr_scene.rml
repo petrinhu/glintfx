@@ -1,0 +1,118 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: A4-EMOJI (COLRv0 colour emoji) pixel-proof document -- driven by
+      tests/fonteng_colr_sanity.cpp. Loads the S1-owned synthetic fixture
+      tests/assets/colr_fixture.ttf (repo-root `tests/`, copied here as "assets/colr_fixture.ttf"
+      by the CMakeLists.txt registration -- see tools/gen_colr_fixture.py for the fixture's own
+      exact glyph/layer/palette layout, which this document assumes byte-for-byte):
+        - U+E000 "two_layer" -- COLR base glyph = triangle@palette-entry-0 (opaque RED) UNDER
+          square@palette-entry-1 (opaque BLUE); the square is a FULL 100x100-unit box, the same
+          bbox as the union, so it fully occludes the triangle underneath it -- meaning "the whole
+          glyph reads pure BLUE" is itself the correctness oracle for LAYER PAINT ORDER (bottom-to-
+          top): a compositor that got the order backwards would show RED wherever the triangle's
+          own (non-rectangular) shape covers and only show BLUE in the square's leftover corners,
+          NOT a uniformly blue glyph. `color: red` on this span is deliberate -- criterion (a).
+        - U+E000 + U+FE0F "two_layer_vs16" -- the SAME glyph immediately followed by VARIATION
+          SELECTOR-16, testing IsVariationSelector()'s skip (font_engine_own.cpp): must measure the
+          IDENTICAL width as "two_layer" alone (VS16 contributing zero advance, zero quad).
+        - U+E001 "fg_sentinel" -- COLR base glyph = triangle@palette-index 0xFFFF, the spec
+          "use foreground/text colour" sentinel this ticket's plan §5 documents as baking OPAQUE
+          WHITE (colour-INDEPENDENT atlas, never the span's own `color`) -- criterion (c).
+          `color: lime` on this span is deliberate -- a wrongly-tinted bake would read back green,
+          not white; a correctly white-baked-but-vertex-tinted-by-`colour` bake (the OTHER possible
+          bug, treating a colour glyph like a grayscale one) would ALSO read back green -- both
+          bugs are caught by the SAME assertion (see fonteng_colr_sanity.cpp).
+        - "gray_ascii" -- an ORDINARY grayscale glyph ('A', "Sans"/OpenSans) -- criterion (b): the
+          COLR bake path must not have broken (or accidentally applied its own white-vertex trick
+          to) the pre-existing, unrelated coverage-atlas glyph path. `color: red` -- must read back
+          the SAME red the span asked for, not white/untinted.
+      Every colour span uses `font-size: 300px` against the fixture's `unitsPerEm=1000` so the
+      glyph's own 100-unit ink resolves to a ~30px core -- generous headroom of FULLY OPAQUE
+      interior pixels over the thin AA fringe for a robust colour AVERAGE (see this scene's own
+      consumer, fonteng_colr_sanity.cpp's average_ink_colour(), for why an area average rather
+      than one hand-picked pixel coordinate is the more robust oracle here -- the fixture's own
+      hmtx advance (1000 units) is far wider than the glyph's own 100-unit ink, so most of a span's
+      box is background; a single mis-guessed coordinate risks landing off-glyph or on an AA edge).
+      Black background, `white-space: nowrap`, zero padding/border/margin -- get_element_box(id)
+      bounds each span tightly enough for the whole-box ink scan.
+  PT: Documento de prova-de-pixel do A4-EMOJI (emoji colorido COLRv0) -- dirigido por
+      tests/fonteng_colr_sanity.cpp. Carrega a fixture sintética de posse do S1
+      tests/assets/colr_fixture.ttf (raiz do repo `tests/`, copiada aqui como
+      "assets/colr_fixture.ttf" pelo registro do CMakeLists.txt -- ver tools/gen_colr_fixture.py
+      pro layout exato de glyph/camada/paleta da fixture, que este documento assume ao pé da
+      letra):
+        - U+E000 "two_layer" -- glyph-base COLR = triângulo@entrada-de-paleta-0 (VERMELHO opaco)
+          SOB quadrado@entrada-de-paleta-1 (AZUL opaco); o quadrado é uma caixa CHEIA de 100x100
+          unidades, a mesma bbox da união, então oclui totalmente o triângulo por baixo dele --
+          significando que "o glyph inteiro lê AZUL puro" é ele mesmo o oráculo de corretude pra
+          ORDEM DE PINTURA de camada (de-baixo-pra-cima): um compositor com a ordem invertida
+          mostraria VERMELHO onde a própria forma (não-retangular) do triângulo cobre e só
+          mostraria AZUL nos cantos sobrando do quadrado, NÃO um glyph uniformemente azul.
+          `color: red` neste span é deliberado -- critério (a).
+        - U+E000 + U+FE0F "two_layer_vs16" -- o MESMO glyph imediatamente seguido do SELETOR DE
+          VARIAÇÃO-16, testando o skip do IsVariationSelector() (font_engine_own.cpp): precisa
+          medir a MESMA largura que "two_layer" sozinho (VS16 contribuindo avanço zero, quad zero).
+        - U+E001 "fg_sentinel" -- glyph-base COLR = triângulo@índice-de-paleta 0xFFFF, o sentinela
+          da spec "usa a cor de texto/foreground" que o §5 do plano desta tarefa documenta como
+          empacotando BRANCO OPACO (atlas INDEPENDENTE-de-cor, nunca a própria `color` do span) --
+          critério (c). `color: lime` neste span é deliberado -- um bake tingido errado leria verde
+          de volta, não branco; um bake corretamente branco-empacotado-mas-tingido-por-vértice pela
+          `colour` (o OUTRO bug possível, tratando um glyph colorido como um em tons de cinza)
+          TAMBÉM leria verde de volta -- os dois bugs são pegos pela MESMA asserção (ver
+          fonteng_colr_sanity.cpp).
+        - "gray_ascii" -- um glyph em tons de cinza COMUM ('A', "Sans"/OpenSans) -- critério (b): o
+          caminho de bake COLR não pode ter quebrado (ou acidentalmente aplicado o próprio truque
+          de vértice-branco) o caminho pré-existente, não-relacionado, de glyph em atlas-de-
+          cobertura. `color: red` -- precisa ler de volta o MESMO vermelho que o span pediu, não
+          branco/sem tingir.
+      Todo span de cor usa `font-size: 300px` contra o `unitsPerEm=1000` da fixture pra a própria
+      tinta de 100 unidades do glyph resolver num núcleo de ~30px -- folga generosa de pixels
+      interiores TOTALMENTE OPACOS sobre a franja fina de AA pra uma MÉDIA de cor robusta (ver o
+      próprio consumidor desta cena, o average_ink_colour() do fonteng_colr_sanity.cpp, pro motivo
+      de uma média de área, em vez de uma coordenada de pixel escolhida à mão, ser o oráculo mais
+      robusto aqui -- o próprio avanço hmtx da fixture (1000 unidades) é bem mais largo que a
+      própria tinta de 100 unidades do glyph, então a maior parte da caixa de um span é fundo; uma
+      coordenada mal-adivinhada arrisca cair fora do glyph ou numa borda de AA). Fundo preto,
+      `white-space: nowrap`, padding/borda/margem zero -- get_element_box(id) delimita cada span
+      justo o bastante pra varredura de tinta na caixa inteira.
+-->
+<rml>
+<head>
+  <style>
+    @font-face { font-family: "ColrFixture"; src: "assets/colr_fixture.ttf"; }
+    @font-face { font-family: "Sans"; src: "assets/OpenSans-Regular.ttf"; }
+
+    body {
+      background: #000000;
+      color: #ffffff;
+      font-family: "Sans";
+      font-size: 48px;
+      margin: 8px;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    span {
+      display: inline-block;
+      padding: 0; margin: 0;
+      white-space: nowrap;
+    }
+    #two_layer, #two_layer_vs16, #fg_sentinel {
+      font-family: "ColrFixture";
+      font-size: 300px;
+    }
+    #two_layer      { color: #ff0000; }
+    #two_layer_vs16 { color: #ff0000; }
+    #fg_sentinel    { color: #00ff00; }
+    #gray_ascii     { font-family: "Sans"; font-size: 200px; color: #ff0000; }
+    br { display: block; }
+  </style>
+  <title>glintfx A4-EMOJI COLRv0 pixel-proof gate</title>
+</head>
+<body>
+  <span id="two_layer"></span><br/>
+  <span id="two_layer_vs16">️</span><br/>
+  <span id="fg_sentinel"></span><br/>
+  <span id="gray_ascii">A</span>
+</body>
+</rml>

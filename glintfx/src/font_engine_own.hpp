@@ -411,6 +411,26 @@ private:
     //     corretude, não um alvo de micro-otimização.
     const LoadedFace* src_face = nullptr;
     int atlas_x = 0, atlas_y = 0, w = 0, h = 0;
+    // EN: (A4-EMOJI) `true` for a glyph baked via the COLR v0 colour path (RasterizeColorGlyph(),
+    //     .cpp) -- the atlas cell holds REAL premultiplied RGBA (the emoji's own colours), not the
+    //     usual premultiplied-white coverage every OTHER glyph uses (see FaceInstance::atlas_rgba's
+    //     own doc-comment). GenerateString() (.cpp) reads this to pick the quad's VERTEX colour:
+    //     `false` (the default, every pre-A4-EMOJI glyph) multiplies the atlas texel by the text
+    //     colour as always; `true` multiplies it by white scaled by the text colour's own alpha
+    //     (`(a,a,a,a)`) instead, so `white * emoji_rgba == emoji_rgba` -- the emoji's baked colours
+    //     pass through untinted while fade/opacity (carried in alpha) still applies. Always `false`
+    //     for a negative-cached (`baked==false`) entry.
+    // PT: (A4-EMOJI) `true` pra um glyph empacotado via o caminho de cor COLR v0
+    //     (RasterizeColorGlyph(), .cpp) -- a célula do atlas guarda RGBA premultiplicado REAL (as
+    //     próprias cores do emoji), não a cobertura branco-premultiplicada de sempre que todo OUTRO
+    //     glyph usa (ver o próprio doc-comment de FaceInstance::atlas_rgba). O GenerateString()
+    //     (.cpp) lê isto pra escolher a cor de VÉRTICE do quad: `false` (o default, todo glyph
+    //     pré-A4-EMOJI) multiplica o texel do atlas pela cor de texto como sempre; `true` multiplica
+    //     ele por branco escalado pelo próprio alpha da cor de texto (`(a,a,a,a)`) em vez disso,
+    //     então `branco * emoji_rgba == emoji_rgba` -- as cores empacotadas do emoji passam sem
+    //     tingir enquanto fade/opacidade (carregado no alpha) continua se aplicando. Sempre `false`
+    //     numa entrada cache-negativada (`baked==false`).
+    bool is_color = false;
     // EN: offset_x/offset_y (px): added to (pen_x, baseline_y) to get the quad's TOP-LEFT
     //     corner in screen space (y-down). See BakeFaceInstance()'s derivation in the .cpp.
     // PT: offset_x/offset_y (px): somados a (pen_x, baseline_y) para obter o canto
@@ -496,6 +516,25 @@ private:
     uint32_t gid = 0; // for glx_sfnt_kern() -- the 'kern' table is keyed by gid, not codepoint.
     int gw = 0, gh = 0;
     std::vector<uint8_t> coverage; // gw*gh coverage bytes, empty for a blank/un-rasterized glyph.
+    // EN: (A4-EMOJI) Colour-glyph bake output, mutually exclusive with `coverage` above --
+    //     RasterizeColorGlyph() (.cpp) fills `color_rgba` (gw*gh*4 bytes, PREMULTIPLIED RGBA, the
+    //     layers already tinted+composited) and sets `is_color=true` INSTEAD of `coverage` when
+    //     `gid` is a usable COLR v0 base glyph; every other path (including a COLR glyph that
+    //     degrades -- too many layers, every layer failed to rasterise) leaves `is_color=false` and
+    //     `color_rgba` empty, `coverage` used as always. BakeFaceInstance()/BakeGlyph() (.cpp)
+    //     branch on `is_color` at atlas-blit time: a straight `std::copy` of `color_rgba` for a
+    //     colour glyph, the usual per-texel cov_lut->(cov,cov,cov,cov) blit otherwise.
+    // PT: (A4-EMOJI) Saída de bake de glyph colorido, mutuamente exclusiva com `coverage` acima --
+    //     o RasterizeColorGlyph() (.cpp) preenche `color_rgba` (gw*gh*4 bytes, RGBA
+    //     PREMULTIPLICADO, as camadas já tingidas+compostas) e seta `is_color=true` EM VEZ DE
+    //     `coverage` quando `gid` é um glyph-base COLR v0 utilizável; todo outro caminho (incluindo
+    //     um glyph COLR que degrada -- camadas demais, toda camada falhou ao rasterizar) deixa
+    //     `is_color=false` e `color_rgba` vazio, `coverage` usado como sempre. O
+    //     BakeFaceInstance()/BakeGlyph() (.cpp) ramificam em `is_color` no momento do blit-no-atlas:
+    //     um `std::copy` direto de `color_rgba` pra um glyph colorido, o blit por-texel
+    //     cov_lut->(cov,cov,cov,cov) de sempre senão.
+    bool is_color = false;
+    std::vector<uint8_t> color_rgba;
     float advance = 0.f, offset_x = 0.f, offset_y = 0.f;
     int atlas_x = 0, atlas_y = 0; // filled by the caller's shelf-pack step (warm set OR BakeGlyph()).
     float y_max_px = 0.f, y_min_px = 0.f; // see this struct's doc-comment above.
@@ -563,6 +602,89 @@ private:
   //     em-square muda por arquivo-fonte de origem.
   bool RasterizeGlyph(const FaceInstance& inst, uint32_t cp, uint32_t gid, Baked& out,
                        const LoadedFace* src = nullptr) const;
+
+  // EN: (A4-EMOJI) COLR v0 colour-glyph bake path -- called by RasterizeGlyph() (.cpp) BEFORE its
+  //     own grayscale outline path, for every `gid` it resolves (warm set AND lazy top-up, primary
+  //     AND fallback faces alike: `sf`/`scale` are whichever `src->sfnt`/scale RasterizeGlyph()
+  //     already derived, so a colour glyph supplied by a FALLBACK COLR face bakes exactly like one
+  //     from the primary -- no separate fallback plumbing needed here, see this ticket's plan §6/S2).
+  //     Enumerates `base_gid`'s COLR v0 layers (glx_sfnt_colr_layers(), capped at kMaxColorLayers)
+  //     and, for each that rasterises cleanly: fetches its plain `glyf` outline
+  //     (glx_sfnt_glyph_outline() -- a COLR layer is spec-defined to be an ordinary glyph, the same
+  //     SOV-RAST rasteriser every grayscale glyph already uses), resolves its tint (CPAL palette 0
+  //     via glx_sfnt_cpal_rgba(), OR opaque white for the spec sentinel `palette_index==0xFFFF` --
+  //     see include/core/sfnt.h's own `glx_sfnt_colr_layer` doc-comment for why this substitution is
+  //     THIS caller's job, not SOV-SFNT's), and composites it premultiplied-OVER onto a staging
+  //     canvas sized to the UNION of every layer's own bbox (two passes over the layer list: bbox
+  //     union first, so the canvas is allocated once at its final size, then rasterise+tint+compose
+  //     into it -- no reallocation/repacking mid-composite). No Y grid-fitting (glx_hint_outline())
+  //     is applied to colour layers -- the face's hint zones (baseline/x-height/cap-height) describe
+  //     TEXT metrics, meaningless for an arbitrary emoji shape; pen-snap/vsnap (`pen_snap`/`v_snap`,
+  //     the SAME flags RasterizeGlyph() already read once per glyph) still round the canvas's
+  //     placement (offset_x/offset_y) the identical way a grayscale glyph's are, for the same
+  //     GL_LINEAR-smear-avoidance reason.
+  //
+  //     DEGRADE POSTURE (never a crash, always falls back to "not a colour glyph" so
+  //     RasterizeGlyph() proceeds into its own grayscale path on `base_gid`'s plain outline):
+  //     `glx_sfnt_colr_layers()` returning anything other than `GLX_SFNT_OK` with a non-zero count
+  //     (no `COLR` table, `base_gid` not a COLR base glyph, or -- the hostile/pathological case --
+  //     more layers than `kMaxColorLayers` fits, `GLX_SFNT_ERR_BUFFER_TOO_SMALL`); every layer's
+  //     outline fetch/rasterisation failing (a truncated/malformed layer glyph, or one whose bbox is
+  //     degenerate); the union canvas exceeding the same 4096x4096 sanity cap RasterizeGlyph()'s own
+  //     grayscale path already enforces. A single BAD layer (a hostile `palette_index` --
+  //     `glx_sfnt_cpal_rgba()` failing for it -- or a layer glyph that itself fails to rasterise)
+  //     does NOT abort the whole glyph: that one layer is simply skipped (paints nothing), every
+  //     OTHER layer still composites -- same "one hostile piece degrades, the rest survives"
+  //     philosophy `glx_sfnt_colr_layers`'s own residual-risk note documents.
+  //
+  //     Returns `true` and fills `out.is_color/gw/gh/color_rgba/offset_x/offset_y` ONLY when at
+  //     least one layer composited successfully; returns `false` (leaving `out` byte-for-byte
+  //     UNTOUCHED) for every degrade case above -- the caller's contract to check the return value
+  //     before trusting any field this function writes.
+  // PT: (A4-EMOJI) Caminho de bake de glyph colorido COLR v0 -- chamado pelo RasterizeGlyph() (.cpp)
+  //     ANTES do próprio caminho de outline em tons de cinza, pra todo `gid` que ele resolve (warm
+  //     set E top-up preguiçoso, face primária E de fallback igualmente: `sf`/`scale` são o que quer
+  //     que `src->sfnt`/escala o RasterizeGlyph() já tenha derivado, então um glyph colorido suprido
+  //     por uma face COLR de FALLBACK empacota exatamente como um da primária -- sem plumbing de
+  //     fallback separado aqui, ver o §6/S2 do plano desta tarefa).
+  //     Enumera as camadas COLR v0 do `base_gid` (glx_sfnt_colr_layers(), tetado em kMaxColorLayers)
+  //     e, pra cada uma que rasteriza limpo: busca o próprio outline `glyf` puro
+  //     (glx_sfnt_glyph_outline() -- uma camada COLR é, pela spec, um glyph comum, o MESMO
+  //     rasterizador SOV-RAST que todo glyph em tons de cinza já usa), resolve o próprio tingimento
+  //     (paleta 0 do CPAL via glx_sfnt_cpal_rgba(), OU branco opaco pro sentinela da spec
+  //     `palette_index==0xFFFF` -- ver o próprio doc-comment `glx_sfnt_colr_layer` do
+  //     include/core/sfnt.h pro motivo desta substituição ser trabalho de QUEM CHAMA, não do
+  //     SOV-SFNT), e a compõe OVER-premultiplicado numa tela de rascunho dimensionada pra UNIÃO da
+  //     própria bbox de toda camada (dois passes sobre a lista de camada: união de bbox primeiro,
+  //     então a tela é alocada uma vez no tamanho final, depois rasteriza+tinge+compõe nela -- sem
+  //     realocação/reempacotamento no meio do composite). Nenhum grid-fitting Y
+  //     (glx_hint_outline()) é aplicado às camadas de cor -- as zonas de hint da face
+  //     (baseline/altura-x/altura-de-maiúscula) descrevem métrica de TEXTO, sem sentido pra uma
+  //     forma de emoji arbitrária; pen-snap/vsnap (`pen_snap`/`v_snap`, os MESMOS flags que o
+  //     RasterizeGlyph() já leu uma vez por glyph) ainda arredondam o posicionamento da tela
+  //     (offset_x/offset_y) do mesmo jeito que os de um glyph em tons de cinza, pelo mesmo motivo de
+  //     evitar borrão do GL_LINEAR.
+  //
+  //     POSTURA DE DEGRADAÇÃO (nunca um crash, sempre cai pra "não é glyph colorido" pra o
+  //     RasterizeGlyph() seguir pro próprio caminho em tons de cinza sobre o outline puro do
+  //     `base_gid`): `glx_sfnt_colr_layers()` devolvendo qualquer coisa diferente de `GLX_SFNT_OK`
+  //     com contagem não-zero (sem tabela `COLR`, `base_gid` não é glyph-base COLR, ou -- o caso
+  //     hostil/patológico -- mais camadas do que `kMaxColorLayers` cabe,
+  //     `GLX_SFNT_ERR_BUFFER_TOO_SMALL`); a busca/rasterização de outline de TODA camada falhando
+  //     (um glyph de camada truncado/malformado, ou um cuja bbox é degenerada); a tela de união
+  //     excedendo o mesmo teto de sanidade 4096x4096 que o próprio caminho em tons de cinza do
+  //     RasterizeGlyph() já aplica. Uma ÚNICA camada RUIM (um `palette_index` hostil --
+  //     `glx_sfnt_cpal_rgba()` falhando pra ela -- ou um glyph de camada que em si falha ao
+  //     rasterizar) NÃO aborta o glyph inteiro: aquela camada é simplesmente pulada (não pinta
+  //     nada), toda OUTRA camada ainda compõe -- mesma filosofia "uma peça hostil degrada, o resto
+  //     sobrevive" que a própria nota de risco-residual do glx_sfnt_colr_layers documenta.
+  //
+  //     Retorna `true` e preenche `out.is_color/gw/gh/color_rgba/offset_x/offset_y` SÓ quando ao
+  //     menos uma camada compôs com sucesso; retorna `false` (deixando `out` intocado byte-a-byte)
+  //     pra todo caso de degradação acima -- o contrato de quem chama é checar o retorno antes de
+  //     confiar em qualquer campo que esta função escreve.
+  bool RasterizeColorGlyph(const glx_sfnt_face& sf, uint32_t base_gid, int pixel_size, bool pen_snap,
+                            bool v_snap, float scale, Baked& out) const;
 
   // EN: (L1.20-FONTFLIP, FT-F4, sub-phase 2B; per-glyph fallback amadurecimento) LAZY TOP-UP for
   //     exactly ONE codepoint missing from inst.glyphs -- called ONLY by EnsureGlyphs() below,

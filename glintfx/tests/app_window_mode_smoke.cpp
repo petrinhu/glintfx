@@ -5,8 +5,8 @@
 //     exception (see below).
 //
 //     ONE BINARY, PARAMETERIZED BY ENV VAR (App's N3 contract: only ONE App instance per
-//     process -- see app.hpp -- so 4+1 modes cannot live in a single process/main(); this file
-//     is registered 5x in tests/CMakeLists.txt via set_tests_properties(... ENVIRONMENT
+//     process -- see app.hpp -- so 5+1 configs cannot live in a single process/main(); this file
+//     is registered 6x in tests/CMakeLists.txt via set_tests_properties(... ENVIRONMENT
 //     GLINTFX_TEST_WINDOW_MODE=...), same env-var-parameterization idiom the plan mandates):
 //       windowed             -> AppConfig::window_mode = Windowed
 //       maximized            -> AppConfig::window_mode = Maximized (TOLERANT assertion below)
@@ -16,6 +16,18 @@
 //                                fallback-to-Windowed path, exercised through the PUBLIC
 //                                AppConfig surface -- App::App()'s ctor-level validation, not
 //                                WindowGlfw::create()'s own internal twin guard)
+//       negative_size        -> AppConfig{.width=-5, .height=-5, .window_mode=
+//                                FullscreenExclusive} (review MAJOR #2, 2026-07-21):
+//                                glfwCreateWindow() used to SIGABRT on a non-positive size in
+//                                EVERY mode -- a pre-existing bug (AppConfig::width/height had
+//                                no guard at all), closed as an opportunistic fix inside
+//                                WindowGlfw::create() while this exact call site was being
+//                                touched for A4-WINMODES. Proves the D5 clamp-to-1280x720
+//                                fallback: ok()==true, no crash, positive get_window_size().
+//                                FullscreenExclusive is deliberately the mode under test here
+//                                (not Windowed) because it is the one that feeds the raw w/h
+//                                straight to glfwSetWindowMonitor() -- the reviewer's own
+//                                adversarial repro combined a hostile size with this exact mode.
 //
 //     THE ONE TOLERANT CASE (D4, documented not hidden): under Xvfb there is NO window
 //     manager, so a Maximized request may not be honoured at all -- glfwWindowHint(
@@ -42,8 +54,8 @@
 //     (ver abaixo).
 //
 //     UM BINÁRIO, PARAMETRIZADO POR ENV VAR (contrato N3 do App: só UMA instância de App por
-//     processo -- ver app.hpp -- então 4+1 modos não cabem num único processo/main(); este
-//     arquivo é registrado 5x em tests/CMakeLists.txt via set_tests_properties(...
+//     processo -- ver app.hpp -- então 5+1 configs não cabem num único processo/main(); este
+//     arquivo é registrado 6x em tests/CMakeLists.txt via set_tests_properties(...
 //     ENVIRONMENT GLINTFX_TEST_WINDOW_MODE=...), o mesmo idioma de parametrização-por-env-var
 //     que o plano exige):
 //       windowed             -> AppConfig::window_mode = Windowed
@@ -55,6 +67,18 @@
 //                                PÚBLICA AppConfig -- a validação em nível de ctor do
 //                                App::App(), não a guarda gêmea interna do próprio
 //                                WindowGlfw::create())
+//       negative_size        -> AppConfig{.width=-5, .height=-5, .window_mode=
+//                                FullscreenExclusive} (MAJOR #2 do review, 2026-07-21):
+//                                glfwCreateWindow() dava SIGABRT com tamanho não-positivo em
+//                                QUALQUER modo -- bug PRÉ-EXISTENTE (AppConfig::width/height
+//                                não tinha guarda nenhuma), fechado de oportunidade dentro de
+//                                WindowGlfw::create() já que este exato call site estava sendo
+//                                tocado pro A4-WINMODES. Prova o fallback D5 de clamp pra
+//                                1280x720: ok()==true, sem crash, get_window_size() positivo.
+//                                FullscreenExclusive é deliberadamente o modo sob teste aqui
+//                                (não Windowed) porque é o que alimenta o w/h cru direto pro
+//                                glfwSetWindowMonitor() -- o próprio repro adversarial do
+//                                reviewer combinou um tamanho hostil com exatamente este modo.
 //
 //     O ÚNICO CASO TOLERANTE (D4, documentado, não escondido): sob Xvfb não há window manager
 //     nenhum, então um pedido Maximized pode simplesmente não ser honrado --
@@ -133,6 +157,21 @@ int main() {
     //     Precisa cair pra Windowed, decidido UMA VEZ dentro de App::App() (ver app.cpp).
     cfg.window_mode = static_cast<glintfx::WindowMode>(255);
     expected         = glintfx::WindowMode::Windowed;
+  } else if (std::strcmp(mode_env, "negative_size") == 0) {
+    // EN: MAJOR #2 (review, 2026-07-21) -- see file header. Deliberately combines a hostile
+    //     size with FullscreenExclusive (the mode that feeds w/h straight to
+    //     glfwSetWindowMonitor()), same combination the reviewer's adversarial harness used.
+    //     No exact-size assertion below (Xvfb's single reported video mode may not be
+    //     1280x720x, GLFW picks the closest match) -- only "positive, no crash".
+    // PT: MAJOR #2 (review, 2026-07-21) -- ver cabeçalho do arquivo. Combina deliberadamente um
+    //     tamanho hostil com FullscreenExclusive (o modo que alimenta w/h cru direto pro
+    //     glfwSetWindowMonitor()), a mesma combinação que o harness adversarial do reviewer
+    //     usou. Sem asserção de tamanho exato abaixo (o único video mode reportado pelo Xvfb
+    //     pode não ser 1280x720, o GLFW escolhe o mais próximo) -- só "positivo, sem crash".
+    cfg.width        = -5;
+    cfg.height       = -5;
+    cfg.window_mode  = glintfx::WindowMode::FullscreenExclusive;
+    expected         = glintfx::WindowMode::FullscreenExclusive;
   } else {
     std::printf("FAIL: unknown GLINTFX_TEST_WINDOW_MODE=\"%s\"\n", mode_env);
     return 2;

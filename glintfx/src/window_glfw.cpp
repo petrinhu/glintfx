@@ -53,6 +53,32 @@ WindowGlfw::~WindowGlfw() {
 bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
   if (!glfwInit()) return false;
   glfw_inited_ = true;
+
+  // EN: A4-WINMODES review fix (MAJOR #2, 2026-07-21) -- glfwCreateWindow() asserts (SIGABRT)
+  //     on a non-positive width/height in EVERY mode, not just the window-mode ones added here
+  //     -- this bug pre-dates A4-WINMODES (AppConfig::width/height had no guard at all) but is
+  //     closed as an opportunistic fix while this exact call site is being touched. Same D5
+  //     fail-high discipline as App::set_dp_ratio()/set_viewport() (which reject a bad value
+  //     and keep the previous one instead of propagating it downstream): clamp to the
+  //     AppConfig-documented default (1280x720) and log once via stderr, rather than letting a
+  //     hostile or buggy caller's non-positive size abort the whole host process.
+  // PT: Fix do review A4-WINMODES (MAJOR #2, 2026-07-21) -- glfwCreateWindow() dá assert
+  //     (SIGABRT) com width/height não-positivo em TODO modo, não só nos de window-mode
+  //     adicionados aqui -- este bug é ANTERIOR ao A4-WINMODES (AppConfig::width/height não
+  //     tinha guarda nenhuma) mas é fechado de oportunidade já que este exato call site está
+  //     sendo tocado. Mesma disciplina fail-high D5 de App::set_dp_ratio()/set_viewport() (que
+  //     rejeitam um valor ruim e mantêm o anterior em vez de propagá-lo adiante): fixa no
+  //     default documentado do AppConfig (1280x720) e loga uma vez via stderr, em vez de deixar
+  //     um width/height não-positivo de um caller hostil ou com bug abortar o processo host
+  //     inteiro.
+  if (w <= 0 || h <= 0) {
+    std::fprintf(stderr,
+      "glintfx: WindowGlfw::create: non-positive size %dx%d requested, "
+      "falling back to 1280x720\n", w, h);
+    w = 1280;
+    h = 720;
+  }
+
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -67,6 +93,19 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
   GLFWmonitor* monitor  = nullptr;
   int          create_w = w;
   int          create_h = h;
+  // EN: A4-WINMODES review fix (MAJOR #1) -- the mode this create() call ACTUALLY achieves,
+  //     recorded into dispatched_mode_ once the window exists (see below). Starts at Windowed
+  //     (the default/fallback outcome) and is only raised to something else by the branches
+  //     that actually succeed at requesting it -- so a graceful fallback (no monitor, no video
+  //     mode, invalid enum) always leaves it at the TRUTHFUL Windowed, matching what create()
+  //     actually did, not what the caller originally asked for.
+  // PT: Fix do review A4-WINMODES (MAJOR #1) -- o modo que esta chamada de create() de fato
+  //     alcança, gravado em dispatched_mode_ assim que a janela existe (ver abaixo). Começa em
+  //     Windowed (o resultado default/fallback) e só é elevado a outra coisa pelos ramos que de
+  //     fato conseguem pedi-lo -- então um fallback gracioso (sem monitor, sem video mode, enum
+  //     inválido) sempre deixa em Windowed VERDADEIRO, batendo com o que o create() de fato fez,
+  //     não com o que o chamador pediu originalmente.
+  WindowMode effective_mode = WindowMode::Windowed;
 
   // EN: `req_mode` (not `mode`) -- cppcheck shadowFunction: a parameter literally named `mode`
   //     shadows the member function WindowGlfw::mode() (same lint class the A2-GAMEPAD slice
@@ -79,6 +118,7 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
       break;
     case WindowMode::Maximized:
       glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+      effective_mode = WindowMode::Maximized;
       break;
     case WindowMode::FullscreenDesktop:
     case WindowMode::FullscreenExclusive: {
@@ -87,7 +127,8 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
         std::fprintf(stderr,
           "glintfx: WindowGlfw::create: no primary monitor available, "
           "falling back to windowed mode\n");
-        break;  // EN: monitor stays null -> bare windowed create below. PT: monitor fica nulo -> create windowed nu abaixo.
+        break;  // EN: monitor stays null -> bare windowed create below, effective_mode stays Windowed.
+                // PT: monitor fica nulo -> create windowed nu abaixo, effective_mode fica Windowed.
       }
       if (req_mode == WindowMode::FullscreenDesktop) {
         // EN: D5 hardening -- glfwGetVideoMode can return null for a monitor with no reported
@@ -103,7 +144,7 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
             "glintfx: WindowGlfw::create: primary monitor reports no video mode, "
             "falling back to windowed mode\n");
           monitor = nullptr;
-          break;
+          break;  // EN: effective_mode stays Windowed. PT: effective_mode fica Windowed.
         }
         glfwWindowHint(GLFW_RED_BITS,     vm->redBits);
         glfwWindowHint(GLFW_GREEN_BITS,   vm->greenBits);
@@ -112,6 +153,9 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
         create_w = vm->width;
         create_h = vm->height;
         fullscreen_desktop_ = true;
+        effective_mode = WindowMode::FullscreenDesktop;
+      } else {
+        effective_mode = WindowMode::FullscreenExclusive;
       }
       // EN: Exclusive -- create_w/create_h stay cfg w/h; GLFW itself picks the closest
       //     matching video mode against the monitor (a real switch, D8).
@@ -121,12 +165,21 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
     }
     default:
       // EN: Invalid enum (out-of-range cast) -- fail-high fallback to Windowed (D5).
+      //     effective_mode stays Windowed.
       // PT: Enum inválido (cast fora de faixa) -- fallback fail-high para Windowed (D5).
+      //     effective_mode fica Windowed.
       break;
   }
 
   win_ = glfwCreateWindow(create_w, create_h, title, monitor, nullptr);
   if (!win_) { glfwTerminate(); glfw_inited_ = false; return false; }
+  // EN: A4-WINMODES review fix (MAJOR #1) -- record what this call ACTUALLY dispatched, now
+  //     that the window genuinely exists in that state. See the dispatched_mode_ field
+  //     doc-comment (window_glfw.hpp) for why set_mode() reads THIS instead of the live mode().
+  // PT: Fix do review A4-WINMODES (MAJOR #1) -- grava o que esta chamada de fato despachou,
+  //     agora que a janela genuinamente existe naquele estado. Ver o doc-comment do campo
+  //     dispatched_mode_ (window_glfw.hpp) pra por que set_mode() lê ESTE em vez do mode() vivo.
+  dispatched_mode_ = effective_mode;
   glfwMakeContextCurrent(win_);
   if (glx_gl_load() != 0) {
     glfwDestroyWindow(win_); win_ = nullptr;
@@ -164,6 +217,20 @@ void WindowGlfw::size(int& w, int& h) const {
   else      { w = 0; h = 0; }
 }
 
+// EN: A4-WINMODES review follow-up -- see the doc-comment on the declaration (window_glfw.hpp)
+//     for the full rationale. 3 attempts x 50ms = up to 150ms worst case; empirically enough
+//     for KWin/Wayland to confirm a single window-state request under normal load on the
+//     líder's real session -- generous enough to matter, bounded enough that a genuinely
+//     unresponsive compositor does not hang the caller.
+// PT: Desdobramento do review A4-WINMODES -- ver o doc-comment na declaração (window_glfw.hpp)
+//     pra racional completa. 3 tentativas x 50ms = até 150ms no pior caso; empiricamente
+//     suficiente pro KWin/Wayland confirmar um único pedido de estado de janela sob carga
+//     normal na sessão real do líder -- generoso o bastante pra importar, limitado o bastante
+//     pra que um compositor genuinamente sem resposta não trave o chamador.
+void WindowGlfw::settle_window_system_request() {
+  for (int attempt = 0; attempt < 3; ++attempt) glfwWaitEventsTimeout(0.05);
+}
+
 // EN: A4-WINMODES -- captures the CURRENT position+size while the window is still windowed,
 //     the instant before set_mode() dispatches to a different target (D7). Only meaningful
 //     (and only ever called) when mode() has just reported Windowed -- see set_mode() below.
@@ -195,27 +262,46 @@ WindowMode WindowGlfw::mode() const {
 
 // EN: A4-WINMODES -- runtime transition machine (D7/D8). See the doc-comment on the
 //     declaration (window_glfw.hpp) for the full contract; this is the implementation.
-//     Re-requesting the CURRENT live mode() is a no-op (matches app.hpp's documented
-//     contract); leaving Windowed always snapshots the geometry FIRST (D7), regardless of
-//     which target follows, so it is available for whichever later request returns to
-//     Windowed. The fullscreen->Maximized branch below is the one D8 mandates a strict order
-//     for: restore windowed FIRST via glfwSetWindowMonitor(..., nullptr, ...), THEN
-//     glfwMaximizeWindow() -- GLFW has no direct fullscreen->maximized transition.
+//     Re-requesting the last DISPATCHED mode is a no-op (matches app.hpp's documented
+//     contract); leaving a dispatched Windowed state always snapshots the geometry FIRST (D7),
+//     regardless of which target follows, so it is available for whichever later request
+//     returns to Windowed. The fullscreen->Maximized branch below is the one D8 mandates a
+//     strict order for: restore windowed FIRST via glfwSetWindowMonitor(..., nullptr, ...),
+//     THEN glfwMaximizeWindow() -- GLFW has no direct fullscreen->maximized transition.
+//
+//     REVIEW FIX (MAJOR #1, 2026-07-21): `current` below is dispatched_mode_ (OUR OWN
+//     synchronous record of intent), NOT this->mode() (the live, WM-confirmed query). See
+//     dispatched_mode_'s doc-comment (window_glfw.hpp) for the full race this closes -- in
+//     short, this->mode()'s GLFW_MAXIMIZED attrib read is asynchronous on real compositors, so
+//     branching this whole function on it let a Windowed request immediately following a
+//     Maximized request read the STALE pre-maximize state and silently no-op, permanently
+//     stranding the window maximized. Every branch below now also WRITES dispatched_mode_ to
+//     the mode it just issued, keeping the ledger current for the next call.
 // PT: A4-WINMODES -- máquina de transição em runtime (D7/D8). Ver o doc-comment na declaração
-//     (window_glfw.hpp) pro contrato completo; esta é a implementação. Repedir o modo VIVO
-//     corrente (mode()) é um no-op (bate com o contrato documentado em app.hpp); sair de
-//     Windowed sempre tira o snapshot da geometria PRIMEIRO (D7), independente de qual alvo
-//     vem a seguir, para que fique disponível para qualquer pedido posterior de volta a
-//     Windowed. O ramo fullscreen->Maximized abaixo é o único para o qual o D8 exige ordem
+//     (window_glfw.hpp) pro contrato completo; esta é a implementação. Repedir o último modo
+//     DESPACHADO é um no-op (bate com o contrato documentado em app.hpp); sair de um estado
+//     Windowed despachado sempre tira o snapshot da geometria PRIMEIRO (D7), independente de
+//     qual alvo vem a seguir, para que fique disponível para qualquer pedido posterior de volta
+//     a Windowed. O ramo fullscreen->Maximized abaixo é o único para o qual o D8 exige ordem
 //     estrita: restaura windowed PRIMEIRO via glfwSetWindowMonitor(..., nullptr, ...), DEPOIS
 //     glfwMaximizeWindow() -- o GLFW não tem transição direta fullscreen->maximizada.
+//
+//     FIX DO REVIEW (MAJOR #1, 2026-07-21): `current` abaixo é dispatched_mode_ (nosso PRÓPRIO
+//     registro síncrono de intenção), NÃO this->mode() (a query viva, confirmada pelo WM). Ver
+//     o doc-comment de dispatched_mode_ (window_glfw.hpp) pra race completa que isto fecha --
+//     resumindo, a leitura do attrib GLFW_MAXIMIZED por trás de this->mode() é assíncrona em
+//     compositores reais, então ramificar a função inteira nela deixava um pedido Windowed logo
+//     após um pedido Maximized ler o estado pré-maximizar DESATUALIZADO e virar no-op
+//     silencioso, travando a janela maximizada pra sempre. Todo ramo abaixo agora também
+//     ESCREVE dispatched_mode_ com o modo que acabou de despachar, mantendo o livro-razão em
+//     dia pra próxima chamada.
 bool WindowGlfw::set_mode(WindowMode req_mode) {
   // EN: `req_mode` (not `mode`) -- same cppcheck shadowFunction avoidance as create() above
   //     (this parameter would otherwise shadow the member function WindowGlfw::mode()).
   // PT: `req_mode` (não `mode`) -- mesma prevenção de shadowFunction do cppcheck que o create()
   //     acima (este parâmetro sombrearia o método membro WindowGlfw::mode() caso contrário).
   if (!win_) return false;
-  const WindowMode current = this->mode();
+  const WindowMode current = dispatched_mode_;
   if (current == req_mode) return true;  // EN: no-op re-request. PT: repedido é no-op.
 
   if (current == WindowMode::Windowed) save_windowed_geometry();
@@ -235,16 +321,31 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
         glfwSetWindowMonitor(win_, nullptr, restore_x, restore_y, restore_w, restore_h, 0);
       }
       fullscreen_desktop_ = false;
+      dispatched_mode_ = WindowMode::Windowed;
+      settle_window_system_request();
       return true;
 
     case WindowMode::Maximized:
       if (from_fullscreen) {
-        // EN: D8 mandatory order -- restore windowed BEFORE maximizing.
-        // PT: Ordem obrigatória D8 -- restaura windowed ANTES de maximizar.
+        // EN: D8 mandatory order -- restore windowed BEFORE maximizing. The settle_
+        //     window_system_request() call right after is NOT the same as the one at the end
+        //     of this branch: this ONE, mid-branch, is specifically what makes the D8 order
+        //     actually work on a real compositor -- see settle_window_system_request()'s
+        //     doc-comment (window_glfw.hpp) for the "restore-to geometry captured from a
+        //     still-fullscreen surface" bug this closes.
+        // PT: Ordem obrigatória D8 -- restaura windowed ANTES de maximizar. A chamada a
+        //     settle_window_system_request() logo depois NÃO é a mesma do fim deste ramo: esta
+        //     AQUI, no meio do ramo, é especificamente o que faz a ordem do D8 funcionar de
+        //     verdade num compositor real -- ver o doc-comment de settle_window_system_request()
+        //     (window_glfw.hpp) pro bug de "geometria restaurar-para capturada de uma
+        //     superfície ainda-fullscreen" que isto fecha.
         glfwSetWindowMonitor(win_, nullptr, restore_x, restore_y, restore_w, restore_h, 0);
         fullscreen_desktop_ = false;
+        settle_window_system_request();
       }
       glfwMaximizeWindow(win_);
+      dispatched_mode_ = WindowMode::Maximized;
+      settle_window_system_request();
       return true;
 
     case WindowMode::FullscreenDesktop:
@@ -253,7 +354,7 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
       if (!monitor) {
         std::fprintf(stderr,
           "glintfx: WindowGlfw::set_mode: no primary monitor available, request ignored\n");
-        return false;  // EN: D5 -- window left untouched. PT: D5 -- janela intocada.
+        return false;  // EN: D5 -- window left untouched, dispatched_mode_ unchanged. PT: D5 -- janela intocada, dispatched_mode_ inalterado.
       }
       if (req_mode == WindowMode::FullscreenDesktop) {
         // EN: D5 hardening, twin of create()'s own null-vm guard above -- see its comment.
@@ -263,20 +364,25 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
           std::fprintf(stderr,
             "glintfx: WindowGlfw::set_mode: primary monitor reports no video mode, "
             "request ignored\n");
-          return false;
+          return false;  // EN: dispatched_mode_ unchanged. PT: dispatched_mode_ inalterado.
         }
         glfwSetWindowMonitor(win_, monitor, 0, 0, vm->width, vm->height, vm->refreshRate);
         fullscreen_desktop_ = true;
+        dispatched_mode_ = WindowMode::FullscreenDesktop;
       } else {
         glfwSetWindowMonitor(win_, monitor, 0, 0, cfg_w_, cfg_h_, GLFW_DONT_CARE);
         fullscreen_desktop_ = false;
+        dispatched_mode_ = WindowMode::FullscreenExclusive;
       }
+      settle_window_system_request();
       return true;
     }
 
     default:
       // EN: Invalid enum (out-of-range cast) -- fail-high no-op (D5), twin of create()'s guard.
-      // PT: Enum inválido (cast fora de faixa) -- no-op fail-high (D5), gêmeo da guarda do create().
+      //     dispatched_mode_ unchanged.
+      // PT: Enum inválido (cast fora de faixa) -- no-op fail-high (D5), gêmeo da guarda do
+      //     create(). dispatched_mode_ inalterado.
       return false;
   }
 }

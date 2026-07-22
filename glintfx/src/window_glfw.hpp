@@ -35,21 +35,34 @@ public:
   // EN: A4-WINMODES -- runtime mode switch. Returns false (no-op, window untouched) when
   //     win_ is null (create() not called or failed) or `req_mode` is not a valid enumerator (an
   //     out-of-range static_cast) -- same fail-high discipline as every other guard in this
-  //     file. Re-requesting the CURRENT live mode() is a safe no-op returning true. See
-  //     window_mode.hpp for per-mode semantics and app.hpp's App::set_window_mode() for the
-  //     full public contract (this is its direct implementation).
+  //     file. Re-requesting the last mode WE DISPATCHED (dispatched_mode_, NOT the live,
+  //     possibly WM-laggy mode() query -- see that field's doc-comment for the real-Wayland
+  //     race this decision closes) is a safe no-op returning true. See window_mode.hpp for
+  //     per-mode semantics and app.hpp's App::set_window_mode() for the full public contract
+  //     (this is its direct implementation).
   //     Transition mechanics (D7/D8): leaving Windowed saves the current position+size
   //     (glfwGetWindowPos/Size) so a later return to Windowed restores it; a window that was
   //     NEVER windowed (born Maximized/Fullscreen) restores to AppConfig's construction
   //     width×height at position (64,64) -- documented default, avoids a window materialising
   //     under the panel. Fullscreen(Desktop or Exclusive) -> Maximized restores windowed FIRST
   //     (glfwSetWindowMonitor(..., nullptr, ...)), THEN glfwMaximizeWindow() -- mandatory
-  //     order, GLFW does not support maximizing a fullscreen window directly. Wayland: window
-  //     position is not readable/settable (best-effort restore, documented limitation).
+  //     order, GLFW does not support maximizing a fullscreen window directly. LATENCY: every
+  //     successful call blocks the caller for up to ~150ms before returning
+  //     (settle_window_system_request(), bounded, NOT a blind sleep -- see its own doc-comment
+  //     for the compositor round-trip this closes); the Fullscreen->Maximized path blocks up to
+  //     ~300ms (two requests to settle, one for the restore-to-windowed step, one for the
+  //     maximize). This is deliberate for a rare, user-initiated action (options menu, Alt+
+  //     Enter), NOT a per-frame call -- reproduced live on a real KDE/Wayland session: without
+  //     it, a caller issuing back-to-back set_mode() calls (or this function issuing its own
+  //     two internal requests) could race the WM's confirmation and end up with the WRONG final
+  //     geometry/state. Wayland: window position is not readable/settable (best-effort
+  //     restore, documented limitation).
   // PT: A4-WINMODES -- troca de modo em runtime. Retorna false (no-op, janela intocada) quando
   //     win_ é nulo (create() não chamado ou falhou) ou `req_mode` não é um enumerador válido (um
   //     static_cast fora de faixa) -- mesma disciplina fail-high de toda outra guarda deste
-  //     arquivo. Repedir o modo VIVO corrente (mode()) é um no-op seguro que retorna true. Ver
+  //     arquivo. Repedir o último modo que NÓS despachamos (dispatched_mode_, NÃO a query mode()
+  //     viva, potencialmente atrasada pelo WM -- ver o doc-comment daquele campo pra race real
+  //     no Wayland que esta decisão fecha) é um no-op seguro que retorna true. Ver
   //     window_mode.hpp para a semântica por modo e App::set_window_mode() (app.hpp) para o
   //     contrato público completo (este é a implementação direta dele).
   //     Mecânica de transição (D7/D8): sair de Windowed salva a posição+tamanho corrente
@@ -59,8 +72,17 @@ public:
   //     evita a janela materializar sob o painel. Fullscreen(Desktop ou Exclusive) ->
   //     Maximized restaura windowed PRIMEIRO (glfwSetWindowMonitor(..., nullptr, ...)), DEPOIS
   //     glfwMaximizeWindow() -- ordem obrigatória, o GLFW não suporta maximizar uma janela
-  //     fullscreen diretamente. Wayland: posição de janela não é legível/gravável (restauração
-  //     best-effort, limitação documentada).
+  //     fullscreen diretamente. LATÊNCIA: toda chamada bem-sucedida bloqueia o chamador por até
+  //     ~150ms antes de retornar (settle_window_system_request(), limitado, NÃO um sleep cego --
+  //     ver o próprio doc-comment dele pra ida-e-volta com o compositor que isto fecha); o
+  //     caminho Fullscreen->Maximized bloqueia até ~300ms (dois pedidos pra assentar, um pro
+  //     passo de restaurar-a-windowed, um pro maximizar). Isto é deliberado pra uma ação rara,
+  //     iniciada pelo usuário (menu de opções, Alt+Enter), NÃO uma chamada por-frame --
+  //     reproduzido ao vivo numa sessão KDE/Wayland real: sem isto, um chamador emitindo
+  //     chamadas set_mode() nas costas uma da outra (ou esta função emitindo os próprios dois
+  //     pedidos internos) podia entrar em race com a confirmação do WM e acabar com a
+  //     geometria/estado final ERRADO. Wayland: posição de janela não é legível/gravável
+  //     (restauração best-effort, limitação documentada).
   bool set_mode(WindowMode req_mode);
 
   // EN: A4-WINMODES -- LIVE window mode, derived from the window system, NOT an echo of the
@@ -138,6 +160,77 @@ private:
   int  saved_y_ = 64;
   int  saved_w_ = 0;
   int  saved_h_ = 0;
+
+  // EN: A4-WINMODES review fix (MAJOR #1, 2026-07-21) -- the mode WE last DISPATCHED to the
+  //     window system (set synchronously by create() and by every dispatching branch of
+  //     set_mode()), used for set_mode()'s no-op/branch decisions INSTEAD OF the live mode()
+  //     query. glfwGetWindowAttrib(win_, GLFW_MAXIMIZED) -- the signal mode() reads for
+  //     Maximized -- is answered by the WM/compositor ASYNCHRONOUSLY on real desktops
+  //     (confirmed on live KDE/Wayland: it can take more than one poll+render cycle to reflect
+  //     a glfwMaximizeWindow()/glfwRestoreWindow() call). Reasoning about "what should this
+  //     call do" from that laggy read let a Windowed request immediately following a Maximized
+  //     request read the STALE pre-maximize attrib, mistake it for "already Windowed", and
+  //     silently no-op -- stranding the window maximized forever once the WM's confirmation
+  //     eventually landed (repro 3/3 on a real session, adversarial review finding).
+  //     dispatched_mode_ is OUR OWN synchronous ledger of intent and never lags, so using it for
+  //     the transition logic makes every set_mode() call deterministic regardless of how fast
+  //     the WM/compositor gets around to confirming the previous one. window_mode() (the PUBLIC
+  //     query, mode() below) is UNCHANGED and still derives live from the window system -- it
+  //     honestly reports the async lag as a documented characteristic (D4) rather than hiding
+  //     it; only this INTERNAL bookkeeping stops trusting the laggy read for its OWN decisions.
+  // PT: Fix do review A4-WINMODES (MAJOR #1, 2026-07-21) -- o modo que NÓS últimos despachamos
+  //     ao sistema de janelas (setado sincronamente pelo create() e por todo ramo que despacha
+  //     do set_mode()), usado nas decisões de no-op/ramo do set_mode() EM VEZ DA query viva
+  //     mode(). glfwGetWindowAttrib(win_, GLFW_MAXIMIZED) -- o sinal que mode() lê pra
+  //     Maximized -- é respondido pelo WM/compositor de forma ASSÍNCRONA em desktops reais
+  //     (confirmado no KDE/Wayland ao vivo: pode levar mais de um ciclo poll+render pra refletir
+  //     uma chamada glfwMaximizeWindow()/glfwRestoreWindow()). Raciocinar sobre "o que esta
+  //     chamada deve fazer" a partir dessa leitura atrasada deixava um pedido Windowed logo após
+  //     um pedido Maximized ler o attrib PRÉ-maximizar desatualizado, confundi-lo com "já
+  //     Windowed", e virar no-op silencioso -- travando a janela maximizada pra sempre assim que
+  //     a confirmação do WM finalmente chegasse (repro 3/3 numa sessão real, achado do review
+  //     adversarial). dispatched_mode_ é nosso PRÓPRIO livro-razão síncrono de intenção e nunca
+  //     atrasa, então usá-lo na lógica de transição torna toda chamada set_mode() determinística
+  //     independente de quão rápido o WM/compositor confirma a anterior. window_mode() (a query
+  //     PÚBLICA, mode() abaixo) fica INALTERADA e continua derivando ao vivo do sistema de
+  //     janelas -- reporta honestamente o atraso assíncrono como uma característica documentada
+  //     (D4) em vez de escondê-la; só esta contabilidade INTERNA para de confiar na leitura
+  //     atrasada pras próprias decisões dela.
+  WindowMode dispatched_mode_ = WindowMode::Windowed;
+
+  // EN: A4-WINMODES review follow-up (found during real-session verification, 2026-07-21,
+  //     beyond the review's original MAJOR #1/#2/(d) list) -- every glfwSetWindowMonitor()/
+  //     glfwMaximizeWindow()/glfwRestoreWindow() call in set_mode() is a REQUEST to the Wayland
+  //     compositor, not a synchronous state change. Calling set_mode() again immediately
+  //     afterwards (either from within the SAME call, the Fullscreen->Maximized D8 sequence, or
+  //     from the CALLER issuing a second set_mode() one frame later) can race the compositor's
+  //     confirmation: it may still be applying the FIRST request when the second lands, and
+  //     capture the wrong "restore-to" geometry or settle on the wrong final state (reproduced
+  //     live: a resized-then-fullscreen-then-restored window landed at monitor resolution
+  //     instead of the tracked windowed size). Called at the end of every window-system-
+  //     touching branch of set_mode(), right before it returns -- a BOUNDED wait
+  //     (glfwWaitEventsTimeout(), GLFW's own blocking-wait-with-deadline primitive, NOT a blind
+  //     sleep) that gives the compositor's configure/ack round-trip a window to land before the
+  //     call returns control to the caller, so the NEXT set_mode() call (whenever it comes)
+  //     starts from settled ground truth.
+  // PT: Desdobramento do review A4-WINMODES (achado durante a verificação em sessão real,
+  //     2026-07-21, além da lista original MAJOR #1/#2/(d)) -- toda chamada
+  //     glfwSetWindowMonitor()/glfwMaximizeWindow()/glfwRestoreWindow() em set_mode() é um
+  //     PEDIDO ao compositor Wayland, não uma troca de estado síncrona. Chamar set_mode() de
+  //     novo logo em seguida (seja de DENTRO da MESMA chamada, na sequência D8 Fullscreen->
+  //     Maximized, seja do CHAMADOR emitindo um segundo set_mode() um frame depois) pode entrar
+  //     em race com a confirmação do compositor: ele pode ainda estar aplicando o PRIMEIRO
+  //     pedido quando o segundo chega, e capturar a geometria "restaurar-para" errada ou
+  //     assentar no estado final errado (reproduzido ao vivo: uma janela redimensionada-depois-
+  //     fullscreen-depois-restaurada pousava na resolução do monitor em vez do tamanho windowed
+  //     rastreado). Chamado no fim de todo ramo de set_mode() que toca o sistema de janelas,
+  //     bem antes de retornar -- uma espera LIMITADA (glfwWaitEventsTimeout(), o próprio
+  //     primitivo bloqueante-com-prazo do GLFW, NÃO um sleep cego) que dá à ida-e-volta de
+  //     configure/ack do compositor uma janela pra aterrissar antes da chamada devolver o
+  //     controle ao chamador, pra que a PRÓXIMA chamada set_mode() (quando quer que venha)
+  //     comece de um chão de verdade assentado.
+  static void settle_window_system_request();
+
   void save_windowed_geometry();
   // EN: Last known modifier bitmask (glintfx::Mod), updated by the key and mouse-button
   //     trampolins and reused for the cursor-pos/scroll callbacks, which GLFW does NOT hand a

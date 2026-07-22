@@ -157,7 +157,12 @@ public:
   //     return to Windowed restores it (a window that was never windowed restores to
   //     AppConfig's construction width×height at position (64,64) -- documented default).
   //     Fullscreen -> Maximized restores windowed FIRST, then maximizes (D8, mandatory order --
-  //     GLFW has no direct fullscreen->maximized transition).
+  //     GLFW has no direct fullscreen->maximized transition). LATENCY: every successful call
+  //     blocks the caller for up to ~150ms before returning (a bounded, non-blind wait -- see
+  //     WindowGlfw::set_mode()'s doc-comment, window_glfw.hpp, for the compositor round-trip
+  //     this closes); Fullscreen->Maximized blocks up to ~300ms (two requests to settle).
+  //     Deliberate for a rare, user-initiated action (options menu, Alt+Enter), not a per-frame
+  //     call.
   //     Wayland (D10): FullscreenExclusive is compositor-EMULATED (no real mode-set, the
   //     compositor scales -- GLFW's documented behaviour); restore position is best-effort
   //     (window position is not readable/settable under native Wayland). Primary monitor only
@@ -173,7 +178,12 @@ public:
   //     um retorno posterior a Windowed os restaure (uma janela que nunca foi windowed restaura
   //     pro width×height de construção do AppConfig na posição (64,64) -- default documentado).
   //     Fullscreen -> Maximized restaura windowed PRIMEIRO, depois maximiza (D8, ordem
-  //     obrigatória -- o GLFW não tem transição direta fullscreen->maximizada).
+  //     obrigatória -- o GLFW não tem transição direta fullscreen->maximizada). LATÊNCIA: toda
+  //     chamada bem-sucedida bloqueia o chamador por até ~150ms antes de retornar (uma espera
+  //     limitada, não cega -- ver o doc-comment de WindowGlfw::set_mode(), window_glfw.hpp, pra
+  //     ida-e-volta com o compositor que isto fecha); Fullscreen->Maximized bloqueia até ~300ms
+  //     (dois pedidos pra assentar). Deliberado pra uma ação rara, iniciada pelo usuário (menu
+  //     de opções, Alt+Enter), não uma chamada por-frame.
   //     Wayland (D10): FullscreenExclusive é EMULADO pelo compositor (sem troca de modo real,
   //     o compositor escala -- comportamento documentado do GLFW); a restauração de posição é
   //     best-effort (posição de janela não é legível/gravável sob Wayland nativo). Só monitor

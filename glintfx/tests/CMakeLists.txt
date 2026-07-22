@@ -1375,6 +1375,49 @@ if(GLINTFX_OWN_FONT_ENGINE)
       -DEXE=$<TARGET_FILE:fonteng_sup_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fonteng_colr_sanity (A4-EMOJI) -- pixel-proof gate for the COLRv0 colour-emoji bake path
+  #     (FontEngineOwn::RasterizeColorGlyph()/GlyphInfo::is_color, src/font_engine_own.{cpp,hpp}).
+  #     Loads the S1-owned synthetic fixture "tests/assets/colr_fixture.ttf" (repo-ROOT `tests/`,
+  #     one level ABOVE glintfx/ -- NOT this directory's own tests/assets/, hence the explicit
+  #     ../../tests/assets source path below, distinct from every other fonteng_* asset copy in
+  #     this file which all pull from glintfx's OWN demos/showcase/assets/), copied here as
+  #     "assets/colr_fixture.ttf" so its @font-face `src` resolves the SAME
+  #     WORKING_DIRECTORY-relative way "assets/OpenSans-Regular.ttf" already does for every sibling
+  #     fonteng_* scene. See tests/fonteng_colr_scene.rml's own header for the fixture's exact
+  #     glyph/layer/palette layout and fonteng_colr_sanity.cpp's own header for the three criteria
+  #     (+ one bonus) this gate proves. Same registration shape as fonteng_sup_sanity right above
+  #     (OUTSIDE if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), so it builds and runs with
+  #     GLINTFX_BACKEND_GLFW ON or OFF -- the own font engine (and therefore RasterizeColorGlyph())
+  #     is exercised identically in embed mode either way.
+  # PT: fonteng_colr_sanity (A4-EMOJI) -- gate de prova-de-pixel pro caminho de bake de emoji
+  #     colorido COLRv0 (FontEngineOwn::RasterizeColorGlyph()/GlyphInfo::is_color,
+  #     src/font_engine_own.{cpp,hpp}). Carrega a fixture sintética de posse do S1
+  #     "tests/assets/colr_fixture.ttf" (raiz do repo `tests/`, um nível ACIMA de glintfx/ -- NÃO o
+  #     tests/assets/ desta própria pasta, daí o caminho explícito ../../tests/assets abaixo,
+  #     distinto de todo outro copy de asset fonteng_* deste arquivo, que puxam todos do próprio
+  #     demos/showcase/assets/ do glintfx), copiada aqui como "assets/colr_fixture.ttf" pra o
+  #     próprio `src` do @font-face resolver do MESMO jeito relativo-ao-WORKING_DIRECTORY que
+  #     "assets/OpenSans-Regular.ttf" já resolve pra toda cena fonteng_* irmã. Ver o cabeçalho
+  #     próprio de tests/fonteng_colr_scene.rml pro layout exato de glyph/camada/paleta da fixture e
+  #     o cabeçalho próprio de fonteng_colr_sanity.cpp pros três critérios (+ um bônus) que este gate
+  #     prova. Mesmo formato de registro de fonteng_sup_sanity logo acima (FORA de
+  #     if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader), para buildar e rodar com
+  #     GLINTFX_BACKEND_GLFW ON ou OFF -- o motor de fonte próprio (e portanto o
+  #     RasterizeColorGlyph()) é exercitado identicamente em modo embed de qualquer jeito.
+  # -------------------------------------------------------------------------
+  add_executable(fonteng_colr_sanity fonteng_colr_sanity.cpp)
+  target_link_libraries(fonteng_colr_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fonteng_colr_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fonteng_colr_scene.rml COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../../tests/assets/colr_fixture.ttf
+                 ${CMAKE_CURRENT_BINARY_DIR}/assets/colr_fixture.ttf COPYONLY)
+  add_test(NAME fonteng_colr_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fonteng_colr_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

@@ -41,10 +41,27 @@
 //     truncated/garbage file both return `SoundId{0}` -- never abort the host (same discipline
 //     as `decorator_polygon.cpp`/`i18n.cpp`'s malformed-input handling).
 //
-//     POLYPHONY (deferred, declared): one live instance per `SoundId`. Calling `play()` on a
-//     `SoundId` that is already playing restarts it from frame 0 -- overlapping instances of the
-//     SAME sound effect (e.g. rapid-fire gunshots) is a future slice (`ma_sound_init_copy`),
-//     documented in docs/audio.md, not silently half-implemented here.
+//     THREADING (AUDIO-F2, make explicit what was implicit before this slice): the `Audio` API
+//     is SINGLE-THREADED -- every call (`play`/`stop`/`play_oneshot`/`is_playing`/...) must come
+//     from one thread. miniaudio's own getters (`ma_sound_is_playing`, `ma_sound_at_end`, ...)
+//     are safe to call concurrently with the internal mixer thread by miniaudio's own design, but
+//     OUR voice table (`Impl::voices`, see audio.cpp) is a plain `std::unordered_map` with no
+//     lock in this slice -- it is not safe to call from two application threads at once.
+//
+//     POLYPHONY (AUDIO-F2, no longer deferred): each `SoundId` has ONE "primary" instance (the
+//     one `play()`/`stop()`/`set_looping()` act on -- unchanged single-instance restart-from-0
+//     contract) plus a pool of "oneshot copies" created by `play_oneshot()`
+//     (`ma_sound_init_copy()`) for overlapping playback of the SAME sound effect (e.g. rapid-fire
+//     gunshots). Copies are fire-and-forget: they never loop (a looping orphan copy could never
+//     be reaped by construction -- deliberate footgun removal), inherit the primary's volume at
+//     the moment they are created (NOT live-linked to it afterwards -- see `set_volume()`, which
+//     DOES also push to every currently-live copy), and are lazily reaped (`ma_sound_uninit()` +
+//     drop) only from inside `play_oneshot()` itself once `ma_sound_at_end()` is true -- no timer,
+//     no background thread, so the reap cannot race `shutdown()` (both run on the caller's single
+//     thread; see this contract mirrored in audio.cpp's `Impl::voices` comment). A hard cap of 32
+//     live copies per `SoundId` applies; once at the cap (after reaping), the OLDEST copy is
+//     stolen (uninitialized and dropped) so the newest hit is always audible -- standard,
+//     deterministic audio voice-stealing, never a rejected `play_oneshot()` call due to the cap.
 //
 // PT: A3-AUDIO (framework-2D, módulo "audio" da ADR-0015) -- reprodução de efeito sonoro e
 //     música via a biblioteca vendorizada miniaudio. Esta é a superfície pública INTEIRA do
@@ -88,10 +105,29 @@
 //     arquivo hostil/truncado/lixo retornam `SoundId{0}` -- nunca abortam o host (mesma
 //     disciplina do tratamento de input malformado do `decorator_polygon.cpp`/`i18n.cpp`).
 //
-//     POLIFONIA (adiada, declarada): uma instância viva por `SoundId`. Chamar `play()` num
-//     `SoundId` que já está tocando reinicia do frame 0 -- instâncias sobrepostas do MESMO
-//     efeito sonoro (ex.: tiros em rajada) é fatia futura (`ma_sound_init_copy`), documentado em
-//     docs/audio.md, não meio-implementado silenciosamente aqui.
+//     THREADING (AUDIO-F2, explicitando o que era implícito antes desta fatia): a API do `Audio`
+//     é SINGLE-THREADED -- toda chamada (`play`/`stop`/`play_oneshot`/`is_playing`/...) precisa
+//     vir de UMA thread. Os próprios getters do miniaudio (`ma_sound_is_playing`,
+//     `ma_sound_at_end`, ...) são seguros pra chamar concorrentemente com a thread interna do
+//     mixer por design do próprio miniaudio, mas a NOSSA tabela de vozes (`Impl::voices`, ver
+//     audio.cpp) é um `std::unordered_map` comum, sem lock nesta fatia -- não é seguro chamar de
+//     duas threads da aplicação ao mesmo tempo.
+//
+//     POLIFONIA (AUDIO-F2, não é mais adiada): cada `SoundId` tem UMA instância "primária" (a
+//     que `play()`/`stop()`/`set_looping()` afetam -- contrato inalterado de reinício-do-frame-0
+//     de instância única) mais um pool de "cópias oneshot" criadas por `play_oneshot()`
+//     (`ma_sound_init_copy()`) pra reprodução sobreposta do MESMO efeito sonoro (ex.: tiros em
+//     rajada). Cópias são fire-and-forget: nunca loopam (uma cópia órfã em loop jamais seria
+//     reapada por construção -- remoção deliberada de footgun), herdam o volume da primária no
+//     MOMENTO em que são criadas (NÃO ficam ligadas ao vivo depois -- ver `set_volume()`, que
+//     TAMBÉM empurra pra toda cópia viva no momento), e são reapadas preguiçosamente
+//     (`ma_sound_uninit()` + descarte) só de dentro do próprio `play_oneshot()` quando
+//     `ma_sound_at_end()` é true -- sem timer, sem thread de fundo, então o reap não pode correr
+//     com o `shutdown()` (ambos rodam na única thread chamadora; ver este contrato espelhado no
+//     comentário de `Impl::voices` do audio.cpp). Um teto rígido de 32 cópias vivas por `SoundId`
+//     se aplica; ao atingir o teto (depois do reap), a cópia MAIS ANTIGA é roubada (desinicializada
+//     e descartada) pra que o hit mais novo sempre soe -- voice-stealing de áudio padrão e
+//     determinístico, nunca uma chamada `play_oneshot()` rejeitada por causa do teto.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
@@ -208,25 +244,108 @@ public:
   SoundId load_sound(const char* path);
 
   // EN: Starts (or restarts from frame 0, if already playing -- see the polyphony note above)
-  //     playback of `id`. Returns false when not initialized or `id` is unknown/0.
+  //     playback of the PRIMARY instance of `id`. `loop` sets the looping state before starting
+  //     (equivalent to a `set_looping(id, loop)` immediately before the restart). `fade_in_s > 0`
+  //     schedules a fade-in from silence up to the sound's CURRENT volume (so a prior
+  //     `set_volume()` survives the fade -- see this file's header comment); any previously
+  //     scheduled `stop(id, fade_out_s)` is reset FIRST, so a fresh play() always wins over a
+  //     stale scheduled stop. `fade_in_s` is hardened like every duration in this module: rejected
+  //     (returns false, primary left untouched) when `!std::isfinite(fade_in_s) || fade_in_s < 0`;
+  //     an accepted value is clamped to `[0, 3600]` s. Returns false when not initialized, `id` is
+  //     unknown/0, or `fade_in_s` was rejected.
   // PT: Inicia (ou reinicia do frame 0, se já estiver tocando -- ver a nota de polifonia acima)
-  //     a reprodução de `id`. Retorna false quando não inicializado ou `id` é desconhecido/0.
-  bool play(SoundId id);
+  //     a reprodução da instância PRIMÁRIA de `id`. `loop` define o estado de loop antes de
+  //     iniciar (equivalente a um `set_looping(id, loop)` imediatamente antes do reinício).
+  //     `fade_in_s > 0` agenda um fade-in do silêncio até o volume ATUAL do som (pra um
+  //     `set_volume()` anterior sobreviver ao fade -- ver o comentário de cabeçalho deste
+  //     arquivo); qualquer `stop(id, fade_out_s)` agendado antes é resetado PRIMEIRO, pra um
+  //     play() novo sempre vencer um stop agendado obsoleto. `fade_in_s` tem o mesmo hardening de
+  //     toda duração deste módulo: rejeitado (retorna false, primária intocada) quando
+  //     `!std::isfinite(fade_in_s) || fade_in_s < 0`; um valor aceito é clampeado em `[0, 3600]`
+  //     s. Retorna false quando não inicializado, `id` é desconhecido/0, ou `fade_in_s` foi
+  //     rejeitado.
+  bool play(SoundId id, bool loop = false, float fade_in_s = 0.0f);
 
-  // EN: Stops playback of `id` (does not unload it -- play() again resumes from frame 0).
-  //     Returns false when not initialized or `id` is unknown/0.
-  // PT: Para a reprodução de `id` (não descarrega -- play() de novo retoma do frame 0). Retorna
-  //     false quando não inicializado ou `id` é desconhecido/0.
-  bool stop(SoundId id);
+  // EN: Stops playback of the PRIMARY instance of `id` AND every currently-live oneshot copy of
+  //     it (does not unload any of them -- play() again resumes the primary from frame 0).
+  //     `fade_out_s == 0` (the default) stops immediately (this module's original behaviour).
+  //     `fade_out_s > 0` schedules a fade-out instead; WHILE fading, `is_playing(id)` keeps
+  //     returning true (that is the deliberate, documented observable -- the sound is still
+  //     audible, just ramping down). Same hardening as `play()`'s `fade_in_s`: `fade_out_s`
+  //     rejected (returns false, nothing stopped) when non-finite or negative; accepted values
+  //     clamped to `[0, 3600]` s. Returns false when not initialized, `id` is unknown/0, or
+  //     `fade_out_s` was rejected.
+  // PT: Para a reprodução da instância PRIMÁRIA de `id` E de toda cópia oneshot viva no momento
+  //     (não descarrega nenhuma -- play() de novo retoma a primária do frame 0). `fade_out_s == 0`
+  //     (o padrão) para imediatamente (comportamento original deste módulo). `fade_out_s > 0`
+  //     agenda um fade-out; ENQUANTO o fade roda, `is_playing(id)` continua retornando true (é
+  //     ESSE o observável deliberado e documentado -- o som ainda está audível, só decaindo).
+  //     Mesmo hardening do `fade_in_s` do `play()`: `fade_out_s` rejeitado (retorna false, nada
+  //     parado) se não-finito ou negativo; valores aceitos clampeados em `[0, 3600]` s. Retorna
+  //     false quando não inicializado, `id` é desconhecido/0, ou `fade_out_s` foi rejeitado.
+  bool stop(SoundId id, float fade_out_s = 0.0f);
+
+  // EN: Live toggle of the looping state on `id`'s PRIMARY instance only (copies never loop --
+  //     see this file's header comment). Applies immediately, no restart needed. Returns false
+  //     when not initialized or `id` is unknown/0.
+  // PT: Toggle ao vivo do estado de loop só na instância PRIMÁRIA de `id` (cópias nunca loopam --
+  //     ver o comentário de cabeçalho deste arquivo). Aplica imediatamente, sem precisar
+  //     reiniciar. Retorna false quando não inicializado ou `id` é desconhecido/0.
+  bool set_looping(SoundId id, bool loop);
+
+  // EN: Fire-and-forget overlapping playback of `id`: creates a copy of the primary
+  //     (`ma_sound_init_copy()`), starts it from frame 0 at the primary's CURRENT volume, and
+  //     registers it in the internal voice pool for this `id` -- see this file's header comment
+  //     for the full polyphony/cap/reap contract. Runs the lazy reap of finished copies of `id`
+  //     first. The copy never loops and never accepts a per-call volume in this slice. Returns
+  //     false when not initialized, `id` is unknown/0, or the underlying copy fails to
+  //     initialize/start (never due to the voice cap -- the oldest copy is stolen instead).
+  // PT: Reprodução sobreposta fire-and-forget de `id`: cria uma cópia da primária
+  //     (`ma_sound_init_copy()`), inicia do frame 0 no volume ATUAL da primária, e registra no
+  //     pool de vozes interno daquele `id` -- ver o comentário de cabeçalho deste arquivo pro
+  //     contrato completo de polifonia/teto/reap. Roda o reap preguiçoso das cópias terminadas de
+  //     `id` primeiro. A cópia nunca loopa e não aceita volume por-chamada nesta fatia. Retorna
+  //     false quando não inicializado, `id` é desconhecido/0, ou a cópia falha ao
+  //     inicializar/iniciar (nunca por causa do teto de vozes -- a cópia mais antiga é roubada em
+  //     vez disso).
+  bool play_oneshot(SoundId id);
+
+  // EN: true when `id`'s PRIMARY instance is playing (per `ma_sound_is_playing()`, which accounts
+  //     for a scheduled stop time -- so this stays true throughout a `stop(id, fade_out_s)` fade)
+  //     OR any of its live oneshot copies is. false when not initialized, `id` is unknown/0, or
+  //     nothing of `id`'s is currently playing.
+  // PT: true quando a instância PRIMÁRIA de `id` está tocando (conforme `ma_sound_is_playing()`,
+  //     que considera um stop-time agendado -- então isto continua true durante todo um fade de
+  //     `stop(id, fade_out_s)`) OU alguma cópia oneshot viva dela está. false quando não
+  //     inicializado, `id` é desconhecido/0, ou nada de `id` está tocando no momento.
+  bool is_playing(SoundId id) const;
+
+  // EN: Number of instances of `id` (primary + oneshot copies) CURRENTLY PLAYING. An ended-but-
+  //     not-yet-reaped copy does not count (it reads `ma_sound_is_playing()`, same as
+  //     `is_playing()` above). 0 when not initialized, `id` is unknown/0, or nothing is playing.
+  //     Useful to observe the reap/cap/voice-stealing behaviour from a test without reaching into
+  //     internals.
+  // PT: Número de instâncias de `id` (primária + cópias oneshot) TOCANDO NO MOMENTO. Uma cópia
+  //     terminada-mas-ainda-não-reapada não conta (lê `ma_sound_is_playing()`, igual ao
+  //     `is_playing()` acima). 0 quando não inicializado, `id` é desconhecido/0, ou nada está
+  //     tocando. Útil pra observar o comportamento de reap/teto/voice-stealing a partir de um
+  //     teste sem alcançar os internos.
+  std::uint32_t voice_count(SoundId id) const;
 
   // EN: Sets the per-sound volume. Rejects a non-finite (NaN/Inf) or negative `v`, keeping the
-  //     sound's previous volume unchanged; otherwise clamps to [0, 1]. Returns false when not
+  //     sound's previous volume unchanged; otherwise clamps to [0, 1]. Applies to the PRIMARY
+  //     instance AND every currently-live oneshot copy of `id` (least surprise -- a copy created
+  //     AFTER this call still inherits the primary's volume at ITS OWN creation time, per
+  //     `play_oneshot()`'s contract, not retroactively from this call). Returns false when not
   //     initialized, `id` is unknown/0, or `v` was rejected; true on an accepted (possibly
   //     clamped) value.
   // PT: Define o volume por-som. Rejeita `v` não-finito (NaN/Inf) ou negativo, mantendo o
-  //     volume anterior do som inalterado; caso contrário faz clamp em [0, 1]. Retorna false
-  //     quando não inicializado, `id` é desconhecido/0, ou `v` foi rejeitado; true num valor
-  //     aceito (possivelmente clampeado).
+  //     volume anterior do som inalterado; caso contrário faz clamp em [0, 1]. Aplica na
+  //     instância PRIMÁRIA E em toda cópia oneshot viva de `id` no momento (menor surpresa -- uma
+  //     cópia criada DEPOIS desta chamada ainda herda o volume da primária no MOMENTO DELA
+  //     própria, conforme o contrato do `play_oneshot()`, não retroativamente desta chamada).
+  //     Retorna false quando não inicializado, `id` é desconhecido/0, ou `v` foi rejeitado; true
+  //     num valor aceito (possivelmente clampeado).
   bool set_volume(SoundId id, float v);
 
   // EN: Sets the engine-wide master volume. Same validation contract as set_volume() (rejects
@@ -237,10 +356,10 @@ public:
   //     nada, sem crash) quando não inicializado.
   void set_master_volume(float v);
 
-  // EN: Stops every currently loaded sound (does not unload any of them). No-op when not
-  //     initialized.
-  // PT: Para todo som carregado no momento (não descarrega nenhum). No-op quando não
-  //     inicializado.
+  // EN: Stops every currently loaded sound -- every primary AND every live oneshot copy (does not
+  //     unload any of them). No-op when not initialized.
+  // PT: Para todo som carregado no momento -- toda primária E toda cópia oneshot viva (não
+  //     descarrega nenhum). No-op quando não inicializado.
   void stop_all();
 
 private:

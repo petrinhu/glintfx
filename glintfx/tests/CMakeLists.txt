@@ -2468,14 +2468,43 @@ if(GLINTFX_MODULE_AUDIO)
   # EN: audio_hostile_sanity -- WAV truncated mid-header/mid-data, random garbage bytes, an
   #     empty file, a WAV lying about its data-chunk size, load_sound(nullptr) -- every case
   #     must return 0/false and never crash (auditoria-dominó: same robustness class as
-  #     i18n_catalog_sanity/decorator_polygon).
+  #     i18n_catalog_sanity/decorator_polygon). AUDIO-F2: NaN/Inf/negative/1e30 fades,
+  #     play_oneshot() on hostile ids, play_oneshot() spam past the voice cap.
   # PT: audio_hostile_sanity -- WAV truncado no meio do header/data, bytes de lixo aleatório,
   #     arquivo vazio, um WAV mentindo sobre o tamanho do chunk de data, load_sound(nullptr)
   #     -- todo caso precisa retornar 0/false e nunca crashar (auditoria-dominó: mesma classe
-  #     de robustez do i18n_catalog_sanity/decorator_polygon).
+  #     de robustez do i18n_catalog_sanity/decorator_polygon). AUDIO-F2: fades NaN/Inf/negativo/
+  #     1e30, play_oneshot() em ids hostis, spam de play_oneshot() além do teto de vozes.
   add_executable(audio_hostile_sanity audio_hostile_sanity.cpp)
   target_link_libraries(audio_hostile_sanity PRIVATE glintfx)
   add_test(NAME audio_hostile_sanity COMMAND audio_hostile_sanity)
+
+  # EN: AUDIO-F2 -- audio_polyphony_sanity: the DETERMINISTIC (no clock) half of the polyphony
+  #     contract -- voice_count() == N right after N play_oneshot() calls of a long wav, the
+  #     32-per-id cap with oldest-steal, and the lazy-reap contract (a short wav's copies
+  #     naturally end and a subsequent play_oneshot() drops them without crashing).
+  # PT: AUDIO-F2 -- audio_polyphony_sanity: a metade DETERMINÍSTICA (sem relógio) do contrato de
+  #     polifonia -- voice_count() == N logo após N chamadas play_oneshot() de um wav longo, o
+  #     teto de 32-por-id com steal-do-mais-antigo, e o contrato de reap preguiçoso (as cópias de
+  #     um wav curto terminam naturalmente e um play_oneshot() subsequente as descarta sem
+  #     crashar).
+  add_executable(audio_polyphony_sanity audio_polyphony_sanity.cpp)
+  target_link_libraries(audio_polyphony_sanity PRIVATE glintfx)
+  add_test(NAME audio_polyphony_sanity COMMAND audio_polyphony_sanity)
+
+  # EN: AUDIO-F2 -- audio_loop_fade_sanity: the TIME-BASED proofs (poll-with-timeout, never a
+  #     bare sleep+assert) -- the loop-twin proof (non-loop twin ends, looping twin keeps
+  #     playing), the fade-out observable (is_playing() stays true throughout a scheduled
+  #     fade-out), and the play-after-fade-stop regression (a fresh play() must reset a
+  #     previously-scheduled fade-stop, per the vendored miniaudio.h's own warning).
+  # PT: AUDIO-F2 -- audio_loop_fade_sanity: as provas TEMPORAIS (poll-com-timeout, nunca um
+  #     sleep+assert seco) -- a prova do gêmeo de loop (gêmeo sem loop termina, gêmeo em loop
+  #     continua tocando), o observável do fade-out (is_playing() continua true durante todo um
+  #     fade-out agendado), e a regressão play-após-fade-stop (um play() novo precisa resetar um
+  #     fade-stop agendado antes, conforme o próprio aviso do miniaudio.h vendorizado).
+  add_executable(audio_loop_fade_sanity audio_loop_fade_sanity.cpp)
+  target_link_libraries(audio_loop_fade_sanity PRIVATE glintfx)
+  add_test(NAME audio_loop_fade_sanity COMMAND audio_loop_fade_sanity)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,8 @@
 #     miniaudio implementation TU, MIT-0/public-domain, compiled with warnings OFF like the main
 #     build does via set_source_files_properties), ../../src/stb_image_impl.cpp (compile-only,
 #     no test exercises it here -- decode correctness is covered by the main Linux suite's
-#     texture_png_alpha/asset_decode_hostile_sanity). Tests: the 3 i18n_*.cpp + 3 audio_*.cpp
+#     texture_png_alpha/asset_decode_hostile_sanity). Tests: the 3 i18n_*.cpp + 5 audio_*.cpp
+#     (AUDIO-F2 added audio_polyphony_sanity/audio_loop_fade_sanity to the original 3)
 #     pure-unit sanities from ../ (tests/), linked against a tiny static lib built from the
 #     sources above -- same test SOURCE FILES the main tests/CMakeLists.txt registers under
 #     `if(GLINTFX_MODULE_I18N)`/`if(GLINTFX_MODULE_AUDIO)` (byte-identical, not a fork: this
@@ -129,14 +130,14 @@ target_include_directories(glintfx_win_image_compile_only PRIVATE
 
 enable_testing()
 
-# EN: The 3 i18n_*.cpp + 3 audio_*.cpp pure-unit sanities, referenced from ../ (tests/) by
+# EN: The 3 i18n_*.cpp + 5 audio_*.cpp pure-unit sanities, referenced from ../ (tests/) by
 #     relative path -- byte-identical to what tests/CMakeLists.txt registers under
 #     if(GLINTFX_MODULE_I18N)/if(GLINTFX_MODULE_AUDIO); this harness does not fork/copy them.
-#     All 6 use AudioConfig::null_backend=true (audio_*) or touch no GL/window at all (i18n_*),
+#     All 8 use AudioConfig::null_backend=true (audio_*) or touch no GL/window at all (i18n_*),
 #     so none need a display or a real sound device -- true headless CI, on Windows too.
-# PT: As 3 sanities unit puras i18n_*.cpp + as 3 audio_*.cpp, referenciadas de ../ (tests/) por
+# PT: As 3 sanities unit puras i18n_*.cpp + as 5 audio_*.cpp, referenciadas de ../ (tests/) por
 #     caminho relativo -- byte-idênticas ao que o tests/CMakeLists.txt registra sob
-#     if(GLINTFX_MODULE_I18N)/if(GLINTFX_MODULE_AUDIO); este harness não as forka/copia. As 6
+#     if(GLINTFX_MODULE_I18N)/if(GLINTFX_MODULE_AUDIO); este harness não as forka/copia. As 8
 #     usam AudioConfig::null_backend=true (audio_*) ou não tocam em GL/janela nenhuma (i18n_*),
 #     então nenhuma precisa de display nem de dispositivo de som real -- CI headless de verdade,
 #     também no Windows.
@@ -147,6 +148,8 @@ set(GLINTFX_WIN_ATOM_TESTS
   audio_lifecycle_sanity
   audio_playback_sanity
   audio_hostile_sanity
+  audio_polyphony_sanity
+  audio_loop_fade_sanity
 )
 foreach(_glintfx_win_test IN LISTS GLINTFX_WIN_ATOM_TESTS)
   add_executable(${_glintfx_win_test} "${GLINTFX_ROOT}/tests/${_glintfx_win_test}.cpp")

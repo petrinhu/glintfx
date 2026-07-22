@@ -136,7 +136,20 @@ void ResolveRippleState(Rml::Element* element, RippleState& out) {
   //     cinto-e-suspensório em cima daquela reescrita do lado do shader, exatamente a mesma
   //     filosofia "clampa, não rejeita" que ResolveTintState documenta pra
   //     `image-tint-threshold`.
-  out.width = std::max(ReadRippleNumber(element, "ripple-width", out.width), 0.0001f);
+  // EN: `(std::max)(...)` parenthesized -- defense-in-depth against the MSVC min/max macro
+  //     trap (<windows.h>'s function-like `max` macro textually replaces this token, which
+  //     hit real MSVC CI as error C2589 before NOMINMAX was added directory-wide in
+  //     CMakeLists.txt). The parens around `std::max` break the macro's required
+  //     name-immediately-followed-by-`(` shape, so this call still compiles correctly even
+  //     if NOMINMAX is ever removed/misconfigured.
+  // PT: `(std::max)(...)` parentetizado -- defesa em profundidade contra a armadilha da
+  //     macro min/max do MSVC (a macro tipo-função `max` do <windows.h> substitui este token
+  //     textualmente, o que bateu de verdade no CI MSVC como erro C2589 antes do NOMINMAX ser
+  //     adicionado por-diretório no CMakeLists.txt). Os parênteses em volta de `std::max`
+  //     quebram a forma exigida pela macro (nome imediatamente seguido de `(`), então esta
+  //     chamada continua compilando corretamente mesmo se o NOMINMAX for removido/mal
+  //     configurado no futuro.
+  out.width = (std::max)(ReadRippleNumber(element, "ripple-width", out.width), 0.0001f);
 }
 
 }  // namespace
@@ -345,7 +358,12 @@ Rml::SharedPtr<Rml::Decorator> RippleDecoratorInstancer::InstanceDecorator(const
     //     Gl3RenderInterface::RenderShader (render_gl3.cpp) -- mesma filosofia "clampa, não
     //     rejeita" do tratamento de `image-tint-threshold` de ResolveTintState em
     //     decorator_image_tint.cpp.
-    max_radius = std::isfinite(v) ? std::max(v, 0.f) : 0.f;
+    // EN: `(std::max)(...)` parenthesized here too -- same MSVC min/max macro defense-in-depth
+    //     as ResolveRippleState's `width` floor above; see that comment for the full rationale.
+    // PT: `(std::max)(...)` parentetizado aqui também -- mesma defesa em profundidade contra a
+    //     macro min/max do MSVC de ResolveRippleState logo acima; ver aquele comentário pra
+    //     racional completa.
+    max_radius = std::isfinite(v) ? (std::max)(v, 0.f) : 0.f;
   }
 
   auto decorator = Rml::MakeShared<RippleDecorator>();

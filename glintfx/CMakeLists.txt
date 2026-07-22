@@ -162,6 +162,60 @@ function(glintfx_instrument_coverage target)
   endif()
 endfunction()
 
+# EN: NOMINMAX / WIN32_LEAN_AND_MEAN under MSVC (AUDIO-F2 CI follow-up, S3-CI dominó #2) --
+#     <windows.h> (pulled in transitively on Windows by GL headers via glloader/gl_loader.h,
+#     and possibly by RmlUi's own platform code) #defines `min`/`max` as function-like macros.
+#     Any call site that spells `std::max(...)`/`std::min(...)` or
+#     `std::numeric_limits<T>::max()` then has the token `max`/`min` textually replaced BEFORE
+#     the compiler ever sees the real identifier, producing nonsense like
+#     `std::numeric_limits<T>::(...)` -- MSVC error C2589 ("illegal token on right side of
+#     '::'"), hit for real by the `windows msvc build` CI job (added in 3dea8fb) against
+#     src/decorator_ripple.cpp. Applied via add_compile_definitions (directory-scope, set
+#     BEFORE FetchContent_MakeAvailable(RmlUi) below, same placement rationale as
+#     GLINTFX_SANITIZE above) so the definitions reach every target compiled in this build --
+#     ours AND the fetched RmlUi sources -- not just the 9 target_compile_options() call sites
+#     the -Wall/-Wextra MSVC guard above touches: a warning-flag guard only needs to cover our
+#     own authored code, but a macro-pollution guard needs to be visible to every translation
+#     unit that might include <windows.h>, including third-party ones we do not control the
+#     #include order of. MSVC-only (via $<CXX_COMPILER_ID:MSVC>): a no-op, harmless-to-omit
+#     definition on GCC/Clang/Linux, where <windows.h> is never pulled in and these two macros
+#     have no meaning. WIN32_LEAN_AND_MEAN is included as a companion hardening measure --
+#     trims <windows.h> itself to the core Win32 API subset, avoiding a whole further class of
+#     name collisions (winsock, GDI, etc.) from headers this project does not otherwise need.
+#     The string MUST stay quoted: without the quotes, CMake splits the argument on `;` BEFORE
+#     evaluating the generator expression, breaking the `$<...>` brackets in half and leaking
+#     malformed genex text straight into the real compile command (confirmed empirically
+#     against compile_commands.json in this same session -- literal, unexpanded
+#     `-D$<0:NOMINMAX ... WIN32_LEAN_AND_MEAN>`).
+# PT: NOMINMAX / WIN32_LEAN_AND_MEAN sob MSVC (follow-up de CI do AUDIO-F2, dominó #2 do
+#     S3-CI) -- o <windows.h> (puxado transitivamente no Windows pelos headers de GL via
+#     glloader/gl_loader.h, e possivelmente pelo próprio código de plataforma do RmlUi)
+#     define `min`/`max` como MACROS tipo-função. Qualquer ponto de chamada que escreva
+#     `std::max(...)`/`std::min(...)` ou `std::numeric_limits<T>::max()` tem então o token
+#     `max`/`min` substituído textualmente ANTES do compilador sequer ver o identificador
+#     real, produzindo algo sem sentido como `std::numeric_limits<T>::(...)` -- erro C2589 do
+#     MSVC ("illegal token on right side of '::'"), batido de verdade pelo job de CI
+#     `windows msvc build` (adicionado em 3dea8fb) contra src/decorator_ripple.cpp. Aplicado
+#     via add_compile_definitions (escopo de diretório, definido ANTES de
+#     FetchContent_MakeAvailable(RmlUi) abaixo, mesma racional de posicionamento do
+#     GLINTFX_SANITIZE acima) para que as definições alcancem todo alvo compilado neste
+#     build -- os nossos E os fontes fetchados do RmlUi -- não só os 9 pontos de
+#     target_compile_options() que a guarda MSVC de -Wall/-Wextra acima toca: uma guarda de
+#     flag de warning só precisa cobrir nosso próprio código autoral, mas uma guarda de
+#     poluição de macro precisa estar visível a toda unidade de tradução que possa incluir
+#     <windows.h>, inclusive as de terceiro cuja ordem de #include não controlamos.
+#     MSVC-only (via $<CXX_COMPILER_ID:MSVC>): no-op, inofensivo de omitir no GCC/Clang/Linux,
+#     onde <windows.h> nunca é puxado e essas duas macros não têm significado.
+#     WIN32_LEAN_AND_MEAN entra como medida de reforço complementar -- enxuga o próprio
+#     <windows.h> ao subconjunto núcleo da API Win32, evitando toda uma outra classe de
+#     colisão de nome (winsock, GDI, etc.) de headers que este projeto não precisa.
+#     A string TEM que ficar entre aspas: sem elas, o CMake divide o argumento no `;` ANTES
+#     de avaliar a generator expression, quebrando os colchetes `$<...>` ao meio e vazando
+#     texto de genex malformado pra linha de comando real (confirmado empiricamente contra
+#     compile_commands.json nesta mesma sessão -- `-D$<0:NOMINMAX ... WIN32_LEAN_AND_MEAN>`
+#     literal, não expandido).
+add_compile_definitions("$<$<CXX_COMPILER_ID:MSVC>:NOMINMAX;WIN32_LEAN_AND_MEAN>")
+
 include(FetchContent)
 
 # EN: GLFW window backend option.

@@ -54,8 +54,8 @@ namespace glintfx::draw2d_detail {
 //     por-instância-de-decorator). Tudo float, naturalmente empacotado (sem padding),
 //     sizeof(Vertex) == 32 bytes.
 struct Vertex {
-  float x = 0.f, y = 0.f;             // screen px, top-left origin, y-down (D5).
-  float u = 0.f, v = 0.f;             // texel-normalized [0,1], y-down (matches image row order, D5).
+  float x = 0.f, y = 0.f;                   // screen px, top-left origin, y-down (D5).
+  float u = 0.f, v = 0.f;                   // texel-normalized [0,1], y-down (matches image row order, D5).
   float r = 1.f, g = 1.f, b = 1.f, a = 1.f; // straight tint, already validated/clamped (D8/D10).
 };
 
@@ -106,12 +106,12 @@ public:
   }
 
   enum class DrawResult {
-    Ok,              // queued (possibly after an internal texture-change or capacity flush).
-    OutsideBracket,  // no begin() in effect (or already end()-ed) -- D4.
-    BracketInvalid,  // this bracket's begin() had target_w/h<=0 -- D10, silent per-call (already
-                      // logged once at begin() by the caller).
-    NonFinite,       // dst/src_px/tint carried a NaN/Inf member -- D10, checked before any math.
-    Degenerate,      // dst.w<=0 || dst.h<=0 -- a legal no-op sprite, not an error (D10).
+    Ok,             // queued (possibly after an internal texture-change or capacity flush).
+    OutsideBracket, // no begin() in effect (or already end()-ed) -- D4.
+    BracketInvalid, // this bracket's begin() had target_w/h<=0 -- D10, silent per-call (already
+                    // logged once at begin() by the caller).
+    NonFinite,      // dst/src_px/tint carried a NaN/Inf member -- D10, checked before any math.
+    Degenerate,     // dst.w<=0 || dst.h<=0 -- a legal no-op sprite, not an error (D10).
   };
 
   // EN: `tex_w`/`tex_h` are the texture's OWN pixel dimensions (the caller has ALREADY validated
@@ -125,7 +125,7 @@ public:
   //     de `src_px` "textura inteira" e clampa qualquer outro `src_px` a `[0,tex_w]x[0,tex_h]`
   //     (D5/D10) antes de gerar vértices.
   DrawResult draw_sprite(std::uint32_t texture_id, int tex_w, int tex_h, const RectF& dst,
-                          const RectF& src_px, const ColorF& tint) {
+                         const RectF& src_px, const ColorF& tint) {
     if (!in_bracket_) return DrawResult::OutsideBracket;
     if (bracket_degenerate_) return DrawResult::BracketInvalid;
 
@@ -144,7 +144,7 @@ public:
     const float th = tex_h > 0 ? static_cast<float>(tex_h) : 0.f;
     const RectF src = resolve_src(src_px, tw, th);
     const ColorF tint_clamped{clampf(tint.r, 0.f, 1.f), clampf(tint.g, 0.f, 1.f),
-                               clampf(tint.b, 0.f, 1.f), clampf(tint.a, 0.f, 1.f)};
+                              clampf(tint.b, 0.f, 1.f), clampf(tint.a, 0.f, 1.f)};
 
     emit_quad(dst, src, tint_clamped, tw, th);
 

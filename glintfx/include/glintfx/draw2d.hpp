@@ -334,7 +334,7 @@ public:
   //     adulterado/estrangeiro é rejeitado (logado uma vez, dedup'd); chamar isto fora de um
   //     bracket begin()/end() é rejeitado (logado uma vez, dedup'd).
   void draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{},
-                    const ColorF& tint = ColorF{});
+                   const ColorF& tint = ColorF{});
 
   // EN: Closes the batching bracket opened by begin(), flushing whatever this bracket still had
   //     pending (D4) -- unconditionally, even an empty/degenerate bracket (a no-op flush in that

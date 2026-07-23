@@ -68,19 +68,29 @@ bool write_file(const fs::path& path, const std::vector<unsigned char>& bytes) {
 //     destruído/adulterado, que precisam de uma textura REAL para destruir/adulterar antes de
 //     mais nada.
 std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsigned char g,
-                                            unsigned char b) {
+                                           unsigned char b) {
   std::vector<unsigned char> f;
   auto push16 = [&](int v) {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0); f.push_back(0); f.push_back(2);
-  push16(0); push16(0); f.push_back(0);
-  push16(0); push16(0);
-  push16(w); push16(h);
+  f.push_back(0);
+  f.push_back(0);
+  f.push_back(2);
+  push16(0);
+  push16(0);
+  f.push_back(0);
+  push16(0);
+  push16(0);
+  push16(w);
+  push16(h);
   f.push_back(24);
   f.push_back(0x20);
-  for (int i = 0; i < w * h; ++i) { f.push_back(b); f.push_back(g); f.push_back(r); }
+  for (int i = 0; i < w * h; ++i) {
+    f.push_back(b);
+    f.push_back(g);
+    f.push_back(r);
+  }
   return f;
 }
 
@@ -105,10 +115,16 @@ std::vector<unsigned char> build_tga_bad_type() {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0); f.push_back(0); f.push_back(99); // 99: not a valid TGA image_type.
-  push16(0); push16(0); f.push_back(0);
-  push16(0); push16(0);
-  push16(8); push16(8);
+  f.push_back(0);
+  f.push_back(0);
+  f.push_back(99); // 99: not a valid TGA image_type.
+  push16(0);
+  push16(0);
+  f.push_back(0);
+  push16(0);
+  push16(0);
+  push16(8);
+  push16(8);
   f.push_back(24);
   f.push_back(0x20);
   for (int i = 0; i < 8 * 8 * 3; ++i) f.push_back(static_cast<unsigned char>(0xAA ^ i));
@@ -123,7 +139,10 @@ std::vector<unsigned char> build_garbage() {
 }
 
 bool write_sparse_file(const fs::path& path, std::uint64_t size) {
-  { std::ofstream f(path, std::ios::binary | std::ios::trunc); if (!f) return false; }
+  {
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+  }
   std::error_code ec;
   fs::resize_file(path, size, ec);
   return !ec;
@@ -241,8 +260,8 @@ int main() {
     check(true, "draw_sprite() with a destroyed handle did not crash");
 
     Texture2d tampered = d2d.load_texture(p_real.c_str());
-    Texture2d tampered_copy = tampered; // a legitimate copy, deliberately mutated below.
-    d2d.destroy_texture(tampered); // the ORIGINAL id/generation now belong to a dead slot...
+    Texture2d tampered_copy = tampered;                 // a legitimate copy, deliberately mutated below.
+    d2d.destroy_texture(tampered);                      // the ORIGINAL id/generation now belong to a dead slot...
     Texture2d fresh = d2d.load_texture(p_real.c_str()); // ...reused by this new load (same slot).
     check(fresh.ok(), "tampered-handle setup: a fresh load reused the just-freed slot");
     d2d.draw_sprite(tampered_copy, RectF{0, 0, 1, 1}); // stale generation vs. the reused slot.

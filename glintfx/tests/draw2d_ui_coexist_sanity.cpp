@@ -68,19 +68,29 @@ void check(bool cond, const char* what) {
 // PT: Mesmo idioma de TGA feito-à-mão de draw2d_render_sanity.cpp -- uma cor sólida exata e
 //     conhecida, independente dos próprios valores de byte opacos de qualquer fixture PNG.
 std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsigned char g,
-                                            unsigned char b) {
+                                           unsigned char b) {
   std::vector<unsigned char> f;
   auto push16 = [&](int v) {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0); f.push_back(0); f.push_back(2);
-  push16(0); push16(0); f.push_back(0);
-  push16(0); push16(0);
-  push16(w); push16(h);
+  f.push_back(0);
+  f.push_back(0);
+  f.push_back(2);
+  push16(0);
+  push16(0);
+  f.push_back(0);
+  push16(0);
+  push16(0);
+  push16(w);
+  push16(h);
   f.push_back(24);
   f.push_back(0x20); // top-down.
-  for (int i = 0; i < w * h; ++i) { f.push_back(b); f.push_back(g); f.push_back(r); }
+  for (int i = 0; i < w * h; ++i) {
+    f.push_back(b);
+    f.push_back(g);
+    f.push_back(r);
+  }
   return f;
 }
 
@@ -129,7 +139,9 @@ std::vector<unsigned char> read_backbuffer_rgb(int w, int h) {
   return px;
 }
 
-struct Rgb { double r = 0, g = 0, b = 0; };
+struct Rgb {
+  double r = 0, g = 0, b = 0;
+};
 
 Rgb region_mean(const std::vector<unsigned char>& px, int w, int h, int cx, int cy, int half) {
   Rgb sum;
@@ -144,7 +156,11 @@ Rgb region_mean(const std::vector<unsigned char>& px, int w, int h, int cx, int 
       ++n;
     }
   }
-  if (n > 0) { sum.r /= n; sum.g /= n; sum.b /= n; }
+  if (n > 0) {
+    sum.r /= n;
+    sum.g /= n;
+    sum.b /= n;
+  }
   return sum;
 }
 
@@ -205,10 +221,11 @@ int main() {
     const Rgb ui_mean = region_mean(px, W, H, kUiCx, kUiCy, 8);
     const Rgb sprite_mean = region_mean(px, W, H, kSpriteCx, kSpriteCy, 8);
     const Rgb neutral_mean = region_mean(px, W, H, kNeutralCx, kNeutralCy, 4);
-    std::printf("draw2d_ui_coexist_sanity [%s]: ui=(%.1f,%.1f,%.1f) sprite=(%.1f,%.1f,%.1f) "
-                "neutral=(%.1f,%.1f,%.1f)\n",
-                order_label, ui_mean.r, ui_mean.g, ui_mean.b, sprite_mean.r, sprite_mean.g,
-                sprite_mean.b, neutral_mean.r, neutral_mean.g, neutral_mean.b);
+    std::printf(
+        "draw2d_ui_coexist_sanity [%s]: ui=(%.1f,%.1f,%.1f) sprite=(%.1f,%.1f,%.1f) "
+        "neutral=(%.1f,%.1f,%.1f)\n",
+        order_label, ui_mean.r, ui_mean.g, ui_mean.b, sprite_mean.r, sprite_mean.g,
+        sprite_mean.b, neutral_mean.r, neutral_mean.g, neutral_mean.b);
     check(near_rgb(ui_mean, 255, 255, 255, kTol),
           (std::string(order_label) + ": UI box still opaque white").c_str());
     check(near_rgb(sprite_mean, 200, 100, 50, kTol),

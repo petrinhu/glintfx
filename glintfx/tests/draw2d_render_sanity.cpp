@@ -83,12 +83,16 @@ std::vector<unsigned char> tga_header(int w, int h) {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0);  // id length
-  f.push_back(0);  // colour map type
-  f.push_back(2);  // image type: uncompressed true-colour
-  push16(0); push16(0); f.push_back(0); // colour map spec, unused
-  push16(0); push16(0); // x/y origin
-  push16(w); push16(h);
+  f.push_back(0); // id length
+  f.push_back(0); // colour map type
+  f.push_back(2); // image type: uncompressed true-colour
+  push16(0);
+  push16(0);
+  f.push_back(0); // colour map spec, unused
+  push16(0);
+  push16(0); // x/y origin
+  push16(w);
+  push16(h);
   f.push_back(24);   // bits per pixel
   f.push_back(0x20); // top-down, no alpha bits
   return f;
@@ -101,7 +105,7 @@ void push_bgr(std::vector<unsigned char>& f, unsigned char r, unsigned char g, u
 }
 
 std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsigned char g,
-                                            unsigned char b) {
+                                           unsigned char b) {
   std::vector<unsigned char> f = tga_header(w, h);
   for (int i = 0; i < w * h; ++i) push_bgr(f, r, g, b);
   return f;
@@ -110,11 +114,11 @@ std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsign
 // EN: 2x2 checker: row0 (TOP, per the header above) = [tl, tr]; row1 (bottom) = [bl, br].
 // PT: Checker 2x2: linha0 (CIMA, conforme o header acima) = [tl, tr]; linha1 (baixo) = [bl, br].
 std::vector<unsigned char> build_tga_checker2x2(unsigned char tl_r, unsigned char tl_g,
-                                                 unsigned char tl_b, unsigned char tr_r,
-                                                 unsigned char tr_g, unsigned char tr_b,
-                                                 unsigned char bl_r, unsigned char bl_g,
-                                                 unsigned char bl_b, unsigned char br_r,
-                                                 unsigned char br_g, unsigned char br_b) {
+                                                unsigned char tl_b, unsigned char tr_r,
+                                                unsigned char tr_g, unsigned char tr_b,
+                                                unsigned char bl_r, unsigned char bl_g,
+                                                unsigned char bl_b, unsigned char br_r,
+                                                unsigned char br_g, unsigned char br_b) {
   std::vector<unsigned char> f = tga_header(2, 2);
   push_bgr(f, tl_r, tl_g, tl_b);
   push_bgr(f, tr_r, tr_g, tr_b);
@@ -139,7 +143,9 @@ std::vector<unsigned char> read_backbuffer_rgb(int w, int h) {
   return px;
 }
 
-struct Rgb { double r = 0, g = 0, b = 0; };
+struct Rgb {
+  double r = 0, g = 0, b = 0;
+};
 
 // EN: Mean colour of a (2*half+1)^2 box centred at (cx,cy) -- absorbs single-pixel llvmpipe
 //     rasterization/rounding noise, same "statistical, not exact" discipline as render_sanity.
@@ -159,7 +165,11 @@ Rgb region_mean(const std::vector<unsigned char>& px, int w, int h, int cx, int 
       ++n;
     }
   }
-  if (n > 0) { sum.r /= n; sum.g /= n; sum.b /= n; }
+  if (n > 0) {
+    sum.r /= n;
+    sum.g /= n;
+    sum.b /= n;
+  }
   return sum;
 }
 
@@ -243,7 +253,7 @@ int main() {
   glClear(GL_COLOR_BUFFER_BIT);
   d2d.begin(W, H);
   d2d.draw_sprite(tex_a, RectF{0, 0, static_cast<float>(W), static_cast<float>(H)}, RectF{},
-                   ColorF{1.f, 1.f, 1.f, 0.5f});
+                  ColorF{1.f, 1.f, 1.f, 0.5f});
   d2d.end();
   {
     const auto px = read_backbuffer_rgb(W, H);
@@ -263,7 +273,7 @@ int main() {
   glClear(GL_COLOR_BUFFER_BIT);
   d2d.begin(W, H);
   d2d.draw_sprite(tex_checker, RectF{0, 0, static_cast<float>(W), static_cast<float>(H)},
-                   RectF{0.f, 0.f, 1.f, 1.f});
+                  RectF{0.f, 0.f, 1.f, 1.f});
   d2d.end();
   {
     const auto px = read_backbuffer_rgb(W, H);
@@ -287,7 +297,7 @@ int main() {
   glClear(GL_COLOR_BUFFER_BIT);
   d2d.begin(W, H);
   d2d.draw_sprite(tex_b, RectF{0, 0, static_cast<float>(W), static_cast<float>(H)}, RectF{},
-                   ColorF{0.2f, 0.4f, 0.6f, 0.8f});
+                  ColorF{0.2f, 0.4f, 0.6f, 0.8f});
   d2d.end();
   {
     const auto px = read_backbuffer_rgb(W, H);

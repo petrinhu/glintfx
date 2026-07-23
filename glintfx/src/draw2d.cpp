@@ -224,13 +224,13 @@ struct Draw2d::Impl {
     using V = draw2d_detail::Vertex;
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(V),
-                           reinterpret_cast<const void*>(offsetof(V, x)));
+                          reinterpret_cast<const void*>(offsetof(V, x)));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(V),
-                           reinterpret_cast<const void*>(offsetof(V, u)));
+                          reinterpret_cast<const void*>(offsetof(V, u)));
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(V),
-                           reinterpret_cast<const void*>(offsetof(V, r)));
+                          reinterpret_cast<const void*>(offsetof(V, r)));
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
@@ -353,9 +353,18 @@ void Draw2d::shutdown() {
   }
   impl_->textures.clear();
   impl_->free_slots.clear();
-  if (impl_->vao) { glDeleteVertexArrays(1, &impl_->vao); impl_->vao = 0; }
-  if (impl_->vbo) { glDeleteBuffers(1, &impl_->vbo); impl_->vbo = 0; }
-  if (impl_->program) { glDeleteProgram(impl_->program); impl_->program = 0; }
+  if (impl_->vao) {
+    glDeleteVertexArrays(1, &impl_->vao);
+    impl_->vao = 0;
+  }
+  if (impl_->vbo) {
+    glDeleteBuffers(1, &impl_->vbo);
+    impl_->vbo = 0;
+  }
+  if (impl_->program) {
+    glDeleteProgram(impl_->program);
+    impl_->program = 0;
+  }
   impl_->uniform_target_size = -1;
   impl_->uniform_tex = -1;
   impl_->batch = draw2d_detail::SpriteBatch{4096}; // discards any open/partial bracket state.
@@ -394,8 +403,8 @@ Texture2d Draw2d::load_texture(const char* path) {
   // pre-allocation" idiom render_gl3.cpp's own LoadTexture uses for the ui-side loader).
   if (len == 0 || len > kMaxImageDecodeBytes) {
     impl_->log_warn(std::string("load_texture(): '") + path + "' is " + std::to_string(len) +
-                     " bytes (0 or over the " + std::to_string(kMaxImageDecodeBytes) +
-                     " byte cap) -- refusing to load.");
+                    " bytes (0 or over the " + std::to_string(kMaxImageDecodeBytes) +
+                    " byte cap) -- refusing to load.");
     return out;
   }
   file.seekg(0, std::ios::beg);
@@ -408,7 +417,7 @@ Texture2d Draw2d::load_texture(const char* path) {
   const DecodedImage decoded = decode_premultiplied_rgba(buf.data(), buf.size());
   if (!decoded.ok) {
     impl_->log_warn(std::string("load_texture(): '") + path +
-                     "' failed to decode (unknown/corrupt format).");
+                    "' failed to decode (unknown/corrupt format).");
     return out;
   }
 
@@ -482,8 +491,9 @@ void Draw2d::begin(int target_width, int target_height) {
   if (!impl_ || !impl_->initialized) return;
   const bool clean = impl_->batch.begin(target_width, target_height);
   if (!clean) {
-    impl_->log_warn("begin() called while a previous bracket was still open -- "
-                     "implicitly closing it (D4).");
+    impl_->log_warn(
+        "begin() called while a previous bracket was still open -- "
+        "implicitly closing it (D4).");
     // Drain BEFORE updating target_w/target_h below: the leftover run this implicit end()
     // finalized was generated against the OLD target size and must be drawn against it.
     impl_->drain_ready();
@@ -491,13 +501,14 @@ void Draw2d::begin(int target_width, int target_height) {
   impl_->target_w = target_width;
   impl_->target_h = target_height;
   if (target_width <= 0 || target_height <= 0) {
-    impl_->log_warn("begin() called with a non-positive target size -- "
-                     "this bracket draws no-op until end() (D10).");
+    impl_->log_warn(
+        "begin() called with a non-positive target size -- "
+        "this bracket draws no-op until end() (D10).");
   }
 }
 
 void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px,
-                          const ColorF& tint) {
+                         const ColorF& tint) {
   if (!impl_ || !impl_->initialized) return;
 
   if (!tex.ok_ || tex.id_ == 0) {

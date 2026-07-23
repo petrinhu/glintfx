@@ -53,7 +53,7 @@ bool near(float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps;
 // PT: Os 6 vértices de um quad, no giro de CreateGlQuadBuffers/BuildQuadCorners
 //     (TL,TR,BR,TL,BR,BL, D5).
 bool quad_matches(const Vertex* v, float x, float y, float w, float h, float u0, float v0,
-                   float u1, float v1) {
+                  float u1, float v1) {
   const bool tl_ok = near(v[0].x, x) && near(v[0].y, y) && near(v[0].u, u0) && near(v[0].v, v0);
   const bool tr_ok = near(v[1].x, x + w) && near(v[1].y, y) && near(v[1].u, u1) && near(v[1].v, v0);
   const bool br_ok = near(v[2].x, x + w) && near(v[2].y, y + h) && near(v[2].u, u1) && near(v[2].v, v1);

@@ -50,19 +50,29 @@ using glintfx::Texture2d;
 namespace {
 
 std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsigned char g,
-                                            unsigned char b) {
+                                           unsigned char b) {
   std::vector<unsigned char> f;
   auto push16 = [&](int v) {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0); f.push_back(0); f.push_back(2);
-  push16(0); push16(0); f.push_back(0);
-  push16(0); push16(0);
-  push16(w); push16(h);
+  f.push_back(0);
+  f.push_back(0);
+  f.push_back(2);
+  push16(0);
+  push16(0);
+  f.push_back(0);
+  push16(0);
+  push16(0);
+  push16(w);
+  push16(h);
   f.push_back(24);
   f.push_back(0x20);
-  for (int i = 0; i < w * h; ++i) { f.push_back(b); f.push_back(g); f.push_back(r); }
+  for (int i = 0; i < w * h; ++i) {
+    f.push_back(b);
+    f.push_back(g);
+    f.push_back(r);
+  }
   return f;
 }
 
@@ -102,12 +112,17 @@ bool sample_ppm_pixel(const char* path, int w, int h, int x, int y, int& r, int&
   //     próprio doc-comment de snapshot() em app.cpp) -- mesma convenção que
   //     app_frame_callback_smoke.cpp usa.
   const long offset = static_cast<long>(y) * w * 3 + static_cast<long>(x) * 3;
-  if (std::fseek(f, offset, SEEK_CUR) != 0) { std::fclose(f); return false; }
+  if (std::fseek(f, offset, SEEK_CUR) != 0) {
+    std::fclose(f);
+    return false;
+  }
   unsigned char rgb[3];
   const bool ok = std::fread(rgb, 1, 3, f) == 3;
   std::fclose(f);
   if (!ok) return false;
-  r = rgb[0]; g = rgb[1]; b = rgb[2];
+  r = rgb[0];
+  g = rgb[1];
+  b = rgb[2];
   return true;
 }
 

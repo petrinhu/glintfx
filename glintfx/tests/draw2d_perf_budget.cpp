@@ -33,11 +33,11 @@
 //     and (c) FAIL if they cross their own BASELINE constant below by more than 1.5x (worse
 //     direction: lower quads/s for (a), higher ms for (c)). Without the env var (every other
 //     runner, every dev machine), only a blunt 10x SANITY ceiling fails the test -- the number is
-//     still printed either way. The RATIO gate (b, layered <= 2x streaming) is MACHINE-RELATIVE
-//     by construction (both arms run on the SAME machine, SAME process, SAME invocation) so it is
-//     STRICT EVERYWHERE, unconditional on GLINTFX_PERF_STRICT -- it is the direct, always-on
-//     answer to this wave's risk 2 ("layers vs batching is where performance can degrade", plan
-//     section 0).
+//     still printed either way. The RATIO gate (b, layered <= 4.0x streaming, revised 2026-07-23
+//     -- see the finding paragraph below) is MACHINE-RELATIVE by construction (both arms run on
+//     the SAME machine, SAME process, SAME invocation) so it is STRICT EVERYWHERE, unconditional
+//     on GLINTFX_PERF_STRICT -- it is the direct, always-on answer to this wave's risk 2 ("layers
+//     vs batching is where performance can degrade", plan section 0).
 //
 //     BASELINE PROVENANCE (honesty over invention -- the house's own named rule: "baseline
 //     medida, nunca inventada"): the three constants below were MEASURED by this agent run on
@@ -52,18 +52,35 @@
 //     meaningless until its baseline actually comes from claudio. Flagged explicitly in this
 //     wave's report, not silently left as if it were the real thing.
 //
-//     A REAL FINDING FROM THIS MEASUREMENT, NOT A BUG IN THIS TEST (reported, not hidden --
-//     "recomendações de tuning com evidência" is this role's own deliverable): the ratio gate (b)
-//     measures ~3.4-3.6x on this machine, consistently, across repeated process launches --
-//     ABOVE the 2.0x ceiling D30 sets. Root cause isolated with a standalone probe (this wave's
-//     own report has the breakdown): `LayerQueue::drain_grouped()`'s `std::stable_sort` moves
-//     whole ~96-byte `LayerCommand` structs (D27's own size estimate) to reorder by a single
-//     `int layer` key, which dominates the layered path's own cost (roughly 60% of it in the
-//     probe) -- `draw2d.cpp`'s own `Impl::replay_layer_queue()` runs the EXACT same
-//     `drain_grouped()` call this benchmark does, so this is not a benchmark artifact. This test
-//     ships the gate AS DESIGNED (D30's literal 2.0x, unconditional) rather than silently
-//     loosening it -- whether to optimize `LayerQueue` (sort a lightweight key, not the full
-//     struct) or revise the ceiling is a design call for whoever owns D2D-3B/D30, not this test.
+//     A REAL FINDING FROM THIS MEASUREMENT, A REVERTED OPTIMIZATION, AND THE CEILING REVISED BY
+//     THE LEADER (reported, not hidden -- "recomendações de tuning com evidência" is this role's
+//     own deliverable): the ratio gate (b) measures ~3.4-3.6x on this machine, consistently,
+//     across repeated process launches -- above the 2.0x ceiling D30 first set. Root cause
+//     isolated with a standalone probe (this wave's own report has the breakdown):
+//     `LayerQueue::drain_grouped()`'s `std::stable_sort` moves whole ~96-byte `LayerCommand`
+//     structs (D27's own size estimate) to reorder by a single `int layer` key, dominating the
+//     layered path's own cost (roughly 60% of it in the probe) -- `draw2d.cpp`'s own
+//     `Impl::replay_layer_queue()` runs the EXACT same `drain_grouped()` call this benchmark does,
+//     so this is not a benchmark artifact. A LIGHTWEIGHT-KEY SORT WAS TRIED AND REVERTED
+//     (PERF-D2D3B, 2026-07-23): a version of `drain_grouped()` that sorted a `{layer, push_index}`
+//     key (8 B) instead of the full struct measured ~2.9x on THIS machine -- but that measurement
+//     used the system's default g++, a METHOD ERROR: every CI workflow that builds this repo
+//     (`.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`/`heavy.yml`) pins
+//     `-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`, never the default compiler. Rebuilt
+//     and re-measured with clang (the only comparison that matters): the lightweight-key sort
+//     measured ~3.69x, WORSE than the original `std::stable_sort`'s ~3.39x under clang -O0's own
+//     codegen for this comparator shape -- the "cheaper key" theory held under gcc, not clang. The
+//     leader's call (D30 owner, 2026-07-23): REVERT to the plain `std::stable_sort` (this file's
+//     current form) rather than ship a change that regresses on the compiler CI actually runs, and
+//     REVISE THE CEILING instead -- layered mode is OPT-IN by construction (buffer + sort +
+//     scissor-regroup + replay is inherently costlier than the untouched streaming path, which
+//     this gate leaves completely alone), so ~3.4x measured WITH CLANG is the honest price of that
+//     feature, not a regression to chase further. The ceiling is REVISED to 4.0x -- the measured
+//     ~3.4x (clang) plus margin against flaking -- while still catching a GRAVE regression (e.g. a
+//     further-degraded sort, north of 4x) without flaking at a borderline ~3.5x-3.7x reading. This
+//     gate stays unconditional, machine-relative, and always-on exactly as D30 originally
+//     specified -- only the numeric ceiling moved, and it moved based on a clang measurement, not
+//     a gcc one.
 // PT: draw2d_perf_budget (PERF-D2D3, D30) -- números de performance declarados para o átomo
 //     Draw2D do glintfx, uma preocupação DIFERENTE da suíte de correção adversarial do
 //     `qa-engineer` (o trabalho deste arquivo é medição, não cobertura fail-high/input hostil --
@@ -101,11 +118,11 @@
 //     e (c) FALHAM se cruzarem a própria constante BASELINE abaixo em mais de 1,5x (direção
 //     pior: quads/s mais baixo pra (a), ms mais alto pra (c)). Sem a env (qualquer outro runner,
 //     qualquer máquina de dev), só um teto de SANIDADE grosseiro de 10x falha o teste -- o número
-//     é sempre impresso dos dois jeitos. O gate de RATIO (b, camadas <= 2x streaming) é
-//     RELATIVO-À-MÁQUINA por construção (os dois braços rodam na MESMA máquina, MESMO processo,
-//     MESMA invocação) então é ESTRITO EM TODO LUGAR, incondicional a GLINTFX_PERF_STRICT -- é a
-//     resposta direta e sempre-ligada ao risco 2 desta onda ("layers vs batching é onde
-//     performance pode degradar", plano seção 0).
+//     é sempre impresso dos dois jeitos. O gate de RATIO (b, camadas <= 4,0x streaming, revisado
+//     em 2026-07-23 -- ver o parágrafo do achado abaixo) é RELATIVO-À-MÁQUINA por construção (os
+//     dois braços rodam na MESMA máquina, MESMO processo, MESMA invocação) então é ESTRITO EM
+//     TODO LUGAR, incondicional a GLINTFX_PERF_STRICT -- é a resposta direta e sempre-ligada ao
+//     risco 2 desta onda ("layers vs batching é onde performance pode degradar", plano seção 0).
 //
 //     PROVENIÊNCIA DA BASELINE (honestidade sobre invenção -- a própria regra nomeada da casa:
 //     "baseline medida, nunca inventada"): as três constantes abaixo foram MEDIDAS por este
@@ -121,19 +138,36 @@
 //     própria baseline vir do claudio de fato. Flagrado explicitamente no relatório desta onda,
 //     não deixado em silêncio como se fosse a coisa real.
 //
-//     UM ACHADO REAL DESTA MEDIÇÃO, NÃO UM BUG NESTE TESTE (reportado, não escondido --
-//     "recomendações de tuning com evidência" é entrega própria deste papel): o gate de razão (b)
-//     mede ~3,4-3,6x nesta máquina, de forma consistente, em vários lançamentos de processo --
-//     ACIMA do teto de 2,0x que o D30 fixa. Causa-raiz isolada com uma sonda avulsa (o próprio
-//     relatório desta onda tem a quebra): o `std::stable_sort` do `LayerQueue::drain_grouped()`
-//     move structs `LayerCommand` inteiras de ~96 bytes (a própria estimativa de tamanho do D27)
-//     pra reordenar por uma única chave `int layer`, o que domina o custo do próprio caminho em
-//     camadas (cerca de 60% dele na sonda) -- o próprio `Impl::replay_layer_queue()` de
-//     `draw2d.cpp` roda a MESMA chamada `drain_grouped()` que este benchmark roda, então isto não
-//     é um artefato de benchmark. Este teste entrega o gate CONFORME DESENHADO (o 2,0x literal
-//     do D30, incondicional) em vez de afrouxá-lo em silêncio -- se vale a pena otimizar o
-//     `LayerQueue` (ordenar uma chave leve, não a struct inteira) ou revisar o teto é uma decisão
-//     de design de quem for dono do D2D-3B/D30, não deste teste.
+//     UM ACHADO REAL DESTA MEDIÇÃO, UMA OTIMIZAÇÃO REVERTIDA, E O TETO REVISADO PELO LÍDER
+//     (reportado, não escondido -- "recomendações de tuning com evidência" é entrega própria deste
+//     papel): o gate de razão (b) mede ~3,4-3,6x nesta máquina, de forma consistente, em vários
+//     lançamentos de processo -- acima do teto de 2,0x que o D30 fixava a princípio. Causa-raiz
+//     isolada com uma sonda avulsa (o próprio relatório desta onda tem a quebra): o
+//     `std::stable_sort` do `LayerQueue::drain_grouped()` move structs `LayerCommand` inteiras de
+//     ~96 bytes (a própria estimativa de tamanho do D27) pra reordenar por uma única chave
+//     `int layer`, dominando o custo do próprio caminho em camadas (cerca de 60% dele na sonda) --
+//     o próprio `Impl::replay_layer_queue()` de `draw2d.cpp` roda a MESMA chamada
+//     `drain_grouped()` que este benchmark roda, então isto não é um artefato de benchmark. UMA
+//     ORDENAÇÃO DE CHAVE LEVE FOI TENTADA E REVERTIDA (PERF-D2D3B, 2026-07-23): uma versão do
+//     `drain_grouped()` que ordenava uma chave `{layer, push_index}` (8 B) em vez da struct
+//     inteira mediu ~2,9x NESTA máquina -- mas essa medição usou o g++ padrão do sistema, um ERRO
+//     DE MÉTODO: todo workflow de CI que builda este repo (`.github/workflows/ci.yml`,
+//     `.forgejo/workflows/ci.yml`/`heavy.yml`) fixa `-DCMAKE_C_COMPILER=clang
+//     -DCMAKE_CXX_COMPILER=clang++`, nunca o compilador padrão. Rebuildado e re-medido com clang
+//     (a única comparação que importa): a ordenação de chave leve mediu ~3,69x, PIOR que o
+//     `std::stable_sort` original (~3,39x sob clang) -- a teoria da "chave mais barata" se
+//     sustentava sob gcc, não sob clang, pro próprio codegen -O0 dessa forma de comparador. A
+//     decisão do líder (dono do D30, 2026-07-23): REVERTER pro `std::stable_sort` simples (a forma
+//     atual deste arquivo) em vez de subir uma mudança que regride no compilador que o CI de fato
+//     roda, e REVISAR O TETO em vez disso -- o modo em camadas é OPT-IN por construção
+//     (bufferizar + ordenar + reagrupar-por-scissor + reproduzir é inerentemente mais custoso que
+//     o caminho streaming intocado, que este gate deixa completamente de lado), então ~3,4x medido
+//     COM CLANG é o preço honesto dessa feature, não uma regressão a caçar mais. O teto é REVISADO
+//     para 4,0x -- o ~3,4x medido (clang) mais margem contra flakiness -- ainda capturando uma
+//     regressão GRAVE (ex.: uma ordenação ainda mais degradada, acima de 4x) sem flakear numa
+//     leitura limítrofe perto de ~3,5x-3,7x. Este gate segue incondicional, relativo-à-máquina e
+//     sempre-ligado exatamente como o D30 especificava originalmente -- só o teto numérico mudou,
+//     e mudou com base numa medição clang, não gcc.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/layer_queue.hpp"
 #include "../src/sprite_batch.hpp"
@@ -206,14 +240,14 @@ double bench_pure_batcher_seconds(std::size_t n) {
 //     SpriteBatch::draw_quad() replay -- the EXACT sequence draw2d.cpp's own end()-time replay
 //     loop runs (push already-projected corners, drain grouped by scissor, replay each group's
 //     commands through the untouched batcher, draining after every draw_quad() the same way (a)
-//     does). `layer = i % 16` gives the stable_sort real (non-trivial) work to do -- a
-//     constant-layer stream would let the sort degenerate into a near-no-op and understate this
-//     mode's real cost. Same "elapsed SECONDS, not a rate" return convention as (a) above.
+//     does). `layer = i % 16` gives the sort real (non-trivial) work to do -- a constant-layer
+//     stream would let it degenerate into a near-no-op and understate this mode's real cost. Same
+//     "elapsed SECONDS, not a rate" return convention as (a) above.
 // PT: (b) -- o MESMO stream de 100k comandos, por LayerQueue::push() -> drain_grouped() -> replay
 //     via SpriteBatch::draw_quad() -- a MESMA sequência que o próprio laço de replay no end() de
 //     draw2d.cpp roda (empurra cantos já projetados, drena agrupado por scissor, reproduz os
 //     comandos de cada grupo pelo batcher intocado, drenando após todo draw_quad() do mesmo jeito
-//     que (a) faz). `layer = i % 16` dá trabalho real (não-trivial) pro stable_sort fazer -- um
+//     que (a) faz). `layer = i % 16` dá trabalho real (não-trivial) pra ordenação fazer -- um
 //     stream de camada constante deixaria a ordenação degenerar num quase-no-op e subestimaria o
 //     custo real deste modo. Mesma convenção de retorno "SEGUNDOS decorridos, não uma taxa" de
 //     (a) acima.
@@ -454,7 +488,7 @@ int main() {
   constexpr double kBaselineE2eMedianMs = 5.0;
   constexpr double kStrictFactor = 1.5;
   constexpr double kSanityFactor = 10.0;
-  constexpr double kRatioGateMax = 2.0; // D30 -- unconditional, everywhere.
+  constexpr double kRatioGateMax = 4.0; // D30, revised 2026-07-23 (clang-measured) -- unconditional, everywhere.
 
   // --- Metrics (a) + (b): pure CPU, no GL, no display -- kAbRepeats paired runs, median'd ------
   const AbResult ab = bench_ab(100000);

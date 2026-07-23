@@ -2309,6 +2309,39 @@ if(GLINTFX_MODULE_DRAW2D)
       -DEXE=$<TARGET_FILE:draw2d_primitives_render_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- the performance-engineer's slice, a
+  #     DIFFERENT concern from every draw2d_*_sanity test above (measurement, not correctness).
+  #     Prints three GLINTFX_PERF <key>=<value> lines every run: pure SpriteBatch throughput (no
+  #     GL), the layered/streaming time ratio (no GL either), and an end-to-end median frame time
+  #     under this same Xvfb/llvmpipe fixture (real GL, ${_embed_dep} glloader, same link pair as
+  #     every draw2d_*_sanity test above). Gated on GLINTFX_MODULE_DRAW2D like every other test in
+  #     this block; runs in BOTH build configurations. The strict 1.5x-baseline gate only bites
+  #     with GLINTFX_PERF_STRICT=1 in the environment (set by .forgejo/workflows/heavy.yml's
+  #     claudio jobs only); everywhere else only a loose 10x sanity ceiling and the
+  #     machine-relative layered<=2x-streaming ratio gate are checked -- see the test file's own
+  #     header comment for the full two-tier gate design and baseline provenance.
+  # PT: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- a fatia do performance-engineer, uma
+  #     preocupação DIFERENTE de todo teste draw2d_*_sanity acima (medição, não correção). Imprime
+  #     três linhas GLINTFX_PERF <chave>=<valor> toda execução: throughput puro do SpriteBatch
+  #     (sem GL), a razão de tempo camadas/streaming (sem GL também), e um tempo médio de frame
+  #     de ponta-a-ponta sob esta mesma fixture Xvfb/llvmpipe (GL real, ${_embed_dep} glloader,
+  #     mesmo par de link de todo teste draw2d_*_sanity acima). Gateado em GLINTFX_MODULE_DRAW2D
+  #     igual a todo outro teste deste bloco; roda nas DUAS configurações de build. O gate estrito
+  #     de baseline 1,5x só morde com GLINTFX_PERF_STRICT=1 no ambiente (setado só pelos jobs
+  #     claudio de .forgejo/workflows/heavy.yml); em todo outro lugar só um teto de sanidade frouxo
+  #     de 10x e o gate de razão camadas<=2x-streaming relativo-à-máquina são checados -- ver o
+  #     comentário de cabeçalho do próprio arquivo de teste pro desenho completo do gate de dois
+  #     níveis e a proveniência da baseline.
+  # ---------------------------------------------------------------------------
+  add_executable(draw2d_perf_budget draw2d_perf_budget.cpp)
+  target_link_libraries(draw2d_perf_budget PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_perf_budget
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_perf_budget>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 # ---------------------------------------------------------------------------

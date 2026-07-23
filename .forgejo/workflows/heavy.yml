@@ -272,8 +272,22 @@ jobs:
     #     jobs clang `fonteng` precisam da flag. Idêntico ao mesmo env em
     #     .forgejo/workflows/ci.yml; puramente aditivo. A nota do cabeçalho do arquivo
     #     acima que afirma que esta imagem não precisa fica superada por este achado.
+    # EN: GLINTFX_PERF_STRICT=1 (PERF-D2D3, D30) -- arms the strict 1.5x-baseline gate in
+    #     tests/draw2d_perf_budget.cpp, ONLY on this claudio job (never in ci.yml/nightly.yml):
+    #     claudio is the one stable, always-on machine this house's baseline constants were meant
+    #     for. Everywhere else the test still runs and still prints its GLINTFX_PERF lines, just
+    #     under the loose 10x sanity ceiling instead -- see that file's own header comment for the
+    #     full two-tier gate design and the baseline-provenance caveat.
+    # PT: GLINTFX_PERF_STRICT=1 (PERF-D2D3, D30) -- arma o gate estrito de baseline 1,5x em
+    #     tests/draw2d_perf_budget.cpp, SÓ neste job claudio (nunca em ci.yml/nightly.yml): o
+    #     claudio é a única máquina estável e sempre-ligada para a qual as constantes de baseline
+    #     desta casa foram pensadas. Em todo outro lugar o teste ainda roda e ainda imprime as
+    #     próprias linhas GLINTFX_PERF, só que sob o teto de sanidade frouxo de 10x -- ver o
+    #     comentário de cabeçalho daquele arquivo pro desenho completo do gate de dois níveis e a
+    #     ressalva de proveniência da baseline.
     env:
       CXXFLAGS: "-include sys/syscall.h"
+      GLINTFX_PERF_STRICT: "1"
     strategy:
       fail-fast: false
       matrix:

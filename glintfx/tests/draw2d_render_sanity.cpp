@@ -11,7 +11,7 @@
 //     expected pixel below is a HAND-COMPUTED delta against the D8 tint formula, and that
 //     computation needs exact source colours, not "reddish, roughly".
 //
-//     Four checks (plan section 5, `draw2d_render_sanity`):
+//     Five checks (plan section 5, `draw2d_render_sanity`, plus MAJOR-2 below):
 //       1. solid-colour sprite readback (region mean within tolerance).
 //       2. alpha blend of a semi-transparent sprite over a known clear colour matches the
 //          premultiplied expectation (a HAND-DERIVED delta, not "looks blended").
@@ -19,6 +19,13 @@
 //       4. the D8 tint formula verified with a computed expected value (a SECOND, independent
 //          delta test at a non-trivial tint, per the house's "formula without a delta test is
 //          the silent-bug class" rule).
+//       5. (MAJOR-2, review adversarial coverage gap) a dst POSITIONED asymmetrically on the Y
+//          axis -- checks 1-4 above are all full-viewport or centre-sampled, hence INVARIANT to
+//          a vertical mirror of vertex positions. The review's own mutation testing (removing
+//          the `1.0 - ...` Y-flip in kVertexSrc, draw2d.cpp) passed clean through checks 1-4 and
+//          was only caught by `draw2d_ui_coexist_sanity.cpp` BY ACCIDENT (that file's own sprite
+//          fixture happens to sit off-centre). This check closes that gap directly, inside the
+//          file whose actual job is proving rendering, not D9 GL-state coexistence.
 // PT: draw2d_render_sanity (D2D-1B) -- prova de pixel-readback do `glintfx::Draw2d` sob
 //     Xvfb/llvmpipe, ESTATÍSTICA/tolerante (nunca pixel-exata -- o próprio precedente do
 //     golden_test da casa, ver o gotcha "golden_test é flaky no llvmpipe" do AGENTS.md). Fixture
@@ -33,7 +40,7 @@
 //     CALCULADO À MÃO contra a fórmula de tint D8, e esse cálculo precisa de cores de origem
 //     exatas, não "avermelhado, mais ou menos".
 //
-//     Quatro checks (plano seção 5, `draw2d_render_sanity`):
+//     Cinco checks (plano seção 5, `draw2d_render_sanity`, mais o MAJOR-2 abaixo):
 //       1. readback de sprite de cor sólida (média de região dentro de tolerância).
 //       2. blend alpha de um sprite semi-transparente sobre uma cor de clear conhecida bate com
 //          a expectativa premultiplicada (um delta DERIVADO À MÃO, não "parece misturado").
@@ -41,11 +48,20 @@
 //       4. a fórmula de tint D8 verificada com um valor esperado calculado (um SEGUNDO teste de
 //          delta independente, num tint não-trivial, conforme a regra da casa "fórmula sem teste
 //          de delta é a classe de bug silencioso").
+//       5. (MAJOR-2, lacuna de cobertura achada pelo review adversarial) um dst POSICIONADO de
+//          forma assimétrica no eixo Y -- os checks 1-4 acima são todos full-viewport ou
+//          amostrados no centro, logo INVARIANTES a um espelhamento vertical das posições de
+//          vértice. A própria mutação do review (removendo o flip `1.0 - ...` de Y em
+//          kVertexSrc, draw2d.cpp) passou limpa pelos checks 1-4 e só foi pega por
+//          `draw2d_ui_coexist_sanity.cpp` POR ACIDENTE (a fixture de sprite daquele arquivo por
+//          acaso fica fora do centro). Este check fecha essa lacuna direto, dentro do arquivo
+//          cujo trabalho de fato é provar renderização, não coexistência de estado GL da D9.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
 #include "gl_loader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -134,12 +150,35 @@ bool write_file(const fs::path& path, const std::vector<unsigned char>& bytes) {
   return f.good();
 }
 
+// EN: glReadPixels itself returns rows BOTTOM-up (row 0 = the window's bottom edge, OpenGL's own
+//     convention) -- flipped here so the RETURNED buffer is TOP-down, matching the y-down
+//     convention every `RectF`/region coordinate in this file already uses (D5). The 4 checks
+//     that pre-date MAJOR-2's positioned check below never needed this (all sample the viewport
+//     CENTRE, whose row index is the same either way for a uniform-fill dst) -- MAJOR-2's own
+//     asymmetric-in-Y check DOES need it, same gotcha decorator_ripple.cpp's own top comment
+//     documents ("row = h - 1 - content_y") and draw2d_ui_coexist_sanity.cpp's own
+//     read_backbuffer_rgb already fixes.
+// PT: O próprio glReadPixels retorna linhas de BAIXO pra cima (linha 0 = borda de baixo da
+//     janela, convenção própria do OpenGL) -- invertido aqui pra que o buffer RETORNADO fique de
+//     CIMA pra baixo, batendo com a convenção y-para-baixo que toda coordenada `RectF`/região
+//     deste arquivo já usa (D5). Os 4 checks que precedem o check posicionado do MAJOR-2 abaixo
+//     nunca precisaram disto (todos amostram o CENTRO do viewport, cujo índice de linha é o
+//     mesmo dos dois jeitos pra um dst de preenchimento uniforme) -- o próprio check
+//     assimétrico-em-Y do MAJOR-2 PRECISA disto, mesma armadilha que o próprio comentário de
+//     topo de decorator_ripple.cpp documenta ("row = h - 1 - content_y") e que o próprio
+//     read_backbuffer_rgb de draw2d_ui_coexist_sanity.cpp já corrige.
 std::vector<unsigned char> read_backbuffer_rgb(int w, int h) {
-  std::vector<unsigned char> px(static_cast<std::size_t>(w) * h * 3);
+  std::vector<unsigned char> raw(static_cast<std::size_t>(w) * h * 3);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glReadBuffer(GL_BACK);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, px.data());
+  glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
+  std::vector<unsigned char> px(raw.size());
+  for (int y = 0; y < h; ++y) {
+    const unsigned char* src_row = raw.data() + static_cast<std::size_t>(h - 1 - y) * w * 3;
+    unsigned char* dst_row = px.data() + static_cast<std::size_t>(y) * w * 3;
+    std::copy(src_row, src_row + static_cast<std::size_t>(w) * 3, dst_row);
+  }
   return px;
 }
 
@@ -306,6 +345,40 @@ int main() {
                 mean.r, mean.g, mean.b);
     check(near_rgb(mean, 42, 52, 32, kTol),
           "tint_formula_computed_value: matches the D8 formula at a non-trivial tint");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Check 5 (MAJOR-2, review adversarial): a dst POSITIONED asymmetrically on the Y axis --
+  // every check above uses a full-viewport dst or samples the viewport CENTRE, both of which are
+  // invariant to a vertical mirror of vertex positions (the mutation the review actually tried:
+  // removing the `1.0 - ...` flip in kVertexSrc, draw2d.cpp). Proven live: that exact mutation
+  // makes THIS check fail while checks 1-4 stay green -- see this file's own commit message /
+  // the review transcript for the before/after ctest run. A small quad near the TOP of the
+  // viewport (y:10-34 of 128) must land THERE, not mirrored to the bottom (y:94-118) -- two
+  // sample points settle it: the quad's own centre must be sprite-coloured, and the point that
+  // would hold the quad if it were mirrored about the viewport's horizontal centreline must
+  // stay background (black, nothing drawn there).
+  // -------------------------------------------------------------------------------------------
+  glClearColor(0.f, 0.f, 0.f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  d2d.begin(W, H);
+  d2d.draw_sprite(tex_a, RectF{40, 10, 48, 24}); // top strip, y:[10,34) of a 128-tall viewport.
+  d2d.end();
+  {
+    const auto px = read_backbuffer_rgb(W, H);
+    // Correct position: centre of the drawn quad (y:[10,34) -> centre y=22).
+    const Rgb top = region_mean(px, W, H, 64, 22, 6);
+    // Mirrored position: where the quad would land if Y were flipped about the centreline
+    // (y=64) instead of correctly projected -- centre of [128-34,128-10) = [94,118) -> y=106.
+    const Rgb mirrored = region_mean(px, W, H, 64, 106, 6);
+    std::printf("draw2d_render_sanity: positioned-y top=(%.1f,%.1f,%.1f) expect ~(200,100,50), "
+                "mirrored=(%.1f,%.1f,%.1f) expect ~(0,0,0)\n", top.r, top.g, top.b, mirrored.r,
+                mirrored.g, mirrored.b);
+    check(near_rgb(top, 200, 100, 50, kTol),
+          "positioned_dst_catches_y_flip_mutation: sprite lands at its declared TOP position");
+    check(near_rgb(mirrored, 0, 0, 0, kTol),
+          "positioned_dst_catches_y_flip_mutation: nothing bleeds into the vertically-mirrored "
+          "position (would be sprite-coloured under a broken/removed Y-flip)");
   }
 
   d2d.shutdown();

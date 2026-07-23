@@ -2515,6 +2515,38 @@ add_test(NAME ripple_stress_sanity
     -DEXE=$<TARGET_FILE:ripple_stress_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: draw2d_ripple_coexist_sanity (D2D-1B follow-up, review adversarial brief 8.4 item 3) --
+#     the risk the plan itself named (EnsureBackdropCaptured reading FBO 0 mid-Context::Render()
+#     while a Draw2D sprite pass writes to that same FBO) and no other test of the wave covers.
+#     Promoted from the review's own scratch probe into the permanent suite. Needs BOTH
+#     GLINTFX_MODULE_FX (ripple() itself, hence nested inside this same if() as
+#     ripple_sanity/ripple_stress_sanity above) AND GLINTFX_MODULE_DRAW2D (the sprite pass) --
+#     the inner guard mirrors the "lean-ui/no-draw2d build must not try to link code that was
+#     never compiled in" reasoning every other module gate in this file already follows. Same
+#     link pair as ripple_sanity above (${_embed_dep} glloader). Runs in BOTH build configs.
+# PT: draw2d_ripple_coexist_sanity (follow-up do D2D-1B, brief de review adversarial 8.4 item 3)
+#     -- o risco que o próprio plano nomeou (EnsureBackdropCaptured lendo o FBO 0 no meio do
+#     Context::Render() enquanto um passe de sprite do Draw2D escreve nesse mesmo FBO) e nenhum
+#     outro teste da onda cobre. Promovido da própria sonda de scratch do review pra suíte
+#     permanente. Precisa TANTO de GLINTFX_MODULE_FX (o próprio ripple(), daí aninhado dentro
+#     deste mesmo if() de ripple_sanity/ripple_stress_sanity acima) QUANTO de
+#     GLINTFX_MODULE_DRAW2D (o passe de sprite) -- a guarda interna espelha o racional
+#     "build lean-ui/sem-draw2d não pode tentar linkar código nunca compilado" que todo outro
+#     gate de módulo deste arquivo já segue. Mesmo par de link do ripple_sanity acima
+#     (${_embed_dep} glloader). Roda em AMBAS as configs de build.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(draw2d_ripple_coexist_sanity draw2d_ripple_coexist_sanity.cpp)
+  target_link_libraries(draw2d_ripple_coexist_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_ripple_coexist_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_ripple_coexist_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
 endif()  # GLINTFX_MODULE_FX
 
 # ---------------------------------------------------------------------------

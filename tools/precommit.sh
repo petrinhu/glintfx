@@ -51,19 +51,29 @@
 #          exactly the moment it is needed most -- a fresh clone, first commit), but
 #          should use the accurate mode when it is already sitting there for free.
 #          HEADERS (`.hpp`/`.h`) never appear as their own "file" entry in
-#          compile_commands.json (they are never their own translation unit) -- routed to
-#          `--project` mode too whenever the db exists at all (matching CI's own strategy,
-#          which has no such split), NOT to the flag-less fallback, because the flag-less
-#          per-file pass analyses a header in ISOLATION and cannot see how the REST of the
-#          project (some `.cpp` TU that `#include`s it) actually uses its members --
+#          compile_commands.json (they are never their own translation unit), so
+#          `--project --file-filter='*<the header path>'` ALWAYS fails to match anything
+#          and hard-errors (confirmed live, 2026-07-23: staging a `.hpp` with the db
+#          present blocked EVERY such commit, unconditionally -- a regression of THIS
+#          gate's own prior fix, see below). The correct routing: find a `.cpp` TU
+#          already in the db whose on-disk content `#include`s the header's basename
+#          DIRECTLY (grep, quote or angle form), and run `--file-filter` on THAT `.cpp`
+#          instead -- cppcheck then analyses the whole TU, including the header pulled in
+#          by it, so diagnostics land on the header's own file:line WITH real cross-TU
+#          context. This is what preserves the original fix's goal without the header
+#          path ever being a `--file-filter` target itself: the flag-less per-file pass
+#          analyses a header in ISOLATION and cannot see how the REST of the project
+#          (some `.cpp` TU that `#include`s it) actually uses its members --
 #          `unusedStructMember` false-flagged exactly this way on `sprite_batch.hpp`'s
 #          `Flush::vertices` (read only from `draw2d.cpp`'s `drain_ready()`, a DIFFERENT
 #          TU) the day D2D-2B first staged that file since GATE-PRECOMMIT went in,
 #          confirmed reproducible in isolation and confirmed CI's own `--project`-only
-#          invocation does NOT hit it. `.cpp` files keep the exact-match rule (a header is
-#          virtually always reachable via inclusion from an existing TU already in the
-#          db; a brand-new, not-yet-configured `.cpp` genuinely has no TU to analyse it
-#          through, so it still needs the flag-less fallback for at least some coverage).
+#          invocation (which filters by directory wildcard `*glintfx/src/*`, never by a
+#          single header path) does NOT hit it. A header with NO consuming TU in the db
+#          yet (a brand-new header nothing `#include`s so far) falls back to the
+#          flag-less per-file pass -- same reasoning as a brand-new `.cpp`: there is
+#          genuinely no TU to analyse it through, so isolated coverage is the best
+#          available, not a regression. `.cpp` files keep the exact-match rule.
 #       2) clang-format-diff on the STAGED diff (`git diff --cached`, not origin/main --
 #          see rationale below) of touched glintfx/*.cpp|*.hpp|*.h, third_party/ and the
 #          generated gl_loader.{h,c} excluded (same exclusions as TST-L1-FORMAT in
@@ -147,21 +157,30 @@
 #          momento em que ele mais faz falta -- clone novo, primeiro commit), mas deve
 #          usar o modo preciso quando ele já está ali de graça.
 #          HEADERS (`.hpp`/`.h`) nunca aparecem como a própria entrada "file" no
-#          compile_commands.json (nunca são a própria unidade de tradução) -- roteados
-#          pro modo `--project` também sempre que o db existir (batendo com a própria
-#          estratégia do CI, que não tem essa divisão), NÃO pro fallback sem flags,
-#          porque o passe por-arquivo sem flags analisa um header ISOLADO e não consegue
-#          ver como o RESTO do projeto (algum `.cpp` TU que faz `#include` dele) de fato
-#          usa os membros dele -- `unusedStructMember` deu falso-positivo exatamente
-#          assim em `Flush::vertices` de `sprite_batch.hpp` (lido só pelo
-#          `drain_ready()` de `draw2d.cpp`, uma TU DIFERENTE) no dia em que o D2D-2B
-#          staged esse arquivo pela primeira vez desde que o GATE-PRECOMMIT entrou,
-#          confirmado reproduzível isolado e confirmado que a própria invocação
-#          `--project`-só do CI NÃO bate nisso. Arquivos `.cpp` mantêm a regra de match
-#          exato (um header é quase sempre alcançável via inclusão de uma TU já
-#          existente no db; um `.cpp` novinho, ainda não configurado, de fato não tem TU
-#          nenhuma pra analisá-lo através dela, então ainda precisa do fallback sem
-#          flags pra ao menos alguma cobertura).
+#          compile_commands.json (nunca são a própria unidade de tradução), então
+#          `--project --file-filter='*<caminho do header>'` SEMPRE falha em casar
+#          qualquer coisa e dá erro duro (confirmado ao vivo, 2026-07-23: stagear um
+#          `.hpp` com o db presente travava TODO commit assim, incondicionalmente --
+#          uma regressão do próprio fix anterior deste gate, ver abaixo). O roteamento
+#          correto: achar uma TU `.cpp` já no db cujo conteúdo em disco faz `#include`
+#          DIRETO do basename do header (grep, forma quote ou angle), e rodar o
+#          `--file-filter` NESSA `.cpp` -- o cppcheck aí analisa a TU inteira, incluindo o
+#          header puxado por ela, então os diagnósticos caem no file:line do PRÓPRIO
+#          header COM contexto cross-TU real. É isso que preserva o objetivo do fix
+#          original sem o caminho do header nunca ser alvo de `--file-filter` em si: o
+#          passe por-arquivo sem flags analisa um header ISOLADO e não consegue ver como
+#          o RESTO do projeto (algum `.cpp` TU que faz `#include` dele) de fato usa os
+#          membros dele -- `unusedStructMember` deu falso-positivo exatamente assim em
+#          `Flush::vertices` de `sprite_batch.hpp` (lido só pelo `drain_ready()` de
+#          `draw2d.cpp`, uma TU DIFERENTE) no dia em que o D2D-2B staged esse arquivo pela
+#          primeira vez desde que o GATE-PRECOMMIT entrou, confirmado reproduzível
+#          isolado e confirmado que a própria invocação `--project`-só do CI (que filtra
+#          por wildcard de diretório `*glintfx/src/*`, nunca por um caminho de header
+#          único) NÃO bate nisso. Um header SEM nenhuma TU consumidora no db ainda
+#          (header novinho que nada faz `#include` até agora) cai pro passe sem flags --
+#          mesmo raciocínio de um `.cpp` novinho: de fato não há TU pra analisá-lo
+#          através dela, então cobertura isolada é o melhor disponível, não uma
+#          regressão. Arquivos `.cpp` mantêm a regra de match exato.
 #       2) clang-format-diff no diff STAGED (`git diff --cached`, não origin/main -- ver
 #          racional abaixo) dos glintfx/*.cpp|*.hpp|*.h tocados, excluindo third_party/
 #          e o gl_loader.{h,c} gerado (mesmas exclusões do TST-L1-FORMAT no preci.sh).
@@ -250,6 +269,58 @@ CPPCHECK_COMMON_ARGS=(
   --error-exitcode=1
 )
 
+# -----------------------------------------------------------------------------
+# EN: find a TU (.cpp) entry already in the compile_commands.json db whose on-disk
+#     content DIRECTLY #includes this header's basename (quote or angle form) -- prints
+#     that TU's REPO-RELATIVE path on stdout (ready for --file-filter="*<path>", same
+#     convention the exact-match .cpp branch below already uses) and returns 0, or
+#     returns 1 if no such TU exists yet (a brand-new header nothing #includes so far --
+#     the flag-less fallback is the right answer for THAT case, same as a brand-new
+#     .cpp). First match wins (db file order, not sorted): one real consumer is enough
+#     to get cross-TU context, this does not try to enumerate every consumer. Direct
+#     #include only (not transitive through another header) -- matches every real case
+#     seen so far (D2D-2B's sprite_batch.hpp via draw2d.cpp, D2D-3A's primitives2d.hpp
+#     via its own test, image_decode.hpp/draw2d.hpp via draw2d.cpp), and going further
+#     (walking a full include graph) would be reimplementing a preprocessor for a case
+#     that has not actually happened yet.
+# PT: acha uma entrada de TU (.cpp) já no db compile_commands.json cujo conteúdo em
+#     disco faz #include DIRETO do basename deste header (forma quote ou angle) --
+#     imprime o caminho REPO-RELATIVO dessa TU no stdout (pronto pra
+#     --file-filter="*<caminho>", mesma convenção que o branch de match exato de .cpp
+#     abaixo já usa) e retorna 0, ou retorna 1 se não existir tal TU ainda (header
+#     novinho que nada faz #include até agora -- o fallback sem flags é a resposta certa
+#     PRA ESSE caso, igual um .cpp novinho). Primeiro match ganha (ordem do db, sem
+#     sort): um consumidor real basta pra ter contexto cross-TU, isto não tenta
+#     enumerar todos. Só #include DIRETO (não transitivo via outro header) -- bate com
+#     todo caso real visto até agora (sprite_batch.hpp do D2D-2B via draw2d.cpp,
+#     primitives2d.hpp do D2D-3A via o próprio teste, image_decode.hpp/draw2d.hpp via
+#     draw2d.cpp), e ir além disso (andar um grafo de include completo) seria
+#     reimplementar um pré-processador pra um caso que ainda não aconteceu de verdade.
+# -----------------------------------------------------------------------------
+find_header_proxy_tu() {
+  local header="$1" compiledb="$2"
+  local base base_re
+  base="$(basename "${header}")"
+  # EN: escape ERE metacharacters in the basename before using it in grep -E -- same
+  #     rationale as run_doc_refs_gate's own escaping below.
+  # PT: escapa metacaracteres de ERE no basename antes de usar no grep -E -- mesmo
+  #     racional do próprio escape de run_doc_refs_gate abaixo.
+  base_re="$(printf '%s' "${base}" | sed -e 's/[.[\^$*+?(){}|\\]/\\&/g')"
+
+  local -a tu_paths=()
+  mapfile -t tu_paths < <(grep -o '"file": "[^"]*"' "${compiledb}" | sed -E 's/"file": "(.*)"$/\1/')
+
+  local tu
+  for tu in "${tu_paths[@]}"; do
+    [[ -f "${tu}" ]] || continue
+    if grep -qE "#include[[:space:]]*[\"<][^\">]*${base_re}[\">]" "${tu}" 2>/dev/null; then
+      echo "${tu#"${REPO_ROOT}"/}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 run_cppcheck_gate() {
   if ! command -v cppcheck >/dev/null 2>&1; then
     echo "warning: 'cppcheck' not found in PATH -- skipping the cppcheck gate (install it, see TOOLING.md)" >&2
@@ -276,19 +347,27 @@ run_cppcheck_gate() {
   if [[ -f "${compiledb}" ]]; then
     for f in "${targets[@]}"; do
       case "${f}" in
-        # EN: A header (.hpp/.h) is never its own "file" entry (never its own TU) --
-        #     route it through --project mode too whenever the db exists at all, same
-        #     as CI's own strategy (no such split there). The flag-less per-file
-        #     fallback analyses a header in ISOLATION and cannot see cross-TU usage of
-        #     its members from whichever .cpp #includes it -- confirmed to false-flag
-        #     unusedStructMember this exact way (D2D-2B, sprite_batch.hpp).
+        # EN: A header (.hpp/.h) is never its own "file" entry (never its own TU), so
+        #     it cannot be a --file-filter target itself -- find a .cpp TU that
+        #     DIRECTLY #includes it and route THAT TU into --project mode instead (see
+        #     find_header_proxy_tu()'s own comment for the full rationale). No proxy
+        #     found (brand-new header, nothing #includes it yet) falls back to the
+        #     flag-less per-file pass, same as a brand-new .cpp.
         # PT: Um header (.hpp/.h) nunca é a própria entrada "file" (nunca é a própria
-        #     TU) -- roteado pro modo --project também sempre que o db existir, mesma
-        #     estratégia do CI (sem essa divisão lá). O fallback sem flags analisa um
-        #     header ISOLADO e não enxerga uso cross-TU dos membros dele pelo .cpp que
-        #     faz #include -- confirmado dar falso-positivo de unusedStructMember
-        #     exatamente assim (D2D-2B, sprite_batch.hpp).
-        *.hpp|*.h) in_db+=("${f}") ;;
+        #     TU), então não pode ser alvo de --file-filter em si -- acha uma TU .cpp
+        #     que faz #include DIRETO dele e roteia ESSA TU pro modo --project (ver o
+        #     comentário da própria find_header_proxy_tu() pro racional completo).
+        #     Nenhum proxy achado (header novinho, nada faz #include dele ainda) cai
+        #     pro passe sem flags, igual um .cpp novinho.
+        *.hpp|*.h)
+          local proxy
+          if proxy="$(find_header_proxy_tu "${f}" "${compiledb}")"; then
+            echo "precommit: header ${f} has no compile_commands.json entry of its own -- routed via consuming TU ${proxy} for cross-TU context" >&2
+            in_db+=("${proxy}")
+          else
+            not_in_db+=("${f}")
+          fi
+          ;;
         *)
           if grep -qF "${f}\"" "${compiledb}" 2>/dev/null; then
             in_db+=("${f}")
@@ -298,6 +377,19 @@ run_cppcheck_gate() {
           ;;
       esac
     done
+    # EN: dedup in_db -- two staged headers can share the same proxy TU (e.g.
+    #     draw2d.hpp and image_decode.hpp both proxy through draw2d.cpp in this very
+    #     commit), or a header's proxy can coincide with a .cpp already staged directly
+    #     -- without this, cppcheck would get the same --file-filter twice and report
+    #     the same findings twice. Order does not matter to cppcheck's --project mode.
+    # PT: dedup do in_db -- dois headers staged podem compartilhar a mesma TU proxy
+    #     (ex.: draw2d.hpp e image_decode.hpp proxeiam por draw2d.cpp neste mesmo
+    #     commit), ou o proxy de um header pode coincidir com um .cpp já staged direto
+    #     -- sem isso, o cppcheck receberia o mesmo --file-filter duas vezes e reportaria
+    #     os mesmos achados duas vezes. Ordem não importa pro modo --project do cppcheck.
+    if [[ "${#in_db[@]}" -gt 1 ]]; then
+      mapfile -t in_db < <(printf '%s\n' "${in_db[@]}" | sort -u)
+    fi
   else
     not_in_db=("${targets[@]}")
   fi

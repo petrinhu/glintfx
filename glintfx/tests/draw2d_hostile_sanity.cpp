@@ -46,6 +46,7 @@ using glintfx::Draw2d;
 using glintfx::RectF;
 using glintfx::SpriteTransform;
 using glintfx::Texture2d;
+using glintfx::Vec2F;
 
 namespace {
 
@@ -250,6 +251,18 @@ int main() {
     d2d.set_camera(Camera2d{1.f, 2.f, 1.f, 0.f});
     d2d.reset_camera();
     d2d.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
+    // D2D-3, D32: the eleven NEW public methods this wave adds share the SAME null-safe-
+    // before-init contract as every other public method (draw2d.hpp's own class comment).
+    d2d.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{});
+    d2d.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{}, SpriteTransform{});
+    d2d.draw_filled_quad(Vec2F{0, 0}, Vec2F{1, 0}, Vec2F{1, 1}, Vec2F{0, 1}, ColorF{});
+    d2d.draw_line(Vec2F{0, 0}, Vec2F{1, 0}, 1.f, ColorF{});
+    d2d.draw_rect_outline(RectF{0, 0, 1, 1}, 1.f, ColorF{});
+    d2d.set_layer(3);
+    d2d.set_scissor(RectF{0, 0, 1, 1});
+    d2d.reset_scissor();
+    const glintfx::TextureBbox bbox_pre = d2d.texture_content_bbox(t);
+    check(!bbox_pre.found, "pre-init: texture_content_bbox() on a never-loaded handle is found==false");
     check(true, "pre-init operations did not crash"); // reaching this line IS the proof.
   }
 
@@ -286,6 +299,19 @@ int main() {
     moved_from.set_camera(Camera2d{1.f, 2.f, 1.f, 0.f});
     moved_from.reset_camera();
     moved_from.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
+    // D2D-3, D32: same null-safe sweep as the pre-init block above, on a moved-from instance --
+    // the eleven NEW public methods this wave adds are not exempt from the cppcheck nullPointer
+    // lesson PROG-1 already fixed once for load_texture() (this file's own top comment).
+    moved_from.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{});
+    moved_from.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{}, SpriteTransform{});
+    moved_from.draw_filled_quad(Vec2F{0, 0}, Vec2F{1, 0}, Vec2F{1, 1}, Vec2F{0, 1}, ColorF{});
+    moved_from.draw_line(Vec2F{0, 0}, Vec2F{1, 0}, 1.f, ColorF{});
+    moved_from.draw_rect_outline(RectF{0, 0, 1, 1}, 1.f, ColorF{});
+    moved_from.set_layer(3);
+    moved_from.set_scissor(RectF{0, 0, 1, 1});
+    moved_from.reset_scissor();
+    const glintfx::TextureBbox bbox_moved = moved_from.texture_content_bbox(t);
+    check(!bbox_moved.found, "moved-from: texture_content_bbox() is found==false, no crash");
     moved_from.shutdown();
     check(true, "moved-from: full public surface did not crash");
     check(sink.ok() == false, "moved-from: the move target was never init()'d, also not ok()");
@@ -535,6 +561,133 @@ int main() {
     other.end();
     check(other.ok(), "the ORIGIN instance's own texture is untouched by d2d's rejected attempt");
     other.shutdown();
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D10 -- NaN/Inf hostile corpus for every NEW primitive method (draw_filled_rect x2/
+  // draw_filled_quad/draw_line/draw_rect_outline): a non-finite member anywhere skips the draw
+  // (no crash), and d2d must remain fully usable right after.
+  // -------------------------------------------------------------------------------------------
+  {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    d2d.begin(W, H);
+    d2d.draw_filled_rect(RectF{nan, 0.f, 10.f, 10.f}, ColorF{});
+    d2d.draw_filled_rect(RectF{0.f, 0.f, 10.f, 10.f}, ColorF{inf, 0.f, 0.f, 1.f});
+    d2d.draw_filled_rect(RectF{0.f, 0.f, 10.f, 10.f}, ColorF{}, SpriteTransform{0.5f, 0.5f, nan, 1.f, 1.f});
+    d2d.draw_filled_quad(Vec2F{nan, 0.f}, Vec2F{1.f, 0.f}, Vec2F{1.f, 1.f}, Vec2F{0.f, 1.f}, ColorF{});
+    d2d.draw_line(Vec2F{0.f, 0.f}, Vec2F{inf, 0.f}, 4.f, ColorF{});
+    d2d.draw_line(Vec2F{0.f, 0.f}, Vec2F{10.f, 0.f}, nan, ColorF{});
+    d2d.draw_rect_outline(RectF{0.f, 0.f, 10.f, 10.f}, nan, ColorF{});
+    d2d.draw_rect_outline(RectF{0.f, 0.f, 10.f, 10.f}, inf, ColorF{});
+    d2d.end();
+    check(d2d.ok(), "primitives_hostile: the NaN/Inf corpus across every new primitive did not crash");
+    // "Still usable" oracle -- a legit primitive still draws right after.
+    d2d.begin(W, H);
+    d2d.draw_filled_rect(RectF{0.f, 0.f, 4.f, 4.f}, ColorF{1.f, 1.f, 1.f, 1.f});
+    d2d.end();
+    check(d2d.ok(), "primitives_hostile: d2d still usable right after the hostile corpus");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D28 -- set_scissor() hostile: a NaN/Inf rect_px must be REJECTED, the previous scissor
+  // state KEPT -- proven by a draw before/after every hostile attempt landing IDENTICALLY (a
+  // render-based proof, same idiom as this file's own camera_hostile section above: set_scissor()
+  // has no public getter either).
+  // -------------------------------------------------------------------------------------------
+  {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    auto scissor_probe = [&]() -> Rgb {
+      glClearColor(100.f / 255.f, 100.f / 255.f, 100.f / 255.f, 1.f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      d2d.begin(W, H);
+      d2d.draw_filled_rect(RectF{0.f, 0.f, static_cast<float>(W), static_cast<float>(H)},
+                           ColorF{10.f / 255.f, 20.f / 255.f, 30.f / 255.f, 1.f});
+      d2d.end();
+      const auto px = read_backbuffer_rgb(W, H);
+      return region_mean(px, W, H, 32, 32, 2);
+    };
+    d2d.set_scissor(RectF{10.f, 10.f, 30.f, 30.f}); // the GOOD scissor every hostile attempt must survive.
+    const Rgb baseline = scissor_probe();
+    const RectF hostiles[] = {
+        RectF{nan, 0.f, 10.f, 10.f},
+        RectF{0.f, nan, 10.f, 10.f},
+        RectF{0.f, 0.f, nan, 10.f},
+        RectF{0.f, 0.f, 10.f, nan},
+        RectF{inf, 0.f, 10.f, 10.f},
+    };
+    for (const RectF& hostile : hostiles) {
+      d2d.set_scissor(hostile); // must be REJECTED -- the good scissor above must survive.
+      const Rgb after = scissor_probe();
+      check(near_rgb(after, baseline.r, baseline.g, baseline.b, 2.0),
+            "scissor_hostile: set_scissor(hostile) rejected -- previous scissor state provably "
+            "kept (D15/D28)");
+    }
+    d2d.reset_scissor();
+    check(d2d.ok(), "scissor_hostile: d2d survives the whole hostile corpus");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D27 -- set_layer() during a hostile/degenerate bracket (begin(0,0)): must not crash,
+  // and end() (which replays the layer queue when armed) must not crash on an empty/degenerate
+  // buffer either.
+  // -------------------------------------------------------------------------------------------
+  {
+    d2d.begin(0, 0); // degenerate bracket (D10).
+    d2d.set_layer(7);
+    d2d.draw_sprite(tex_real, RectF{0, 0, 10, 10});
+    d2d.draw_filled_rect(RectF{0, 0, 10, 10}, ColorF{});
+    d2d.end();
+    check(d2d.ok(), "layer_hostile: set_layer() during a degenerate bracket did not crash");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D27 -- a 300k-command hostile stream in buffered mode: the 262144 cap must hold
+  // (memory bounded), no crash, and d2d must remain usable right after (ASan-clean is the real
+  // gate here, same as the rest of this file).
+  // -------------------------------------------------------------------------------------------
+  {
+    d2d.begin(W, H);
+    d2d.set_layer(0);
+    for (int i = 0; i < 300000; ++i)
+      d2d.draw_filled_rect(RectF{0.f, 0.f, 1.f, 1.f}, ColorF{});
+    d2d.end();
+    check(d2d.ok(), "layer_300k: a 300k-command buffered stream did not crash, cap held (D27)");
+    // "Still usable" oracle.
+    d2d.begin(W, H);
+    d2d.draw_sprite(tex_real, RectF{0, 0, 4, 4});
+    d2d.end();
+    check(d2d.ok(), "layer_300k: d2d still usable right after the hostile stream");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D29 -- texture_content_bbox() with stale/foreign/destroyed handles: the full D7
+  // validation chain, found==false, no crash.
+  // -------------------------------------------------------------------------------------------
+  {
+    Texture2d victim = d2d.load_texture(p_real.c_str());
+    check(victim.ok(), "bbox_hostile setup: victim texture loaded");
+    const glintfx::TextureBbox bbox_live = d2d.texture_content_bbox(victim);
+    check(bbox_live.found, "bbox_hostile: a live, real texture's bbox is found==true");
+
+    Texture2d stale_copy = victim;
+    d2d.destroy_texture(victim);
+    const glintfx::TextureBbox bbox_destroyed = d2d.texture_content_bbox(stale_copy);
+    check(!bbox_destroyed.found, "bbox_hostile: a stale (already-destroyed) handle -- found==false");
+
+    const glintfx::TextureBbox bbox_zeroed = d2d.texture_content_bbox(victim); // victim is now Texture2d{}.
+    check(!bbox_zeroed.found, "bbox_hostile: destroy_texture()'s own zeroed handle -- found==false");
+
+    Draw2d other_bbox;
+    check(other_bbox.init(), "bbox_hostile setup: second Draw2d instance init'd");
+    Texture2d foreign = other_bbox.load_texture(p_real.c_str());
+    check(foreign.ok(), "bbox_hostile setup: foreign texture loaded on the second instance");
+    const glintfx::TextureBbox bbox_foreign = d2d.texture_content_bbox(foreign);
+    check(!bbox_foreign.found, "bbox_hostile: a foreign-instance handle -- found==false (D7)");
+    other_bbox.shutdown();
+
+    check(d2d.ok(), "bbox_hostile: d2d survives the whole handle corpus");
   }
 
   // -------------------------------------------------------------------------------------------

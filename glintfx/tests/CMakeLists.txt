@@ -958,6 +958,32 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decision D27/D28) -- PURE unit test for src/layer_queue.hpp: no window, no
+#     GL context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
+#     here" reasoning as primitives2d_sanity/transform2d_sanity/sprite_batch_sanity above).
+#     Registered UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other
+#     draw2d test in this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (RectF/ColorF, transitively via
+#     transform2d.hpp/layer_queue.hpp) -- layer_queue.hpp is entirely header-only, it pulls in no
+#     library symbols.
+# PT: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisão D27/D28) -- teste unit PURO para src/layer_queue.hpp: sem janela,
+#     sem contexto GL, nenhuma dependência de RmlUi/GLFW (mesmo racional "nada relacionado a
+#     display pra isolar aqui" de primitives2d_sanity/transform2d_sanity/sprite_batch_sanity
+#     acima). Registrado INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo
+#     outro teste de draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka
+#     `glintfx` só pelo include path público de <glintfx/draw2d.hpp> (RectF/ColorF,
+#     transitivamente via transform2d.hpp/layer_queue.hpp) -- layer_queue.hpp é inteiramente
+#     header-only, não puxa símbolo nenhum de biblioteca.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(layer_queue_sanity layer_queue_sanity.cpp)
+  target_link_libraries(layer_queue_sanity PRIVATE glintfx)
+  add_test(NAME layer_queue_sanity COMMAND layer_queue_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #
@@ -2249,6 +2275,38 @@ if(GLINTFX_MODULE_DRAW2D)
   add_test(NAME draw2d_hostile_sanity
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:draw2d_hostile_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # EN: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- pixel-readback proof for the
+  #     primitives/layers/scissor/bbox surface this wave adds (D23-D29): filled rect region-mean
+  #     equals the D8 premultiplied colour formula on the white texel; alpha-0.5 outline
+  #     corner-region mean == edge-region mean (the D26 double-blend killer); a line's screen
+  #     band width triples under camera zoom 3 (the D24 "thickness scales by projection" delta
+  #     test, risk 3); a rotated filled rect (transform overload) under camera rotation pi/2;
+  #     scissor on an off-center rect proven on BOTH y-halves (the D28 y-flip killer) plus an
+  #     empty (w==0) scissor clipping everything; two overlapping translucent quads in REVERSE
+  #     layer order render back-to-front (the D27 arming/stable-sort pin), the SAME pair WITHOUT
+  #     set_layer() proving call order instead. Statistical, region-mean tolerance, NEVER
+  #     pixel-exact (this house's own downgrade discipline for llvmpipe/Xvfb).
+  # PT: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- prova de pixel-readback pra
+  #     superfície de primitivas/layers/scissor/bbox que esta onda adiciona (D23-D29): a
+  #     média-de-região do rect preenchido bate com a fórmula de cor premultiplicada D8 sobre o
+  #     texel branco; a média-de-região do canto do contorno alpha-0.5 == média-de-região da
+  #     borda (o mata-double-blend do D26); a banda de tela de uma linha triplica sob zoom de
+  #     câmera 3 (o teste delta "espessura escala por projeção" do D24, risco 3); um rect
+  #     preenchido rotacionado (overload de transform) sob rotação de câmera pi/2; scissor num
+  #     rect fora do centro provado nas DUAS metades y (o mata-y-flip do D28) mais um scissor
+  #     vazio (w==0) clipando tudo; dois quads translúcidos sobrepostos em ordem de camada
+  #     INVERTIDA renderizam de trás pra frente (a fixação de armar/ordenar-estável do D27), o
+  #     MESMO par SEM set_layer() provando ordem de chamada em vez disso. Estatístico, tolerância
+  #     de média-de-região, NUNCA pixel-exato (a própria disciplina de downgrade desta casa pra
+  #     llvmpipe/Xvfb).
+  add_executable(draw2d_primitives_render_sanity draw2d_primitives_render_sanity.cpp)
+  target_link_libraries(draw2d_primitives_render_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_primitives_render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_primitives_render_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()

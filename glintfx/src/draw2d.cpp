@@ -41,7 +41,9 @@
 
 #include "gl_loader.h"
 #include "image_decode.hpp"
+#include "layer_queue.hpp"
 #include "log_dedup.hpp"
+#include "primitives2d.hpp"
 #include "sprite_batch.hpp"
 #include "transform2d.hpp"
 
@@ -146,6 +148,11 @@ struct Draw2d::Impl {
     int height = 0;
     std::uint32_t generation = 1;
     bool alive = false;
+    // D2D-3, D29 -- computed ONCE in load_texture() (compute_content_bbox(), on the decoded
+    // pixels that already exist on the CPU there, discarded right after) and cached here (16
+    // bytes) -- lives and dies with this slot (D32). See texture_content_bbox() below for the
+    // full D7 handle-validation chain that gates reading it through the public API.
+    ContentBbox bbox{};
   };
   std::vector<TextureSlot> textures;
   std::vector<std::size_t> free_slots;
@@ -153,6 +160,34 @@ struct Draw2d::Impl {
   draw2d_detail::SpriteBatch batch{4096};
   int target_w = 0;
   int target_h = 0;
+
+  // D2D-3, D23 -- the internal 1x1 white premultiplied texture (A1 (a)): a NORMAL registry slot
+  // (created in init(), id 1 -- the FIRST consumer load_texture() therefore yields id 2,
+  // unobservable through the public API since ids are opaque/private), never handed out as a
+  // public Texture2d. Every untextured primitive (draw_filled_rect/draw_filled_quad/draw_line/
+  // draw_rect_outline) draws THROUGH the same batcher path as draw_sprite() against this id, the
+  // D8 tint formula on its white premultiplied texel yielding exactly `color`. Released by the
+  // SAME shutdown() texture-teardown loop as every other slot (zero diff there).
+  std::uint32_t white_texture_id = 0;
+
+  // D2D-3, D28 -- the scissor is Draw2d STATE, sticky across draws AND brackets (like the
+  // camera) until set_scissor()/reset_scissor()/shutdown() change it. `scissor_active == false`
+  // is the default (no clip, the v0.21.0-literal path); `scissor_rect` is only meaningful when
+  // `scissor_active` is true. Read by set_gl_state_for_draw() at EVERY flush (D9's own no-
+  // caching rule, unchanged) and captured into each LayerCommand's own snapshot when a draw is
+  // buffered (D27).
+  bool scissor_active = false;
+  RectF scissor_rect{};
+
+  // D2D-3, D27 -- draw-order state: opt-in, default OFF (a bracket that never calls set_layer()
+  // never touches either field below, and every draw streams through `batch` exactly as
+  // v0.21.0). `layer_armed` is bracket-scoped, reset by end() (and discarded by shutdown() mid-
+  // bracket, D32); `current_layer` tags every subsequent draw_sprite()/primitive call while
+  // armed (sticky WITHIN the bracket, D27). `layer_queue` buffers the post-validation, post-
+  // projection commands until end()'s replay.
+  bool layer_armed = false;
+  int current_layer = 0;
+  draw2d_detail::LayerQueue layer_queue;
 
   // EN: D2D-2B, Q1 (c)/D22 -- the camera is `Draw2d` STATE, sticky until set_camera()/
   //     reset_camera()/shutdown() change it. `has_camera == false` is the default,
@@ -250,6 +285,50 @@ struct Draw2d::Impl {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
+  // EN: D2D-3, D23 -- creates the internal 1x1 RGBA8 premultiplied WHITE texture through the
+  //     SAME upload_gl_texture() path load_texture() itself uses, and registers it as a NORMAL
+  //     registry slot (single source, D23's own literal claim: "through the same upload_gl_texture
+  //     path... as a NORMAL registry slot"). Premultiplied opaque white is its own fixed point
+  //     (R=R*A/255 = 255*255/255 = 255), so the raw bytes below already ARE the premultiplied
+  //     form -- no decode/premultiply step needed for a 1x1 constant. Returns false on GL upload
+  //     failure (fail-high: init() itself fails, D23's own "a Draw2d that cannot draw primitives
+  //     it advertises does not half-initialize" rule).
+  // PT: D2D-3, D23 -- cria a textura branca 1x1 RGBA8 premultiplicada interna pelo MESMO caminho
+  //     upload_gl_texture() que o próprio load_texture() usa, e a registra como um slot NORMAL do
+  //     registry (fonte única, a própria alegação literal do D23: "pelo mesmo caminho
+  //     upload_gl_texture... como um slot NORMAL do registry"). Branco opaco premultiplicado é o
+  //     próprio ponto fixo (R=R*A/255 = 255*255/255 = 255), então os bytes crus abaixo JÁ SÃO a
+  //     forma premultiplicada -- nenhum passo de decode/premultiply necessário pra uma constante
+  //     1x1. Devolve false em falha de upload GL (fail-high: o próprio init() falha, a regra
+  //     própria do D23 "um Draw2d que não consegue desenhar as primitivas que anuncia não
+  //     meio-inicializa").
+  bool create_white_texture() {
+    DecodedImage white;
+    white.ok = true;
+    white.width = 1;
+    white.height = 1;
+    white.rgba = {255, 255, 255, 255};
+    const GLuint gl_name = upload_gl_texture(white);
+    if (!gl_name) return false;
+
+    std::size_t idx;
+    if (!free_slots.empty()) {
+      idx = free_slots.back();
+      free_slots.pop_back();
+    } else {
+      idx = textures.size();
+      textures.push_back(TextureSlot{});
+    }
+    TextureSlot& slot = textures[idx];
+    slot.gl_name = gl_name;
+    slot.width = 1;
+    slot.height = 1;
+    slot.alive = true;
+    slot.bbox = ContentBbox{true, 0, 0, 1, 1}; // D29: a 1x1 opaque texture's own documented bbox.
+    white_texture_id = static_cast<std::uint32_t>(idx) + 1;
+    return true;
+  }
+
   // cppcheck functionStatic: touches no Impl member, only its argument and GL global state --
   // called as impl_->upload_gl_texture(decoded), unaffected by the added `static`.
   static GLuint upload_gl_texture(const DecodedImage& decoded) {
@@ -281,7 +360,18 @@ struct Draw2d::Impl {
     glBindVertexArray(vao);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
-    glDisable(GL_SCISSOR_TEST);
+    // D2D-3, D28 -- the ONE declared behavioural diff in existing code (D31): this used to be an
+    // unconditional glDisable(GL_SCISSOR_TEST). With no scissor EVER set (scissor_active stays
+    // false, the default) the emitted GL calls are IDENTICAL to v0.21.0 -- still asserting
+    // EVERYTHING this state depends on at every flush, per D9's own no-caching rule, unchanged.
+    if (scissor_active) {
+      const draw2d_detail::ScissorGl mapped =
+          draw2d_detail::map_scissor_to_gl(scissor_rect, target_h);
+      glEnable(GL_SCISSOR_TEST);
+      glScissor(mapped.x, mapped.y, mapped.w, mapped.h);
+    } else {
+      glDisable(GL_SCISSOR_TEST);
+    }
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
@@ -329,6 +419,134 @@ struct Draw2d::Impl {
       glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(f.vertices.size()));
     }
   }
+
+  // EN: D2D-3, D24 -- per-corner camera projection shared by every NEW primitive method
+  //     (draw_filled_rect/draw_filled_quad/draw_line/draw_rect_outline). Deliberately NOT shared
+  //     with draw_sprite(transform)'s own existing camera-path code below -- that overload's
+  //     inline projection stays byte-identical (D31's zero-diff set); this is a fresh copy for
+  //     the fresh call sites this slice adds. No divergence is possible either way: both this
+  //     method and draw_sprite(transform) ultimately call the SAME
+  //     draw2d_detail::world_to_screen() (transform2d.hpp, single source, D12).
+  // PT: D2D-3, D24 -- projeção de câmera por-canto compartilhada por todo método de primitiva
+  //     NOVO (draw_filled_rect/draw_filled_quad/draw_line/draw_rect_outline). Deliberadamente NÃO
+  //     compartilhada com o próprio código de câmera já existente do draw_sprite(transform)
+  //     abaixo -- aquele overload fica byte-idêntico (conjunto zero-diff do D31); esta é uma
+  //     cópia nova pros sítios de chamada novos que esta fatia adiciona. Nenhuma divergência é
+  //     possível de qualquer forma: tanto este método quanto o draw_sprite(transform) no fim
+  //     chamam o MESMO draw2d_detail::world_to_screen() (transform2d.hpp, fonte única, D12).
+  draw2d_detail::SpriteCorners project_corners(const draw2d_detail::SpriteCorners& local) const {
+    if (!has_camera) return local;
+    return draw2d_detail::SpriteCorners{
+        draw2d_detail::world_to_screen(camera, target_w, target_h, local.tl),
+        draw2d_detail::world_to_screen(camera, target_w, target_h, local.tr),
+        draw2d_detail::world_to_screen(camera, target_w, target_h, local.br),
+        draw2d_detail::world_to_screen(camera, target_w, target_h, local.bl)};
+  }
+
+  // EN: D2D-3, D24/D27 -- the shared "queue or stream" tail every primitive/sprite draw method
+  //     funnels through, AFTER its own degenerate check (a degenerate rect/line/outline is a
+  //     silent no-op the CALLER already returned on before ever reaching here -- mirrors
+  //     SpriteBatch::draw_sprite()'s own split of "degenerate before the queueing step").
+  //     `corners` are FINAL, already-projected screen-space TL,TR,BR,BL (D24's "one composition
+  //     story"). Checks OutsideBracket via batch.in_bracket() (the public introspection accessor
+  //     SpriteBatch already exposed -- D31: zero change to SpriteBatch needed to read it) and
+  //     re-validates finiteness of corners/src_px/tint (D10-style defence in depth -- the SAME
+  //     re-check SpriteBatch::draw_quad() already applies to its own caller-supplied corners,
+  //     provably unreachable in practice since every call site already validated before reaching
+  //     here, kept anyway per this module's own "fail-high over trusting an invariant silently"
+  //     discipline, see drain_ready()'s comment above). When set_layer() has armed buffered mode
+  //     (D27), the draw is captured into layer_queue with a snapshot of the CURRENT layer/scissor
+  //     state instead of reaching the batcher; otherwise it streams through batch.draw_quad() +
+  //     drain_ready() exactly as the D2D-2B corner-based path already does.
+  // PT: D2D-3, D24/D27 -- a cauda compartilhada "enfileira ou streama" por onde todo método de
+  //     desenho de primitiva/sprite passa, DEPOIS do próprio cheque de degenerescência (um
+  //     retângulo/linha/contorno degenerado é um no-op silencioso que o CHAMADOR já retornou
+  //     antes de sequer chegar aqui -- espelha o próprio split "degenerado antes do passo de
+  //     enfileiramento" do SpriteBatch::draw_sprite()). `corners` são FINAIS, já projetados em
+  //     espaço de tela TL,TR,BR,BL ("uma história de composição só" do D24). Checa OutsideBracket
+  //     via batch.in_bracket() (o acessor de introspecção público que o SpriteBatch já expunha --
+  //     D31: zero mudança no SpriteBatch necessária pra lê-lo) e revalida a finitude de
+  //     cantos/src_px/tint (defesa-em-profundidade estilo D10 -- o MESMO recheque que
+  //     SpriteBatch::draw_quad() já aplica sobre os próprios cantos fornecidos pelo chamador,
+  //     comprovadamente inalcançável na prática já que todo sítio de chamada já validou antes de
+  //     chegar aqui, mantido mesmo assim pela própria disciplina "fail-high em vez de confiar num
+  //     invariante em silêncio" deste módulo, ver o comentário do drain_ready() acima). Quando
+  //     set_layer() armou o modo bufferizado (D27), o desenho é capturado em layer_queue com um
+  //     snapshot do estado de camada/scissor CORRENTE em vez de alcançar o batcher; senão,
+  //     streama por batch.draw_quad() + drain_ready() exatamente como o caminho por-cantos do
+  //     D2D-2B já faz.
+  void submit_quad(const draw2d_detail::SpriteCorners& corners, std::uint32_t texture_id, int tex_w,
+                   int tex_h, const RectF& src_px, const ColorF& tint, const char* what) {
+    if (!batch.in_bracket()) {
+      log_warn(std::string(what) + "() called outside a begin()/end() bracket -- ignored (D4).");
+      return;
+    }
+    if (!draw2d_detail::is_finite(corners) || !draw2d_detail::is_finite(src_px) ||
+        !draw2d_detail::is_finite(tint)) {
+      log_warn(std::string(what) + "() rejected a non-finite (NaN/Inf) value (D10).");
+      return;
+    }
+
+    if (layer_armed) {
+      draw2d_detail::LayerCommand cmd;
+      cmd.corners = corners;
+      cmd.texture_id = texture_id;
+      cmd.tex_w = tex_w;
+      cmd.tex_h = tex_h;
+      cmd.src_px = src_px;
+      cmd.tint = tint;
+      cmd.scissor = draw2d_detail::ScissorSnapshot{scissor_active, scissor_rect};
+      cmd.layer = current_layer;
+      if (layer_queue.push(cmd) == draw2d_detail::PushResult::CapExceeded)
+        log_warn(
+            "set_layer(): buffered command dropped -- the 262144-command cap was reached (D27).");
+      return;
+    }
+
+    Vec2F arr[4] = {corners.tl, corners.tr, corners.br, corners.bl};
+    const draw2d_detail::SpriteBatch::DrawResult result =
+        batch.draw_quad(texture_id, tex_w, tex_h, arr, src_px, tint);
+    if (result == draw2d_detail::SpriteBatch::DrawResult::NonFinite)
+      log_warn(std::string(what) + "() rejected a non-finite value at the batcher (D10)."); // unreachable in practice, see the comment above.
+    drain_ready();
+  }
+
+  // EN: D2D-3, D27/D28 -- end()'s buffered-mode replay: drains layer_queue already stable-sorted
+  //     by layer AND grouped into maximal same-scissor runs (LayerQueue::drain_grouped(), D27/D28's
+  //     own contract), then feeds the batcher through batch.draw_quad() group by group -- each
+  //     group applies its OWN scissor state to `scissor_active`/`scissor_rect` BEFORE its
+  //     commands are fed to the batcher, then forces a flush boundary (flush_pending()+
+  //     drain_ready()) so THAT group's GL draws execute under the RIGHT glScissor (read by
+  //     set_gl_state_for_draw() at drain time). Runs entirely BEFORE end()'s own
+  //     batch.end()/drain_ready() lines (unchanged) -- by the time those run, every group has
+  //     already been flushed, so they are a harmless no-op tail, not a duplicate emission.
+  // PT: D2D-3, D27/D28 -- o replay de modo bufferizado do end(): drena a layer_queue já
+  //     ordenada-de-forma-estável por camada E agrupada em corridas maximais de mesmo scissor (o
+  //     próprio contrato de LayerQueue::drain_grouped(), D27/D28), depois alimenta o batcher por
+  //     batch.draw_quad() grupo a grupo -- cada grupo aplica o PRÓPRIO estado de scissor a
+  //     `scissor_active`/`scissor_rect` ANTES dos comandos dele serem entregues ao batcher, depois
+  //     força uma fronteira de flush (flush_pending()+drain_ready()) pra que os draws GL DAQUELE
+  //     grupo executem sob o glScissor CERTO (lido por set_gl_state_for_draw() no momento do
+  //     dreno). Roda inteiramente ANTES das próprias linhas batch.end()/drain_ready() do end()
+  //     (inalteradas) -- quando elas rodam, todo grupo já foi flushado, então são uma cauda
+  //     no-op inofensiva, não uma emissão duplicada.
+  void replay_layer_queue() {
+    std::vector<draw2d_detail::LayerGroup> groups = layer_queue.drain_grouped();
+    for (const draw2d_detail::LayerGroup& group : groups) {
+      scissor_active = group.scissor.active;
+      scissor_rect = group.scissor.rect;
+      for (const draw2d_detail::LayerCommand& cmd : group.commands) {
+        Vec2F arr[4] = {cmd.corners.tl, cmd.corners.tr, cmd.corners.br, cmd.corners.bl};
+        batch.draw_quad(cmd.texture_id, cmd.tex_w, cmd.tex_h, arr, cmd.src_px, cmd.tint);
+        // NonFinite/OutsideBracket at replay time are unreachable in practice (every command was
+        // already validated finite, and the bracket that BUFFERED it is the SAME one still open
+        // here, D10) -- no per-command log, same "defence-in-depth, not spammed" discipline
+        // drain_ready()'s own comment documents for its unreachable branch.
+      }
+      batch.flush_pending();
+      drain_ready();
+    }
+  }
 };
 
 Draw2d::Draw2d() : impl_(std::make_unique<Impl>()) {}
@@ -348,6 +566,12 @@ bool Draw2d::init() {
   }
   if (!impl_->compile_program()) return false;
   impl_->setup_vao_vbo();
+  // D2D-3, D23 -- fail-high: a Draw2d that cannot create the white texture its primitives
+  // advertise does not half-initialize (init() itself fails, `initialized` stays false).
+  if (!impl_->create_white_texture()) {
+    impl_->log_warn("init(): failed to create the internal 1x1 white texture (D23) -- aborting.");
+    return false;
+  }
   impl_->initialized = true;
   return true;
 }
@@ -389,6 +613,12 @@ void Draw2d::shutdown() {
   impl_->target_h = 0;
   impl_->has_camera = false; // D22: a re-init()ed instance starts in screen space.
   impl_->camera = Camera2d{};
+  impl_->white_texture_id = 0;   // D23: released above by the generic texture-teardown loop.
+  impl_->scissor_active = false; // D28: a re-init()ed instance starts with no clip.
+  impl_->scissor_rect = RectF{};
+  impl_->layer_armed = false; // D27/D32: shutdown() discards any buffer, mid-bracket or not.
+  impl_->current_layer = 0;
+  impl_->layer_queue.clear();
   impl_->initialized = false;
 }
 
@@ -452,6 +682,12 @@ Texture2d Draw2d::load_texture(const char* path) {
     return out;
   }
 
+  // D2D-3, D29 -- computed ONCE here, on the decoded pixels that already exist on the CPU (about
+  // to be discarded when `decoded` goes out of scope after this function returns) -- see
+  // image_decode.hpp's own header comment for why this seam, not a retained buffer nor a
+  // glGetTexImage readback.
+  const ContentBbox bbox = compute_content_bbox(decoded.rgba.data(), decoded.width, decoded.height);
+
   std::size_t idx;
   if (!impl_->free_slots.empty()) {
     idx = impl_->free_slots.back();
@@ -465,6 +701,7 @@ Texture2d Draw2d::load_texture(const char* path) {
   slot.width = decoded.width;
   slot.height = decoded.height;
   slot.alive = true;
+  slot.bbox = bbox; // D29: cached, lives and dies with this slot (D32).
   // slot.generation is left as-is: 1 for a never-used slot, already bumped by destroy_texture()
   // for a reused one -- either way it is the CURRENT valid generation for this slot.
 
@@ -506,6 +743,7 @@ void Draw2d::destroy_texture(Texture2d& tex) {
   slot.gl_name = 0;
   slot.width = 0;
   slot.height = 0;
+  slot.bbox = ContentBbox{}; // D29/D32: the bbox cache lives and dies with this slot.
   slot.alive = false;
   slot.generation++; // any surviving copy of `tex` (or of the handle this call zeroes) is now stale.
   impl_->free_slots.push_back(idx);
@@ -551,6 +789,27 @@ void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& sr
     return;
   }
   const Impl::TextureSlot& slot = impl_->textures[idx];
+
+  // D2D-3, D27 -- a layer-armed bracket buffers this draw instead of streaming it (the CURRENT
+  // layer tags sprites too, not just primitives -- draw2d.hpp's own class comment on
+  // set_layer()). Guard order mirrors SpriteBatch::draw_sprite()'s own literal order (finite
+  // check, THEN the degenerate no-op) so a hostile dst/src_px/tint is rejected IDENTICALLY
+  // whether this bracket is streaming or buffered -- dst is expanded to its own axis-aligned
+  // screen-space corners directly (this overload never consults the camera, D5's literal
+  // no-camera contract, unchanged either way).
+  if (impl_->layer_armed) {
+    if (!draw2d_detail::is_finite(dst) || !draw2d_detail::is_finite(src_px) ||
+        !draw2d_detail::is_finite(tint)) {
+      impl_->log_warn("draw_sprite() rejected a non-finite (NaN/Inf) dst/src_px/tint value (D10).");
+      return;
+    }
+    if (dst.w <= 0.f || dst.h <= 0.f) return; // D10: silent legal no-op.
+    impl_->submit_quad(
+        draw2d_detail::SpriteCorners{Vec2F{dst.x, dst.y}, Vec2F{dst.x + dst.w, dst.y},
+                                     Vec2F{dst.x + dst.w, dst.y + dst.h}, Vec2F{dst.x, dst.y + dst.h}},
+        tex.id_, slot.width, slot.height, src_px, tint, "draw_sprite");
+    return;
+  }
 
   const draw2d_detail::SpriteBatch::DrawResult result =
       impl_->batch.draw_sprite(tex.id_, slot.width, slot.height, dst, src_px, tint);
@@ -705,6 +964,18 @@ void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& sr
     std::swap(quad_corners[1], quad_corners[2]);
   }
 
+  // D2D-3, D27 -- a layer-armed bracket buffers this draw instead of streaming it (the CURRENT
+  // layer tags sprites too, matching this method's own class comment above). `quad_corners`
+  // here are ALREADY the final, post-flip, post-projection screen corners this function computed
+  // above -- reused as-is, no re-derivation.
+  if (impl_->layer_armed) {
+    impl_->submit_quad(
+        draw2d_detail::SpriteCorners{quad_corners[0], quad_corners[1], quad_corners[2],
+                                     quad_corners[3]},
+        tex.id_, slot.width, slot.height, src_px, tint, "draw_sprite(transform)");
+    return;
+  }
+
   const draw2d_detail::SpriteBatch::DrawResult result =
       impl_->batch.draw_quad(tex.id_, slot.width, slot.height, quad_corners, src_px, tint);
   using DR = draw2d_detail::SpriteBatch::DrawResult;
@@ -717,10 +988,285 @@ void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& sr
   impl_->drain_ready();
 }
 
+// EN: D2D-3, D23/D24 -- untextured filled rectangle: geometry in the ACTIVE space (world units
+//     with a camera set, screen px otherwise, D18's sprite rule), through the SAME batcher path
+//     as draw_sprite() against the internal white texture (D23). Guard order, literal: finite
+//     dst/color BEFORE any arithmetic; dst.w<=0||dst.h<=0 a SILENT legal no-op (D10); THEN
+//     project (world_to_screen per corner when a camera is set); THEN the post-math guard on the
+//     PROJECTED corners (D20's second guard, overflow). See draw2d.hpp's own doc-comment for the
+//     full contract.
+// PT: D2D-3, D23/D24 -- retângulo preenchido não-texturizado: geometria no espaço ATIVO (unidades
+//     de mundo com câmera setada, px de tela caso contrário, regra de sprite do D18), pelo MESMO
+//     caminho de batcher do draw_sprite() contra a textura branca interna (D23). Ordem de guarda,
+//     literal: dst/color finitos ANTES de qualquer conta; dst.w<=0||dst.h<=0 um no-op legal
+//     SILENCIOSO (D10); DEPOIS projeta (world_to_screen por canto quando há câmera); DEPOIS a
+//     guarda pós-conta sobre os cantos PROJETADOS (segunda guarda do D20, overflow). Ver o
+//     próprio doc-comment de draw2d.hpp pro contrato completo.
+void Draw2d::draw_filled_rect(const RectF& dst, const ColorF& color) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(dst) || !draw2d_detail::is_finite(color)) {
+    impl_->log_warn("draw_filled_rect(): rejected a non-finite (NaN/Inf) dst/color value (D10).");
+    return;
+  }
+  if (dst.w <= 0.f || dst.h <= 0.f) return; // D10: silent legal no-op.
+
+  const draw2d_detail::SpriteCorners local{
+      Vec2F{dst.x, dst.y}, Vec2F{dst.x + dst.w, dst.y}, Vec2F{dst.x + dst.w, dst.y + dst.h},
+      Vec2F{dst.x, dst.y + dst.h}};
+  const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+  if (!draw2d_detail::is_finite(projected)) {
+    impl_->log_warn("draw_filled_rect(): rejected a non-finite projected corner (overflow, D20).");
+    return;
+  }
+  impl_->submit_quad(projected, impl_->white_texture_id, 1, 1, RectF{}, color, "draw_filled_rect");
+}
+
+// EN: D2D-3, D18/D24 -- the transform overload: `transform` applies pivot/rotation/scale/flip
+//     about `dst` in the ACTIVE space (same corner math draw_sprite(transform) uses,
+//     compute_sprite_corners(), transform2d.hpp, single source), each resulting corner then
+//     projected when a camera is set. flip_h/flip_v have no visual effect on a solid fill (no
+//     texel to flip, the white texture's own {0,0,0,0} sentinel src_px covers it uniformly) but
+//     are accepted without error, same total-input contract as every SpriteTransform consumer.
+// PT: D2D-3, D18/D24 -- o overload de transform: `transform` aplica pivô/rotação/escala/flip
+//     sobre `dst` no espaço ATIVO (mesma matemática de canto que draw_sprite(transform) usa,
+//     compute_sprite_corners(), transform2d.hpp, fonte única), cada canto resultante então
+//     projetado quando há câmera. flip_h/flip_v não têm efeito visual sobre um preenchimento
+//     sólido (nenhum texel pra espelhar, o próprio src_px sentinela {0,0,0,0} da textura branca
+//     cobre uniformemente) mas são aceitos sem erro, mesmo contrato de input total de todo
+//     consumidor de SpriteTransform.
+void Draw2d::draw_filled_rect(const RectF& dst, const ColorF& color,
+                              const SpriteTransform& transform) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(transform)) {
+    impl_->log_warn(
+        "draw_filled_rect(transform): rejected a non-finite (NaN/Inf) SpriteTransform member (D20).");
+    return;
+  }
+  if (!draw2d_detail::is_finite(dst) || !draw2d_detail::is_finite(color)) {
+    impl_->log_warn("draw_filled_rect(transform): rejected a non-finite (NaN/Inf) dst/color value (D10).");
+    return;
+  }
+  if (dst.w <= 0.f || dst.h <= 0.f) return; // D10: silent legal no-op.
+
+  const draw2d_detail::SpriteCorners local = draw2d_detail::compute_sprite_corners(dst, transform);
+  const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+  if (!draw2d_detail::is_finite(projected)) {
+    impl_->log_warn(
+        "draw_filled_rect(transform): rejected a non-finite projected corner (overflow, D20).");
+    return;
+  }
+  impl_->submit_quad(projected, impl_->white_texture_id, 1, 1, RectF{}, color,
+                     "draw_filled_rect(transform)");
+}
+
+// EN: D2D-3, D24 -- arbitrary quad, corners supplied directly by the caller in TL,TR,BR,BL order
+//     (D5/D19's convention), in the ACTIVE space, each projected when a camera is set. A
+//     degenerate or self-crossing (bowtie) quad is LEGAL (the GPU's own business, documented) --
+//     no dst.w/h-style degenerate check exists here on purpose, there is no dst rect.
+// PT: D2D-3, D24 -- quad arbitrário, cantos fornecidos direto pelo chamador na ordem TL,TR,BR,BL
+//     (convenção D5/D19), no espaço ATIVO, cada um projetado quando há câmera. Um quad degenerado
+//     ou auto-cruzado (bowtie) é LEGAL (negócio da própria GPU, documentado) -- nenhum cheque de
+//     degenerescência estilo dst.w/h existe aqui de propósito, não há retângulo dst.
+void Draw2d::draw_filled_quad(Vec2F tl, Vec2F tr, Vec2F br, Vec2F bl, const ColorF& color) {
+  if (!impl_ || !impl_->initialized) return;
+  const draw2d_detail::SpriteCorners local{tl, tr, br, bl};
+  if (!draw2d_detail::is_finite(local) || !draw2d_detail::is_finite(color)) {
+    impl_->log_warn("draw_filled_quad(): rejected a non-finite (NaN/Inf) corner/color value (D10).");
+    return;
+  }
+  const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+  if (!draw2d_detail::is_finite(projected)) {
+    impl_->log_warn("draw_filled_quad(): rejected a non-finite projected corner (overflow, D20).");
+    return;
+  }
+  impl_->submit_quad(projected, impl_->white_texture_id, 1, 1, RectF{}, color, "draw_filled_quad");
+}
+
+// EN: D2D-3, D25 -- a line segment of `thickness` ACTIVE-space units, butt-capped, geometry via
+//     src/primitives2d.hpp's compute_line_corners() (single source, D25's own literal formula).
+//     Guard order, literal: a/b/thickness/color ALL finite BEFORE any arithmetic (the sqrt
+//     included, is_degenerate_line() itself does not check finiteness -- see that predicate's
+//     own header comment); `a == b` (exactly) or `thickness <= 0` a SILENT legal no-op BEFORE the
+//     division (no divide-by-zero path exists); THEN project; THEN the post-math guard.
+// PT: D2D-3, D25 -- um segmento de linha de `thickness` unidades do espaço ATIVO, com tampa butt,
+//     geometria via compute_line_corners() de src/primitives2d.hpp (fonte única, a própria
+//     fórmula literal do D25). Ordem de guarda, literal: a/b/thickness/color TODOS finitos ANTES
+//     de qualquer conta (o sqrt incluso, o próprio is_degenerate_line() não checa finitude -- ver
+//     o comentário de cabeçalho daquele predicado); `a == b` (exatamente) ou `thickness <= 0` um
+//     no-op legal SILENCIOSO ANTES da divisão (nenhum caminho de divisão-por-zero existe); DEPOIS
+//     projeta; DEPOIS a guarda pós-conta.
+void Draw2d::draw_line(Vec2F a, Vec2F b, float thickness, const ColorF& color) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(a) || !draw2d_detail::is_finite(b) || !std::isfinite(thickness) ||
+      !draw2d_detail::is_finite(color)) {
+    impl_->log_warn("draw_line(): rejected a non-finite (NaN/Inf) a/b/thickness/color value (D10).");
+    return;
+  }
+  if (draw2d_detail::is_degenerate_line(a, b, thickness)) return; // D10: silent legal no-op.
+
+  const draw2d_detail::SpriteCorners local = draw2d_detail::compute_line_corners(a, b, thickness);
+  const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+  if (!draw2d_detail::is_finite(projected)) {
+    impl_->log_warn("draw_line(): rejected a non-finite projected corner (overflow, D20).");
+    return;
+  }
+  impl_->submit_quad(projected, impl_->white_texture_id, 1, 1, RectF{}, color, "draw_line");
+}
+
+// EN: D2D-3, D26 -- a rectangular outline of `thickness` ACTIVE-space units, decomposed into 4
+//     NON-OVERLAPPING strips via src/primitives2d.hpp's compute_outline_strips() (single source,
+//     the collapse clamp `t = min(thickness, min(dst.w,dst.h)/2)` tiling `dst` exactly with no
+//     special-case branch once `2*thickness >= min(dst.w,dst.h)`). Each strip is projected and
+//     submitted independently -- a non-finite PROJECTED corner on one strip skips only THAT
+//     strip (logged once, dedup'd), the others still draw (a strip-scoped D20 guard, not an
+//     all-or-nothing abort for the whole outline).
+// PT: D2D-3, D26 -- um contorno retangular de `thickness` unidades do espaço ATIVO, decomposto em
+//     4 faixas SEM SOBREPOSIÇÃO via compute_outline_strips() de src/primitives2d.hpp (fonte
+//     única, o clamp de colapso `t = min(thickness, min(dst.w,dst.h)/2)` ladrilhando `dst`
+//     exatamente sem ramo de caso especial quando `2*thickness >= min(dst.w,dst.h)`). Cada faixa
+//     é projetada e submetida independentemente -- um canto PROJETADO não-finito numa faixa pula
+//     só AQUELA faixa (logado uma vez, dedup'd), as outras ainda desenham (uma guarda D20
+//     escopada por-faixa, não um aborto tudo-ou-nada do contorno inteiro).
+void Draw2d::draw_rect_outline(const RectF& dst, float thickness, const ColorF& color) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(dst) || !std::isfinite(thickness) ||
+      !draw2d_detail::is_finite(color)) {
+    impl_->log_warn(
+        "draw_rect_outline(): rejected a non-finite (NaN/Inf) dst/thickness/color value (D10).");
+    return;
+  }
+  if (draw2d_detail::is_degenerate_outline(dst, thickness)) return; // D10: silent legal no-op.
+
+  const draw2d_detail::OutlineStrips strips = draw2d_detail::compute_outline_strips(dst, thickness);
+  const RectF strip_rects[4] = {strips.top, strips.bottom, strips.left, strips.right};
+  for (const RectF& strip : strip_rects) {
+    const draw2d_detail::SpriteCorners local{
+        Vec2F{strip.x, strip.y}, Vec2F{strip.x + strip.w, strip.y},
+        Vec2F{strip.x + strip.w, strip.y + strip.h}, Vec2F{strip.x, strip.y + strip.h}};
+    const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+    if (!draw2d_detail::is_finite(projected)) {
+      impl_->log_warn("draw_rect_outline(): rejected a non-finite projected corner (overflow, D20).");
+      continue;
+    }
+    impl_->submit_quad(projected, impl_->white_texture_id, 1, 1, RectF{}, color, "draw_rect_outline");
+  }
+}
+
+// EN: D2D-3, D27 -- arms buffered mode (opt-in, default OFF). The FIRST call arms the CURRENT
+//     bracket (or the NEXT one when called outside a bracket -- batch.in_bracket() answers
+//     which); already-streamed draws in the current bracket are finalized+drained under the OLD
+//     streaming path FIRST (flush_pending(), the D31 additive method, + drain_ready()) so they
+//     render below every layer, exactly as documented. Sticky WITHIN the bracket; reset to
+//     disarmed/layer 0 by end() (D27's own "not sticky across brackets like the camera" rule).
+// PT: D2D-3, D27 -- arma o modo bufferizado (opt-in, default OFF). A PRIMEIRA chamada arma o
+//     bracket CORRENTE (ou o PRÓXIMO se chamada fora de um bracket -- batch.in_bracket() responde
+//     qual); desenhos já streamados no bracket corrente são finalizados+drenados pelo caminho
+//     streaming ANTIGO PRIMEIRO (flush_pending(), o método aditivo do D31, + drain_ready()) pra
+//     que renderizem abaixo de toda camada, exatamente como documentado. Sticky DENTRO do
+//     bracket; reseta pra desarmado/camada 0 no end() (a própria regra do D27 de "não sticky
+//     entre brackets como a câmera").
+void Draw2d::set_layer(int layer) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!impl_->layer_armed) {
+    impl_->batch.flush_pending();
+    impl_->drain_ready();
+    impl_->layer_armed = true;
+  }
+  impl_->current_layer = layer;
+}
+
+// EN: D2D-3, D28 -- rectangular clip, ALWAYS screen px, camera-independent (A3). Validation
+//     (D15's idiom): any non-finite `rect_px` member REJECTS the call, PREVIOUS state kept, one
+//     dedup'd log; `rect_px.w<=0 || rect_px.h<=0` is LEGAL ("clip everything", GL semantics);
+//     negative x/y are LEGAL (clamping is the GPU's job). A mid-bracket change in STREAMING mode
+//     forces a run boundary (the pending run is finalized+drained under the OLD scissor state
+//     FIRST, via flush_pending()+drain_ready(), same D31 method set_layer() above already uses)
+//     -- named CONTRAST with the camera (D13: never forces a flush; scissor DOES). In BUFFERED
+//     mode nothing is forced here: each command's OWN scissor snapshot is captured at push()
+//     time (impl_->submit_quad()), so this call only updates the STATE that future draws (and
+//     future snapshots) will see.
+// PT: D2D-3, D28 -- recorte retangular, SEMPRE em px de tela, câmera-independente (A3). Validação
+//     (idioma do D15): qualquer membro não-finito de `rect_px` REJEITA a chamada, estado ANTERIOR
+//     mantido, um log dedup'd; `rect_px.w<=0 || rect_px.h<=0` é LEGAL ("clipa tudo", semântica
+//     GL); x/y negativos são LEGAIS (clampar é trabalho da GPU). Uma mudança no meio do bracket
+//     em modo STREAMING força uma fronteira de corrida (a corrida pendente é finalizada+drenada
+//     sob o scissor VELHO PRIMEIRO, via flush_pending()+drain_ready(), o mesmo método do D31 que
+//     o set_layer() acima já usa) -- CONTRASTE nomeado com a câmera (D13: nunca força um flush; o
+//     scissor FORÇA). Em modo BUFFERIZADO nada é forçado aqui: o PRÓPRIO snapshot de scissor de
+//     cada comando é capturado no momento do push() (impl_->submit_quad()), então esta chamada só
+//     atualiza o ESTADO que desenhos (e snapshots) futuros vão ver.
+void Draw2d::set_scissor(const RectF& rect_px) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(rect_px)) {
+    impl_->log_warn(
+        "set_scissor(): rejected a non-finite member -- previous scissor state kept (D15/D28).");
+    return;
+  }
+  if (!impl_->layer_armed) {
+    impl_->batch.flush_pending();
+    impl_->drain_ready();
+  }
+  impl_->scissor_active = true;
+  impl_->scissor_rect = rect_px;
+}
+
+// EN: D2D-3, D28 -- idempotent, safe to call with no scissor set. shutdown() already does this
+//     implicitly (same D22 idiom as reset_camera()). Same streaming-run-boundary behaviour as
+//     set_scissor() above (a reset IS a scissor state change).
+// PT: D2D-3, D28 -- idempotente, seguro chamar sem scissor setado. shutdown() já faz isso
+//     implicitamente (mesmo idioma D22 do reset_camera()). Mesmo comportamento de fronteira de
+//     corrida em streaming do set_scissor() acima (um reset É uma mudança de estado de scissor).
+void Draw2d::reset_scissor() {
+  if (!impl_ || !impl_->initialized) return;
+  if (!impl_->layer_armed) {
+    impl_->batch.flush_pending();
+    impl_->drain_ready();
+  }
+  impl_->scissor_active = false;
+  impl_->scissor_rect = RectF{};
+}
+
+// EN: D2D-3, D29 -- the smallest rect containing every texel with alpha>0, cached at
+//     load_texture() time (impl_->textures[idx].bbox). `found == false` (every field zero) on
+//     the full D7 handle-validation chain (invalid/stale/foreign/never-loaded, same rejection
+//     story as draw_sprite()) OR a fully-transparent texture.
+// PT: D2D-3, D29 -- o menor retângulo contendo todo texel com alpha>0, cacheado no momento do
+//     load_texture() (impl_->textures[idx].bbox). `found == false` (todo campo zero) na cadeia
+//     completa de validação D7 do handle (inválido/obsoleto/estrangeiro/nunca-carregado, mesma
+//     história de rejeição do draw_sprite()) OU uma textura totalmente transparente.
+TextureBbox Draw2d::texture_content_bbox(const Texture2d& tex) {
+  if (!impl_ || !impl_->initialized) return TextureBbox{};
+  if (!tex.ok_ || tex.id_ == 0) {
+    impl_->log_warn("texture_content_bbox(): invalid (never-loaded) texture handle -- ignored.");
+    return TextureBbox{};
+  }
+  if (tex.owner_ != impl_.get()) {
+    impl_->log_warn(
+        "texture_content_bbox(): texture handle issued by a different Draw2d instance -- ignored (D7).");
+    return TextureBbox{};
+  }
+  const std::size_t idx = static_cast<std::size_t>(tex.id_) - 1;
+  if (idx >= impl_->textures.size() || !impl_->textures[idx].alive ||
+      impl_->textures[idx].generation != tex.generation_) {
+    impl_->log_warn("texture_content_bbox(): unknown/stale/tampered texture handle -- ignored (D7).");
+    return TextureBbox{};
+  }
+  const Impl::TextureSlot& slot = impl_->textures[idx];
+  if (!slot.bbox.found) return TextureBbox{};
+  return TextureBbox{true, slot.bbox.x, slot.bbox.y, slot.bbox.w, slot.bbox.h};
+}
+
 void Draw2d::end() {
   if (!impl_ || !impl_->initialized) return;
+  // D2D-3, D27 -- the buffered-mode replay runs BEFORE the two existing lines below (unchanged):
+  // by the time they run, every layer group has already been flushed+drained by
+  // replay_layer_queue() itself, so they are a harmless no-op tail in that case, and the SAME
+  // (only) path taken when layer mode was never armed.
+  if (impl_->layer_armed) impl_->replay_layer_queue();
   impl_->batch.end();
   impl_->drain_ready();
+  impl_->layer_armed = false; // D27: NOT sticky across brackets, unlike the camera/scissor.
+  impl_->current_layer = 0;
 }
 
 // EN: D2D-2B, D21 -- the PUBLIC free functions declared in draw2d.hpp, defined out-of-line

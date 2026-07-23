@@ -262,6 +262,44 @@ int main() {
   d2d.end();
   assert_both_layers("ui-then-sprite");
 
+  // -------------------------------------------------------------------------------------------
+  // D2D-3, D28/D9 -- scissor + UiLayer coexistence: the sharpest edge this wave's own doc-comment
+  // names (draw2d.hpp's set_scissor() contract) is a scissor LEFT BEHIND clipping the host's NEXT
+  // pass -- here, UiLayer::render() itself. Proves UiLayer is UNAFFECTED: its own GlStateGuard
+  // (gl_state.hpp:68/72/129/131) already captures+restores the scissor box+enable around its own
+  // render, so the UI box paints FULLY regardless of a Draw2D scissor left active from the sprite
+  // pass right before it. The sprite pass itself IS visibly clipped (proving the scissor was
+  // real, not a no-op) -- a scissor rect that excludes the sprite's own region entirely.
+  // -------------------------------------------------------------------------------------------
+  {
+    glClearColor(10.f / 255.f, 20.f / 255.f, 40.f / 255.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    // Scissor covers ONLY the neutral strip -- excludes BOTH the sprite region [96,160)^2 and the
+    // UI box region [0,64)^2 entirely, so this check can tell "clipped by the leftover scissor"
+    // (sprite AND ui both fail to show their own colour) apart from "each renderer manages its
+    // own state correctly" (ui shows its own colour regardless, sprite does not).
+    d2d.set_scissor(RectF{kNeutralCx - 8.f, kNeutralCy - 8.f, 16.f, 16.f});
+    d2d.begin(W, H);
+    d2d.draw_sprite(tex, RectF{96, 96, 64, 64});
+    d2d.end(); // the scissor is Draw2D state (D28) -- LEFT ACTIVE here, on purpose, per this
+               // check's own point: UiLayer::render() right below must not be affected by it.
+    ui.update();
+    ui.render();
+
+    const auto px = read_backbuffer_rgb(W, H);
+    const Rgb ui_mean = region_mean(px, W, H, kUiCx, kUiCy, 8);
+    const Rgb sprite_mean = region_mean(px, W, H, kSpriteCx, kSpriteCy, 8);
+    check(near_rgb(ui_mean, 255, 255, 255, kTol),
+          "scissor_ui_coexist: UI box paints FULLY despite the Draw2D scissor left active -- "
+          "UiLayer's own GlStateGuard restores the scissor box+enable (gl_state.hpp)");
+    check(!near_rgb(sprite_mean, 200, 100, 50, kTol),
+          "scissor_ui_coexist: the sprite pass itself WAS clipped by its own scissor (proves the "
+          "scissor was real, not a silent no-op)");
+    check(ui.ok() && d2d.ok(), "scissor_ui_coexist: both renderers survived the frame");
+
+    d2d.reset_scissor(); // D28: sticky across brackets -- reset explicitly, leave nothing behind.
+  }
+
   d2d.shutdown();
   std::error_code ec;
   fs::remove_all(dir, ec);

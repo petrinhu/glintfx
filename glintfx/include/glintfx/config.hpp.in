@@ -133,6 +133,30 @@
 //        para).
 #cmakedefine01 GLINTFX_MODULE_FX
 
+// EN: 1  (default, ADR-0017) when the Draw2D module is compiled in: glintfx::Draw2d/Texture2d/
+//        RectF/ColorF are available (glintfx/draw2d.hpp) -- the first way this library's public
+//        API draws the game world (texture load + draw_sprite + internal per-texture batching,
+//        own GL 3.3 pipeline), independent of `.rcss`-declared UI. Depends on core + the
+//        internal image-decode seam + the internal gl-loader ONLY -- no RmlUi type, no window,
+//        no fx dependency (ADR-0017 axis 1, decision (1a)) -- so it compiles in the embed
+//        (GLFW=OFF) build and therefore in the MSVC job too. Used internally to gate the
+//        `glintfx_draw2d` OBJECT-library link in CMakeLists.txt.
+//     0  glintfx::Draw2d is not compiled in and every draw2d-related symbol is absent from
+//        libglintfx.a (`nm`-provable, same discipline as ADR-0013's `glx_`-prefix gate); #include
+//        <glintfx/draw2d.hpp> is skipped by the umbrella header glintfx.hpp.
+// PT: 1  (padrão, ADR-0017) quando o módulo Draw2D é compilado: glintfx::Draw2d/Texture2d/
+//        RectF/ColorF estão disponíveis (glintfx/draw2d.hpp) -- o primeiro jeito da API pública
+//        desta biblioteca desenhar o mundo do jogo (carregar textura + draw_sprite + batching
+//        interno por-textura, pipeline GL 3.3 próprio), independente da UI declarada em `.rcss`.
+//        Depende só de core + a costura interna de decode de imagem + o gl-loader interno --
+//        zero tipo do RmlUi, zero janela, zero dependência de fx (ADR-0017 eixo 1, decisão
+//        (1a)) -- então compila no build embed (GLFW=OFF) e portanto também no job MSVC. Usado
+//        internamente pra gatear o link da biblioteca OBJECT `glintfx_draw2d` no CMakeLists.txt.
+//     0  glintfx::Draw2d não é compilado e todo símbolo relacionado a draw2d fica ausente de
+//        libglintfx.a (provável via `nm`, mesma disciplina do gate de prefixo `glx_` da
+//        ADR-0013); #include <glintfx/draw2d.hpp> é pulado pelo header guarda-chuva glintfx.hpp.
+#cmakedefine01 GLINTFX_MODULE_DRAW2D
+
 // EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
 //     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
 // PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()

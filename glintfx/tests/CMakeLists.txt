@@ -711,6 +711,33 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_draw2d_smoke (D2D-1B, GLFW=ON leg) -- glintfx::Draw2d inside App::set_frame_callback
+  #     (D6: standalone composition recipe, world under the UI) + Draw2d::init() called AFTER an
+  #     App is already constructed (D2's idempotent glx_gl_load() claim, pinned end-to-end here,
+  #     not just at the loader-unit level). Gated on GLINTFX_MODULE_DRAW2D (same as every other
+  #     draw2d test in this file) -- this target does not even exist in a `lean`/no-draw2d build.
+  #     Self-contained fixtures (own hand-crafted TGA + own probe .rml, /var/tmp scratch dir) --
+  #     no shared asset with texture_png_alpha above.
+  # PT: app_draw2d_smoke (D2D-1B, perna GLFW=ON) -- glintfx::Draw2d dentro de
+  #     App::set_frame_callback (D6: receita de composição standalone, mundo sob a UI) +
+  #     Draw2d::init() chamado DEPOIS de um App já construído (o claim de idempotência do
+  #     glx_gl_load() da D2, fixado ponta-a-ponta aqui, não só no nível de unidade do loader).
+  #     Gateado em GLINTFX_MODULE_DRAW2D (igual a todo outro teste de draw2d deste arquivo) --
+  #     este alvo nem sequer existe num build `lean`/sem-draw2d. Fixtures autocontidas (TGA feito
+  #     à mão próprio + .rml de sonda próprio, dir de scratch /var/tmp) -- nenhum asset
+  #     compartilhado com o texture_png_alpha acima.
+  # ---------------------------------------------------------------------------
+  if(GLINTFX_MODULE_DRAW2D)
+    add_executable(app_draw2d_smoke app_draw2d_smoke.cpp)
+    target_link_libraries(app_draw2d_smoke PRIVATE glintfx)
+    add_test(NAME app_draw2d_smoke
+      COMMAND ${CMAKE_COMMAND}
+        -DEXE=$<TARGET_FILE:app_draw2d_smoke>
+        -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  endif()
+
+  # ---------------------------------------------------------------------------
   # EN: data_model_rebind_uaf — regression test for the duplicate-key
   #     heap-use-after-free in DataBinder::bind_* (audit finding, 2026-07-04).
   #     Duplicate bind_number/bind_string/bind_bool/bind_list on the SAME key must
@@ -811,6 +838,71 @@ add_test(NAME input_state_sanity COMMAND input_state_sanity)
 add_executable(log_dedup_sanity log_dedup_sanity.cpp)
 target_link_libraries(log_dedup_sanity PRIVATE glintfx)
 add_test(NAME log_dedup_sanity COMMAND log_dedup_sanity)
+
+# ---------------------------------------------------------------------------
+# EN: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
+#     decision D3) -- PURE unit test for src/image_decode.hpp: no window, no GL context, no
+#     RmlUi/GLFW dependency AT ALL (decode_premultiplied_rgba is a plain "bytes in, pixels out"
+#     function). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as
+#     input_state_sanity/log_dedup_sanity right above -- runs in BOTH build configurations. Needs
+#     the vendored stb_image.h declarations (third_party/stb, PRIVATE to this executable only --
+#     see the target_include_directories() call below) and links against `glintfx`, whose static
+#     archive already contains the compiled stb_image implementation (glintfx_image OBJECT
+#     library, unconditionally folded in -- see glintfx/CMakeLists.txt's own comment on that
+#     target) so no separate stb_image_impl.cpp compilation is needed here. Two binary fixtures
+#     (image_decode_rgba_2x2.png, image_decode_solid.jpg -- generated once via PIL, see this
+#     test's own file header) are copied to CMAKE_CURRENT_BINARY_DIR (= build/tests/, ctest's own
+#     default WORKING_DIRECTORY when none is given, same as input_state_sanity/log_dedup_sanity)
+#     so the test can open them by bare relative name. See the test file's own header for the
+#     full oracle (exact-value premultiply check on the lossless PNG fixture, tolerance-based RGB
+#     + exact alpha on the lossy JPEG fixture, hostile corpus reused directly at the helper seam).
+# PT: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-
+#     d2d1.md, decisão D3) -- teste unit PURO para src/image_decode.hpp: sem janela, sem contexto
+#     GL, sem dependência de RmlUi/GLFW NENHUMA (decode_premultiplied_rgba é uma função simples
+#     "bytes entram, pixels saem"). Registrado INCONDICIONALMENTE, mesma racional "nada
+#     relacionado a display pra isolar aqui" de input_state_sanity/log_dedup_sanity logo acima --
+#     roda nas DUAS configurações de build. Precisa das declarações vendorizadas de stb_image.h
+#     (third_party/stb, PRIVATE só a este executável -- ver a chamada
+#     target_include_directories() abaixo) e linka contra `glintfx`, cujo archive estático já
+#     contém a implementação compilada do stb_image (biblioteca OBJECT glintfx_image, dobrada
+#     incondicionalmente -- ver o próprio comentário daquele alvo em glintfx/CMakeLists.txt), então
+#     nenhuma compilação separada de stb_image_impl.cpp é necessária aqui. Duas fixtures binárias
+#     (image_decode_rgba_2x2.png, image_decode_solid.jpg -- geradas uma vez via PIL, ver o próprio
+#     cabeçalho de arquivo deste teste) são copiadas para CMAKE_CURRENT_BINARY_DIR (= build/tests/,
+#     o próprio WORKING_DIRECTORY padrão do ctest quando nenhum é dado, igual a
+#     input_state_sanity/log_dedup_sanity) para que o teste as abra por nome relativo simples. Ver
+#     o próprio cabeçalho de arquivo do teste pro oráculo completo.
+# ---------------------------------------------------------------------------
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_decode_rgba_2x2.png
+               ${CMAKE_CURRENT_BINARY_DIR}/image_decode_rgba_2x2.png COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_decode_solid.jpg
+               ${CMAKE_CURRENT_BINARY_DIR}/image_decode_solid.jpg COPYONLY)
+add_executable(image_decode_sanity image_decode_sanity.cpp)
+target_include_directories(image_decode_sanity PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+target_link_libraries(image_decode_sanity PRIVATE glintfx)
+add_test(NAME image_decode_sanity COMMAND image_decode_sanity)
+
+# ---------------------------------------------------------------------------
+# EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
+#     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
+#     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered
+#     UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other draw2d test in
+#     this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (RectF/ColorF) -- sprite_batch.hpp itself pulls in
+#     no library symbols, it is entirely header-only.
+# PT: sprite_batch_sanity (D2D-1B) -- teste unit PURO para src/sprite_batch.hpp: sem janela, sem
+#     contexto GL, nenhuma dependência de RmlUi/GLFW (mesmo racional "nada relacionado a display
+#     pra isolar aqui" de image_decode_sanity/input_state_sanity/log_dedup_sanity acima).
+#     Registrado INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo outro
+#     teste de draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka `glintfx` só
+#     pelo include path público de <glintfx/draw2d.hpp> (RectF/ColorF) -- o próprio
+#     sprite_batch.hpp não puxa símbolo nenhum de biblioteca, é inteiramente header-only.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(sprite_batch_sanity sprite_batch_sanity.cpp)
+  target_link_libraries(sprite_batch_sanity PRIVATE glintfx)
+  add_test(NAME sprite_batch_sanity COMMAND sprite_batch_sanity)
+endif()
 
 # ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
@@ -2029,6 +2121,68 @@ add_test(NAME asset_decode_hostile_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: draw2d_render_sanity / draw2d_ui_coexist_sanity / draw2d_hostile_sanity (D2D-1B) -- embed
+#     fixture tests for glintfx::Draw2d (a hidden WindowGlfw GL-context host, same idiom as
+#     gl_state_guard.cpp/ui_layer_compose.cpp above -- ${_embed_dep} glloader is the exact same
+#     link pair those tests use). Run in BOTH build configurations (Draw2D never depends on
+#     GLINTFX_BACKEND_GLFW -- ADR-0017 axis 1). Gated on GLINTFX_MODULE_DRAW2D: with the module
+#     OFF these three targets are not even defined, letting a `lean`/no-draw2d build configure and
+#     test cleanly with zero draw2d-shaped gaps in the suite (same discipline
+#     GLINTFX_MODULE_GAMEPAD's own gate follows further below).
+#       - draw2d_render_sanity: pixel-readback proof (solid colour, alpha-blend/tint formula
+#         hand-derived deltas, src_px quadrant) -- Draw2D standalone, no UiLayer/RmlUi at all.
+#       - draw2d_ui_coexist_sanity: the test that guards this wave's CENTRAL RISK (D9) -- one
+#         frame with the sprite pass THEN ui_layer.render(), one with the reverse order, both
+#         must render BOTH layers correctly.
+#       - draw2d_hostile_sanity: the fail-high surface (D7/D10/D11) -- hostile texture corpus,
+#         destroyed/tampered/foreign handles, begin(0,0), nested begin(), draw outside a bracket,
+#         double shutdown(), destroying a Draw2d with a live texture. ASan-clean is the real gate
+#         (the `claudio` sanitize leg, AGENTS.md's CI policy).
+# PT: draw2d_render_sanity / draw2d_ui_coexist_sanity / draw2d_hostile_sanity (D2D-1B) -- testes
+#     de fixture embed para glintfx::Draw2d (um host de contexto GL WindowGlfw oculto, mesmo
+#     idioma de gl_state_guard.cpp/ui_layer_compose.cpp acima -- ${_embed_dep} glloader é o mesmo
+#     par de link exato que aqueles testes usam). Rodam em AMBAS as configurações de build (o
+#     Draw2D nunca depende de GLINTFX_BACKEND_GLFW -- ADR-0017 eixo 1). Gateados em
+#     GLINTFX_MODULE_DRAW2D: com o módulo OFF estes três alvos nem sequer são definidos, deixando
+#     um build `lean`/sem-draw2d configurar e testar limpo, sem lacuna no formato de draw2d na
+#     suíte (mesma disciplina que o próprio gate de GLINTFX_MODULE_GAMEPAD segue mais abaixo).
+#       - draw2d_render_sanity: prova de pixel-readback (cor sólida, deltas derivados à mão de
+#         blend alpha/fórmula de tint, quadrante src_px) -- Draw2D sozinho, sem UiLayer/RmlUi.
+#       - draw2d_ui_coexist_sanity: o teste que guarda o RISCO CENTRAL desta onda (D9) -- um
+#         frame com o passe de sprite DEPOIS ui_layer.render(), um com a ordem reversa, os dois
+#         precisam renderizar as DUAS camadas corretamente.
+#       - draw2d_hostile_sanity: a superfície fail-high (D7/D10/D11) -- corpus hostil de textura,
+#         handles destruídos/adulterados/estrangeiros, begin(0,0), begin() aninhado, draw fora de
+#         bracket, shutdown() duplo, destruir um Draw2d com textura viva. ASan-limpo é o gate de
+#         fato (a perna sanitize do `claudio`, política de CI do AGENTS.md).
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(draw2d_render_sanity draw2d_render_sanity.cpp)
+  target_link_libraries(draw2d_render_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_render_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  add_executable(draw2d_ui_coexist_sanity draw2d_ui_coexist_sanity.cpp)
+  target_link_libraries(draw2d_ui_coexist_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_ui_coexist_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_ui_coexist_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  add_executable(draw2d_hostile_sanity draw2d_hostile_sanity.cpp)
+  target_link_libraries(draw2d_hostile_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_hostile_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_hostile_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: data_model_embed_sanity -- embed-path (UiLayer) end-to-end proof for the data-model API
 #     (AUD-TEC-7, 2026-07-08 audit finding): create_data_model/bind_number/bind_string/
 #     bind_bool/bind_list/load/set_number/set_string/set_bool/set_list, all via UiLayer, never
@@ -2361,6 +2515,38 @@ add_test(NAME ripple_stress_sanity
     -DEXE=$<TARGET_FILE:ripple_stress_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: draw2d_ripple_coexist_sanity (D2D-1B follow-up, review adversarial brief 8.4 item 3) --
+#     the risk the plan itself named (EnsureBackdropCaptured reading FBO 0 mid-Context::Render()
+#     while a Draw2D sprite pass writes to that same FBO) and no other test of the wave covers.
+#     Promoted from the review's own scratch probe into the permanent suite. Needs BOTH
+#     GLINTFX_MODULE_FX (ripple() itself, hence nested inside this same if() as
+#     ripple_sanity/ripple_stress_sanity above) AND GLINTFX_MODULE_DRAW2D (the sprite pass) --
+#     the inner guard mirrors the "lean-ui/no-draw2d build must not try to link code that was
+#     never compiled in" reasoning every other module gate in this file already follows. Same
+#     link pair as ripple_sanity above (${_embed_dep} glloader). Runs in BOTH build configs.
+# PT: draw2d_ripple_coexist_sanity (follow-up do D2D-1B, brief de review adversarial 8.4 item 3)
+#     -- o risco que o próprio plano nomeou (EnsureBackdropCaptured lendo o FBO 0 no meio do
+#     Context::Render() enquanto um passe de sprite do Draw2D escreve nesse mesmo FBO) e nenhum
+#     outro teste da onda cobre. Promovido da própria sonda de scratch do review pra suíte
+#     permanente. Precisa TANTO de GLINTFX_MODULE_FX (o próprio ripple(), daí aninhado dentro
+#     deste mesmo if() de ripple_sanity/ripple_stress_sanity acima) QUANTO de
+#     GLINTFX_MODULE_DRAW2D (o passe de sprite) -- a guarda interna espelha o racional
+#     "build lean-ui/sem-draw2d não pode tentar linkar código nunca compilado" que todo outro
+#     gate de módulo deste arquivo já segue. Mesmo par de link do ripple_sanity acima
+#     (${_embed_dep} glloader). Roda em AMBAS as configs de build.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(draw2d_ripple_coexist_sanity draw2d_ripple_coexist_sanity.cpp)
+  target_link_libraries(draw2d_ripple_coexist_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_ripple_coexist_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_ripple_coexist_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
 endif()  # GLINTFX_MODULE_FX
 
 # ---------------------------------------------------------------------------

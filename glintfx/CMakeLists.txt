@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.19.0)
+project(glintfx LANGUAGES C CXX VERSION 0.20.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
@@ -544,6 +544,32 @@ if(GLINTFX_MODULE_GAMEPAD AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(STATUS "glintfx: gamepad module is Linux-only (raw evdev) -- forcing GLINTFX_MODULE_GAMEPAD=OFF on ${CMAKE_SYSTEM_NAME}")
   set(GLINTFX_MODULE_GAMEPAD OFF) # EN: shadow local: every guard below sees this. PT: sombra local: toda guarda abaixo enxerga isto.
 endif()
+
+# --- GLINTFX_MODULE_DRAW2D (real ON/OFF, ADR-0017, framework-2D slice D2D-1B) ---
+# EN: Sprites (texture load + draw_sprite + internal per-texture batching, own GL 3.3 pipeline) --
+#     the first public API surface that draws the GAME WORLD, independent of `.rcss`-declared UI.
+#     Same independence class as GLINTFX_MODULE_I18N/AUDIO/GAMEPAD above: src/draw2d.cpp (plus the
+#     pure src/sprite_batch.hpp it includes) has zero caller anywhere else in the library
+#     (ADR-0017, consumer-only). Depends on `core` + the internal image-decode seam
+#     (src/image_decode.hpp, D2D-1A) + the internal gl-loader (glloader) ONLY -- NOT ui, NOT fx,
+#     NOT window (ADR-0017 axis 1, decision (1a): a sprites-only game must not carry HTML/CSS).
+#     Compiles in the embed (GLFW=OFF) build and therefore in the MSVC job too, same as
+#     GLINTFX_MODULE_AUDIO -- this becomes the "MSVC-compiled gate" ADR-0017/D1 asks for
+#     (compile+link only; no Windows RUNTIME execution exists in CI, declared in docs/draw2d.md).
+# PT: Sprites (carregar textura + draw_sprite + batching interno por-textura, pipeline GL 3.3
+#     próprio) -- a primeira superfície de API pública que desenha o MUNDO DO JOGO, independente
+#     da UI declarada em `.rcss`. Mesma classe de independência do GLINTFX_MODULE_I18N/AUDIO/
+#     GAMEPAD acima: src/draw2d.cpp (mais o src/sprite_batch.hpp puro que ele inclui) não tem
+#     NENHUM chamador em outro lugar da biblioteca (ADR-0017, só-consumidor). Depende de `core` +
+#     a costura interna de decode de imagem (src/image_decode.hpp, D2D-1A) + o gl-loader interno
+#     (glloader) SÓ -- NÃO ui, NÃO fx, NÃO window (ADR-0017 eixo 1, decisão (1a): um jogo
+#     só-sprites não pode carregar HTML/CSS). Compila no build embed (GLFW=OFF) e portanto também
+#     no job MSVC, igual ao GLINTFX_MODULE_AUDIO -- isto vira o "gate compilado-no-MSVC" que a
+#     ADR-0017/D1 pede (só compila+linka; nenhuma execução RUNTIME Windows existe em CI, declarado
+#     em docs/draw2d.md).
+option(GLINTFX_MODULE_DRAW2D
+  "Draw2D module: sprite batching + texture loading, own GL 3.3 pipeline (ADR-0017; depends on core + the internal gl-loader + the image-decode seam; NOT ui/fx/window)"
+  ON)
 
 # --- GLINTFX_MODULE_FX (real ON/OFF, FX-CARVE-1) ---
 # EN: Carves the fx AUTHORED by glintfx (tint + ripple GLSL programs, their CompileShader/
@@ -1215,15 +1241,48 @@ if(GLINTFX_MODULE_GAMEPAD)
   add_library(glintfx::gamepad ALIAS glintfx_gamepad)
 endif()
 
+# --- glintfx_draw2d (GLINTFX_MODULE_DRAW2D, real ON/OFF -- see its option() block above) ---
+# EN: src/draw2d.cpp only -- src/sprite_batch.hpp is a pure, header-only include of it (no
+#     separate TU). Needs glloader (the internal `glx_`-prefixed GL 3.3 loader, same as
+#     glintfx_window/glintfx_fx above) and the third_party/stb include dir PRIVATE: draw2d.cpp
+#     includes src/image_decode.hpp, whose own #include "stb_image.h" needs ONLY the stb_image
+#     DECLARATIONS (the STB_IMAGE_IMPLEMENTATION translation unit itself, src/stb_image_impl.cpp,
+#     lives in the always-linked glintfx_image OBJECT library -- see that block above; no
+#     STB_IMAGE_IMPLEMENTATION define here, so this does not create a second definition). NO
+#     RmlUi::Core link -- draw2d.cpp/sprite_batch.hpp/image_decode.hpp are grep-confirmed
+#     RmlUi-free (ADR-0017 axis 1, decision (1a)).
+# PT: Só src/draw2d.cpp -- src/sprite_batch.hpp é um include puro, header-only, dele (nenhuma TU
+#     separada). Precisa do glloader (o loader GL 3.3 interno prefixado `glx_`, igual ao
+#     glintfx_window/glintfx_fx acima) e do include dir third_party/stb PRIVATE: draw2d.cpp
+#     inclui src/image_decode.hpp, cujo próprio #include "stb_image.h" precisa SÓ das
+#     DECLARAÇÕES do stb_image (a própria unidade de tradução STB_IMAGE_IMPLEMENTATION,
+#     src/stb_image_impl.cpp, mora na biblioteca OBJECT glintfx_image sempre-linkada -- ver
+#     aquele bloco acima; nenhum define STB_IMAGE_IMPLEMENTATION aqui, então isto não cria uma
+#     segunda definição). SEM link de RmlUi::Core -- draw2d.cpp/sprite_batch.hpp/
+#     image_decode.hpp são confirmados por grep como livres-de-RmlUi (ADR-0017 eixo 1, decisão
+#     (1a)).
+if(GLINTFX_MODULE_DRAW2D)
+  add_library(glintfx_draw2d OBJECT src/draw2d.cpp)
+  target_include_directories(glintfx_draw2d PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+  target_link_libraries(glintfx_draw2d PRIVATE glloader)
+  target_compile_options(glintfx_draw2d PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
+  glintfx_instrument_coverage(glintfx_draw2d)
+  add_library(glintfx::draw2d ALIAS glintfx_draw2d)
+endif()
+
 # EN: Fold every module OBJECT library into the aggregate `glintfx` STATIC
 #     target. glintfx_core/glintfx_image are unconditional (their flags are
 #     forced ON in A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/glintfx_audio/
-#     glintfx_gamepad mirror the same guard their own add_library() call above is under.
+#     glintfx_gamepad/glintfx_draw2d mirror the same guard their own add_library() call above is
+#     under.
 # PT: Dobra cada biblioteca OBJECT de módulo no alvo agregado `glintfx`
 #     STATIC. glintfx_core/glintfx_image são incondicionais (as flags deles
 #     são forçadas ON no A0); glintfx_text/glintfx_window/glintfx_i18n/glintfx_fx/
-#     glintfx_audio/glintfx_gamepad espelham a mesma guarda sob a qual a própria chamada
-#     add_library() delas está acima.
+#     glintfx_audio/glintfx_gamepad/glintfx_draw2d espelham a mesma guarda sob a qual a própria
+#     chamada add_library() delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
 if(GLINTFX_OWN_FONT_ENGINE)
   target_link_libraries(glintfx PRIVATE glintfx_text)
@@ -1242,6 +1301,9 @@ if(GLINTFX_MODULE_AUDIO)
 endif()
 if(GLINTFX_MODULE_GAMEPAD)
   target_link_libraries(glintfx PRIVATE glintfx_gamepad)
+endif()
+if(GLINTFX_MODULE_DRAW2D)
+  target_link_libraries(glintfx PRIVATE glintfx_draw2d)
 endif()
 
 target_compile_definitions(glintfx PRIVATE

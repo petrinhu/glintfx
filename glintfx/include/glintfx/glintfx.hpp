@@ -21,7 +21,10 @@
 //     gamepad.hpp é incluído quando GLINTFX_MODULE_GAMEPAD está habilitado (padrão ON no Linux,
 //     forçado OFF em outro lugar -- ver o gate de plataforma do CMakeLists.txt -- módulo
 //     "gamepad" da ADR-0015 (b)/ADR-0016, fatia framework-2D A2-GAMEPAD; mesma classe de
-//     independência do i18n/audio, porém Linux-only por natureza).
+//     independência do i18n/audio, porém Linux-only por natureza); draw2d.hpp é incluído quando
+//     GLINTFX_MODULE_DRAW2D está habilitado (padrão ON, átomo "draw2d" do ADR-0017, fatia
+//     D2D-1B -- depende de core + a costura interna de decode de imagem + o gl-loader interno;
+//     NÃO de ui/fx/window, mesmo padrão de independência do i18n/audio/gamepad acima).
 #pragma once
 #include <glintfx/config.hpp>
 #include <glintfx/version.hpp>
@@ -37,4 +40,7 @@
 #endif
 #if GLINTFX_MODULE_GAMEPAD
 #include <glintfx/gamepad.hpp>
+#endif
+#if GLINTFX_MODULE_DRAW2D
+#include <glintfx/draw2d.hpp>
 #endif

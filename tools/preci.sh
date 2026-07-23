@@ -178,7 +178,63 @@ run_layer1_config() {
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++
   cmake --build "${build_dir}" -j"$(nproc)"
-  xvfb-run -a ctest --test-dir "${build_dir}" --output-on-failure
+
+  # EN: QA-XVFBISO -- isolate WAYLAND_DISPLAY/XDG_RUNTIME_DIR AT THE POINT THIS SCRIPT
+  #     LAUNCHES `xvfb-run -a ctest`, instead of trusting whatever the calling shell
+  #     already had unset/exported. That trust is exactly what failed on 2026-07-23: this
+  #     line used to be a bare `xvfb-run -a ctest ...` with no isolation of its own, so
+  #     running `bash tools/preci.sh` from a shell with a live Wayland session inherited
+  #     straight through into every one of the ~90 tests, opening real windows on the
+  #     líder's desktop (25-30 of them create a window). Each individual test ALSO
+  #     isolates itself via glintfx/tests/run_xvfb.cmake (see its header for the full
+  #     wl_display_connect(NULL)/XDG_RUNTIME_DIR mechanism) -- that fix alone protects the
+  #     test binaries by construction, but this outer `ctest` launch is a SEPARATE entry
+  #     point and gets its own isolation too: isolation belongs to whoever executes, not
+  #     to whoever calls. One fake XDG_RUNTIME_DIR per run_layer1_config() invocation
+  #     (mktemp -d, mode 0700, atomic).
+  #     Cleanup is an explicit capture-rc/rm/return, NOT a `trap ... RETURN` -- verified by
+  #     hand (harness script, 2026-07-23) that a RETURN trap set inside a function does
+  #     NOT reliably fire when `set -e` aborts on that function's own failing command: the
+  #     shell unwinds straight past the function scope instead of "returning" from it
+  #     normally, so the trap body silently never runs and the fake dir is orphaned on
+  #     every ctest FAILURE -- exactly the case that most needs cleanup, since it is also
+  #     the case run daily. The explicit form below has no such gap: it is correct on
+  #     both the pass and the fail path, and cannot regress if `set -e` semantics differ
+  #     across bash versions run by the líder's shell vs. this repo's CI containers.
+  # PT: QA-XVFBISO -- isola WAYLAND_DISPLAY/XDG_RUNTIME_DIR NO PONTO em que este script
+  #     lança o `xvfb-run -a ctest`, em vez de confiar no que o shell chamador já tivesse
+  #     feito unset/export. Foi exatamente essa confiança que falhou em 2026-07-23: esta
+  #     linha era um `xvfb-run -a ctest ...` cru, sem isolamento próprio, então rodar
+  #     `bash tools/preci.sh` de um shell com sessão Wayland viva vazava direto pros ~90
+  #     testes, abrindo janelas reais na área de trabalho do líder (25-30 deles criam
+  #     janela). Cada teste individual TAMBÉM se isola via glintfx/tests/run_xvfb.cmake
+  #     (ver o cabeçalho dele pro mecanismo completo de
+  #     wl_display_connect(NULL)/XDG_RUNTIME_DIR) -- esse fix sozinho já protege os
+  #     binários de teste por construção, mas este lançamento externo do `ctest` é um
+  #     ponto de entrada SEPARADO e também ganha isolamento próprio: isolamento pertence
+  #     a quem executa, não a quem chama. Um XDG_RUNTIME_DIR falso por invocação de
+  #     run_layer1_config() (mktemp -d, modo 0700, atômico).
+  #     A limpeza é um capture-rc/rm/return explícito, NÃO um `trap ... RETURN` --
+  #     verificado à mão (script de harness, 2026-07-23) que um trap RETURN definido
+  #     dentro de uma função NÃO dispara de forma confiável quando o `set -e` aborta por
+  #     causa do próprio comando que falhou naquela função: o shell desenrola direto,
+  #     pulando o "retorno" normal da função, então o corpo do trap silenciosamente nunca
+  #     roda e o diretório falso fica órfão em toda FALHA de ctest -- exatamente o caso
+  #     que mais precisa de limpeza, já que também é o caso rodado todo dia. A forma
+  #     explícita abaixo não tem essa lacuna: está correta tanto no caminho de sucesso
+  #     quanto no de falha, e não regride se a semântica do `set -e` variar entre a versão
+  #     do bash no shell do líder e a dos containers de CI deste repo.
+  local fake_xdg_runtime
+  fake_xdg_runtime="$(mktemp -d "${TMPDIR:-/tmp}/glintfx-preci-xvfb-runtime.XXXXXX")"
+
+  local xvfb_rc=0
+  env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="${fake_xdg_runtime}" \
+    xvfb-run -a ctest --test-dir "${build_dir}" --output-on-failure || xvfb_rc=$?
+  rm -rf "${fake_xdg_runtime}"
+  if [[ "${xvfb_rc}" -ne 0 ]]; then
+    return "${xvfb_rc}"
+  fi
+
   ran_anything=1
 }
 

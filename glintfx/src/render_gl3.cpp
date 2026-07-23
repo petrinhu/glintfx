@@ -18,9 +18,20 @@
 #include <RmlUi/Core/FileInterface.h>
 #include <RmlUi/Core/Core.h>
 
-// EN: stb_image — header-only declarations; implementation compiled in stb_image_impl.cpp.
-// PT: stb_image — declarações do header; implementação compilada em stb_image_impl.cpp.
-#include "stb_image.h"
+// EN: D2D-1A -- the decode+premultiply+256MiB-cap core that used to live directly in this file's
+//     LoadTexture below now lives in image_decode.hpp (pure, zero-GL, zero-RmlUi, headless-
+//     testable seam -- see that header's own top comment for the full carve rationale and the
+//     split of guard responsibility with LoadTexture's own pre-read file-size cap, which stays
+//     here). Brings in stb_image.h's declarations transitively (implementation still compiled once
+//     in stb_image_impl.cpp) -- no direct stb_image.h include needed in this file anymore.
+// PT: D2D-1A -- o núcleo de decode+premultiply+teto-de-256MiB que antes vivia direto neste
+//     arquivo, dentro do LoadTexture abaixo, agora vive em image_decode.hpp (costura pura, zero
+//     GL, zero RmlUi, testável headless -- ver o próprio comentário de topo daquele header pro
+//     racional completo do carve e a divisão de responsabilidade de guarda com a própria guarda
+//     de tamanho de arquivo pré-leitura do LoadTexture, que permanece aqui). Traz as declarações
+//     de stb_image.h transitivamente (implementação ainda compilada uma vez em
+//     stb_image_impl.cpp) -- nenhum include direto de stb_image.h mais necessário neste arquivo.
+#include "image_decode.hpp"
 
 // EN: FX-CARVE-1 — the seam header to the optional fx module (src/fx/effects_gl3.cpp). Declares
 //     FxHook + CreateGl3FxHook(); see fx_hook.hpp's own file header for the full gate mechanism.
@@ -46,8 +57,6 @@
 //     <RmlUi/Core/Types.h> que RmlUi_Renderer_GL3.h inclui.
 #include <RmlUi/Core/Log.h>
 
-#include <climits>  // EN: INT_MAX (AUD-L1-PARSE — LoadTexture's static_cast<int>(len) overflow guard).
-                    // PT: INT_MAX (AUD-L1-PARSE — guarda de overflow do static_cast<int>(len) do LoadTexture).
 #include <memory>
 #include <vector>
 
@@ -65,16 +74,17 @@
 // ---------------------------------------------------------------------------
 // EN: Gl3RenderInterface — subclass of RenderInterface_GL3 that overrides LoadTexture
 //     to support PNG, JPG, and TGA files with correct premultiplied alpha. The override:
-//       1. Reads raw bytes via RmlUi's FileInterface (respects the asset base-URL).
-//       2. Decodes via stbi_load_from_memory (forces 4-channel RGBA output).
-//       3. Premultiplies alpha: R = R*A/255, G = G*A/255, B = B*A/255.
+//       1. Reads raw bytes via RmlUi's FileInterface (respects the asset base-URL), with a
+//          256 MiB size cap checked BEFORE the read (AUD-L1-PARSE, below).
+//       2. Decodes + premultiplies via image_decode.hpp's decode_premultiplied_rgba (D2D-1A --
+//          forces 4-channel RGBA, premultiplies R = R*A/255, G = G*A/255, B = B*A/255).
 //          The GL3 backend composites in premultiplied-alpha space (GL_ONE,
 //          GL_ONE_MINUS_SRC_ALPHA); uploading straight-alpha would cause a bright
 //          halo around semi-transparent or hard-edged PNG/TGA regions.
-//       4. Delegates the GL upload to the base-class GenerateTexture (reuses
+//       3. Delegates the GL upload to the base-class GenerateTexture (reuses
 //          GL_RGBA8 + mipmaps + filter — no GL reimplementation here).
-//       5. Falls back to RenderInterface_GL3::LoadTexture only on file read error
-//          or stb decode failure.
+//       4. Falls back to RenderInterface_GL3::LoadTexture only on file read error
+//          or stb decode failure (image_decode.hpp's `DecodedImage::ok == false`).
 //
 //     TGA bypass note: this override also intercepts TGA files (stb decodes TGA).
 //     This is intentional: the upstream RenderInterface_GL3::LoadTexture does NOT
@@ -85,16 +95,18 @@
 //
 // PT: Gl3RenderInterface — subclasse de RenderInterface_GL3 que sobrescreve LoadTexture
 //     para suportar PNG, JPG e TGA com alpha premultiplicado correto. O override:
-//       1. Lê bytes brutos via FileInterface do RmlUi (respeita a base-URL de assets).
-//       2. Decodifica via stbi_load_from_memory (força saída RGBA de 4 canais).
-//       3. Premultiplica o alpha: R = R*A/255, G = G*A/255, B = B*A/255.
-//          O backend GL3 compõe em espaço premultiplied-alpha (GL_ONE,
+//       1. Lê bytes brutos via FileInterface do RmlUi (respeita a base-URL de assets), com um
+//          teto de 256 MiB checado ANTES da leitura (AUD-L1-PARSE, abaixo).
+//       2. Decodifica + premultiplica via decode_premultiplied_rgba de image_decode.hpp
+//          (D2D-1A -- força RGBA de 4 canais, premultiplica R = R*A/255, G = G*A/255,
+//          B = B*A/255). O backend GL3 compõe em espaço premultiplied-alpha (GL_ONE,
 //          GL_ONE_MINUS_SRC_ALPHA); fazer upload de alpha straight causaria halo
 //          claro ao redor de regiões PNG/TGA semi-transparentes ou de bordas duras.
-//       4. Delega o upload GL ao GenerateTexture da base (reusa GL_RGBA8 + mipmaps
+//       3. Delega o upload GL ao GenerateTexture da base (reusa GL_RGBA8 + mipmaps
 //          + filtro — sem reimplementação de GL aqui).
-//       5. Faz fallback para RenderInterface_GL3::LoadTexture apenas em erro de
-//          leitura de arquivo ou falha de decode do stb.
+//       4. Faz fallback para RenderInterface_GL3::LoadTexture apenas em erro de
+//          leitura de arquivo ou falha de decode do stb (`DecodedImage::ok == false`
+//          de image_decode.hpp).
 //
 //     Nota de bypass do TGA: este override também intercepta TGA (stb decodifica TGA).
 //     Isso é intencional: o RenderInterface_GL3::LoadTexture do upstream NÃO premultiplica
@@ -252,83 +264,42 @@ public:
       return RenderInterface_GL3::LoadTexture(dims, source);
     }
 
-    // EN: AUD-L1-PARSE guard 2/2 — defense-in-depth against static_cast<int>(len) below wrapping
-    //     negative for len > INT_MAX. Unreachable today (guard 1/2 above already caps `len` at
-    //     256 MiB, far under INT_MAX), kept explicit per the same fail-secure idiom as the other
-    //     hostile-input guards in this file (see e.g. decorator_polygon.cpp's `sides` guard).
-    //     `return false` (NOT a fallback to the base loader) for the same reason as guard 1/2
-    //     above: this guard's whole point is that `len` is too large to touch further, and the
-    //     base loader's own `new byte[buffer_size]` has no cap of its own -- if `kMaxAssetFileBytes`
-    //     is ever raised past INT_MAX without this guard also being revisited, delegating here
-    //     would silently resurrect the same unbounded-allocation DoS this whole guard pair exists
-    //     to close.
-    // PT: guarda 2/2 do AUD-L1-PARSE — defesa em profundidade contra o static_cast<int>(len)
-    //     abaixo dar wrap negativo para len > INT_MAX. Inalcançável hoje (a guarda 1/2 acima já
-    //     limita `len` a 256 MiB, bem abaixo de INT_MAX), mantida explícita seguindo o mesmo
-    //     idioma fail-secure das outras guardas de entrada hostil deste arquivo (ver p.ex. a
-    //     guarda de `sides` de decorator_polygon.cpp).
-    //     `return false` (NÃO um fallback pro loader da base) pela mesma razão da guarda 1/2
-    //     acima: o ponto inteiro desta guarda é que `len` é grande demais pra sequer tocar, e o
-    //     `new byte[buffer_size]` próprio do loader da base não tem teto nenhum -- se
-    //     `kMaxAssetFileBytes` algum dia for elevado além de INT_MAX sem esta guarda também ser
-    //     revisitada, delegar aqui ressuscitaria silenciosamente o mesmo DoS de alocação sem teto
-    //     que este par de guardas existe pra fechar.
-    if (len > static_cast<size_t>(INT_MAX)) {
-      Rml::Log::Message(Rml::Log::LT_WARNING,
-          "LoadTexture: asset '%s' is %zu bytes, exceeding INT_MAX -- refusing to load.",
-          source.c_str(), len);
-      return false;
-    }
-
-    // EN: Decode via stb_image (forces 4-channel RGBA output regardless of source format).
-    //     RAII via unique_ptr: stbi_image_free is called on any exit path, including
-    //     exceptions thrown by GenerateTexture, without a manual stbi_image_free call.
-    // PT: Decodifica via stb_image (força saída RGBA de 4 canais independente do formato).
-    //     RAII via unique_ptr: stbi_image_free é chamado em qualquer saída, incluindo
-    //     exceções de GenerateTexture, sem chamada manual a stbi_image_free.
-    int w = 0, h = 0, n = 0;
-    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
-        stbi_load_from_memory(buf.data(), static_cast<int>(len), &w, &h, &n, 4),
-        &stbi_image_free);
-    if (!px) {
-      // EN: Unknown format or decode error — fallback to base.
-      // PT: Formato desconhecido ou erro de decode — fallback para base.
+    // EN: D2D-1A -- decode + premultiply via the image_decode.hpp seam (thin caller from here
+    //     on; see that header's own top comment for the full carve rationale). The helper's OWN
+    //     256 MiB cap (`kMaxImageDecodeBytes`) is checked again inside it, redundantly with
+    //     `kMaxAssetFileBytes` above -- provably unreachable HERE (guard 1/2 above already caps
+    //     `len` at 256 MiB before this call ever runs), kept as the helper's own first line of
+    //     defense for callers that skip straight here without a file-size pre-check of their own
+    //     (see image_decode.hpp's own comment). This also folds the old, explicitly-dead "guard
+    //     2/2" INT_MAX check into a single compile-time `static_assert` inside the helper
+    //     (`kMaxImageDecodeBytes <= INT_MAX`) instead of a second runtime branch here -- the
+    //     invariant it protected is unchanged, only where it is enforced.
+    // PT: D2D-1A -- decode + premultiply via a costura de image_decode.hpp (chamador fino a
+    //     partir daqui; ver o próprio comentário de topo daquele header pro racional completo do
+    //     carve). O teto PRÓPRIO do helper de 256 MiB (`kMaxImageDecodeBytes`) é checado de novo
+    //     dentro dele, redundante com `kMaxAssetFileBytes` acima -- comprovadamente inalcançável
+    //     AQUI (a guarda 1/2 acima já limita `len` a 256 MiB antes desta chamada sequer rodar),
+    //     mantida como a primeira linha de defesa própria do helper para chamadores que vão
+    //     direto aqui sem uma pré-checagem de tamanho de arquivo própria (ver o próprio
+    //     comentário de image_decode.hpp). Isto também dobra a antiga "guarda 2/2" de INT_MAX,
+    //     já explicitamente morta, num único `static_assert` em tempo de compilação dentro do
+    //     helper (`kMaxImageDecodeBytes <= INT_MAX`) em vez de um segundo branch em runtime aqui
+    //     -- o invariante que ela protegia é o mesmo, só onde é aplicado que muda.
+    const glintfx::DecodedImage decoded = glintfx::decode_premultiplied_rgba(buf.data(), len);
+    if (!decoded.ok) {
+      // EN: Unknown format, decode error, or (unreachable here) an over-cap buffer -- fallback
+      //     to base, identical to the pre-carve stb-decode-failure branch.
+      // PT: Formato desconhecido, erro de decode, ou (inalcançável aqui) um buffer acima do
+      //     teto -- fallback para base, idêntico ao ramo pré-carve de falha de decode do stb.
       return RenderInterface_GL3::LoadTexture(dims, source);
     }
 
-    // EN: Premultiply alpha — the GL3 backend blends with GL_ONE, GL_ONE_MINUS_SRC_ALPHA
-    //     which assumes premultiplied RGB. Without this step, transparent pixels whose
-    //     source image stores a non-zero RGB (common in anti-aliased edges and hard-edge
-    //     transparent regions) produce a bright colour halo around the rendered shape.
-    // PT: Premultiplica o alpha — o backend GL3 faz blend com GL_ONE, GL_ONE_MINUS_SRC_ALPHA
-    //     que assume RGB premultiplicado. Sem esta etapa, pixels transparentes cuja imagem
-    //     de origem armazena RGB não-zero (comum em bordas anti-aliased e regiões
-    //     transparentes de borda dura) produzem um halo colorido claro ao redor da forma.
-    unsigned char* p = px.get();
-    // EN: Compute the pixel count in unsigned 64-bit arithmetic before the loop — `w`/`h`
-    //     come straight from stb_image's decode of a possibly-hostile asset file, so `w * h`
-    //     in signed `int` arithmetic is UB on overflow for large-enough malformed dimensions.
-    // PT: Calcula a contagem de pixels em aritmética sem sinal de 64 bits antes do loop — `w`/`h`
-    //     vêm direto do decode do stb_image de um arquivo de asset potencialmente hostil, então
-    //     `w * h` em aritmética `int` assinada é UB por overflow para dimensões malformadas
-    //     grandes o bastante.
-    const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
-    for (size_t i = 0; i < pixel_count; ++i) {
-      unsigned int a = p[i * 4 + 3];
-      p[i * 4 + 0] = static_cast<unsigned char>(p[i * 4 + 0] * a / 255u);
-      p[i * 4 + 1] = static_cast<unsigned char>(p[i * 4 + 1] * a / 255u);
-      p[i * 4 + 2] = static_cast<unsigned char>(p[i * 4 + 2] * a / 255u);
-    }
-
-    dims = Rml::Vector2i(w, h);
-    Rml::TextureHandle handle = RenderInterface_GL3::GenerateTexture(
+    dims = Rml::Vector2i(decoded.width, decoded.height);
+    return RenderInterface_GL3::GenerateTexture(
         Rml::Span<const Rml::byte>(
-            reinterpret_cast<const Rml::byte*>(p),
-            static_cast<size_t>(w) * static_cast<size_t>(h) * 4u),
+            reinterpret_cast<const Rml::byte*>(decoded.rgba.data()),
+            decoded.rgba.size()),
         dims);
-    // EN: px freed automatically by unique_ptr destructor on scope exit.
-    // PT: px liberado automaticamente pelo destrutor do unique_ptr ao sair do escopo.
-    return handle;
   }
 
   // EN: FX-CARVE-1 — CompileShader/RenderShader/ReleaseShader delegate to `fx_` when the fx

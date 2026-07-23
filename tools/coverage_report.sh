@@ -163,7 +163,52 @@ rm -rf "${PROFILE_DIR}"
 mkdir -p "${PROFILE_DIR}"
 export LLVM_PROFILE_FILE="${PROFILE_DIR}/%m-%p.profraw"
 
-xvfb-run -a ctest --test-dir "${BUILD_DIR}" --output-on-failure
+# EN: QA-XVFBISO -- isolate WAYLAND_DISPLAY/XDG_RUNTIME_DIR AT THE POINT this script
+#     launches `xvfb-run -a ctest`, instead of trusting whatever the calling shell already
+#     had unset/exported (that trust is what let real windows open on the líder's live
+#     Wayland desktop on 2026-07-23, via this exact same unprotected pattern in
+#     tools/preci.sh -- see that script's run_layer1_config() for the full incident
+#     story). Each individual test ALSO isolates itself via
+#     glintfx/tests/run_xvfb.cmake (its header has the full wl_display_connect(NULL)/
+#     XDG_RUNTIME_DIR mechanism) -- that protects the test binaries by construction, but
+#     this outer `ctest` launch is a SEPARATE entry point and gets its own isolation too:
+#     isolation belongs to whoever executes, not to whoever calls. One fake
+#     XDG_RUNTIME_DIR for this whole script run (mktemp -d, mode 0700, atomic), removed
+#     via the EXIT trap regardless of how the script ends. Verified by hand (2026-07-23)
+#     that this specific combination -- trap set at TOP-LEVEL script scope (not inside a
+#     function) on EXIT (not RETURN) -- DOES fire correctly even when the wrapped `ctest`
+#     command fails under `set -e`: this is the mechanism tools/preci.sh's
+#     run_layer1_config() tried FIRST (a `trap ... RETURN` set inside that function) and
+#     had to abandon after proving it silently skips the cleanup on the failure path (see
+#     that function's comment for the harness that caught it) -- EXIT-at-top-level does
+#     not share that gap. Unrelated to PROFILE_DIR above: this directory only ever holds
+#     an absent-by-design "wayland-0" socket, nothing coverage-related lives in it.
+# PT: QA-XVFBISO -- isola WAYLAND_DISPLAY/XDG_RUNTIME_DIR NO PONTO em que este script
+#     lança o `xvfb-run -a ctest`, em vez de confiar no que o shell chamador já tivesse
+#     feito unset/export (foi exatamente essa confiança que deixou janelas reais abrirem
+#     na área de trabalho Wayland ao vivo do líder em 2026-07-23, através deste mesmo
+#     padrão sem proteção no tools/preci.sh -- ver o run_layer1_config() daquele script
+#     pra história completa do incidente). Cada teste individual TAMBÉM se isola via
+#     glintfx/tests/run_xvfb.cmake (o cabeçalho dele tem o mecanismo completo de
+#     wl_display_connect(NULL)/XDG_RUNTIME_DIR) -- isso protege os binários de teste por
+#     construção, mas este lançamento externo do `ctest` é um ponto de entrada SEPARADO e
+#     também ganha isolamento próprio: isolamento pertence a quem executa, não a quem
+#     chama. Um XDG_RUNTIME_DIR falso pra esta rodada inteira do script (mktemp -d, modo
+#     0700, atômico), removido pelo trap EXIT independente de como o script termina.
+#     Verificado à mão (2026-07-23) que esta combinação especifica -- trap definido no
+#     escopo de TOPO do script (não dentro de uma função) sobre EXIT (não RETURN) --
+#     dispara corretamente mesmo quando o `ctest` envolvido falha sob `set -e`: foi essa a
+#     mecânica que o run_layer1_config() do tools/preci.sh tentou PRIMEIRO (um
+#     `trap ... RETURN` definido dentro daquela função) e teve que abandonar depois de
+#     provar que ela silenciosamente pula a limpeza no caminho de falha (ver o comentário
+#     daquela função pro harness que pegou isso) -- EXIT-no-topo não compartilha essa
+#     lacuna. Sem relação com PROFILE_DIR acima: este diretório só guarda um socket
+#     "wayland-0" ausente de propósito, nada de cobertura vive nele.
+GLINTFX_XVFB_FAKE_XDG_RUNTIME="$(mktemp -d "${TMPDIR:-/tmp}/glintfx-cov-xvfb-runtime.XXXXXX")"
+trap 'rm -rf "${GLINTFX_XVFB_FAKE_XDG_RUNTIME}"' EXIT
+
+env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="${GLINTFX_XVFB_FAKE_XDG_RUNTIME}" \
+  xvfb-run -a ctest --test-dir "${BUILD_DIR}" --output-on-failure
 
 shopt -s nullglob
 profraws=("${PROFILE_DIR}"/*.profraw)

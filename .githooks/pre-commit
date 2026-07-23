@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MPL-2.0
+# EN: git pre-commit hook (GATE-PRECOMMIT). Runs tools/precommit.sh on the STAGED files
+#     before any `git commit` becomes real -- the shift-left companion to .githooks/
+#     pre-push (TST-L1-PRECI): where pre-push gates "before it becomes visible on a
+#     remote" with the full build+test, this one gates "before it becomes a commit" with
+#     checks cheap enough to pay every single time (cppcheck, clang-format-diff,
+#     doc-citation drift -- see tools/precommit.sh's own header for the full rationale
+#     and the measured cost). A non-zero exit here ABORTS the commit.
+#
+#     Activation has TWO valid routes depending on whether `core.hooksPath` is already
+#     claimed globally by something else on this machine (see tools/precommit.sh's own
+#     header, "ACTIVATION -- TWO VALID ROUTES", for the full rationale and the 2026-07-23
+#     finding that motivated splitting this into two routes instead of one):
+#       (a) plain clone, no global core.hooksPath: `git config core.hooksPath .githooks`
+#       (b) global core.hooksPath already set (e.g. this house's `~/.claude/githooks`):
+#           `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit` instead -- do NOT
+#           override core.hooksPath locally, it would replace the global value outright
+#           and silently disable whatever that global hook does for this repo.
+#
+#     To bypass for one commit (e.g. a genuine emergency, or `--no-verify`ing WIP you
+#     intend to fix before it ever leaves your machine):
+#       git commit --no-verify
+#     Use sparingly -- this is the gate, not a formality (see CLAUDE.md's anti-pattern
+#     list: --no-verify as a habit is exactly what this hook exists to make unnecessary).
+#
+# PT: hook git pre-commit (GATE-PRECOMMIT). Roda tools/precommit.sh sobre os arquivos
+#     STAGED antes de qualquer `git commit` virar real -- o companheiro shift-left do
+#     .githooks/pre-push (TST-L1-PRECI): onde o pre-push gateia "antes de ficar visível
+#     num remoto" com o build+teste completo, este gateia "antes de virar commit" com
+#     checks baratos o bastante pra pagar toda vez (cppcheck, clang-format-diff, deriva
+#     de citação de doc -- ver o cabeçalho do próprio tools/precommit.sh pro racional
+#     completo e o custo medido). Uma saída não-zero aqui ABORTA o commit.
+#
+#     A ativação tem DUAS rotas válidas dependendo de o `core.hooksPath` já estar ou não
+#     reivindicado globalmente por outra coisa nesta máquina (ver o próprio cabeçalho do
+#     tools/precommit.sh, "ATIVAÇÃO -- DUAS ROTAS VÁLIDAS", pro racional completo e o
+#     achado de 2026-07-23 que motivou dividir isto em duas rotas em vez de uma):
+#       (a) clone simples, sem core.hooksPath global: `git config core.hooksPath .githooks`
+#       (b) core.hooksPath global já setado (ex.: o `~/.claude/githooks` desta casa):
+#           `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit` em vez disso -- NÃO
+#           sobrescreva core.hooksPath localmente, isso substituiria o valor global por
+#           inteiro e desativaria silenciosamente o que aquele hook global faz pra este
+#           repo.
+#
+#     Para pular num commit específico (ex.: uma emergência de verdade, ou um
+#     `--no-verify` num WIP que você pretende consertar antes de sair da sua máquina):
+#       git commit --no-verify
+#     Usar com moderação -- isto é o gate, não uma formalidade (ver a lista de
+#     anti-patterns do CLAUDE.md: `--no-verify` como hábito é exatamente o que este hook
+#     existe para tornar desnecessário).
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+exec "${REPO_ROOT}/tools/precommit.sh"

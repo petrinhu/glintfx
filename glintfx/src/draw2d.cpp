@@ -481,6 +481,14 @@ struct Draw2d::Impl {
       log_warn(std::string(what) + "() called outside a begin()/end() bracket -- ignored (D4).");
       return;
     }
+    // D2D-3B QA fix -- mirrors SpriteBatch::draw_quad()'s own literal guard order
+    // (in_bracket -> bracket_degenerate -> finite): a degenerate bracket (begin()'s own
+    // target_w/h<=0, already logged once there) is rejected HERE, before either the layer_armed
+    // enqueue below OR the streaming batch.draw_quad() call get a chance to run -- previously
+    // only the streaming path caught this (inside batch.draw_quad() itself), so a layer-armed
+    // draw during a degenerate bracket buffered a command that replay_layer_queue() would later
+    // discard anyway, wasted work/memory for a case that is a documented no-op either way.
+    if (batch.bracket_degenerate()) return;
     if (!draw2d_detail::is_finite(corners) || !draw2d_detail::is_finite(src_px) ||
         !draw2d_detail::is_finite(tint)) {
       log_warn(std::string(what) + "() rejected a non-finite (NaN/Inf) value (D10).");
@@ -538,9 +546,12 @@ struct Draw2d::Impl {
       for (const draw2d_detail::LayerCommand& cmd : group.commands) {
         Vec2F arr[4] = {cmd.corners.tl, cmd.corners.tr, cmd.corners.br, cmd.corners.bl};
         batch.draw_quad(cmd.texture_id, cmd.tex_w, cmd.tex_h, arr, cmd.src_px, cmd.tint);
-        // NonFinite/OutsideBracket at replay time are unreachable in practice (every command was
-        // already validated finite, and the bracket that BUFFERED it is the SAME one still open
-        // here, D10) -- no per-command log, same "defence-in-depth, not spammed" discipline
+        // NonFinite/OutsideBracket/BracketInvalid at replay time are ALL unreachable in practice:
+        // NonFinite because every command was already validated finite before push(); OutsideBracket
+        // because the bracket that BUFFERED it is the SAME one still open here (D10); and
+        // BracketInvalid (D2D-3B QA fix) because submit_quad() now checks batch.bracket_degenerate()
+        // BEFORE enqueueing, so a degenerate bracket never gets a command buffered in the first
+        // place -- no per-command log, same "defence-in-depth, not spammed" discipline
         // drain_ready()'s own comment documents for its unreachable branch.
       }
       batch.flush_pending();

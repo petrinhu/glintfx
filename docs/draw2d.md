@@ -531,7 +531,7 @@ registry before use.
 
 **A handle is NOT interchangeable between `Draw2d` instances.** `load_texture()` stamps the
 returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:713`); both
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:773`/`717`) reject a handle whose
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:784`/`728`) reject a handle whose
 `owner_` tag does not match `this`, logged once and treated exactly like any other
 unknown/stale handle -- never dereferenced as a raw GL name.
 This is a guarantee by construction, not a numeric coincidence: id and generation alone cannot
@@ -1251,7 +1251,7 @@ interno antes de usar.
 
 **Um handle NÃO é intercambiável entre instâncias `Draw2d`.** `load_texture()` carimba o handle
 retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:713`); tanto
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:773`/`717`) rejeitam um handle cuja
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:784`/`728`) rejeitam um handle cuja
 tag `owner_` não bate com `this`, logado uma vez e tratado exatamente como qualquer outro handle
 desconhecido/obsoleto -- nunca desreferenciado como nome GL cru. É uma garantia por construção,
 não uma coincidência numérica:

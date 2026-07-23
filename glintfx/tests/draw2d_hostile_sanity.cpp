@@ -251,7 +251,7 @@ int main() {
     d2d.set_camera(Camera2d{1.f, 2.f, 1.f, 0.f});
     d2d.reset_camera();
     d2d.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
-    // D2D-3, D32: the eleven NEW public methods this wave adds share the SAME null-safe-
+    // D2D-3, D32: the nine NEW public methods this wave adds share the SAME null-safe-
     // before-init contract as every other public method (draw2d.hpp's own class comment).
     d2d.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{});
     d2d.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{}, SpriteTransform{});
@@ -300,7 +300,7 @@ int main() {
     moved_from.reset_camera();
     moved_from.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
     // D2D-3, D32: same null-safe sweep as the pre-init block above, on a moved-from instance --
-    // the eleven NEW public methods this wave adds are not exempt from the cppcheck nullPointer
+    // the nine NEW public methods this wave adds are not exempt from the cppcheck nullPointer
     // lesson PROG-1 already fixed once for load_texture() (this file's own top comment).
     moved_from.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{});
     moved_from.draw_filled_rect(RectF{0, 0, 1, 1}, ColorF{}, SpriteTransform{});

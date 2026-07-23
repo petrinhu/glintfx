@@ -281,9 +281,19 @@ public:
     return out;
   }
 
-  // EN: Test/introspection helpers -- not used by draw2d.cpp itself.
-  // PT: Helpers de teste/introspecção -- não usados pelo próprio draw2d.cpp.
+  // EN: Introspection helpers -- draw2d.cpp's own submit_quad() reads BOTH: in_bracket() gates
+  //     every primitive/sprite call (D4's OutsideBracket story) and bracket_degenerate() (D2D-3B
+  //     QA fix) lets the layer-armed enqueue path reject a degenerate bracket BEFORE buffering a
+  //     command instead of only catching it later, silently, at replay_layer_queue() time -- the
+  //     SAME early rejection draw_quad()/draw_sprite() above already give the streaming path.
+  // PT: Helpers de introspecção -- o próprio submit_quad() do draw2d.cpp lê OS DOIS:
+  //     in_bracket() controla toda chamada de primitiva/sprite (a história OutsideBracket do D4)
+  //     e bracket_degenerate() (conserto de QA do D2D-3B) deixa o caminho de enfileiramento
+  //     layer-armed rejeitar um bracket degenerado ANTES de bufferizar um comando, em vez de só
+  //     pegar isso depois, em silêncio, no momento do replay_layer_queue() -- a MESMA rejeição
+  //     antecipada que draw_quad()/draw_sprite() acima já dão ao caminho streaming.
   bool in_bracket() const { return in_bracket_; }
+  bool bracket_degenerate() const { return bracket_degenerate_; }
   std::size_t max_quads() const { return max_quads_; }
 
 private:

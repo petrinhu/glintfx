@@ -89,19 +89,40 @@ std::vector<LayerCommand> flatten(const std::vector<LayerGroup>& groups) {
   return out;
 }
 
+// EN: D2D-3B QA fix (MAJOR): 32 same-layer commands, not 3 -- an earlier version of this test
+//     pushed only 3, which does NOT kill the std::stable_sort -> std::sort mutation this file's
+//     own header comment names: libstdc++'s introsort falls back to insertion sort below its
+//     small-partition threshold (empirically ~16 elements), and insertion sort on an ALREADY-
+//     sorted-by-push-order run (every key here compares equal, so the input is trivially
+//     "sorted" under this comparator) preserves order BY ACCIDENT even with a plain, unstable
+//     std::sort -- the mutation survived, green for the wrong reason. 32 clears that threshold
+//     (confirmed empirically: n=24/32/40/50/64 all reorder under plain std::sort with this
+//     all-equal-key pattern, n=8/16 do not) so the mutation actually shuffles `texture_id` and
+//     this check catches it.
+// PT: Conserto de QA do D2D-3B (MAJOR): 32 comandos de mesma camada, não 3 -- uma versão anterior
+//     deste teste empurrava só 3, o que NÃO mata a mutação std::stable_sort -> std::sort que o
+//     próprio comentário de cabeçalho deste arquivo nomeia: o introsort da libstdc++ cai pra
+//     insertion sort abaixo do próprio teto de partição pequena (empiricamente ~16 elementos), e
+//     insertion sort sobre uma corrida JÁ ordenada pela ordem de push (toda chave aqui compara
+//     igual, então a entrada é trivialmente "ordenada" sob este comparador) preserva a ordem POR
+//     ACIDENTE mesmo com um std::sort simples e instável -- a mutação sobrevivia, verde pelo
+//     motivo errado. 32 supera esse teto (confirmado empiricamente: n=24/32/40/50/64 todos
+//     reordenam sob um std::sort simples com este padrão de chave-toda-igual, n=8/16 não) então a
+//     mutação de fato embaralha `texture_id` e este cheque a pega.
 void test_stable_order_within_layer() {
+  constexpr int kCount = 32;
   LayerQueue q;
-  q.push(make_cmd(0, 1));
-  q.push(make_cmd(0, 2));
-  q.push(make_cmd(0, 3));
+  for (int i = 0; i < kCount; ++i) q.push(make_cmd(0, static_cast<std::uint32_t>(i)));
   const std::vector<LayerGroup> groups = q.drain_grouped();
   check(groups.size() == 1, "stable_order: same layer + same (default-inactive) scissor -> 1 group");
-  check(groups.size() == 1 && groups[0].commands.size() == 3,
-        "stable_order: all 3 commands present");
-  check(groups.size() == 1 && groups[0].commands.size() == 3 && groups[0].commands[0].texture_id == 1 &&
-            groups[0].commands[1].texture_id == 2 && groups[0].commands[2].texture_id == 3,
-        "stable_order: equal-layer commands keep PUSH order (the std::stable_sort mutation "
-        "killer -- a plain std::sort offers no such guarantee)");
+  check(groups.size() == 1 && groups[0].commands.size() == static_cast<std::size_t>(kCount),
+        "stable_order: all 32 commands present");
+  bool in_order = groups.size() == 1 && groups[0].commands.size() == static_cast<std::size_t>(kCount);
+  for (int i = 0; in_order && i < kCount; ++i)
+    in_order = groups[0].commands[static_cast<std::size_t>(i)].texture_id == static_cast<std::uint32_t>(i);
+  check(in_order,
+        "stable_order: 32 equal-layer commands keep PUSH order 0..31 exactly (the std::stable_sort "
+        "mutation killer -- a plain std::sort offers no such guarantee and reorders at this count)");
   check(q.empty(), "stable_order: drain_grouped() clears the queue");
 }
 

@@ -37,6 +37,14 @@
 //          -- proves texture-change flushes survive being replayed in a DIFFERENT order than they
 //          were submitted (each shape still lands at its own position with its own colour, no
 //          vertex/texture cross-contamination).
+//       8. reset_scissor, direct/isolated (D2D-3B QA fix, MINOR 1): unlike item 5 above (every
+//          probe there ends its OWN bracket right after the scissored draw, never drawing AGAIN
+//          post-reset), this check sets a SMALL off-center scissor, draws (clipped, expected),
+//          calls reset_scissor(), THEN draws a full-viewport rect AGAIN -- a probe FAR outside the
+//          old rect must now be painted. The direct mutation killer for set_gl_state_for_draw()'s
+//          `glDisable(GL_SCISSOR_TEST)` branch (draw2d.cpp's own D28 comment names this the ONE
+//          declared behavioural diff of this wave) ever being dropped: without it, the stale GL
+//          scissor box from the FIRST draw would still clip the second one to the same small rect.
 //     v0.21.0/onda-3/onda-4 regression coverage is NOT re-proven here (draw2d_render_sanity.cpp/
 //     draw2d_camera_render_sanity.cpp/draw2d_ui_coexist_sanity.cpp/draw2d_hostile_sanity.cpp/
 //     sprite_batch_sanity.cpp/transform2d_sanity.cpp run UNCHANGED and green, the published-
@@ -51,7 +59,7 @@
 //     em todo check abaixo.
 //
 //     Checks, cada um derivado à mão das fórmulas literais D8/D24/D25/D26/D27/D28 (nunca "parece
-//     certo"): ver a lista EN acima -- os mesmos sete itens, espelhados em pt-br nos comentários
+//     certo"): ver a lista EN acima -- os mesmos oito itens, espelhados em pt-br nos comentários
 //     de cada função de teste abaixo.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
@@ -527,6 +535,52 @@ int main() {
 
     std::error_code ec;
     fs::remove_all(dir, ec);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // 8. reset_scissor -- direct proof, isolated from item 5's grouping (D28 QA fix, MINOR 1).
+  // EN: Item 5 above only shows the OLD scissor rect being respected while it is ACTIVE; no check
+  //     there actually draws AFTER reset_scissor() to prove the clip is truly gone (each probe
+  //     ends its own bracket right after the scissored draw, then calls reset_scissor() with
+  //     nothing left to paint against it). This is the direct, isolated mutation killer the QA
+  //     review named: set_scissor() to a SMALL off-center rect, draw (clipped, expected),
+  //     reset_scissor(), THEN a SECOND full-viewport filled_rect -- if set_gl_state_for_draw()'s
+  //     `glDisable(GL_SCISSOR_TEST)` branch were ever dropped (the ONE declared behavioural diff
+  //     of this wave, this file's header comment / draw2d.cpp's own D28 comment), the GL scissor
+  //     box left over from the FIRST draw would still be enabled and clip the second one to the
+  //     SAME small rect -- a probe FAR outside that old rect (near a corner) would stay background
+  //     instead of painted.
+  // PT: 8. reset_scissor -- prova direta, isolada do agrupamento do item 5 (conserto de QA do D28,
+  //     MINOR 1). O item 5 acima só mostra o retângulo de scissor VELHO sendo respeitado enquanto
+  //     está ATIVO; nenhum cheque lá desenha DEPOIS do reset_scissor() pra provar que o clip
+  //     realmente sumiu (cada sonda fecha o próprio bracket logo depois do desenho scissorado,
+  //     então chama reset_scissor() sem mais nada pra pintar contra ele). Este é o mata-mutação
+  //     direto e isolado que o review de QA nomeou: set_scissor() pra um retângulo PEQUENO fora do
+  //     centro, desenha (clipado, esperado), reset_scissor(), DEPOIS um SEGUNDO filled_rect de
+  //     viewport-inteiro -- se o ramo `glDisable(GL_SCISSOR_TEST)` do set_gl_state_for_draw() fosse
+  //     removido algum dia (o ÚNICO diff comportamental declarado desta onda, o próprio comentário
+  //     de cabeçalho deste arquivo / o comentário D28 do draw2d.cpp), a caixa de scissor do GL
+  //     deixada pelo PRIMEIRO desenho continuaria habilitada e clipparia o segundo também ao MESMO
+  //     retângulo pequeno -- uma sonda LONGE daquele retângulo velho (perto de um canto)
+  //     continuaria fundo em vez de pintada.
+  // -------------------------------------------------------------------------------------------
+  {
+    const ColorF fill_color{0.4f, 0.7f, 0.2f, 1.f};
+    clear_bg();
+    d2d.set_scissor(RectF{70.f, 70.f, 20.f, 20.f}); // small, off-center -- the stale GL box under test.
+    d2d.begin(W, H);
+    d2d.draw_filled_rect(RectF{0.f, 0.f, static_cast<float>(W), static_cast<float>(H)}, fill_color);
+    d2d.end(); // clipped to {70,70,20,20} -- expected, not asserted here (item 5 already covers it).
+    d2d.reset_scissor();
+    d2d.begin(W, H);
+    d2d.draw_filled_rect(RectF{0.f, 0.f, static_cast<float>(W), static_cast<float>(H)}, fill_color);
+    d2d.end(); // must now paint the FULL viewport -- the reset() under test.
+    const auto px = read_backbuffer_rgb(W, H);
+    check(near_rgb(region_mean(px, W, H, 100, 100, 20), 102.0, 178.5, 51.0, 6.0),
+          "reset_scissor: centre (inside the old scissor rect too) is painted");
+    check(near_rgb(region_mean(px, W, H, 10, 10, 5), 102.0, 178.5, 51.0, 6.0),
+          "reset_scissor: a corner FAR outside the old scissor rect is ALSO painted -- the clip is "
+          "gone (the direct mutation killer for a dropped glDisable(GL_SCISSOR_TEST))");
   }
 
   check(d2d.ok(), "draw2d_primitives_render_sanity: d2d survives the whole suite");

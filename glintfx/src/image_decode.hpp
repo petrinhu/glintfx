@@ -193,4 +193,96 @@ inline DecodedImage decode_premultiplied_rgba(const unsigned char* data, std::si
   return out;
 }
 
+// EN: D2D-3, decision D29 -- the pure bbox-of-non-transparent-texels computation. Called ONCE
+//     inside `load_texture()` (draw2d.cpp, D2D-3B) on the SAME `DecodedImage::rgba` buffer
+//     `decode_premultiplied_rgba()` above just produced, before that buffer is discarded after
+//     GL upload -- so the smallest rect containing every texel with `alpha > 0` is computed
+//     exactly once, on pixel data that already exists on the CPU, never retained as a standalone
+//     buffer nor re-fetched via a `glGetTexImage` readback (both rejected alternatives, recorded
+//     in the plan: the first is up-to-256-MiB-class memory for a rarely-used query, the second
+//     is a GL round-trip and a GLES/core-profile portability trap). Coordinates are TEXEL space,
+//     top-left origin, y-down -- the SAME space `src_px` already uses (matches image memory row
+//     order, this file's own D5-class convention) -- so a caller's hitbox-from-bbox pattern
+//     composes with `src_px` directly. Premultiply does NOT disturb this definition: the alpha
+//     channel is UNCHANGED by the premultiply loop above (it multiplies R/G/B only, alpha passes
+//     through verbatim) -- stated here so nobody has to re-derive it from that loop. Pure, total,
+//     cannot log (same discipline as `decode_premultiplied_rgba` above): `rgba == nullptr`,
+//     `w <= 0`, `h <= 0`, or every texel having `alpha == 0` (a fully-transparent image, distinct
+//     from a 1x1 opaque image which returns `{true, 0, 0, 1, 1}`) all leave `ContentBbox::found
+//     == false` with every other field at its default-constructed 0. A semi-transparent texel
+//     (`alpha == 1`, the smallest nonzero byte value) COUNTS -- the `alpha > 0` definition, not
+//     `alpha == 255`; an alpha THRESHOLD parameter is out of scope here (INBOX seed
+//     `SEED-D2D-BBOX-THRESH`). This function returns its OWN small struct (`ContentBbox`, not
+//     the public `glintfx::TextureBbox` declared in `<glintfx/draw2d.hpp>`) on purpose -- this
+//     header has ZERO dependency on Draw2D's own public header (see this file's own top comment
+//     on why: `render_gl3.cpp`'s ui-side `LoadTexture` also depends on this file and has nothing
+//     to do with Draw2D); `draw2d.cpp` (D2D-3B) converts this to the public `TextureBbox` at its
+//     own call site.
+// PT: D2D-3, decisão D29 -- a computação pura de bbox-de-texels-não-transparentes. Chamada UMA
+//     vez dentro de `load_texture()` (draw2d.cpp, D2D-3B) sobre o MESMO buffer
+//     `DecodedImage::rgba` que o próprio `decode_premultiplied_rgba()` acima acabou de produzir,
+//     antes desse buffer ser descartado após o upload GL -- então o menor retângulo contendo
+//     todo texel com `alpha > 0` é computado exatamente uma vez, sobre dado de pixel que já
+//     existe na CPU, nunca retido como buffer avulso nem re-buscado via readback
+//     `glGetTexImage` (as duas alternativas rejeitadas, gravadas no plano: a primeira é memória
+//     de até 256 MiB pra uma consulta pouco usada, a segunda é um round-trip de GL e uma
+//     armadilha de portabilidade GLES/core-profile). Coordenadas em espaço de TEXEL, origem
+//     superior-esquerda, y pra baixo -- o MESMO espaço que `src_px` já usa (bate com a ordem de
+//     linha da memória de imagem, a mesma convenção classe-D5 deste arquivo) -- então o padrão
+//     hitbox-a-partir-de-bbox de um chamador compõe direto com `src_px`. O premultiply NÃO
+//     perturba esta definição: o canal alpha fica INALTERADO pelo loop de premultiply acima (ele
+//     multiplica só R/G/B, o alpha passa direto) -- dito aqui pra ninguém precisar re-derivar
+//     isso daquele loop. Pura, total, não pode logar (mesma disciplina do
+//     `decode_premultiplied_rgba` acima): `rgba == nullptr`, `w <= 0`, `h <= 0`, ou todo texel
+//     com `alpha == 0` (uma imagem totalmente transparente, distinta de uma imagem opaca 1x1 que
+//     devolve `{true, 0, 0, 1, 1}`) todos deixam `ContentBbox::found == false` com todo outro
+//     campo no próprio 0 default-construído. Um texel semi-transparente (`alpha == 1`, o menor
+//     valor de byte não-zero) CONTA -- a definição é `alpha > 0`, não `alpha == 255`; um
+//     parâmetro de LIMIAR de alpha fica fora de escopo aqui (semente INBOX `SEED-D2D-BBOX-
+//     THRESH`). Esta função devolve a PRÓPRIA struct pequena (`ContentBbox`, não o
+//     `glintfx::TextureBbox` público declarado em `<glintfx/draw2d.hpp>`) de propósito -- este
+//     header tem ZERO dependência do header público próprio do Draw2D (ver o próprio comentário
+//     de topo deste arquivo pro porquê: o `LoadTexture` do lado ui de `render_gl3.cpp` também
+//     depende deste arquivo e não tem nada a ver com Draw2D); o `draw2d.cpp` (D2D-3B) converte
+//     isto pro `TextureBbox` público no próprio sítio de chamada dele.
+struct ContentBbox {
+  bool found = false;
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+};
+
+inline ContentBbox compute_content_bbox(const unsigned char* rgba, int w, int h) {
+  ContentBbox out;
+  if (rgba == nullptr || w <= 0 || h <= 0)
+    return out; // EN: found stays false. PT: found permanece false.
+
+  int min_x = w, min_y = h, max_x = -1, max_y = -1;
+  for (int row = 0; row < h; ++row) {
+    for (int col = 0; col < w; ++col) {
+      const std::size_t idx = (static_cast<std::size_t>(row) * static_cast<std::size_t>(w) +
+                               static_cast<std::size_t>(col)) *
+                                  4u +
+                              3u;
+      if (rgba[idx] == 0)
+        continue; // EN: alpha == 0 -- not part of the content bbox (D29's alpha>0 rule).
+                  // PT: alpha == 0 -- fora do bbox de conteúdo (regra alpha>0 do D29).
+      if (col < min_x) min_x = col;
+      if (col > max_x) max_x = col;
+      if (row < min_y) min_y = row;
+      if (row > max_y) max_y = row;
+    }
+  }
+  if (max_x < 0)
+    return out; // EN: fully transparent -- found stays false. PT: totalmente transparente.
+
+  out.found = true;
+  out.x = min_x;
+  out.y = min_y;
+  out.w = max_x - min_x + 1;
+  out.h = max_y - min_y + 1;
+  return out;
+}
+
 } // namespace glintfx

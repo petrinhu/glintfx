@@ -927,6 +927,37 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: primitives2d_sanity (D2D-3A, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisions D25/D26/D28/D29) -- PURE unit test for src/primitives2d.hpp (line
+#     corners, rect-outline decomposition, scissor GL mapping) AND the D29 bbox helper in
+#     src/image_decode.hpp (compute_content_bbox). No window, no GL context, no RmlUi/GLFW
+#     dependency whatsoever (same "nothing display-related to isolate here" reasoning as
+#     transform2d_sanity/sprite_batch_sanity/image_decode_sanity above). Registered
+#     UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other draw2d test in
+#     this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (Vec2F/RectF/ColorF, transitively via
+#     transform2d.hpp/primitives2d.hpp) -- primitives2d.hpp/image_decode.hpp are entirely
+#     header-only, they pull in no library symbols.
+# PT: primitives2d_sanity (D2D-3A, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisões D25/D26/D28/D29) -- teste unit PURO para src/primitives2d.hpp
+#     (cantos de linha, decomposição de contorno, mapeamento GL de scissor) E o helper D29 de
+#     bbox em src/image_decode.hpp (compute_content_bbox). Sem janela, sem contexto GL, nenhuma
+#     dependência de RmlUi/GLFW (mesmo racional "nada relacionado a display pra isolar aqui" de
+#     transform2d_sanity/sprite_batch_sanity/image_decode_sanity acima). Registrado
+#     INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo outro teste de
+#     draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka `glintfx` só pelo
+#     include path público de <glintfx/draw2d.hpp> (Vec2F/RectF/ColorF, transitivamente via
+#     transform2d.hpp/primitives2d.hpp) -- primitives2d.hpp/image_decode.hpp são inteiramente
+#     header-only, não puxam símbolo nenhum de biblioteca.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(primitives2d_sanity primitives2d_sanity.cpp)
+  target_include_directories(primitives2d_sanity PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+  target_link_libraries(primitives2d_sanity PRIVATE glintfx)
+  add_test(NAME primitives2d_sanity COMMAND primitives2d_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #

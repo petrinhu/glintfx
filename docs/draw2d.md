@@ -35,14 +35,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // or just let `draw2d` go out of scope
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) does not touch GL -- construction is
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:373`) does not touch GL -- construction is
   always cheap and side-effect-free, same discipline as `Audio()`/`App()`/`UiLayer()`.
 - `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) requires a CURRENT GL 3.3 core context.
   It calls `glx_gl_load()` itself -- see "GL loader idempotency" below for why that is safe even
   when a cohabiting `App`/`UiLayer` already loaded the same table. Returns `false` on any
   GL/shader failure, or when the instance is already initialized (call `shutdown()` first to
   re-init).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) is idempotent -- releases every live
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) is idempotent -- releases every live
   texture, the VBO/VAO, and the shader program, ONLY if `init()` ever succeeded, and discards
   any open/partial `begin()`/`end()` bracket. The destructor calls it.
 - **Moved-from state is a safe no-op, deliberately stricter than `App`.** Every method on a
@@ -73,11 +73,11 @@ projection formulas and their own coordinate story.
 
 ### Camera (D2D-2 -- optional world space)
 
-`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:170`) is an OPTIONAL world camera. Its default
+`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:191`) is an OPTIONAL world camera. Its default
 STATE is "no camera" -- exactly the coordinate contract above, not "camera set to identity" (see
 the anchor note below for why that distinction matters). `set_camera(const Camera2d&)`
 (`glintfx/include/glintfx/draw2d.hpp:485`) switches subsequent `draw_sprite` calls, in any open
-or future bracket, to WORLD space; `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`)
+or future bracket, to WORLD space; `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`)
 returns to screen space -- idempotent, safe to call with no camera set. `shutdown()` already
 resets to no-camera (D22); a freshly-`init()`ed instance always starts in screen space.
 
@@ -159,7 +159,7 @@ caller wanting a letterbox-exact fit composes this with `UiLayer::set_viewport`
 
 ### SpriteTransform (D18 -- per-sprite pivot/rotation/scale/flip)
 
-`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:201`) is orthogonal to the camera and
+`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:222`) is orthogonal to the camera and
 applies in **BOTH** spaces -- world units when a camera is set, screen px otherwise (D5/Q1 (c))
 -- via the overload `draw_sprite(tex, dst, src_px, tint, transform)`
 (`glintfx/include/glintfx/draw2d.hpp:524-525`, defined `glintfx/src/draw2d.cpp:635`).
@@ -206,28 +206,28 @@ against there -- confirmed as an analysis, not an omission, by the adversarial r
 | Method | Returns | Notes |
 | :--- | :--- | :--- |
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Requires a current GL 3.3 core context. `false` on GL/shader failure or if already initialized. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
-| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:485`) | `void` | Switches subsequent draws to world space (D2D-2, Q1 (c)). Fail-high (D15): keeps the previous state on a non-finite member or `zoom <= 0`. See "Camera" above. |
-| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) | `void` | Returns subsequent draws to screen space (the no-camera default). Idempotent. See "Camera" above. |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:524-525`) | `void` | D18 overload -- pivot/rotation/scale/flip, in whichever space is active. See "SpriteTransform" above. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
-| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:240`) | `Vec2F` | Pure, total free function (D12/D16). See "Camera" above. |
-| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:241`) | `Vec2F` | Pure, total free function (D12/D16), exact inverse of `world_to_screen`. |
-| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:242`) | `Camera2d` | D17, generic rect-fit convenience. Hostile input returns `Camera2d{}`. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:398`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:437`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:454`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:473`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:507-508`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
+| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:527`) | `void` | Switches subsequent draws to world space (D2D-2, Q1 (c)). Fail-high (D15): keeps the previous state on a non-finite member or `zoom <= 0`. See "Camera" above. |
+| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) | `void` | Returns subsequent draws to screen space (the no-camera default). Idempotent. See "Camera" above. |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:566-567`) | `void` | D18 overload -- pivot/rotation/scale/flip, in whichever space is active. See "SpriteTransform" above. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:575`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:294`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:297-298`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
+| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:261`) | `Vec2F` | Pure, total free function (D12/D16). See "Camera" above. |
+| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:262`) | `Vec2F` | Pure, total free function (D12/D16), exact inverse of `world_to_screen`. |
+| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:263`) | `Camera2d` | D17, generic rect-fit convenience. Hostile input returns `Camera2d{}`. |
 
 ### Premultiply and the tint formula (D8)
 
 `load_texture()` decodes and **alpha-premultiplies** the image on upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` unchanged)
 to match this module's blend, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) is
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:142`) is
 **straight** (non-premultiplied) RGBA in `[0, 1]`, each channel clamped on intake -- default is
 opaque white (identity: an unmodified sample). The fragment shader
 (`glintfx/src/draw2d.cpp:90-99`) applies the exact modulation:
@@ -325,7 +325,7 @@ calls (D9 above covers who restores what).
 
 ### Texture handles (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) is a plain, copyable value handle -- NOT
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:287`) is a plain, copyable value handle -- NOT
 an RAII owner (`destroy_texture()` is the explicit release, same idiom as `Audio::SoundId`).
 Internally it carries an opaque id, a generation counter, and an **owner tag** (the issuing
 `Draw2d`'s own identity): a `Draw2d` instance validates every handle against its own internal
@@ -465,14 +465,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // ou simplesmente deixe `draw2d` sair de escopo
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) não toca em GL -- a construção é sempre
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:373`) não toca em GL -- a construção é sempre
   barata e sem efeito colateral, mesma disciplina de `Audio()`/`App()`/`UiLayer()`.
 - `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) exige um contexto GL 3.3 core CORRENTE.
   Chama o próprio `glx_gl_load()` -- ver "Idempotência do loader GL" abaixo pro porquê disso ser
   seguro mesmo quando um `App`/`UiLayer` coabitante já carregou a mesma tabela. Retorna `false`
   em qualquer falha de GL/shader, ou quando a instância já está inicializada (chame `shutdown()`
   primeiro pra re-inicializar).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) é idempotente -- libera toda textura
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) é idempotente -- libera toda textura
   viva, o VBO/VAO, e o programa de shader, SÓ SE `init()` alguma vez teve sucesso, e descarta
   qualquer bracket `begin()`/`end()` aberto/parcial. O destrutor chama.
 - **Estado movido-de é um no-op seguro, deliberadamente mais estrito que o `App`.** Todo método
@@ -505,12 +505,12 @@ aquela seção pras fórmulas de projeção e a própria história de coordenada
 
 ### Câmera (D2D-2 -- espaço de mundo opcional)
 
-`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:170`) é uma câmera de mundo OPCIONAL. O ESTADO
+`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:191`) é uma câmera de mundo OPCIONAL. O ESTADO
 default dela é "sem câmera" -- exatamente o contrato de coordenadas acima, não "câmera setada
 pra identidade" (ver a nota de âncora abaixo pro porquê dessa distinção importar).
-`set_camera(const Camera2d&)` (`glintfx/include/glintfx/draw2d.hpp:485`) passa as chamadas
+`set_camera(const Camera2d&)` (`glintfx/include/glintfx/draw2d.hpp:527`) passa as chamadas
 `draw_sprite` seguintes, em qualquer bracket aberto ou futuro, pro espaço de MUNDO;
-`reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) volta pro espaço de tela --
+`reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) volta pro espaço de tela --
 idempotente, seguro chamar sem câmera setada. `shutdown()` já reseta pra sem-câmera (D22); uma
 instância recém-`init()`ada sempre começa em espaço de tela.
 
@@ -597,7 +597,7 @@ devolvem `Camera2d{}` (documentado, não um crash).
 
 ### SpriteTransform (D18 -- pivô/rotação/escala/flip por-sprite)
 
-`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:201`) é ortogonal à câmera e vale nos
+`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:222`) é ortogonal à câmera e vale nos
 DOIS espaços -- unidades de mundo com câmera setada, px de tela caso contrário (D5/Q1 (c)) --
 via o overload `draw_sprite(tex, dst, src_px, tint, transform)`
 (`glintfx/include/glintfx/draw2d.hpp:524-525`, definido em `glintfx/src/draw2d.cpp:635`).
@@ -645,28 +645,28 @@ review adversarial.
 | Método | Retorna | Notas |
 | :--- | :--- | :--- |
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Exige um contexto GL 3.3 core corrente. `false` em falha de GL/shader ou se já inicializado. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
-| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:485`) | `void` | Passa os desenhos seguintes pro espaço de mundo (D2D-2, Q1 (c)). Fail-high (D15): mantém o estado anterior em membro não-finito ou `zoom <= 0`. Ver "Câmera" acima. |
-| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) | `void` | Devolve os desenhos seguintes pro espaço de tela (o default sem câmera). Idempotente. Ver "Câmera" acima. |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:524-525`) | `void` | Overload D18 -- pivô/rotação/escala/flip, no espaço que estiver ativo. Ver "SpriteTransform" acima. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
-| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:240`) | `Vec2F` | Free function pura e total (D12/D16). Ver "Câmera" acima. |
-| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:241`) | `Vec2F` | Free function pura e total (D12/D16), inverso exato de `world_to_screen`. |
-| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:242`) | `Camera2d` | D17, conveniência genérica de fit-por-retângulo. Input hostil devolve `Camera2d{}`. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:398`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:437`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:454`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:473`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:507-508`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
+| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:527`) | `void` | Passa os desenhos seguintes pro espaço de mundo (D2D-2, Q1 (c)). Fail-high (D15): mantém o estado anterior em membro não-finito ou `zoom <= 0`. Ver "Câmera" acima. |
+| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) | `void` | Devolve os desenhos seguintes pro espaço de tela (o default sem câmera). Idempotente. Ver "Câmera" acima. |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:566-567`) | `void` | Overload D18 -- pivô/rotação/escala/flip, no espaço que estiver ativo. Ver "SpriteTransform" acima. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:575`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:294`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:297-298`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
+| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:261`) | `Vec2F` | Free function pura e total (D12/D16). Ver "Câmera" acima. |
+| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:262`) | `Vec2F` | Free function pura e total (D12/D16), inverso exato de `world_to_screen`. |
+| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:263`) | `Camera2d` | D17, conveniência genérica de fit-por-retângulo. Input hostil devolve `Camera2d{}`. |
 
 ### Premultiply e a fórmula do tint (D8)
 
 `load_texture()` decodifica e **premultiplica o alpha** da imagem no upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` inalterado)
 pra bater com o blend deste módulo, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) é RGBA
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:142`) é RGBA
 **straight** (não-premultiplicado) em `[0, 1]`, cada canal clampado na entrada -- o padrão é
 branco opaco (identidade: uma amostra sem modificação). O estágio de fragmento
 (`glintfx/src/draw2d.cpp:90-99`) aplica a modulação exata:
@@ -767,7 +767,7 @@ chamadas GL cruas (o D9 acima cobre quem restaura o quê).
 
 ### Handles de textura (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) é um handle-valor simples, copiável --
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:287`) é um handle-valor simples, copiável --
 NÃO é dono RAII (`destroy_texture()` é a liberação explícita, mesmo idioma do `Audio::SoundId`).
 Internamente carrega um id opaco, um contador de geração, e uma **tag de dono** (a identidade
 própria do `Draw2d` emissor): uma instância `Draw2d` valida todo handle contra o próprio registry

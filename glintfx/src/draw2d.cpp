@@ -43,11 +43,13 @@
 #include "image_decode.hpp"
 #include "log_dedup.hpp"
 #include "sprite_batch.hpp"
+#include "transform2d.hpp"
 
 #include <cstddef>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace glintfx {
@@ -151,6 +153,19 @@ struct Draw2d::Impl {
   draw2d_detail::SpriteBatch batch{4096};
   int target_w = 0;
   int target_h = 0;
+
+  // EN: D2D-2B, Q1 (c)/D22 -- the camera is `Draw2d` STATE, sticky until set_camera()/
+  //     reset_camera()/shutdown() change it. `has_camera == false` is the default,
+  //     v0.20.0-literal screen-space path; `camera` itself is only meaningful when
+  //     `has_camera` is true (a stored camera is valid by construction, D15 -- set_camera()
+  //     never lets a non-finite/zoom<=0 value through).
+  // PT: D2D-2B, Q1 (c)/D22 -- a câmera é ESTADO do `Draw2d`, sticky até set_camera()/
+  //     reset_camera()/shutdown() mudarem. `has_camera == false` é o default, o caminho de
+  //     espaço de tela literal da v0.20.0; `camera` em si só é significativo quando
+  //     `has_camera` é true (uma câmera armazenada é válida por construção, D15 --
+  //     set_camera() nunca deixa passar um valor não-finito/zoom<=0).
+  bool has_camera = false;
+  Camera2d camera{};
 
   // EN: log_dedup.hpp is ZERO-RmlUi (its own header comment) -- Draw2D has no Rml::Log to reach
   //     (unlike render_gl3.cpp/decorator_polygon.cpp), so this dedup table gates a plain
@@ -372,6 +387,8 @@ void Draw2d::shutdown() {
   impl_->batch = draw2d_detail::SpriteBatch{4096}; // discards any open/partial bracket state.
   impl_->target_w = 0;
   impl_->target_h = 0;
+  impl_->has_camera = false; // D22: a re-init()ed instance starts in screen space.
+  impl_->camera = Camera2d{};
   impl_->initialized = false;
 }
 
@@ -549,10 +566,193 @@ void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& sr
   impl_->drain_ready();
 }
 
+// EN: D2D-2B, Q1 (c)/D15 -- fail-high: any non-finite `camera` member or `camera.zoom <= 0`
+//     rejects the call, KEEPING the previous state (including "no camera") -- one dedup'd
+//     log line, never a partial/corrupt camera write. `draw2d_detail::is_finite(Camera2d)`
+//     is transform2d.hpp's own predicate (D2D-2A), reused here rather than re-derived --
+//     single source, same rationale D12's own header comment gives for the projection
+//     formulas themselves.
+// PT: D2D-2B, Q1 (c)/D15 -- fail-high: qualquer membro não-finito de `camera` ou
+//     `camera.zoom <= 0` rejeita a chamada, MANTENDO o estado anterior (inclusive "sem
+//     câmera") -- uma linha de log dedup'd, nunca uma escrita parcial/corrompida de câmera.
+//     `draw2d_detail::is_finite(Camera2d)` é o próprio predicado de transform2d.hpp
+//     (D2D-2A), reusado aqui em vez de re-derivado -- fonte única, mesma racional que o
+//     próprio comentário de cabeçalho do D12 dá pras fórmulas de projeção em si.
+void Draw2d::set_camera(const Camera2d& camera) {
+  if (!impl_ || !impl_->initialized) return;
+  if (!draw2d_detail::is_finite(camera) || camera.zoom <= 0.f) {
+    impl_->log_warn(
+        "set_camera(): rejected a non-finite member or zoom<=0 -- "
+        "previous camera state kept (D15).");
+    return;
+  }
+  impl_->has_camera = true;
+  impl_->camera = camera;
+}
+
+// EN: D2D-2B, Q1 (c) -- idempotent, safe to call with no camera set (a no-op in that case).
+//     `shutdown()` already does this implicitly (D22).
+// PT: D2D-2B, Q1 (c) -- idempotente, seguro chamar sem câmera setada (um no-op nesse caso).
+//     `shutdown()` já faz isso implicitamente (D22).
+void Draw2d::reset_camera() {
+  if (!impl_ || !impl_->initialized) return;
+  impl_->has_camera = false;
+  impl_->camera = Camera2d{};
+}
+
+// EN: D2D-2B, D18/D20 overload -- `transform` applies pivot/rotation/scale/flip about `dst`
+//     in whichever space is currently active (world units with a camera set, screen px
+//     otherwise). Fail-high order, literal (D20): (1) every `transform` member finite
+//     BEFORE any arithmetic; (2) `dst.w <= 0 || dst.h <= 0` stays the silent legal no-op the
+//     4-arg overload already has (unchanged); (3) the texture-handle validation the 4-arg
+//     overload already runs (D7, duplicated here rather than factored out -- the 4-arg path
+//     must stay byte-for-byte untouched, Q1 (c)'s compatibility guarantee); (4) corners via
+//     `transform2d.hpp::compute_sprite_corners` (D2D-2A, single source); (5) WITH a camera,
+//     each corner projected through `world_to_screen` (D12) -- CPU-side, pre-batcher (D13),
+//     so this never forces a flush; (6) the post-math guard: the FINAL (post-projection)
+//     corners must be finite, or the draw is skipped (D20's second guard, overflow with no
+//     v0.20.0 twin by design -- catches overflow from EITHER the corner math or the camera
+//     projection, whichever ran). flip_h/flip_v (D18) swap UV on the resolved src_px
+//     sub-rect -- implemented here (not by SpriteTransform itself) by swapping which UV
+//     corner each screen corner receives, same idiom draw_quad's own u0/v0/u1/v1 pairing
+//     already uses.
+// PT: D2D-2B, overload D18/D20 -- `transform` aplica pivô/rotação/escala/flip sobre `dst` no
+//     espaço que estiver ativo no momento (unidades de mundo com câmera setada, px de tela
+//     caso contrário). Ordem fail-high, literal (D20): (1) todo membro de `transform` finito
+//     ANTES de qualquer conta; (2) `dst.w <= 0 || dst.h <= 0` continua o no-op legal
+//     silencioso que o overload de 4 args já tem (inalterado); (3) a validação de handle de
+//     textura que o overload de 4 args já roda (D7, duplicada aqui em vez de fatorada -- o
+//     caminho de 4 args precisa ficar byte-a-byte intocado, a garantia de compatibilidade da
+//     Q1 (c)); (4) cantos via `transform2d.hpp::compute_sprite_corners` (D2D-2A, fonte
+//     única); (5) COM câmera, cada canto projetado por `world_to_screen` (D12) -- CPU-side,
+//     pré-batcher (D13), então isto nunca força um flush; (6) a guarda pós-conta: os cantos
+//     FINAIS (pós-projeção) precisam ser finitos, ou o desenho é pulado (a segunda guarda do
+//     D20, overflow sem gêmeo na v0.20.0 por design -- pega overflow tanto da matemática de
+//     canto quanto da projeção de câmera, qualquer uma que tenha rodado). flip_h/flip_v
+//     (D18) trocam UV no sub-retângulo `src_px` resolvido -- implementado aqui (não pelo
+//     próprio SpriteTransform) trocando qual canto UV cada canto de tela recebe, mesmo
+//     idioma que o próprio pareamento u0/v0/u1/v1 do draw_quad já usa.
+void Draw2d::draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px,
+                         const ColorF& tint, const SpriteTransform& transform) {
+  if (!impl_ || !impl_->initialized) return;
+
+  if (!draw2d_detail::is_finite(transform)) {
+    impl_->log_warn(
+        "draw_sprite(transform): rejected a non-finite (NaN/Inf) SpriteTransform member (D20).");
+    return;
+  }
+  if (dst.w <= 0.f || dst.h <= 0.f) return; // D10: silent legal no-op, unchanged from the 4-arg overload.
+
+  if (!tex.ok_ || tex.id_ == 0) {
+    impl_->log_warn("draw_sprite(transform): invalid (never-loaded) texture handle -- ignored.");
+    return;
+  }
+  if (tex.owner_ != impl_.get()) {
+    impl_->log_warn(
+        "draw_sprite(transform): texture handle issued by a different Draw2d instance -- ignored (D7).");
+    return;
+  }
+  const std::size_t idx = static_cast<std::size_t>(tex.id_) - 1;
+  if (idx >= impl_->textures.size() || !impl_->textures[idx].alive ||
+      impl_->textures[idx].generation != tex.generation_) {
+    impl_->log_warn("draw_sprite(transform): unknown/stale/tampered texture handle -- ignored (D7).");
+    return;
+  }
+  const Impl::TextureSlot& slot = impl_->textures[idx];
+
+  const draw2d_detail::SpriteCorners local = draw2d_detail::compute_sprite_corners(dst, transform);
+
+  Vec2F projected[4];
+  if (impl_->has_camera) {
+    projected[0] =
+        draw2d_detail::world_to_screen(impl_->camera, impl_->target_w, impl_->target_h, local.tl);
+    projected[1] =
+        draw2d_detail::world_to_screen(impl_->camera, impl_->target_w, impl_->target_h, local.tr);
+    projected[2] =
+        draw2d_detail::world_to_screen(impl_->camera, impl_->target_w, impl_->target_h, local.br);
+    projected[3] =
+        draw2d_detail::world_to_screen(impl_->camera, impl_->target_w, impl_->target_h, local.bl);
+  } else {
+    projected[0] = local.tl;
+    projected[1] = local.tr;
+    projected[2] = local.br;
+    projected[3] = local.bl;
+  }
+
+  const draw2d_detail::SpriteCorners final_corners{projected[0], projected[1], projected[2],
+                                                   projected[3]};
+  if (!draw2d_detail::is_finite(final_corners)) {
+    impl_->log_warn(
+        "draw_sprite(transform): rejected a non-finite computed corner (overflow, D20).");
+    return;
+  }
+
+  // D18: flip_h/flip_v swap UV on the RESOLVED src_px sub-rect, never touching src_px
+  // itself -- draw_quad() below always assigns UV by SLOT (slot0->u0v0, slot1->u1v0,
+  // slot2->u1v1, slot3->u0v1, the same TL/TR/BR/BL pairing draw_sprite's own emit_quad()
+  // uses), so re-ordering which PHYSICAL corner occupies which slot flips which texel that
+  // physical corner samples, with the quad's screen-space footprint (the SET of 4 physical
+  // positions) unchanged. flip_h swaps the two UV-column slot-pairs (0,1) and (2,3);
+  // flip_v swaps the two UV-row slot-pairs (0,3) and (1,2); applying both composes to the
+  // 180-degree UV permutation (each physical corner samples its diagonal opposite's texel).
+  Vec2F quad_corners[4] = {projected[0], projected[1], projected[2], projected[3]};
+  if (transform.flip_h) {
+    std::swap(quad_corners[0], quad_corners[1]);
+    std::swap(quad_corners[2], quad_corners[3]);
+  }
+  if (transform.flip_v) {
+    std::swap(quad_corners[0], quad_corners[3]);
+    std::swap(quad_corners[1], quad_corners[2]);
+  }
+
+  const draw2d_detail::SpriteBatch::DrawResult result =
+      impl_->batch.draw_quad(tex.id_, slot.width, slot.height, quad_corners, src_px, tint);
+  using DR = draw2d_detail::SpriteBatch::DrawResult;
+  if (result == DR::OutsideBracket)
+    impl_->log_warn("draw_sprite(transform) called outside a begin()/end() bracket -- ignored (D4).");
+  else if (result == DR::NonFinite)
+    impl_->log_warn(
+        "draw_sprite(transform) rejected a non-finite (NaN/Inf) src_px/tint value (D10).");
+
+  impl_->drain_ready();
+}
+
 void Draw2d::end() {
   if (!impl_ || !impl_->initialized) return;
   impl_->batch.end();
   impl_->drain_ready();
+}
+
+// EN: D2D-2B, D21 -- the PUBLIC free functions declared in draw2d.hpp, defined out-of-line
+//     HERE (not header-inline) so `nm` still proves their removal when
+//     GLINTFX_MODULE_DRAW2D=OFF. Each is a one-line delegation to the SAME internal
+//     formulas `draw_sprite`'s camera path uses above (src/transform2d.hpp, D2D-2A) --
+//     single source, the draw path and these helpers cannot diverge (plan section 0, risk
+//     2). Qualified calls (`draw2d_detail::...`), not `using` + unqualified: ADL on
+//     Camera2d/Vec2F (both `glintfx::`) would otherwise find these very declarations again
+//     and the two overloads match identically (see transform2d_sanity.cpp's own w2s/s2w/
+//     fit_cam wrapper comment for the same ambiguity, hit independently by D2D-2A's tests).
+// PT: D2D-2B, D21 -- as free functions PÚBLICAS declaradas em draw2d.hpp, definidas fora de
+//     linha AQUI (não header-inline) pra que o `nm` continue provando a remoção delas
+//     quando GLINTFX_MODULE_DRAW2D=OFF. Cada uma é uma delegação de uma linha pras MESMAS
+//     fórmulas internas que o caminho de câmera do `draw_sprite` usa acima
+//     (src/transform2d.hpp, D2D-2A) -- fonte única, o caminho de desenho e estes helpers não
+//     podem divergir (plano seção 0, risco 2). Chamadas qualificadas
+//     (`draw2d_detail::...`), não `using` + não-qualificada: ADL em Camera2d/Vec2F (ambos
+//     `glintfx::`) acharia estas mesmas declarações de novo e os dois overloads bateriam
+//     identicamente (ver o próprio comentário do wrapper w2s/s2w/fit_cam de
+//     transform2d_sanity.cpp pra mesma ambiguidade, batida independentemente pelos testes
+//     do D2D-2A).
+Vec2F world_to_screen(const Camera2d& cam, int viewport_w, int viewport_h, Vec2F world) {
+  return draw2d_detail::world_to_screen(cam, viewport_w, viewport_h, world);
+}
+
+Vec2F screen_to_world(const Camera2d& cam, int viewport_w, int viewport_h, Vec2F screen) {
+  return draw2d_detail::screen_to_world(cam, viewport_w, viewport_h, screen);
+}
+
+Camera2d camera_from_world_rect(const RectF& world_rect, int viewport_w, int viewport_h) {
+  return draw2d_detail::camera_from_world_rect(world_rect, viewport_w, viewport_h);
 }
 
 } // namespace glintfx

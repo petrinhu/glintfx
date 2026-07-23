@@ -29,17 +29,22 @@
 #include <glintfx/glintfx.hpp>
 #include "gl_loader.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
+using glintfx::Camera2d;
 using glintfx::ColorF;
 using glintfx::Draw2d;
 using glintfx::RectF;
+using glintfx::SpriteTransform;
 using glintfx::Texture2d;
 
 namespace {
@@ -149,6 +154,62 @@ bool write_sparse_file(const fs::path& path, std::uint64_t size) {
   return !ec;
 }
 
+// EN: D2D-2B -- a minimal readback pair (Rgb/read_backbuffer_rgb/region_mean/near_rgb, same
+//     y-flip fix and "statistical, never pixel-exact" discipline as draw2d_render_sanity.cpp),
+//     added to THIS file for the camera hostile section below: proving a hostile set_camera()
+//     call left the PREVIOUS camera state intact needs to observe where a sprite actually
+//     landed -- `Camera2d` has no public getter (SEED-D2D-CAMGETTER, out of this wave), so a
+//     render-based proof is the only oracle available.
+// PT: D2D-2B -- um par mínimo de readback (Rgb/read_backbuffer_rgb/region_mean/near_rgb, mesmo
+//     fix de flip de Y e disciplina "estatístico, nunca pixel-exato" de draw2d_render_sanity.cpp),
+//     somado a ESTE arquivo pra seção de câmera hostil abaixo: provar que uma chamada hostil de
+//     set_camera() deixou o estado de câmera ANTERIOR intacto precisa observar onde um sprite de
+//     fato pousou -- `Camera2d` não tem getter público (SEED-D2D-CAMGETTER, fora desta onda),
+//     então uma prova baseada em render é o único oráculo disponível.
+struct Rgb {
+  double r = 0, g = 0, b = 0;
+};
+
+std::vector<unsigned char> read_backbuffer_rgb(int w, int h) {
+  std::vector<unsigned char> raw(static_cast<std::size_t>(w) * h * 3);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glReadBuffer(GL_BACK);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
+  std::vector<unsigned char> px(raw.size());
+  for (int y = 0; y < h; ++y) {
+    const unsigned char* src_row = raw.data() + static_cast<std::size_t>(h - 1 - y) * w * 3;
+    unsigned char* dst_row = px.data() + static_cast<std::size_t>(y) * w * 3;
+    std::copy(src_row, src_row + static_cast<std::size_t>(w) * 3, dst_row);
+  }
+  return px;
+}
+
+Rgb region_mean(const std::vector<unsigned char>& px, int w, int h, int cx, int cy, int half) {
+  Rgb sum;
+  int n = 0;
+  for (int y = cy - half; y <= cy + half; ++y) {
+    for (int x = cx - half; x <= cx + half; ++x) {
+      if (x < 0 || x >= w || y < 0 || y >= h) continue;
+      const std::size_t idx = (static_cast<std::size_t>(y) * w + x) * 3;
+      sum.r += px[idx + 0];
+      sum.g += px[idx + 1];
+      sum.b += px[idx + 2];
+      ++n;
+    }
+  }
+  if (n > 0) {
+    sum.r /= n;
+    sum.g /= n;
+    sum.b /= n;
+  }
+  return sum;
+}
+
+bool near_rgb(const Rgb& got, double r, double g, double b, double tol) {
+  return std::fabs(got.r - r) <= tol && std::fabs(got.g - g) <= tol && std::fabs(got.b - b) <= tol;
+}
+
 } // namespace
 
 int main() {
@@ -184,6 +245,11 @@ int main() {
     d2d.begin(W, H);
     d2d.draw_sprite(t, RectF{0, 0, 1, 1});
     d2d.end();
+    // D2D-2B, D15/D22: set_camera()/reset_camera()/the transform overload share the same
+    // null-safe-before-init contract as every other public method.
+    d2d.set_camera(Camera2d{1.f, 2.f, 1.f, 0.f});
+    d2d.reset_camera();
+    d2d.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
     check(true, "pre-init operations did not crash"); // reaching this line IS the proof.
   }
 
@@ -214,6 +280,12 @@ int main() {
     moved_from.begin(W, H);
     moved_from.draw_sprite(t, RectF{0, 0, 1, 1});
     moved_from.end();
+    // D2D-2B, D15/D22: set_camera()/reset_camera()/the transform overload on a moved-from
+    // Draw2d -- same null-safe contract as every other new public method (the cppcheck
+    // nullPointer lesson above applies here too).
+    moved_from.set_camera(Camera2d{1.f, 2.f, 1.f, 0.f});
+    moved_from.reset_camera();
+    moved_from.draw_sprite(t, RectF{0, 0, 1, 1}, RectF{}, ColorF{}, SpriteTransform{});
     moved_from.shutdown();
     check(true, "moved-from: full public surface did not crash");
     check(sink.ok() == false, "moved-from: the move target was never init()'d, also not ok()");
@@ -224,6 +296,7 @@ int main() {
     std::puts("draw2d_hostile_sanity FAIL: Draw2d::init() failed");
     return 3;
   }
+  glViewport(0, 0, W, H); // D2D-2B: needed by the camera-hostile readback section below.
 
   // -------------------------------------------------------------------------------------------
   // Hostile corpus (D7): missing file, nullptr, empty, garbage, truncated, oversized-cap.
@@ -273,6 +346,140 @@ int main() {
   Texture2d tex_real = d2d.load_texture(p_real.c_str());
   check(tex_real.ok() && tex_real.width() == 4 && tex_real.height() == 4,
         "still usable: a real texture decodes correctly after the hostile corpus");
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-2B -- camera hostile surface (D15): set_camera() with each invalid member must KEEP the
+  // previous camera state, proven by rendering before/after every hostile attempt and confirming
+  // the sprite lands in the SAME place every time (Camera2d has no getter, SEED-D2D-CAMGETTER --
+  // a render-based proof is the only oracle here). Background cleared to a colour distinct from
+  // tex_real's own (10,20,30) so an unprojected/corrupted draw (a NaN/Inf-tainted camera whose
+  // world_to_screen() falls back to D16's totality and returns the world point UNCHANGED, used
+  // as-is as a screen coordinate) is unambiguously distinguishable from the correctly-projected
+  // one.
+  // -------------------------------------------------------------------------------------------
+  {
+    const RectF world_dst{-2.f, -2.f, 4.f, 4.f}; // world rect at the origin, matches tex_real's 4x4 size.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+
+    auto sprite_lands_at_centre = [&]() -> bool {
+      glClearColor(100.f / 255.f, 100.f / 255.f, 100.f / 255.f, 1.f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      d2d.begin(W, H);
+      d2d.draw_sprite(tex_real, world_dst, RectF{}, ColorF{}, SpriteTransform{});
+      d2d.end();
+      const auto px = read_backbuffer_rgb(W, H);
+      const Rgb centre = region_mean(px, W, H, 32, 32, 1);
+      return near_rgb(centre, 10, 20, 30, 6.0);
+    };
+
+    d2d.set_camera(Camera2d{0.f, 0.f, 1.f, 0.f}); // the GOOD camera every hostile attempt below must survive.
+    check(sprite_lands_at_centre(),
+          "camera_hostile: baseline -- good camera projects the sprite to screen centre");
+
+    const Camera2d hostiles[] = {
+        Camera2d{nan, 0.f, 1.f, 0.f},
+        Camera2d{0.f, nan, 1.f, 0.f},
+        Camera2d{0.f, 0.f, nan, 0.f},
+        Camera2d{0.f, 0.f, 1.f, nan},
+        Camera2d{inf, 0.f, 1.f, 0.f},
+        Camera2d{0.f, 0.f, 0.f, 0.f},  // zoom == 0.
+        Camera2d{0.f, 0.f, -1.f, 0.f}, // zoom < 0.
+    };
+    for (const Camera2d& hostile : hostiles) {
+      d2d.set_camera(hostile); // must be REJECTED -- the good camera above must survive.
+      check(sprite_lands_at_centre(),
+            "camera_hostile: set_camera(hostile) rejected -- previous camera state provably kept (D15)");
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-2B -- the SpriteTransform overload with hostile fields (D20's first guard, "before any
+  // arithmetic"): a NaN/Inf member anywhere must skip the draw (region stays the clear colour,
+  // no crash), and d2d must remain fully usable right after.
+  // -------------------------------------------------------------------------------------------
+  {
+    d2d.reset_camera(); // screen space for this section.
+    const RectF dst{10.f, 10.f, 4.f, 4.f};
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+
+    auto region_is_background = [&](const SpriteTransform& hostile) -> bool {
+      glClearColor(100.f / 255.f, 100.f / 255.f, 100.f / 255.f, 1.f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      d2d.begin(W, H);
+      d2d.draw_sprite(tex_real, dst, RectF{}, ColorF{}, hostile);
+      d2d.end();
+      const auto px = read_backbuffer_rgb(W, H);
+      const Rgb centre = region_mean(px, W, H, 12, 12, 1);
+      return near_rgb(centre, 100, 100, 100, 6.0);
+    };
+
+    SpriteTransform t_rot_nan{};
+    t_rot_nan.rotation = nan;
+    SpriteTransform t_origin_nan{};
+    t_origin_nan.origin_x = nan;
+    SpriteTransform t_scale_inf{};
+    t_scale_inf.scale_x = inf;
+    check(region_is_background(t_rot_nan),
+          "sprite_transform_hostile: NaN rotation -- draw skipped, no crash");
+    check(region_is_background(t_origin_nan),
+          "sprite_transform_hostile: NaN origin_x -- draw skipped, no crash");
+    check(region_is_background(t_scale_inf),
+          "sprite_transform_hostile: Inf scale_x -- draw skipped, no crash");
+    check(d2d.ok(), "sprite_transform_hostile: d2d survives the SpriteTransform hostile corpus");
+
+    // "Still usable" sanity: a legit transform draw still lands correctly right after.
+    glClearColor(100.f / 255.f, 100.f / 255.f, 100.f / 255.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    d2d.begin(W, H);
+    d2d.draw_sprite(tex_real, dst, RectF{}, ColorF{}, SpriteTransform{});
+    d2d.end();
+    const auto px = read_backbuffer_rgb(W, H);
+    const Rgb centre = region_mean(px, W, H, 12, 12, 1);
+    check(near_rgb(centre, 10, 20, 30, 6.0),
+          "sprite_transform_hostile: a legit SpriteTransform draw still works right after the hostile corpus");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-2B, D22 -- shutdown() resets the camera to "no camera"; a re-init()ed instance starts in
+  // screen space even though a camera was set before shutdown(). An ISOLATED Draw2d instance is
+  // used here (not the shared `d2d`/`tex_real` fixture the rest of this file reuses) precisely
+  // because shutdown() invalidates every texture handle -- reusing `d2d` here would silently
+  // break every later section's `tex_real`.
+  // -------------------------------------------------------------------------------------------
+  {
+    Draw2d d2d_reset;
+    check(d2d_reset.init(), "camera_reset_on_shutdown setup: instance init'd");
+    glViewport(0, 0, W, H);
+    Texture2d tex = d2d_reset.load_texture(p_real.c_str());
+    check(tex.ok(), "camera_reset_on_shutdown setup: texture loaded");
+
+    // Wildly off -- if this camera survived shutdown()/init(), the draw below would land
+    // nowhere near screen centre.
+    d2d_reset.set_camera(Camera2d{1000.f, 1000.f, 1.f, 0.f});
+    d2d_reset.shutdown();
+    check(d2d_reset.init(), "camera_reset_on_shutdown: re-init() after shutdown() succeeds");
+    glViewport(0, 0, W, H);
+
+    Texture2d tex_after_reinit = d2d_reset.load_texture(p_real.c_str());
+    check(tex_after_reinit.ok(),
+          "camera_reset_on_shutdown: texture reloads fine after the shutdown/re-init cycle");
+
+    const RectF dst{30.f, 30.f, 4.f, 4.f}; // screen-space dst -- only renders here if the camera is OFF.
+    glClearColor(100.f / 255.f, 100.f / 255.f, 100.f / 255.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    d2d_reset.begin(W, H);
+    d2d_reset.draw_sprite(tex_after_reinit, dst, RectF{}, ColorF{}, SpriteTransform{});
+    d2d_reset.end();
+    const auto px = read_backbuffer_rgb(W, H);
+    const Rgb centre = region_mean(px, W, H, 32, 32, 1);
+    check(near_rgb(centre, 10, 20, 30, 6.0),
+          "camera_reset_on_shutdown: shutdown()/init() reset the camera (D22) -- draw used screen "
+          "space, not the pre-shutdown camera");
+    d2d_reset.shutdown();
+  }
+  glViewport(0, 0, W, H); // restore, for the rest of this file's own draws (all screen-space, 4-arg).
 
   // -------------------------------------------------------------------------------------------
   // Destroyed/tampered/foreign handle -> draw_sprite()/destroy_texture() must fail-high, no

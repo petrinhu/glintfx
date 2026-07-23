@@ -371,9 +371,11 @@ int main() {
     // Mirrored position: where the quad would land if Y were flipped about the centreline
     // (y=64) instead of correctly projected -- centre of [128-34,128-10) = [94,118) -> y=106.
     const Rgb mirrored = region_mean(px, W, H, 64, 106, 6);
-    std::printf("draw2d_render_sanity: positioned-y top=(%.1f,%.1f,%.1f) expect ~(200,100,50), "
-                "mirrored=(%.1f,%.1f,%.1f) expect ~(0,0,0)\n", top.r, top.g, top.b, mirrored.r,
-                mirrored.g, mirrored.b);
+    std::printf(
+        "draw2d_render_sanity: positioned-y top=(%.1f,%.1f,%.1f) expect ~(200,100,50), "
+        "mirrored=(%.1f,%.1f,%.1f) expect ~(0,0,0)\n",
+        top.r, top.g, top.b, mirrored.r,
+        mirrored.g, mirrored.b);
     check(near_rgb(top, 200, 100, 50, kTol),
           "positioned_dst_catches_y_flip_mutation: sprite lands at its declared TOP position");
     check(near_rgb(mirrored, 0, 0, 0, kTol),

@@ -109,19 +109,29 @@ void check(bool cond, const char* what) {
 //     uma cor sólida exata e conhecida, independente dos próprios valores de byte opacos de
 //     qualquer fixture PNG.
 std::vector<unsigned char> build_tga_solid(int w, int h, unsigned char r, unsigned char g,
-                                            unsigned char b) {
+                                           unsigned char b) {
   std::vector<unsigned char> f;
   auto push16 = [&](int v) {
     f.push_back(static_cast<unsigned char>(v & 0xFF));
     f.push_back(static_cast<unsigned char>((v >> 8) & 0xFF));
   };
-  f.push_back(0); f.push_back(0); f.push_back(2);
-  push16(0); push16(0); f.push_back(0);
-  push16(0); push16(0);
-  push16(w); push16(h);
+  f.push_back(0);
+  f.push_back(0);
+  f.push_back(2);
+  push16(0);
+  push16(0);
+  f.push_back(0);
+  push16(0);
+  push16(0);
+  push16(w);
+  push16(h);
   f.push_back(24);
   f.push_back(0x20); // top-down.
-  for (int i = 0; i < w * h; ++i) { f.push_back(b); f.push_back(g); f.push_back(r); }
+  for (int i = 0; i < w * h; ++i) {
+    f.push_back(b);
+    f.push_back(g);
+    f.push_back(r);
+  }
   return f;
 }
 
@@ -246,8 +256,10 @@ int main() {
     // clamps to EXACTLY 1 for x>=50 (GLSL spec), so ring==0 exactly here: must be sprite-exact,
     // no ripple contribution whatsoever.
     const auto* sprite_ctrl = pixel_at(px, W, 260, 232);
-    std::printf("draw2d_ripple_coexist_sanity [sprite-then-ui]: sprite_ctrl=(%d,%d,%d), "
-                "expect (200,30,30)\n", sprite_ctrl[0], sprite_ctrl[1], sprite_ctrl[2]);
+    std::printf(
+        "draw2d_ripple_coexist_sanity [sprite-then-ui]: sprite_ctrl=(%d,%d,%d), "
+        "expect (200,30,30)\n",
+        sprite_ctrl[0], sprite_ctrl[1], sprite_ctrl[2]);
     check(sprite_ctrl[0] == 200 && sprite_ctrl[1] == 30 && sprite_ctrl[2] == 30,
           "[sprite-then-ui] sprite interior untouched by ripple far from the ring (d=60>width=50)");
     // (170,232): background side, exactly 30px LEFT of origin(200,232) along a single axis --
@@ -255,9 +267,10 @@ int main() {
     // use, `result = sampled_rgb*ring + original_dst*(1-ring)`, ring=0.352):
     //   R: 10*0.648 + 200*0.352 = 76.88   G: 20*0.648 + 30*0.352 = 23.52   B: 40*0.648 + 30*0.352 = 36.48
     const auto* leak = pixel_at(px, W, 170, 232);
-    std::printf("draw2d_ripple_coexist_sanity [sprite-then-ui]: leak-point=(%d,%d,%d), "
-                "expect ~(77,24,36) (background=10,20,40 sprite=200,30,30, ring=0.352)\n",
-                leak[0], leak[1], leak[2]);
+    std::printf(
+        "draw2d_ripple_coexist_sanity [sprite-then-ui]: leak-point=(%d,%d,%d), "
+        "expect ~(77,24,36) (background=10,20,40 sprite=200,30,30, ring=0.352)\n",
+        leak[0], leak[1], leak[2]);
     check(near(leak[0], 77, 20) && near(leak[1], 24, 15) && near(leak[2], 36, 15),
           "[sprite-then-ui] the sprite's own colour leaked into the background at the "
           "hand-derived ripple sample point (proves EnsureBackdropCaptured saw the sprite pass, "
@@ -282,9 +295,11 @@ int main() {
   {
     const auto px = read_backbuffer_rgb(W, H);
     const auto* sprite_ctrl = pixel_at(px, W, 232, 232);
-    std::printf("draw2d_ripple_coexist_sanity [ui-then-sprite]: sprite_ctrl=(%d,%d,%d), "
-                "expect (200,30,30) -- sprite drawn AFTER ripple captured, must still show the "
-                "sprite itself untouched\n", sprite_ctrl[0], sprite_ctrl[1], sprite_ctrl[2]);
+    std::printf(
+        "draw2d_ripple_coexist_sanity [ui-then-sprite]: sprite_ctrl=(%d,%d,%d), "
+        "expect (200,30,30) -- sprite drawn AFTER ripple captured, must still show the "
+        "sprite itself untouched\n",
+        sprite_ctrl[0], sprite_ctrl[1], sprite_ctrl[2]);
     check(sprite_ctrl[0] == 200 && sprite_ctrl[1] == 30 && sprite_ctrl[2] == 30,
           "[ui-then-sprite] sprite pass drawn cleanly on top, unaffected by the ripple pass's "
           "own GL state");

@@ -905,6 +905,28 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: transform2d_sanity (D2D-2A) -- PURE unit test for src/transform2d.hpp: no window, no GL
+#     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
+#     here" reasoning as sprite_batch_sanity/image_decode_sanity above). Registered
+#     UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other draw2d test in
+#     this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (Vec2F/Camera2d/SpriteTransform/RectF) --
+#     transform2d.hpp itself pulls in no library symbols, it is entirely header-only.
+# PT: transform2d_sanity (D2D-2A) -- teste unit PURO para src/transform2d.hpp: sem janela, sem
+#     contexto GL, nenhuma dependência de RmlUi/GLFW (mesmo racional "nada relacionado a
+#     display pra isolar aqui" de sprite_batch_sanity/image_decode_sanity acima). Registrado
+#     INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo outro teste de
+#     draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka `glintfx` só pelo
+#     include path público de <glintfx/draw2d.hpp> (Vec2F/Camera2d/SpriteTransform/RectF) -- o
+#     próprio transform2d.hpp não puxa símbolo nenhum de biblioteca, é inteiramente header-only.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(transform2d_sanity transform2d_sanity.cpp)
+  target_link_libraries(transform2d_sanity PRIVATE glintfx)
+  add_test(NAME transform2d_sanity COMMAND transform2d_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #

@@ -35,14 +35,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // or just let `draw2d` go out of scope
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:202`) does not touch GL -- construction is
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) does not touch GL -- construction is
   always cheap and side-effect-free, same discipline as `Audio()`/`App()`/`UiLayer()`.
-- `init()` (`glintfx/include/glintfx/draw2d.hpp:224`) requires a CURRENT GL 3.3 core context.
+- `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) requires a CURRENT GL 3.3 core context.
   It calls `glx_gl_load()` itself -- see "GL loader idempotency" below for why that is safe even
   when a cohabiting `App`/`UiLayer` already loaded the same table. Returns `false` on any
   GL/shader failure, or when the instance is already initialized (call `shutdown()` first to
   re-init).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:236`) is idempotent -- releases every live
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) is idempotent -- releases every live
   texture, the VBO/VAO, and the shader program, ONLY if `init()` ever succeeded, and discards
   any open/partial `begin()`/`end()` bracket. The destructor calls it.
 - **Moved-from state is a safe no-op, deliberately stricter than `App`.** Every method on a
@@ -68,23 +68,23 @@ this slice (`D2D-2`, next wave) -- see "Limits declared" below.
 
 | Method | Returns | Notes |
 | :--- | :--- | :--- |
-| `init()` (`glintfx/include/glintfx/draw2d.hpp:224`) | `bool` | Requires a current GL 3.3 core context. `false` on GL/shader failure or if already initialized. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:227`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:236`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:266`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:283`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:302`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:336-337`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:345`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:144`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:147-148`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
+| `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Requires a current GL 3.3 core context. `false` on GL/shader failure or if already initialized. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
 
 ### Premultiply and the tint formula (D8)
 
 `load_texture()` decodes and **alpha-premultiplies** the image on upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` unchanged)
 to match this module's blend, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:108`) is
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) is
 **straight** (non-premultiplied) RGBA in `[0, 1]`, each channel clamped on intake -- default is
 opaque white (identity: an unmodified sample). The fragment shader
 (`glintfx/src/draw2d.cpp:90-99`) applies the exact modulation:
@@ -182,7 +182,7 @@ calls (D9 above covers who restores what).
 
 ### Texture handles (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:137`) is a plain, copyable value handle -- NOT
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) is a plain, copyable value handle -- NOT
 an RAII owner (`destroy_texture()` is the explicit release, same idiom as `Audio::SoundId`).
 Internally it carries an opaque id, a generation counter, and an **owner tag** (the issuing
 `Draw2d`'s own identity): a `Draw2d` instance validates every handle against its own internal
@@ -300,14 +300,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // ou simplesmente deixe `draw2d` sair de escopo
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:202`) não toca em GL -- a construção é sempre
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) não toca em GL -- a construção é sempre
   barata e sem efeito colateral, mesma disciplina de `Audio()`/`App()`/`UiLayer()`.
-- `init()` (`glintfx/include/glintfx/draw2d.hpp:224`) exige um contexto GL 3.3 core CORRENTE.
+- `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) exige um contexto GL 3.3 core CORRENTE.
   Chama o próprio `glx_gl_load()` -- ver "Idempotência do loader GL" abaixo pro porquê disso ser
   seguro mesmo quando um `App`/`UiLayer` coabitante já carregou a mesma tabela. Retorna `false`
   em qualquer falha de GL/shader, ou quando a instância já está inicializada (chame `shutdown()`
   primeiro pra re-inicializar).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:236`) é idempotente -- libera toda textura
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) é idempotente -- libera toda textura
   viva, o VBO/VAO, e o programa de shader, SÓ SE `init()` alguma vez teve sucesso, e descarta
   qualquer bracket `begin()`/`end()` aberto/parcial. O destrutor chama.
 - **Estado movido-de é um no-op seguro, deliberadamente mais estrito que o `App`.** Todo método
@@ -335,23 +335,23 @@ explicitamente FORA desta fatia (`D2D-2`, próxima onda) -- ver "Limites declara
 
 | Método | Retorna | Notas |
 | :--- | :--- | :--- |
-| `init()` (`glintfx/include/glintfx/draw2d.hpp:224`) | `bool` | Exige um contexto GL 3.3 core corrente. `false` em falha de GL/shader ou se já inicializado. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:227`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:236`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:266`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:283`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:302`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:336-337`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:345`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:144`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:147-148`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
+| `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Exige um contexto GL 3.3 core corrente. `false` em falha de GL/shader ou se já inicializado. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
 
 ### Premultiply e a fórmula do tint (D8)
 
 `load_texture()` decodifica e **premultiplica o alpha** da imagem no upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` inalterado)
 pra bater com o blend deste módulo, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:108`) é RGBA
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) é RGBA
 **straight** (não-premultiplicado) em `[0, 1]`, cada canal clampado na entrada -- o padrão é
 branco opaco (identidade: uma amostra sem modificação). O estágio de fragmento
 (`glintfx/src/draw2d.cpp:90-99`) aplica a modulação exata:
@@ -452,7 +452,7 @@ chamadas GL cruas (o D9 acima cobre quem restaura o quê).
 
 ### Handles de textura (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:137`) é um handle-valor simples, copiável --
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) é um handle-valor simples, copiável --
 NÃO é dono RAII (`destroy_texture()` é a liberação explícita, mesmo idioma do `Audio::SoundId`).
 Internamente carrega um id opaco, um contador de geração, e uma **tag de dono** (a identidade
 própria do `Draw2d` emissor): uma instância `Draw2d` valida todo handle contra o próprio registry

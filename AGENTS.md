@@ -49,9 +49,18 @@ cmake -S glintfx -B glintfx/build -DGLINTFX_GOLDEN_TEST=ON   # real GPU only
 
 To verify drop-in consumption end to end, build `consumer-example/`, which pulls glintfx via `FetchContent` (`SOURCE_DIR`) and links `glintfx::glintfx` with no GL/GLFW/RmlUi references.
 
-### Local gate before pushing (opt-in pre-push hook)
+### Local gates (opt-in hooks): pre-commit and pre-push
 
-`tools/preci.sh` (TST-L1-PRECI) mirrors the fast day-to-day slice of CI **before** code becomes visible on a remote. Activate once per clone with `git config core.hooksPath .githooks`; `.githooks/pre-push` then runs it in fast mode on every `git push` and aborts the push on any failure. Fast mode detects which layer(s) were actually touched (`origin/main...HEAD` union the working tree) and runs only the matching build+test -- Layer 0 (`make build && make test`) and/or Layer 1 (`glintfx/build-preci`, `GLFW=ON` config, `ctest` under Xvfb). `tools/preci.sh --full` runs the wide net (both glintfx configs, sequentially -- one build in memory at a time -- plus `check_encapsulation.sh` and `gitleaks` if installed) for occasional manual runs, e.g. before tagging a release. See [`TESTES.md`](TESTES.md#tst-l1-preci).
+Two opt-in hooks, both wrapper scripts in `.githooks/` that delegate to a `tools/*.sh` script -- neither is installed by default (git only looks in `.git/hooks/` out of the box):
+
+- **`.githooks/pre-commit` -> `tools/precommit.sh` (GATE-PRECOMMIT).** Runs on every `git commit`, staged files only: cppcheck on staged `glintfx/src/*.cpp|*.hpp` (same flags as CI's TST-L1-STATIC), `clang-format-diff` on the staged diff, and `tools/check_doc_line_refs.sh` when (and only when) the staged set is relevant to it -- a doc file itself, or a staged file's basename cited `path:N`-shaped somewhere under `docs/`. Typical cost: tens of ms; the doc-refs sub-check only fires when relevant (~1.6s when it does -- see the script's own header for the 2026-07-23 false-positive it replaced, where a bare-substring match made touching `TODO.md` -- which nearly every commit does per this house's own "cite the ID" convention -- trigger the expensive path on almost every commit).
+- **`.githooks/pre-push` -> `tools/preci.sh` (TST-L1-PRECI).** Mirrors the fast day-to-day slice of CI **before** code becomes visible on a remote. See below for what it runs.
+
+**Activation has two valid routes** -- which one applies depends on whether `core.hooksPath` is already claimed globally by something else on this machine (found the hard way, 2026-07-23; full rationale in `tools/precommit.sh`'s header, "ACTIVATION -- TWO VALID ROUTES"):
+- **(a) Plain clone, no global `core.hooksPath` set:** `git config core.hooksPath .githooks` -- git then reads both `.githooks/pre-commit` and `.githooks/pre-push` directly.
+- **(b) A global `core.hooksPath` is already set** (e.g. this house's own `~/.claude/githooks`, the TODO.md freshness post-commit hook): do **not** override `core.hooksPath` locally -- git has exactly one value for it, so a local override *replaces* the global one wholesale and silently disables whatever that global hook does for this repo. Instead symlink (or copy) each hook straight into this repo's own git-dir hooks folder: `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit` (and the same for `pre-push`). The global hook's own shim (`~/.claude/githooks/_chain.sh`) already delegates to `$(git rev-parse --git-common-dir)/hooks/<name>` when that local file is executable, so both systems coexist.
+
+`tools/preci.sh` fast mode detects which layer(s) were actually touched (`origin/main...HEAD` union the working tree) and runs only the matching build+test -- Layer 0 (`make build && make test`) and/or Layer 1 (`glintfx/build-preci`, `GLFW=ON` config, `ctest` under Xvfb). `tools/preci.sh --full` runs the wide net (both glintfx configs, sequentially -- one build in memory at a time -- plus `check_encapsulation.sh` and `gitleaks` if installed) for occasional manual runs, e.g. before tagging a release. See [`TESTES.md`](TESTES.md#tst-l1-preci).
 
 ### CI policy: gate order and where each check runs
 
@@ -189,7 +198,7 @@ A constelação bigtech (definição dos agents, RACI, pipelines de release) é 
 ### Ponteiros essenciais
 
 - [`CLAUDE.md`](CLAUDE.md): convenções do projeto, idioma, autoridade do líder, ambiente (toolchain Fedora 44), glintfx como produto ativo.
-- Gate local pre-push: `git config core.hooksPath .githooks` ativa `tools/preci.sh` via `.githooks/pre-push` (TST-L1-PRECI) -- ver seção "Local gate before pushing" acima e [`TESTES.md`](TESTES.md#tst-l1-preci).
+- Gates locais pre-commit/pre-push (`GATE-PRECOMMIT`/TST-L1-PRECI, `.githooks/` -> `tools/precommit.sh`/`tools/preci.sh`): duas rotas de ativação, nem sempre `git config core.hooksPath .githooks` -- ver seção "Local gates (opt-in hooks): pre-commit and pre-push" acima e [`TESTES.md`](TESTES.md#tst-l1-preci).
 - [`docs/embed-integration.md`](docs/embed-integration.md): contrato de integração do `UiLayer` para hosts (fonte de verdade para frame lifecycle, GL state, dp_ratio, base URL, data model, texturas) -- leia antes de mexer no caminho embed.
 - [`TODO.md`](TODO.md): tabela de pendências (ondas, IDs, pré-requisitos) das duas camadas, a **INBOX** (descobertas não priorizadas) e o escopo planejado da **v2** (component library / Atomic Design, spec em `docs/superpowers/specs/2026-06-30-glintfx-v2-design.md`, branch `feat/v2-f2-components`, pausada).
 - **Sistema de memória:** memórias tipadas em `~/.claude/projects/<slug>/memory/` (índice em `MEMORY.md`), autocarregadas por sessão. Não duplicar o que o repo já registra; registrar só o não óbvio.

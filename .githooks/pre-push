@@ -7,9 +7,15 @@
 #     for "this is about to be visible"). A non-zero exit here ABORTS the push.
 #
 #     This hook is OPT-IN, not installed by default (git only looks in .git/hooks/ out
-#     of the box). Activate it once per clone with:
-#
-#       git config core.hooksPath .githooks
+#     of the box). Activation has TWO valid routes depending on whether `core.hooksPath`
+#     is already claimed globally by something else on this machine (found the hard way,
+#     2026-07-23 -- see tools/precommit.sh's header, "ACTIVATION -- TWO VALID ROUTES",
+#     for the full rationale; the same split applies here, this hook is not special):
+#       (a) plain clone, no global core.hooksPath: `git config core.hooksPath .githooks`
+#       (b) global core.hooksPath already set (e.g. this house's `~/.claude/githooks`):
+#           `ln -s ../../.githooks/pre-push .git/hooks/pre-push` instead -- do NOT
+#           override core.hooksPath locally, it would replace the global value outright
+#           and silently disable whatever that global hook does for this repo.
 #
 #     To bypass for one push (e.g. an emergency, or a push that touches neither layer):
 #       git push --no-verify
@@ -23,9 +29,17 @@
 #     o push.
 #
 #     Este hook é OPT-IN, não é instalado por padrão (o git só olha .git/hooks/ de
-#     fábrica). Ative uma vez por clone com:
-#
-#       git config core.hooksPath .githooks
+#     fábrica). A ativação tem DUAS rotas válidas dependendo de o `core.hooksPath` já
+#     estar ou não reivindicado globalmente por outra coisa nesta máquina (achado na
+#     marra, 2026-07-23 -- ver o cabeçalho do tools/precommit.sh, "ATIVAÇÃO -- DUAS
+#     ROTAS VÁLIDAS", pro racional completo; a mesma divisão vale aqui, este hook não é
+#     especial):
+#       (a) clone simples, sem core.hooksPath global: `git config core.hooksPath .githooks`
+#       (b) core.hooksPath global já setado (ex.: o `~/.claude/githooks` desta casa):
+#           `ln -s ../../.githooks/pre-push .git/hooks/pre-push` em vez disso -- NÃO
+#           sobrescreva core.hooksPath localmente, isso substituiria o valor global por
+#           inteiro e desativaria silenciosamente o que aquele hook global faz pra este
+#           repo.
 #
 #     Para pular num push específico (ex.: emergência, ou um push que não toca nenhuma
 #     das camadas):

@@ -9,9 +9,35 @@
 #     three rounds of avoidable rework this onda -- a formatting commit that shifted doc
 #     line citations, a test commit that skipped clang-format-diff, and a null-deref
 #     (draw2d.cpp:378) that only surfaced in CI ~3min later -- all three are catchable in
-#     well under a second locally. Invoked by .githooks/pre-commit (opt-in, same
-#     activation as .githooks/pre-push: `git config core.hooksPath .githooks`), or run
-#     directly by hand any time (`tools/precommit.sh`).
+#     well under a second locally. Invoked by .githooks/pre-commit, or run directly by
+#     hand any time (`tools/precommit.sh`).
+#
+#     ACTIVATION -- TWO VALID ROUTES, pick the one that matches your git config (found
+#     the hard way, 2026-07-23 -- read this before assuming the pre-push comment's
+#     `git config core.hooksPath .githooks` is universally correct, it is NOT on every
+#     machine):
+#       (a) Clone with NO `core.hooksPath` set anywhere (git's out-of-the-box default,
+#           `.git/hooks/` only): `git config core.hooksPath .githooks` -- git then reads
+#           BOTH .githooks/pre-commit and .githooks/pre-push directly. This is what the
+#           .githooks/pre-push header describes, and it is correct for a plain clone.
+#       (b) Clone where a GLOBAL `core.hooksPath` is already claimed by something else
+#           (e.g. this house's own `~/.claude/githooks` -- the TODO.md freshness
+#           post-commit hook, see its README.md's "Coexistência com hooks locais"): do
+#           NOT override `core.hooksPath` locally -- that would REPLACE the global value
+#           wholesale (git has exactly one `core.hooksPath`, it does not chain) and
+#           silently kill the global hook's frescor-tracking for this repo. Instead,
+#           symlink (or copy) the hook straight into the repo's OWN git-dir hooks
+#           folder: `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit`. The global
+#           hook's own shim (`~/.claude/githooks/_chain.sh`) already does exactly this
+#           delegation for you on every OTHER hook name (`pre-commit`, `pre-push`, ...):
+#           it execs `$(git rev-parse --git-common-dir)/hooks/<name>` if that local file
+#           is executable, so the two systems COEXIST -- the global frescor hook still
+#           fires, AND it hands off to this repo's own pre-commit gate right after. This
+#           is the route in use on the líder's machine today (2026-07-23): route (b),
+#           `.git/hooks/pre-commit` symlinked, `core.hooksPath` left untouched at its
+#           global value; `.git/hooks/pre-push` is NOT yet symlinked the same way, so
+#           TST-L1-PRECI is not actually wired on this exact clone until someone
+#           symlinks it too -- a pre-existing gap, not something this gate introduced.
 #
 #     Three gates, STAGED FILES ONLY (never the whole tree -- keeps the cost proportional
 #     to what is actually being committed, not to repo size):
@@ -64,9 +90,35 @@
 #     formatação que deslocou citações de linha de doc, um commit de teste que pulou o
 #     clang-format-diff, e um null-deref (draw2d.cpp:378) que só apareceu no CI ~3min
 #     depois -- as três são pegáveis localmente em bem menos de um segundo. Invocado por
-#     .githooks/pre-commit (opt-in, mesma ativação do .githooks/pre-push:
-#     `git config core.hooksPath .githooks`), ou rodado direto à mão
-#     (`tools/precommit.sh`).
+#     .githooks/pre-commit, ou rodado direto à mão (`tools/precommit.sh`).
+#
+#     ATIVAÇÃO -- DUAS ROTAS VÁLIDAS, escolha a que bate com a sua config git (achado
+#     na marra, 2026-07-23 -- leia isto antes de assumir que o `git config
+#     core.hooksPath .githooks` do comentário do pre-push vale universalmente, NÃO vale
+#     em toda máquina):
+#       (a) Clone SEM `core.hooksPath` setado em lugar nenhum (o default de fábrica do
+#           git, só `.git/hooks/`): `git config core.hooksPath .githooks` -- o git então
+#           lê DIRETO .githooks/pre-commit e .githooks/pre-push. É o que o cabeçalho do
+#           .githooks/pre-push descreve, e está correto pra um clone simples.
+#       (b) Clone onde um `core.hooksPath` GLOBAL já está reivindicado por outra coisa
+#           (ex.: o `~/.claude/githooks` desta casa -- o hook post-commit de frescor do
+#           TODO.md, ver "Coexistência com hooks locais" no README.md dele): NÃO
+#           sobrescreva `core.hooksPath` localmente -- isso SUBSTITUIRIA o valor global
+#           por inteiro (o git tem exatamente um `core.hooksPath`, não encadeia) e mataria
+#           silenciosamente o rastreio de frescor do hook global pra este repo. Em vez
+#           disso, symlink (ou copie) o hook direto pro diretório PRÓPRIO de hooks do
+#           git-dir do repo: `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit`. O
+#           próprio shim do hook global (`~/.claude/githooks/_chain.sh`) já faz
+#           exatamente essa delegação pra você em todo OUTRO nome de hook (`pre-commit`,
+#           `pre-push`, ...): ele executa `$(git rev-parse --git-common-dir)/hooks/<nome>`
+#           se esse arquivo local for executável, então os dois sistemas COEXISTEM -- o
+#           hook global de frescor continua disparando, E ele repassa pro gate de
+#           pre-commit deste repo logo em seguida. Esta é a rota em uso na máquina do
+#           líder hoje (2026-07-23): rota (b), `.git/hooks/pre-commit` symlinkado,
+#           `core.hooksPath` intocado no valor global; `.git/hooks/pre-push` AINDA NÃO
+#           está symlinkado do mesmo jeito, então o TST-L1-PRECI não está de fato
+#           enganchado nesta clone exata até alguém symlinkar também -- lacuna
+#           pré-existente, não algo que este gate introduziu.
 #
 #     Três gates, SÓ ARQUIVOS STAGED (nunca a árvore inteira -- mantém o custo
 #     proporcional ao que de fato está sendo commitado, não ao tamanho do repo):
@@ -274,14 +326,47 @@ fi
 #     why this one is conditional and the other two are not: it scans ALL of docs/
 #     regardless of which file changed (~1.6s measured), so the win is skipping the
 #     whole run, not narrowing its input. "Relevant" = a doc file itself is staged, OR
-#     some staged file's basename is cited somewhere under docs/ -- a cheap grep, not
-#     the full symbol-aware verifier.
+#     some staged file's basename is cited somewhere under docs/ AS AN ACTUAL
+#     `path:N`-SHAPED CITATION -- a cheap grep, not the full symbol-aware verifier, but
+#     matching the SAME SHAPE check_doc_line_refs.sh itself parses (basename immediately
+#     followed by `:<digits>`), not a bare substring mention.
+#
+#     PLAIN-SUBSTRING FALSE-POSITIVE, FOUND AND FIXED (2026-07-23, live test by the
+#     team-lead): the first cut of this gate grepped for the basename ALONE, so staging
+#     `TODO.md` (which this house's own convention says to touch on nearly every commit
+#     that closes a TODO item -- see CLAUDE.md's "citar o ID nos commits") matched every
+#     one of the many *plain mentions* of "TODO.md" across docs/ (`docs/draw2d.md`,
+#     `docs/audio.md`, `docs/adr/0009-...`, `docs/wiki/Layer-0-Core.md`, ...) even though
+#     NONE of them is a `TODO.md:N` line citation -- confirmed empirically: zero hits for
+#     `grep -E 'TODO\.md:[0-9]'` across the whole docs/ tree. The bare-substring version
+#     turned the common case (touch TODO.md + one .cpp) into the expensive path
+#     (~4.1s measured), exactly backwards from the intent. Requiring `:<digits>`
+#     immediately after the basename is the fix: it is the one syntactic marker that
+#     distinguishes "this doc is CITING a file:line" from "this doc merely MENTIONS a
+#     filename", and it costs nothing extra (still one grep pass, same doc_files list).
 # PT: 3) check_doc_line_refs.sh, gateado por relevância. Ver o comentário de cabeçalho
 #     acima pro porquê este é condicional e os outros dois não: ele varre TODO o docs/
 #     independente de qual arquivo mudou (~1,6s medido), então o ganho é pular a rodada
 #     inteira, não estreitar a entrada dela. "Relevante" = um arquivo de doc em si está
-#     staged, OU o basename de algum arquivo staged é citado em algum lugar sob docs/ --
-#     um grep barato, não o verificador completo ciente de símbolo.
+#     staged, OU o basename de algum arquivo staged é citado em algum lugar sob docs/
+#     COMO UMA CITAÇÃO DE VERDADE no formato `caminho:N` -- um grep barato, não o
+#     verificador completo ciente de símbolo, mas casando a MESMA FORMA que o próprio
+#     check_doc_line_refs.sh parseia (basename imediatamente seguido de `:<dígitos>`),
+#     não uma menção crua de substring.
+#
+#     FALSO-POSITIVO DE SUBSTRING CRUA, ACHADO E CORRIGIDO (2026-07-23, teste ao vivo do
+#     líder de equipe): a primeira versão deste gate grepava só o basename SOZINHO,
+#     então staged `TODO.md` (que a própria convenção da casa manda tocar em quase todo
+#     commit que fecha um item do TODO -- ver "citar o ID nos commits" do CLAUDE.md)
+#     casava com toda MENÇÃO crua de "TODO.md" pelo docs/ (`docs/draw2d.md`,
+#     `docs/audio.md`, `docs/adr/0009-...`, `docs/wiki/Layer-0-Core.md`, ...) mesmo
+#     nenhuma delas sendo uma citação `TODO.md:N` -- confirmado empiricamente: zero
+#     ocorrências de `grep -E 'TODO\.md:[0-9]'` na árvore docs/ inteira. A versão de
+#     substring crua transformou o caso comum (tocar TODO.md + um .cpp) no caminho caro
+#     (~4,1s medido), exatamente o oposto da intenção. Exigir `:<dígitos>` logo após o
+#     basename é o conserto: é o único marcador sintático que distingue "esta doc está
+#     CITANDO um arquivo:linha" de "esta doc só MENCIONA um nome de arquivo", e não
+#     custa nada a mais (ainda um único passe de grep, mesma lista doc_files).
 # -----------------------------------------------------------------------------
 run_doc_refs_gate() {
   local f relevant=0
@@ -302,9 +387,15 @@ run_doc_refs_gate() {
     )
     if [[ "${#doc_files[@]}" -gt 0 ]]; then
       for f in "${staged_files[@]}"; do
-        local base
+        local base base_re
         base="$(basename "${f}")"
-        if grep -qlF -- "${base}" "${doc_files[@]}" 2>/dev/null; then
+        # EN: escape ERE metacharacters in the basename (mainly '.') before using it in
+        #     grep -E -- a filename like "app.hpp" must match the LITERAL dot, not "any
+        #     char". PT: escapa metacaracteres de ERE no basename (principalmente '.')
+        #     antes de usar no grep -E -- um nome de arquivo tipo "app.hpp" precisa
+        #     casar o ponto LITERAL, não "qualquer caractere".
+        base_re="$(printf '%s' "${base}" | sed -e 's/[.[\^$*+?(){}|\\]/\\&/g')"
+        if grep -qlE -- "${base_re}:[0-9]" "${doc_files[@]}" 2>/dev/null; then
           relevant=1
           break
         fi

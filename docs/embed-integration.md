@@ -1239,7 +1239,11 @@ already integrates `UiLayer` per this document:
   it for an overlay -- both are exercised by this module's own coexistence test
   (`draw2d_ui_coexist_sanity.cpp`) in both orders.
 
-Full API contract, coordinate/premultiply/tint semantics, and recipes: `docs/draw2d.md`.
+Full API contract, coordinate/premultiply/tint semantics, and recipes: `docs/draw2d.md`. The
+optional `Camera2d`/`SpriteTransform` surface added in `D2D-2` (v0.21.0) does not change any of
+this: camera and per-sprite math run entirely on the CPU, before the batcher (D13) -- zero new
+GL state, zero effect on the coexistence contract above. See `docs/draw2d.md`'s "Camera" and
+"SpriteTransform" sections.
 
 **PT:** `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) é um átomo separado pra
 desenhar o mundo do jogo (carga de textura + `draw_sprite` + batching por-textura) que COABITA o
@@ -1259,7 +1263,11 @@ especificamente pra um host que já integra o `UiLayer` conforme este documento:
   mundo-sob-UI, ou depois dele pra um overlay -- as duas ordens são exercitadas pelo próprio
   teste de coexistência deste módulo (`draw2d_ui_coexist_sanity.cpp`).
 
-Contrato de API completo, semântica de coordenadas/premultiply/tint, e receitas: `docs/draw2d.md`.
+Contrato de API completo, semântica de coordenadas/premultiply/tint, e receitas:
+`docs/draw2d.md`. A superfície opcional `Camera2d`/`SpriteTransform` somada no `D2D-2`
+(v0.21.0) não muda nada disto: a matemática de câmera e por-sprite roda inteiramente na CPU,
+antes do batcher (D13) -- zero estado GL novo, zero efeito no contrato de coexistência acima.
+Ver as seções "Câmera" e "SpriteTransform" de `docs/draw2d.md`.
 
 ## See also / Veja também
 

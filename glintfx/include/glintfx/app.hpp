@@ -459,6 +459,14 @@ public:
   //     host hosting its own renderer here brings and initialises its OWN loader (glad, GLEW,
   //     hand-rolled, whatever); it never needs, and cannot reach, glintfx's internal one. See
   //     docs/embed-integration.md for the full write-up.
+  //
+  //     DRAWING SPRITES INSTEAD OF A HAND-ROLLED RENDERER (`GLINTFX_MODULE_DRAW2D`, `D2D-1`,
+  //     v0.20.0). `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) is a supported
+  //     alternative to building your own GL renderer inside `cb`: `begin()`/`draw_sprite()`/
+  //     `end()` inside this hook draws the game world under the UI, using this same insertion
+  //     point and the same "leaves state behind, gets auto-restored before the UI pass" contract
+  //     documented above. See docs/draw2d.md for the full API contract (coordinates,
+  //     premultiply/tint, the GL-state ownership contract) and the App/embed recipes.
   // PT: Registra o hook de desenho por-frame do jogo (A1, framework-2D). Chamado uma vez por
   //     iteração de render()/run() -- com o contexto GL corrente, APÓS o clear do frame e ANTES
   //     do passe de render de UI, para que uma cena desenhada dentro de `cb` componha SOB a UI
@@ -487,6 +495,14 @@ public:
   //     SIGSEGV que isso fecha. Um host que hospeda o próprio renderer aqui traz e inicializa o
   //     PRÓPRIO loader (glad, GLEW, feito à mão, o que for); ele nunca precisa, e não consegue
   //     alcançar, o loader interno da glintfx. Ver docs/embed-integration.md pro relato completo.
+  //
+  //     DESENHANDO SPRITES EM VEZ DE UM RENDERER FEITO À MÃO (`GLINTFX_MODULE_DRAW2D`, `D2D-1`,
+  //     v0.20.0). O `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) é uma alternativa
+  //     suportada a construir o próprio renderer GL dentro de `cb`: `begin()`/`draw_sprite()`/
+  //     `end()` dentro deste hook desenha o mundo do jogo sob a UI, usando este mesmo ponto de
+  //     inserção e o mesmo contrato "deixa estado para trás, é auto-restaurado antes do passe de
+  //     UI" documentado acima. Ver docs/draw2d.md pro contrato de API completo (coordenadas,
+  //     premultiply/tint, o contrato de posse de estado GL) e as receitas App/embed.
   void set_frame_callback(std::function<void(float dt_seconds)> cb);
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the

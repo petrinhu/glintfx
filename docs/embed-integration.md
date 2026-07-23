@@ -1143,7 +1143,7 @@ void main() {
 
 ## 21. Frame hook: hosting your own GL renderer (`App`-only, `DOC-HOSTIN`, v0.19.0) / Hook de frame: hospedando o próprio renderer GL (só `App`, `DOC-HOSTIN`, v0.19.0)
 
-**EN:** `App::set_frame_callback(std::function<void(float dt_seconds)> cb)` (`glintfx/include/glintfx/app.hpp:490`) fires once per `render()`/`run()` iteration, with the GL context current, AFTER the frame clear and BEFORE the UI render pass -- see `Engine::render_standalone`'s doc-comment (`glintfx/src/engine.hpp:90-125`) for the exact insertion point and the full GL-state save/restore contract. This section adds one thing that comment does not cover: **hosting a complete, independent GL renderer inside `cb` is a supported, validated pattern**, not just a place for a couple of draw calls.
+**EN:** `App::set_frame_callback(std::function<void(float dt_seconds)> cb)` (`glintfx/include/glintfx/app.hpp:506`) fires once per `render()`/`run()` iteration, with the GL context current, AFTER the frame clear and BEFORE the UI render pass -- see `Engine::render_standalone`'s doc-comment (`glintfx/src/engine.hpp:90-125`) for the exact insertion point and the full GL-state save/restore contract. This section adds one thing that comment does not cover: **hosting a complete, independent GL renderer inside `cb` is a supported, validated pattern**, not just a place for a couple of draw calls.
 
 **Validated in production (Onda 2, v0.19.0, `HOSTIN` inventory).** The GusWorld consumer runs its own OpenGL renderer entirely inside this hook -- its own shaders, its own VAOs/VBOs, its own texture loader -- alongside its own GL function-pointer loader, with zero conflict against glintfx's internal one. Measured over 8633 frames in that integration: `dt_seconds`'s own error against a wall-clock oracle had a **p95 of 20.8 microseconds**.
 
@@ -1151,7 +1151,7 @@ void main() {
 
 **State restore -- already documented, referenced here, not duplicated.** The hook may leave arbitrary GL state behind (bind any program/VAO/texture, toggle blend/depth/scissor/cull/stencil, rebind the draw framebuffer); it is automatically restored to the RmlUi-established baseline before the UI render pass runs. Full mechanics and the RmlUi-source citation backing them: `glintfx/src/engine.hpp:90-125` ("GL STATE CONTRACT" in `render_standalone`'s doc-comment). Do not re-derive this here -- read that comment directly if the exact restore set matters to your renderer (e.g. which texture unit, which blend equation).
 
-**PT:** `App::set_frame_callback(std::function<void(float dt_seconds)> cb)` (`glintfx/include/glintfx/app.hpp:490`) dispara uma vez por iteração de `render()`/`run()`, com o contexto GL corrente, APÓS o clear do frame e ANTES do passe de render de UI -- ver o doc-comment de `Engine::render_standalone` (`glintfx/src/engine.hpp:90-125`) para o ponto de inserção exato e o contrato completo de salvar/restaurar estado GL. Esta seção acrescenta uma coisa que aquele comentário não cobre: **hospedar um renderer GL completo e independente dentro de `cb` é um padrão suportado e validado**, não só um lugar pra algumas chamadas de desenho.
+**PT:** `App::set_frame_callback(std::function<void(float dt_seconds)> cb)` (`glintfx/include/glintfx/app.hpp:506`) dispara uma vez por iteração de `render()`/`run()`, com o contexto GL corrente, APÓS o clear do frame e ANTES do passe de render de UI -- ver o doc-comment de `Engine::render_standalone` (`glintfx/src/engine.hpp:90-125`) para o ponto de inserção exato e o contrato completo de salvar/restaurar estado GL. Esta seção acrescenta uma coisa que aquele comentário não cobre: **hospedar um renderer GL completo e independente dentro de `cb` é um padrão suportado e validado**, não só um lugar pra algumas chamadas de desenho.
 
 **Validado em produção (Onda 2, v0.19.0, inventário `HOSTIN`).** O consumidor GusWorld roda o próprio renderer OpenGL inteiramente dentro deste hook -- shaders próprios, VAOs/VBOs próprios, loader de textura próprio -- ao lado do próprio loader de ponteiros de função GL dele, sem conflito nenhum contra o loader interno da glintfx. Medido ao longo de 8633 frames naquela integração: o erro do próprio `dt_seconds` contra um oráculo de relógio de parede teve **p95 de 20,8 microssegundos**.
 
@@ -1219,6 +1219,48 @@ void main() {
 
 **Honestidade headless:** sob Xvfb (sem window manager) iconify pode nunca ser honrado e o relato de focus pode ser degenerado -- mesma classe de limitação já documentada pro `window_mode()` (`docs/window-modes.md`). Estes callbacks são exercitados de verdade só numa leg de QA em compositor aninhado, não sob o Xvfb do CI.
 
+## 23. Draw2D coexistence (`GLINTFX_MODULE_DRAW2D`, `D2D-1`, v0.20.0) / Coexistência com o Draw2D (`GLINTFX_MODULE_DRAW2D`, `D2D-1`, v0.20.0)
+
+**EN:** `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) is a separate atom for drawing
+the game world (texture load + `draw_sprite` + per-texture batching) that COHABITS the same GL
+context as `UiLayer`'s RmlUi GL3 renderer, in both `App` and embed mode. It does not depend on
+`ui`, does not touch any `UiLayer`/`App` method, and composes purely by call order: no new
+ordering API exists here or in `docs/draw2d.md`. Two things matter specifically for a host that
+already integrates `UiLayer` per this document:
+
+- **State ownership, same shape as section 2's `GlStateGuard` contract.** Draw2D sets every
+  piece of GL state it depends on at each internal flush and does not restore any of it -- in
+  embed mode, `UiLayer::render()`'s own `GlStateGuard` re-establishes the UI's full state
+  regardless of what a Draw2D pass left behind, exactly as it already does for the host's own
+  raw GL calls (section 2). See `docs/draw2d.md`'s own "GL-state contract (D9)" section for the
+  full enumerated list.
+- **Order is free, same as any of the host's own GL calls.** Call `Draw2d::begin()`/
+  `draw_sprite()`/`end()` before `ui_layer.render()` for a world-under-UI composition, or after
+  it for an overlay -- both are exercised by this module's own coexistence test
+  (`draw2d_ui_coexist_sanity.cpp`) in both orders.
+
+Full API contract, coordinate/premultiply/tint semantics, and recipes: `docs/draw2d.md`.
+
+**PT:** `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) é um átomo separado pra
+desenhar o mundo do jogo (carga de textura + `draw_sprite` + batching por-textura) que COABITA o
+mesmo contexto GL do renderer GL3 do RmlUi do `UiLayer`, nos dois modos, `App` e embed. Não
+depende de `ui`, não toca em nenhum método de `UiLayer`/`App`, e compõe puramente por ordem de
+chamada: não existe API de ordem nova aqui nem em `docs/draw2d.md`. Duas coisas importam
+especificamente pra um host que já integra o `UiLayer` conforme este documento:
+
+- **Posse de estado, mesma forma do contrato `GlStateGuard` da seção 2.** O Draw2D seta todo
+  pedaço de estado GL de que depende a cada flush interno e não restaura nada disso -- no modo
+  embed, o próprio `GlStateGuard` de `UiLayer::render()` reestabelece o estado completo da UI
+  independente do que um passe de Draw2D deixou para trás, exatamente como já faz pras próprias
+  chamadas GL cruas do host (seção 2). Ver a própria seção "Contrato de estado GL (D9)" de
+  `docs/draw2d.md` pra lista enumerada completa.
+- **Ordem é livre, igual a qualquer chamada GL própria do host.** Chame
+  `Draw2d::begin()`/`draw_sprite()`/`end()` antes do `ui_layer.render()` pra uma composição
+  mundo-sob-UI, ou depois dele pra um overlay -- as duas ordens são exercitadas pelo próprio
+  teste de coexistência deste módulo (`draw2d_ui_coexist_sanity.cpp`).
+
+Contrato de API completo, semântica de coordenadas/premultiply/tint, e receitas: `docs/draw2d.md`.
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.
@@ -1227,4 +1269,5 @@ void main() {
 - [`docs/superpowers/plans/2026-07-22-onda2-input-host.md`](superpowers/plans/2026-07-22-onda2-input-host.md): the Onda 2 (v0.19.0) design plan behind sections 21-22 (`DOC-HOSTIN`, `HOSTIN-1..5`) -- decisions D1-D10, the full API contract, and the seeded follow-ups (`SEED-SCANCODE`, `SEED-MOUSE9PLUS`). / o plano de design da Onda 2 (v0.19.0) por trás das seções 21-22 (`DOC-HOSTIN`, `HOSTIN-1..5`) -- decisões D1-D10, o contrato de API completo, e os desdobramentos semeados (`SEED-SCANCODE`, `SEED-MOUSE9PLUS`).
 - [ADR-0012](adr/0012-backdrop-capture.md): backdrop capture decision (section 20) -- the conditional exception to ADR-0008's compose-only guarantee. / decisão de captura de backdrop (seção 20) -- a exceção condicional à garantia compose-only do ADR-0008.
 - [`README.md`](../README.md): library overview and the standalone `glintfx::App` path. / visão geral da lib e o caminho standalone `glintfx::App`.
+- [`docs/draw2d.md`](draw2d.md): `Draw2d` full API contract (section 23 covers coexistence only). / contrato de API completo do `Draw2d` (a seção 23 cobre só coexistência).
 - [`docs/effects.md`](effects.md): RCSS effect syntax used inside embedded documents. / sintaxe de efeitos RCSS usada dentro de documentos embutidos.

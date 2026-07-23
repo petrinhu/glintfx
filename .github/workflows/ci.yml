@@ -649,37 +649,81 @@ jobs:
   #     MSVC-guard comment next to glintfx_core's target_compile_options() call (search this
   #     file's history / glintfx/CMakeLists.txt for "AUDIO-F2 / gusworld Windows CI regression")
   #     for the fix this job verifies.
-  #     Dependency scope, DEGRADED from a full GLFW+FreeType+RmlUi build on purpose (this exact
-  #     trade-off was flagged as acceptable when this job was authored -- see PT below for the
-  #     honest boundary):
-  #       - FreeType: installed via vcpkg (freetype:x64-windows), pinned to vcpkg tag 2026.06.24
-  #         for reproducibility (not the runner's preinstalled vcpkg, whose path/version drifted
-  #         across runner-image generations -- see actions/runner-images#9269/#6146). Unavoidable:
-  #         find_package(Freetype REQUIRED) in glintfx/CMakeLists.txt is unconditional, not gated
-  #         by any GLINTFX_MODULE_* flag, so configure fails without it no matter which target is
-  #         built afterwards.
-  #       - GLFW: NOT installed. GLINTFX_BACKEND_GLFW=OFF here, so glintfx_window (window_glfw.cpp)
-  #         and Backends/RmlUi_Platform_GLFW.cpp are skipped -- these are the ONE target_compile_
-  #         options() site (glintfx_window's) this job does NOT exercise on MSVC. Chosen to avoid
-  #         a second from-source vcpkg port (glfw3) and a second real dependency surface, keeping
-  #         this job's cost/flakiness close to windows-atoms.yml's own "pragmatic gate" philosophy
-  #         (see that file's header) while still catching the flag-portability regression class on
-  #         6 of glintfx's other 9 compiled targets (core/image/text/i18n/fx/audio -- gamepad is
-  #         force-disabled on non-Linux by glintfx/CMakeLists.txt itself, so it was never going to
-  #         run here regardless). OpenGL needs no vcpkg install -- ships with the Windows SDK/MSVC
-  #         toolchain already on the runner image, and RmlUi_Renderer_GL3.cpp (the GL3 renderer)
-  #         compiles unconditionally as part of glintfx_fx REGARDLESS of GLINTFX_BACKEND_GLFW (see
-  #         `_rml_backends` usage in glintfx/CMakeLists.txt) -- only the GLFW-specific glue is
-  #         skipped, not the actual OpenGL-facing renderer code.
+  #
+  #     MATRIX backend: [ON, OFF] (CI-MSVCGLFW, PROG-1 Onda 7, added 2026-07-23). Before this
+  #     change the job only ever ran GLINTFX_BACKEND_GLFW=OFF -- the GLFW=ON leg below is
+  #     GENUINELY NEW COVERAGE, not a refactor of something already proven. It exists because
+  #     the consumer (GusWorld) asked, with the exact wording "does your MSVC job validate
+  #     GLFW=ON", because their answer decides an architecture call on their side: their CTO
+  #     proposed keeping a second SDL-based window shell alive through an extra migration slice
+  #     purely to hedge against this gap -- if GLFW=ON is proven here, the direct cut is cheaper
+  #     for them. fail-fast: false (mirrors build-and-test's own matrix above): a GLFW=ON
+  #     failure must never hide whether GLFW=OFF (the leg GusWorld actually ships with in
+  #     production TODAY) still passes, and vice-versa -- OFF must not regress just because ON
+  #     was added.
+  #       - backend: OFF -- UNCHANGED from before this matrix existed. Same install/configure/
+  #         build/link-smoke steps, same scope note below. This is the leg that must never
+  #         regress.
+  #       - backend: ON -- NEW. Adds `vcpkg install glfw3:x64-windows`, pinned to the SAME vcpkg
+  #         tag as freetype (2026.06.24) for the same reproducibility reason (see the "bootstrap
+  #         vcpkg" step comment below). GLINTFX_BACKEND_GLFW=ON brings in glintfx_window
+  #         (window_glfw.cpp) and Backends/RmlUi_Platform_GLFW.cpp under MSVC for the first time
+  #         -- these were the ONE target_compile_options() site the OFF-only job never
+  #         exercised. UNVERIFIED AT AUTHORING TIME, same as the OFF leg was when it was first
+  #         authored (see that leg's own caveat below): no Windows/MSVC toolchain is available
+  #         locally to dry-run a GLFW-linked MSVC build, so its first real signal is this leg's
+  #         own first CI run. If it does not compile, that is a valid, honest deliverable in
+  #         itself (see TODO.md CI-MSVCGLFW) -- do not force it green by loosening a flag or
+  #         disabling a target; report the exact compiler/linker error and, if the fix is a
+  #         small, clearly-correct platform guard (the same class as the -Wextra guard this job
+  #         already verifies), apply and explain it; if it is bigger or a design call, stop and
+  #         report to the líder instead of guessing.
+  #
+  #     HONEST CEILING -- corrects the "9/9 targets" phrasing used when this leg was queued
+  #     (TODO.md CI-MSVCGLFW, docs/superpowers/plans/2026-07-22-programa-completo.md row 71/185):
+  #     glintfx has 9 add_library() module targets (core/image/text/window/i18n/fx/audio/
+  #     gamepad/draw2d). GLINTFX_MODULE_GAMEPAD is forced OFF on ANY non-Linux
+  #     CMAKE_SYSTEM_NAME UNCONDITIONALLY (raw evdev has no portable substitute -- see
+  #     glintfx/CMakeLists.txt's own GLINTFX_MODULE_GAMEPAD guard), independent of
+  #     GLINTFX_BACKEND_GLFW -- gamepad NEVER builds on windows-latest today, ON leg or OFF.
+  #     So this matrix's ON leg reaches 8 of 9 targets (adds window on top of the 7 the OFF leg
+  #     already builds: core/image/text/i18n/fx/audio/draw2d), NOT 9/9. The 9th needs
+  #     TODO.md GP-WINDOWS (a separate, larger, consumer-driven item: an XInput/GameInput
+  #     gamepad backend behind the same public API, gated on GusWorld's own Windows port
+  #     entering their queue post their v1.0.0). Do not claim 9/9 in release notes or
+  #     consumer-facing replies until GP-WINDOWS lands -- this comment is the source the
+  #     orquestrador cited to the consumer, keep it accurate.
+  #
+  #     Dependency scope for the OFF leg, DEGRADED from a full GLFW+FreeType+RmlUi build on
+  #     purpose (this exact trade-off was flagged as acceptable when this leg was authored --
+  #     see PT below for the honest boundary):
+  #       - FreeType: installed via vcpkg (freetype:x64-windows) on BOTH legs, pinned to vcpkg
+  #         tag 2026.06.24 for reproducibility (not the runner's preinstalled vcpkg, whose path/
+  #         version drifted across runner-image generations -- see actions/runner-images#9269/
+  #         #6146). Unavoidable: find_package(Freetype REQUIRED) in glintfx/CMakeLists.txt is
+  #         unconditional, not gated by any GLINTFX_MODULE_* flag, so configure fails without it
+  #         no matter which target is built afterwards, on either leg.
+  #       - GLFW: NOT installed on the OFF leg. GLINTFX_BACKEND_GLFW=OFF there, so
+  #         glintfx_window (window_glfw.cpp) and Backends/RmlUi_Platform_GLFW.cpp are skipped.
+  #         Chosen (when the OFF-only job was first authored) to avoid a second from-source
+  #         vcpkg port and a second real dependency surface, keeping that leg's cost/flakiness
+  #         close to windows-atoms.yml's own "pragmatic gate" philosophy (see that file's
+  #         header) while still catching the flag-portability regression class on 7 of
+  #         glintfx's 9 compiled targets (core/image/text/i18n/fx/audio/draw2d -- gamepad is
+  #         force-disabled on non-Linux regardless, see HONEST CEILING above). OpenGL needs no
+  #         vcpkg install on either leg -- ships with the Windows SDK/MSVC toolchain already on
+  #         the runner image, and RmlUi_Renderer_GL3.cpp (the GL3 renderer) compiles
+  #         unconditionally as part of glintfx_fx REGARDLESS of GLINTFX_BACKEND_GLFW (see
+  #         `_rml_backends` usage in glintfx/CMakeLists.txt) -- only the GLFW-specific glue was
+  #         ever gated, not the actual OpenGL-facing renderer code.
   #     Builds ONLY the `glintfx` aggregate target (GLINTFX_BUILD_TESTS=OFF, GLINTFX_BUILD_DEMOS=
-  #     OFF) -- this job's whole purpose is reproducing the LIBRARY build GusWorld hit, not
-  #     running the Linux-only Xvfb test suite a second time under a different compiler.
-  #     UNVERIFIED AT AUTHORING TIME: no Windows/MSVC toolchain was available to dry-run this job
-  #     before it was committed -- its first real signal is its own first CI run. If vcpkg
-  #     (freetype from source) proves flaky in practice, the response is narrowing scope further
-  #     (e.g. `continue-on-error: true` while investigating) rather than dropping the gate --
-  #     mirrors windows-atoms.yml's own "if it demonstrates flakiness in practice, the líder
-  #     decides whether to downgrade it to informational" precedent.
+  #     OFF) on both legs -- this job's whole purpose is reproducing the LIBRARY build GusWorld
+  #     hit, not running the Linux-only Xvfb test suite a second time under a different compiler.
+  #     If vcpkg (freetype and/or glfw3 from source) proves flaky in practice, the response is
+  #     narrowing scope further (e.g. `continue-on-error: true` on the affected leg while
+  #     investigating) rather than dropping the gate -- mirrors windows-atoms.yml's own "if it
+  #     demonstrates flakiness in practice, the líder decides whether to downgrade it to
+  #     informational" precedent.
   # PT: windows-msvc-build -- gate de portabilidade MSVC (regressão de CI Windows do AUDIO-F2 /
   #     GusWorld, S3-CI). Configura + builda o PRÓPRIO glintfx/CMakeLists.txt (o mesmo arquivo que
   #     todo job acima builda com clang no Linux) no windows-latest com MSVC (cl.exe), sem
@@ -694,42 +738,95 @@ jobs:
   #     de guarda MSVC ao lado do target_compile_options() do glintfx_core (buscar neste arquivo/
   #     em glintfx/CMakeLists.txt por "AUDIO-F2 / gusworld Windows CI regression") para o fix que
   #     este job verifica.
-  #     Escopo de dependência, DEGRADADO de propósito a partir de um build completo GLFW+FreeType+
-  #     RmlUi (este exato trade-off foi sinalizado como aceitável quando este job foi autorado --
-  #     ver a fronteira honesta abaixo):
-  #       - FreeType: instalado via vcpkg (freetype:x64-windows), pinado na tag 2026.06.24 do
-  #         vcpkg para reprodutibilidade (não o vcpkg pré-instalado do runner, cujo path/versão
-  #         andou mudando entre gerações de imagem de runner -- ver actions/runner-images#9269/
-  #         #6146). Inevitável: find_package(Freetype REQUIRED) no glintfx/CMakeLists.txt é
-  #         incondicional, não gateado por nenhuma flag GLINTFX_MODULE_*, então o configure falha
-  #         sem ele independente de qual alvo for buildado depois.
-  #       - GLFW: NÃO instalado. GLINTFX_BACKEND_GLFW=OFF aqui, então o glintfx_window
-  #         (window_glfw.cpp) e o Backends/RmlUi_Platform_GLFW.cpp são pulados -- este é o ÚNICO
-  #         ponto de target_compile_options() (o do glintfx_window) que este job NÃO exercita no
-  #         MSVC. Escolhido para evitar uma segunda porta vcpkg buildada do source (glfw3) e uma
-  #         segunda superfície de dependência real, mantendo o custo/flakiness deste job perto da
-  #         própria filosofia de "gate pragmático" do windows-atoms.yml (ver o cabeçalho daquele
-  #         arquivo) e ainda assim pegando a classe de regressão de portabilidade de flag em 6 dos
-  #         outros 9 alvos compilados da glintfx (core/image/text/i18n/fx/audio -- o gamepad é
-  #         forçado OFF em não-Linux pelo próprio glintfx/CMakeLists.txt, então nunca ia rodar
-  #         aqui de qualquer forma). OpenGL não precisa de instalação via vcpkg -- já vem com o
-  #         Windows SDK/toolchain MSVC na imagem do runner, e o RmlUi_Renderer_GL3.cpp (o
-  #         renderer GL3) compila incondicionalmente como parte do glintfx_fx INDEPENDENTE de
-  #         GLINTFX_BACKEND_GLFW (ver o uso de `_rml_backends` no glintfx/CMakeLists.txt) -- só a
-  #         cola específica do GLFW é pulada, não o código de renderer que fala com o OpenGL de
-  #         verdade.
-  #     Builda SÓ o alvo agregado `glintfx` (GLINTFX_BUILD_TESTS=OFF, GLINTFX_BUILD_DEMOS=OFF) --
-  #     o propósito inteiro deste job é reproduzir o build da BIBLIOTECA que o GusWorld bateu, não
-  #     rodar de novo a suíte de teste Linux-only sob Xvfb com outro compilador.
-  #     NÃO VERIFICADO NO MOMENTO DA AUTORIA: nenhuma toolchain Windows/MSVC estava disponível
-  #     para testar este job a seco antes de ser commitado -- o primeiro sinal real é a própria
-  #     primeira execução de CI dele. Se o vcpkg (freetype do source) se mostrar flaky na
-  #     prática, a resposta é estreitar o escopo mais (ex.: `continue-on-error: true` enquanto se
-  #     investiga) em vez de derrubar o gate -- espelha o próprio precedente do windows-atoms.yml
-  #     ("se demonstrar flakiness na prática, o líder decide rebaixar para informativo").
+  #
+  #     MATRIX backend: [ON, OFF] (CI-MSVCGLFW, PROG-1 Onda 7, acrescentada 2026-07-23). Antes
+  #     desta mudança o job só rodava GLINTFX_BACKEND_GLFW=OFF -- a perna GLFW=ON abaixo é
+  #     COBERTURA GENUINAMENTE NOVA, não um refactor de algo já provado. Existe porque o
+  #     consumidor (GusWorld) perguntou, com todas as letras, se o nosso job MSVC valida
+  #     GLFW=ON, porque a resposta decide uma escolha de arquitetura do lado deles: o CTO deles
+  #     propôs manter uma segunda casca de janela baseada em SDL viva por uma fatia inteira de
+  #     migração só pra se proteger desta lacuna -- se GLFW=ON for provado aqui, o corte direto
+  #     fica mais barato pra eles. fail-fast: false (espelha a própria matrix do build-and-test
+  #     acima): uma falha em GLFW=ON nunca pode esconder se GLFW=OFF (a perna com a qual o
+  #     GusWorld de fato roda em produção HOJE) continua passando, e vice-versa -- OFF não pode
+  #     regredir só porque ON foi acrescentado.
+  #       - backend: OFF -- INALTERADA desde antes desta matrix existir. Mesmos passos de
+  #         instalação/configure/build/link-smoke, mesma nota de escopo abaixo. Esta é a perna
+  #         que nunca pode regredir.
+  #       - backend: ON -- NOVA. Acrescenta `vcpkg install glfw3:x64-windows`, pinada na MESMA
+  #         tag do vcpkg do freetype (2026.06.24) pelo mesmo motivo de reprodutibilidade (ver o
+  #         comentário do passo "bootstrap vcpkg" abaixo). GLINTFX_BACKEND_GLFW=ON traz o
+  #         glintfx_window (window_glfw.cpp) e o Backends/RmlUi_Platform_GLFW.cpp pro MSVC pela
+  #         primeira vez -- estes eram o ÚNICO ponto de target_compile_options() que o job
+  #         só-OFF nunca exercitava. NÃO VERIFICADO NO MOMENTO DA AUTORIA, igual a perna OFF
+  #         quando foi autorada pela primeira vez (ver a ressalva dela própria abaixo): nenhuma
+  #         toolchain Windows/MSVC está disponível localmente pra testar a seco um build MSVC
+  #         linkado com GLFW, então o primeiro sinal real é a própria primeira execução de CI
+  #         desta perna. Se não compilar, isso É uma entrega válida e honesta em si mesma (ver
+  #         TODO.md CI-MSVCGLFW) -- não force verde afrouxando flag nem desligando alvo; reporte
+  #         o erro exato de compilador/linker e, se o conserto for uma guarda de plataforma
+  #         pequena e claramente correta (a mesma classe da guarda -Wextra que este job já
+  #         verifica), aplique e explique; se for maior ou decisão de design, pare e reporte ao
+  #         líder em vez de chutar.
+  #
+  #     TETO HONESTO -- corrige a formulação "9/9 alvos" usada quando esta perna entrou na fila
+  #     (TODO.md CI-MSVCGLFW, docs/superpowers/plans/2026-07-22-programa-completo.md linha
+  #     71/185): a glintfx tem 9 alvos de módulo add_library() (core/image/text/window/i18n/fx/
+  #     audio/gamepad/draw2d). O GLINTFX_MODULE_GAMEPAD é forçado OFF em QUALQUER
+  #     CMAKE_SYSTEM_NAME não-Linux INCONDICIONALMENTE (evdev cru não tem substituto portável --
+  #     ver a própria guarda GLINTFX_MODULE_GAMEPAD em glintfx/CMakeLists.txt),
+  #     independentemente de GLINTFX_BACKEND_GLFW -- o gamepad NUNCA builda no windows-latest
+  #     hoje, nem na perna ON nem na OFF. Logo a perna ON desta matrix alcança 8 de 9 alvos
+  #     (acrescenta window sobre os 7 que a perna OFF já builda: core/image/text/i18n/fx/audio/
+  #     draw2d), NÃO 9/9. O 9º precisa do TODO.md GP-WINDOWS (item separado, maior,
+  #     consumer-driven: um backend de gamepad XInput/GameInput atrás da mesma API pública,
+  #     gateado pelo próprio porte Windows do GusWorld entrar na fila deles pós-v1.0.0). NÃO
+  #     afirme 9/9 em release notes nem em resposta ao consumidor até o GP-WINDOWS aterrissar --
+  #     este comentário é a fonte que o orquestrador citou ao consumidor, mantenha-o exato.
+  #
+  #     Escopo de dependência da perna OFF, DEGRADADO de propósito a partir de um build completo
+  #     GLFW+FreeType+RmlUi (este exato trade-off foi sinalizado como aceitável quando esta
+  #     perna foi autorada -- ver a fronteira honesta abaixo):
+  #       - FreeType: instalado via vcpkg (freetype:x64-windows) nas DUAS pernas, pinado na tag
+  #         2026.06.24 do vcpkg para reprodutibilidade (não o vcpkg pré-instalado do runner,
+  #         cujo path/versão andou mudando entre gerações de imagem de runner -- ver
+  #         actions/runner-images#9269/#6146). Inevitável: find_package(Freetype REQUIRED) no
+  #         glintfx/CMakeLists.txt é incondicional, não gateado por nenhuma flag
+  #         GLINTFX_MODULE_*, então o configure falha sem ele independente de qual alvo for
+  #         buildado depois, em qualquer perna.
+  #       - GLFW: NÃO instalado na perna OFF. GLINTFX_BACKEND_GLFW=OFF lá, então o
+  #         glintfx_window (window_glfw.cpp) e o Backends/RmlUi_Platform_GLFW.cpp são pulados.
+  #         Escolhido (quando o job só-OFF foi autorado pela primeira vez) para evitar uma
+  #         segunda porta vcpkg buildada do source e uma segunda superfície de dependência real,
+  #         mantendo o custo/flakiness daquela perna perto da própria filosofia de "gate
+  #         pragmático" do windows-atoms.yml (ver o cabeçalho daquele arquivo) e ainda assim
+  #         pegando a classe de regressão de portabilidade de flag em 7 dos 9 alvos compilados
+  #         da glintfx (core/image/text/i18n/fx/audio/draw2d -- o gamepad é forçado OFF em
+  #         não-Linux independente, ver TETO HONESTO acima). OpenGL não precisa de instalação
+  #         via vcpkg em nenhuma perna -- já vem com o Windows SDK/toolchain MSVC na imagem do
+  #         runner, e o RmlUi_Renderer_GL3.cpp (o renderer GL3) compila incondicionalmente como
+  #         parte do glintfx_fx INDEPENDENTE de GLINTFX_BACKEND_GLFW (ver o uso de
+  #         `_rml_backends` no glintfx/CMakeLists.txt) -- só a cola específica do GLFW sempre
+  #         foi gateada, não o código de renderer que fala com o OpenGL de verdade.
+  #     Builda SÓ o alvo agregado `glintfx` (GLINTFX_BUILD_TESTS=OFF, GLINTFX_BUILD_DEMOS=OFF)
+  #     nas duas pernas -- o propósito inteiro deste job é reproduzir o build da BIBLIOTECA que
+  #     o GusWorld bateu, não rodar de novo a suíte de teste Linux-only sob Xvfb com outro
+  #     compilador. Se o vcpkg (freetype e/ou glfw3 do source) se mostrar flaky na prática, a
+  #     resposta é estreitar o escopo mais (ex.: `continue-on-error: true` na perna afetada
+  #     enquanto se investiga) em vez de derrubar o gate -- espelha o próprio precedente do
+  #     windows-atoms.yml ("se demonstrar flakiness na prática, o líder decide rebaixar para
+  #     informativo").
   windows-msvc-build:
-    name: windows msvc build (windows-latest, glintfx/CMakeLists.txt)
+    name: windows msvc build (windows-latest, glintfx/CMakeLists.txt / GLFW=${{ matrix.backend }})
     runs-on: windows-latest
+    strategy:
+      # EN: OFF must never regress just because ON is new/unproven -- see the matrix rationale
+      #     in this job's own header comment above.
+      # PT: OFF nunca pode regredir só porque ON é nova/não-provada -- ver o racional da matrix
+      #     no próprio comentário de cabeçalho deste job acima.
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -750,50 +847,89 @@ jobs:
           C:\vcpkg-glintfx\bootstrap-vcpkg.bat
         shell: pwsh
 
-      # EN: Cache vcpkg's built packages + download cache -- freetype builds from source under
-      #     vcpkg (no prebuilt binary cache configured here), which is the slow part of this job
-      #     on a cache miss. Keyed on the pinned vcpkg tag + package/triplet so a vcpkg upgrade or
-      #     port-list change invalidates it automatically instead of silently reusing a stale
-      #     build.
-      # PT: Cache dos pacotes buildados do vcpkg + cache de download -- o freetype builda do
-      #     source sob o vcpkg (sem cache de binário prebuilt configurado aqui), que é a parte
-      #     lenta deste job num cache miss. Chaveado na tag pinada do vcpkg + pacote/triplet para
-      #     que um upgrade do vcpkg ou mudança na lista de ports invalide automaticamente em vez
-      #     de reusar silenciosamente um build velho.
+      # EN: Cache vcpkg's built packages + download cache -- freetype (both legs) and glfw3 (ON
+      #     leg only) build from source under vcpkg (no prebuilt binary cache configured here),
+      #     which is the slow part of this job on a cache miss. Keyed on the pinned vcpkg tag +
+      #     package set + triplet so a vcpkg upgrade or port-list change invalidates it
+      #     automatically instead of silently reusing a stale build. The key branches on
+      #     matrix.backend so the OFF leg keeps its ORIGINAL key (freetype-only, unchanged by
+      #     this matrix -- its warm cache survives) while the ON leg gets its own distinct key
+      #     (freetype+glfw3) instead of colliding with or invalidating the OFF leg's cache.
+      # PT: Cache dos pacotes buildados do vcpkg + cache de download -- freetype (nas duas
+      #     pernas) e glfw3 (só na perna ON) buildam do source sob o vcpkg (sem cache de binário
+      #     prebuilt configurado aqui), que é a parte lenta deste job num cache miss. Chaveado na
+      #     tag pinada do vcpkg + conjunto de pacotes + triplet para que um upgrade do vcpkg ou
+      #     mudança na lista de ports invalide automaticamente em vez de reusar silenciosamente
+      #     um build velho. A chave bifurca em matrix.backend para que a perna OFF mantenha sua
+      #     chave ORIGINAL (só freetype, inalterada por esta matrix -- o cache quente dela
+      #     sobrevive) enquanto a perna ON ganha uma chave própria e distinta (freetype+glfw3) em
+      #     vez de colidir com ou invalidar o cache da perna OFF.
       - name: cache vcpkg packages
         uses: actions/cache@v4
         with:
           path: |
             C:\vcpkg-glintfx\installed
             C:\vcpkg-glintfx\downloads
-          key: vcpkg-2026.06.24-x64-windows-freetype-${{ runner.os }}
+          key: vcpkg-2026.06.24-x64-windows-${{ matrix.backend == 'ON' && 'freetype-glfw3' || 'freetype' }}-${{ runner.os }}
 
       - name: vcpkg install (freetype)
         run: C:\vcpkg-glintfx\vcpkg.exe install freetype:x64-windows
         shell: pwsh
 
-      # EN: GLINTFX_BACKEND_GLFW=OFF -- see this job's own header comment above for the honest
-      #     boundary (glintfx_window/RmlUi_Platform_GLFW.cpp are the one target_compile_options()
-      #     site NOT exercised by this job). GLINTFX_BUILD_TESTS/DEMOS=OFF -- this job builds only
-      #     the library, not the test/demo targets (out of scope, see header comment).
-      # PT: GLINTFX_BACKEND_GLFW=OFF -- ver o próprio comentário de cabeçalho deste job acima para
-      #     a fronteira honesta (glintfx_window/RmlUi_Platform_GLFW.cpp são o único ponto de
-      #     target_compile_options() NÃO exercitado por este job). GLINTFX_BUILD_TESTS/DEMOS=OFF
-      #     -- este job builda só a biblioteca, não os alvos de teste/demo (fora de escopo, ver
-      #     comentário de cabeçalho).
+      # EN: glfw3 -- ON leg ONLY (CI-MSVCGLFW). Pinned to the same vcpkg tag as freetype above
+      #     (2026.06.24, same reproducibility rationale -- see the "bootstrap vcpkg" step).
+      #     Exports the CMake package `glfw3` (target `glfw`), which is exactly the name
+      #     glintfx/CMakeLists.txt's `find_package(glfw3 REQUIRED)` looks for when
+      #     GLINTFX_BACKEND_GLFW=ON -- the vcpkg toolchain file already wired into `configure`
+      #     below makes that find_package() resolve to this vcpkg-built package automatically,
+      #     no extra CMake argument needed. NOT run on the OFF leg -- keeps that leg's
+      #     dependency surface exactly as narrow as before this matrix existed.
+      # PT: glfw3 -- SÓ na perna ON (CI-MSVCGLFW). Pinado na mesma tag do vcpkg do freetype
+      #     acima (2026.06.24, mesmo racional de reprodutibilidade -- ver o passo "bootstrap
+      #     vcpkg"). Exporta o pacote CMake `glfw3` (alvo `glfw`), que é exatamente o nome que o
+      #     `find_package(glfw3 REQUIRED)` do glintfx/CMakeLists.txt procura quando
+      #     GLINTFX_BACKEND_GLFW=ON -- o arquivo de toolchain do vcpkg já conectado no
+      #     `configure` abaixo faz esse find_package() resolver pra este pacote buildado pelo
+      #     vcpkg automaticamente, sem argumento extra de CMake. NÃO roda na perna OFF -- mantém
+      #     a superfície de dependência daquela perna exatamente tão estreita quanto era antes
+      #     desta matrix existir.
+      - name: vcpkg install (glfw3)
+        if: matrix.backend == 'ON'
+        run: C:\vcpkg-glintfx\vcpkg.exe install glfw3:x64-windows
+        shell: pwsh
+
+      # EN: GLINTFX_BACKEND_GLFW=${{ matrix.backend }} -- see this job's own header comment above
+      #     for the honest boundary per leg (OFF never exercises glintfx_window/
+      #     RmlUi_Platform_GLFW.cpp; ON does, for the first time, and gamepad NEVER builds on
+      #     Windows regardless of this flag -- see HONEST CEILING in the header comment).
+      #     -B glintfx\build-msvc-${{ matrix.backend }} -- separate build dir per leg (mirrors
+      #     build-and-test's own build-<backend> pattern above) so the two matrix jobs, which run
+      #     concurrently on separate windows-latest runners, never share a build tree.
+      #     GLINTFX_BUILD_TESTS/DEMOS=OFF -- this job builds only the library, not the test/demo
+      #     targets (out of scope, see header comment), on both legs.
+      # PT: GLINTFX_BACKEND_GLFW=${{ matrix.backend }} -- ver o próprio comentário de cabeçalho
+      #     deste job acima para a fronteira honesta por perna (OFF nunca exercita
+      #     glintfx_window/RmlUi_Platform_GLFW.cpp; ON exercita, pela primeira vez, e o gamepad
+      #     NUNCA builda no Windows independente desta flag -- ver TETO HONESTO no comentário de
+      #     cabeçalho). -B glintfx\build-msvc-${{ matrix.backend }} -- build dir separado por
+      #     perna (espelha o próprio padrão build-<backend> do build-and-test acima) para que as
+      #     duas jobs da matrix, que rodam concorrentemente em runners windows-latest separados,
+      #     nunca compartilhem uma árvore de build. GLINTFX_BUILD_TESTS/DEMOS=OFF -- este job
+      #     builda só a biblioteca, não os alvos de teste/demo (fora de escopo, ver comentário de
+      #     cabeçalho), nas duas pernas.
       - name: configure
         run: |
-          cmake -S glintfx -B glintfx/build-msvc `
+          cmake -S glintfx -B glintfx/build-msvc-${{ matrix.backend }} `
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg-glintfx\scripts\buildsystems\vcpkg.cmake `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DGLINTFX_BACKEND_GLFW=OFF `
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} `
             -DGLINTFX_BUILD_TESTS=OFF `
             -DGLINTFX_BUILD_DEMOS=OFF `
             -DGLINTFX_BUILD_LINK_SMOKE=ON
         shell: pwsh
 
       - name: build (glintfx target only)
-        run: cmake --build glintfx/build-msvc --config Release --target glintfx
+        run: cmake --build glintfx/build-msvc-${{ matrix.backend }} --config Release --target glintfx
         shell: pwsh
 
       # EN: glintfx_link_smoke (QW-MSVCLINK, PROG-1) -- builds and RUNS a minimal executable
@@ -826,6 +962,6 @@ jobs:
       #     GLINTFX_BUILD_LINK_SMOKE em glintfx/CMakeLists.txt para a racional completa.
       - name: build + run glintfx_link_smoke (consumer-style executable link)
         run: |
-          cmake --build glintfx/build-msvc --config Release --target glintfx_link_smoke
-          .\glintfx\build-msvc\Release\glintfx_link_smoke.exe
+          cmake --build glintfx/build-msvc-${{ matrix.backend }} --config Release --target glintfx_link_smoke
+          .\glintfx\build-msvc-${{ matrix.backend }}\Release\glintfx_link_smoke.exe
         shell: pwsh

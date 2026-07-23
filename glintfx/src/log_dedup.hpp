@@ -157,7 +157,9 @@ public:
 
 private:
   struct Key {
-    int type;
+    int type = 0; // always set explicitly at every construction site (`Key{type, message}` above) --
+                  // the default is a belt-and-suspenders cppcheck fix (uninitMemberVarNoCtor), not a
+                  // behavior change: no code path ever relies on this default value.
     std::string message;
     bool operator==(const Key& other) const noexcept {
       return type == other.type && message == other.message;
@@ -174,11 +176,13 @@ private:
   };
   struct Entry {
     Key key;
-    std::uint64_t count;
+    std::uint64_t count = 0; // always set explicitly at the one construction site (`Entry{key, 1,
+                             // 10}` above) -- default is a cppcheck fix (uninitMemberVarNoCtor),
+                             // not a behavior change.
     // EN: Next occurrence count at which a summary line is due (10, then *10 each time it fires).
     // PT: Próxima contagem de ocorrência na qual uma linha de sumário é devida (10, depois *10
     //     a cada disparo).
-    std::uint64_t next_report;
+    std::uint64_t next_report = 0; // same rationale as `count` above.
   };
 
   // EN: front = most-recently-used, back = least-recently-used (LRU eviction victim).

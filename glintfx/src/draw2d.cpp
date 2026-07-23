@@ -235,7 +235,9 @@ struct Draw2d::Impl {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
-  GLuint upload_gl_texture(const DecodedImage& decoded) {
+  // cppcheck functionStatic: touches no Impl member, only its argument and GL global state --
+  // called as impl_->upload_gl_texture(decoded), unaffected by the added `static`.
+  static GLuint upload_gl_texture(const DecodedImage& decoded) {
     GLuint id = 0;
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_2D, id);
@@ -375,7 +377,13 @@ void Draw2d::shutdown() {
 
 Texture2d Draw2d::load_texture(const char* path) {
   Texture2d out; // ok_ == false by default.
-  if (!impl_ || !impl_->initialized) {
+  // D2D-1B fix: a moved-from Draw2d has impl_ == nullptr (see shutdown()'s comment on this
+  // module's null-safe contract) -- there is no Impl to log through in that case, so the two
+  // conditions below MUST short-circuit separately instead of being folded into one `||` (the
+  // fold used to deref impl_->log_warn() on a null impl_, cppcheck nullPointer, D2D-1B onda3
+  // lint gate). A never-initialized-but-non-null Impl still gets the diagnostic.
+  if (!impl_) return out;
+  if (!impl_->initialized) {
     impl_->log_warn("load_texture() called before init()/after shutdown() -- ignored.");
     return out;
   }

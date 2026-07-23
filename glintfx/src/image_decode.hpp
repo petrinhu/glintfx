@@ -176,7 +176,7 @@ inline DecodedImage decode_premultiplied_rgba(const unsigned char* data, std::si
   //     cálculo de contagem de pixel em size_t feito ANTES do loop para que `w * h` nunca dê
   //     overflow em aritmética `int` assinada para dimensões grandes-mas-ainda-sob-o-teto de um
   //     asset hostil/malformado.
-  unsigned char* p = px.get();
+  const unsigned char* p = px.get(); // read-only source: the premultiply writes into `out.rgba`, never back through `p`.
   const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
   out.rgba.resize(pixel_count * 4u);
   for (std::size_t i = 0; i < pixel_count; ++i) {

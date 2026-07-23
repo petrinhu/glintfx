@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -184,6 +185,38 @@ int main() {
     d2d.draw_sprite(t, RectF{0, 0, 1, 1});
     d2d.end();
     check(true, "pre-init operations did not crash"); // reaching this line IS the proof.
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Moved-from Draw2d (impl_ == nullptr, PROG-1) -- every public method's documented contract
+  // (draw2d.hpp's class comment: "todo método abaixo é um no-op seguro num Draw2d movido-de") is
+  // a safe no-op, NOT a crash. Regression for a real null-pointer deref cppcheck caught in
+  // load_texture(): the old `if (!impl_ || !impl_->initialized) { impl_->log_warn(...); ... }`
+  // guard dereferenced impl_ INSIDE the very branch that proves it is null. This case reproduces
+  // that shape exactly -- it crashes on the old code and must pass here.
+  // PT: Draw2d movido-de (impl_ == nullptr, PROG-1) -- o contrato documentado de todo método
+  // público (comentário de classe de draw2d.hpp: "todo método abaixo é um no-op seguro num Draw2d
+  // movido-de") é um no-op seguro, NÃO um crash. Regressão para um null-pointer deref real que o
+  // cppcheck pegou em load_texture(): a guarda antiga `if (!impl_ || !impl_->initialized) {
+  // impl_->log_warn(...); ... }` desreferenciava impl_ DENTRO do próprio ramo que prova que ele é
+  // nulo. Este caso reproduz essa forma exatamente -- crasha no código antigo e precisa passar
+  // aqui.
+  {
+    Draw2d moved_from;
+    Draw2d sink = std::move(moved_from); // moved_from.impl_ is now nullptr.
+    check(!moved_from.ok(), "moved-from: ok() is false");
+    // The path need not exist: a moved-from instance must reject BEFORE ever touching the
+    // filesystem -- that early-out (impl_ == nullptr) is exactly the crash site under test.
+    Texture2d t = moved_from.load_texture("does_not_matter.tga"); // the crash site (PROG-1) -- must not deref a null impl_.
+    check(!t.ok(), "moved-from: load_texture() fails safely, no crash");
+    // The rest of the public surface must also be safe no-ops per the documented contract.
+    moved_from.destroy_texture(t);
+    moved_from.begin(W, H);
+    moved_from.draw_sprite(t, RectF{0, 0, 1, 1});
+    moved_from.end();
+    moved_from.shutdown();
+    check(true, "moved-from: full public surface did not crash");
+    check(sink.ok() == false, "moved-from: the move target was never init()'d, also not ok()");
   }
 
   Draw2d d2d;

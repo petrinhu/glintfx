@@ -13,10 +13,15 @@
 //     camera members, NaN/Inf point, non-positive viewport -- input returned UNCHANGED for
 //     both functions), D17 camera_from_world_rect (valid fit + hostile corpus), D18 corner
 //     math (pi/2 rotation permutes corners exactly, pivot (0,0) vs (1,1), negative scale
-//     mirrors), D19 exact equivalence (identity SpriteTransform reproduces dst's own 4 corners
-//     bit-for-bit -- exact float equality is legitimate here, see transform2d.hpp's own
-//     rationale), and D20 overflow (a finite scale times a finite dst that multiplies past
-//     float's range produces a non-finite corner, caught by is_finite(SpriteCorners)).
+//     mirrors, and -- PROG-1, closing an Onda 4 adversarial-review gap -- anisotropic scale
+//     (scale_x != scale_y) COMBINED with a nonzero rotation, the only case where "scale then
+//     rotate" is observably different from "rotate then scale"; every other D18 case above has
+//     either uniform scale or zero rotation, under which the two orders commute and a swapped
+//     apply() lambda passes unnoticed), D19 exact equivalence (identity SpriteTransform
+//     reproduces dst's own 4 corners bit-for-bit -- exact float equality is legitimate here,
+//     see transform2d.hpp's own rationale), and D20 overflow (a finite scale times a finite dst
+//     that multiplies past float's range produces a non-finite corner, caught by
+//     is_finite(SpriteCorners)).
 // PT: transform2d_sanity (D2D-2A) -- teste unitário headless para a matemática PURA de
 //     projeção/transform em src/transform2d.hpp (plano docs/superpowers/plans/2026-07-23-
 //     onda4-draw2d-camera.md, decisões D12/D14/D16/D17/D18/D19/D20). Sem GL, sem Xvfb, sem
@@ -32,7 +37,12 @@
 //     câmera NaN/Inf, ponto NaN/Inf, viewport não-positivo -- input devolvido INALTERADO nas
 //     duas funções), D17 camera_from_world_rect (fit válido + corpus hostil), matemática de
 //     canto D18 (rotação pi/2 permuta cantos exatamente, pivô (0,0) vs (1,1), escala negativa
-//     espelha), equivalência exata D19 (SpriteTransform identidade reproduz os 4 cantos do
+//     espelha, e -- PROG-1, fechando uma lacuna do review adversarial da Onda 4 -- escala
+//     anisotrópica (scale_x != scale_y) COMBINADA com rotação não-zero, o único caso em que
+//     "escala depois rotação" é observavelmente diferente de "rotação depois escala"; todo
+//     outro caso do D18 acima tem escala uniforme ou rotação zero, condição sob a qual as duas
+//     ordens comutam e uma lambda apply() com as linhas trocadas passa despercebida),
+//     equivalência exata D19 (SpriteTransform identidade reproduz os 4 cantos do
 //     próprio dst bit-a-bit -- igualdade de float exata é legítima aqui, ver a racional do
 //     próprio transform2d.hpp), e overflow D20 (uma escala finita vezes um dst finito que
 //     multiplica além da faixa do float produz um canto não-finito, capturado por
@@ -334,6 +344,52 @@ void test_d18_negative_scale_mirrors() {
   check(near(c.bl, Vec2F{10.f, 10.f}, 1e-3f), "d18_negative_scale: BL mirrors to old BR position");
 }
 
+void test_d18_anisotropic_scale_then_rotate_order() {
+  // Adversarial-review gap (PROG-1): every other D18 case above keeps scale UNIFORM
+  // (scale_x==scale_y, including the default 1/1) whenever rotation != 0, or keeps rotation==0
+  // whenever scale is anisotropic (test_d18_negative_scale_mirrors' scale_x=-1 has rot=0). A
+  // uniform scale COMMUTES with rotation (R*(s*v) == s*(R*v) when sx==sy), so "scale about the
+  // pivot, THEN rotate" and "rotate, THEN scale" produce the SAME corners in every case above --
+  // the qa-engineer swapped the two lines in compute_sprite_corners()'s apply() lambda and all
+  // 93 tests still passed. This case sets BOTH scale_x != scale_y AND rotation != 0 at once, the
+  // only combination where order is observable, closing the gap.
+  //
+  // dst={0,0,10,10} (TL=(0,0),TR=(10,0),BR=(10,10),BL=(0,10)), origin default 0.5/0.5 ->
+  // pivot=(5,5). scale_x=2, scale_y=1 (anisotropic), rotation=pi/2 (cos=0,sin=1 exactly at this
+  // angle in float). D18 literal: corner' = pivot + rot((corner - pivot) * (scale_x, scale_y),
+  // rotation) -- scale FIRST, rotate SECOND, about the pivot, in that order.
+  //
+  // Hand-derivation for TL=(0,0):
+  //   local  = (corner - pivot) * scale = ((0-5)*2, (0-5)*1) = (-10, -5)
+  //   rotated = rot(local, pi/2) = (local.x*cos - local.y*sin, local.x*sin + local.y*cos)
+  //           = (-10*0 - (-5)*1, -10*1 + (-5)*0) = (5, -10)
+  //   result  = pivot + rotated = (5+5, 5-10) = (10, -5)
+  // Same derivation for the other 3 corners (TR=(10,0), BR=(10,10), BL=(0,10)):
+  //   TR: local=(10,-5) -> rotated=(5,10)  -> result=(10, 15)
+  //   BR: local=(10, 5) -> rotated=(-5,10) -> result=( 0, 15)
+  //   BL: local=(-10,5) -> rotated=(-5,-10)-> result=( 0, -5)
+  //
+  // Contrast with the WRONG order (rotate FIRST, then scale -- the exact mutation this test
+  // guards against) for TL: rot((0,0)-(5,5), pi/2) = rot(-5,-5, pi/2) = (5,-5); then *scale(2,1)
+  // = (10,-5); +pivot = (15, 0) -- a full (5,5) away from the correct (10,-5). Every corner
+  // below differs by at least that much between the two orders, so the mutation fails LOUD, not
+  // subtly.
+  const RectF dst{0.f, 0.f, 10.f, 10.f};
+  SpriteTransform t{};
+  t.scale_x = 2.f;
+  t.scale_y = 1.f;
+  t.rotation = kHalfPi;
+  const SpriteCorners c = compute_sprite_corners(dst, t);
+  check(near(c.tl, Vec2F{10.f, -5.f}, 1e-2f),
+        "d18_aniso_scale_then_rotate: TL hand-computed (scale-then-rotate order)");
+  check(near(c.tr, Vec2F{10.f, 15.f}, 1e-2f),
+        "d18_aniso_scale_then_rotate: TR hand-computed (scale-then-rotate order)");
+  check(near(c.br, Vec2F{0.f, 15.f}, 1e-2f),
+        "d18_aniso_scale_then_rotate: BR hand-computed (scale-then-rotate order)");
+  check(near(c.bl, Vec2F{0.f, -5.f}, 1e-2f),
+        "d18_aniso_scale_then_rotate: BL hand-computed (scale-then-rotate order)");
+}
+
 // ---------------------------------------------------------------------------
 // D19 -- exact equivalence (identity transform, bit-for-bit) / equivalência exata
 // ---------------------------------------------------------------------------
@@ -389,6 +445,7 @@ int main() {
   test_d18_rotation_permutes_corners();
   test_d18_pivot_variants();
   test_d18_negative_scale_mirrors();
+  test_d18_anisotropic_scale_then_rotate_order();
   test_d19_identity_exact_equivalence();
   test_d20_overflow_guard();
 

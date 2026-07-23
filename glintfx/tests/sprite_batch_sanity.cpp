@@ -13,8 +13,11 @@
 //     D2D-2B addition: draw_quad() (plan docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md,
 //     D19) -- same D4/D5/D8 policy as draw_sprite() (mirrored, not re-derived), the
 //     batcher-level half of D19's exact-equivalence pin (identity-transform-corners through
-//     draw_quad() == draw_sprite()'s own dst path, vertex-for-vertex bit-exact), and its own
-//     NaN/Inf/bracket fail-high surface.
+//     draw_quad() == draw_sprite()'s own dst path, vertex-for-vertex bit-exact), its own
+//     NaN/Inf/bracket fail-high surface, and (Onda 4 adversarial review, MINOR 2) draw_quad()'s
+//     own 100k-draw hostile stream staying memory-bounded -- the pre-existing hostile-volume
+//     test only ever exercised draw_sprite(); this is permanent coverage for draw_quad()'s own
+//     ready-queue drain discipline, not the ad hoc check that dies with a review.
 // PT: sprite_batch_sanity (D2D-1B) -- teste unitário headless para a política de batching PURA
 //     em src/sprite_batch.hpp (plano docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
 //     decisões D4/D5/D8/D10). Sem GL, sem Xvfb, sem janela -- roda em AMBAS as configs de build,
@@ -27,6 +30,15 @@
 //     limitado em memória quando o chamador drena take_ready() a cada chamada (a mesma
 //     disciplina que o próprio draw2d.cpp segue -- ver o comentário de cabeçalho de
 //     sprite_batch.hpp pro porquê da fila pronta NÃO ser limitada sozinha).
+//     Adendo D2D-2B: draw_quad() (plano docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md,
+//     D19) -- mesma política D4/D5/D8 do draw_sprite() (espelhada, não re-derivada), a metade
+//     em nível de batcher da fixação de equivalência exata do D19 (cantos-com-transform-
+//     identidade via draw_quad() == o próprio caminho dst do draw_sprite(), vértice-a-vértice
+//     bit-exato), a própria superfície de fail-high NaN/Inf/bracket, e (review adversarial da
+//     Onda 4, MINOR 2) o próprio stream hostil de 100k desenhos do draw_quad() permanecendo
+//     limitado em memória -- o teste hostil-de-volume pré-existente só exercitava o
+//     draw_sprite(); isto é cobertura permanente pra disciplina de drenagem da fila-pronta do
+//     draw_quad(), não a verificação ad hoc que morre com um review.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/sprite_batch.hpp"
 
@@ -433,6 +445,55 @@ void test_hostile_100k_bounded() {
         "hostile_100k_bounded: every draw's vertices were eventually accounted for");
 }
 
+// EN: Onda 4 adversarial review, MINOR 2: test_hostile_100k_bounded() above only ever exercises
+//     draw_sprite()'s bracket-drain loop -- draw_quad() (D19) shares the same underlying
+//     ready-queue/take_ready() machinery, but had NO permanent coverage proving it stays
+//     memory-bounded under the same hostile volume (the qa-engineer checked it ad hoc during
+//     review; that verification dies with the review unless it is a real test). Same discipline
+//     as above (drain after EVERY call), same capacity_respected/total_vertices_drained
+//     bookkeeping, but with caller-supplied, non-axis-aligned corners (a small per-draw skew) so
+//     this is not just draw_sprite()'s dst path in disguise.
+// PT: Review adversarial da Onda 4, MINOR 2: test_hostile_100k_bounded() acima só exercita o
+//     laço de drenagem de bracket do draw_sprite() -- o draw_quad() (D19) compartilha a mesma
+//     máquina de fila-pronta/take_ready(), mas não tinha cobertura PERMANENTE provando que
+//     permanece limitado em memória sob o mesmo volume hostil (o qa-engineer verificou ad hoc
+//     durante o review; essa verificação morre com o review a menos que seja um teste de
+//     verdade). Mesma disciplina de cima (drena a CADA chamada), mesma contabilidade de
+//     capacity_respected/total_vertices_drained, mas com cantos fornecidos pelo chamador,
+//     não-axis-aligned (um leve skew por-desenho) para não ser só o caminho dst do draw_sprite()
+//     disfarçado.
+void test_hostile_100k_bounded_draw_quad() {
+  SpriteBatch b; // default capacity, 4096.
+  const std::size_t total_draws = 100000;
+  std::size_t total_vertices_drained = 0;
+  bool capacity_respected = true;
+
+  b.begin(100, 100);
+  for (std::size_t i = 0; i < total_draws; ++i) {
+    // Arbitrary, non-axis-aligned corners: a small per-draw skew (not a plain rectangle) so
+    // this exercises draw_quad()'s own caller-supplied-corner path, not draw_sprite()'s
+    // axis-aligned expansion under another name.
+    const float skew = static_cast<float>(i % 4) * 0.1f;
+    const Vec2F corners[4] = {{0.f + skew, 0.f}, {1.f + skew, 0.f}, {1.f, 1.f}, {0.f, 1.f}};
+    b.draw_quad(1, 4, 4, corners, RectF{}, ColorF{});
+    // Same discipline draw2d.cpp itself follows -- drain after EVERY call.
+    for (const Flush& f : b.take_ready()) {
+      if (f.vertices.size() > b.max_quads() * 6) capacity_respected = false;
+      total_vertices_drained += f.vertices.size();
+    }
+  }
+  b.end();
+  for (const Flush& f : b.take_ready()) {
+    if (f.vertices.size() > b.max_quads() * 6) capacity_respected = false;
+    total_vertices_drained += f.vertices.size();
+  }
+
+  check(capacity_respected,
+        "hostile_100k_bounded_draw_quad: no single flush ever exceeded max_quads()");
+  check(total_vertices_drained == total_draws * 6,
+        "hostile_100k_bounded_draw_quad: every draw's vertices were eventually accounted for");
+}
+
 } // namespace
 
 int main() {
@@ -451,6 +512,7 @@ int main() {
   test_draw_quad_same_policy_as_draw_sprite();
   test_draw_quad_nan_and_bracket_policy();
   test_hostile_100k_bounded();
+  test_hostile_100k_bounded_draw_quad();
 
   if (g_failures == 0) {
     std::puts("sprite_batch_sanity: PASS");

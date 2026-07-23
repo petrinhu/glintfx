@@ -155,6 +155,16 @@ Factual record, kept sober (this is engineering documentation, not a scolding): 
 
 **An agent does not install a system package on its own initiative** -- ask for authorization first. Reporting "not executed, needs `<package>` installed" is an honest negative result, and a better one than improvising around a missing tool.
 
+### Vendored dependencies: upstream bug reporting policy
+
+**Rule: before opening a bug ticket against an upstream project, check its development branches (`dev`/`master`/`next`).** If the bug is already fixed there, do NOT open a ticket -- at most, comment on an existing one. Apply the fix locally as a disclosed patch, document it in the vendor directory's own `README.md` and in `CHANGELOG.md`, and wait for the next tagged release to drop the local patch.
+
+**The concrete case behind this rule** (recorded factually and soberly, without sourness -- the maintainer is fully within their rights): we reported a real heap-use-after-free in miniaudio (`ma_resource_manager_data_buffer_node_acquire`, the synchronous-decode-failure path), caught live by this repo's own test suite under AddressSanitizer -- [mackron/miniaudio#1141](https://github.com/mackron/miniaudio/issues/1141). The ticket was explicitly transparent: it stated the `dev` branch already avoided the bug, and argued that the 0.11.25 release and `master` still crashed with nothing tracking it. The maintainer closed it in one line: *"Please do not open tickets for bugs that have already been fixed."* Being transparent about the state of `dev` did not offset that -- the ticket itself was the problem. **The recorded decision (the leader's) is to not insist and not reply**: pushing further spends goodwill with a dependency's maintainer for zero technical gain, since the fix already exists on `dev` regardless of what happens with the ticket.
+
+**Operational side, for whoever touches this vendor directory next:** the one-line local patch lives at `glintfx/third_party/miniaudio/miniaudio.h:70939` (the `result == MA_SUCCESS &&` guard), documented in `glintfx/third_party/miniaudio/README.md`. It must be REMOVED on the next miniaudio version bump that already carries the `dev`-branch fix -- check that first, before re-applying it blindly on a re-vendor.
+
+**What this rule does NOT cover:** the consumer-to-library flow (a GusWorld finding becomes a fast tagged patch release) keeps applying in full -- this rule is only about opening a ticket in a third-party repository, nothing else.
+
 ---
 
 ## Para o Claude Code (português)
@@ -258,3 +268,13 @@ Registro factual, mantido sóbrio (é doc de engenharia, não bronca): o inciden
 **Regra dura: nunca na sessão viva do líder.** A injeção de input mira **sempre** o display aninhado, **nunca** o `:0`. O motivo está registrado, não é hipotético: uma rajada de troca de modo de janela já travou o touchpad dele até precisar de reboot (ver a memória `feedback_nunca_stress_janela_sessao_viva`).
 
 **Agente não instala pacote de sistema por conta própria** -- pede autorização primeiro. Reportar "não executado, precisa instalar `<pacote>`" é um resultado negativo honesto, e melhor do que improvisar em cima de uma ferramenta ausente.
+
+### Dependências vendorizadas: política de reporte de bug upstream
+
+**Regra: antes de abrir issue de bug num upstream, checar os branches de desenvolvimento (`dev`/`master`/`next`).** Se o bug já estiver corrigido lá, NÃO abrir issue -- no máximo comentar numa issue existente. Aplicar o fix localmente como patch divulgado, documentar no `README.md` do próprio diretório do vendor e no `CHANGELOG.md`, e esperar o próximo release taggeado pra descartar o patch local.
+
+**O caso concreto por trás desta regra** (registrado factual e sóbrio, sem azedume -- o mantenedor está plenamente no direito dele): reportamos um heap-use-after-free real no miniaudio (`ma_resource_manager_data_buffer_node_acquire`, caminho de falha de decode síncrono), capturado ao vivo pela suíte de testes deste repositório sob AddressSanitizer -- [mackron/miniaudio#1141](https://github.com/mackron/miniaudio/issues/1141). A issue foi explicitamente transparente: dizia que o branch `dev` já evitava o bug, e argumentava que a release 0.11.25 e o `master` ainda crashavam sem nada rastreando isso. O mantenedor fechou em uma linha: *"Please do not open tickets for bugs that have already been fixed."* A transparência sobre o estado do `dev` não compensou -- o próprio ticket foi o problema. **A decisão registrada (do líder) é não insistir e não responder**: insistir gasta capital com o mantenedor de uma dependência sem ganho técnico nenhum, já que o fix já existe no `dev` independente do destino do ticket.
+
+**Lado operacional, pra quem for mexer neste diretório de vendor depois:** o patch local de uma linha vive em `glintfx/third_party/miniaudio/miniaudio.h:70939` (o guard `result == MA_SUCCESS &&`), documentado em `glintfx/third_party/miniaudio/README.md`. Ele DEVE SER REMOVIDO no próximo bump de versão do miniaudio que já traga o fix do branch `dev` -- checar isso primeiro, antes de reaplicar cegamente num re-vendor.
+
+**O que esta regra NÃO cobre:** o fluxo consumidor↔lib (um achado do GusWorld vira patch taggeado rápido) segue valendo integralmente -- esta regra é só sobre abrir ticket num repositório de terceiro, nada além disso.

@@ -1245,6 +1245,14 @@ this: camera and per-sprite math run entirely on the CPU, before the batcher (D1
 GL state, zero effect on the coexistence contract above. See `docs/draw2d.md`'s "Camera" and
 "SpriteTransform" sections.
 
+**`D2D-3` (v0.22.0) DOES touch this contract, in one declared way.** Draw2D's optional
+`set_scissor` can now leave `GL_SCISSOR_TEST` enabled behind after `end()` (the D9 contract's
+own scissor line went from an unconditional `glDisable` to conditional) -- a leftover scissor
+clips the host's own NEXT GL pass, including its clear. See `docs/draw2d.md`'s "Scissor" section
+for the full mapping/flush-boundary contract and the recipe (`reset_scissor()` before handing
+the frame back). `UiLayer::render()` itself is unaffected either way (its own `GlStateGuard`
+already re-establishes state), pinned by a dedicated `draw2d_ui_coexist_sanity` case.
+
 **PT:** `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) é um átomo separado pra
 desenhar o mundo do jogo (carga de textura + `draw_sprite` + batching por-textura) que COABITA o
 mesmo contexto GL do renderer GL3 do RmlUi do `UiLayer`, nos dois modos, `App` e embed. Não

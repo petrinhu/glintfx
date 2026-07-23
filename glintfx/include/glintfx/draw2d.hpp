@@ -7,11 +7,18 @@
 //     batching. ZERO third-party type crosses this header (no GL, no GLFW, no RmlUi) -- same
 //     "golden boundary" discipline as every other public header (AGENTS.md).
 //
-//     COORDINATE CONTRACT (D5): screen-space pixels, top-left origin, y-down -- the SAME space as
-//     `UiEvent` mouse coordinates and `UiLayer::get_element_box` (one coordinate story for the
-//     whole library). `src_px` is a sub-rectangle of the texture in TEXEL coordinates (top-left
-//     origin, y-down, matching image memory row order); `{0,0,0,0}` is the sentinel for "whole
-//     texture". Camera/world-space transforms are explicitly OUT of this slice (D2D-2, next wave).
+//     COORDINATE CONTRACT (D5, REFRAMED by D2D-2 / ADR-0017's Addendum, Q1 (c)): screen-space
+//     pixels, top-left origin, y-down -- the SAME space as `UiEvent` mouse coordinates and
+//     `UiLayer::get_element_box` (one coordinate story for the whole library) -- is now the
+//     documented NO-CAMERA case: with no camera set, `draw_sprite` runs this literal v0.20.0
+//     contract, unchanged (an absence of diff, not a re-derivation of it). `src_px` is a
+//     sub-rectangle of the texture in TEXEL coordinates (top-left origin, y-down, matching image
+//     memory row order); `{0,0,0,0}` is the sentinel for "whole texture". `set_camera(Camera2d)`
+//     switches subsequent draws to WORLD space (see `Camera2d`/`SpriteTransform`/
+//     `world_to_screen`/`screen_to_world`/`camera_from_world_rect` below); `reset_camera()`
+//     returns to screen space. The camera and per-sprite transforms are CPU-side, pure,
+//     pre-batcher (D13) -- the GL layer and its published touched-state list (below) are
+//     untouched by either, and switching camera mid-bracket never forces a flush.
 //
 //     GL-STATE CONTRACT (D9, the anti-`GlStateGuard`-bug decision -- see gl_state.hpp for the
 //     class this decision answers): Draw2D SETS every piece of GL state it depends on at each
@@ -43,13 +50,19 @@
 //     interno por-textura. ZERO tipo de terceiro cruza este header (sem GL, sem GLFW, sem RmlUi)
 //     -- mesma disciplina de "fronteira dourada" de todo outro header público (AGENTS.md).
 //
-//     CONTRATO DE COORDENADAS (D5): pixels em espaço de tela, origem superior-esquerda, y pra
-//     baixo -- o MESMO espaço das coordenadas de mouse do `UiEvent` e de
-//     `UiLayer::get_element_box` (uma história de coordenadas só pra biblioteca inteira).
-//     `src_px` é uma sub-retângulo da textura em coordenadas de TEXEL (origem superior-esquerda,
-//     y pra baixo, batendo com a ordem de linha da memória de imagem); `{0,0,0,0}` é a sentinela
-//     de "textura inteira". Transformações de câmera/espaço-de-mundo estão explicitamente FORA
-//     desta fatia (D2D-2, próxima onda).
+//     CONTRATO DE COORDENADAS (D5, REENQUADRADO pelo D2D-2 / Adendo da ADR-0017, Q1 (c)): pixels
+//     em espaço de tela, origem superior-esquerda, y pra baixo -- o MESMO espaço das coordenadas
+//     de mouse do `UiEvent` e de `UiLayer::get_element_box` (uma história de coordenadas só pra
+//     biblioteca inteira) -- agora é o caso documentado SEM CÂMERA: sem câmera setada,
+//     `draw_sprite` roda este contrato literal da v0.20.0, inalterado (uma ausência de diff, não
+//     uma re-derivação dele). `src_px` é uma sub-retângulo da textura em coordenadas de TEXEL
+//     (origem superior-esquerda, y pra baixo, batendo com a ordem de linha da memória de imagem);
+//     `{0,0,0,0}` é a sentinela de "textura inteira". `set_camera(Camera2d)` passa os desenhos
+//     seguintes pro espaço de MUNDO (ver `Camera2d`/`SpriteTransform`/`world_to_screen`/
+//     `screen_to_world`/`camera_from_world_rect` abaixo); `reset_camera()` volta pro espaço de
+//     tela. A câmera e os transforms por-sprite são CPU-side, puros, pré-batcher (D13) -- a
+//     camada GL e sua lista publicada de estado tocado (abaixo) ficam intocadas por qualquer um
+//     dos dois, e trocar de câmera no meio do bracket nunca força um flush.
 //
 //     CONTRATO DE ESTADO GL (D9, a decisão anti-bug-`GlStateGuard` -- ver gl_state.hpp pra classe
 //     de bug que esta decisão responde): o Draw2D SETA todo pedaço de estado GL de que depende a
@@ -111,6 +124,122 @@ struct ColorF {
   float b = 1.f;
   float a = 1.f;
 };
+
+// EN: 2D point value type -- world OR screen space depending on call site (see the file header
+//     comment's coordinate contract, D5). Zero third-party type crosses this boundary (no GLM,
+//     no other vector-math library) -- same "golden boundary" discipline as every other public
+//     type here. Aggregate, trivially copyable.
+// PT: Tipo-valor de ponto 2D -- espaço de mundo OU de tela dependendo do sítio de chamada (ver o
+//     contrato de coordenadas do comentário de cabeçalho deste arquivo, D5). Zero tipo de
+//     terceiro cruza esta fronteira (sem GLM, sem outra lib de matemática vetorial) -- mesma
+//     disciplina de "fronteira dourada" de todo outro tipo público daqui. Agregado, trivialmente
+//     copiável.
+struct Vec2F {
+  float x = 0.f;
+  float y = 0.f;
+};
+
+// EN: World camera, CENTER anchor (ADR-0017 Addendum, Q2 (2a)): `(x, y)` is the world point
+//     shown at the viewport's CENTER -- "point the camera at the player" is
+//     `cam.x = player.x; cam.y = player.y`, the whole follow-cam line, and zoom/rotation pivot
+//     about the view center (what every consumer visually expects). Default-constructed
+//     `Camera2d{}` is NOT the identity mapping (it centers the world origin on screen) --
+//     harmless because the DEFAULT STATE of a `Draw2d` is "no camera" (Q1 (c)), never "camera
+//     set to identity"; see `Draw2d::set_camera` below. `zoom` is screen px per world unit
+//     (`zoom 2` = magnified 2x; must be `> 0`, D15 -- `zoom == 0` would collapse the world and
+//     make `screen_to_world` divide by zero, and negative zoom is NOT a mirror idiom, `flip_h`/
+//     `flip_v` on `SpriteTransform` exist for that). `rotation` is the camera's OWN orientation
+//     in RADIANS (D14) -- a positive value turns the camera clockwise, so the world appears to
+//     rotate counter-clockwise on screen; any finite value is legal, wrapping naturally through
+//     `sin`/`cos` past `2*pi`. See `world_to_screen`/`screen_to_world` below for the exact
+//     projection formulas (D12).
+// PT: Câmera de mundo, âncora CENTRO (Adendo da ADR-0017, Q2 (2a)): `(x, y)` é o ponto do mundo
+//     mostrado no CENTRO do viewport -- "apontar a câmera pro jogador" é
+//     `cam.x = player.x; cam.y = player.y`, a linha inteira do follow-cam, e zoom/rotação
+//     pivotam sobre o centro da vista (o que todo consumidor espera visualmente). Um
+//     `Camera2d{}` default-construído NÃO é a transformação identidade (centra a origem do mundo
+//     na tela) -- inofensivo porque o ESTADO default de um `Draw2d` é "sem câmera" (Q1 (c)),
+//     nunca "câmera setada pra identidade"; ver `Draw2d::set_camera` abaixo. `zoom` é px de tela
+//     por unidade de mundo (`zoom 2` = ampliado 2x; precisa ser `> 0`, D15 -- `zoom == 0`
+//     colapsaria o mundo e faria `screen_to_world` dividir por zero, e zoom negativo NÃO é um
+//     idioma de espelho, `flip_h`/`flip_v` em `SpriteTransform` existem pra isso). `rotation` é
+//     a orientação da PRÓPRIA câmera em RADIANOS (D14) -- um valor positivo gira a câmera no
+//     sentido horário, então o mundo parece girar anti-horário na tela; qualquer valor finito é
+//     legal, dando wrap naturalmente por `sin`/`cos` além de `2*pi`. Ver `world_to_screen`/
+//     `screen_to_world` abaixo pras fórmulas exatas de projeção (D12).
+struct Camera2d {
+  float x = 0.f;
+  float y = 0.f;
+  float zoom = 1.f;
+  float rotation = 0.f;
+};
+
+// EN: Per-sprite transform (pivot, rotation, scale, flip), orthogonal to the camera -- applies
+//     in BOTH spaces (world units when a camera is set, screen px otherwise, D18).
+//     `origin_x`/`origin_y` are the pivot, NORMALIZED within `dst` (default `0.5/0.5` = center);
+//     `rotation` is radians about the pivot (D14, independent of any camera rotation);
+//     `scale_x`/`scale_y` are about the pivot (default 1; negative is LEGAL -- it mirrors the
+//     geometry, winding is irrelevant because D9 already disables backface cull); `flip_h`/
+//     `flip_v` swap UV on the RESOLVED `src_px` sub-rect (so an atlas frame flips within itself,
+//     never bleeding a neighbouring frame) -- implemented by `Draw2d::draw_sprite`'s transform
+//     overload below (D2D-2B), not by this value type. Corner math (scale about the pivot, THEN
+//     rotate about the pivot, literal order) lives in the internal sibling header of
+//     `world_to_screen` (`src/transform2d.hpp`, single source); see `docs/draw2d.md` for the
+//     full formula.
+// PT: Transform por-sprite (pivô, rotação, escala, flip), ortogonal à câmera -- vale nos DOIS
+//     espaços (unidades de mundo com câmera setada, px de tela caso contrário, D18).
+//     `origin_x`/`origin_y` são o pivô, NORMALIZADO dentro de `dst` (padrão `0.5/0.5` = centro);
+//     `rotation` é radianos sobre o pivô (D14, independente de qualquer rotação de câmera);
+//     `scale_x`/`scale_y` são sobre o pivô (padrão 1; negativo é LEGAL -- espelha a geometria, o
+//     giro é irrelevante porque o D9 já desliga o cull de backface); `flip_h`/`flip_v` trocam UV
+//     no sub-retângulo `src_px` RESOLVIDO (então um frame de atlas espelha dentro de si mesmo,
+//     nunca vaza pra um frame vizinho) -- implementado pelo overload de transform do
+//     `Draw2d::draw_sprite` abaixo (D2D-2B), não por este tipo-valor. A matemática de canto
+//     (escala sobre o pivô, DEPOIS rotação sobre o pivô, ordem literal) mora no header interno
+//     irmão de `world_to_screen` (`src/transform2d.hpp`, fonte única); ver `docs/draw2d.md` pra
+//     fórmula completa.
+struct SpriteTransform {
+  float origin_x = 0.5f;
+  float origin_y = 0.5f;
+  float rotation = 0.f;
+  float scale_x = 1.f;
+  float scale_y = 1.f;
+  bool flip_h = false;
+  bool flip_v = false;
+};
+
+// EN: Pure, TOTAL helpers (D12/D16) -- defined out-of-line in draw2d.cpp (D21: kept out of this
+//     header on purpose, so `nm` still proves their removal when GLINTFX_MODULE_DRAW2D=OFF),
+//     delegating to the SAME internal formulas `Draw2d::draw_sprite`'s camera path uses
+//     (`src/transform2d.hpp`, single source -- the draw path and these helpers cannot diverge).
+//     D12, literal: `world_to_screen(cam, W, H, p) = rot((p - (cam.x,cam.y)) * cam.zoom,
+//     -cam.rotation) + (W/2, H/2)`; `screen_to_world` is its exact inverse. D16 totality:
+//     invalid input (any non-finite member of `cam` or the point, `cam.zoom <= 0`, or a
+//     non-positive viewport) returns the INPUT POINT UNCHANGED -- deterministic, documented,
+//     never NaN out; these functions cannot log (they are pure). `camera_from_world_rect`
+//     (D17, the one cuttable convenience) returns the camera that fits `world_rect` by WIDTH
+//     (`zoom = viewport_w / world_rect.w`, center = rect center); vertical coverage follows the
+//     viewport's own aspect (compose with `UiLayer::set_viewport` for a letterbox-exact fit,
+//     which already exists). Fail-high: non-finite `world_rect`, `world_rect.w <= 0 ||
+//     world_rect.h <= 0`, or a non-positive viewport return `Camera2d{}`.
+// PT: Helpers puros e TOTAIS (D12/D16) -- definidos fora de linha em draw2d.cpp (D21: mantidos
+//     fora deste header de propósito, pra que o `nm` continue provando a remoção deles quando
+//     GLINTFX_MODULE_DRAW2D=OFF), delegando pras MESMAS fórmulas internas que o caminho de
+//     câmera do `Draw2d::draw_sprite` usa (`src/transform2d.hpp`, fonte única -- o caminho de
+//     desenho e estes helpers não podem divergir). D12, literal: `world_to_screen(cam, W, H, p)
+//     = rot((p - (cam.x,cam.y)) * cam.zoom, -cam.rotation) + (W/2, H/2)`; `screen_to_world` é o
+//     inverso exato. Totalidade D16: input inválido (qualquer membro não-finito de `cam` ou do
+//     ponto, `cam.zoom <= 0`, ou viewport não-positivo) devolve o PONTO DE ENTRADA INALTERADO --
+//     determinístico, documentado, nunca NaN pra fora; estas funções não podem logar (são
+//     puras). `camera_from_world_rect` (D17, a única conveniência cortável) devolve a câmera que
+//     ajusta `world_rect` por LARGURA (`zoom = viewport_w / world_rect.w`, centro = centro do
+//     retângulo); a cobertura vertical segue o próprio aspecto do viewport (compor com
+//     `UiLayer::set_viewport` pra fit letterbox-exato, que já existe). Fail-high: `world_rect`
+//     não-finito, `world_rect.w <= 0 || world_rect.h <= 0`, ou viewport não-positivo devolvem
+//     `Camera2d{}`.
+Vec2F world_to_screen(const Camera2d& cam, int viewport_w, int viewport_h, Vec2F world);
+Vec2F screen_to_world(const Camera2d& cam, int viewport_w, int viewport_h, Vec2F screen);
+Camera2d camera_from_world_rect(const RectF& world_rect, int viewport_w, int viewport_h);
 
 // EN: Value handle to a texture owned by a `Draw2d` instance (D7). Copyable, trivially small --
 //     NOT an RAII owner (`Draw2d::destroy_texture` is the explicit release, same idiom as
@@ -335,6 +464,65 @@ public:
   //     bracket begin()/end() é rejeitado (logado uma vez, dedup'd).
   void draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{},
                    const ColorF& tint = ColorF{});
+
+  // EN: Q1 (c), ADR-0017 Addendum: switches subsequent draw_sprite() calls in ANY open (or
+  //     future) bracket to WORLD space, projected through `camera` via `world_to_screen` (D12)
+  //     -- CPU-side, pre-batcher (D13), so switching mid-bracket NEVER forces a flush
+  //     (same-texture batching survives it, D4 untouched). Fail-high (D15, the set_dp_ratio
+  //     idiom): any non-finite `camera` member, or `camera.zoom <= 0`, rejects the call -- the
+  //     PREVIOUS state (including "no camera") is KEPT, one dedup'd log line. Safe no-op on a
+  //     never-init/moved-from/post-shutdown `Draw2d` (every new public method shares this
+  //     module's null-safe contract, D15).
+  // PT: Q1 (c), Adendo da ADR-0017: passa as chamadas draw_sprite() seguintes em QUALQUER
+  //     bracket aberto (ou futuro) pra espaço de MUNDO, projetado por `camera` via
+  //     `world_to_screen` (D12) -- CPU-side, pré-batcher (D13), então trocar no meio do bracket
+  //     NUNCA força um flush (o batching por-mesma-textura sobrevive, D4 intocado). Fail-high
+  //     (D15, o idioma do set_dp_ratio): qualquer membro não-finito de `camera`, ou
+  //     `camera.zoom <= 0`, rejeita a chamada -- o estado ANTERIOR (inclusive "sem câmera") é
+  //     MANTIDO, uma linha de log dedup'd. No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown (todo método público novo compartilha o
+  //     contrato null-safe deste módulo, D15).
+  void set_camera(const Camera2d& camera);
+
+  // EN: Q1 (c): returns subsequent draw_sprite() calls to screen space (the no-camera,
+  //     v0.20.0-literal path, D5's reframed default). Idempotent -- safe to call with no camera
+  //     set. `shutdown()` already does this implicitly (D22); safe no-op on a
+  //     never-init/moved-from/post-shutdown `Draw2d`.
+  // PT: Q1 (c): devolve as chamadas draw_sprite() seguintes pro espaço de tela (o caminho
+  //     sem-câmera, literal-v0.20.0, o default reenquadrado do D5). Idempotente -- seguro
+  //     chamar sem câmera setada. `shutdown()` já faz isso implicitamente (D22); no-op seguro
+  //     num `Draw2d` nunca-inicializado/movido-de/pós-shutdown.
+  void reset_camera();
+
+  // EN: D18 overload -- `transform` applies pivot/rotation/scale/flip about `dst` in
+  //     WHICHEVER space is currently active (world units with a camera set, screen px
+  //     otherwise, D5/Q1 (c)); each resulting corner is then projected through
+  //     `world_to_screen` when a camera is set (D12/D18, "one composition story, no special
+  //     cases"). Fail-high (D20, D10 extended): every `transform` member finite BEFORE any
+  //     arithmetic (NaN/Inf anywhere skips the draw, dedup'd log, same `NonFinite` class as
+  //     `dst`/`src_px`/`tint`); `dst.w <= 0 || dst.h <= 0` stays a silent legal no-op
+  //     (unchanged from the 4-arg overload); a post-math guard rejects a non-finite COMPUTED
+  //     corner (overflow -- e.g. huge zoom times huge coordinate, dedup'd log, no v0.20.0 twin
+  //     by design). The plain 4-arg `draw_sprite` above is UNCHANGED by this overload's
+  //     existence -- it keeps calling the v0.20.0 batcher path verbatim, camera or not (that
+  //     absence-of-diff IS the Q1 (c) compatibility guarantee, additionally pinned by an
+  //     exact-equivalence unit test, D19).
+  // PT: Overload D18 -- `transform` aplica pivô/rotação/escala/flip sobre `dst` no espaço que
+  //     estiver ATIVO no momento (unidades de mundo com câmera setada, px de tela caso
+  //     contrário, D5/Q1 (c)); cada canto resultante é então projetado por `world_to_screen`
+  //     quando uma câmera está setada (D12/D18, "uma história de composição só, sem caso
+  //     especial"). Fail-high (D20, D10 estendido): todo membro de `transform` finito ANTES de
+  //     qualquer conta (NaN/Inf em qualquer lugar pula o desenho, log dedup'd, mesma classe
+  //     `NonFinite` de `dst`/`src_px`/`tint`); `dst.w <= 0 || dst.h <= 0` continua um no-op
+  //     legal silencioso (inalterado em relação ao overload de 4 args); uma guarda pós-conta
+  //     rejeita um canto COMPUTADO não-finito (overflow -- ex.: zoom enorme vezes coordenada
+  //     enorme, log dedup'd, sem gêmeo na v0.20.0 por design). O `draw_sprite` de 4 args puro
+  //     acima fica INALTERADO pela existência deste overload -- continua chamando o caminho
+  //     v0.20.0 do batcher verbatim, com ou sem câmera (essa ausência-de-diff É a garantia de
+  //     compatibilidade da Q1 (c), fixada adicionalmente por um teste unitário de equivalência
+  //     exata, D19).
+  void draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px,
+                   const ColorF& tint, const SpriteTransform& transform);
 
   // EN: Closes the batching bracket opened by begin(), flushing whatever this bracket still had
   //     pending (D4) -- unconditionally, even an empty/degenerate bracket (a no-op flush in that

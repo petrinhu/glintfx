@@ -161,6 +161,75 @@ public:
     return DrawResult::Ok;
   }
 
+  // EN: D2D-2B, D19 -- transformed-quad entry: identical bracket/capacity/texture-change
+  //     policy to draw_sprite() above (D4), identical src_px sentinel+clamp (D5) and tint
+  //     clamp (D8) via the SAME resolve_src()/clampf() helpers -- but vertices carry the
+  //     CALLER's `corners` (already projected, already transformed by draw2d.cpp's D18/D12
+  //     math) instead of an axis-aligned expansion of a `dst` rect. `corners` is TL,TR,BR,BL
+  //     (the same winding emit_quad() below already uses, D5) -- the caller (draw2d.cpp) is
+  //     responsible for D20's fail-high validation of `corners` BEFORE calling this (every
+  //     member finite); this method's own NonFinite check below covers `src_px`/`tint` only,
+  //     mirroring draw_sprite()'s own split (dst validated by the caller's math, src_px/tint
+  //     validated here). draw_sprite()'s OWN vertex path (emit_quad()) is NOT reused or
+  //     rewritten by this method's existence -- see emit_quad_corners() below, a sibling
+  //     that computes the SAME UV formula against caller-supplied positions instead of a
+  //     `dst` rect, which is what makes an identity SpriteTransform + no camera produce
+  //     bit-identical vertices to draw_sprite()'s own path (D19's compatibility pin; the
+  //     other half of this pin -- SpriteTransform{} reproducing `dst`'s own 4 corners
+  //     bit-for-bit -- is transform2d.hpp's, D2D-2A).
+  // PT: D2D-2B, D19 -- entrada de quad transformado: política de bracket/capacidade/
+  //     troca-de-textura IDÊNTICA ao draw_sprite() acima (D4), sentinela+clamp de src_px
+  //     IDÊNTICO (D5) e clamp de tint IDÊNTICO (D8) via os MESMOS helpers resolve_src()/
+  //     clampf() -- mas os vértices carregam os `corners` do CHAMADOR (já projetados, já
+  //     transformados pela matemática D18/D12 de draw2d.cpp) em vez de uma expansão
+  //     axis-aligned de um retângulo `dst`. `corners` é TL,TR,BR,BL (o mesmo giro que o
+  //     emit_quad() abaixo já usa, D5) -- o chamador (draw2d.cpp) é responsável pela
+  //     validação fail-high do D20 sobre `corners` ANTES de chamar isto (todo membro
+  //     finito); o próprio cheque NonFinite deste método abaixo cobre só `src_px`/`tint`,
+  //     espelhando o próprio split do draw_sprite() (dst validado pela matemática do
+  //     chamador, src_px/tint validados aqui). O PRÓPRIO caminho de vértice do
+  //     draw_sprite() (emit_quad()) não é reusado nem reescrito pela existência deste
+  //     método -- ver emit_quad_corners() abaixo, um irmão que computa a MESMA fórmula de
+  //     UV contra posições fornecidas pelo chamador em vez de um retângulo `dst`, que é o
+  //     que faz um SpriteTransform identidade + sem câmera produzir vértices
+  //     bit-idênticos ao próprio caminho do draw_sprite() (a fixação de compatibilidade do
+  //     D19; a outra metade desta fixação -- SpriteTransform{} reproduzindo os próprios 4
+  //     cantos de `dst` bit-a-bit -- é do transform2d.hpp, D2D-2A).
+  DrawResult draw_quad(std::uint32_t texture_id, int tex_w, int tex_h, const Vec2F corners[4],
+                       const RectF& src_px, const ColorF& tint) {
+    if (!in_bracket_) return DrawResult::OutsideBracket;
+    if (bracket_degenerate_) return DrawResult::BracketInvalid;
+
+    // D10-style guard, D19's own scope: corners are the CALLER's job to validate finite
+    // (draw2d.cpp's D20 guards do this before calling here); src_px/tint are validated here,
+    // same as draw_sprite() above.
+    if (!all_finite(corners) || !all_finite(src_px) || !all_finite(tint)) return DrawResult::NonFinite;
+
+    // D4: flush the run so far on a texture change (first draw of the bracket counts as one).
+    if (!has_current_texture_ || current_texture_id_ != texture_id) {
+      finalize_current_run();
+      current_texture_id_ = texture_id;
+      has_current_texture_ = true;
+    }
+
+    const float tw = tex_w > 0 ? static_cast<float>(tex_w) : 0.f;
+    const float th = tex_h > 0 ? static_cast<float>(tex_h) : 0.f;
+    const RectF src = resolve_src(src_px, tw, th);
+    const ColorF tint_clamped{clampf(tint.r, 0.f, 1.f), clampf(tint.g, 0.f, 1.f),
+                              clampf(tint.b, 0.f, 1.f), clampf(tint.a, 0.f, 1.f)};
+
+    emit_quad_corners(corners, src, tint_clamped, tw, th);
+
+    // D4: capacity flush -- same memory-bound policy as draw_sprite() above.
+    if (current_vertices_.size() / 6 >= max_quads_) {
+      finalize_current_run();
+      current_texture_id_ = texture_id;
+      has_current_texture_ = true;
+    }
+
+    return DrawResult::Ok;
+  }
+
   // EN: Closes the bracket, finalizing whatever run was pending (D4) -- unconditionally, even an
   //     empty one (finalize_current_run() is itself a no-op on an empty run, so end() on an
   //     untouched bracket queues nothing). Safe to call without an open bracket (no-op).
@@ -204,6 +273,19 @@ private:
   static bool all_finite(const ColorF& c) {
     return std::isfinite(c.r) && std::isfinite(c.g) && std::isfinite(c.b) && std::isfinite(c.a);
   }
+  // EN: D2D-2B -- draw_quad()'s own finiteness check on the caller-supplied corners (a
+  //     cheap defence-in-depth re-check; draw2d.cpp's D20 guards already validate these
+  //     before calling here, same "fail-high at every boundary" discipline `SpriteBatch`
+  //     itself already applies to dst/src_px/tint above).
+  // PT: D2D-2B -- o próprio cheque de finitude do draw_quad() sobre os cantos fornecidos
+  //     pelo chamador (uma re-checagem barata de defesa-em-profundidade; as guardas D20 de
+  //     draw2d.cpp já validam isto antes de chamar aqui, mesma disciplina "fail-high em
+  //     toda fronteira" que o próprio `SpriteBatch` já aplica a dst/src_px/tint acima).
+  static bool all_finite(const Vec2F corners[4]) {
+    for (int i = 0; i < 4; ++i)
+      if (!std::isfinite(corners[i].x) || !std::isfinite(corners[i].y)) return false;
+    return true;
+  }
   static float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
   // EN: D5/D10 -- resolves the {0,0,0,0} "whole texture" sentinel, then clamps to
@@ -239,6 +321,41 @@ private:
     const Vertex tr{dst.x + dst.w, dst.y, u1, v0, tint.r, tint.g, tint.b, tint.a};
     const Vertex br{dst.x + dst.w, dst.y + dst.h, u1, v1, tint.r, tint.g, tint.b, tint.a};
     const Vertex bl{dst.x, dst.y + dst.h, u0, v1, tint.r, tint.g, tint.b, tint.a};
+
+    current_vertices_.push_back(tl);
+    current_vertices_.push_back(tr);
+    current_vertices_.push_back(br);
+    current_vertices_.push_back(tl);
+    current_vertices_.push_back(br);
+    current_vertices_.push_back(bl);
+  }
+
+  // EN: D2D-2B, D19 -- emit_quad()'s sibling: the SAME UV formula (u0/v0/u1/v1 from `src`
+  //     and tex dims), the SAME TL,TR,BR,BL winding and 2-triangle layout, but vertex
+  //     POSITIONS come from the caller's `corners` array instead of an axis-aligned
+  //     expansion of a `dst` rect. This equivalence in construction is exactly what makes
+  //     draw_quad(identity-transform-corners, ...) produce bit-identical vertices to
+  //     draw_sprite(dst, ...) -- D19's compatibility pin (the other half, SpriteTransform{}
+  //     reproducing dst's own 4 corners bit-for-bit, is transform2d.hpp's, D2D-2A).
+  // PT: D2D-2B, D19 -- irmão do emit_quad(): a MESMA fórmula de UV (u0/v0/u1/v1 a partir de
+  //     `src` e das dimensões da textura), o MESMO giro TL,TR,BR,BL e layout de 2
+  //     triângulos, mas as POSIÇÕES de vértice vêm do array `corners` do chamador em vez de
+  //     uma expansão axis-aligned de um retângulo `dst`. Esta equivalência de construção é
+  //     exatamente o que faz draw_quad(cantos-de-transform-identidade, ...) produzir
+  //     vértices bit-idênticos a draw_sprite(dst, ...) -- a fixação de compatibilidade do
+  //     D19 (a outra metade, SpriteTransform{} reproduzindo os próprios 4 cantos de dst
+  //     bit-a-bit, é do transform2d.hpp, D2D-2A).
+  void emit_quad_corners(const Vec2F corners[4], const RectF& src, const ColorF& tint,
+                         float tex_w, float tex_h) {
+    const float u0 = tex_w > 0.f ? src.x / tex_w : 0.f;
+    const float v0 = tex_h > 0.f ? src.y / tex_h : 0.f;
+    const float u1 = tex_w > 0.f ? (src.x + src.w) / tex_w : 0.f;
+    const float v1 = tex_h > 0.f ? (src.y + src.h) / tex_h : 0.f;
+
+    const Vertex tl{corners[0].x, corners[0].y, u0, v0, tint.r, tint.g, tint.b, tint.a};
+    const Vertex tr{corners[1].x, corners[1].y, u1, v0, tint.r, tint.g, tint.b, tint.a};
+    const Vertex br{corners[2].x, corners[2].y, u1, v1, tint.r, tint.g, tint.b, tint.a};
+    const Vertex bl{corners[3].x, corners[3].y, u0, v1, tint.r, tint.g, tint.b, tint.a};
 
     current_vertices_.push_back(tl);
     current_vertices_.push_back(tr);

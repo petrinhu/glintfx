@@ -905,6 +905,28 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: transform2d_sanity (D2D-2A) -- PURE unit test for src/transform2d.hpp: no window, no GL
+#     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
+#     here" reasoning as sprite_batch_sanity/image_decode_sanity above). Registered
+#     UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other draw2d test in
+#     this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (Vec2F/Camera2d/SpriteTransform/RectF) --
+#     transform2d.hpp itself pulls in no library symbols, it is entirely header-only.
+# PT: transform2d_sanity (D2D-2A) -- teste unit PURO para src/transform2d.hpp: sem janela, sem
+#     contexto GL, nenhuma dependência de RmlUi/GLFW (mesmo racional "nada relacionado a
+#     display pra isolar aqui" de sprite_batch_sanity/image_decode_sanity acima). Registrado
+#     INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo outro teste de
+#     draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka `glintfx` só pelo
+#     include path público de <glintfx/draw2d.hpp> (Vec2F/Camera2d/SpriteTransform/RectF) -- o
+#     próprio transform2d.hpp não puxa símbolo nenhum de biblioteca, é inteiramente header-only.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(transform2d_sanity transform2d_sanity.cpp)
+  target_link_libraries(transform2d_sanity PRIVATE glintfx)
+  add_test(NAME transform2d_sanity COMMAND transform2d_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #
@@ -2138,6 +2160,11 @@ add_test(NAME asset_decode_hostile_sanity
 #         destroyed/tampered/foreign handles, begin(0,0), nested begin(), draw outside a bracket,
 #         double shutdown(), destroying a Draw2d with a live texture. ASan-clean is the real gate
 #         (the `claudio` sanitize leg, AGENTS.md's CI policy).
+#       - draw2d_camera_render_sanity (D2D-2B, added this wave): camera offset/zoom/rotation,
+#         SpriteTransform rotation/flip_h/flip_v (no camera), and a mid-bracket
+#         set_camera()/reset_camera() switch on ONE texture -- every expected screen
+#         position/colour hand-derived from D12/D18's literal formulas (plan
+#         docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md section 5).
 # PT: draw2d_render_sanity / draw2d_ui_coexist_sanity / draw2d_hostile_sanity (D2D-1B) -- testes
 #     de fixture embed para glintfx::Draw2d (um host de contexto GL WindowGlfw oculto, mesmo
 #     idioma de gl_state_guard.cpp/ui_layer_compose.cpp acima -- ${_embed_dep} glloader é o mesmo
@@ -2155,6 +2182,11 @@ add_test(NAME asset_decode_hostile_sanity
 #         handles destruídos/adulterados/estrangeiros, begin(0,0), begin() aninhado, draw fora de
 #         bracket, shutdown() duplo, destruir um Draw2d com textura viva. ASan-limpo é o gate de
 #         fato (a perna sanitize do `claudio`, política de CI do AGENTS.md).
+#       - draw2d_camera_render_sanity (D2D-2B, somado nesta onda): offset/zoom/rotação de
+#         câmera, SpriteTransform rotação/flip_h/flip_v (sem câmera), e uma troca
+#         set_camera()/reset_camera() no meio do bracket sobre UMA textura -- toda
+#         posição/cor de tela esperada derivada à mão das fórmulas literais D12/D18 (plano
+#         docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md seção 5).
 # ---------------------------------------------------------------------------
 if(GLINTFX_MODULE_DRAW2D)
   add_executable(draw2d_render_sanity draw2d_render_sanity.cpp)
@@ -2162,6 +2194,14 @@ if(GLINTFX_MODULE_DRAW2D)
   add_test(NAME draw2d_render_sanity
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:draw2d_render_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  add_executable(draw2d_camera_render_sanity draw2d_camera_render_sanity.cpp)
+  target_link_libraries(draw2d_camera_render_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_camera_render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_camera_render_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

@@ -50,6 +50,20 @@
 #          split is deliberate: the hook must never depend on a build existing (that is
 #          exactly the moment it is needed most -- a fresh clone, first commit), but
 #          should use the accurate mode when it is already sitting there for free.
+#          HEADERS (`.hpp`/`.h`) never appear as their own "file" entry in
+#          compile_commands.json (they are never their own translation unit) -- routed to
+#          `--project` mode too whenever the db exists at all (matching CI's own strategy,
+#          which has no such split), NOT to the flag-less fallback, because the flag-less
+#          per-file pass analyses a header in ISOLATION and cannot see how the REST of the
+#          project (some `.cpp` TU that `#include`s it) actually uses its members --
+#          `unusedStructMember` false-flagged exactly this way on `sprite_batch.hpp`'s
+#          `Flush::vertices` (read only from `draw2d.cpp`'s `drain_ready()`, a DIFFERENT
+#          TU) the day D2D-2B first staged that file since GATE-PRECOMMIT went in,
+#          confirmed reproducible in isolation and confirmed CI's own `--project`-only
+#          invocation does NOT hit it. `.cpp` files keep the exact-match rule (a header is
+#          virtually always reachable via inclusion from an existing TU already in the
+#          db; a brand-new, not-yet-configured `.cpp` genuinely has no TU to analyse it
+#          through, so it still needs the flag-less fallback for at least some coverage).
 #       2) clang-format-diff on the STAGED diff (`git diff --cached`, not origin/main --
 #          see rationale below) of touched glintfx/*.cpp|*.hpp|*.h, third_party/ and the
 #          generated gl_loader.{h,c} excluded (same exclusions as TST-L1-FORMAT in
@@ -132,6 +146,22 @@
 #          deliberada: o hook nunca pode depender de um build existir (é exatamente o
 #          momento em que ele mais faz falta -- clone novo, primeiro commit), mas deve
 #          usar o modo preciso quando ele já está ali de graça.
+#          HEADERS (`.hpp`/`.h`) nunca aparecem como a própria entrada "file" no
+#          compile_commands.json (nunca são a própria unidade de tradução) -- roteados
+#          pro modo `--project` também sempre que o db existir (batendo com a própria
+#          estratégia do CI, que não tem essa divisão), NÃO pro fallback sem flags,
+#          porque o passe por-arquivo sem flags analisa um header ISOLADO e não consegue
+#          ver como o RESTO do projeto (algum `.cpp` TU que faz `#include` dele) de fato
+#          usa os membros dele -- `unusedStructMember` deu falso-positivo exatamente
+#          assim em `Flush::vertices` de `sprite_batch.hpp` (lido só pelo
+#          `drain_ready()` de `draw2d.cpp`, uma TU DIFERENTE) no dia em que o D2D-2B
+#          staged esse arquivo pela primeira vez desde que o GATE-PRECOMMIT entrou,
+#          confirmado reproduzível isolado e confirmado que a própria invocação
+#          `--project`-só do CI NÃO bate nisso. Arquivos `.cpp` mantêm a regra de match
+#          exato (um header é quase sempre alcançável via inclusão de uma TU já
+#          existente no db; um `.cpp` novinho, ainda não configurado, de fato não tem TU
+#          nenhuma pra analisá-lo através dela, então ainda precisa do fallback sem
+#          flags pra ao menos alguma cobertura).
 #       2) clang-format-diff no diff STAGED (`git diff --cached`, não origin/main -- ver
 #          racional abaixo) dos glintfx/*.cpp|*.hpp|*.h tocados, excluindo third_party/
 #          e o gl_loader.{h,c} gerado (mesmas exclusões do TST-L1-FORMAT no preci.sh).
@@ -245,11 +275,28 @@ run_cppcheck_gate() {
   local -a in_db=() not_in_db=()
   if [[ -f "${compiledb}" ]]; then
     for f in "${targets[@]}"; do
-      if grep -qF "${f}\"" "${compiledb}" 2>/dev/null; then
-        in_db+=("${f}")
-      else
-        not_in_db+=("${f}")
-      fi
+      case "${f}" in
+        # EN: A header (.hpp/.h) is never its own "file" entry (never its own TU) --
+        #     route it through --project mode too whenever the db exists at all, same
+        #     as CI's own strategy (no such split there). The flag-less per-file
+        #     fallback analyses a header in ISOLATION and cannot see cross-TU usage of
+        #     its members from whichever .cpp #includes it -- confirmed to false-flag
+        #     unusedStructMember this exact way (D2D-2B, sprite_batch.hpp).
+        # PT: Um header (.hpp/.h) nunca é a própria entrada "file" (nunca é a própria
+        #     TU) -- roteado pro modo --project também sempre que o db existir, mesma
+        #     estratégia do CI (sem essa divisão lá). O fallback sem flags analisa um
+        #     header ISOLADO e não enxerga uso cross-TU dos membros dele pelo .cpp que
+        #     faz #include -- confirmado dar falso-positivo de unusedStructMember
+        #     exatamente assim (D2D-2B, sprite_batch.hpp).
+        *.hpp|*.h) in_db+=("${f}") ;;
+        *)
+          if grep -qF "${f}\"" "${compiledb}" 2>/dev/null; then
+            in_db+=("${f}")
+          else
+            not_in_db+=("${f}")
+          fi
+          ;;
+      esac
     done
   else
     not_in_db=("${targets[@]}")

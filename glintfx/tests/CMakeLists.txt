@@ -813,6 +813,49 @@ target_link_libraries(log_dedup_sanity PRIVATE glintfx)
 add_test(NAME log_dedup_sanity COMMAND log_dedup_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
+#     decision D3) -- PURE unit test for src/image_decode.hpp: no window, no GL context, no
+#     RmlUi/GLFW dependency AT ALL (decode_premultiplied_rgba is a plain "bytes in, pixels out"
+#     function). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as
+#     input_state_sanity/log_dedup_sanity right above -- runs in BOTH build configurations. Needs
+#     the vendored stb_image.h declarations (third_party/stb, PRIVATE to this executable only --
+#     see the target_include_directories() call below) and links against `glintfx`, whose static
+#     archive already contains the compiled stb_image implementation (glintfx_image OBJECT
+#     library, unconditionally folded in -- see glintfx/CMakeLists.txt's own comment on that
+#     target) so no separate stb_image_impl.cpp compilation is needed here. Two binary fixtures
+#     (image_decode_rgba_2x2.png, image_decode_solid.jpg -- generated once via PIL, see this
+#     test's own file header) are copied to CMAKE_CURRENT_BINARY_DIR (= build/tests/, ctest's own
+#     default WORKING_DIRECTORY when none is given, same as input_state_sanity/log_dedup_sanity)
+#     so the test can open them by bare relative name. See the test file's own header for the
+#     full oracle (exact-value premultiply check on the lossless PNG fixture, tolerance-based RGB
+#     + exact alpha on the lossy JPEG fixture, hostile corpus reused directly at the helper seam).
+# PT: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-
+#     d2d1.md, decisão D3) -- teste unit PURO para src/image_decode.hpp: sem janela, sem contexto
+#     GL, sem dependência de RmlUi/GLFW NENHUMA (decode_premultiplied_rgba é uma função simples
+#     "bytes entram, pixels saem"). Registrado INCONDICIONALMENTE, mesma racional "nada
+#     relacionado a display pra isolar aqui" de input_state_sanity/log_dedup_sanity logo acima --
+#     roda nas DUAS configurações de build. Precisa das declarações vendorizadas de stb_image.h
+#     (third_party/stb, PRIVATE só a este executável -- ver a chamada
+#     target_include_directories() abaixo) e linka contra `glintfx`, cujo archive estático já
+#     contém a implementação compilada do stb_image (biblioteca OBJECT glintfx_image, dobrada
+#     incondicionalmente -- ver o próprio comentário daquele alvo em glintfx/CMakeLists.txt), então
+#     nenhuma compilação separada de stb_image_impl.cpp é necessária aqui. Duas fixtures binárias
+#     (image_decode_rgba_2x2.png, image_decode_solid.jpg -- geradas uma vez via PIL, ver o próprio
+#     cabeçalho de arquivo deste teste) são copiadas para CMAKE_CURRENT_BINARY_DIR (= build/tests/,
+#     o próprio WORKING_DIRECTORY padrão do ctest quando nenhum é dado, igual a
+#     input_state_sanity/log_dedup_sanity) para que o teste as abra por nome relativo simples. Ver
+#     o próprio cabeçalho de arquivo do teste pro oráculo completo.
+# ---------------------------------------------------------------------------
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_decode_rgba_2x2.png
+               ${CMAKE_CURRENT_BINARY_DIR}/image_decode_rgba_2x2.png COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/image_decode_solid.jpg
+               ${CMAKE_CURRENT_BINARY_DIR}/image_decode_solid.jpg COPYONLY)
+add_executable(image_decode_sanity image_decode_sanity.cpp)
+target_include_directories(image_decode_sanity PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+target_link_libraries(image_decode_sanity PRIVATE glintfx)
+add_test(NAME image_decode_sanity COMMAND image_decode_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #

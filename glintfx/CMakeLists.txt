@@ -661,7 +661,31 @@ option(GLINTFX_MODULE_FX
 #     introduzido de verdade no momento em que existir o primeiro módulo que
 #     precisar compor sem a ui.
 
-if(GLINTFX_OWN_FONT_ENGINE)
+# EN: ADR-0018 (e), D2D-TEXT/TX9 -- widened from `GLINTFX_OWN_FONT_ENGINE` alone (L1.20-FONTFLIP
+#     Phase 1's own original gate) to `GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D`: the
+#     Draw2D atom's own text machinery (src/text_raster.hpp/.cpp, TX2 (a)) needs these same
+#     vendored `_glx_core_src_dir`/`_glx_core_include_dir` paths available even when the ui's own
+#     font engine selector is OFF. `GLINTFX_OWN_FONT_ENGINE` itself is UNTOUCHED, not repurposed
+#     -- it remains STRICTLY the ui-side engine selector (FontEngine::Own vs. FreeType,
+#     ADR-0011); this `if` only decides whether the vendored PATH VARIABLES below get computed at
+#     all, mechanical and reversible, matching ADR-0018 (e)'s own "só o gate de compilação muda"
+#     scope. Consuming these paths into an actual compiled object (linking sfnt.c/raster.c/hint.c
+#     into glintfx_draw2d without colliding with glintfx_text's own copy when BOTH flags are ON,
+#     the ordinary default) is the Draw2D integration slice's (T2) own job, not this gate's.
+# PT: ADR-0018 (e), D2D-TEXT/TX9 -- alargado de só `GLINTFX_OWN_FONT_ENGINE` (o próprio gate
+#     original da Fase 1 do L1.20-FONTFLIP) pra `GLINTFX_OWN_FONT_ENGINE OR
+#     GLINTFX_MODULE_DRAW2D`: a própria maquinaria de texto do átomo Draw2D
+#     (src/text_raster.hpp/.cpp, TX2 (a)) precisa destes MESMOS paths vendorizados
+#     `_glx_core_src_dir`/`_glx_core_include_dir` disponíveis mesmo quando o seletor de motor de
+#     fonte próprio da ui está OFF. O `GLINTFX_OWN_FONT_ENGINE` em si fica INTOCADO, não
+#     redestinado -- segue sendo ESTRITAMENTE o seletor de motor do lado ui (`FontEngine::Own` vs.
+#     FreeType, ADR-0011); este `if` só decide se as VARIÁVEIS DE PATH vendorizadas abaixo são
+#     computadas ou não, mecânico e reversível, batendo com o escopo "só o gate de compilação
+#     muda" do próprio ADR-0018 (e). Consumir esses paths num objeto compilado de verdade (linkar
+#     sfnt.c/raster.c/hint.c no glintfx_draw2d sem colidir com a própria cópia do glintfx_text
+#     quando AS DUAS flags estão ON, o default comum) é trabalho da própria fatia de integração do
+#     Draw2D (T2), não deste gate.
+if(GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D)
   # EN: Vendored paths (L1.20-FONTFLIP Phase 1) -- always present as part of the glintfx/
   #     subtree itself (glintfx/vendor/core/), so no existence guard/FATAL_ERROR is needed
   #     here anymore (unlike the pre-Phase-1 ../src / ../include/core layout). See

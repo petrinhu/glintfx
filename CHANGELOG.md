@@ -8,6 +8,73 @@
 
 ---
 
+## [Unreleased]
+
+### Added / Adicionado
+
+- **EN:** **Draw2D text: `load_font` / `draw_text` / `measure_text`** (`D2D-TEXT`, Onda 6,
+  contracts TX1-TX17, [ADR-0018](docs/adr/0018-draw2d-text.md)): the Draw2D atom can now draw
+  UTF-8 text. `Draw2d` gains `load_font`/`destroy_font` (a `Font2d` value handle, the `Texture2d`
+  D7 idiom -- not interchangeable between instances, lazy per-size atlas), `draw_text` (two
+  overloads) and `measure_text` (two overloads). Glyphs come from the **sovereign C font core**
+  (`glx_sfnt`/`glx_raster`/`glx_hint`, the SAME clean-room engine the `ui` atom's own font path
+  runs by default since v0.10.0) -- NOT FreeType, NOT the RmlUi text path (ADR-0018 (a)): one
+  rasterization truth for the whole library, UI text and game text off literally the same
+  rasterizer. Text anchors at the **top-left** (y-down, consistent with every sprite's `dst`,
+  ADR-0018 (c); `measure_text` echoes `ascent` for baseline-precise callers), draws in the ACTIVE
+  space (world units under a camera, screen px otherwise -- scales with `cam.zoom` by projection
+  alone), batches through the SAME batcher as sprites, and honours the current camera/layer/
+  scissor exactly like a sprite run (zero new GL-state or coexistence rule). **Full UTF-8**
+  (invalid/overlong/truncated -> U+FFFD, never a crash; a missing glyph renders `.notdef`/tofu),
+  **kerning** (the face's `kern` table, applied identically in draw and measure -- single source),
+  **multi-line `\n`**, and **small-body pen-snap/vsnap** in the no-camera integer-size path.
+  **Word-wrap + alignment** (leader-expanded scope): `TextOptions{max_width, align}` -- `max_width
+  > 0` greedy-wraps at spaces (a word wider than `max_width` force-breaks at the last glyph that
+  fits, minimum one per line; `max_width <= 0` is the "no wrap" sentinel), `TextAlign`
+  Left/Center/Right/**Justify** (word-spacing only; the block's last line and any `\n`-ended line
+  fall back to Left; justify without `max_width` degrades to Left). **Honest, DECLARED ceiling**
+  (the sovereign core's ceiling): no RTL/complex shaping (no GSUB/GPOS -- the same bar the ui's
+  default engine has lived with since v0.10.0), no GPOS-only kerning, no multi-face fallback, no
+  COLR/emoji, no hyphenation/letter-spacing justify -- each a named INBOX seed. **Fail-high,
+  central:** null/oversized/corrupt font, invalid UTF-8, non-finite `pos`/`size`/`color`/
+  `max_width`, hostile `align` cast, a 1 MiB per-call input cap, and atlas exhaustion are all
+  bounded, dedup'd-logged, never a crash. **Dependency profile amended** (ADR-0018 (d)/(e)): the
+  `draw2d` atom now carries the vendored font core -- no new third-party edge (the core is
+  in-tree, pure C, already MSVC-proven); a sprites-only consumer pays ~3 extra C translation units
+  of compile, no per-feature sub-flag. Full contract, recipes, and limits: `docs/draw2d.md`'s
+  "Text" section.
+- **PT:** **Texto no Draw2D: `load_font` / `draw_text` / `measure_text`** (`D2D-TEXT`, Onda 6,
+  contratos TX1-TX17, [ADR-0018](docs/adr/0018-draw2d-text.md)): o átomo Draw2D agora desenha
+  texto UTF-8. O `Draw2d` ganha `load_font`/`destroy_font` (um handle-valor `Font2d`, o idioma D7
+  do `Texture2d` -- não intercambiável entre instâncias, atlas por-tamanho preguiçoso), `draw_text`
+  (dois overloads) e `measure_text` (dois overloads). Os glifos vêm do **núcleo C soberano de
+  fonte** (`glx_sfnt`/`glx_raster`/`glx_hint`, o MESMO motor clean-room que o caminho de fonte
+  próprio do átomo `ui` roda por padrão desde a v0.10.0) -- NÃO o FreeType, NÃO o caminho de texto
+  do RmlUi (ADR-0018 (a)): uma verdade de rasterização só na biblioteca inteira, texto da ui e de
+  jogo do mesmo rasterizador. O texto ancora no **topo-esquerdo** (y pra baixo, consistente com o
+  `dst` de todo sprite, ADR-0018 (c); `measure_text` ecoa o `ascent` pra quem precisa de baseline),
+  desenha no espaço ATIVO (unidades de mundo sob câmera, px de tela sem -- escala com `cam.zoom` só
+  por projeção), batcha pelo MESMO batcher dos sprites e honra câmera/camada/scissor correntes
+  como uma corrida de sprite (zero estado GL ou regra de coexistência nova). **UTF-8 completo**
+  (inválido/overlong/truncado -> U+FFFD, nunca crash; glifo ausente renderiza `.notdef`/tofu),
+  **kerning** (tabela `kern` da face, idêntico em desenho e medição -- fonte única), **multi-linha
+  `\n`** e **pen-snap/vsnap de corpo pequeno** no caminho sem câmera em tamanho inteiro.
+  **Word-wrap + alinhamento** (escopo expandido pelo líder): `TextOptions{max_width, align}` --
+  `max_width > 0` quebra gulosa em espaços (palavra maior que `max_width` quebra à força no último
+  glifo que cabe, mínimo um por linha; `max_width <= 0` é a sentinela de "sem wrap"), `TextAlign`
+  Left/Center/Right/**Justify** (só word-spacing; a última linha do bloco e qualquer linha
+  terminada por `\n` caem pra Left; justify sem `max_width` degrada pra Left). **Teto honesto e
+  DECLARADO** (o teto do núcleo soberano): sem RTL/shaping complexo (sem GSUB/GPOS -- a mesma barra
+  que o motor default da ui vive desde a v0.10.0), sem kerning só-GPOS, sem fallback multi-face,
+  sem COLR/emoji, sem hifenização/justify por letter-spacing -- cada um uma semente nomeada na
+  INBOX. **Fail-high central:** fonte nula/grande-demais/corrompida, UTF-8 inválido,
+  `pos`/`size`/`color`/`max_width` não-finito, cast hostil de `align`, teto de 1 MiB por chamada e
+  exaustão de atlas são todos limitados, com log dedup'd, nunca crash. **Perfil de dependência
+  emendado** (ADR-0018 (d)/(e)): o átomo `draw2d` agora carrega o núcleo de fonte vendorizado --
+  sem aresta de terceiro nova (o core é in-tree, C puro, já provado no MSVC); um consumidor
+  só-sprites paga ~3 unidades de tradução C a mais de compile, sem sub-flag por-feature. Contrato,
+  receitas e limites completos: seção "Texto" de `docs/draw2d.md`.
+
 ## [0.22.0] - 2026-07-23 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.22.0)
 
 ### Added / Adicionado

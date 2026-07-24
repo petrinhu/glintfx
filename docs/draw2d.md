@@ -12,7 +12,9 @@
 `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) is the sprite-drawing facade for the
 `GLINTFX_MODULE_DRAW2D` atom, added by [ADR-0017](adr/0017-draw2d-module.md) (framework-2D
 architecture, [ADR-0015](adr/0015-framework-2d-atomized-architecture.md)). It depends on `core`
-plus the internal image-decode seam and the internal `glx_`-prefixed GL loader ONLY -- no
+plus the internal image-decode seam, the internal `glx_`-prefixed GL loader, and -- since
+`D2D-TEXT` ([ADR-0018](adr/0018-draw2d-text.md) (d)) -- the vendored sovereign font core
+(`glx_sfnt`/`glx_raster`/`glx_hint`, read-only shared with the `ui`'s own font engine) ONLY -- no
 `window`, no `ui`, no `fx` -- so it works in an embed host with no GLFW linked, and compiles in
 the same `GLFW=OFF` leg the MSVC job builds.
 
@@ -383,6 +385,116 @@ handle (the full D7 validation chain, dedup'd log -- same rejection story as `dr
 fully-transparent texture -- distinct from a 1x1 opaque texture, which returns
 `{true, 0, 0, 1, 1}`.
 
+### Text (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
+
+Draw2D renders UTF-8 text through the **sovereign C font core**
+(`glx_sfnt`/`glx_raster`/`glx_hint`, the same clean-room engine the `ui` atom's own font path
+runs by default since v0.10.0), NOT FreeType and NOT the RmlUi text path -- see
+[ADR-0018](adr/0018-draw2d-text.md) (decision (a)). One rasterization truth for the whole
+library: with the default `FontEngine::Own`, UI text and game text come off literally the same
+rasterizer, visually consistent on the same screen. The honest ceiling this buys is stated in
+"Limits declared" below (no complex shaping, no GPOS-only kerning).
+
+```cpp
+glintfx::Font2d font = draw2d.load_font("assets/OpenSans-Regular.ttf");
+
+draw2d.begin(w, h);
+draw2d.draw_text(font, "Score: 1200", {16.f, 16.f}, 24.f, {1,1,1,1});   // top-left anchor, white
+draw2d.end();
+
+draw2d.destroy_font(font);
+```
+
+**Fonts are value handles (TX1 -- the `Texture2d` idiom).** `Font2d`
+(`glintfx/include/glintfx/draw2d.hpp:361`) is a small, copyable value carrying an opaque id +
+generation + owner tag -- NOT an RAII owner: `destroy_font`
+(`glintfx/include/glintfx/draw2d.hpp:961`) is the explicit release (it ALWAYS zeroes the handle).
+`load_font` (`glintfx/include/glintfx/draw2d.hpp:948`) parses an in-file SFNT/TrueType face and
+registers it in the instance's font registry; the per-size glyph atlas is baked LAZILY on the
+first `draw_text`, not here. A handle is **NOT interchangeable between `Draw2d` instances** -- the
+owner tag rejects a foreign handle exactly like `Texture2d` does (D7). `ok() == false` (never a
+crash) on a null path, an open failure, the 64 MiB font-blob cap, or a parse failure
+(corrupt/unsupported font -- CFF/OTF outlines, a truncated table).
+
+**Drawing (TX1/TX7).** `draw_text` (`glintfx/include/glintfx/draw2d.hpp:988`) draws a UTF-8
+string at `pos` -- the **TOP-LEFT** of the first line's box (y-down,
+[ADR-0018](adr/0018-draw2d-text.md) (c)), consistent with every sprite's `dst`. `size` is in
+**ACTIVE-space** units: screen px with no camera, world units under one -- glyphs scale with
+`cam.zoom` by projection alone, exactly like every primitive (TX7). Text batches through the SAME
+batcher as sprites and honours the current camera, layer (D27), and scissor (D28) like a sprite
+run; `color` tints it via the same premultiplied D8 formula, over an R8 coverage atlas.
+Baseline-precise callers convert the top-left anchor to a baseline with one add of
+`TextMetrics::ascent` (below).
+
+**UTF-8 and glyph coverage (TX1).** Invalid/overlong/truncated UTF-8 renders U+FFFD (the
+replacement character), never a crash and never a silent truncation. Any codepoint the loaded
+face's cmap (format 4/12) covers renders; a codepoint the face lacks renders `.notdef` (tofu) --
+visible and honest, per TrueType's own convention.
+
+**Kerning and multi-line (TX1).** Kerning comes from the face's `kern` table, applied
+IDENTICALLY in `draw_text` and `measure_text` (single source -- a mutation in the advance/kern
+math breaks both). A `\n` starts a new line at the face's own line-height
+(`ascent - descent + line-gap`).
+
+**Snap for small bodies (TX8).** In the NO-CAMERA path at integer pixel sizes, pen-snap (X) +
+vsnap (Y) hinting sharpens small-body text (the `glx_hint` work the ui's 9-13dp HUD already
+validated). Under a camera the snapping is bypassed -- snapping world-space text would make it
+swim as the camera moves (documented, deliberate).
+
+**Metrics (TX1).** `measure_text` (`glintfx/include/glintfx/draw2d.hpp:1023`) lays out the string
+WITHOUT drawing and returns `TextMetrics` (`glintfx/include/glintfx/draw2d.hpp:443`)
+`{ok, width, height, ascent, line_height, line_count}` -- for HUD anchoring/centering without a
+draw. It consumes the SAME layout the two `draw_text` overloads use. `width` is the widest LINE's
+natural advance width (NOT the reference width the block was aligned within); `line_count` counts
+lines AFTER wrap + explicit `\n`.
+
+#### Word-wrap and alignment (TX15/TX16 -- the `TextOptions` overload)
+
+`TextOptions` (`glintfx/include/glintfx/draw2d.hpp:421`) `{max_width, align}` is an
+aggregate-with-defaults -- the `SpriteTransform` house idiom, so `TextOptions{}` is EXACTLY the
+no-options overload (pinned by a unit test). The `draw_text`
+(`glintfx/include/glintfx/draw2d.hpp:1006`) and `measure_text`
+(`glintfx/include/glintfx/draw2d.hpp:1029`) overloads take it.
+
+- **`max_width`** is in ACTIVE-space units. `max_width > 0` enables greedy word-wrap;
+  `max_width <= 0` is the documented **"no wrap"** sentinel (the `RectF{}` idiom -- only an
+  explicit `\n` breaks then).
+- **Word-wrap (TX15).** Greedy break at spaces (U+0020); the space that caused the break is
+  consumed, not rendered at the line edge. A single word wider than `max_width` **force-breaks**
+  at the last glyph that fits, minimum one glyph per line -- a fail-safe: text never overflows
+  past that one mandatory glyph and never vanishes. Explicit `\n` always breaks. U+00A0 (no-break
+  space) is honoured as non-breaking. **No hyphenation** and no locale-aware break classes (seed
+  `SEED-D2D-TEXT-TYPESETTING`).
+- **Alignment (TX16).** `TextAlign` (`glintfx/include/glintfx/draw2d.hpp:402`)
+  `{Left, Center, Right, Justify}` positions each line within the reference width -- `max_width`
+  when wrapping, else the block's widest line (so centered/right multi-line `\n` text works with
+  NO wrap). `Left` offset 0; `Center` `(ref_w - line_w)/2`; `Right` `ref_w - line_w`.
+- **Justify (TX16).** Word-spacing ONLY: the extra space of a line is distributed equally across
+  its interior U+0020 gaps (deterministic remainder). Per typographic convention, the block's
+  LAST line and any line ended by an explicit `\n` are NOT justified -- they fall back to `Left`.
+  `Justify` with `max_width <= 0` degrades to `Left` (justify needs a target width to mean
+  anything). No letter-spacing distribution (that, plus hyphenation, is the declared-out
+  `SEED-D2D-TEXT-TYPESETTING` tier).
+
+**Fail-high (TX6, central -- every guard runs BEFORE any arithmetic, D10):** a non-finite
+`pos`/`size`/`color` member skips the draw (dedup'd log); `size <= 0` is a silent legal no-op; an
+invalid/stale/foreign `font` is rejected (dedup'd log, the full D7 chain); `utf8 == nullptr` is a
+silent legal no-op for `draw_text` and `TextMetrics{}` for `measure_text`; the per-call input is
+capped at 1 MiB of bytes (processed up to the cap + one dedup'd log -- a single hostile call
+cannot freeze a frame). For the options overload: a non-finite `max_width` skips the call
+(dedup'd log -- `max_width <= 0` itself is LEGAL, the no-wrap sentinel); an `align` value outside
+the enum's range (a hostile cast) is treated as `Left` (dedup'd log). Atlas exhaustion from a
+hostile stream of thousands of distinct codepoints is a NAMED memory bound (capped per
+font-size instance; past the cap, new glyphs draw `.notdef` + one dedup'd log -- no eviction, a
+memory bound, not a performance claim, same class as the 4096-quad batcher cap). Every call is
+null-safe on a never-init/moved-from/post-shutdown/outside-bracket `Draw2d`.
+
+**Dependency profile.** Enabling `draw_text` is what adds the vendored font core to the `draw2d`
+atom's dependency surface ([ADR-0018](adr/0018-draw2d-text.md) (d)/(e)): a sprites-only consumer
+that never calls `draw_text` still pays the compile of ~3 extra C translation units (accepted
+cost, no per-feature sub-flag). No new third-party dependency edge is created -- the core is
+already in-tree, pure C, and already compiles in the MSVC job.
+
 ### API reference
 
 | Method | Returns | Notes |
@@ -412,6 +524,12 @@ fully-transparent texture -- distinct from a 1x1 opaque texture, which returns
 | `set_scissor(const RectF&)` (`glintfx/include/glintfx/draw2d.hpp:889`) | `void` | D28 -- ALWAYS screen px, camera-independent. Fail-high keeps previous state on non-finite input. See "Scissor" above. |
 | `reset_scissor()` (`glintfx/include/glintfx/draw2d.hpp:896`) | `void` | D28 -- idempotent, clears the scissor state set by `set_scissor`. |
 | `texture_content_bbox(const Texture2d&)` (`glintfx/include/glintfx/draw2d.hpp:929`) | `TextureBbox` | D29 -- smallest `alpha>0` rect, cached at `load_texture()` time. See "Texture content bbox" above. |
+| `load_font(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:948`) | `Font2d` | TX1 -- parses an in-file SFNT/TrueType face via the sovereign C core. `ok() == false` on null path, open failure, the 64 MiB blob cap, or a parse failure -- never a crash. Lazy per-size atlas. See "Text" above. |
+| `destroy_font(Font2d& font)` (`glintfx/include/glintfx/draw2d.hpp:961`) | `void` | TX1 -- releases the glyph-atlas GL textures, ALWAYS zeroes `font`. Fail-high (never UB) on already-destroyed/tampered/foreign handles. |
+| `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:988`) | `void` | TX1/TX7 -- UTF-8 text, top-left anchor, ACTIVE-space `size`, batched/camera/layer/scissor like a sprite. Invalid UTF-8 -> U+FFFD; missing glyph -> `.notdef`. See "Text" above. |
+| `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | TX15/TX16 overload -- word-wrap (`max_width > 0`) + per-line alignment (left/center/right/justify). See "Word-wrap and alignment" above. |
+| `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout WITHOUT drawing; `{ok,width,height,ascent,line_height,line_count}`. Same layout + fail-high chain as `draw_text`. See "Text" above. |
+| `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | TX15/TX16 overload -- measures with wrap + alignment active (`line_count`/`height` reflect the wrapped lines). |
 
 ### Premultiply and the tint formula (D8)
 
@@ -650,8 +768,24 @@ left as if it were the final number.
 
 Stated instead of faked, per the plan's own testing-downgrade discipline:
 
-- **No `draw_text`** -- `D2D-TEXT`, its own wave, requires its own ADR first (font-engine
-  tension: `App`'s FreeType-vs-own-engine flip, `docs/adr/0011-soft-font-flip.md`).
+- **Text has an honest, DECLARED ceiling (the sovereign core's ceiling, [ADR-0018](adr/0018-draw2d-text.md)):**
+  - **No RTL and no complex shaping** -- LTR only, no BiDi, no ligatures. The sovereign C core
+    has no GSUB/GPOS, so pretending otherwise would be dishonest -- the SAME bar the ui's own
+    default font engine has lived with since v0.10.0 (`docs/adr/0011-soft-font-flip.md`). Seed
+    `SEED-D2D-TEXT-SHAPING`, trigger: a Layer-0-track decision (not a wave).
+  - **No GPOS-only kerning** -- fonts that ship kerning ONLY in GPOS (a real subset of modern
+    faces) render unkerned. Seed `SEED-CORE-GPOS-KERN` -- a CORE seed: if it ever lands in the
+    sovereign C, both `ui` and `draw2d` text inherit it for free.
+  - **No multi-face fallback chain** -- game text is single-face; a missing glyph is `.notdef`
+    (tofu), not a system-font substitution. Seed `SEED-D2D-TEXT-FALLBACK`, trigger: a consumer
+    ask.
+  - **No COLR/emoji rendering in draw2d** -- the core supports COLR v0 but the atlas format does
+    not carry it yet. Seed `SEED-D2D-TEXT-COLR`, trigger: a consumer ask.
+  - **No hyphenation, no letter-spacing justify, no rich text** -- `Justify` is word-spacing
+    only; the typographic-quality tier above it (language-aware hyphenation is dictionary-class
+    work) is seed `SEED-D2D-TEXT-TYPESETTING`, trigger: a consumer ask.
+  - **No `SpriteTransform` overload for text** -- text has no pivot/rotation/scale/flip overload
+    in this slice. Seed `SEED-D2D-TEXT-TRANSFORM`, trigger: a consumer ask.
 - **No circle/ellipse/regular-polygon primitives** -- seed `SEED-D2D-SHAPES` (the `ui` atom's
   `polygon()` RCSS decorator already covers the declarative side); trigger: a consumer ask.
 - **No line caps/joins (round/miter), no polylines** -- `draw_line` is butt-capped only; seed
@@ -702,8 +836,19 @@ Stated instead of faked, per the plan's own testing-downgrade discipline:
   (`tests/primitives2d_sanity.cpp`).
 - `glintfx/src/layer_queue.hpp` -- the pure, single-source buffered command queue (D27) behind
   `set_layer`, headless-testable (`tests/layer_queue_sanity.cpp`).
+- `glintfx/src/text_raster.hpp` / `glintfx/src/text_layout.hpp` -- the two pure, single-source
+  text seams (TX2): UTF-8 decode + face lifecycle + glyph bake over the sovereign core, and the
+  positioning math (wrap TX15, alignment/justify TX16) that `draw_text` and `measure_text` both
+  consume.
+- [Onda 6 plan](../glintfx/docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md) -- the
+  D2D-TEXT design (TX1-TX17) behind the "Text" section above.
 - [Onda 5 plan](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- the D2D-3 design
   decisions D23-D32 behind primitives/layers/scissor/bbox/perf (this doc's own sections above).
+- [ADR-0018](adr/0018-draw2d-text.md) -- the text decision: sovereign-C-core glyph source,
+  top-left anchor, word-wrap/alignment in scope, the amended `draw2d` dependency profile.
+- [ADR-0011](adr/0011-soft-font-flip.md) -- the sovereign font core and the `FontEngine::Own`
+  default that `draw_text` shares with the `ui`, and the house precedent for the "no GSUB/GPOS"
+  ceiling.
 - [ADR-0017](adr/0017-draw2d-module.md) -- the architectural decision this module implements
   (module placement, own GL pipeline, order-by-call-order composition); its
   [Addendum (2026-07-23)](adr/0017-draw2d-module.md#addendum-2026-07-23-d2d-2-coordinate-model)
@@ -1099,6 +1244,117 @@ nunca-carregado (a cadeia completa de validação D7, log dedup'd -- mesma hist�
 `draw_sprite`) OU uma textura totalmente transparente -- distinta de uma textura opaca 1x1, que
 devolve `{true, 0, 0, 1, 1}`.
 
+### Texto (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
+
+O Draw2D renderiza texto UTF-8 pelo **núcleo C soberano de fonte**
+(`glx_sfnt`/`glx_raster`/`glx_hint`, o mesmo motor clean-room que o caminho de fonte próprio do
+átomo `ui` roda por padrão desde a v0.10.0), NÃO o FreeType e NÃO o caminho de texto do RmlUi --
+ver [ADR-0018](adr/0018-draw2d-text.md) (decisão (a)). Uma verdade de rasterização só na
+biblioteca inteira: com `FontEngine::Own` default, texto da ui e texto de jogo saem literalmente
+do mesmo rasterizador, consistentes na mesma tela. O teto honesto que isso compra está em
+"Limites declarados" abaixo (sem shaping complexo, sem kerning só-GPOS).
+
+```cpp
+glintfx::Font2d font = draw2d.load_font("assets/OpenSans-Regular.ttf");
+
+draw2d.begin(w, h);
+draw2d.draw_text(font, "Score: 1200", {16.f, 16.f}, 24.f, {1,1,1,1});   // âncora topo-esquerdo, branco
+draw2d.end();
+
+draw2d.destroy_font(font);
+```
+
+**Fontes são handles-valor (TX1 -- o idioma do `Texture2d`).** `Font2d`
+(`glintfx/include/glintfx/draw2d.hpp:361`) é um valor pequeno e copiável com id opaco + geração +
+tag de dono -- NÃO é dono RAII: `destroy_font` (`glintfx/include/glintfx/draw2d.hpp:961`) é a
+liberação explícita (SEMPRE zera o handle). `load_font`
+(`glintfx/include/glintfx/draw2d.hpp:948`) parseia uma face SFNT/TrueType em arquivo e a registra
+no registry de fonte da instância; o atlas de glifo por-tamanho é assado PREGUIÇOSAMENTE no
+primeiro `draw_text`, não aqui. Um handle **NÃO é intercambiável entre instâncias `Draw2d`** -- a
+tag de dono rejeita um handle estrangeiro exatamente como o `Texture2d` (D7). `ok() == false`
+(nunca crash) em path nulo, falha ao abrir, o teto de 64 MiB de blob, ou falha de parse (fonte
+corrompida/não-suportada -- outlines CFF/OTF, tabela truncada).
+
+**Desenho (TX1/TX7).** `draw_text` (`glintfx/include/glintfx/draw2d.hpp:988`) desenha uma string
+UTF-8 em `pos` -- o **TOPO-ESQUERDO** da caixa da primeira linha (y pra baixo,
+[ADR-0018](adr/0018-draw2d-text.md) (c)), consistente com o `dst` de todo sprite. `size` é em
+unidades do espaço **ATIVO**: px de tela sem câmera, unidades de mundo com uma -- glifos escalam
+com `cam.zoom` só por projeção, exatamente como toda primitiva (TX7). O texto batcha pelo MESMO
+batcher dos sprites e honra a câmera, camada (D27) e scissor (D28) correntes como uma corrida de
+sprite; `color` o tinge pela mesma fórmula premultiplicada D8, sobre um atlas de cobertura R8.
+Quem precisa de baseline converte a âncora topo-esquerdo com uma soma de `TextMetrics::ascent`
+(abaixo).
+
+**UTF-8 e cobertura de glifo (TX1).** UTF-8 inválido/overlong/truncado renderiza U+FFFD (o
+caractere de substituição), nunca um crash e nunca truncamento silencioso. Qualquer codepoint
+coberto pelo cmap (formato 4/12) da face renderiza; um codepoint que a face não tem renderiza
+`.notdef` (tofu) -- visível e honesto, pela própria convenção do TrueType.
+
+**Kerning e multi-linha (TX1).** O kerning vem da tabela `kern` da face, aplicado IDENTICAMENTE
+em `draw_text` e `measure_text` (fonte única -- uma mutação na matemática de avanço/kern quebra os
+dois). Um `\n` começa nova linha no line-height da própria face (`ascent - descent + line-gap`).
+
+**Snap pra corpo pequeno (TX8).** No caminho SEM câmera em tamanho de pixel inteiro, o hinting
+pen-snap (X) + vsnap (Y) dá nitidez ao texto de corpo pequeno (o trabalho do `glx_hint` que o HUD
+9-13dp da ui já validou). Sob câmera o snap é ignorado -- fazer snap em texto de espaço de mundo
+o faria "nadar" com o movimento da câmera (documentado, deliberado).
+
+**Métricas (TX1).** `measure_text` (`glintfx/include/glintfx/draw2d.hpp:1023`) faz o layout da
+string SEM desenhar e devolve `TextMetrics` (`glintfx/include/glintfx/draw2d.hpp:443`)
+`{ok, width, height, ascent, line_height, line_count}` -- pra ancoragem/centralização de HUD sem
+desenhar. Consome o MESMO layout que os dois overloads de `draw_text` usam. `width` é a largura de
+avanço natural da LINHA mais larga (NÃO a largura de referência dentro da qual o bloco foi
+alinhado); `line_count` conta as linhas DEPOIS do wrap + `\n` explícito.
+
+#### Word-wrap e alinhamento (TX15/TX16 -- o overload de `TextOptions`)
+
+`TextOptions` (`glintfx/include/glintfx/draw2d.hpp:421`) `{max_width, align}` é um
+agregado-com-defaults -- o idioma da casa do `SpriteTransform`, então `TextOptions{}` é EXATAMENTE
+o overload sem opções (fixado por teste unitário). Os overloads `draw_text`
+(`glintfx/include/glintfx/draw2d.hpp:1006`) e `measure_text`
+(`glintfx/include/glintfx/draw2d.hpp:1029`) o recebem.
+
+- **`max_width`** é em unidades do espaço ATIVO. `max_width > 0` liga word-wrap guloso;
+  `max_width <= 0` é a sentinela documentada de **"sem wrap"** (o idioma do `RectF{}` -- só um
+  `\n` explícito quebra então).
+- **Word-wrap (TX15).** Quebra gulosa em espaços (U+0020); o espaço que causou a quebra é
+  consumido, não renderizado na borda da linha. Uma palavra maior que `max_width` **quebra à
+  força** no último glifo que cabe, mínimo um glifo por linha -- um fail-safe: o texto nunca
+  estoura além desse um glifo obrigatório e nunca some. `\n` explícito sempre quebra. U+00A0
+  (espaço não-quebrável) é honrado como não-quebrável. **Sem hifenização** e sem classes de quebra
+  por locale (semente `SEED-D2D-TEXT-TYPESETTING`).
+- **Alinhamento (TX16).** `TextAlign` (`glintfx/include/glintfx/draw2d.hpp:402`)
+  `{Left, Center, Right, Justify}` posiciona cada linha dentro da largura de referência --
+  `max_width` com wrap, senão a linha mais larga do bloco (então texto multi-linha `\n`
+  centralizado/à-direita funciona SEM wrap). `Left` offset 0; `Center` `(ref_w - line_w)/2`;
+  `Right` `ref_w - line_w`.
+- **Justify (TX16).** SÓ word-spacing: o espaço extra de uma linha é distribuído igualmente entre
+  os gaps de U+0020 interiores (resto determinístico). Pela convenção tipográfica, a ÚLTIMA linha
+  do bloco e qualquer linha terminada por `\n` explícito NÃO justificam -- caem pra `Left`.
+  `Justify` com `max_width <= 0` degrada pra `Left` (justify precisa de largura-alvo pra
+  significar algo). Sem distribuição por letter-spacing (isso, mais hifenização, é o tier
+  declarado-fora `SEED-D2D-TEXT-TYPESETTING`).
+
+**Fail-high (TX6, central -- toda guarda roda ANTES de qualquer conta, D10):** um membro
+não-finito de `pos`/`size`/`color` pula o desenho (log dedup'd); `size <= 0` é um no-op legal
+silencioso; uma `font` inválida/obsoleta/estrangeira é rejeitada (log dedup'd, a cadeia D7
+completa); `utf8 == nullptr` é no-op legal silencioso no `draw_text` e `TextMetrics{}` no
+`measure_text`; o input por-chamada tem teto de 1 MiB de bytes (processado até o teto + um log
+dedup'd -- uma chamada hostil não congela um frame). No overload de opções: um `max_width`
+não-finito pula a chamada (log dedup'd -- `max_width <= 0` em si é LEGAL, a sentinela de sem-wrap);
+um `align` fora da faixa do enum (um cast hostil) é tratado como `Left` (log dedup'd). Exaustão de
+atlas por um stream hostil de milhares de codepoints distintos é um limite de memória NOMEADO
+(teto por instância fonte-tamanho; além do teto, glifo novo desenha `.notdef` + um log dedup'd --
+sem eviction, um limite de memória, não claim de performance, mesma classe do teto de 4096 quads
+do batcher). Toda chamada é null-safe num `Draw2d`
+nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket.
+
+**Perfil de dependência.** Habilitar `draw_text` é o que adiciona o núcleo de fonte vendorizado à
+superfície de dependência do átomo `draw2d` ([ADR-0018](adr/0018-draw2d-text.md) (d)/(e)): um
+consumidor só-sprites que nunca chama `draw_text` ainda paga o compile de ~3 unidades de tradução
+C a mais (custo aceito, sem sub-flag por-feature). Nenhuma aresta de dependência de terceiro nova
+é criada -- o core já está in-tree, C puro, e já compila no job MSVC.
+
 ### Referência de API
 
 | Método | Retorna | Notas |
@@ -1128,6 +1384,12 @@ devolve `{true, 0, 0, 1, 1}`.
 | `set_scissor(const RectF&)` (`glintfx/include/glintfx/draw2d.hpp:889`) | `void` | D28 -- SEMPRE px de tela, câmera-independente. Fail-high mantém estado anterior em input não-finito. Ver "Scissor" acima. |
 | `reset_scissor()` (`glintfx/include/glintfx/draw2d.hpp:896`) | `void` | D28 -- idempotente, limpa o estado de scissor setado pelo `set_scissor`. |
 | `texture_content_bbox(const Texture2d&)` (`glintfx/include/glintfx/draw2d.hpp:929`) | `TextureBbox` | D29 -- menor retângulo `alpha>0`, cacheado no momento do `load_texture()`. Ver "Bbox de conteúdo de textura" acima. |
+| `load_font(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:948`) | `Font2d` | TX1 -- parseia uma face SFNT/TrueType em arquivo via o núcleo C soberano. `ok() == false` em path nulo, falha ao abrir, o teto de 64 MiB de blob, ou falha de parse -- nunca crash. Atlas por-tamanho preguiçoso. Ver "Texto" acima. |
+| `destroy_font(Font2d& font)` (`glintfx/include/glintfx/draw2d.hpp:961`) | `void` | TX1 -- libera as texturas GL de atlas de glifo, SEMPRE zera `font`. Fail-high (nunca UB) em handles já-destruído/adulterado/estrangeiro. |
+| `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:988`) | `void` | TX1/TX7 -- texto UTF-8, âncora topo-esquerdo, `size` em espaço ATIVO, batcha/câmera/camada/scissor como sprite. UTF-8 inválido -> U+FFFD; glifo ausente -> `.notdef`. Ver "Texto" acima. |
+| `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | Overload TX15/TX16 -- word-wrap (`max_width > 0`) + alinhamento por linha (left/center/right/justify). Ver "Word-wrap e alinhamento" acima. |
+| `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout SEM desenhar; `{ok,width,height,ascent,line_height,line_count}`. Mesmo layout + cadeia fail-high do `draw_text`. Ver "Texto" acima. |
+| `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | Overload TX15/TX16 -- mede com wrap + alinhamento ativos (`line_count`/`height` refletem as linhas quebradas). |
 
 ### Premultiply e a fórmula do tint (D8)
 
@@ -1374,8 +1636,26 @@ o número final.
 
 Declarados em vez de fingidos, conforme a própria disciplina de downgrade-de-teste do plano:
 
-- **Sem `draw_text`** -- `D2D-TEXT`, onda própria, exige o próprio ADR primeiro (tensão de
-  motor-de-fonte: o flip FreeType-vs-motor-próprio do `App`, `docs/adr/0011-soft-font-flip.md`).
+- **O texto tem um teto honesto e DECLARADO (o teto do núcleo soberano, [ADR-0018](adr/0018-draw2d-text.md)):**
+  - **Sem RTL e sem shaping complexo** -- só LTR, sem BiDi, sem ligaduras. O núcleo C soberano não
+    tem GSUB/GPOS, então fingir o contrário seria desonesto -- a MESMA barra que o motor de fonte
+    próprio default da ui já vive desde a v0.10.0 (`docs/adr/0011-soft-font-flip.md`). Semente
+    `SEED-D2D-TEXT-SHAPING`, gatilho: uma decisão de trilha Camada-0 (não uma onda).
+  - **Sem kerning só-GPOS** -- fontes que só trazem kerning em GPOS (um subset real de faces
+    modernas) renderizam sem kerning. Semente `SEED-CORE-GPOS-KERN` -- semente do CORE: se um dia
+    entrar no C soberano, texto da `ui` e do `draw2d` herdam de graça.
+  - **Sem cadeia de fallback multi-face** -- texto de jogo é single-face; um glifo ausente é
+    `.notdef` (tofu), não uma substituição por fonte do sistema. Semente `SEED-D2D-TEXT-FALLBACK`,
+    gatilho: um consumidor pedir.
+  - **Sem COLR/emoji no draw2d** -- o core suporta COLR v0 mas o formato de atlas ainda não o
+    carrega. Semente `SEED-D2D-TEXT-COLR`, gatilho: um consumidor pedir.
+  - **Sem hifenização, sem justify por letter-spacing, sem rich text** -- `Justify` é só
+    word-spacing; o tier de qualidade tipográfica acima dele (hifenização consciente de idioma é
+    trabalho classe dicionário) é a semente `SEED-D2D-TEXT-TYPESETTING`, gatilho: um consumidor
+    pedir.
+  - **Sem overload de `SpriteTransform` pra texto** -- texto não tem overload de
+    pivô/rotação/escala/flip nesta fatia. Semente `SEED-D2D-TEXT-TRANSFORM`, gatilho: um
+    consumidor pedir.
 - **Sem primitivas de círculo/elipse/polígono-regular** -- semente `SEED-D2D-SHAPES` (o
   decorator RCSS `polygon()` do átomo `ui` já cobre o lado declarativo); gatilho: um consumidor
   pedir.
@@ -1431,9 +1711,20 @@ Declarados em vez de fingidos, conforme a própria disciplina de downgrade-de-te
   (`tests/primitives2d_sanity.cpp`).
 - `glintfx/src/layer_queue.hpp` -- a fila de comandos bufferizada pura de fonte única (D27) por
   trás do `set_layer`, testável headless (`tests/layer_queue_sanity.cpp`).
+- `glintfx/src/text_raster.hpp` / `glintfx/src/text_layout.hpp` -- as duas costuras de texto
+  puras de fonte única (TX2): decode UTF-8 + ciclo de vida da face + bake de glifo sobre o núcleo
+  soberano, e a matemática de posicionamento (wrap TX15, alinhamento/justify TX16) que `draw_text`
+  e `measure_text` ambos consomem.
+- [Plano da Onda 6](../glintfx/docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md) -- o design
+  D2D-TEXT (TX1-TX17) por trás da seção "Texto" acima.
 - [Plano da Onda 5](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- as decisões de
   desenho D23-D32 do D2D-3 por trás de primitivas/layers/scissor/bbox/perf (as próprias seções
   deste doc acima).
+- [ADR-0018](adr/0018-draw2d-text.md) -- a decisão de texto: fonte de glifo no núcleo C soberano,
+  âncora topo-esquerdo, word-wrap/alinhamento no escopo, o perfil de dependência do `draw2d`
+  emendado.
+- [ADR-0011](adr/0011-soft-font-flip.md) -- o núcleo de fonte soberano e o default `FontEngine::Own`
+  que o `draw_text` compartilha com a `ui`, e o precedente da casa pro teto "sem GSUB/GPOS".
 - [ADR-0017](adr/0017-draw2d-module.md) -- a decisão arquitetural que este módulo implementa
   (posição do módulo, pipeline GL próprio, composição por ordem-de-chamada); o
   [Adendo (2026-07-23)](adr/0017-draw2d-module.md#addendum-2026-07-23-d2d-2-coordinate-model)

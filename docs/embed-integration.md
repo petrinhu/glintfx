@@ -1253,6 +1253,15 @@ for the full mapping/flush-boundary contract and the recipe (`reset_scissor()` b
 the frame back). `UiLayer::render()` itself is unaffected either way (its own `GlStateGuard`
 already re-establishes state), pinned by a dedicated `draw2d_ui_coexist_sanity` case.
 
+**`D2D-TEXT` adds text (`load_font`/`draw_text`/`measure_text`) with NO new coexistence rule.**
+Glyphs batch through the SAME batcher and obey the SAME D9 GL-state contract as `draw_sprite`, so
+everything above holds unchanged. The one distribution-visible change is the atom's dependency
+profile: `draw2d` now carries the vendored sovereign font core
+(`glx_sfnt`/`glx_raster`/`glx_hint`, read-only shared with the ui's own font engine,
+[ADR-0018](adr/0018-draw2d-text.md) (d)) -- it links no new third-party library. Text draws in
+the ACTIVE space (world under a camera, screen px otherwise) exactly like every primitive. Full
+contract and limits: `docs/draw2d.md`'s "Text" section.
+
 **PT:** `glintfx::Draw2d` (`glintfx/include/glintfx/draw2d.hpp`) é um átomo separado pra
 desenhar o mundo do jogo (carga de textura + `draw_sprite` + batching por-textura) que COABITA o
 mesmo contexto GL do renderer GL3 do RmlUi do `UiLayer`, nos dois modos, `App` e embed. Não
@@ -1276,6 +1285,15 @@ Contrato de API completo, semântica de coordenadas/premultiply/tint, e receitas
 (v0.21.0) não muda nada disto: a matemática de câmera e por-sprite roda inteiramente na CPU,
 antes do batcher (D13) -- zero estado GL novo, zero efeito no contrato de coexistência acima.
 Ver as seções "Câmera" e "SpriteTransform" de `docs/draw2d.md`.
+
+**O `D2D-TEXT` adiciona texto (`load_font`/`draw_text`/`measure_text`) SEM regra de coexistência
+nova.** Glifos batcham pelo MESMO batcher e obedecem o MESMO contrato de estado GL D9 do
+`draw_sprite`, então tudo acima vale sem mudança. A única mudança visível-pra-distribuição é o
+perfil de dependência do átomo: o `draw2d` agora carrega o núcleo C soberano de fonte vendorizado
+(`glx_sfnt`/`glx_raster`/`glx_hint`, compartilhado só-leitura com o motor de fonte próprio da ui,
+[ADR-0018](adr/0018-draw2d-text.md) (d)) -- não linka nenhuma lib de terceiro nova. O texto
+desenha no espaço ATIVO (mundo sob câmera, px de tela sem) exatamente como toda primitiva.
+Contrato e limites completos: seção "Texto" de `docs/draw2d.md`.
 
 ## See also / Veja também
 

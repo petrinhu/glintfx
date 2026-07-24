@@ -156,8 +156,8 @@ not slipped in, per this ADR's own consequences section below. Every other claus
 
 **(e) CMake gate decoupling (mechanical, follows FROM (a)+(d)).** Today the vendored
 `vendor/core/{sfnt,raster,hint}.c` objects compile ONLY under `GLINTFX_OWN_FONT_ENGINE`
-(`glintfx/CMakeLists.txt:664` sets the vendored paths; the `glintfx_text` object library at
-`glintfx/CMakeLists.txt:1026-1031` is the sole consumer). This ADR requires the gate to widen to
+(`glintfx/CMakeLists.txt:688` sets the vendored paths; the `glintfx_text` object library at
+`glintfx/CMakeLists.txt:1051-1056` is the sole consumer). This ADR requires the gate to widen to
 `GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D` so the core objects compile for Draw2D too
 when the ui's own font engine is OFF. `GLINTFX_OWN_FONT_ENGINE` itself remains STRICTLY the
 ui-side engine selector (`FontEngine::Own` vs. FreeType, [[0011-soft-font-flip]]) — untouched,
@@ -238,8 +238,8 @@ decisão de ordem de composição) fica intocada.
 
 **(e) Desacoplamento do gate CMake (mecânico, decorre de (a)+(d)).** Hoje os objetos vendorizados
 `vendor/core/{sfnt,raster,hint}.c` compilam SÓ sob `GLINTFX_OWN_FONT_ENGINE`
-(`glintfx/CMakeLists.txt:664` seta os paths vendorizados; a biblioteca-objeto `glintfx_text` em
-`glintfx/CMakeLists.txt:1026-1031` é o único consumidor). Este ADR exige alargar o gate pra
+(`glintfx/CMakeLists.txt:688` seta os paths vendorizados; a biblioteca-objeto `glintfx_text` em
+`glintfx/CMakeLists.txt:1051-1056` é o único consumidor). Este ADR exige alargar o gate pra
 `GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D`, pra que os objetos do core compilem pro
 Draw2D também quando o motor próprio da ui estiver OFF. O `GLINTFX_OWN_FONT_ENGINE` em si segue
 sendo ESTRITAMENTE o seletor de motor do lado ui (`FontEngine::Own` vs. FreeType,
@@ -300,7 +300,7 @@ código.
   the leader is cutting ONLY justify to `SEED-D2D-TEXT-TYPESETTING`, keeping
   left/center/right.
 - The CMake decoupling in decision (e) is unimplemented as of this ADR (verified: today's gate is
-  still `GLINTFX_OWN_FONT_ENGINE` alone, `glintfx/CMakeLists.txt:1026-1031`) — a real,
+  still `GLINTFX_OWN_FONT_ENGINE` alone, `glintfx/CMakeLists.txt:1051-1056`) — a real,
   sequenced prerequisite for the module itself, not a free byproduct, carrying its own regression
   risk against the existing `GLINTFX_OWN_FONT_ENGINE`-only build (mitigated by the existing font
   test suite acting as the guard, same convention [[0017-draw2d-module]] (d) used for the
@@ -354,7 +354,7 @@ código.
   justify sozinho ameaçando a v0.23.0, a proposta ao líder é cortar SÓ o justify pra
   `SEED-D2D-TEXT-TYPESETTING`, mantendo left/center/right.
 - O desacoplamento de CMake da decisão (e) segue não-implementado no momento deste ADR
-  (verificado: o gate de hoje segue só `GLINTFX_OWN_FONT_ENGINE`, `glintfx/CMakeLists.txt:1026-1031`)
+  (verificado: o gate de hoje segue só `GLINTFX_OWN_FONT_ENGINE`, `glintfx/CMakeLists.txt:1051-1056`)
   — um pré-requisito real, sequenciado, pro módulo em si, não um subproduto de graça, carregando
   risco de regressão próprio contra o build hoje só-`GLINTFX_OWN_FONT_ENGINE` (mitigado pela
   suíte de testes de fonte existente agindo como guarda, mesma convenção que a (d) do

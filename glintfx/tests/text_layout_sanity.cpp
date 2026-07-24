@@ -207,6 +207,22 @@ void test_forcebreak_long_word() {
   expect_glyph(r, 4, 'a', 0.f, 32.f, "forcebreak: L2 a@(0,32)");
 }
 
+void test_forcebreak_exact_fit() {
+  // adv 10, max_width 20 (exactly 2 glyphs == 20). Single unbreakable word "aaa": the 2nd 'a'
+  // lands the line at EXACTLY 20, which the force-break's strict `>` KEEPS (20 > 20 is false), so
+  // the break falls before the 3rd 'a'. Lines: ["aa", "a"]. This pins the boundary `>` against the
+  // `>=` mutant: with `>=` the 2nd 'a' (20 >= 20 true) would break early, giving ["a","a","a"]
+  // (line_count 3, and the glyph at index 1 would sit at (0,20) not (10,8)) -- either assertion
+  // fails loud, so the mutation dies here.
+  const MonoCtx m;
+  const auto s = make_mono(m);
+  const auto r = run(s, cps({'a', 'a', 'a'}), 20.f, Align::Left);
+  check(r.line_count == 2, "forcebreak_exact_fit: line_count == 2 (exact-fit kept by strict >)");
+  expect_glyph(r, 0, 'a', 0.f, 8.f, "forcebreak_exact_fit: L0 a@(0,8)");
+  expect_glyph(r, 1, 'a', 10.f, 8.f, "forcebreak_exact_fit: L0 a@(10,8) -- exact fit at 20, kept");
+  expect_glyph(r, 2, 'a', 0.f, 20.f, "forcebreak_exact_fit: L1 a@(0,20) -- break before 3rd 'a'");
+}
+
 void test_forcebreak_min_one_glyph() {
   // adv 10, max_width 5 (< one glyph). Each glyph still gets a line (min 1), never an infinite loop.
   const MonoCtx m;
@@ -388,6 +404,7 @@ int main() {
   test_hard_break();
   test_wrap_word_overflow();
   test_forcebreak_long_word();
+  test_forcebreak_exact_fit();
   test_forcebreak_min_one_glyph();
   test_center();
   test_right();

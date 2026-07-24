@@ -176,7 +176,13 @@ bool compute_bake_geometry(const TextFace& face, uint32_t gid, float size_px, bo
 
   if (vsnap) {
     const int32_t hint_scale_num = scale_num;
-    const glx_hint_zones zones = derive_hint_zones(*sf);
+    // EN: Reuse the zones derived ONCE in TextFace::open() (they come from this same face, so this
+    //     is byte-for-byte what re-deriving here would yield) -- skips a redundant per-bake glyph
+    //     scan and keeps hint_zones_ a live, single-source member.
+    // PT: Reusa as zonas derivadas UMA vez no TextFace::open() (vêm desta mesma face, então é
+    //     byte-a-byte o que re-derivar aqui daria) -- pula um scan de glifo redundante por bake e
+    //     mantém hint_zones_ um membro vivo, de fonte única.
+    const glx_hint_zones& zones = face.hint_zones();
     // EN: GLX_HINT_NOOP (nothing to fit / already fitted) leaves `points_out` byte-for-byte
     //     unchanged -- a clean, non-error outcome neither checked nor needed here, same posture
     //     src/font_engine_own.cpp's own BakeFaceInstance() already takes.

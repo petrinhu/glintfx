@@ -351,6 +351,17 @@ public:
   //     endurecida.
   const glx_sfnt_face* raw() const { return ok_ ? &face_ : nullptr; }
 
+  // EN: Read-only access to this face's vertical grid-fitting zones, derived ONCE in open() (see
+  //     derive_hint_zones() in text_raster.cpp). compute_bake_geometry() reuses this instead of
+  //     re-deriving per bake -- the stored zones come from this same face_, so the result is
+  //     byte-for-byte identical. Only meaningful for an ok() face (a not-ok() face leaves it
+  //     zero-initialized).
+  // PT: Acesso somente-leitura às zonas de grid-fitting vertical desta face, derivadas UMA vez no
+  //     open() (ver derive_hint_zones() em text_raster.cpp). compute_bake_geometry() reusa isto em
+  //     vez de re-derivar por bake -- as zonas guardadas vêm deste mesmo face_, então o resultado
+  //     é byte-a-byte idêntico. Só faz sentido pra uma face ok() (uma não-ok() o deixa zerado).
+  const glx_hint_zones& hint_zones() const { return hint_zones_; }
+
 private:
   std::vector<uint8_t> blob_;
   glx_sfnt_face face_{};

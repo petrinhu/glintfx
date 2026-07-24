@@ -243,6 +243,26 @@ public:
     bracket_degenerate_ = false;
   }
 
+  // EN: D2D-3, D27/D28 -- ADDITIVE, the ONLY change to this file (D31's zero-diff set covers
+  //     everything else here). Finalizes whatever run is CURRENTLY pending into the ready queue
+  //     (same effect as end()'s own finalize_current_run() call) but LEAVES THE BRACKET OPEN --
+  //     what draw2d.cpp's set_layer() arming drain and set_scissor()'s mid-streaming run-boundary
+  //     (D2D-3B) both need: flush what already streamed under the OLD state, without closing the
+  //     begin()/end() pair itself. A no-op when no bracket is open or the current run is empty
+  //     (finalize_current_run()'s own existing no-op-on-empty behaviour, unchanged).
+  // PT: D2D-3, D27/D28 -- ADITIVO, a ÚNICA mudança neste arquivo (o conjunto zero-diff do D31
+  //     cobre todo o resto daqui). Finaliza a corrida CORRENTE pendente na fila pronta (mesmo
+  //     efeito da própria chamada finalize_current_run() do end()) mas MANTÉM O BRACKET ABERTO --
+  //     o que o dreno de arme do set_layer() e a fronteira de corrida no meio do streaming do
+  //     set_scissor() (draw2d.cpp, D2D-3B) precisam: fazer flush do que já streamou sob o estado
+  //     ANTIGO, sem fechar o próprio par begin()/end(). No-op quando nenhum bracket está aberto
+  //     ou a corrida corrente está vazia (o próprio comportamento no-op-em-vazio já existente de
+  //     finalize_current_run(), inalterado).
+  void flush_pending() {
+    if (!in_bracket_) return;
+    finalize_current_run();
+  }
+
   // EN: True when at least one Flush is waiting to be drained.
   // PT: True quando ao menos um Flush está esperando pra ser drenado.
   bool has_ready() const { return !ready_.empty(); }
@@ -261,9 +281,19 @@ public:
     return out;
   }
 
-  // EN: Test/introspection helpers -- not used by draw2d.cpp itself.
-  // PT: Helpers de teste/introspecção -- não usados pelo próprio draw2d.cpp.
+  // EN: Introspection helpers -- draw2d.cpp's own submit_quad() reads BOTH: in_bracket() gates
+  //     every primitive/sprite call (D4's OutsideBracket story) and bracket_degenerate() (D2D-3B
+  //     QA fix) lets the layer-armed enqueue path reject a degenerate bracket BEFORE buffering a
+  //     command instead of only catching it later, silently, at replay_layer_queue() time -- the
+  //     SAME early rejection draw_quad()/draw_sprite() above already give the streaming path.
+  // PT: Helpers de introspecção -- o próprio submit_quad() do draw2d.cpp lê OS DOIS:
+  //     in_bracket() controla toda chamada de primitiva/sprite (a história OutsideBracket do D4)
+  //     e bracket_degenerate() (conserto de QA do D2D-3B) deixa o caminho de enfileiramento
+  //     layer-armed rejeitar um bracket degenerado ANTES de bufferizar um comando, em vez de só
+  //     pegar isso depois, em silêncio, no momento do replay_layer_queue() -- a MESMA rejeição
+  //     antecipada que draw_quad()/draw_sprite() acima já dão ao caminho streaming.
   bool in_bracket() const { return in_bracket_; }
+  bool bracket_degenerate() const { return bracket_degenerate_; }
   std::size_t max_quads() const { return max_quads_; }
 
 private:

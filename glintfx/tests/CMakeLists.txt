@@ -927,6 +927,63 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: primitives2d_sanity (D2D-3A, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisions D25/D26/D28/D29) -- PURE unit test for src/primitives2d.hpp (line
+#     corners, rect-outline decomposition, scissor GL mapping) AND the D29 bbox helper in
+#     src/image_decode.hpp (compute_content_bbox). No window, no GL context, no RmlUi/GLFW
+#     dependency whatsoever (same "nothing display-related to isolate here" reasoning as
+#     transform2d_sanity/sprite_batch_sanity/image_decode_sanity above). Registered
+#     UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other draw2d test in
+#     this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (Vec2F/RectF/ColorF, transitively via
+#     transform2d.hpp/primitives2d.hpp) -- primitives2d.hpp/image_decode.hpp are entirely
+#     header-only, they pull in no library symbols.
+# PT: primitives2d_sanity (D2D-3A, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisões D25/D26/D28/D29) -- teste unit PURO para src/primitives2d.hpp
+#     (cantos de linha, decomposição de contorno, mapeamento GL de scissor) E o helper D29 de
+#     bbox em src/image_decode.hpp (compute_content_bbox). Sem janela, sem contexto GL, nenhuma
+#     dependência de RmlUi/GLFW (mesmo racional "nada relacionado a display pra isolar aqui" de
+#     transform2d_sanity/sprite_batch_sanity/image_decode_sanity acima). Registrado
+#     INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo outro teste de
+#     draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka `glintfx` só pelo
+#     include path público de <glintfx/draw2d.hpp> (Vec2F/RectF/ColorF, transitivamente via
+#     transform2d.hpp/primitives2d.hpp) -- primitives2d.hpp/image_decode.hpp são inteiramente
+#     header-only, não puxam símbolo nenhum de biblioteca.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(primitives2d_sanity primitives2d_sanity.cpp)
+  target_include_directories(primitives2d_sanity PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+  target_link_libraries(primitives2d_sanity PRIVATE glintfx)
+  add_test(NAME primitives2d_sanity COMMAND primitives2d_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
+# EN: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decision D27/D28) -- PURE unit test for src/layer_queue.hpp: no window, no
+#     GL context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
+#     here" reasoning as primitives2d_sanity/transform2d_sanity/sprite_batch_sanity above).
+#     Registered UNCONDITIONALLY (gated only on GLINTFX_MODULE_DRAW2D, same as every other
+#     draw2d test in this file) -- runs in BOTH build configurations. Links `glintfx` only for the
+#     <glintfx/draw2d.hpp> public include path (RectF/ColorF, transitively via
+#     transform2d.hpp/layer_queue.hpp) -- layer_queue.hpp is entirely header-only, it pulls in no
+#     library symbols.
+# PT: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
+#     primitives.md, decisão D27/D28) -- teste unit PURO para src/layer_queue.hpp: sem janela,
+#     sem contexto GL, nenhuma dependência de RmlUi/GLFW (mesmo racional "nada relacionado a
+#     display pra isolar aqui" de primitives2d_sanity/transform2d_sanity/sprite_batch_sanity
+#     acima). Registrado INCONDICIONALMENTE (gateado só por GLINTFX_MODULE_DRAW2D, igual a todo
+#     outro teste de draw2d deste arquivo) -- roda nas DUAS configurações de build. Linka
+#     `glintfx` só pelo include path público de <glintfx/draw2d.hpp> (RectF/ColorF,
+#     transitivamente via transform2d.hpp/layer_queue.hpp) -- layer_queue.hpp é inteiramente
+#     header-only, não puxa símbolo nenhum de biblioteca.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(layer_queue_sanity layer_queue_sanity.cpp)
+  target_link_libraries(layer_queue_sanity PRIVATE glintfx)
+  add_test(NAME layer_queue_sanity COMMAND layer_queue_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: Embed-mode tests — ui_layer_attach, ui_layer_compose, gl_state_guard,
 #     ui_layer_events, ui_layer_sanity.
 #
@@ -2218,6 +2275,71 @@ if(GLINTFX_MODULE_DRAW2D)
   add_test(NAME draw2d_hostile_sanity
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:draw2d_hostile_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # EN: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- pixel-readback proof for the
+  #     primitives/layers/scissor/bbox surface this wave adds (D23-D29): filled rect region-mean
+  #     equals the D8 premultiplied colour formula on the white texel; alpha-0.5 outline
+  #     corner-region mean == edge-region mean (the D26 double-blend killer); a line's screen
+  #     band width triples under camera zoom 3 (the D24 "thickness scales by projection" delta
+  #     test, risk 3); a rotated filled rect (transform overload) under camera rotation pi/2;
+  #     scissor on an off-center rect proven on BOTH y-halves (the D28 y-flip killer) plus an
+  #     empty (w==0) scissor clipping everything; two overlapping translucent quads in REVERSE
+  #     layer order render back-to-front (the D27 arming/stable-sort pin), the SAME pair WITHOUT
+  #     set_layer() proving call order instead. Statistical, region-mean tolerance, NEVER
+  #     pixel-exact (this house's own downgrade discipline for llvmpipe/Xvfb).
+  # PT: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- prova de pixel-readback pra
+  #     superfície de primitivas/layers/scissor/bbox que esta onda adiciona (D23-D29): a
+  #     média-de-região do rect preenchido bate com a fórmula de cor premultiplicada D8 sobre o
+  #     texel branco; a média-de-região do canto do contorno alpha-0.5 == média-de-região da
+  #     borda (o mata-double-blend do D26); a banda de tela de uma linha triplica sob zoom de
+  #     câmera 3 (o teste delta "espessura escala por projeção" do D24, risco 3); um rect
+  #     preenchido rotacionado (overload de transform) sob rotação de câmera pi/2; scissor num
+  #     rect fora do centro provado nas DUAS metades y (o mata-y-flip do D28) mais um scissor
+  #     vazio (w==0) clipando tudo; dois quads translúcidos sobrepostos em ordem de camada
+  #     INVERTIDA renderizam de trás pra frente (a fixação de armar/ordenar-estável do D27), o
+  #     MESMO par SEM set_layer() provando ordem de chamada em vez disso. Estatístico, tolerância
+  #     de média-de-região, NUNCA pixel-exato (a própria disciplina de downgrade desta casa pra
+  #     llvmpipe/Xvfb).
+  add_executable(draw2d_primitives_render_sanity draw2d_primitives_render_sanity.cpp)
+  target_link_libraries(draw2d_primitives_render_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_primitives_render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_primitives_render_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- the performance-engineer's slice, a
+  #     DIFFERENT concern from every draw2d_*_sanity test above (measurement, not correctness).
+  #     Prints three GLINTFX_PERF <key>=<value> lines every run: pure SpriteBatch throughput (no
+  #     GL), the layered/streaming time ratio (no GL either), and an end-to-end median frame time
+  #     under this same Xvfb/llvmpipe fixture (real GL, ${_embed_dep} glloader, same link pair as
+  #     every draw2d_*_sanity test above). Gated on GLINTFX_MODULE_DRAW2D like every other test in
+  #     this block; runs in BOTH build configurations. The strict 1.5x-baseline gate only bites
+  #     with GLINTFX_PERF_STRICT=1 in the environment (set by .forgejo/workflows/heavy.yml's
+  #     claudio jobs only); everywhere else only a loose 10x sanity ceiling and the
+  #     machine-relative layered<=2x-streaming ratio gate are checked -- see the test file's own
+  #     header comment for the full two-tier gate design and baseline provenance.
+  # PT: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- a fatia do performance-engineer, uma
+  #     preocupação DIFERENTE de todo teste draw2d_*_sanity acima (medição, não correção). Imprime
+  #     três linhas GLINTFX_PERF <chave>=<valor> toda execução: throughput puro do SpriteBatch
+  #     (sem GL), a razão de tempo camadas/streaming (sem GL também), e um tempo médio de frame
+  #     de ponta-a-ponta sob esta mesma fixture Xvfb/llvmpipe (GL real, ${_embed_dep} glloader,
+  #     mesmo par de link de todo teste draw2d_*_sanity acima). Gateado em GLINTFX_MODULE_DRAW2D
+  #     igual a todo outro teste deste bloco; roda nas DUAS configurações de build. O gate estrito
+  #     de baseline 1,5x só morde com GLINTFX_PERF_STRICT=1 no ambiente (setado só pelos jobs
+  #     claudio de .forgejo/workflows/heavy.yml); em todo outro lugar só um teto de sanidade frouxo
+  #     de 10x e o gate de razão camadas<=2x-streaming relativo-à-máquina são checados -- ver o
+  #     comentário de cabeçalho do próprio arquivo de teste pro desenho completo do gate de dois
+  #     níveis e a proveniência da baseline.
+  # ---------------------------------------------------------------------------
+  add_executable(draw2d_perf_budget draw2d_perf_budget.cpp)
+  target_link_libraries(draw2d_perf_budget PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_perf_budget
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_perf_budget>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()

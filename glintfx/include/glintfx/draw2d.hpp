@@ -36,12 +36,22 @@
 //     share-group) to still be current -- same honesty `docs/embed-integration.md` already
 //     demands of `UiLayer`.
 //
-//     WHAT THIS SLICE DOES NOT SHIP (declared, not hidden -- plan section 1): camera/rotation/
-//     scale/flip/`screen_to_world` (D2D-2); layers/explicit draw order/untextured primitives/
-//     scissor/measured perf budget (D2D-3); a post-UI `App` frame hook (sprites over the UI in
-//     standalone -- INBOX seed `SEED-D2D-POSTUI`); `set_asset_base_url` honoured by
-//     `load_texture` (INBOX seed `SEED-D2D-BASEURL`); a nearest-neighbour/filter option per
-//     texture (INBOX seed `SEED-D2D-TEXFILTER`, default is `GL_LINEAR`).
+//     WHAT THIS SLICE DOES NOT SHIP (declared, not hidden -- plan section 1; corrected here,
+//     D2D-3A, to drop camera/rotation/scale/flip/`screen_to_world`, shipped by D2D-2 and stale in
+//     this paragraph since -- a pre-existing doc-drift found and fixed while touching this same
+//     file for D2D-3A's own additions, not a D2D-3A regression): `draw_text` (its own wave,
+//     `D2D-TEXT`, requires an ADR first -- font-engine tension); circle/ellipse/regular-polygon
+//     primitives (INBOX seed `SEED-D2D-SHAPES`; the `ui` atom's `polygon()` decorator already
+//     covers the RCSS side); line caps/joins (round/miter) and polylines (INBOX seed
+//     `SEED-D2D-LINECAPS`; this wave's `draw_line` is butt-capped); secondary sort by texture
+//     WITHIN a layer (INBOX seed `SEED-D2D-LAYER-TEXSORT`); world-space clipping under a rotated
+//     camera (INBOX seed `SEED-D2D-WORLDCLIP`, a mask/stencil-class feature, not this wave's
+//     screen-space-only scissor); an alpha THRESHOLD parameter for `texture_content_bbox`
+//     (INBOX seed `SEED-D2D-BBOX-THRESH`; this wave's definition is `alpha > 0`); a post-UI
+//     `App` frame hook (sprites over the UI in standalone -- INBOX seed `SEED-D2D-POSTUI`);
+//     `set_asset_base_url` honoured by `load_texture` (INBOX seed `SEED-D2D-BASEURL`); a
+//     nearest-neighbour/filter option per texture (INBOX seed `SEED-D2D-TEXFILTER`, default is
+//     `GL_LINEAR`).
 // PT: D2D-1B -- a superfície pública do módulo Draw2D (docs/superpowers/plans/2026-07-23-onda3-
 //     draw2d-d2d1.md seção 4, contrato LITERAL; a ADR-0017 grava a decisão arquitetural que isto
 //     implementa -- pipeline GL 3.3 próprio, átomo próprio `GLINTFX_MODULE_DRAW2D`, composição
@@ -80,12 +90,23 @@
 //     no mesmo share-group) ainda esteja corrente -- mesma honestidade que
 //     `docs/embed-integration.md` já exige do `UiLayer`.
 //
-//     O QUE ESTA FATIA NÃO ENTREGA (declarado, não escondido -- plano seção 1):
-//     câmera/rotação/escala/flip/`screen_to_world` (D2D-2); layers/ordem explícita de
-//     desenho/primitivas não-texturizadas/scissor/perf budget medido (D2D-3); hook pós-UI no
-//     frame do `App` (sprites sobre a UI no standalone -- seed `SEED-D2D-POSTUI`);
-//     `set_asset_base_url` honrado pelo `load_texture` (seed `SEED-D2D-BASEURL`); opção de
-//     filtro nearest-neighbour por textura (seed `SEED-D2D-TEXFILTER`, default é `GL_LINEAR`).
+//     O QUE ESTA FATIA NÃO ENTREGA (declarado, não escondido -- plano seção 1; corrigido aqui,
+//     D2D-3A, removendo câmera/rotação/escala/flip/`screen_to_world`, entregues pelo D2D-2 e
+//     obsoletos neste parágrafo desde então -- um doc-drift pré-existente achado e corrigido ao
+//     tocar este mesmo arquivo pras próprias adições do D2D-3A, não uma regressão desta fatia):
+//     `draw_text` (onda própria, `D2D-TEXT`, exige ADR primeiro -- tensão com motor de fonte);
+//     primitivas de círculo/elipse/polígono-regular (seed INBOX `SEED-D2D-SHAPES`; o decorator
+//     `polygon()` do átomo `ui` já cobre o lado RCSS); tampas/junções de linha (round/miter) e
+//     polylines (seed INBOX `SEED-D2D-LINECAPS`; o `draw_line` desta onda tem tampa butt);
+//     ordenação secundária por textura DENTRO de uma camada (seed INBOX
+//     `SEED-D2D-LAYER-TEXSORT`); recorte em espaço de mundo sob câmera rotacionada (seed INBOX
+//     `SEED-D2D-WORLDCLIP`, uma feature classe máscara/stencil, não o scissor só-espaço-de-tela
+//     desta onda); um parâmetro de LIMIAR de alpha pro `texture_content_bbox` (seed INBOX
+//     `SEED-D2D-BBOX-THRESH`; a definição desta onda é `alpha > 0`); hook pós-UI no frame do
+//     `App` (sprites sobre a UI no standalone -- seed INBOX `SEED-D2D-POSTUI`);
+//     `set_asset_base_url` honrado pelo `load_texture` (seed INBOX `SEED-D2D-BASEURL`); opção de
+//     filtro nearest-neighbour por textura (seed INBOX `SEED-D2D-TEXFILTER`, default é
+//     `GL_LINEAR`).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
@@ -301,6 +322,27 @@ private:
   //     sozinho já carrega para reuso de slot DENTRO de uma instância). nullptr para um handle
   //     nunca carregado.
   const void* owner_ = nullptr;
+};
+
+// EN: D29 -- texel coordinates, top-left origin, y-down (the SAME space as `src_px`, D5). House
+//     precedent for a found-flag return struct: `ElementBox{found,x,y,w,h}` from
+//     `UiLayer::get_element_box`/`App::get_element_box`. `found == false` (every other field left
+//     at 0) on: an invalid/stale/foreign/never-loaded texture handle, OR a fully-transparent
+//     texture -- distinct from a 1x1 opaque texture, which returns `{true, 0, 0, 1, 1}`. See
+//     `Draw2d::texture_content_bbox` below for the full contract.
+// PT: D29 -- coordenadas de texel, origem superior-esquerda, y pra baixo (o MESMO espaço de
+//     `src_px`, D5). Precedente da casa pra uma struct de retorno com flag found:
+//     `ElementBox{found,x,y,w,h}` de `UiLayer::get_element_box`/`App::get_element_box`. `found ==
+//     false` (todo outro campo em 0) em: um handle de textura inválido/obsoleto/estrangeiro/
+//     nunca-carregado, OU uma textura totalmente transparente -- distinta de uma textura opaca
+//     1x1, que devolve `{true, 0, 0, 1, 1}`. Ver `Draw2d::texture_content_bbox` abaixo pro
+//     contrato completo.
+struct TextureBbox {
+  bool found = false;
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
 };
 
 // EN: Sprite-batching facade over an own GL 3.3 core pipeline (ADR-0017 axis 2, decision (2a)).
@@ -531,6 +573,256 @@ public:
   //     tinha pendente (D4) -- incondicionalmente, mesmo um bracket vazio/degenerado (um flush
   //     no-op nesse caso). Seguro chamar sem um begin() correspondente (no-op).
   void end();
+
+  // EN: D23/D24 -- untextured filled rectangle: geometry in the ACTIVE space (world units with a
+  //     camera set, screen px otherwise, exactly D18's sprite rule), drawn through the SAME
+  //     batcher path as draw_sprite() against an internal 1x1 white premultiplied texture (D23) --
+  //     the D8 tint formula on that white texel yields exactly `color` in premultiplied space, no
+  //     new shader/GL-state class (A1 (a)). Fail-high (D24's shared template, D10 extended): a
+  //     non-finite `dst`/`color` member skips the draw (logged once, dedup'd); `dst.w <= 0 ||
+  //     dst.h <= 0` is a SILENT legal no-op (unlogged, same D10 idiom as draw_sprite()); a
+  //     post-math guard rejects a non-finite PROJECTED corner (overflow, D20's second guard,
+  //     shared). Tagged by the CURRENT layer if set_layer() has armed buffered mode (D27); the
+  //     CURRENT scissor travels with it (D28). Safe no-op on a never-init/moved-from/post-
+  //     shutdown/outside-bracket `Draw2d` (this module's null-safe contract).
+  // PT: D23/D24 -- retângulo preenchido não-texturizado: geometria no espaço ATIVO (unidades de
+  //     mundo com câmera setada, px de tela caso contrário, exatamente a regra de sprite do D18),
+  //     desenhado pelo MESMO caminho de batcher do draw_sprite() contra uma textura branca
+  //     premultiplicada 1x1 interna (D23) -- a fórmula de tint D8 sobre esse texel branco produz
+  //     exatamente `color` em espaço premultiplicado, sem shader/classe de estado GL nova (A1
+  //     (a)). Fail-high (o template compartilhado do D24, D10 estendido): um membro não-finito de
+  //     `dst`/`color` pula o desenho (logado uma vez, dedup'd); `dst.w <= 0 || dst.h <= 0` é um
+  //     no-op legal SILENCIOSO (não logado, mesmo idioma D10 do draw_sprite()); uma guarda
+  //     pós-conta rejeita um canto PROJETADO não-finito (overflow, segunda guarda do D20,
+  //     compartilhada). Marcado com a camada CORRENTE se set_layer() armou o modo bufferizado
+  //     (D27); o scissor CORRENTE viaja junto (D28). No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket (o contrato null-safe deste
+  //     módulo).
+  void draw_filled_rect(const RectF& dst, const ColorF& color);
+  // EN: D18 overload, same composition rule as draw_sprite()'s own transform overload:
+  //     `transform` applies pivot/rotation/scale/flip about `dst` in the ACTIVE space, each
+  //     resulting corner then projected through world_to_screen when a camera is set. flip_h/
+  //     flip_v have no visual effect on a solid colour fill (no texel to flip) but are accepted
+  //     without error, same total-input contract as every SpriteTransform consumer. Same
+  //     fail-high split as the 4-arg overload above, plus D20's first guard on every `transform`
+  //     member (finite BEFORE any arithmetic).
+  // PT: Overload D18, mesma regra de composição do próprio overload de transform do
+  //     draw_sprite(): `transform` aplica pivô/rotação/escala/flip sobre `dst` no espaço ATIVO,
+  //     cada canto resultante então projetado por world_to_screen quando há câmera. flip_h/
+  //     flip_v não têm efeito visual sobre um preenchimento de cor sólida (nenhum texel pra
+  //     espelhar) mas são aceitos sem erro, mesmo contrato de input total de todo consumidor de
+  //     SpriteTransform. Mesmo split fail-high do overload de 4 args acima, mais a primeira
+  //     guarda do D20 sobre todo membro de `transform` (finito ANTES de qualquer conta).
+  void draw_filled_rect(const RectF& dst, const ColorF& color, const SpriteTransform& transform);
+
+  // EN: D24 -- arbitrary quad, corners supplied directly by the caller in TL,TR,BR,BL order (the
+  //     SAME convention as emit_quad_corners()/SpriteCorners, D5/D19), in the ACTIVE space, each
+  //     projected through world_to_screen when a camera is set. A degenerate or self-crossing
+  //     (bowtie) quad is LEGAL and draws exactly the two triangles the corners describe (the
+  //     GPU's own business, documented, not this call's problem). Fail-high: a non-finite
+  //     `tl`/`tr`/`br`/`bl`/`color` member skips the draw (logged once, dedup'd, BEFORE any
+  //     arithmetic); the post-math guard on the PROJECTED corners still applies (D20's second
+  //     guard, overflow). Tagged by the current layer/scissor exactly like draw_filled_rect()
+  //     above. Safe no-op on a never-init/moved-from/post-shutdown/outside-bracket `Draw2d`.
+  // PT: D24 -- quad arbitrário, cantos fornecidos direto pelo chamador na ordem TL,TR,BR,BL (a
+  //     MESMA convenção de emit_quad_corners()/SpriteCorners, D5/D19), no espaço ATIVO, cada um
+  //     projetado por world_to_screen quando há câmera. Um quad degenerado ou auto-cruzado
+  //     (bowtie) é LEGAL e desenha exatamente os dois triângulos que os cantos descrevem
+  //     (negócio da própria GPU, documentado, não é problema desta chamada). Fail-high: um
+  //     membro não-finito de `tl`/`tr`/`br`/`bl`/`color` pula o desenho (logado uma vez,
+  //     dedup'd, ANTES de qualquer conta); a guarda pós-conta sobre os cantos PROJETADOS ainda
+  //     vale (segunda guarda do D20, overflow). Marcado pela camada/scissor correntes
+  //     exatamente como o draw_filled_rect() acima. No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket.
+  void draw_filled_quad(Vec2F tl, Vec2F tr, Vec2F br, Vec2F bl, const ColorF& color);
+
+  // EN: D25 -- a line segment of `thickness` ACTIVE-space units, butt-capped (the quad ends
+  //     exactly at `a` and `b`; round/miter caps and polylines are seed SEED-D2D-LINECAPS, out of
+  //     this wave), geometry computed by src/primitives2d.hpp's compute_line_corners() (single
+  //     source): with `d = b - a`, `len = |d|`, unit `u = d/len`, normal `n = (-u.y, u.x)`,
+  //     `h = thickness/2`, the quad corners are `a+n*h, b+n*h, b-n*h, a-n*h` (TL,TR,BR,BL). Each
+  //     corner is then projected through world_to_screen when a camera is set -- `thickness`
+  //     therefore scales with `cam.zoom` BY PROJECTION alone, no separate conversion formula (the
+  //     consumer's measured "outline/line thickness in world units, scaling with the camera" need
+  //     falls out of this for free, D24). Fail-high, guard order literal: `a`/`b`/`thickness`/
+  //     `color` all finite BEFORE any arithmetic (the sqrt included); `a == b` (exactly) or
+  //     `thickness <= 0` is a SILENT legal no-op BEFORE the division (no divide-by-zero path
+  //     exists, D10 idiom); the post-math guard on the PROJECTED corners still applies (D20's
+  //     second guard). Tagged by the current layer/scissor. Safe no-op on a never-init/moved-from/
+  //     post-shutdown/outside-bracket `Draw2d`.
+  // PT: D25 -- um segmento de linha de `thickness` unidades do espaço ATIVO, com tampa butt (o
+  //     quad termina exatamente em `a` e `b`; tampas round/miter e polylines são a semente
+  //     SEED-D2D-LINECAPS, fora desta onda), geometria computada pelo compute_line_corners() de
+  //     src/primitives2d.hpp (fonte única): com `d = b - a`, `len = |d|`, unitário `u = d/len`,
+  //     normal `n = (-u.y, u.x)`, `h = thickness/2`, os cantos do quad são `a+n*h, b+n*h, b-n*h,
+  //     a-n*h` (TL,TR,BR,BL). Cada canto é então projetado por world_to_screen quando há câmera
+  //     -- `thickness` portanto escala com `cam.zoom` SÓ POR PROJEÇÃO, sem fórmula de conversão
+  //     separada (a necessidade medida do consumidor de "espessura de linha/contorno em unidade
+  //     de mundo, escalando com a câmera" sai disso de graça, D24). Fail-high, ordem de guarda
+  //     literal: `a`/`b`/`thickness`/`color` todos finitos ANTES de qualquer conta (o sqrt
+  //     incluso); `a == b` (exatamente) ou `thickness <= 0` é um no-op legal SILENCIOSO ANTES da
+  //     divisão (nenhum caminho de divisão-por-zero existe, idioma D10); a guarda pós-conta
+  //     sobre os cantos PROJETADOS ainda vale (segunda guarda do D20). Marcado pela
+  //     camada/scissor correntes. No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket.
+  void draw_line(Vec2F a, Vec2F b, float thickness, const ColorF& color);
+
+  // EN: D26 -- a rectangular outline of `thickness` ACTIVE-space units, decomposed into 4
+  //     NON-OVERLAPPING strips inside `dst` (top/bottom/left/right, computed by
+  //     src/primitives2d.hpp's compute_outline_strips(), single source) -- non-overlap is a
+  //     CORRECTNESS property, not a micro-optimization: overlapping strips would double-blend a
+  //     translucent colour at the corners. The collapse clamp `t = min(thickness, min(dst.w,
+  //     dst.h)/2)` makes the four strips tile `dst` EXACTLY (no special-case code) once
+  //     `2*thickness >= min(dst.w, dst.h)` -- the outline degenerates to ONE filled rect covering
+  //     `dst`, documented. `thickness` scales with `cam.zoom` by the SAME per-corner projection
+  //     as draw_line() above (D24) -- the consumer's measured "outline thickness in world units"
+  //     need is exactly this, no bespoke API. Fail-high: a non-finite `dst`/`thickness`/`color`
+  //     member skips the draw (logged once, dedup'd); `thickness <= 0` or `dst.w <= 0 ||
+  //     dst.h <= 0` is a SILENT legal no-op; the post-math guard on the PROJECTED strip corners
+  //     still applies. Tagged by the current layer/scissor. Safe no-op on a never-init/moved-from/
+  //     post-shutdown/outside-bracket `Draw2d`.
+  // PT: D26 -- um contorno retangular de `thickness` unidades do espaço ATIVO, decomposto em 4
+  //     faixas SEM SOBREPOSIÇÃO dentro de `dst` (topo/base/esquerda/direita, computadas pelo
+  //     compute_outline_strips() de src/primitives2d.hpp, fonte única) -- a não-sobreposição é
+  //     uma propriedade de CORREÇÃO, não uma micro-otimização: faixas sobrepostas dariam
+  //     double-blend numa cor translúcida nos cantos. O clamp de colapso `t = min(thickness,
+  //     min(dst.w, dst.h)/2)` faz as quatro faixas ladrilharem `dst` EXATAMENTE (sem código de
+  //     caso especial) quando `2*thickness >= min(dst.w, dst.h)` -- o contorno degenera pra UM
+  //     retângulo preenchido cobrindo `dst`, documentado. `thickness` escala com `cam.zoom` pela
+  //     MESMA projeção por-canto do draw_line() acima (D24) -- a necessidade medida do
+  //     consumidor de "espessura de contorno em unidade de mundo" é exatamente isto, sem API sob
+  //     medida. Fail-high: um membro não-finito de `dst`/`thickness`/`color` pula o desenho
+  //     (logado uma vez, dedup'd); `thickness <= 0` ou `dst.w <= 0 || dst.h <= 0` é um no-op
+  //     legal SILENCIOSO; a guarda pós-conta sobre os cantos PROJETADOS das faixas ainda vale.
+  //     Marcado pela camada/scissor correntes. No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket.
+  void draw_rect_outline(const RectF& dst, float thickness, const ColorF& color);
+
+  // EN: D27 -- draw order, OPT-IN buffered mode, default OFF: a bracket that never calls
+  //     set_layer() runs the LITERAL v0.21.0 streaming path unchanged (zero diff, the Q1 (c)
+  //     idiom this module already used for the camera, third use in this atom's history). The
+  //     FIRST set_layer() call arms buffered mode for the CURRENT bracket (or the NEXT one when
+  //     called outside a bracket); if draws already streamed in the current bracket, they are
+  //     finalized and drained under the streaming path FIRST (they render below every layer),
+  //     THEN buffering starts -- deterministic, call set_layer() before the first draw of the
+  //     bracket to avoid this split. Any `int` is legal (negative = below the default 0); the
+  //     CURRENT layer tags every subsequent draw_sprite()/primitive call (sticky WITHIN the
+  //     bracket). At end(), buffered commands are stable-sorted by layer (equal layer keeps
+  //     submission order) and replayed through the batcher, grouped by consecutive scissor state
+  //     (D28); end() then RESETS to streaming/layer 0 for the NEXT bracket (layers are NOT sticky
+  //     across brackets like the camera/scissor -- one experimental set_layer() call must not
+  //     permanently change the module's flush timing). Layers order draws WITHIN one Draw2D
+  //     bracket only; composition with the UI/host stays order-of-call (ADR-0017 axis 3,
+  //     untouched). Memory: buffering holds ONE bracket's commands until end(), hard-capped at
+  //     262144 (a memory bound against a hostile stream, dropped+logged once past that, NOT a
+  //     performance claim -- D30 measures throughput). Safe no-op on a never-init/moved-from/
+  //     post-shutdown `Draw2d`.
+  // PT: D27 -- ordem de desenho, modo bufferizado OPT-IN, default OFF: um bracket que nunca
+  //     chama set_layer() roda o caminho streaming LITERAL da v0.21.0 inalterado (ausência de
+  //     diff, o idioma Q1 (c) que este módulo já usou pra câmera, 3º uso na história deste
+  //     átomo). A PRIMEIRA chamada set_layer() arma o modo bufferizado do bracket CORRENTE (ou
+  //     do PRÓXIMO se chamada fora de um bracket); se já havia desenhos streamados no bracket
+  //     corrente, eles são finalizados e drenados pelo caminho streaming PRIMEIRO (renderizam
+  //     abaixo de toda camada), DEPOIS o buffering começa -- determinístico, chame set_layer()
+  //     antes do primeiro desenho do bracket pra evitar esse split. Qualquer `int` é legal
+  //     (negativo = abaixo do 0 default); a camada CORRENTE marca toda chamada
+  //     draw_sprite()/primitiva seguinte (sticky DENTRO do bracket). No end(), comandos
+  //     bufferizados são ordenados de forma estável por camada (camada igual mantém ordem de
+  //     submissão) e reproduzidos pelo batcher, agrupados por estado de scissor consecutivo
+  //     (D28); o end() então RESETA pra streaming/camada 0 pro PRÓXIMO bracket (camadas NÃO são
+  //     sticky entre brackets como a câmera/scissor -- uma chamada experimental de set_layer()
+  //     não pode mudar permanentemente o timing de flush do módulo). Camadas ordenam desenhos SÓ
+  //     DENTRO de um bracket do Draw2D; a composição com a UI/host continua ordem-de-chamada
+  //     (eixo 3 da ADR-0017, intocado). Memória: o buffering segura os comandos de UM bracket
+  //     até o end(), teto rígido de 262144 (um limite de MEMÓRIA contra um stream hostil,
+  //     descartado+logado uma vez passado isso, NÃO um claim de performance -- o D30 mede
+  //     throughput). No-op seguro num `Draw2d` nunca-inicializado/movido-de/pós-shutdown.
+  void set_layer(int layer);
+
+  // EN: D28 -- rectangular clip, ALWAYS screen px (top-left origin, y-down, the SAME space as
+  //     begin()'s target size), camera-INDEPENDENT (A3): a world-rect clip under rotation is a
+  //     mask/stencil-class feature, not this (seed SEED-D2D-WORLDCLIP). Sticky across draws AND
+  //     brackets (like the camera) until reset_scissor()/shutdown(). Validation (D15's idiom):
+  //     any non-finite `rect_px` member REJECTS the call, PREVIOUS state kept, one dedup'd log;
+  //     `rect_px.w <= 0 || rect_px.h <= 0` is LEGAL and means "clip everything" (GL semantics,
+  //     e.g. a collapsing reveal animation); negative x/y are LEGAL (clamping is the GPU's job).
+  //     A mid-bracket change in STREAMING mode forces a run boundary (the pending run is
+  //     finalized and drained under the OLD scissor first) -- named CONTRAST with the camera
+  //     (D13: the camera never forces a flush; scissor DOES, it is per-flush GL state, not
+  //     per-vertex data); in BUFFERED mode the scissor snapshot travels with each command instead
+  //     (same observable semantics). GL mapping at flush, literal (the y-flip conversion,
+  //     src/primitives2d.hpp's map_scissor_to_gl(), single source with the unit test):
+  //     `glScissor(x, target_h - (y + h), w, h)`, width/height clamped to non-negative before the
+  //     int cast. D9 CONTRACT UPDATE, stated loudly: Draw2D may now leave `GL_SCISSOR_TEST`
+  //     ENABLED behind (it still restores nothing, by contract) -- `App`'s frame-hook
+  //     `GlStateGuard` already captures and restores the scissor box+enable, but in EMBED MODE
+  //     this is the sharpest edge of this whole wave for hosts: a leftover scissor clips the
+  //     host's NEXT pass, INCLUDING its own clear. Reset your scissor or call reset_scissor()
+  //     before handing the frame on to the host. Safe no-op on a never-init/moved-from/
+  //     post-shutdown `Draw2d`.
+  // PT: D28 -- recorte retangular, SEMPRE em px de tela (origem superior-esquerda, y pra baixo,
+  //     o MESMO espaço do tamanho-alvo do begin()), câmera-INDEPENDENTE (A3): um recorte de
+  //     retângulo de MUNDO sob rotação é uma feature classe máscara/stencil, não isto (semente
+  //     SEED-D2D-WORLDCLIP). Sticky entre desenhos E brackets (como a câmera) até
+  //     reset_scissor()/shutdown(). Validação (idioma do D15): qualquer membro não-finito de
+  //     `rect_px` REJEITA a chamada, estado ANTERIOR mantido, um log dedup'd; `rect_px.w <= 0 ||
+  //     rect_px.h <= 0` é LEGAL e significa "clipa tudo" (semântica GL, ex.: uma animação de
+  //     revelação colapsando); x/y negativos são LEGAIS (clampar é trabalho da GPU). Uma
+  //     mudança no meio do bracket em modo STREAMING força uma fronteira de corrida (a corrida
+  //     pendente é finalizada e drenada sob o scissor VELHO primeiro) -- CONTRASTE nomeado com a
+  //     câmera (D13: a câmera nunca força um flush; o scissor FORÇA, é estado GL por-flush, não
+  //     dado por-vértice); em modo BUFFERIZADO o snapshot do scissor viaja com cada comando
+  //     (mesma semântica observável). Mapeamento GL no flush, literal (a conversão de y-flip, o
+  //     map_scissor_to_gl() de src/primitives2d.hpp, fonte única com o teste unitário):
+  //     `glScissor(x, target_h - (y + h), w, h)`, largura/altura clampadas a não-negativo antes
+  //     do cast pra int. ATUALIZAÇÃO DE CONTRATO D9, dita em voz alta: o Draw2D agora pode deixar
+  //     `GL_SCISSOR_TEST` LIGADO pra trás (continua não restaurando nada, por contrato) -- o
+  //     `GlStateGuard` do frame hook do `App` já captura e restaura a caixa+enable de scissor,
+  //     mas em MODO EMBED esta é a aresta mais afiada de toda a onda pros hosts: um scissor
+  //     esquecido clipa o PRÓXIMO passe do host, INCLUSIVE o próprio clear dele. Resete o
+  //     próprio scissor ou chame reset_scissor() antes de entregar o frame ao host. No-op seguro
+  //     num `Draw2d` nunca-inicializado/movido-de/pós-shutdown.
+  void set_scissor(const RectF& rect_px);
+  // EN: Idempotent -- safe to call with no scissor set. shutdown() already does this implicitly
+  //     (same D22 idiom as reset_camera()). Safe no-op on a never-init/moved-from/post-shutdown
+  //     `Draw2d`.
+  // PT: Idempotente -- seguro chamar sem scissor setado. shutdown() já faz isso implicitamente
+  //     (mesmo idioma D22 do reset_camera()). No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown.
+  void reset_scissor();
+
+  // EN: D29 -- the smallest rect containing every texel with `alpha > 0` (semi-transparent
+  //     counts; an alpha THRESHOLD parameter is seed SEED-D2D-BBOX-THRESH), computed ONCE inside
+  //     load_texture() (src/image_decode.hpp's compute_content_bbox(), on the decoded pixels
+  //     that already exist on the CPU there, discarded right after) and cached in the texture's
+  //     registry slot (16 bytes) -- NOT retained as a full RGBA buffer, NOT a glGetTexImage
+  //     readback (both rejected: memory cost for a rarely-used query, and a GL round-trip /
+  //     GLES-portability trap, respectively). Coordinates are in the SAME texel space as
+  //     `src_px` (top-left origin, y-down, matching image memory row order, D5) -- the
+  //     hitbox-from-bbox pattern composes with draw_sprite()'s `src_px` directly. Premultiply
+  //     does NOT disturb this: the alpha channel is unchanged by premultiplication. `found ==
+  //     false` (every other field zero) on: an invalid/stale/foreign/never-loaded `tex` handle
+  //     (the full D7 validation chain, dedup'd log -- same rejection story as draw_sprite()) OR a
+  //     fully-transparent texture -- distinct from a 1x1 opaque texture, which returns `{true, 0,
+  //     0, 1, 1}`. Safe no-op (returns `TextureBbox{}`) on a never-init/moved-from/post-shutdown
+  //     `Draw2d`.
+  // PT: D29 -- o menor retângulo contendo todo texel com `alpha > 0` (semi-transparente conta;
+  //     um parâmetro de LIMIAR de alpha é a semente SEED-D2D-BBOX-THRESH), computado UMA vez
+  //     dentro de load_texture() (o compute_content_bbox() de src/image_decode.hpp, sobre os
+  //     pixels decodificados que já existem na CPU ali, descartados logo depois) e cacheado no
+  //     slot do registry da textura (16 bytes) -- NÃO retido como buffer RGBA completo, NÃO um
+  //     readback glGetTexImage sob demanda (ambos rejeitados: custo de memória pra uma consulta
+  //     pouco usada, e um round-trip de GL / armadilha de portabilidade GLES, respectivamente).
+  //     Coordenadas no MESMO espaço de texel de `src_px` (origem superior-esquerda, y pra baixo,
+  //     batendo com a ordem de linha da memória de imagem, D5) -- o padrão
+  //     hitbox-a-partir-de-bbox compõe direto com o `src_px` do draw_sprite(). O premultiply NÃO
+  //     perturba isto: o canal alpha fica inalterado pela premultiplicação. `found == false`
+  //     (todo outro campo zero) em: um handle `tex` inválido/obsoleto/estrangeiro/
+  //     nunca-carregado (a cadeia completa de validação D7, log dedup'd -- mesma história de
+  //     rejeição do draw_sprite()) OU uma textura totalmente transparente -- distinta de uma
+  //     textura opaca 1x1, que devolve `{true, 0, 0, 1, 1}`. No-op seguro (devolve
+  //     `TextureBbox{}`) num `Draw2d` nunca-inicializado/movido-de/pós-shutdown.
+  TextureBbox texture_content_bbox(const Texture2d& tex);
 
 private:
   struct Impl;

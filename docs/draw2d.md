@@ -35,14 +35,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // or just let `draw2d` go out of scope
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) does not touch GL -- construction is
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:373`) does not touch GL -- construction is
   always cheap and side-effect-free, same discipline as `Audio()`/`App()`/`UiLayer()`.
 - `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) requires a CURRENT GL 3.3 core context.
   It calls `glx_gl_load()` itself -- see "GL loader idempotency" below for why that is safe even
   when a cohabiting `App`/`UiLayer` already loaded the same table. Returns `false` on any
   GL/shader failure, or when the instance is already initialized (call `shutdown()` first to
   re-init).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) is idempotent -- releases every live
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) is idempotent -- releases every live
   texture, the VBO/VAO, and the shader program, ONLY if `init()` ever succeeded, and discards
   any open/partial `begin()`/`end()` bracket. The destructor calls it.
 - **Moved-from state is a safe no-op, deliberately stricter than `App`.** Every method on a
@@ -73,11 +73,11 @@ projection formulas and their own coordinate story.
 
 ### Camera (D2D-2 -- optional world space)
 
-`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:170`) is an OPTIONAL world camera. Its default
+`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:191`) is an OPTIONAL world camera. Its default
 STATE is "no camera" -- exactly the coordinate contract above, not "camera set to identity" (see
 the anchor note below for why that distinction matters). `set_camera(const Camera2d&)`
 (`glintfx/include/glintfx/draw2d.hpp:485`) switches subsequent `draw_sprite` calls, in any open
-or future bracket, to WORLD space; `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`)
+or future bracket, to WORLD space; `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`)
 returns to screen space -- idempotent, safe to call with no camera set. `shutdown()` already
 resets to no-camera (D22); a freshly-`init()`ed instance always starts in screen space.
 
@@ -159,7 +159,7 @@ caller wanting a letterbox-exact fit composes this with `UiLayer::set_viewport`
 
 ### SpriteTransform (D18 -- per-sprite pivot/rotation/scale/flip)
 
-`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:201`) is orthogonal to the camera and
+`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:222`) is orthogonal to the camera and
 applies in **BOTH** spaces -- world units when a camera is set, screen px otherwise (D5/Q1 (c))
 -- via the overload `draw_sprite(tex, dst, src_px, tint, transform)`
 (`glintfx/include/glintfx/draw2d.hpp:524-525`, defined `glintfx/src/draw2d.cpp:635`).
@@ -201,33 +201,224 @@ identity ops `*1.0f`, `+0.0f`, `cos(0)=1`, `sin(0)=0` are IEEE-exact).
 axis-aligned path has no multiplication that can overflow, so there was nothing to guard
 against there -- confirmed as an analysis, not an omission, by the adversarial review.
 
+### Primitives (D23-D26 -- untextured drawing)
+
+`draw_filled_rect`, `draw_filled_quad`, `draw_line`, and `draw_rect_outline`
+(`glintfx/include/glintfx/draw2d.hpp:601`/`616`/`637`/`668`/`699`) draw untextured shapes
+through the SAME batched pipeline as `draw_sprite` -- no second shader, no new GL-state class
+(decision A1 (a), D23). `init()` creates an internal 1x1 RGBA8 premultiplied WHITE texture
+(`Impl::create_white_texture()`, `glintfx/src/draw2d.cpp:305`) as a NORMAL registry slot (id 1;
+the public `Texture2d` handle for it is never constructed, so a consumer can neither draw with
+it nor destroy it). Creation failure fails `init()` itself (fail-high: a `Draw2d` that cannot
+draw the primitives it advertises does not half-initialize). Consequence, stated: the first
+consumer `load_texture()` now returns id 2, unobservable through the public API (ids are
+opaque).
+
+Every primitive shares D24's composition story with `draw_sprite`/`SpriteTransform`: geometry
+is built in the ACTIVE space (world units with a camera set, screen px otherwise, D5/D18), each
+corner is then projected through `world_to_screen` when a camera is set, then passes the D20
+post-math finiteness guard, then enters the SAME batcher as a `draw_quad` against the white
+texture with the primitive's colour as the D8 tint -- on that white texel, the D8 formula
+(`out = texel_premult * vec4(tint.rgb*tint.a, tint.a)`, see "Premultiply and the tint formula"
+below) yields EXACTLY `color` in premultiplied space, no separate formula. Consequence:
+`draw_line`/`draw_rect_outline` thickness is in ACTIVE-space units and scales with `cam.zoom`
+BY PROJECTION alone -- the consumer's measured "outline/line thickness in world units, scaling
+with the camera" need falls out of this general rule, no bespoke API. Every primitive shares
+the sprite fail-high template: any non-finite input member skips the draw (dedup'd log) BEFORE
+any arithmetic; a degenerate size (`dst.w<=0||dst.h<=0`, a line's `a==b` or `thickness<=0`, an
+outline's `thickness<=0`) is a SILENT legal no-op; the post-math corner guard (D20) covers
+overflow, same as sprites. Each primitive is tagged by the CURRENT layer (D27) and travels with
+the CURRENT scissor (D28) exactly like `draw_sprite`.
+
+`draw_filled_rect` has a 4-arg overload and a `SpriteTransform` overload (same
+pivot/rotation/scale/flip composition as `draw_sprite`'s own transform overload, "SpriteTransform"
+above -- `flip_h`/`flip_v` are accepted but have no visual effect on a solid fill). `draw_filled_quad`
+takes four caller-supplied corners in TL,TR,BR,BL order (D5/D19's convention); a degenerate or
+self-crossing (bowtie) quad is LEGAL and draws exactly the two triangles the corners describe
+(the GPU's own business).
+
+**Line geometry (D25, literal -- single source `glintfx/src/primitives2d.hpp:203`,
+`compute_line_corners()`):** with `d = b - a`, `len = |d|`, unit `u = d/len`, normal
+`n = (-u.y, u.x)`, `h = thickness/2`:
+
+```
+tl = a + n*h,  tr = b + n*h,  br = b - n*h,  bl = a - n*h
+```
+
+Butt caps -- the quad ends exactly at `a` and `b`; round/miter caps and polylines are seed
+`SEED-D2D-LINECAPS` (`TODO.md` INBOX), out of this wave. Guard order (`is_degenerate_line()`,
+`glintfx/src/primitives2d.hpp:183`): `a`/`b`/`thickness`/`color` all finite BEFORE any
+arithmetic (the `sqrt` included), THEN `a == b` (exactly) or `thickness <= 0` is checked -- no
+divide-by-zero path exists in `compute_line_corners()` because the caller never invokes it when
+degenerate.
+
+**Rect outline (D26, literal -- single source `glintfx/src/primitives2d.hpp:247`,
+`compute_outline_strips()`):** four NON-OVERLAPPING strips inside `dst`, with the collapse
+clamp `t = min(thickness, min(dst.w, dst.h)/2)`:
+
+```
+top    = {x,       y,        w,      t}
+bottom = {x,       y+h-t,    w,      t}
+left   = {x,       y+t,      t,      h-2t}
+right  = {x+w-t,   y+t,      t,      h-2t}
+```
+
+Non-overlap is a CORRECTNESS property, not a micro-optimization: with a translucent outline
+colour, overlapping strips would double-blend at the corners (visibly darker squares). The SAME
+clamped formula, with no special-case branch, tiles `dst` EXACTLY once
+`2*thickness >= min(dst.w, dst.h)` -- the outline degenerates to ONE filled rect covering `dst`.
+Each of the 4 strips is projected and submitted independently: a non-finite PROJECTED corner on
+one strip skips only THAT strip (logged once, dedup'd), the others still draw.
+
+**Not shipped, seeded:** circle/ellipse/regular-polygon primitives (`SEED-D2D-SHAPES` -- the
+`ui` atom's `polygon()` RCSS decorator already covers the declarative side); secondary sort by
+texture within a layer (`SEED-D2D-LAYER-TEXSORT`).
+
+### Layers (D27 -- explicit draw order, opt-in)
+
+`set_layer(int layer)` (`glintfx/include/glintfx/draw2d.hpp:740`) is OPT-IN, default OFF: a
+bracket that never calls `set_layer` runs the LITERAL v0.21.0 streaming path unchanged -- the
+SAME "absence of diff" idiom the camera (D13) and the coordinate contract (D5) already use in
+this module, applied a third time. Any `int` is legal (negative sorts below the default `0`);
+the CURRENT layer tags every subsequent `draw_sprite`/primitive call, sticky WITHIN the bracket.
+
+**Arming:** the FIRST `set_layer` call arms buffered mode for the CURRENT bracket (or the NEXT
+one, when called outside a bracket). If draws already streamed in the current bracket, they are
+finalized and drained under the OLD streaming path FIRST (`SpriteBatch::flush_pending()`,
+`glintfx/src/sprite_batch.hpp:261`, the one additive D31 method) -- they render below every
+layer, effectively "under the bridge". Recommendation: call `set_layer` before the first draw
+of a bracket to avoid this split.
+
+**Buffering and replay:** a buffered command captures the FINAL state -- post-validation,
+post-projection screen-space corners, texture id (white for primitives), resolved `src_px`,
+clamped tint, the scissor snapshot ACTIVE at push time (D28), and the layer tag; the camera is
+therefore sampled AT CALL TIME, exactly like streaming mode. At `end()`, commands are
+stable-sorted by layer (`std::stable_sort`, `glintfx/src/layer_queue.hpp:206` -- equal layer
+keeps submission order, GUARANTEED) and replayed through the UNTOUCHED batcher, grouped into
+maximal runs of consecutive same-scissor commands (`scissor_equal()`,
+`glintfx/src/layer_queue.hpp:111`); `end()` then RESETS to streaming/layer 0 for the NEXT
+bracket -- layers are NOT sticky across brackets like the camera/scissor, because (unlike them)
+they change the module's own flush timing.
+
+**Layers order draws WITHIN one Draw2D bracket only.** Composition with the UI or the host's
+own GL calls stays order-of-call (ADR-0017 axis 3, untouched) -- there is still no cross-module
+ordering API.
+
+**Memory:** buffering holds ONE bracket's commands until `end()`, hard-capped at 262144
+(`LayerQueue::kMaxCommands`, `glintfx/src/layer_queue.hpp:166`, ~24 MiB at ~96 B/command) -- a
+MEMORY bound against a hostile stream (same class as the batcher's own 4096-quad flush bound,
+D4), NOT a performance claim -- see "Performance" below; past the cap, draws are dropped,
+logged once, dedup'd. `shutdown()` discards any open buffer.
+
+### Scissor (D28 -- rectangular clip)
+
+`set_scissor(const RectF& rect_px)` / `reset_scissor()`
+(`glintfx/include/glintfx/draw2d.hpp:785`/`792`) clip drawing to a rectangle, ALWAYS in SCREEN
+px -- top-left origin, y-down, the SAME space as `begin()`'s target size -- camera-INDEPENDENT
+(A3): a world-rect clip under rotation is a mask/stencil-class feature, not this (seed
+`SEED-D2D-WORLDCLIP`). Sticky across draws AND brackets (like the camera) until
+`reset_scissor()`/`shutdown()`.
+
+**Validation (D15's idiom, `glintfx/src/draw2d.cpp:1198`):** any non-finite `rect_px` member
+REJECTS the call, the PREVIOUS scissor state is KEPT, one dedup'd log.
+`rect_px.w <= 0 || rect_px.h <= 0` is LEGAL and means "clip everything" (GL semantics -- e.g. a
+collapsing reveal animation). Negative `x`/`y` are LEGAL (clamping is the GPU's job).
+
+**Flush-boundary semantics, named contrast with the camera (D13):** the camera never forces a
+GL flush (D13); a mid-bracket scissor change in STREAMING mode DOES -- the pending run is
+finalized and drained under the OLD scissor first (`flush_pending()`+drain, same D31 method
+`set_layer` already uses), then the state updates. In BUFFERED mode nothing is forced: each
+command's OWN scissor snapshot travels with it (captured at push time), and replay already
+groups consecutive same-scissor commands -- same observable semantics.
+
+**GL mapping at flush, literal (the y-flip conversion -- single source, `map_scissor_to_gl()`,
+`glintfx/src/primitives2d.hpp:272`):**
+
+```
+glScissor(x, target_h - (y + h), w, h)
+```
+
+with `w`/`h` (the GL "extents") clamped to non-negative BEFORE the int cast; `x`/`y` (the
+origin) are cast straight through, un-clamped, per D28's own "clamping is the GPU's job" rule.
+
+**The ONE declared behavioural diff in existing code (D31), and the D9 contract update it
+forces:** `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:358`) used to call
+`glDisable(GL_SCISSOR_TEST)` unconditionally, every flush. It is now conditional
+(`glintfx/src/draw2d.cpp:363-374`): if a scissor is set, `glEnable(GL_SCISSOR_TEST)` +
+`glScissor(mapped rect)`; otherwise `glDisable(GL_SCISSOR_TEST)`, still asserting EVERYTHING
+this state depends on at every flush, per D9's own no-caching rule, unchanged. With no scissor
+EVER set, the emitted GL calls are IDENTICAL to v0.21.0. The GL-state contract (D9, below)
+publishes an UPDATED touched-state line for this.
+
+**High-severity warning for embed hosts -- read this before shipping a scissor call:** Draw2D
+may now leave `GL_SCISSOR_TEST` ENABLED behind (it still restores nothing, by contract, D9). In
+`App`, the frame hook's `GlStateGuard` already captures and restores the scissor box+enable
+(`glintfx/src/gl_state.hpp:68`/`72`/`129`/`131`, verified, not assumed) -- covered for free.
+**In EMBED MODE this is the sharpest edge of the whole D2D-3 wave for hosts:** a leftover
+scissor clips the host's NEXT GL pass, INCLUDING its own clear. Reset your own scissor, or call
+`reset_scissor()`, before handing the frame back to the host. `draw2d_ui_coexist_sanity.cpp`
+pins that `UiLayer::render()` itself is unaffected (its own `GlStateGuard` already
+re-establishes state) -- but a host doing its OWN raw GL after a Draw2D pass has no such guard
+unless it writes one.
+
+### Texture content bbox (D29)
+
+`texture_content_bbox(const Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:825`) returns
+`TextureBbox{found, x, y, w, h}` (`glintfx/include/glintfx/draw2d.hpp:340`, house precedent:
+`ElementBox{found,x,y,w,h}` from `UiLayer::get_element_box`) -- the smallest rect containing
+every texel with `alpha > 0` (semi-transparent counts; an alpha THRESHOLD parameter is seed
+`SEED-D2D-BBOX-THRESH`). Coordinates are in the SAME texel space as `src_px` (top-left origin,
+y-down, matching image memory row order, D5) -- the hitbox-from-bbox pattern composes with
+`draw_sprite`'s `src_px` directly.
+
+Computed ONCE, inside `load_texture()` (`compute_content_bbox()`, `glintfx/src/image_decode.hpp`
+-- on the decoded pixels that already exist on the CPU there, discarded right after) and cached
+in the texture's registry slot (16 bytes) -- NOT retained as a full RGBA buffer (a 256 MiB-class
+memory cost for a rarely-used query), NOT a `glGetTexImage` readback on demand (a GL round-trip
+and a GLES/core-profile portability trap). Premultiply does NOT disturb this: the alpha channel
+is unchanged by premultiplication.
+
+`found == false` (every other field zero) on: an invalid/stale/foreign/never-loaded `tex`
+handle (the full D7 validation chain, dedup'd log -- same rejection story as `draw_sprite`) OR a
+fully-transparent texture -- distinct from a 1x1 opaque texture, which returns
+`{true, 0, 0, 1, 1}`.
+
 ### API reference
 
 | Method | Returns | Notes |
 | :--- | :--- | :--- |
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Requires a current GL 3.3 core context. `false` on GL/shader failure or if already initialized. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
-| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:485`) | `void` | Switches subsequent draws to world space (D2D-2, Q1 (c)). Fail-high (D15): keeps the previous state on a non-finite member or `zoom <= 0`. See "Camera" above. |
-| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) | `void` | Returns subsequent draws to screen space (the no-camera default). Idempotent. See "Camera" above. |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:524-525`) | `void` | D18 overload -- pivot/rotation/scale/flip, in whichever space is active. See "SpriteTransform" above. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
-| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:240`) | `Vec2F` | Pure, total free function (D12/D16). See "Camera" above. |
-| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:241`) | `Vec2F` | Pure, total free function (D12/D16), exact inverse of `world_to_screen`. |
-| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:242`) | `Camera2d` | D17, generic rect-fit convenience. Hostile input returns `Camera2d{}`. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:398`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:437`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:454`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:473`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:507-508`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
+| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:527`) | `void` | Switches subsequent draws to world space (D2D-2, Q1 (c)). Fail-high (D15): keeps the previous state on a non-finite member or `zoom <= 0`. See "Camera" above. |
+| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) | `void` | Returns subsequent draws to screen space (the no-camera default). Idempotent. See "Camera" above. |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:566-567`) | `void` | D18 overload -- pivot/rotation/scale/flip, in whichever space is active. See "SpriteTransform" above. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:575`) | `void` | Closes the bracket opened by `begin()`, flushing whatever is still pending -- unconditionally, even an empty bracket. Safe without a matching `begin()`. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:294`) | `bool` | `false` when never loaded, when `load_texture()` failed, or after `destroy_texture()` zeroed this handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:297-298`) | `int` | Pixel dimensions of the decoded image. `0` when `!ok()`. |
+| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:261`) | `Vec2F` | Pure, total free function (D12/D16). See "Camera" above. |
+| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:262`) | `Vec2F` | Pure, total free function (D12/D16), exact inverse of `world_to_screen`. |
+| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:263`) | `Camera2d` | D17, generic rect-fit convenience. Hostile input returns `Camera2d{}`. |
+| `draw_filled_rect(const RectF&, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:601`) | `void` | D23/D24 -- untextured filled rectangle, ACTIVE space. See "Primitives" above. |
+| `draw_filled_rect(const RectF&, const ColorF&, const SpriteTransform&)` (`glintfx/include/glintfx/draw2d.hpp:616`) | `void` | D18 overload -- pivot/rotation/scale/flip, same composition as `draw_sprite`'s own transform overload. |
+| `draw_filled_quad(Vec2F, Vec2F, Vec2F, Vec2F, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:637`) | `void` | D24 -- arbitrary quad, corners in TL,TR,BR,BL order. Bowtie quads are legal. |
+| `draw_line(Vec2F, Vec2F, float, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:668`) | `void` | D25 -- butt-capped line segment, `thickness` in ACTIVE-space units. See "Primitives" above. |
+| `draw_rect_outline(const RectF&, float, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:699`) | `void` | D26 -- 4 non-overlapping strips, collapse clamp at `2*thickness >= min(w,h)`. See "Primitives" above. |
+| `set_layer(int)` (`glintfx/include/glintfx/draw2d.hpp:740`) | `void` | D27 -- opt-in buffered draw order. `end()` resets to streaming/layer 0. See "Layers" above. |
+| `set_scissor(const RectF&)` (`glintfx/include/glintfx/draw2d.hpp:785`) | `void` | D28 -- ALWAYS screen px, camera-independent. Fail-high keeps previous state on non-finite input. See "Scissor" above. |
+| `reset_scissor()` (`glintfx/include/glintfx/draw2d.hpp:792`) | `void` | D28 -- idempotent, clears the scissor state set by `set_scissor`. |
+| `texture_content_bbox(const Texture2d&)` (`glintfx/include/glintfx/draw2d.hpp:825`) | `TextureBbox` | D29 -- smallest `alpha>0` rect, cached at `load_texture()` time. See "Texture content bbox" above. |
 
 ### Premultiply and the tint formula (D8)
 
 `load_texture()` decodes and **alpha-premultiplies** the image on upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` unchanged)
 to match this module's blend, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) is
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:142`) is
 **straight** (non-premultiplied) RGBA in `[0, 1]`, each channel clamped on intake -- default is
 opaque white (identity: an unmodified sample). The fragment shader
 (`glintfx/src/draw2d.cpp:90-99`) applies the exact modulation:
@@ -254,13 +445,20 @@ of touched state (same style as `gl_state.hpp`'s captured list, `glintfx/src/gl_
 - Vertex array object (`glBindVertexArray`)
 - Depth test (explicitly `glDisable(GL_DEPTH_TEST)`)
 - Face culling (explicitly `glDisable(GL_CULL_FACE)`)
-- Scissor test (explicitly `glDisable(GL_SCISSOR_TEST)`)
+- Scissor test (CONDITIONAL since D2D-3/D28, `glintfx/src/draw2d.cpp:363-374`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` when a scissor is set via `set_scissor`, otherwise `glDisable(GL_SCISSOR_TEST)` as before -- see "Scissor" above for the CONTRACT CHANGE this represents)
 - Blend enable (`glEnable(GL_BLEND)`)
 - Blend func, both RGB and alpha (`glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`)
 - Blend equation (`glBlendEquation(GL_FUNC_ADD)`)
 - Active texture unit (`glActiveTexture(GL_TEXTURE0)`)
 - 2D texture binding on that unit (`glBindTexture(GL_TEXTURE_2D, ...)`)
 - The `uTex`/`uTargetSize` shader uniforms
+
+**D2D-3 contract change, stated loudly:** before v0.22.0, the scissor line above was
+unconditional (`glDisable(GL_SCISSOR_TEST)`, every flush, no exception) -- a scissor feature
+that never enables scissor does not exist, so this line changed. With no scissor EVER set
+(`set_scissor` never called) the emitted GL stream is byte-identical to v0.21.0; the moment a
+host calls `set_scissor`, Draw2D can leave `GL_SCISSOR_TEST` ENABLED behind after `end()`. See
+"Scissor" above for the full mapping/flush-boundary contract and the embed-mode hazard.
 
 **Draw2D does NOT restore any of this after `end()`.** This is deliberate, not an oversight --
 restoration is the enclosing contract's job, and both enclosing contracts already exist:
@@ -325,15 +523,15 @@ calls (D9 above covers who restores what).
 
 ### Texture handles (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) is a plain, copyable value handle -- NOT
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:287`) is a plain, copyable value handle -- NOT
 an RAII owner (`destroy_texture()` is the explicit release, same idiom as `Audio::SoundId`).
 Internally it carries an opaque id, a generation counter, and an **owner tag** (the issuing
 `Draw2d`'s own identity): a `Draw2d` instance validates every handle against its own internal
 registry before use.
 
 **A handle is NOT interchangeable between `Draw2d` instances.** `load_texture()` stamps the
-returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:476`); both
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:535`/`480`) reject a handle whose
+returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:713`); both
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:784`/`728`) reject a handle whose
 `owner_` tag does not match `this`, logged once and treated exactly like any other
 unknown/stale handle -- never dereferenced as a raw GL name.
 This is a guarantee by construction, not a numeric coincidence: id and generation alone cannot
@@ -390,16 +588,83 @@ Windows (`glintfx/src/gl_loader.c:830`) code paths -- there is no internal "alre
 to interact with, so calling it twice is a redundant, harmless re-resolve, not a state hazard. A
 host does not need to order Draw2D's `init()` relative to `App`'s/`UiLayer`'s own initialization.
 
+### Performance (D30 -- declared numbers, honest gates)
+
+`glintfx/tests/draw2d_perf_budget.cpp` measures three metrics, headless, printed as
+machine-readable `GLINTFX_PERF <key>=<value>` lines on every run (visible in the CI log
+regardless of gate outcome):
+
+1. **`pure_batcher_quads_per_s`** -- 100k quads through `SpriteBatch` alone (CPU, no GL/display
+   involved).
+2. **`layered_streaming_ratio`** -- the SAME 100k-command stream through the buffered path
+   (`LayerQueue::push` -> `drain_grouped()` -> replay via `SpriteBatch::draw_quad()`, the EXACT
+   sequence `Draw2d::end()`'s own replay runs), reported as `time_layered / time_streaming`
+   (`>= 1.0` -- the layered path can only ADD work, it reuses the SAME batcher underneath, D31's
+   zero-diff set).
+3. **`e2e_10k_sprite_1k_prim_median_ms`** -- a real `Draw2d` bracket of 10k sprites (one
+   texture) plus a real bracket of 1k `draw_filled_rect` primitives, under a live GL 3.3 context
+   on Xvfb/llvmpipe, `glFinish()`'d before the clock stops -- median over 30 frames (first 2
+   discarded as warm-up).
+
+**Declared downgrade:** llvmpipe rasterizes on the CPU -- metric 3 is a CPU-raster REGRESSION
+GUARD, not a GPU throughput/bandwidth/vsync-pacing truth. Metrics 1 and 2 ARE real CPU numbers
+(no GL involved at all).
+
+**The gate, two-tier:** with `GLINTFX_PERF_STRICT=1` in the environment (set ONLY by the
+`claudio` self-hosted runner's job in `.forgejo/workflows/heavy.yml`, never by
+`ci.yml`/`nightly.yml`), metrics 1 and 3 FAIL if they cross their own BASELINE constant by more
+than 1.5x. Without the env var (every other runner, every dev machine), only a blunt 10x
+SANITY ceiling fails the test -- the number is still printed either way. The RATIO gate (metric
+2) is MACHINE-RELATIVE by construction (both arms run on the same machine, same process, same
+invocation), so it is STRICT EVERYWHERE, unconditional on `GLINTFX_PERF_STRICT` -- it is the
+direct, always-on answer to this wave's own risk 2 ("layers vs batching is where performance can
+degrade").
+
+**A real finding, reported not hidden:** the ratio gate measures ~3.4-3.6x on the machine that
+measured this wave's baselines, consistently across repeated runs -- above the 2.0x ceiling this
+wave first set. Root cause: `LayerQueue::drain_grouped()`'s `std::stable_sort`
+(`glintfx/src/layer_queue.hpp:206`) moves whole ~96-byte `LayerCommand` structs to reorder by a
+single `int layer` key, dominating the layered path's own cost (roughly 60% of it in a
+standalone probe) -- `Draw2d::end()`'s own replay runs the EXACT same `drain_grouped()` call
+this benchmark does, so this is not a benchmark artifact. A lightweight-key sort was tried and
+reverted: it measured better under gcc but WORSE under clang -- the only compiler every CI
+workflow in this repo actually pins (`-DCMAKE_CXX_COMPILER=clang++`). The house's own call: keep
+the plain `std::stable_sort` and REVISE THE CEILING to **4.0x** instead of chasing a
+compiler-specific micro-optimization that regresses on the compiler CI actually runs -- layered
+mode is opt-in by construction (the untouched streaming path pays none of this), so ~3.4x
+measured WITH CLANG is the honest price of that feature, not a regression to chase further.
+
+**Declared numbers, honest provenance** (`glintfx/tests/draw2d_perf_budget.cpp`, baseline
+constants dated in-file): `pure_batcher_quads_per_s` baseline = **8 500 000**,
+`e2e_10k_sprite_1k_prim_median_ms` baseline = **5.0**, `layered_streaming_ratio` ceiling =
+**4.0x** (revised, clang-measured) -- all measured on **2026-07-23**, on a Fedora 44 sandboxed
+dev container (12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM), **NOT** the literal
+`claudio` self-hosted Forgejo runner named by this wave's plan (a different physical machine).
+This is a real measurement, never a guess, but a STAND-IN baseline: the first `claudio` CI run
+of this test prints its own `GLINTFX_PERF` lines in the job log, and per D30 these three
+constants should be swapped for that run's numbers once available (a one-line diff each, this
+comment's date/host updated in `draw2d_perf_budget.cpp`) -- flagged here explicitly, not silently
+left as if it were the final number.
+
 ### Limits declared
 
 Stated instead of faked, per the plan's own testing-downgrade discipline:
 
 - **No `draw_text`** -- `D2D-TEXT`, its own wave, requires its own ADR first (font-engine
   tension: `App`'s FreeType-vs-own-engine flip, `docs/adr/0011-soft-font-flip.md`).
-- **No untextured primitives (rect/outline/line), layers, explicit draw order, scissor, or
-  measured performance budget** -- `D2D-3`, promoted, the next wave. The 4096-quad capacity
-  flush stays a memory bound, not a throughput claim; this wave adds no performance number for
-  the transform/camera path either.
+- **No circle/ellipse/regular-polygon primitives** -- seed `SEED-D2D-SHAPES` (the `ui` atom's
+  `polygon()` RCSS decorator already covers the declarative side); trigger: a consumer ask.
+- **No line caps/joins (round/miter), no polylines** -- `draw_line` is butt-capped only; seed
+  `SEED-D2D-LINECAPS`, trigger: a consumer ask.
+- **No secondary sort by texture within a layer** -- fewer flushes in layered mode is seed
+  `SEED-D2D-LAYER-TEXSORT`, trigger: the perf budget showing a flush-bound consumer.
+- **No world-space clipping** (a rotated clip region under a camera) -- scissor here is
+  screen-space only (D28, A3); a world-rect clip is a mask/stencil-class feature, seed
+  `SEED-D2D-WORLDCLIP`, trigger: a consumer ask.
+- **No alpha THRESHOLD parameter for `texture_content_bbox`** -- this wave's definition is fixed
+  at `alpha > 0`, seed `SEED-D2D-BBOX-THRESH`, trigger: a consumer ask.
+- **The 4096-quad batcher capacity and the 262144-command layer cap stay MEMORY bounds, not
+  throughput claims** -- see "Performance" above for the measured, declared numbers.
 - **Camera shake, smoothing, and bounds/clamp are the consumer's game loop's job, not this
   module's.** Draw2D ships the projection (`Camera2d`, `set_camera`, the pure helpers); it does
   not ship the cinematics on top of it (lerp-follow, deadzone, screen shake). Seeded follow-up:
@@ -432,6 +697,13 @@ Stated instead of faked, per the plan's own testing-downgrade discipline:
 - `glintfx/src/transform2d.hpp` -- the pure, single-source projection/corner math (D12/D18)
   behind both the camera draw path and the public `world_to_screen`/`screen_to_world`/
   `camera_from_world_rect` helpers.
+- `glintfx/src/primitives2d.hpp` -- the pure, single-source geometry (D25 line, D26 outline,
+  D28 scissor-to-GL mapping) behind the primitives, headless-testable
+  (`tests/primitives2d_sanity.cpp`).
+- `glintfx/src/layer_queue.hpp` -- the pure, single-source buffered command queue (D27) behind
+  `set_layer`, headless-testable (`tests/layer_queue_sanity.cpp`).
+- [Onda 5 plan](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- the D2D-3 design
+  decisions D23-D32 behind primitives/layers/scissor/bbox/perf (this doc's own sections above).
 - [ADR-0017](adr/0017-draw2d-module.md) -- the architectural decision this module implements
   (module placement, own GL pipeline, order-by-call-order composition); its
   [Addendum (2026-07-23)](adr/0017-draw2d-module.md#addendum-2026-07-23-d2d-2-coordinate-model)
@@ -465,14 +737,14 @@ draw2d.destroy_texture(hero);
 draw2d.shutdown();                                        // ou simplesmente deixe `draw2d` sair de escopo
 ```
 
-- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:331`) não toca em GL -- a construção é sempre
+- `Draw2d()` (`glintfx/include/glintfx/draw2d.hpp:373`) não toca em GL -- a construção é sempre
   barata e sem efeito colateral, mesma disciplina de `Audio()`/`App()`/`UiLayer()`.
 - `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) exige um contexto GL 3.3 core CORRENTE.
   Chama o próprio `glx_gl_load()` -- ver "Idempotência do loader GL" abaixo pro porquê disso ser
   seguro mesmo quando um `App`/`UiLayer` coabitante já carregou a mesma tabela. Retorna `false`
   em qualquer falha de GL/shader, ou quando a instância já está inicializada (chame `shutdown()`
   primeiro pra re-inicializar).
-- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) é idempotente -- libera toda textura
+- `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) é idempotente -- libera toda textura
   viva, o VBO/VAO, e o programa de shader, SÓ SE `init()` alguma vez teve sucesso, e descarta
   qualquer bracket `begin()`/`end()` aberto/parcial. O destrutor chama.
 - **Estado movido-de é um no-op seguro, deliberadamente mais estrito que o `App`.** Todo método
@@ -505,12 +777,12 @@ aquela seção pras fórmulas de projeção e a própria história de coordenada
 
 ### Câmera (D2D-2 -- espaço de mundo opcional)
 
-`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:170`) é uma câmera de mundo OPCIONAL. O ESTADO
+`Camera2d` (`glintfx/include/glintfx/draw2d.hpp:191`) é uma câmera de mundo OPCIONAL. O ESTADO
 default dela é "sem câmera" -- exatamente o contrato de coordenadas acima, não "câmera setada
 pra identidade" (ver a nota de âncora abaixo pro porquê dessa distinção importar).
-`set_camera(const Camera2d&)` (`glintfx/include/glintfx/draw2d.hpp:485`) passa as chamadas
+`set_camera(const Camera2d&)` (`glintfx/include/glintfx/draw2d.hpp:527`) passa as chamadas
 `draw_sprite` seguintes, em qualquer bracket aberto ou futuro, pro espaço de MUNDO;
-`reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) volta pro espaço de tela --
+`reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) volta pro espaço de tela --
 idempotente, seguro chamar sem câmera setada. `shutdown()` já reseta pra sem-câmera (D22); uma
 instância recém-`init()`ada sempre começa em espaço de tela.
 
@@ -597,7 +869,7 @@ devolvem `Camera2d{}` (documentado, não um crash).
 
 ### SpriteTransform (D18 -- pivô/rotação/escala/flip por-sprite)
 
-`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:201`) é ortogonal à câmera e vale nos
+`SpriteTransform` (`glintfx/include/glintfx/draw2d.hpp:222`) é ortogonal à câmera e vale nos
 DOIS espaços -- unidades de mundo com câmera setada, px de tela caso contrário (D5/Q1 (c)) --
 via o overload `draw_sprite(tex, dst, src_px, tint, transform)`
 (`glintfx/include/glintfx/draw2d.hpp:524-525`, definido em `glintfx/src/draw2d.cpp:635`).
@@ -640,33 +912,229 @@ na v0.20.0, por design: o caminho antigo axis-aligned não tem multiplicação q
 então não havia nada pra guardar contra lá -- confirmado como análise, não como omissão, pelo
 review adversarial.
 
+### Primitivas (D23-D26 -- desenho não-texturizado)
+
+`draw_filled_rect`, `draw_filled_quad`, `draw_line`, e `draw_rect_outline`
+(`glintfx/include/glintfx/draw2d.hpp:601`/`616`/`637`/`668`/`699`) desenham formas
+não-texturizadas pelo MESMO pipeline batchado do `draw_sprite` -- sem segundo shader, sem
+classe de estado GL nova (decisão A1 (a), D23). O `init()` cria uma textura branca RGBA8
+premultiplicada 1x1 interna (`Impl::create_white_texture()`, `glintfx/src/draw2d.cpp:305`) como
+slot NORMAL do registry (id 1; o handle público `Texture2d` dela nunca é construído, então um
+consumidor não pode nem desenhar com ela nem destruí-la). Falha de criação falha o próprio
+`init()` (fail-high: um `Draw2d` que não consegue desenhar as primitivas que anuncia não
+meio-inicializa). Consequência, dita: o primeiro `load_texture()` do consumidor agora devolve o
+id 2, inobservável pela API pública (ids são opacos).
+
+Toda primitiva compartilha a história de composição do D24 com `draw_sprite`/`SpriteTransform`:
+a geometria é construída no espaço ATIVO (unidades de mundo com câmera setada, px de tela caso
+contrário, D5/D18), cada canto é então projetado por `world_to_screen` quando há câmera, depois
+passa pela guarda pós-conta de finitude do D20, depois entra no MESMO batcher como um
+`draw_quad` contra a textura branca com a cor da primitiva como o tint D8 -- sobre aquele texel
+branco, a fórmula D8 (`out = texel_premult * vec4(tint.rgb*tint.a, tint.a)`, ver "Premultiply e
+a fórmula do tint" abaixo) produz EXATAMENTE `color` em espaço premultiplicado, sem fórmula
+separada. Consequência: a espessura de `draw_line`/`draw_rect_outline` é em unidades do espaço
+ATIVO e escala com `cam.zoom` SÓ POR PROJEÇÃO -- a necessidade medida do consumidor de
+"espessura de contorno/linha em unidade de mundo, escalando com a câmera" sai desta regra geral,
+sem API sob medida. Toda primitiva compartilha o template fail-high do sprite: um membro de
+input não-finito pula o desenho (log dedup'd) ANTES de qualquer conta; um tamanho degenerado
+(`dst.w<=0||dst.h<=0`, o `a==b` ou `thickness<=0` de uma linha, o `thickness<=0` de um contorno)
+é um no-op legal SILENCIOSO; a guarda pós-conta de canto (D20) cobre overflow, igual aos
+sprites. Cada primitiva é marcada pela camada CORRENTE (D27) e viaja com o scissor CORRENTE
+(D28) exatamente como o `draw_sprite`.
+
+`draw_filled_rect` tem um overload de 4 args e um overload de `SpriteTransform` (mesma
+composição de pivô/rotação/escala/flip do próprio overload de transform do `draw_sprite`,
+"SpriteTransform" acima -- `flip_h`/`flip_v` são aceitos mas não têm efeito visual sobre um
+preenchimento sólido). `draw_filled_quad` recebe quatro cantos fornecidos pelo chamador na ordem
+TL,TR,BR,BL (convenção D5/D19); um quad degenerado ou auto-cruzado (bowtie) é LEGAL e desenha
+exatamente os dois triângulos que os cantos descrevem (negócio da própria GPU).
+
+**Geometria de linha (D25, literal -- fonte única `glintfx/src/primitives2d.hpp:203`,
+`compute_line_corners()`):** com `d = b - a`, `len = |d|`, unitário `u = d/len`, normal
+`n = (-u.y, u.x)`, `h = thickness/2`:
+
+```
+tl = a + n*h,  tr = b + n*h,  br = b - n*h,  bl = a - n*h
+```
+
+Tampas butt -- o quad termina exatamente em `a` e `b`; tampas round/miter e polylines são a
+semente `SEED-D2D-LINECAPS` (INBOX do `TODO.md`), fora desta onda. Ordem de guarda
+(`is_degenerate_line()`, `glintfx/src/primitives2d.hpp:183`): `a`/`b`/`thickness`/`color` todos
+finitos ANTES de qualquer conta (o `sqrt` incluso), DEPOIS `a == b` (exatamente) ou
+`thickness <= 0` é checado -- nenhum caminho de divisão-por-zero existe em
+`compute_line_corners()` porque o chamador nunca a invoca quando degenerado.
+
+**Contorno de retângulo (D26, literal -- fonte única `glintfx/src/primitives2d.hpp:247`,
+`compute_outline_strips()`):** quatro faixas SEM SOBREPOSIÇÃO dentro de `dst`, com o clamp de
+colapso `t = min(thickness, min(dst.w, dst.h)/2)`:
+
+```
+top    = {x,       y,        w,      t}
+bottom = {x,       y+h-t,    w,      t}
+left   = {x,       y+t,      t,      h-2t}
+right  = {x+w-t,   y+t,      t,      h-2t}
+```
+
+Não-sobreposição é uma propriedade de CORREÇÃO, não uma micro-otimização: com uma cor de
+contorno translúcida, faixas sobrepostas dariam double-blend nos cantos (quadrados visivelmente
+mais escuros). A MESMA fórmula clampada, sem ramo de caso especial, ladrilha `dst` EXATAMENTE
+quando `2*thickness >= min(dst.w, dst.h)` -- o contorno degenera pra UM retângulo preenchido
+cobrindo `dst`. Cada uma das 4 faixas é projetada e submetida independentemente: um canto
+PROJETADO não-finito numa faixa pula só AQUELA faixa (logado uma vez, dedup'd), as outras ainda
+desenham.
+
+**Não entregue, semeado:** primitivas de círculo/elipse/polígono-regular (`SEED-D2D-SHAPES` -- o
+decorator RCSS `polygon()` do átomo `ui` já cobre o lado declarativo); sort secundário por
+textura dentro de uma camada (`SEED-D2D-LAYER-TEXSORT`).
+
+### Layers (D27 -- ordem de desenho explícita, opt-in)
+
+`set_layer(int layer)` (`glintfx/include/glintfx/draw2d.hpp:740`) é OPT-IN, default DESLIGADO:
+um bracket que nunca chama `set_layer` roda o caminho streaming LITERAL da v0.21.0 inalterado --
+o MESMO idioma de "ausência de diff" que a câmera (D13) e o contrato de coordenadas (D5) já usam
+neste módulo, aplicado uma terceira vez. Qualquer `int` é legal (negativo ordena abaixo do `0`
+default); a camada CORRENTE marca toda chamada `draw_sprite`/primitiva seguinte, sticky DENTRO
+do bracket.
+
+**Armar:** a PRIMEIRA chamada `set_layer` arma o modo bufferizado do bracket CORRENTE (ou do
+PRÓXIMO, se chamada fora de um bracket). Se já havia desenhos streamados no bracket corrente,
+eles são finalizados e drenados pelo caminho streaming ANTIGO PRIMEIRO
+(`SpriteBatch::flush_pending()`, `glintfx/src/sprite_batch.hpp:261`, o único método aditivo do
+D31) -- renderizam abaixo de toda camada, efetivamente "debaixo da ponte". Recomendação: chame
+`set_layer` antes do primeiro desenho de um bracket pra evitar esse split.
+
+**Buffering e replay:** um comando bufferizado captura o estado FINAL -- cantos em espaço de
+tela pós-validação/pós-projeção, id de textura (branca pra primitivas), `src_px` resolvido, tint
+clampado, o snapshot de scissor ATIVO no momento do push (D28), e a tag de camada; a câmera é
+portanto amostrada NO MOMENTO DA CHAMADA, exatamente como o modo streaming. No `end()`, comandos
+são ordenados de forma estável por camada (`std::stable_sort`, `glintfx/src/layer_queue.hpp:206`
+-- camada igual mantém ordem de submissão, GARANTIDO) e reproduzidos pelo batcher INTOCADO,
+agrupados em corridas maximais de comandos consecutivos de mesmo scissor (`scissor_equal()`,
+`glintfx/src/layer_queue.hpp:111`); o `end()` então RESETA pra streaming/camada 0 pro PRÓXIMO
+bracket -- camadas NÃO são sticky entre brackets como a câmera/scissor, porque (diferente
+delas) mudam o próprio timing de flush do módulo.
+
+**Camadas ordenam desenhos SÓ DENTRO de um bracket do Draw2D.** A composição com a UI ou com as
+próprias chamadas GL do host continua ordem-de-chamada (eixo 3 da ADR-0017, intocado) -- ainda
+não existe API de ordem cross-módulo.
+
+**Memória:** o buffering segura os comandos de UM bracket até o `end()`, teto rígido de 262144
+(`LayerQueue::kMaxCommands`, `glintfx/src/layer_queue.hpp:166`, ~24 MiB a ~96 B/comando) -- um
+limite de MEMÓRIA contra um stream hostil (mesma classe do próprio limite de flush em 4096 quads
+do batcher, D4), NÃO um claim de performance -- ver "Performance" abaixo; passado o teto,
+desenhos são descartados, logado uma vez, dedup'd. `shutdown()` descarta qualquer buffer aberto.
+
+### Scissor (D28 -- recorte retangular)
+
+`set_scissor(const RectF& rect_px)` / `reset_scissor()`
+(`glintfx/include/glintfx/draw2d.hpp:785`/`792`) recortam o desenho a um retângulo, SEMPRE em px
+de TELA -- origem superior-esquerda, y pra baixo, o MESMO espaço do tamanho-alvo do `begin()` --
+câmera-INDEPENDENTE (A3): um recorte de retângulo de mundo sob rotação é uma feature classe
+máscara/stencil, não isto (semente `SEED-D2D-WORLDCLIP`). Sticky entre desenhos E brackets (como
+a câmera) até `reset_scissor()`/`shutdown()`.
+
+**Validação (idioma do D15, `glintfx/src/draw2d.cpp:1198`):** qualquer membro não-finito de
+`rect_px` REJEITA a chamada, o estado ANTERIOR de scissor é MANTIDO, um log dedup'd.
+`rect_px.w <= 0 || rect_px.h <= 0` é LEGAL e significa "clipa tudo" (semântica GL -- ex.: uma
+animação de revelação colapsando). x/y negativos são LEGAIS (clampar é trabalho da GPU).
+
+**Semântica de fronteira de flush, contraste nomeado com a câmera (D13):** a câmera nunca força
+um flush GL (D13); uma mudança de scissor no meio do bracket em modo STREAMING FORÇA -- a
+corrida pendente é finalizada e drenada sob o scissor VELHO primeiro
+(`flush_pending()`+dreno, o mesmo método do D31 que o `set_layer` já usa), depois o estado
+atualiza. Em modo BUFFERIZADO nada é forçado: o PRÓPRIO snapshot de scissor de cada comando
+viaja com ele (capturado no momento do push), e o replay já agrupa comandos consecutivos de
+mesmo scissor -- mesma semântica observável.
+
+**Mapeamento GL no flush, literal (a conversão de y-flip -- fonte única, `map_scissor_to_gl()`,
+`glintfx/src/primitives2d.hpp:272`):**
+
+```
+glScissor(x, target_h - (y + h), w, h)
+```
+
+com `w`/`h` (a "extensão" GL) clampados a não-negativo ANTES do cast pra int; `x`/`y` (a origem)
+são convertidos direto, sem clamp, pela própria regra "clampar é trabalho da GPU" do D28.
+
+**O ÚNICO diff comportamental declarado em código existente (D31), e a atualização de contrato
+D9 que ele força:** o `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:358`) costumava chamar
+`glDisable(GL_SCISSOR_TEST)` incondicionalmente, a cada flush. Agora é condicional
+(`glintfx/src/draw2d.cpp:363-374`): se um scissor está setado, `glEnable(GL_SCISSOR_TEST)` +
+`glScissor(retângulo mapeado)`; senão `glDisable(GL_SCISSOR_TEST)`, ainda afirmando TUDO de que
+este estado depende a cada flush, pela própria regra de não-cachear do D9, inalterada. Sem
+scissor NUNCA setado, os GL calls emitidos são IDÊNTICOS à v0.21.0. O contrato de estado GL
+(D9, abaixo) publica uma linha de estado tocado ATUALIZADA pra isto.
+
+**Aviso de severidade alta pra hosts embed -- leia isto antes de embarcar uma chamada de
+scissor:** o Draw2D agora pode deixar `GL_SCISSOR_TEST` LIGADO pra trás (continua não
+restaurando nada, por contrato, D9). No `App`, o `GlStateGuard` do hook de frame já captura e
+restaura a caixa+enable de scissor (`glintfx/src/gl_state.hpp:68`/`72`/`129`/`131`, verificado,
+não assumido) -- coberto de graça. **EM MODO EMBED esta é a aresta mais afiada de toda a onda
+D2D-3 pros hosts:** um scissor esquecido clipa o PRÓXIMO passe GL do host, INCLUSIVE o próprio
+clear dele. Resete o próprio scissor, ou chame `reset_scissor()`, antes de entregar o frame de
+volta ao host. `draw2d_ui_coexist_sanity.cpp` fixa que o próprio `UiLayer::render()` não é
+afetado (o próprio `GlStateGuard` já reestabelece estado) -- mas um host fazendo GL cru PRÓPRIO
+depois de um passe Draw2D não tem essa guarda a menos que escreva uma.
+
+### Bbox de conteúdo de textura (D29)
+
+`texture_content_bbox(const Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:825`) devolve
+`TextureBbox{found, x, y, w, h}` (`glintfx/include/glintfx/draw2d.hpp:340`, precedente da casa:
+`ElementBox{found,x,y,w,h}` de `UiLayer::get_element_box`) -- o menor retângulo contendo todo
+texel com `alpha > 0` (semi-transparente conta; um parâmetro de LIMIAR de alpha é a semente
+`SEED-D2D-BBOX-THRESH`). Coordenadas no MESMO espaço de texel de `src_px` (origem
+superior-esquerda, y pra baixo, batendo com a ordem de linha da memória de imagem, D5) -- o
+padrão hitbox-a-partir-de-bbox compõe direto com o `src_px` do `draw_sprite`.
+
+Computado UMA vez, dentro do `load_texture()` (`compute_content_bbox()`,
+`glintfx/src/image_decode.hpp` -- sobre os pixels decodificados que já existem na CPU ali,
+descartados logo depois) e cacheado no slot do registry da textura (16 bytes) -- NÃO retido como
+buffer RGBA completo (um custo de memória classe-256 MiB pra uma consulta pouco usada), NÃO um
+readback `glGetTexImage` sob demanda (um round-trip de GL e uma armadilha de portabilidade
+GLES/core-profile). O premultiply NÃO perturba isto: o canal alpha fica inalterado pela
+premultiplicação.
+
+`found == false` (todo outro campo zero) em: um handle `tex` inválido/obsoleto/estrangeiro/
+nunca-carregado (a cadeia completa de validação D7, log dedup'd -- mesma história de rejeição do
+`draw_sprite`) OU uma textura totalmente transparente -- distinta de uma textura opaca 1x1, que
+devolve `{true, 0, 0, 1, 1}`.
+
 ### Referência de API
 
 | Método | Retorna | Notas |
 | :--- | :--- | :--- |
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:353`) | `bool` | Exige um contexto GL 3.3 core corrente. `false` em falha de GL/shader ou se já inicializado. |
-| `ok()` (`glintfx/include/glintfx/draw2d.hpp:356`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
-| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:365`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:395`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
-| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:412`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
-| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:431`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:465-466`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
-| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:485`) | `void` | Passa os desenhos seguintes pro espaço de mundo (D2D-2, Q1 (c)). Fail-high (D15): mantém o estado anterior em membro não-finito ou `zoom <= 0`. Ver "Câmera" acima. |
-| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:495`) | `void` | Devolve os desenhos seguintes pro espaço de tela (o default sem câmera). Idempotente. Ver "Câmera" acima. |
-| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:524-525`) | `void` | Overload D18 -- pivô/rotação/escala/flip, no espaço que estiver ativo. Ver "SpriteTransform" acima. |
-| `end()` (`glintfx/include/glintfx/draw2d.hpp:533`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
-| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:273`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
-| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:276-277`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
-| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:240`) | `Vec2F` | Free function pura e total (D12/D16). Ver "Câmera" acima. |
-| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:241`) | `Vec2F` | Free function pura e total (D12/D16), inverso exato de `world_to_screen`. |
-| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:242`) | `Camera2d` | D17, conveniência genérica de fit-por-retângulo. Input hostil devolve `Camera2d{}`. |
+| `ok()` (`glintfx/include/glintfx/draw2d.hpp:398`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
+| `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:407`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:437`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
+| `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:454`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
+| `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:473`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:507-508`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
+| `set_camera(const Camera2d& camera)` (`glintfx/include/glintfx/draw2d.hpp:527`) | `void` | Passa os desenhos seguintes pro espaço de mundo (D2D-2, Q1 (c)). Fail-high (D15): mantém o estado anterior em membro não-finito ou `zoom <= 0`. Ver "Câmera" acima. |
+| `reset_camera()` (`glintfx/include/glintfx/draw2d.hpp:537`) | `void` | Devolve os desenhos seguintes pro espaço de tela (o default sem câmera). Idempotente. Ver "Câmera" acima. |
+| `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px, const ColorF& tint, const SpriteTransform& transform)` (`glintfx/include/glintfx/draw2d.hpp:566-567`) | `void` | Overload D18 -- pivô/rotação/escala/flip, no espaço que estiver ativo. Ver "SpriteTransform" acima. |
+| `end()` (`glintfx/include/glintfx/draw2d.hpp:575`) | `void` | Fecha o bracket aberto por `begin()`, fazendo flush do que ainda estiver pendente -- incondicionalmente, mesmo um bracket vazio. Seguro sem um `begin()` correspondente. |
+| `Texture2d::ok()` (`glintfx/include/glintfx/draw2d.hpp:294`) | `bool` | `false` quando nunca carregado, quando `load_texture()` falhou, ou depois de `destroy_texture()` zerar este handle. |
+| `Texture2d::width()`/`height()` (`glintfx/include/glintfx/draw2d.hpp:297-298`) | `int` | Dimensões em pixel da imagem decodificada. `0` quando `!ok()`. |
+| `world_to_screen(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:261`) | `Vec2F` | Free function pura e total (D12/D16). Ver "Câmera" acima. |
+| `screen_to_world(const Camera2d&, int, int, Vec2F)` (`glintfx/include/glintfx/draw2d.hpp:262`) | `Vec2F` | Free function pura e total (D12/D16), inverso exato de `world_to_screen`. |
+| `camera_from_world_rect(const RectF&, int, int)` (`glintfx/include/glintfx/draw2d.hpp:263`) | `Camera2d` | D17, conveniência genérica de fit-por-retângulo. Input hostil devolve `Camera2d{}`. |
+| `draw_filled_rect(const RectF&, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:601`) | `void` | D23/D24 -- retângulo preenchido não-texturizado, espaço ATIVO. Ver "Primitivas" acima. |
+| `draw_filled_rect(const RectF&, const ColorF&, const SpriteTransform&)` (`glintfx/include/glintfx/draw2d.hpp:616`) | `void` | Overload D18 -- pivô/rotação/escala/flip, mesma composição do overload de transform do `draw_sprite`. |
+| `draw_filled_quad(Vec2F, Vec2F, Vec2F, Vec2F, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:637`) | `void` | D24 -- quad arbitrário, cantos na ordem TL,TR,BR,BL. Quads bowtie são legais. |
+| `draw_line(Vec2F, Vec2F, float, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:668`) | `void` | D25 -- segmento de linha com tampa butt, `thickness` em unidades do espaço ATIVO. Ver "Primitivas" acima. |
+| `draw_rect_outline(const RectF&, float, const ColorF&)` (`glintfx/include/glintfx/draw2d.hpp:699`) | `void` | D26 -- 4 faixas sem sobreposição, clamp de colapso em `2*thickness >= min(w,h)`. Ver "Primitivas" acima. |
+| `set_layer(int)` (`glintfx/include/glintfx/draw2d.hpp:740`) | `void` | D27 -- ordem de desenho bufferizada opt-in. `end()` reseta pra streaming/camada 0. Ver "Layers" acima. |
+| `set_scissor(const RectF&)` (`glintfx/include/glintfx/draw2d.hpp:785`) | `void` | D28 -- SEMPRE px de tela, câmera-independente. Fail-high mantém estado anterior em input não-finito. Ver "Scissor" acima. |
+| `reset_scissor()` (`glintfx/include/glintfx/draw2d.hpp:792`) | `void` | D28 -- idempotente, limpa o estado de scissor setado pelo `set_scissor`. |
+| `texture_content_bbox(const Texture2d&)` (`glintfx/include/glintfx/draw2d.hpp:825`) | `TextureBbox` | D29 -- menor retângulo `alpha>0`, cacheado no momento do `load_texture()`. Ver "Bbox de conteúdo de textura" acima. |
 
 ### Premultiply e a fórmula do tint (D8)
 
 `load_texture()` decodifica e **premultiplica o alpha** da imagem no upload
 (`glintfx/src/image_decode.hpp:150`, `R = R*A/255`, `G = G*A/255`, `B = B*A/255`, `A` inalterado)
 pra bater com o blend deste módulo, `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`
-(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:121`) é RGBA
+(`glintfx/src/draw2d.cpp:269`). `ColorF` (`glintfx/include/glintfx/draw2d.hpp:142`) é RGBA
 **straight** (não-premultiplicado) em `[0, 1]`, cada canal clampado na entrada -- o padrão é
 branco opaco (identidade: uma amostra sem modificação). O estágio de fragmento
 (`glintfx/src/draw2d.cpp:90-99`) aplica a modulação exata:
@@ -694,13 +1162,21 @@ enumerada do estado tocado (mesmo estilo da lista capturada em `gl_state.hpp`,
 - Vertex array object (`glBindVertexArray`)
 - Depth test (explicitamente `glDisable(GL_DEPTH_TEST)`)
 - Face culling (explicitamente `glDisable(GL_CULL_FACE)`)
-- Scissor test (explicitamente `glDisable(GL_SCISSOR_TEST)`)
+- Scissor test (CONDICIONAL desde o D2D-3/D28, `glintfx/src/draw2d.cpp:363-374`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` quando um scissor está setado via `set_scissor`, senão `glDisable(GL_SCISSOR_TEST)` como antes -- ver "Scissor" acima pra MUDANÇA DE CONTRATO que isto representa)
 - Blend enable (`glEnable(GL_BLEND)`)
 - Blend func, RGB e alpha (`glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`)
 - Blend equation (`glBlendEquation(GL_FUNC_ADD)`)
 - Unidade de textura ativa (`glActiveTexture(GL_TEXTURE0)`)
 - Binding de textura 2D naquela unidade (`glBindTexture(GL_TEXTURE_2D, ...)`)
 - Os uniforms de shader `uTex`/`uTargetSize`
+
+**Mudança de contrato do D2D-3, dita em voz alta:** antes da v0.22.0, a linha de scissor acima
+era incondicional (`glDisable(GL_SCISSOR_TEST)`, todo flush, sem exceção) -- um scissor que
+nunca liga scissor não existe, então esta linha mudou. Sem scissor NUNCA setado
+(`set_scissor` nunca chamado) o stream GL emitido é byte-idêntico à v0.21.0; no momento em que
+um host chama `set_scissor`, o Draw2D pode deixar `GL_SCISSOR_TEST` LIGADO pra trás depois do
+`end()`. Ver "Scissor" acima pro contrato completo de mapeamento/fronteira-de-flush e o perigo
+em modo embed.
 
 **O Draw2D NÃO restaura nada disso depois do `end()`.** É deliberado, não um esquecimento --
 restaurar é trabalho do contrato que envolve, e os dois contratos que envolvem já existem:
@@ -767,15 +1243,15 @@ chamadas GL cruas (o D9 acima cobre quem restaura o quê).
 
 ### Handles de textura (D7)
 
-`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:266`) é um handle-valor simples, copiável --
+`Texture2d` (`glintfx/include/glintfx/draw2d.hpp:287`) é um handle-valor simples, copiável --
 NÃO é dono RAII (`destroy_texture()` é a liberação explícita, mesmo idioma do `Audio::SoundId`).
 Internamente carrega um id opaco, um contador de geração, e uma **tag de dono** (a identidade
 própria do `Draw2d` emissor): uma instância `Draw2d` valida todo handle contra o próprio registry
 interno antes de usar.
 
 **Um handle NÃO é intercambiável entre instâncias `Draw2d`.** `load_texture()` carimba o handle
-retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:476`); tanto
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:535`/`480`) rejeitam um handle cuja
+retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:713`); tanto
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:784`/`728`) rejeitam um handle cuja
 tag `owner_` não bate com `this`, logado uma vez e tratado exatamente como qualquer outro handle
 desconhecido/obsoleto -- nunca desreferenciado como nome GL cru. É uma garantia por construção,
 não uma coincidência numérica:
@@ -835,16 +1311,87 @@ guarda interna de "já carregado" pra interagir com nada, então chamar duas vez
 re-resolve redundante e inofensivo, não um risco de estado. Um host não precisa ordenar o
 `init()` do Draw2D em relação à própria inicialização do `App`/`UiLayer`.
 
+### Performance (D30 -- números declarados, gates honestos)
+
+`glintfx/tests/draw2d_perf_budget.cpp` mede três métricas, headless, impressas como linhas
+machine-readable `GLINTFX_PERF <chave>=<valor>` toda execução (visíveis no log de CI independente
+do resultado do gate):
+
+1. **`pure_batcher_quads_per_s`** -- 100k quads pelo `SpriteBatch` sozinho (CPU, sem GL/display
+   envolvido).
+2. **`layered_streaming_ratio`** -- o MESMO stream de 100k comandos pelo caminho bufferizado
+   (`LayerQueue::push` -> `drain_grouped()` -> replay via `SpriteBatch::draw_quad()`, a MESMA
+   sequência que o próprio replay do `Draw2d::end()` roda), reportado como
+   `time_layered / time_streaming` (`>= 1.0` -- o caminho bufferizado só pode ADICIONAR trabalho,
+   reusa o MESMO batcher por baixo, o conjunto zero-diff do D31).
+3. **`e2e_10k_sprite_1k_prim_median_ms`** -- um bracket real de `Draw2d` de 10k sprites (uma
+   textura) mais um bracket real de 1k primitivas `draw_filled_rect`, sob um contexto GL 3.3 vivo
+   no Xvfb/llvmpipe, com `glFinish()` antes do cronômetro parar -- mediana sobre 30 frames (2
+   primeiros descartados como aquecimento).
+
+**Downgrade declarado:** o llvmpipe rasteriza na CPU -- a métrica 3 é uma GUARDA DE REGRESSÃO DE
+RASTER DE CPU, não uma verdade de throughput/banda/pacing-de-vsync de GPU. As métricas 1 e 2 SÃO
+números reais de CPU (nenhum GL envolvido).
+
+**O gate, dois níveis:** com `GLINTFX_PERF_STRICT=1` no ambiente (setada SÓ pelo job do runner
+self-hosted `claudio` em `.forgejo/workflows/heavy.yml`, nunca por `ci.yml`/`nightly.yml`), as
+métricas 1 e 3 FALHAM se cruzarem a própria constante BASELINE em mais de 1,5x. Sem a env
+(qualquer outro runner, qualquer máquina de dev), só um teto de SANIDADE grosseiro de 10x falha o
+teste -- o número é impresso de qualquer forma. O gate de RATIO (métrica 2) é MACHINE-RELATIVE
+por construção (os dois braços rodam na mesma máquina, mesmo processo, mesma invocação), então é
+ESTRITO EM TODO LUGAR, incondicional a `GLINTFX_PERF_STRICT` -- é a resposta direta e sempre-ligada
+ao próprio risco 2 desta onda ("layers vs batching é onde a performance pode degradar").
+
+**Um achado real, reportado e não escondido:** o gate de razão mede ~3,4-3,6x na máquina que
+mediu as baselines desta onda, de forma consistente em corridas repetidas -- acima do teto de
+2,0x que esta onda setou primeiro. Causa-raiz: o `std::stable_sort` (`glintfx/src/layer_queue.hpp:206`)
+de `LayerQueue::drain_grouped()` move structs `LayerCommand`
+inteiras (~96 B) pra reordenar por uma chave `int layer` só, dominando o custo do caminho em
+camadas (aproximadamente 60% dele numa sonda avulsa) -- o próprio replay do `Draw2d::end()` roda
+a EXATA mesma `drain_grouped()` que este benchmark roda, então não é artefato de benchmark. Uma
+ordenação por chave leve foi tentada e revertida: media melhor sob gcc mas PIOR sob clang -- o
+único compilador que todo workflow de CI deste repo de fato pina
+(`-DCMAKE_CXX_COMPILER=clang++`). A decisão da casa: manter o `std::stable_sort` simples e
+REVISAR O TETO pra **4,0x** em vez de perseguir uma micro-otimização específica de compilador
+que regride no compilador que o CI de fato roda -- o modo em camadas é opt-in por construção (o
+caminho streaming intocado não paga nada disso), então ~3,4x medido COM CLANG é o preço honesto
+dessa feature, não uma regressão a perseguir mais.
+
+**Números declarados, proveniência honesta** (`glintfx/tests/draw2d_perf_budget.cpp`, constantes
+de baseline datadas no próprio arquivo): baseline de `pure_batcher_quads_per_s` = **8 500 000**,
+baseline de `e2e_10k_sprite_1k_prim_median_ms` = **5,0**, teto de `layered_streaming_ratio` =
+**4,0x** (revisado, medido com clang) -- todos medidos em **2026-07-23**, num container de dev
+sandboxed Fedora 44 (Intel Core i5-12500H 12ª geração, 16 núcleos lógicos, 31 GiB RAM), **NÃO** o
+próprio runner Forgejo self-hosted `claudio` nomeado pelo plano desta onda (uma máquina física
+diferente). Esta é uma medição real, nunca um chute, mas uma baseline PROVISÓRIA: a 1ª execução
+de CI no `claudio` deste teste imprime as próprias linhas `GLINTFX_PERF` no log do job, e
+conforme o D30 essas três constantes devem ser trocadas pelos números daquela execução assim que
+disponíveis (um diff de uma linha cada, a data/máquina deste comentário atualizada em
+`draw2d_perf_budget.cpp`) -- flagado aqui explicitamente, não deixado em silêncio como se fosse
+o número final.
+
 ### Limites declarados
 
 Declarados em vez de fingidos, conforme a própria disciplina de downgrade-de-teste do plano:
 
 - **Sem `draw_text`** -- `D2D-TEXT`, onda própria, exige o próprio ADR primeiro (tensão de
   motor-de-fonte: o flip FreeType-vs-motor-próprio do `App`, `docs/adr/0011-soft-font-flip.md`).
-- **Sem primitivas não-texturizadas (rect/outline/line), layers, ordem explícita de desenho,
-  scissor, ou perf budget medido** -- `D2D-3`, promovida, a próxima onda. O flush em 4096 quads
-  segue um limite de memória, não um claim de throughput; esta onda também não adiciona número
-  de performance pro caminho de transform/câmera.
+- **Sem primitivas de círculo/elipse/polígono-regular** -- semente `SEED-D2D-SHAPES` (o
+  decorator RCSS `polygon()` do átomo `ui` já cobre o lado declarativo); gatilho: um consumidor
+  pedir.
+- **Sem tampas/junções de linha (round/miter), sem polylines** -- `draw_line` é só tampa butt;
+  semente `SEED-D2D-LINECAPS`, gatilho: um consumidor pedir.
+- **Sem sort secundário por textura dentro de uma camada** -- menos flushes em modo layered é a
+  semente `SEED-D2D-LAYER-TEXSORT`, gatilho: o perf budget mostrar um consumidor limitado por
+  flush.
+- **Sem clipping em espaço de mundo** (uma região de clip rotacionada sob câmera) -- scissor
+  aqui é só espaço de tela (D28, A3); um clip de retângulo de mundo é uma feature classe
+  máscara/stencil, semente `SEED-D2D-WORLDCLIP`, gatilho: um consumidor pedir.
+- **Sem parâmetro de LIMIAR de alpha pro `texture_content_bbox`** -- a definição desta onda é
+  fixa em `alpha > 0`, semente `SEED-D2D-BBOX-THRESH`, gatilho: um consumidor pedir.
+- **A capacidade de 4096 quads do batcher e o teto de 262144 comandos de camada seguem limites
+  de MEMÓRIA, não claims de throughput** -- ver "Performance" acima pros números medidos e
+  declarados.
 - **Shake, suavização e limites/clamp de câmera são trabalho do game loop do consumidor, não
   deste módulo.** O Draw2D entrega a projeção (`Camera2d`, `set_camera`, os helpers puros); não
   entrega a cinemática por cima dela (lerp-follow, deadzone, screen shake). Desdobramento
@@ -879,6 +1426,14 @@ Declarados em vez de fingidos, conforme a própria disciplina de downgrade-de-te
 - `glintfx/src/transform2d.hpp` -- a matemática pura de fonte única de projeção/canto (D12/D18)
   por trás tanto do caminho de desenho com câmera quanto dos helpers públicos
   `world_to_screen`/`screen_to_world`/`camera_from_world_rect`.
+- `glintfx/src/primitives2d.hpp` -- a geometria pura de fonte única (linha D25, contorno D26,
+  mapeamento scissor-pra-GL D28) por trás das primitivas, testável headless
+  (`tests/primitives2d_sanity.cpp`).
+- `glintfx/src/layer_queue.hpp` -- a fila de comandos bufferizada pura de fonte única (D27) por
+  trás do `set_layer`, testável headless (`tests/layer_queue_sanity.cpp`).
+- [Plano da Onda 5](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- as decisões de
+  desenho D23-D32 do D2D-3 por trás de primitivas/layers/scissor/bbox/perf (as próprias seções
+  deste doc acima).
 - [ADR-0017](adr/0017-draw2d-module.md) -- a decisão arquitetural que este módulo implementa
   (posição do módulo, pipeline GL próprio, composição por ordem-de-chamada); o
   [Adendo (2026-07-23)](adr/0017-draw2d-module.md#addendum-2026-07-23-d2d-2-coordinate-model)

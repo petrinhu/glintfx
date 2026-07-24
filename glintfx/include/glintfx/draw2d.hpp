@@ -345,6 +345,110 @@ struct TextureBbox {
   int h = 0;
 };
 
+// EN: D2D-TEXT/TX1 -- value handle to a font face owned by a `Draw2d` instance (the exact D7
+//     idiom `Texture2d` uses). Copyable, trivially small -- NOT an RAII owner (`destroy_font()`
+//     is the explicit release, same as `destroy_texture()`). The three private fields are an
+//     opaque id + generation + owner tag, validated against the owning `Draw2d`'s font registry
+//     on every use -- an unknown/stale/tampered/foreign handle is fail-high (logged once,
+//     dedup'd, no-op), NEVER dereferenced. Default-constructed as `ok() == false`.
+// PT: D2D-TEXT/TX1 -- handle-valor para uma face de fonte possuída por uma instância `Draw2d` (o
+//     idioma D7 exato do `Texture2d`). Copiável, trivialmente pequeno -- NÃO é dono RAII
+//     (`destroy_font()` é a liberação explícita, igual ao `destroy_texture()`). Os três campos
+//     privados são um id opaco + geração + tag de dono, validados contra o registry de fonte do
+//     `Draw2d` dono a cada uso -- um handle desconhecido/obsoleto/adulterado/estrangeiro é
+//     fail-high (logado uma vez, dedup'd, no-op), NUNCA desreferenciado. Default-construído como
+//     `ok() == false`.
+struct Font2d {
+  Font2d() = default;
+
+  // EN: false when never loaded, when load_font() failed (hostile/corrupt/unsupported font file),
+  //     or after destroy_font() zeroed this handle.
+  // PT: false quando nunca carregada, quando load_font() falhou (arquivo de fonte hostil/
+  //     corrompido/não-suportado), ou após destroy_font() zerar este handle.
+  bool ok() const { return ok_; }
+
+private:
+  friend class Draw2d;
+  bool ok_ = false;
+  // EN: Opaque, do-not-touch -- id_==0 is the permanent invalid sentinel (same convention as
+  //     Texture2d/Audio::SoundId); id_>0 indexes Draw2d's internal font registry, generation_
+  //     detects a slot destroyed and reused since this handle was issued, owner_ rejects a handle
+  //     from a DIFFERENT Draw2d instance (see Texture2d's own owner-tag comment above).
+  // PT: Opaco, não-tocar -- id_==0 é a sentinela permanente de inválido (mesma convenção do
+  //     Texture2d/Audio::SoundId); id_>0 indexa o registry interno de fonte do Draw2d,
+  //     generation_ detecta um slot destruído e reusado desde que este handle foi emitido, owner_
+  //     rejeita um handle de uma instância Draw2d DIFERENTE (ver o comentário de tag de dono do
+  //     próprio Texture2d acima).
+  std::uint32_t id_ = 0;
+  std::uint32_t generation_ = 0;
+  const void* owner_ = nullptr;
+};
+
+// EN: D2D-TEXT/TX16 -- per-line horizontal alignment for `draw_text`/`measure_text`. `Justify` is
+//     word-spacing only (letter-spacing distribution and hyphenation are the declared-out
+//     SEED-D2D-TEXT-TYPESETTING tier): the extra space of each wrapped line is spread equally
+//     across its interior U+0020 gaps; per typographic convention the LAST line of a block and any
+//     line ended by an explicit `\n` fall back to `Left`, and `Justify` with `max_width <= 0`
+//     (the no-wrap sentinel) degrades to `Left`. LTR only (no BiDi, no complex shaping -- the
+//     sovereign core has no GSUB/GPOS, an honest declared limit). The four values are 0/1/2/3.
+// PT: D2D-TEXT/TX16 -- alinhamento horizontal por linha do `draw_text`/`measure_text`. `Justify` é
+//     só word-spacing (distribuição por letter-spacing e hifenização são o tier declarado-fora
+//     SEED-D2D-TEXT-TYPESETTING): o espaço extra de cada linha quebrada é distribuído igualmente
+//     entre os gaps de U+0020 interiores; pela convenção tipográfica a ÚLTIMA linha de um bloco e
+//     qualquer linha terminada por `\n` explícito caem pra `Left`, e `Justify` com
+//     `max_width <= 0` (a sentinela de sem-wrap) degrada pra `Left`. Só LTR (sem BiDi, sem shaping
+//     complexo -- o núcleo soberano não tem GSUB/GPOS, um limite declarado honesto). Os quatro
+//     valores são 0/1/2/3.
+enum class TextAlign { Left,
+                       Center,
+                       Right,
+                       Justify };
+
+// EN: D2D-TEXT/TX1 -- optional layout parameters for `draw_text`/`measure_text`. `max_width` is in
+//     ACTIVE-space units (screen px with no camera, world units under one -- see the coordinate
+//     contract above); `max_width <= 0` is the documented "no wrap" sentinel (the `RectF{}` idiom
+//     -- only explicit `\n` breaks then). `align` positions each line within the reference width
+//     (`max_width` when wrapping, else the block's widest line -- so centered/right multi-line
+//     `\n` text works with no wrap). Aggregate-with-defaults, the `SpriteTransform` house idiom:
+//     `TextOptions{}` is exactly the no-options overload.
+// PT: D2D-TEXT/TX1 -- parâmetros opcionais de layout do `draw_text`/`measure_text`. `max_width` é
+//     em unidades do espaço ATIVO (px de tela sem câmera, unidades de mundo com uma -- ver o
+//     contrato de coordenadas acima); `max_width <= 0` é a sentinela documentada de "sem wrap" (o
+//     idioma do `RectF{}` -- só `\n` explícito quebra então). `align` posiciona cada linha dentro
+//     da largura de referência (`max_width` com wrap, senão a linha mais larga do bloco -- então
+//     texto multi-linha `\n` centralizado/à-direita funciona sem wrap). Agregado-com-defaults, o
+//     idioma da casa do `SpriteTransform`: `TextOptions{}` é exatamente o overload sem opções.
+struct TextOptions {
+  float max_width = 0.f;
+  TextAlign align = TextAlign::Left;
+};
+
+// EN: D2D-TEXT/TX1 -- block metrics from `measure_text` (layout without drawing, for HUD
+//     anchoring/centering). `ok == false` (every other field 0) on an invalid/stale/foreign font
+//     handle, a null utf8, a non-finite/non-positive `size`, or a non-finite `TextOptions`
+//     member -- the same TX6 fail-high chain `draw_text` applies. `width`/`height` are the tight
+//     content box in ACTIVE-space units (`width` is the widest LINE's natural advance width, NOT
+//     the reference width the block was aligned within); `ascent` and `line_height` are the face's
+//     own metrics (echoed so a baseline-precise caller converts the top-left anchor with one add,
+//     ADR-0018 (c)); `line_count` is the number of lines AFTER wrap + explicit `\n`.
+// PT: D2D-TEXT/TX1 -- métricas de bloco do `measure_text` (layout sem desenhar, pra ancoragem/
+//     centralização de HUD). `ok == false` (todo outro campo 0) num handle de fonte inválido/
+//     obsoleto/estrangeiro, um utf8 nulo, um `size` não-finito/não-positivo, ou um membro de
+//     `TextOptions` não-finito -- a mesma cadeia fail-high do TX6 que o `draw_text` aplica.
+//     `width`/`height` são a caixa de conteúdo justa em unidades do espaço ATIVO (`width` é a
+//     largura de avanço natural da LINHA mais larga, NÃO a largura de referência dentro da qual o
+//     bloco foi alinhado); `ascent` e `line_height` são as métricas próprias da face (ecoadas pra
+//     quem chama e precisa de baseline converter a âncora topo-esquerdo com uma soma, ADR-0018
+//     (c)); `line_count` é o número de linhas DEPOIS do wrap + `\n` explícito.
+struct TextMetrics {
+  bool ok = false;
+  float width = 0.f;
+  float height = 0.f;
+  float ascent = 0.f;
+  float line_height = 0.f;
+  int line_count = 0;
+};
+
 // EN: Sprite-batching facade over an own GL 3.3 core pipeline (ADR-0017 axis 2, decision (2a)).
 //     See this file's header comment for the coordinate/GL-state/lifetime contracts this class
 //     implements; see `docs/draw2d.md` for the full public writeup (recipes for App and embed).
@@ -823,6 +927,107 @@ public:
   //     textura opaca 1x1, que devolve `{true, 0, 0, 1, 1}`. No-op seguro (devolve
   //     `TextureBbox{}`) num `Draw2d` nunca-inicializado/movido-de/pós-shutdown.
   TextureBbox texture_content_bbox(const Texture2d& tex);
+
+  // EN: D2D-TEXT/TX1 -- parses an in-file SFNT/TrueType font (the sovereign C core's own
+  //     hostile-input-hardened parser, ADR-0018 (a)) and registers it in this instance's font
+  //     registry (D7). Requires a live init()ed instance (like load_texture()); the per-size glyph
+  //     atlas is created LAZILY on first draw_text(), NOT here. Returns a `Font2d` with `ok() ==
+  //     false` (never a crash, never partially valid) on: a never-init/moved-from/post-shutdown
+  //     `Draw2d`, `path == nullptr`, file-open failure, the 64 MiB font-blob cap (TX6), or a parse
+  //     failure (unknown/corrupt/unsupported font -- CFF/OTF outlines, a truncated table, ...) --
+  //     same fail-high discipline as load_texture(), one dedup'd log line.
+  // PT: D2D-TEXT/TX1 -- parseia uma fonte SFNT/TrueType em arquivo (o parser endurecido contra
+  //     input hostil do próprio núcleo C soberano, ADR-0018 (a)) e a registra no registry de
+  //     fonte desta instância (D7). Exige uma instância init()ada viva (como o load_texture()); o
+  //     atlas de glifo por-tamanho é criado PREGUIÇOSAMENTE no primeiro draw_text(), NÃO aqui.
+  //     Retorna uma `Font2d` com `ok() == false` (nunca crash, nunca parcialmente válida) em: um
+  //     `Draw2d` nunca-inicializado/movido-de/pós-shutdown, `path == nullptr`, falha ao abrir o
+  //     arquivo, o teto de 64 MiB de blob de fonte (TX6), ou uma falha de parse (fonte
+  //     desconhecida/corrompida/não-suportada -- outlines CFF/OTF, uma tabela truncada, ...) --
+  //     mesma disciplina fail-high do load_texture(), uma linha de log dedup'd.
+  Font2d load_font(const char* path);
+  // EN: Releases the glyph atlas GL textures the font `font` accumulated (if any) and ALWAYS zeroes
+  //     `font` on return (a handle you tried to destroy never looks valid afterwards, D7) -- except
+  //     when `font` was already the invalid sentinel (a true no-op). Every failure mode is
+  //     fail-high (logged once, dedup'd), never a double-free, never UB: already-destroyed,
+  //     tampered, or FOREIGN. No-op (still zeroes `font`) when called before init()/after
+  //     shutdown().
+  // PT: Libera as texturas GL de atlas de glifo que a fonte `font` acumulou (se alguma) e SEMPRE
+  //     zera `font` ao retornar (um handle que você tentou destruir nunca parece válido depois, D7)
+  //     -- exceto quando `font` já era a sentinela inválida (um no-op de verdade). Todo modo de
+  //     falha é fail-high (logado uma vez, dedup'd), nunca um double-free, nunca UB: já-destruída,
+  //     adulterada, ou ESTRANGEIRA. No-op (ainda zera `font`) se chamado antes de init()/depois de
+  //     shutdown().
+  void destroy_font(Font2d& font);
+
+  // EN: D2D-TEXT/TX1 -- draws a UTF-8 string at `pos` (the TOP-LEFT of the first line's box, y-down,
+  //     ADR-0018 (c)), `size` em in ACTIVE-space units (screen px with no camera, world units under
+  //     one -- glyphs scale with `cam.zoom` by projection alone, like every primitive, TX7), tinted
+  //     by `color` (the SAME premultiplied D8 formula sprites use, over an R8 coverage atlas). The
+  //     text batches through the same batcher as sprites and honours the current camera/layer/
+  //     scissor exactly like a sprite run. Invalid UTF-8 renders U+FFFD; a codepoint the face lacks
+  //     renders `.notdef` (tofu) -- visible and honest, never a crash. Fail-high, every guard BEFORE
+  //     any arithmetic (TX6/D10): a non-finite `pos`/`size`/`color` member skips the draw (dedup'd
+  //     log); `size <= 0` is a SILENT legal no-op; an invalid/stale/foreign `font` is rejected
+  //     (dedup'd log); `utf8 == nullptr` is a silent legal no-op; the per-call input is capped at
+  //     1 MiB of bytes (processed up to the cap + one dedup'd log). Safe no-op on a never-init/
+  //     moved-from/post-shutdown/outside-bracket `Draw2d`.
+  // PT: D2D-TEXT/TX1 -- desenha uma string UTF-8 em `pos` (o TOPO-ESQUERDO da caixa da primeira
+  //     linha, y pra baixo, ADR-0018 (c)), `size` em unidades do espaço ATIVO (px de tela sem
+  //     câmera, unidades de mundo com uma -- glifos escalam com `cam.zoom` só por projeção, como
+  //     toda primitiva, TX7), tingida por `color` (a MESMA fórmula premultiplicada D8 dos sprites,
+  //     sobre um atlas de cobertura R8). O texto batcha pelo mesmo batcher dos sprites e honra a
+  //     câmera/camada/scissor correntes exatamente como uma corrida de sprite. UTF-8 inválido
+  //     renderiza U+FFFD; um codepoint que a face não tem renderiza `.notdef` (tofu) -- visível e
+  //     honesto, nunca um crash. Fail-high, toda guarda ANTES de qualquer conta (TX6/D10): um
+  //     membro não-finito de `pos`/`size`/`color` pula o desenho (log dedup'd); `size <= 0` é um
+  //     no-op legal SILENCIOSO; uma `font` inválida/obsoleta/estrangeira é rejeitada (log dedup'd);
+  //     `utf8 == nullptr` é um no-op legal silencioso; o input por-chamada tem teto de 1 MiB de
+  //     bytes (processado até o teto + um log dedup'd). No-op seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown/fora-de-bracket.
+  void draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size,
+                 const ColorF& color = ColorF{});
+  // EN: TX1/TX15/TX16 overload -- `options.max_width` (> 0) enables greedy word-wrap in ACTIVE-space
+  //     units (breaks at U+0020; a word wider than max_width force-breaks at the last glyph that
+  //     fits, never overflowing nor vanishing; explicit `\n` always breaks; no hyphenation) and
+  //     `options.align` sets per-line alignment (left/center/right/justify, TX16). Same fail-high
+  //     chain as the 5-arg overload, plus: a non-finite `max_width` skips the call (dedup'd log --
+  //     `max_width <= 0` itself is LEGAL, the no-wrap sentinel), an `align` outside the enum's range
+  //     (a hostile cast) is treated as Left (dedup'd log). The 5-arg overload above == this one with
+  //     `TextOptions{}` (pinned by a unit test).
+  // PT: Overload TX1/TX15/TX16 -- `options.max_width` (> 0) liga word-wrap guloso em unidades do
+  //     espaço ATIVO (quebra em U+0020; uma palavra maior que max_width quebra à força no último
+  //     glifo que cabe, nunca estourando nem sumindo; `\n` explícito sempre quebra; sem
+  //     hifenização) e `options.align` define o alinhamento por linha (left/center/right/justify,
+  //     TX16). Mesma cadeia fail-high do overload de 5 args, mais: um `max_width` não-finito pula a
+  //     chamada (log dedup'd -- `max_width <= 0` em si é LEGAL, a sentinela de sem-wrap), um `align`
+  //     fora da faixa do enum (um cast hostil) é tratado como Left (log dedup'd). O overload de 5
+  //     args acima == este com `TextOptions{}` (fixado por teste unitário).
+  void draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color,
+                 const TextOptions& options);
+
+  // EN: D2D-TEXT/TX1 -- lays out `utf8` WITHOUT drawing and returns its block metrics (see
+  //     `TextMetrics`). Consumes the SAME layout_text() the two draw_text() overloads use (single
+  //     source, ADR-0018 (a)/(f): a mutation in the advance/kern/wrap/align math breaks both drawing
+  //     and measuring). Same TX6 fail-high chain: an invalid/stale/foreign `font`, a null utf8, a
+  //     non-finite/non-positive `size`, or (in the overload) a non-finite `max_width` returns
+  //     `TextMetrics{}` (ok == false). Safe on a never-init/moved-from/post-shutdown `Draw2d`
+  //     (returns `TextMetrics{}`).
+  // PT: D2D-TEXT/TX1 -- faz o layout de `utf8` SEM desenhar e devolve as métricas do bloco (ver
+  //     `TextMetrics`). Consome o MESMO layout_text() que os dois overloads de draw_text() usam
+  //     (fonte única, ADR-0018 (a)/(f): uma mutação na matemática de avanço/kern/wrap/align quebra
+  //     tanto o desenho quanto a medição). Mesma cadeia fail-high do TX6: uma `font` inválida/
+  //     obsoleta/estrangeira, um utf8 nulo, um `size` não-finito/não-positivo, ou (no overload) um
+  //     `max_width` não-finito devolve `TextMetrics{}` (ok == false). Seguro num `Draw2d`
+  //     nunca-inicializado/movido-de/pós-shutdown (devolve `TextMetrics{}`).
+  TextMetrics measure_text(const Font2d& font, const char* utf8, float size);
+  // EN: TX1/TX15/TX16 overload -- measures with word-wrap + alignment active (same `options`
+  //     contract as draw_text()'s own overload; `line_count`/`height` reflect the wrapped lines).
+  // PT: Overload TX1/TX15/TX16 -- mede com word-wrap + alinhamento ativos (mesmo contrato de
+  //     `options` do overload próprio do draw_text(); `line_count`/`height` refletem as linhas
+  //     quebradas).
+  TextMetrics measure_text(const Font2d& font, const char* utf8, float size,
+                           const TextOptions& options);
 
 private:
   struct Impl;

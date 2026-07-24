@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.22.0)
+project(glintfx LANGUAGES C CXX VERSION 0.23.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23
@@ -1045,27 +1045,72 @@ target_compile_options(glintfx_image PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-W
 glintfx_instrument_coverage(glintfx_image)
 add_library(glintfx::image ALIAS glintfx_image)
 
-# --- glintfx_text (GLINTFX_MODULE_TEXT forced ON in A0; sources only exist ---
-# --- when the pre-existing GLINTFX_OWN_FONT_ENGINE selector is ON, unchanged ---
-if(GLINTFX_OWN_FONT_ENGINE)
-  add_library(glintfx_text OBJECT
-    src/font_engine_own.cpp
+# --- glintfx_fontcore (D2D-TEXT/TX9, ADR-0018 (e): the SINGLE compiled copy of the ---
+# --- vendored sovereign C font core sfnt.c/raster.c/hint.c) ---
+# EN: The symbol-collision resolution T1a explicitly deferred to the T2 integration slice. BOTH the
+#     ui's own font engine (glintfx_text/font_engine_own.cpp) and the Draw2D atom's text machinery
+#     (glintfx_draw2d/text_raster.cpp) consume the same glx_sfnt_*/glx_rasterize_outline/
+#     glx_hint_outline symbols. Compiling the three .c files INSIDE each OBJECT library (the pre-T2
+#     layout) put a second copy of every one of those symbols into libglintfx.a whenever BOTH flags
+#     were ON (the ordinary default) -- a "multiple definition" link error. This dedicated OBJECT
+#     library owns the ONE copy: it is built whenever EITHER consumer needs it
+#     (GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D, the same gate the vendored PATH VARIABLES
+#     use above), linked ONCE into the aggregate `glintfx` STATIC below, and its PUBLIC include dir
+#     (the vendored core/{sfnt,raster,hint}.h) is inherited by both consumers so they compile
+#     against the same headers. Proven: both flags ON now compile and link with no duplicate symbol
+#     (see the wave's report). MSVC-safe: the C core already compiles in the MSVC job (own engine is
+#     default ON); -Wall/-Wextra stay off-MSVC-only, same guard as every other target here.
+# PT: A resolução da colisão de símbolo que o T1a explicitamente adiou pra fatia de integração T2.
+#     TANTO o motor de fonte próprio da ui (glintfx_text/font_engine_own.cpp) QUANTO a maquinaria de
+#     texto do átomo Draw2D (glintfx_draw2d/text_raster.cpp) consomem os mesmos símbolos
+#     glx_sfnt_*/glx_rasterize_outline/glx_hint_outline. Compilar os três .c DENTRO de cada
+#     biblioteca OBJECT (o layout pré-T2) punha uma segunda cópia de cada um desses símbolos na
+#     libglintfx.a sempre que AS DUAS flags estavam ON (o default comum) -- um erro de link
+#     "multiple definition". Esta biblioteca OBJECT dedicada possui a UMA cópia: é buildada sempre
+#     que QUALQUER consumidor precisa (GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D, o mesmo
+#     gate das VARIÁVEIS DE PATH vendorizadas acima), linkada UMA VEZ no `glintfx` STATIC agregado
+#     abaixo, e o include dir PÚBLICO dela (o core/{sfnt,raster,hint}.h vendorizado) é herdado pelos
+#     dois consumidores pra que compilem contra os mesmos headers. Provado: as duas flags ON agora
+#     compilam e linkam sem símbolo duplicado (ver o relatório da onda). MSVC-safe: o núcleo C já
+#     compila no job MSVC (motor próprio é default ON); -Wall/-Wextra ficam só-fora-do-MSVC, mesma
+#     guarda de todo outro alvo daqui.
+if(GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D)
+  add_library(glintfx_fontcore OBJECT
     ${_glx_core_src_dir}/sfnt.c
     ${_glx_core_src_dir}/raster.c
-    ${_glx_core_src_dir}/hint.c)  # EN/PT: SOV-HINT (L1.20-FONTFLIP FT-F4) Y grid-fitter, wired in sub-phase 1.4.
+    ${_glx_core_src_dir}/hint.c)
+  target_include_directories(glintfx_fontcore PUBLIC $<BUILD_INTERFACE:${_glx_core_include_dir}>)
+  target_compile_options(glintfx_fontcore PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
+  glintfx_instrument_coverage(glintfx_fontcore)
+  add_library(glintfx::fontcore ALIAS glintfx_fontcore)
+endif()
+
+# --- glintfx_text (GLINTFX_MODULE_TEXT forced ON in A0; sources only exist ---
+# --- when the pre-existing GLINTFX_OWN_FONT_ENGINE selector is ON, unchanged ---
+# EN: The vendored core sfnt.c/raster.c/hint.c MOVED OUT of this library into glintfx_fontcore above
+#     (D2D-TEXT/TX9) so the aggregate carries exactly ONE copy of the glx_* symbols. font_engine_own.o's
+#     undefined refs to glx_sfnt_*/glx_rasterize_outline/glx_hint_outline resolve when the aggregate
+#     `glintfx` STATIC (which links glintfx_fontcore ONCE, below) is linked into a consumer -- a
+#     static archive carrying unresolved refs between its own member objects is legal. font_engine_own.cpp
+#     still gets the vendored core/{sfnt,raster,hint}.h include dir from the set_source_files_properties()
+#     call above (file-scoped, still applies here). glintfx_fontcore is deliberately NOT linked into this
+#     OBJECT library: linking one OBJECT library into another can propagate its objects transitively to
+#     the final target and would risk re-introducing the very duplicate symbol this split removes.
+# PT: O core vendorizado sfnt.c/raster.c/hint.c SAIU desta biblioteca pro glintfx_fontcore acima
+#     (D2D-TEXT/TX9) pra que o agregado carregue exatamente UMA cópia dos símbolos glx_*. As refs
+#     indefinidas do font_engine_own.o a glx_sfnt_*/glx_rasterize_outline/glx_hint_outline resolvem
+#     quando o `glintfx` STATIC agregado (que linka glintfx_fontcore UMA VEZ, abaixo) é linkado num
+#     consumidor -- um arquivo estático carregando refs não-resolvidas entre os próprios objetos-membro
+#     é legal. O font_engine_own.cpp ainda recebe o include dir do core/{sfnt,raster,hint}.h vendorizado
+#     da chamada set_source_files_properties() acima (escopada por arquivo, ainda se aplica aqui). O
+#     glintfx_fontcore é deliberadamente NÃO linkado nesta biblioteca OBJECT: linkar uma biblioteca
+#     OBJECT em outra pode propagar os objetos dela transitivamente pro alvo final e arriscaria
+#     reintroduzir o exato símbolo duplicado que esta divisão remove.
+if(GLINTFX_OWN_FONT_ENGINE)
+  add_library(glintfx_text OBJECT src/font_engine_own.cpp)
   target_include_directories(glintfx_text PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
-  # EN: RmlUi::Core for <RmlUi/Core/*.h> (font_engine_own.hpp); the vendored
-  #     core/{sfnt,raster,hint}.h include dir is already applied to these exact
-  #     source files via the set_source_files_properties() call right above,
-  #     which is file-scoped (not target-scoped) and therefore still applies
-  #     here unchanged.
-  # PT: RmlUi::Core para <RmlUi/Core/*.h> (font_engine_own.hpp); o include dir
-  #     vendorizado core/{sfnt,raster,hint}.h já é aplicado a estes exatos
-  #     arquivos-fonte via a chamada set_source_files_properties() logo acima,
-  #     que é escopada por arquivo (não por alvo) e por isso continua se
-  #     aplicando aqui sem mudança.
   target_link_libraries(glintfx_text PRIVATE RmlUi::Core)
   target_compile_options(glintfx_text PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_text)
@@ -1285,12 +1330,31 @@ endif()
 #     segunda definição). SEM link de RmlUi::Core -- draw2d.cpp/sprite_batch.hpp/
 #     image_decode.hpp são confirmados por grep como livres-de-RmlUi (ADR-0017 eixo 1, decisão
 #     (1a)).
+# EN: D2D-TEXT/TX9 -- src/text_raster.cpp joins draw2d.cpp here (the Draw2D atom's own text raster
+#     seam, TX2 (a)); src/text_layout.hpp + src/sprite_batch.hpp stay header-only includes (no
+#     separate TU). The vendored core/{sfnt,raster,hint}.h include dir (`_glx_core_include_dir`) is
+#     added PRIVATE so text_raster.cpp (and draw2d.cpp, which transitively includes text_layout.hpp ->
+#     text_raster.hpp -> core/*.h) resolve those headers. The glx_* SYMBOLS come from glintfx_fontcore
+#     (linked ONCE into the aggregate below) -- this OBJECT library carries only the undefined refs,
+#     resolved at the aggregate link (same as glintfx_text). NO STB_IMAGE_IMPLEMENTATION here (the
+#     always-linked glintfx_image owns it). NO RmlUi::Core -- text_raster/text_layout are grep-confirmed
+#     RmlUi-free (ADR-0017 axis 1 / ADR-0018 (a): a sprites+text game does not carry HTML/CSS).
+# PT: D2D-TEXT/TX9 -- src/text_raster.cpp entra junto com draw2d.cpp aqui (a própria costura de raster
+#     de texto do átomo Draw2D, TX2 (a)); src/text_layout.hpp + src/sprite_batch.hpp continuam includes
+#     header-only (nenhuma TU separada). O include dir do core/{sfnt,raster,hint}.h vendorizado
+#     (`_glx_core_include_dir`) é adicionado PRIVATE pra que text_raster.cpp (e draw2d.cpp, que inclui
+#     transitivamente text_layout.hpp -> text_raster.hpp -> core/*.h) resolvam aqueles headers. Os
+#     SÍMBOLOS glx_* vêm do glintfx_fontcore (linkado UMA VEZ no agregado abaixo) -- esta biblioteca
+#     OBJECT carrega só as refs indefinidas, resolvidas no link do agregado (igual ao glintfx_text).
+#     SEM STB_IMAGE_IMPLEMENTATION aqui (o glintfx_image sempre-linkado o possui). SEM RmlUi::Core --
+#     text_raster/text_layout são confirmados por grep como livres-de-RmlUi (ADR-0017 eixo 1 / ADR-0018
+#     (a): um jogo de sprites+texto não carrega HTML/CSS).
 if(GLINTFX_MODULE_DRAW2D)
-  add_library(glintfx_draw2d OBJECT src/draw2d.cpp)
+  add_library(glintfx_draw2d OBJECT src/draw2d.cpp src/text_raster.cpp)
   target_include_directories(glintfx_draw2d PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb ${_glx_core_include_dir})
   target_link_libraries(glintfx_draw2d PRIVATE glloader)
   target_compile_options(glintfx_draw2d PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   glintfx_instrument_coverage(glintfx_draw2d)
@@ -1308,6 +1372,16 @@ endif()
 #     glintfx_audio/glintfx_gamepad/glintfx_draw2d espelham a mesma guarda sob a qual a própria
 #     chamada add_library() delas está acima.
 target_link_libraries(glintfx PRIVATE glintfx_core glintfx_image)
+# EN: D2D-TEXT/TX9 -- the ONE copy of the vendored sovereign C font core (sfnt/raster/hint), linked
+#     exactly once whenever EITHER the ui's own font engine OR the Draw2D atom's text machinery needs
+#     it. This is what makes "both flags ON" link with no duplicate glx_* symbol.
+# PT: D2D-TEXT/TX9 -- a UMA cópia do núcleo C soberano de fonte vendorizado (sfnt/raster/hint),
+#     linkada exatamente uma vez sempre que QUALQUER um -- o motor de fonte da ui OU a maquinaria de
+#     texto do átomo Draw2D -- precisa. É isto que faz "as duas flags ON" linkarem sem símbolo glx_*
+#     duplicado.
+if(GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D)
+  target_link_libraries(glintfx PRIVATE glintfx_fontcore)
+endif()
 if(GLINTFX_OWN_FONT_ENGINE)
   target_link_libraries(glintfx PRIVATE glintfx_text)
 endif()

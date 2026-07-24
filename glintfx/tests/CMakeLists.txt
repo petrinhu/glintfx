@@ -730,6 +730,14 @@ if(GLINTFX_BACKEND_GLFW)
   if(GLINTFX_MODULE_DRAW2D)
     add_executable(app_draw2d_smoke app_draw2d_smoke.cpp)
     target_link_libraries(app_draw2d_smoke PRIVATE glintfx)
+    # EN: D2D-TEXT -- the smoke now also loads a real font and draws text; the fixture is copied to
+    #     ${CMAKE_BINARY_DIR} (the test's WORKING_DIRECTORY below) so it opens by a plain relative
+    #     name, self-contained like the smoke's own hand-crafted TGA/RML.
+    # PT: D2D-TEXT -- o smoke agora também carrega uma fonte real e desenha texto; a fixture é
+    #     copiada pra ${CMAKE_BINARY_DIR} (o WORKING_DIRECTORY do teste abaixo) pra abrir por um nome
+    #     relativo simples, autocontida como o próprio TGA/RML feito à mão do smoke.
+    configure_file(${CMAKE_SOURCE_DIR}/demos/showcase/assets/OpenSans-Regular.ttf
+                   ${CMAKE_BINARY_DIR}/app_draw2d_smoke_font.ttf COPYONLY)
     add_test(NAME app_draw2d_smoke
       COMMAND ${CMAKE_COMMAND}
         -DEXE=$<TARGET_FILE:app_draw2d_smoke>

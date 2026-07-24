@@ -45,16 +45,63 @@
 #include "log_dedup.hpp"
 #include "primitives2d.hpp"
 #include "sprite_batch.hpp"
+#include "text_layout.hpp"
+#include "text_raster.hpp"
 #include "transform2d.hpp"
 
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace glintfx {
+
+// EN: D2D-TEXT/TX1 -- pin the PUBLIC `TextAlign` enum to the internal `text_detail::Align` (frozen
+//     by T1b, text_layout.hpp) so the `static_cast<text_detail::Align>` draw2d.cpp does in
+//     run_text_layout() below is trivial and safe: same value order, checked at COMPILE time so a
+//     future reorder of either enum is a build error, not a silent misalignment (ADR-0018 (f), the
+//     transform2d.hpp public-thin-wrapper-delegates-to-detail pattern).
+// PT: D2D-TEXT/TX1 -- fixa o enum PÚBLICO `TextAlign` ao interno `text_detail::Align` (congelado
+//     pelo T1b, text_layout.hpp) pra que o `static_cast<text_detail::Align>` que o draw2d.cpp faz
+//     no run_text_layout() abaixo seja trivial e seguro: mesma ordem de valor, checada em COMPILE
+//     time pra que um futuro reordenamento de qualquer um dos enums seja um erro de build, não um
+//     desalinhamento silencioso (ADR-0018 (f), o padrão wrapper-público-fino-delega-pro-detalhe do
+//     transform2d.hpp).
+static_assert(static_cast<int>(TextAlign::Left) == static_cast<int>(text_detail::Align::Left),
+              "TextAlign::Left must match text_detail::Align::Left");
+static_assert(static_cast<int>(TextAlign::Center) == static_cast<int>(text_detail::Align::Center),
+              "TextAlign::Center must match text_detail::Align::Center");
+static_assert(static_cast<int>(TextAlign::Right) == static_cast<int>(text_detail::Align::Right),
+              "TextAlign::Right must match text_detail::Align::Right");
+static_assert(static_cast<int>(TextAlign::Justify) == static_cast<int>(text_detail::Align::Justify),
+              "TextAlign::Justify must match text_detail::Align::Justify");
+
+// EN: D2D-TEXT/TX3/TX4 -- glyph atlas page geometry. A page is ONE R8 GL texture (1 byte/texel);
+//     glyphs shelf-pack into the current page, and a new page is added when the current one is
+//     full (up to kMaxAtlasPages per font-size instance -- a hostile stream of thousands of
+//     distinct codepoints is bounded here, past the cap new glyphs render blank + one dedup'd log,
+//     TX4's "no eviction, memory-bound-not-perf-claim" contract). Multi-page (rather than a
+//     grow-and-repack single page) keeps every already-emitted glyph quad's UVs valid for the life
+//     of the atlas -- a page, once packed, is immutable, so a mid-frame page addition never
+//     invalidates a quad already queued this frame.
+// PT: D2D-TEXT/TX3/TX4 -- geometria de página do atlas de glifo. Uma página é UMA textura GL R8 (1
+//     byte/texel); glifos empacotam em prateleira na página corrente, e uma página nova é
+//     adicionada quando a corrente enche (até kMaxAtlasPages por instância fonte-tamanho -- um
+//     stream hostil de milhares de codepoints distintos é limitado aqui, passado o teto glifos
+//     novos renderizam em branco + um log dedup'd, o contrato do TX4 "sem eviction, limite-de-
+//     memória-não-claim-de-perf"). Multi-página (em vez de uma página única que cresce-e-reempacota)
+//     mantém as UVs de todo quad de glifo já emitido válidas pela vida do atlas -- uma página, uma
+//     vez empacotada, é imutável, então adicionar uma página no meio do frame nunca invalida um
+//     quad já enfileirado neste frame.
+namespace {
+constexpr int kAtlasPageDim = 1024; // R8 -> 1 MiB per page.
+constexpr int kMaxAtlasPages = 8;   // per (font, size) -> ~8 MiB worst case under a hostile stream.
+} // namespace
 
 namespace {
 
@@ -156,6 +203,59 @@ struct Draw2d::Impl {
   };
   std::vector<TextureSlot> textures;
   std::vector<std::size_t> free_slots;
+
+  // EN: D2D-TEXT/TX3 -- one resolved glyph in an atlas. `has_ink == false` marks a glyph that
+  //     bakes to no bitmap (a space, an empty `.notdef`, a glyph past the atlas cap, or an outline
+  //     too complex for the raster seam's fixed buffers) -- draw_text() emits NO quad for it, only
+  //     advances the pen. For an inked glyph, (`tx`,`ty`,`tw`,`th`) is the texel cell within
+  //     `page_texture_id`'s page (including the 1px kPad AA-safety border the bake already added),
+  //     and `bearing_x`/`bearing_y`/`bitmap_w`/`bitmap_h` are in BAKE pixels (the caller scales
+  //     them to active-space by size/bake_size).
+  // PT: D2D-TEXT/TX3 -- um glifo resolvido num atlas. `has_ink == false` marca um glifo que assa em
+  //     nenhum bitmap (um espaço, um `.notdef` vazio, um glifo passado o teto do atlas, ou um
+  //     outline complexo demais pros buffers fixos da costura de raster) -- o draw_text() NÃO emite
+  //     quad pra ele, só avança a pena. Pra um glifo com tinta, (`tx`,`ty`,`tw`,`th`) é a célula de
+  //     texel dentro da página do `page_texture_id` (incluindo a borda de 1px kPad de segurança de
+  //     AA que o bake já adicionou), e `bearing_x`/`bearing_y`/`bitmap_w`/`bitmap_h` estão em
+  //     pixels de BAKE (quem chama os escala pro espaço ativo por size/bake_size).
+  struct AtlasGlyph {
+    bool has_ink = false;
+    int tx = 0, ty = 0, tw = 0, th = 0;
+    std::uint32_t page_texture_id = 0;
+    float bearing_x = 0.f, bearing_y = 0.f;
+    int bitmap_w = 0, bitmap_h = 0;
+  };
+  // EN: One atlas page -- a registry texture id (into `textures`, so drain_ready() resolves it to a
+  //     GL name exactly like a sprite) plus the shelf-pack cursor.
+  // PT: Uma página de atlas -- um id de textura do registry (em `textures`, pra que o drain_ready()
+  //     o resolva num nome GL exatamente como um sprite) mais o cursor de empacotamento em
+  //     prateleira.
+  struct AtlasPage {
+    std::uint32_t texture_id = 0;
+    int shelf_x = 0, shelf_y = 0, shelf_h = 0;
+  };
+  // EN: All glyphs of one font baked at one rounded-integer pixel size (TX3's "per rounded-integer
+  //     pixel size instance"). `glyphs` is node-stable (an AtlasGlyph* returned by resolve_glyph()
+  //     survives later inserts, unordered_map's own guarantee).
+  // PT: Todos os glifos de uma fonte assados num tamanho-px inteiro (a "instância por tamanho-px
+  //     inteiro" do TX3). `glyphs` é node-estável (um AtlasGlyph* devolvido pelo resolve_glyph()
+  //     sobrevive a inserts posteriores, garantia própria do unordered_map).
+  struct AtlasForSize {
+    std::vector<AtlasPage> pages;
+    std::unordered_map<std::uint32_t, AtlasGlyph> glyphs;
+  };
+  // EN: D2D-TEXT/TX1 -- font registry slot (the Texture2d D7 idiom: id/generation/alive). Owns the
+  //     parsed face plus its per-size atlases.
+  // PT: D2D-TEXT/TX1 -- slot do registry de fonte (o idioma D7 do Texture2d: id/generation/alive).
+  //     Possui a face parseada mais os atlases por-tamanho dela.
+  struct FontSlot {
+    TextFace face;
+    std::uint32_t generation = 1;
+    bool alive = false;
+    std::unordered_map<int, AtlasForSize> by_size;
+  };
+  std::vector<FontSlot> fonts;
+  std::vector<std::size_t> free_font_slots;
 
   draw2d_detail::SpriteBatch batch{4096};
   int target_w = 0;
@@ -558,6 +658,262 @@ struct Draw2d::Impl {
       drain_ready();
     }
   }
+
+  // EN: D2D-TEXT/TX3 -- creates one R8 glyph-atlas page: a coverage texture whose GL_TEXTURE_SWIZZLE
+  //     is set to RRRR so a single-channel coverage texel `c` reads as RGBA `(c,c,c,c)` == the
+  //     premultiplied-white form the D8 tint shader already expects (zero new shader -- the
+  //     `finalColor = texel * vec4(tint.rgb*tint.a, tint.a)` formula colors the glyph for free).
+  //     Registered as a NORMAL registry slot (like the 1x1 white texture) so the batcher/drain path
+  //     handles it identically to a sprite. Returns the registry texture id (1-based), or 0 on GL
+  //     failure (fail-high: the caller renders the glyph blank + logs).
+  // PT: D2D-TEXT/TX3 -- cria uma página de atlas de glifo R8: uma textura de cobertura cujo
+  //     GL_TEXTURE_SWIZZLE é setado pra RRRR pra que um texel de cobertura de canal-único `c` seja
+  //     lido como RGBA `(c,c,c,c)` == a forma branco-premultiplicado que o shader de tint D8 já
+  //     espera (zero shader novo -- a fórmula `finalColor = texel * vec4(tint.rgb*tint.a, tint.a)`
+  //     colore o glifo de graça). Registrada como um slot NORMAL do registry (como a textura branca
+  //     1x1) pra que o caminho de batcher/dreno a trate identicamente a um sprite. Devolve o id de
+  //     textura do registry (1-based), ou 0 em falha GL (fail-high: quem chama renderiza o glifo em
+  //     branco + loga).
+  std::uint32_t create_atlas_page_texture() {
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    if (id == 0) return 0;
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+    // EN: UNPACK_ALIGNMENT 1 -- R8 rows of arbitrary width upload tightly packed (the default 4
+    //     would corrupt odd-width sub-uploads). Left at 1 afterwards, harmless (D9: this module
+    //     sets what it needs and does not restore; 1 is the most conservative pack).
+    // PT: UNPACK_ALIGNMENT 1 -- linhas R8 de largura arbitrária sobem empacotadas justas (o default
+    //     4 corromperia sub-uploads de largura ímpar). Deixado em 1 depois, inofensivo (D9: este
+    //     módulo seta o que precisa e não restaura; 1 é o empacotamento mais conservador).
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    const std::vector<unsigned char> zeros(static_cast<std::size_t>(kAtlasPageDim) * kAtlasPageDim, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, kAtlasPageDim, kAtlasPageDim, 0, GL_RED, GL_UNSIGNED_BYTE,
+                 zeros.data());
+    const GLenum err = glGetError();
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (err != GL_NO_ERROR) {
+      glDeleteTextures(1, &id);
+      return 0;
+    }
+    std::size_t idx;
+    if (!free_slots.empty()) {
+      idx = free_slots.back();
+      free_slots.pop_back();
+    } else {
+      idx = textures.size();
+      textures.push_back(TextureSlot{});
+    }
+    TextureSlot& slot = textures[idx];
+    slot.gl_name = id;
+    slot.width = kAtlasPageDim;
+    slot.height = kAtlasPageDim;
+    slot.alive = true;
+    slot.bbox = ContentBbox{}; // D29: atlas pages are never handed out publicly; no content bbox.
+    return static_cast<std::uint32_t>(idx) + 1;
+  }
+
+  // EN: D2D-TEXT -- releases a registry texture the font machinery owns (an atlas page), mirroring
+  //     destroy_texture()'s own slot teardown (glDeleteTextures + free-slot recycle + generation
+  //     bump). No-op for id 0 / out-of-range / already-dead. Used by destroy_font(); shutdown()'s
+  //     own texture-teardown loop covers pages too (they ARE registry slots), so it needs no change.
+  // PT: D2D-TEXT -- libera uma textura do registry que a maquinaria de fonte possui (uma página de
+  //     atlas), espelhando o próprio teardown de slot do destroy_texture() (glDeleteTextures +
+  //     reciclagem de free-slot + bump de geração). No-op pra id 0 / fora-de-faixa / já-morto. Usado
+  //     pelo destroy_font(); o próprio laço de teardown de textura do shutdown() cobre páginas
+  //     também (elas SÃO slots do registry), então não precisa de mudança.
+  void release_atlas_texture(std::uint32_t id) {
+    if (id == 0) return;
+    const std::size_t i = static_cast<std::size_t>(id) - 1;
+    if (i >= textures.size()) return;
+    TextureSlot& s = textures[i];
+    if (!s.alive) return;
+    if (s.gl_name) glDeleteTextures(1, &s.gl_name);
+    s.gl_name = 0;
+    s.width = 0;
+    s.height = 0;
+    s.bbox = ContentBbox{};
+    s.alive = false;
+    s.generation++;
+    free_slots.push_back(i);
+  }
+
+  // EN: Shelf-packs a (gw,gh) cell into page `p`, MUTATING its cursor and returning true with the
+  //     placed origin (ox,oy). Advances the current shelf; when the row runs out of width, wraps to
+  //     a fresh shelf at `shelf_y + shelf_h`; returns false only when even a fresh shelf would
+  //     overflow the page height (page full).
+  // PT: Empacota uma célula (gw,gh) em prateleira na página `p`, MUTANDO o cursor dela e devolvendo
+  //     true com a origem posicionada (ox,oy). Avança a prateleira corrente; quando a linha fica sem
+  //     largura, envolve pra uma prateleira nova em `shelf_y + shelf_h`; devolve false só quando até
+  //     uma prateleira nova estouraria a altura da página (página cheia).
+  static bool place_in_page(AtlasPage& p, int gw, int gh, int& ox, int& oy) {
+    int x = p.shelf_x, y = p.shelf_y, sh = p.shelf_h;
+    if (x + gw > kAtlasPageDim) { // wrap to a new shelf.
+      x = 0;
+      y = y + sh;
+      sh = 0;
+    }
+    if (y + gh > kAtlasPageDim) return false; // page full.
+    ox = x;
+    oy = y;
+    p.shelf_x = x + gw;
+    p.shelf_y = y;
+    p.shelf_h = (gh > sh) ? gh : sh;
+    return true;
+  }
+
+  // EN: D2D-TEXT/TX3/TX4/TX5 -- resolves the AtlasGlyph for (`fs`, `gid`, `bake_size`, `vsnap`),
+  //     lazily baking on first sight and caching it in `fs.by_size[bake_size]`. Returns a pointer
+  //     stable across later resolve_glyph() calls (node-based map). A returned `has_ink == false`
+  //     glyph is the CORRECT non-error answer for a space/empty-notdef, an atlas past its page cap
+  //     (TX4), a glyph bigger than one page, or a bake failure -- draw_text() simply emits no quad.
+  //     NEVER returns nullptr (the caller need not special-case it beyond `has_ink`).
+  // PT: D2D-TEXT/TX3/TX4/TX5 -- resolve o AtlasGlyph pra (`fs`, `gid`, `bake_size`, `vsnap`),
+  //     assando preguiçosamente na primeira vez e cacheando em `fs.by_size[bake_size]`. Devolve um
+  //     ponteiro estável entre chamadas posteriores ao resolve_glyph() (mapa node-based). Um glifo
+  //     `has_ink == false` devolvido é a resposta CORRETA sem erro pra um espaço/notdef-vazio, um
+  //     atlas passado o teto de página (TX4), um glifo maior que uma página, ou uma falha de bake --
+  //     o draw_text() simplesmente não emite quad. NUNCA devolve nullptr (quem chama não precisa
+  //     tratar isso além do `has_ink`).
+  const AtlasGlyph* resolve_glyph(FontSlot& fs, std::uint32_t gid, int bake_size, bool vsnap) {
+    AtlasForSize& a = fs.by_size[bake_size];
+    auto it = a.glyphs.find(gid);
+    if (it != a.glyphs.end()) return &it->second;
+
+    AtlasGlyph ag; // has_ink == false by default: the safe no-quad answer for every early return.
+    const auto store = [&]() -> const AtlasGlyph* { return &a.glyphs.emplace(gid, ag).first->second; };
+
+    const GlyphBakePlan plan = plan_glyph_bake(fs.face, gid, static_cast<float>(bake_size), vsnap);
+    if (!plan.ok) return store();                                 // hard reject (foreign face/oob gid).
+    if (plan.bitmap_w <= 0 || plan.bitmap_h <= 0) return store(); // valid no-ink glyph (space/empty).
+    const int gw = plan.bitmap_w, gh = plan.bitmap_h;
+    if (gw > kAtlasPageDim || gh > kAtlasPageDim) {
+      log_warn("draw_text(): a glyph bitmap exceeds the atlas page size -- rendered blank (TX4).");
+      return store();
+    }
+
+    // Find room in the current (last) page; else open a new page (up to the cap).
+    int px = 0, py = 0;
+    AtlasPage* page = a.pages.empty() ? nullptr : &a.pages.back();
+    bool placed = (page != nullptr) && place_in_page(*page, gw, gh, px, py);
+    if (!placed) {
+      if (a.pages.size() >= static_cast<std::size_t>(kMaxAtlasPages)) {
+        log_warn("draw_text(): glyph atlas page cap reached -- new glyphs rendered blank (TX4).");
+        return store();
+      }
+      const std::uint32_t tid = create_atlas_page_texture();
+      if (tid == 0) {
+        log_warn("draw_text(): failed to allocate a glyph atlas page texture -- glyph blank.");
+        return store();
+      }
+      a.pages.push_back(AtlasPage{tid, 0, 0, 0});
+      page = &a.pages.back();
+      if (!place_in_page(*page, gw, gh, px, py)) return store(); // guarded above; belt-and-suspenders.
+    }
+
+    // Bake the coverage bitmap on the CPU, then upload it into the page cell.
+    std::vector<std::uint8_t> bitmap(static_cast<std::size_t>(gw) * gh, 0);
+    std::vector<float> scratch(glyph_bake_scratch_floats(gw, gh));
+    if (!bake_glyph_into(fs.face, gid, static_cast<float>(bake_size), vsnap, gw, gh, bitmap.data(), gw,
+                         scratch.data(), scratch.size()))
+      return store(); // bake failed unexpectedly -- render blank, never a crash.
+
+    const std::size_t pidx = static_cast<std::size_t>(page->texture_id) - 1;
+    glBindTexture(GL_TEXTURE_2D, textures[pidx].gl_name);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, px, py, gw, gh, GL_RED, GL_UNSIGNED_BYTE, bitmap.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    ag.has_ink = true;
+    ag.page_texture_id = page->texture_id;
+    ag.tx = px;
+    ag.ty = py;
+    ag.tw = gw;
+    ag.th = gh;
+    ag.bearing_x = plan.bearing_x;
+    ag.bearing_y = plan.bearing_y;
+    ag.bitmap_w = gw;
+    ag.bitmap_h = gh;
+    return store();
+  }
+
+  // EN: D2D-TEXT/TX1/TX2/TX6 -- the SINGLE-SOURCE text pipeline both draw_text() and measure_text()
+  //     funnel through (a mutation in decode/wrap/align/kern math must break both, ADR-0018
+  //     (a)/(f)). Validates the font handle (the full D7 chain) and the TX6 inputs, decodes UTF-8
+  //     (the 1 MiB per-call byte cap, invalid -> U+FFFD), and runs the frozen layout_text(). Returns
+  //     the validated FontSlot* (for draw_text()'s bake step) with `layout` filled, or nullptr on
+  //     ANY reject (measure_text -> TextMetrics{}, draw_text -> no-op). All rejects here are the
+  //     shared TX6 chain: a null utf8 and a size<=0 are silent (legal no-ops, not errors); an
+  //     invalid handle / non-finite max_width / out-of-range align are logged once (dedup'd).
+  // PT: D2D-TEXT/TX1/TX2/TX6 -- o pipeline de texto FONTE-ÚNICA por onde draw_text() e
+  //     measure_text() passam (uma mutação na matemática de decode/wrap/align/kern tem que quebrar
+  //     os dois, ADR-0018 (a)/(f)). Valida o handle de fonte (a cadeia D7 completa) e os inputs do
+  //     TX6, decodifica UTF-8 (o teto de 1 MiB de byte por-chamada, inválido -> U+FFFD), e roda o
+  //     layout_text() congelado. Devolve o FontSlot* validado (pro passo de bake do draw_text()) com
+  //     `layout` preenchido, ou nullptr em QUALQUER reject (measure_text -> TextMetrics{}, draw_text
+  //     -> no-op). Todo reject aqui é a cadeia TX6 compartilhada: um utf8 nulo e um size<=0 são
+  //     silenciosos (no-ops legais, não erros); um handle inválido / max_width não-finito / align
+  //     fora de faixa são logados uma vez (dedup'd).
+  FontSlot* run_text_layout(const Font2d& font, const char* utf8, float size,
+                            const TextOptions& opt, text_detail::LayoutResult& layout,
+                            const char* what) {
+    if (!font.ok_ || font.id_ == 0) {
+      log_warn(std::string(what) + "(): invalid (never-loaded) font handle -- ignored.");
+      return nullptr;
+    }
+    if (font.owner_ != this) {
+      log_warn(std::string(what) + "(): font handle issued by a different Draw2d instance -- ignored (D7).");
+      return nullptr;
+    }
+    const std::size_t idx = static_cast<std::size_t>(font.id_) - 1;
+    if (idx >= fonts.size() || !fonts[idx].alive || fonts[idx].generation != font.generation_) {
+      log_warn(std::string(what) + "(): unknown/stale/tampered font handle -- ignored (D7).");
+      return nullptr;
+    }
+    FontSlot& fs = fonts[idx];
+
+    if (utf8 == nullptr) return nullptr;                     // TX6: silent legal no-op.
+    if (!std::isfinite(size) || size <= 0.f) return nullptr; // TX6: silent legal no-op.
+    if (!std::isfinite(opt.max_width)) {                     // TX6: max_width<=0 IS legal (no-wrap).
+      log_warn(std::string(what) + "(): non-finite max_width -- call skipped (TX6).");
+      return nullptr;
+    }
+    int align_i = static_cast<int>(opt.align);
+    if (align_i < 0 || align_i > 3) { // hostile cast outside the enum's range -> Left (TX6).
+      log_warn(std::string(what) + "(): align out of range -- treated as Left (TX6).");
+      align_i = 0;
+    }
+
+    // TX6: bound the per-call input at 1 MiB of bytes BEFORE decoding (a single hostile call must
+    // not freeze a frame). A tail cut mid-multibyte decodes to U+FFFD, never a crash.
+    std::size_t byte_len = 0;
+    while (byte_len < kMaxTextCallBytes && utf8[byte_len] != '\0') ++byte_len;
+    if (utf8[byte_len] != '\0')
+      log_warn(std::string(what) + "(): input over the 1 MiB per-call cap -- truncated (TX6).");
+
+    std::vector<std::uint32_t> cps;
+    for (std::size_t i = 0; i < byte_len;) {
+      const Utf8Decoded d = decode_utf8_codepoint(utf8 + i, byte_len - i);
+      if (d.consumed == 0) break; // only when len == 0; pure defensive floor.
+      cps.push_back(d.codepoint);
+      i += d.consumed;
+    }
+
+    // TX2: layout over the frozen advance interface at the ACTIVE-space em `size` (advances/kern in
+    // active-space units, identical in draw and measure -- the single-source contract).
+    const AdvanceContext actx{&fs.face, size};
+    const GlyphAdvanceSource src = make_advance_source(actx);
+    layout = text_detail::layout_text(src, cps.data(), cps.size(), opt.max_width,
+                                      static_cast<text_detail::Align>(align_i));
+    return &fs;
+  }
 };
 
 Draw2d::Draw2d() : impl_(std::make_unique<Impl>()) {}
@@ -605,6 +961,10 @@ void Draw2d::shutdown() {
   }
   impl_->textures.clear();
   impl_->free_slots.clear();
+  // D2D-TEXT: faces + their per-size atlases die here; the atlas PAGE GL textures were already
+  // released by the generic texture-teardown loop above (pages ARE registry slots, D2D-TEXT/TX3).
+  impl_->fonts.clear();
+  impl_->free_font_slots.clear();
   if (impl_->vao) {
     glDeleteVertexArrays(1, &impl_->vao);
     impl_->vao = 0;
@@ -1278,6 +1638,221 @@ void Draw2d::end() {
   impl_->drain_ready();
   impl_->layer_armed = false; // D27: NOT sticky across brackets, unlike the camera/scissor.
   impl_->current_layer = 0;
+}
+
+// EN: D2D-TEXT/TX1/TX6 -- parses a font file into a TextFace (the sovereign C core's hardened
+//     parser) and registers it. Mirrors load_texture()'s own file-read + fail-high discipline
+//     (nullptr/open-fail/blob-cap/parse-fail all yield an ok()==false Font2d, one dedup'd log), with
+//     the 64 MiB font-blob cap (kMaxFontBlobBytes, TX6) in place of load_texture()'s 256 MiB image
+//     cap. GL is NOT touched here -- the per-size glyph atlas is created lazily at draw_text().
+// PT: D2D-TEXT/TX1/TX6 -- parseia um arquivo de fonte num TextFace (o parser endurecido do núcleo C
+//     soberano) e o registra. Espelha a própria disciplina de leitura-de-arquivo + fail-high do
+//     load_texture() (nullptr/falha-de-open/teto-de-blob/falha-de-parse todos rendem uma Font2d
+//     ok()==false, um log dedup'd), com o teto de 64 MiB de blob de fonte (kMaxFontBlobBytes, TX6)
+//     no lugar do teto de 256 MiB de imagem do load_texture(). GL NÃO é tocado aqui -- o atlas de
+//     glifo por-tamanho é criado preguiçosamente no draw_text().
+Font2d Draw2d::load_font(const char* path) {
+  Font2d out; // ok_ == false by default.
+  if (!impl_) return out;
+  if (!impl_->initialized) {
+    impl_->log_warn("load_font() called before init()/after shutdown() -- ignored.");
+    return out;
+  }
+  if (path == nullptr) {
+    impl_->log_warn("load_font(nullptr) -- ignored.");
+    return out;
+  }
+
+  std::ifstream file(path, std::ios::binary);
+  if (!file) {
+    impl_->log_warn(std::string("load_font(): could not open '") + path + "'.");
+    return out;
+  }
+  file.seekg(0, std::ios::end);
+  const std::streamoff len_off = file.tellg();
+  if (len_off < 0) {
+    impl_->log_warn(std::string("load_font(): could not determine size of '") + path + "'.");
+    return out;
+  }
+  const std::size_t len = static_cast<std::size_t>(len_off);
+  if (len == 0 || len > kMaxFontBlobBytes) {
+    impl_->log_warn(std::string("load_font(): '") + path + "' is " + std::to_string(len) +
+                    " bytes (0 or over the " + std::to_string(kMaxFontBlobBytes) +
+                    " byte cap) -- refusing to load.");
+    return out;
+  }
+  file.seekg(0, std::ios::beg);
+  std::vector<std::uint8_t> buf(len);
+  if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len))) {
+    impl_->log_warn(std::string("load_font(): short read on '") + path + "'.");
+    return out;
+  }
+
+  TextFace face = TextFace::open(buf.data(), buf.size());
+  if (!face.ok()) {
+    impl_->log_warn(std::string("load_font(): '") + path +
+                    "' failed to parse (unknown/corrupt/unsupported font).");
+    return out;
+  }
+
+  std::size_t idx;
+  if (!impl_->free_font_slots.empty()) {
+    idx = impl_->free_font_slots.back();
+    impl_->free_font_slots.pop_back();
+  } else {
+    idx = impl_->fonts.size();
+    impl_->fonts.push_back(Impl::FontSlot{});
+  }
+  Impl::FontSlot& fs = impl_->fonts[idx];
+  fs.face = std::move(face);
+  fs.by_size.clear();
+  fs.alive = true;
+  // fs.generation is left as-is: 1 for a never-used slot, already bumped by destroy_font() for a
+  // reused one -- either way it is the CURRENT valid generation for this slot.
+
+  out.ok_ = true;
+  out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
+  out.generation_ = fs.generation;
+  out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
+  return out;
+}
+
+// EN: D2D-TEXT/TX1 -- releases the font's atlas page GL textures, tears the slot down (generation
+//     bump so any surviving copy is stale), and zeroes `font`. Mirrors destroy_texture()'s own D7
+//     fail-high chain (already-invalid/foreign/out-of-range/stale).
+// PT: D2D-TEXT/TX1 -- libera as texturas GL de página de atlas da fonte, faz o teardown do slot
+//     (bump de geração pra que qualquer cópia sobrevivente fique obsoleta), e zera `font`. Espelha
+//     a própria cadeia fail-high D7 do destroy_texture() (já-inválida/estrangeira/fora-de-faixa/
+//     obsoleta).
+void Draw2d::destroy_font(Font2d& font) {
+  if (!impl_ || !impl_->initialized) {
+    font = Font2d{};
+    return;
+  }
+  if (font.id_ == 0) return; // already-invalid handle -- no-op, nothing to log.
+  if (font.owner_ != impl_.get()) {
+    impl_->log_warn("destroy_font(): handle issued by a different Draw2d instance -- ignored (D7).");
+    font = Font2d{};
+    return;
+  }
+  const std::size_t idx = static_cast<std::size_t>(font.id_) - 1;
+  if (idx >= impl_->fonts.size()) {
+    impl_->log_warn("destroy_font(): out-of-range handle -- ignored (D7).");
+    font = Font2d{};
+    return;
+  }
+  Impl::FontSlot& fs = impl_->fonts[idx];
+  if (!fs.alive || fs.generation != font.generation_) {
+    impl_->log_warn("destroy_font(): stale/already-destroyed/tampered handle -- ignored (D7).");
+    font = Font2d{};
+    return;
+  }
+
+  for (auto& [size_px, atlas] : fs.by_size)
+    for (const Impl::AtlasPage& page : atlas.pages) impl_->release_atlas_texture(page.texture_id);
+  fs.by_size.clear();
+  fs.face = TextFace{};
+  fs.alive = false;
+  fs.generation++; // any surviving copy of this handle is now stale.
+  impl_->free_font_slots.push_back(idx);
+  font = Font2d{};
+}
+
+void Draw2d::draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size,
+                       const ColorF& color) {
+  draw_text(font, utf8, pos, size, color, TextOptions{});
+}
+
+// EN: D2D-TEXT/TX1/TX7/TX8 -- draws `utf8` at top-left `pos`. Flow: TX6 pos/color finiteness guard
+//     BEFORE any arithmetic -> run_text_layout() (handle+input validation, decode, the frozen
+//     layout, single source with measure_text) -> pick the bake pixel size (round the on-screen em,
+//     size*zoom under a camera, clamped [1,512], TX5) -> per glyph, resolve/bake into the atlas,
+//     place the quad in ACTIVE space (pen_x/pen_y from layout + bearing*scale), snap in the
+//     no-camera path (TX8), project each corner through the camera (TX7, project_corners()), the D20
+//     post-projection finiteness guard, then submit through the SAME batcher/layer/scissor path as
+//     a sprite. A no-ink glyph (space, tofu-empty, past the atlas cap) advances the pen with no quad.
+// PT: D2D-TEXT/TX1/TX7/TX8 -- desenha `utf8` no topo-esquerdo `pos`. Fluxo: guarda de finitude de
+//     pos/color do TX6 ANTES de qualquer conta -> run_text_layout() (validação de handle+input,
+//     decode, o layout congelado, fonte única com measure_text) -> escolhe o tamanho-px de bake
+//     (arredonda o em em-tela, size*zoom com câmera, clampado [1,512], TX5) -> por glifo, resolve/
+//     assa no atlas, posiciona o quad no espaço ATIVO (pen_x/pen_y do layout + bearing*scale),
+//     snapa no caminho sem-câmera (TX8), projeta cada canto pela câmera (TX7, project_corners()), a
+//     guarda de finitude pós-projeção do D20, depois submete pelo MESMO caminho de batcher/camada/
+//     scissor de um sprite. Um glifo sem tinta (espaço, tofu-vazio, passado o teto do atlas) avança
+//     a pena sem quad.
+void Draw2d::draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size,
+                       const ColorF& color, const TextOptions& options) {
+  if (!impl_ || !impl_->initialized) return;
+  // TX6/D10: every consumed float finite BEFORE any arithmetic (size<=0 is handled as a silent
+  // no-op inside run_text_layout, the degenerate-not-error idiom).
+  if (!draw2d_detail::is_finite(pos) || !std::isfinite(size) || !draw2d_detail::is_finite(color)) {
+    impl_->log_warn("draw_text(): rejected a non-finite (NaN/Inf) pos/size/color value (D10).");
+    return;
+  }
+
+  text_detail::LayoutResult layout;
+  Impl::FontSlot* fs = impl_->run_text_layout(font, utf8, size, options, layout, "draw_text");
+  if (fs == nullptr) return;         // TX6 reject (already logged/handled inside).
+  if (layout.glyphs.empty()) return; // empty string / all-space-no-ink -- nothing to draw.
+
+  // TX5/TX8: bake at the rounded ON-SCREEN em (crisp), scale the baked geometry back to active
+  // space by size/bake_size. Snapping applies only when no camera is set (TX8: snapped world-space
+  // text would swim under a moving camera).
+  const bool snap = !impl_->has_camera;
+  float size_at_screen = impl_->has_camera ? size * impl_->camera.zoom : size;
+  size_at_screen = std::fmin(512.f, std::fmax(1.f, size_at_screen)); // TX5 clamp [1,512], NaN-safe.
+  const int bake_size = static_cast<int>(std::lround(size_at_screen));
+  const float scale = size / static_cast<float>(bake_size);
+
+  for (const text_detail::PlacedGlyph& pg : layout.glyphs) {
+    const Impl::AtlasGlyph* ag = impl_->resolve_glyph(*fs, pg.gid, bake_size, snap);
+    if (ag == nullptr || !ag->has_ink) continue; // no quad for a no-ink glyph.
+
+    float gx = pos.x + pg.pen_x + ag->bearing_x * scale;
+    float gy = pos.y + pg.pen_y + ag->bearing_y * scale;
+    if (snap) { // TX8 pen-snap X + integer top-left in the no-camera path (vsnap did the bitmap Y).
+      gx = std::round(gx);
+      gy = std::round(gy);
+    }
+    const float gw = static_cast<float>(ag->bitmap_w) * scale;
+    const float gh = static_cast<float>(ag->bitmap_h) * scale;
+    const draw2d_detail::SpriteCorners local{Vec2F{gx, gy}, Vec2F{gx + gw, gy},
+                                             Vec2F{gx + gw, gy + gh}, Vec2F{gx, gy + gh}};
+    const draw2d_detail::SpriteCorners projected = impl_->project_corners(local);
+    if (!draw2d_detail::is_finite(projected)) {
+      impl_->log_warn("draw_text(): rejected a non-finite projected glyph corner (overflow, D20).");
+      continue;
+    }
+    const RectF src_px{static_cast<float>(ag->tx), static_cast<float>(ag->ty),
+                       static_cast<float>(ag->tw), static_cast<float>(ag->th)};
+    impl_->submit_quad(projected, ag->page_texture_id, kAtlasPageDim, kAtlasPageDim, src_px, color,
+                       "draw_text");
+  }
+}
+
+TextMetrics Draw2d::measure_text(const Font2d& font, const char* utf8, float size) {
+  return measure_text(font, utf8, size, TextOptions{});
+}
+
+// EN: D2D-TEXT/TX1 -- layout without drawing (no GL touched). Consumes the SAME run_text_layout()
+//     draw_text() uses (single source), so a mutation in the advance/kern/wrap/align math breaks
+//     both. Returns TextMetrics{} (ok==false) on any TX6 reject.
+// PT: D2D-TEXT/TX1 -- layout sem desenhar (GL não tocado). Consome o MESMO run_text_layout() que o
+//     draw_text() usa (fonte única), então uma mutação na matemática de avanço/kern/wrap/align
+//     quebra os dois. Devolve TextMetrics{} (ok==false) em qualquer reject do TX6.
+TextMetrics Draw2d::measure_text(const Font2d& font, const char* utf8, float size,
+                                 const TextOptions& options) {
+  TextMetrics m; // ok == false by default.
+  if (!impl_ || !impl_->initialized) return m;
+  text_detail::LayoutResult layout;
+  if (impl_->run_text_layout(font, utf8, size, options, layout, "measure_text") == nullptr) return m;
+  m.ok = true;
+  m.width = layout.width;
+  m.height = layout.height;
+  m.ascent = layout.ascent;
+  m.line_height = layout.line_height;
+  m.line_count = layout.line_count;
+  return m;
 }
 
 // EN: D2D-2B, D21 -- the PUBLIC free functions declared in draw2d.hpp, defined out-of-line

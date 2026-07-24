@@ -44,8 +44,11 @@ namespace fs = std::filesystem;
 using glintfx::App;
 using glintfx::ColorF;
 using glintfx::Draw2d;
+using glintfx::Font2d;
 using glintfx::RectF;
+using glintfx::TextMetrics;
 using glintfx::Texture2d;
+using glintfx::Vec2F;
 
 namespace {
 
@@ -170,11 +173,30 @@ int main() {
     return 5;
   }
 
+  // D2D-TEXT -- load a real font (copied next to the test as app_draw2d_smoke_font.ttf by CMake)
+  // and prove draw_text() reaches actual glyph pixels + measure_text() returns sane metrics.
+  Font2d font = d2d.load_font("app_draw2d_smoke_font.ttf");
+  if (!font.ok()) {
+    std::puts("app_draw2d_smoke FAIL: load_font() failed");
+    return 8;
+  }
+  // measure_text() is pure-CPU (no GL/frame) -- pin single-line metrics before the frame.
+  const TextMetrics tm = d2d.measure_text(font, "Hi!", 22.f);
+  if (!tm.ok || tm.line_count != 1 || tm.width <= 0.f || tm.ascent <= 0.f ||
+      tm.line_height <= 0.f) {
+    std::printf("app_draw2d_smoke FAIL: measure_text bad (ok=%d w=%.1f asc=%.1f lh=%.1f lines=%d)\n",
+                tm.ok, tm.width, tm.ascent, tm.line_height, tm.line_count);
+    return 9;
+  }
+
   app.set_frame_callback([&](float) {
     int w = 0, h = 0;
     app.get_window_size(w, h);
     d2d.begin(w, h);
     d2d.draw_sprite(tex, RectF{50, 50, 120, 120});
+    // White text at (10,176), well below the UI box (y<100) and the sprite (y<170), on the dark
+    // #0a1428 background -- so any bright pixel in its box proves a glyph rasterized and composed.
+    d2d.draw_text(font, "Hi!", Vec2F{10.f, 176.f}, 22.f, ColorF{1.f, 1.f, 1.f, 1.f});
     d2d.end();
   });
 
@@ -221,6 +243,26 @@ int main() {
   // Overlap: the sprite pass ran inside the frame hook, BEFORE Context::Render() -- the UI's
   // opaque box must paint over it here (D6: sprites compose UNDER the UI in standalone mode).
   check_pixel("overlap-ui-wins", 75, 75, 255, 255, 255);
+
+  // D2D-TEXT -- scan the "Hi!" text box for at least one clearly-lit pixel (a glyph rasterized
+  // and composed). Statistical, not golden-pixel-exact (glyph outlines are font-dependent): the
+  // dark #0a1428 background reads ~(10,20,40), so a channel over ~120 can only be glyph ink.
+  {
+    bool text_pixel_found = false;
+    for (int y = 176; y < 198 && !text_pixel_found; ++y) {
+      for (int x = 10; x < 70 && !text_pixel_found; ++x) {
+        int r = 0, g = 0, b = 0;
+        if (sample_ppm_pixel(kSnapshotPath, W, H, x, y, r, g, b) && r > 120 && g > 120 && b > 120)
+          text_pixel_found = true;
+      }
+    }
+    if (text_pixel_found) {
+      std::puts("app_draw2d_smoke [text]: found a lit glyph pixel in the text box");
+    } else {
+      std::puts("FAIL: text: no lit glyph pixel found in the 'Hi!' box");
+      ++failures;
+    }
+  }
 
   std::error_code ec;
   fs::remove_all(dir, ec);

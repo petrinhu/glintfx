@@ -43,8 +43,17 @@
   slot -- born from the consumer's real playtest hitbox bug. Fail-high throughout: every new
   method is a safe no-op on never-init/moved-from/post-shutdown (11 methods, the full sweep);
   every primitive guards non-finite input BEFORE any arithmetic and a degenerate size is a
-  silent legal no-op; `set_scissor` keeps the previous state on hostile input. `project(VERSION
-  0.22.0)`.
+  silent legal no-op; `set_scissor` keeps the previous state on hostile input. **Declared out of
+  scope, with triggers:** `draw_text` is STILL absent -- `D2D-TEXT` remains its own wave, needs
+  its own font-engine ADR (unchanged this release); circle/ellipse/regular-polygon primitives
+  (seed `SEED-D2D-SHAPES`), line caps/joins/polylines beyond butt-capped (seed
+  `SEED-D2D-LINECAPS`), a secondary texture sort within a layer (seed
+  `SEED-D2D-LAYER-TEXSORT`), a data-driven alpha threshold for `texture_content_bbox` (seed
+  `SEED-D2D-BBOX-THRESH`) -- all four trigger on a consumer ask, per `docs/draw2d.md`'s "Limits
+  declared". **Pixel-readback tests under Xvfb/llvmpipe stay statistical, never pixel-exact**
+  (same downgrade as v0.20.0/v0.21.0, tile threading on llvmpipe is non-deterministic) -- this
+  wave's exactness claims (D25/D26 line/outline geometry) live ONLY in the pure CPU unit tests,
+  where they are legitimate. `project(VERSION 0.22.0)`.
 - **PT:** **Primitivas não-texturizadas do Draw2D + ordem de desenho explícita + scissor + bbox
   de conteúdo** (`D2D-3A`/`D2D-3B`, Onda 5, decisões D23-D32): a peça que torna o átomo Draw2D
   CONFORTÁVEL e MEDIDO, conforme a própria disciplina desta casa de escopo-geral-com-prioridade-
@@ -79,7 +88,17 @@
   método novo é um no-op seguro em nunca-inicializado/movido-de/pós-shutdown (11 métodos, a
   varredura completa); toda primitiva guarda input não-finito ANTES de qualquer conta e um
   tamanho degenerado é um no-op legal silencioso; `set_scissor` mantém o estado anterior em
-  input hostil. `project(VERSION 0.22.0)`.
+  input hostil. **Declarado fora de escopo, com gatilhos:** `draw_text` CONTINUA ausente --
+  `D2D-TEXT` segue onda própria, precisa do próprio ADR de motor-de-fonte (inalterado nesta
+  release); primitivas círculo/elipse/polígono-regular (semente `SEED-D2D-SHAPES`), tampas/junções
+  de linha/polilinhas além de butt-capped (semente `SEED-D2D-LINECAPS`), um sort secundário por
+  textura dentro de uma camada (semente `SEED-D2D-LAYER-TEXSORT`), um limiar de alpha
+  configurável pro `texture_content_bbox` (semente `SEED-D2D-BBOX-THRESH`) -- as quatro disparam
+  com um pedido de consumidor, conforme "Limites declarados" de `docs/draw2d.md`. **Testes de
+  pixel-readback sob Xvfb/llvmpipe seguem estatísticos, nunca pixel-exatos** (mesmo downgrade da
+  v0.20.0/v0.21.0, tile-threading no llvmpipe é não-determinístico) -- as claims de exatidão desta
+  onda (geometria de linha/contorno D25/D26) vivem SÓ nos testes unitários puros de CPU, onde são
+  legítimas. `project(VERSION 0.22.0)`.
 
 ### Changed / Alterado
 

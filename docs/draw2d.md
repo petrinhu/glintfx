@@ -842,7 +842,7 @@ Stated instead of faked, per the plan's own testing-downgrade discipline:
   consume.
 - [Onda 6 plan](../glintfx/docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md) -- the
   D2D-TEXT design (TX1-TX17) behind the "Text" section above.
-- [Onda 5 plan](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- the D2D-3 design
+- [Onda 5 plan](../glintfx/docs/superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- the D2D-3 design
   decisions D23-D32 behind primitives/layers/scissor/bbox/perf (this doc's own sections above).
 - [ADR-0018](adr/0018-draw2d-text.md) -- the text decision: sovereign-C-core glyph source,
   top-left anchor, word-wrap/alignment in scope, the amended `draw2d` dependency profile.
@@ -1717,7 +1717,7 @@ Declarados em vez de fingidos, conforme a própria disciplina de downgrade-de-te
   e `measure_text` ambos consomem.
 - [Plano da Onda 6](../glintfx/docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md) -- o design
   D2D-TEXT (TX1-TX17) por trás da seção "Texto" acima.
-- [Plano da Onda 5](superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- as decisões de
+- [Plano da Onda 5](../glintfx/docs/superpowers/plans/2026-07-23-onda5-draw2d-primitives.md) -- as decisões de
   desenho D23-D32 do D2D-3 por trás de primitivas/layers/scissor/bbox/perf (as próprias seções
   deste doc acima).
 - [ADR-0018](adr/0018-draw2d-text.md) -- a decisão de texto: fonte de glifo no núcleo C soberano,

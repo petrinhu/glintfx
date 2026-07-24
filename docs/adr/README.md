@@ -23,3 +23,4 @@
 | [0015](0015-framework-2d-atomized-architecture.md) | Framework 2D: atomized-by-subsystem architecture / Framework 2D: arquitetura atomizada por subsistema | Accepted |
 | [0016](0016-gamepad-atom.md) | Gamepad ships as its own atom, `input` stays reserved / Gamepad entregue como átomo próprio, `input` segue reservado | Accepted |
 | [0017](0017-draw2d-module.md) | Draw2D ships as its own atom, own GL pipeline, order-of-call composition / Draw2D entregue como átomo próprio, pipeline GL próprio, composição por ordem de chamada | Accepted |
+| [0018](0018-draw2d-text.md) | `draw_text` in the Draw2D atom: sovereign-C-core glyph source, top-left anchor, word-wrap/alignment in scope / `draw_text` no átomo Draw2D: fonte de glifo no núcleo C soberano, âncora topo-esquerdo, word-wrap/alinhamento no escopo | Accepted |

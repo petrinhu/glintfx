@@ -8,7 +8,7 @@
 
 ---
 
-## [Unreleased]
+## [0.23.0] - 2026-07-24 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.23.0)
 
 ### Added / Adicionado
 
@@ -74,6 +74,20 @@
   sem aresta de terceiro nova (o core é in-tree, C puro, já provado no MSVC); um consumidor
   só-sprites paga ~3 unidades de tradução C a mais de compile, sem sub-flag por-feature. Contrato,
   receitas e limites completos: seção "Texto" de `docs/draw2d.md`.
+- **EN:** **Draw2D is now an adoptable capability.** With untextured primitives (v0.22.0) and text
+  (this release), the Draw2D atom covers what the first consumer (GusWorld) asked its own
+  `platform/render2d` to stop doing: sprites, filled/outlined rects and quads, lines, layers,
+  scissor, camera, content bbox, and UTF-8 text. The consumer's local 2D renderer can retire in
+  favour of `glintfx::Draw2d`. This closes the Draw2D adoption arc (Onda 5 + Onda 6 of PROG-1);
+  the declared ceiling (no RTL/shaping, no multi-face fallback, no COLR/emoji, no hyphenation)
+  seeds the INBOX for pull-driven follow-ups.
+- **PT:** **O Draw2D agora é uma capability adotável.** Com as primitivas sem-textura (v0.22.0) e o
+  texto (esta release), o átomo Draw2D cobre o que o primeiro consumidor (GusWorld) pediu para o
+  próprio `platform/render2d` deixar de fazer: sprites, retângulos e quads preenchidos/contornados,
+  linhas, camadas, scissor, câmera, bbox de conteúdo e texto UTF-8. O renderizador 2D local do
+  consumidor pode se aposentar em favor de `glintfx::Draw2d`. Isto encerra o arco de adoção do
+  Draw2D (Onda 5 + Onda 6 do PROG-1); o teto declarado (sem RTL/shaping, sem fallback multi-face,
+  sem COLR/emoji, sem hifenização) semeia a INBOX para desdobramentos puxados por demanda.
 
 ## [0.22.0] - 2026-07-23 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.22.0)
 

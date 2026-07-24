@@ -1019,6 +1019,41 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: text_layout_sanity (D2D-TEXT, T1b, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-draw2d-
+#     text.md, TX2 (b), TX15 word-wrap, TX16 align/justify, TX17's hand-computed-value gate, layout
+#     half) -- PURE unit test for src/text_layout.hpp: no window, no GL context, no RmlUi/GLFW
+#     dependency AND -- unlike text_raster_sanity -- NO font fixture and NO sovereign-core SOURCE at
+#     all. text_layout.hpp is pure positioning math over the frozen GlyphAdvanceSource; this test
+#     drives it with a monospace MOCK of that interface, so it links NOTHING beyond its own object.
+#     It still needs `_glx_core_include_dir` on its include path because text_layout.hpp #includes
+#     text_raster.hpp (for the frozen GlyphAdvanceSource type ONLY), which transitively pulls the
+#     core/*.h headers at COMPILE time -- but it references no glx_* symbol and no text_raster.cpp
+#     symbol, so no core object and no `glintfx` link is required (the standalone proof the layout
+#     half is genuinely decoupled from the raster half, T1a/T1b disjoint-files design). Gated on
+#     GLINTFX_MODULE_DRAW2D alone (same as every other draw2d pure-seam test above) -- runs in BOTH
+#     build configurations.
+# PT: text_layout_sanity (D2D-TEXT, T1b, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-draw2d-
+#     text.md, TX2 (b), word-wrap TX15, align/justify TX16, gate de valor-à-mão do TX17, metade de
+#     layout) -- teste unit PURO para src/text_layout.hpp: sem janela, sem contexto GL, sem
+#     dependência de RmlUi/GLFW E -- diferente do text_raster_sanity -- SEM fixture de fonte e SEM
+#     FONTE do núcleo soberano nenhuma. O text_layout.hpp é matemática pura de posicionamento sobre a
+#     GlyphAdvanceSource congelada; este teste o dirige com um MOCK monoespaçado daquela interface,
+#     então linka NADA além do próprio objeto. Ainda precisa do `_glx_core_include_dir` no include
+#     path porque o text_layout.hpp inclui o text_raster.hpp (só pelo tipo GlyphAdvanceSource
+#     congelado), que puxa transitivamente os headers core/*.h em COMPILE time -- mas não referencia
+#     nenhum símbolo glx_* nem símbolo do text_raster.cpp, então nenhum objeto do core e nenhum link
+#     de `glintfx` é preciso (a prova standalone de que a metade de layout é de fato desacoplada da
+#     metade de raster, o design de arquivos disjuntos T1a/T1b). Gateado só por GLINTFX_MODULE_DRAW2D
+#     (igual a todo outro teste de costura pura do draw2d acima) -- roda nas DUAS configs de build.
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  add_executable(text_layout_sanity text_layout_sanity.cpp)
+  target_include_directories(text_layout_sanity PRIVATE ${_glx_core_include_dir})
+  target_compile_options(text_layout_sanity PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
+  add_test(NAME text_layout_sanity COMMAND text_layout_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
 #     primitives.md, decision D27/D28) -- PURE unit test for src/layer_queue.hpp: no window, no
 #     GL context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate

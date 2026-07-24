@@ -958,6 +958,67 @@ if(GLINTFX_MODULE_DRAW2D)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: text_raster_sanity (D2D-TEXT, T1a, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-
+#     draw2d-text.md, TX2 (a), TX17's hand-computed-value gate, raster half) -- PURE unit test
+#     for src/text_raster.hpp: no window, no GL context, no RmlUi/GLFW dependency whatsoever
+#     (same "nothing display-related to isolate here" reasoning as every other draw2d pure-seam
+#     test above). DELIBERATELY does NOT link `glintfx` -- compiles the vendored sovereign C core
+#     (sfnt.c/raster.c/hint.c) DIRECTLY into this one executable, using the SAME
+#     `_glx_core_src_dir`/`_glx_core_include_dir` variables the top-level CMakeLists.txt sets
+#     (ADR-0018 (e)/TX9's own widened `if(GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D)`
+#     gate) rather than riding on glintfx_text's own default-ON compile of the same 3 files. This
+#     is the standalone proof TX9's decoupling actually holds: this target is gated on
+#     GLINTFX_MODULE_DRAW2D ALONE below, so it still builds+passes in a
+#     -DGLINTFX_OWN_FONT_ENGINE=OFF configuration (the ui's own font engine selector, untouched
+#     by TX9, ADR-0018 (e)). How the FINAL glintfx_draw2d target itself consumes these same
+#     objects without a duplicate-symbol collision against glintfx_text when BOTH flags are ON
+#     (the ordinary default) is the Draw2D integration slice's (T2) own job -- out of scope for
+#     this standalone test. Two fixtures (OpenSans-Regular.ttf, PixelOperatorMono.ttf, already
+#     shipped under demos/showcase/assets/ for the showcase demo) are copied to
+#     CMAKE_CURRENT_BINARY_DIR so the test opens them by bare relative name, same convention as
+#     image_decode_sanity's own two fixtures above. See the test's own file header for the full
+#     oracle (fontTools-derived hand values, same ORACLE METHOD discipline
+#     tests/test_sfnt.c's own file header documents for the Layer-0 suite).
+# PT: text_raster_sanity (D2D-TEXT, T1a, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-
+#     draw2d-text.md, TX2 (a), gate de valor-à-mão do TX17, metade raster) -- teste unit PURO
+#     para src/text_raster.hpp: sem janela, sem contexto GL, nenhuma dependência de RmlUi/GLFW
+#     (mesmo racional "nada relacionado a display pra isolar aqui" de todo outro teste de costura
+#     pura do draw2d acima). DELIBERADAMENTE NÃO linka `glintfx` -- compila o núcleo C soberano
+#     vendorizado (sfnt.c/raster.c/hint.c) DIRETO neste executável, usando as MESMAS variáveis
+#     `_glx_core_src_dir`/`_glx_core_include_dir` que o CMakeLists.txt de topo define (o próprio
+#     gate alargado `if(GLINTFX_OWN_FONT_ENGINE OR GLINTFX_MODULE_DRAW2D)` do ADR-0018 (e)/TX9)
+#     em vez de pegar carona na própria compilação default-ON dos mesmos 3 arquivos do
+#     glintfx_text. Esta é a prova standalone de que o desacoplamento do TX9 de fato aguenta:
+#     este alvo é gateado SÓ por GLINTFX_MODULE_DRAW2D abaixo, então ainda builda+passa numa
+#     configuração -DGLINTFX_OWN_FONT_ENGINE=OFF (o seletor de motor de fonte próprio da ui,
+#     intocado pelo TX9, ADR-0018 (e)). Como o alvo FINAL glintfx_draw2d em si consome esses
+#     mesmos objetos sem colisão de símbolo duplicado contra o glintfx_text quando AS DUAS flags
+#     estão ON (o default comum) é trabalho da própria fatia de integração do Draw2D (T2) -- fora
+#     de escopo deste teste standalone. Duas fixtures (OpenSans-Regular.ttf,
+#     PixelOperatorMono.ttf, já distribuídas em demos/showcase/assets/ pro demo showcase) são
+#     copiadas pro CMAKE_CURRENT_BINARY_DIR pro teste abrir por nome relativo simples, mesma
+#     convenção das próprias duas fixtures do image_decode_sanity acima. Ver o cabeçalho próprio
+#     de arquivo do teste pro oráculo completo (valores à mão derivados via fontTools, mesma
+#     disciplina MÉTODO DO ORÁCULO que o cabeçalho próprio do tests/test_sfnt.c documenta pra
+#     suíte da Camada 0).
+# ---------------------------------------------------------------------------
+if(GLINTFX_MODULE_DRAW2D)
+  configure_file(${CMAKE_SOURCE_DIR}/demos/showcase/assets/OpenSans-Regular.ttf
+                 ${CMAKE_CURRENT_BINARY_DIR}/OpenSans-Regular.ttf COPYONLY)
+  configure_file(${CMAKE_SOURCE_DIR}/demos/showcase/assets/PixelOperatorMono.ttf
+                 ${CMAKE_CURRENT_BINARY_DIR}/PixelOperatorMono.ttf COPYONLY)
+  add_executable(text_raster_sanity
+    text_raster_sanity.cpp
+    ${CMAKE_SOURCE_DIR}/src/text_raster.cpp
+    ${_glx_core_src_dir}/sfnt.c
+    ${_glx_core_src_dir}/raster.c
+    ${_glx_core_src_dir}/hint.c)
+  target_include_directories(text_raster_sanity PRIVATE ${_glx_core_include_dir})
+  target_compile_options(text_raster_sanity PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
+  add_test(NAME text_raster_sanity COMMAND text_raster_sanity)
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: layer_queue_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-onda5-draw2d-
 #     primitives.md, decision D27/D28) -- PURE unit test for src/layer_queue.hpp: no window, no
 #     GL context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate

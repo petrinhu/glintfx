@@ -2320,7 +2320,7 @@ add_test(NAME asset_decode_hostile_sanity
 #       - draw2d_hostile_sanity: the fail-high surface (D7/D10/D11) -- hostile texture corpus,
 #         destroyed/tampered/foreign handles, begin(0,0), nested begin(), draw outside a bracket,
 #         double shutdown(), destroying a Draw2d with a live texture. ASan-clean is the real gate
-#         (the `claudio` sanitize leg, AGENTS.md's CI policy).
+#         (the sanitize leg, AGENTS.md's CI policy).
 #       - draw2d_camera_render_sanity (D2D-2B, added this wave): camera offset/zoom/rotation,
 #         SpriteTransform rotation/flip_h/flip_v (no camera), and a mid-bracket
 #         set_camera()/reset_camera() switch on ONE texture -- every expected screen
@@ -2342,7 +2342,7 @@ add_test(NAME asset_decode_hostile_sanity
 #       - draw2d_hostile_sanity: a superfície fail-high (D7/D10/D11) -- corpus hostil de textura,
 #         handles destruídos/adulterados/estrangeiros, begin(0,0), begin() aninhado, draw fora de
 #         bracket, shutdown() duplo, destruir um Draw2d com textura viva. ASan-limpo é o gate de
-#         fato (a perna sanitize do `claudio`, política de CI do AGENTS.md).
+#         fato (a perna sanitize, política de CI do AGENTS.md).
 #       - draw2d_camera_render_sanity (D2D-2B, somado nesta onda): offset/zoom/rotação de
 #         câmera, SpriteTransform rotação/flip_h/flip_v (sem câmera), e uma troca
 #         set_camera()/reset_camera() no meio do bracket sobre UMA textura -- toda
@@ -2422,8 +2422,9 @@ if(GLINTFX_MODULE_DRAW2D)
   #     under this same Xvfb/llvmpipe fixture (real GL, ${_embed_dep} glloader, same link pair as
   #     every draw2d_*_sanity test above). Gated on GLINTFX_MODULE_DRAW2D like every other test in
   #     this block; runs in BOTH build configurations. The strict 1.5x-baseline gate only bites
-  #     with GLINTFX_PERF_STRICT=1 in the environment (set by .forgejo/workflows/heavy.yml's
-  #     claudio jobs only); everywhere else only a loose 10x sanity ceiling and the
+  #     with GLINTFX_PERF_STRICT=1 in the environment (NOTHING sets it since 2026-07-25 -- the
+  #     self-hosted runner job that did was retired; set it by hand to arm the strict tier);
+  #     everywhere else only a loose 10x sanity ceiling and the
   #     machine-relative layered<=2x-streaming ratio gate are checked -- see the test file's own
   #     header comment for the full two-tier gate design and baseline provenance.
   # PT: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- a fatia do performance-engineer, uma
@@ -2433,8 +2434,9 @@ if(GLINTFX_MODULE_DRAW2D)
   #     de ponta-a-ponta sob esta mesma fixture Xvfb/llvmpipe (GL real, ${_embed_dep} glloader,
   #     mesmo par de link de todo teste draw2d_*_sanity acima). Gateado em GLINTFX_MODULE_DRAW2D
   #     igual a todo outro teste deste bloco; roda nas DUAS configurações de build. O gate estrito
-  #     de baseline 1,5x só morde com GLINTFX_PERF_STRICT=1 no ambiente (setado só pelos jobs
-  #     claudio de .forgejo/workflows/heavy.yml); em todo outro lugar só um teto de sanidade frouxo
+  #     de baseline 1,5x só morde com GLINTFX_PERF_STRICT=1 no ambiente (NADA a seta desde
+  #     2026-07-25 -- o job do runner self-hosted que a setava foi aposentado; sete à mão pra
+  #     armar o nível estrito); em todo outro lugar só um teto de sanidade frouxo
   #     de 10x e o gate de razão camadas<=2x-streaming relativo-à-máquina são checados -- ver o
   #     comentário de cabeçalho do próprio arquivo de teste pro desenho completo do gate de dois
   #     níveis e a proveniência da baseline.

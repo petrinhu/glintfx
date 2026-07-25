@@ -40,7 +40,7 @@
 #     Wayland, not just test fixtures -- out of scope, still not done, still
 #     would need an explicit architecture decision if ever wanted). The fake
 #     directory is removed again after the test process exits, win or lose.
-#     GitHub Actions / Forgejo Actions runners are headless (no desktop
+#     GitHub Actions runners are headless (no desktop
 #     session, no WAYLAND_DISPLAY, no wayland-0 socket to begin with) so this
 #     change is inert there: XDG_RUNTIME_DIR gets pointed at an equally-empty
 #     directory that no code path needed protecting against in the first
@@ -86,7 +86,7 @@
 #     de escopo, ainda não feito, ainda exigiria decisão explícita de
 #     arquitetura se algum dia for desejado). O diretório falso é removido de
 #     novo depois que o processo de teste sai, passe ou falhe.
-#     Runners do GitHub Actions / Forgejo Actions são headless (sem sessão de
+#     Runners do GitHub Actions são headless (sem sessão de
 #     desktop, sem WAYLAND_DISPLAY, sem socket wayland-0 de saída) então esta
 #     mudança é inócua lá: XDG_RUNTIME_DIR só passa a apontar para um
 #     diretório igualmente vazio que nenhum caminho de código precisava de

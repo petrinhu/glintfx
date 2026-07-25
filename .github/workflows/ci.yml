@@ -500,12 +500,12 @@ jobs:
 
       # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) instead of
       #     /usr/local/bin -- avoids a sudo dependency on the non-root GH Actions
-      #     runner user, and the exact same steps work unmodified on the Forgejo
-      #     workflow's root-inside-container runner.
+      #     runner user, and keeps the step portable to a root-inside-container
+      #     runner should a self-hosted one be added later.
       # PT: Instalado em $HOME/.local/bin (adicionado ao PATH via GITHUB_PATH) em vez
       #     de /usr/local/bin -- evita depender de sudo no usuario nao-root do runner
-      #     do GH Actions, e os mesmos passos funcionam sem alteracao no runner
-      #     root-dentro-do-container do workflow Forgejo.
+      #     do GH Actions, e mantem o passo portavel para um runner
+      #     root-dentro-de-container caso um self-hosted seja adicionado depois.
       - name: install gitleaks
         run: |
           mkdir -p "$HOME/.local/bin"

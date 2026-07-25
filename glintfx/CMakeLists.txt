@@ -9,8 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, TODO.md LW-TST) — AddressSanitizer + LeakSanitizer +
 #     UndefinedBehaviorSanitizer for a nightly memory-safety gate. OFF by default: never
 #     pollutes the normal build (dev, PR-hot CI) — the instrumented build is significantly
-#     slower and is meant to run as a separate/nightly job (see .github/workflows/nightly.yml
-#     and .forgejo/workflows/nightly.yml).
+#     slower and is meant to run as a separate/nightly job (see
+#     .github/workflows/nightly.yml).
 #     Applied via add_compile_options/add_link_options (directory-scope, set BEFORE
 #     FetchContent_MakeAvailable(RmlUi) and the INTERFACE target glloader declared below)
 #     so the flags reach every target compiled in this build: glintfx itself, vendored
@@ -27,8 +27,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # PT: GLINTFX_SANITIZE (TST-L1-MEM, TODO.md LW-TST) — AddressSanitizer + LeakSanitizer +
 #     UndefinedBehaviorSanitizer para um gate noturno de memory-safety. OFF por padrão: nunca
 #     polui o build normal (dev, CI quente de PR) — o build instrumentado é significativamente
-#     mais lento e é feito para rodar como job separado/noturno (ver .github/workflows/nightly.yml
-#     e .forgejo/workflows/nightly.yml).
+#     mais lento e é feito para rodar como job separado/noturno (ver
+#     .github/workflows/nightly.yml).
 #     Aplicado via add_compile_options/add_link_options (escopo de diretório, definido ANTES
 #     de FetchContent_MakeAvailable(RmlUi) e da declaração do target INTERFACE glloader
 #     abaixo) para que as flags alcancem todo target compilado neste build: a própria
@@ -60,8 +60,8 @@ endif()
 #     (llvm-cov), self-hosted per the líder's 2026-07-04 decision (NOT Codecov or any
 #     third-party service -- zero data leaves the repo/CI runner). OFF by default: an
 #     instrumented build never pollutes the normal/dev/PR-hot build; it is meant to run
-#     as its own CI job (see the `coverage` job in .github/workflows/ci.yml and
-#     .forgejo/workflows/ci.yml) or via tools/coverage_report.sh locally.
+#     as its own CI job (see the `coverage` job in .github/workflows/ci.yml) or via
+#     tools/coverage_report.sh locally.
 #
 #     Clang-only, hard gate: this project's CI has built glintfx with clang since v0.5.0
 #     (README.md declares "Compiler: clang"), and Clang's source-based coverage
@@ -96,8 +96,7 @@ endif()
 #     Codecov nem nenhum serviço de terceiro -- zero dado sai do repo/runner de CI). OFF
 #     por padrão: um build instrumentado nunca polui o build normal/dev/CI quente de PR;
 #     é feito para rodar como job próprio de CI (ver o job `coverage` em
-#     .github/workflows/ci.yml e .forgejo/workflows/ci.yml) ou via
-#     tools/coverage_report.sh localmente.
+#     .github/workflows/ci.yml) ou via tools/coverage_report.sh localmente.
 #
 #     Só Clang, gate duro: o CI deste projeto builda a glintfx com clang desde a v0.5.0
 #     (README.md declara "Compiler: clang"), e a cobertura source-based do Clang

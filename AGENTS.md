@@ -70,23 +70,23 @@ What this means in practice:
 
 - `https://github.com/petrinhu/glintfx` is the canonical URL for the repository, its releases, its issues, and its wiki. Every `codeberg.org` link is a future 404 and must not be reintroduced.
 - The git remotes `origin` and `github` both point at GitHub. There is no "dual push" any more: one push, one remote.
-- The Forgejo-side Codeberg workflows (`.forgejo/workflows/ci.yml`, `.forgejo/workflows/core-ci.yml`, both `runs-on: codeberg-medium`) were deleted as dead code. Only `.forgejo/workflows/heavy.yml` (`runs-on: docker`, the local `claudio` runner) remains.
+- **The whole `.forgejo/` directory is gone**, deleted on 2026-07-25: the two Codeberg workflows (`ci.yml`, `core-ci.yml`, `runs-on: codeberg-medium`) and `heavy.yml` (the local `claudio` runner) alike. Do not recreate it.
 - Historical prose in `CHANGELOG.md` still describes what past releases actually did, dual-remote mentions included. That is a record, not an instruction: do not rewrite it.
 
 ### CI policy: where each check runs
 
-**All CI runs on GitHub, heavy checks included. GitHub is the single release gate.** (Lead's decision, 2026-07-25, when the project moved off Codeberg; see "GitHub is the only public face" below.)
+**All CI runs on GitHub. `.github/workflows/` is the only CI that exists.** (Lead's decision, 2026-07-25.)
 
-- **`github`** (`.github/workflows/ci.yml`, `ubuntu-latest`) is the **gate**. Runs on push to `main`, on tags, and on PRs; matrix over `GLINTFX_BACKEND_GLFW` (ON/OFF). A green run here is what authorises a merge or a tag.
-- **`claudio`** (`.forgejo/workflows/heavy.yml`, `runs-on: docker`, `container: fedora:42`) is the local self-hosted Forgejo runner, kept as a **fallback only**. It still carries the depth checks (ASan `sanitize` and the own-font-engine `fonteng` build) on PR-to-`main`, tags, and manual dispatch, but it is no longer part of a gate order: use it when GitHub cannot answer the question, not as a second opinion to wait on.
-- **Nightly ASan** (`.github/workflows/nightly.yml`, GitHub cron) stays as a **safety net**, independent of the PR/tag gate.
+- **`.github/workflows/ci.yml`** (`ubuntu-latest`) is the **gate**. Runs on push to `main`, on tags, and on PRs; matrix over `GLINTFX_BACKEND_GLFW` (ON/OFF). A green run here is what authorises a merge or a tag.
+- **`.github/workflows/nightly.yml`** (GitHub cron) is the nightly ASan **safety net**, independent of the PR/tag gate.
+- **There is no CI on this machine any more.** The self-hosted Forgejo runner `claudio` was shut down and removed on 2026-07-25, and `.forgejo/` no longer exists in the repository. `forgejo-runner exec` is not a thing here: there is no Forgejo workflow left to validate with it.
 
-**Declared pending item:** the lead intends to register `claudio` as a self-hosted runner **on GitHub**, later, so the heavy checks run under the same surface as everything else. Until he does it himself, **do not configure a self-hosted runner on GitHub** and do not migrate `heavy.yml`: the file stays where it is, as-is.
+**Declared pending item: the heavy job is temporarily homeless.** The ASan/LSan/UBSan `sanitize` leg and the own-font-engine `fonteng` leg used to run only on `claudio`. Nothing runs them on a server today. The lead will set up a self-hosted runner on GitHub later and port the job there; the recipe to port is saved outside the repository, at `~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml` (and remains recoverable from git history). **Until the lead does it himself, do not configure a self-hosted runner on GitHub.**
 
-Two practices survive the move unchanged, and both still matter:
+Two practices survive the move and both still matter:
 
-- **Reproduce a container failure locally before iterating by push.** Anything that fails only under `fedora:42` gets reproduced in `tools/ci/Containerfile.f42` first. This caught two real class-of-bug misses that reproduced only in that base image (missing `libasan`/`libubsan`, and a `SYS_futex` gap under clang's sanitizer runtime).
-- **Run the pre-commit `ctest` locally** (`tools/preci.sh`, see the local-gates section above) rather than using CI as your first compiler.
+- **Reproduce a container failure locally, by hand, before iterating by push.** `tools/ci/Containerfile.f42` and `tools/ci/build_image.sh` still work standalone: they build `localhost/glintfx-ci:f42` (fedora:42 with clang, cmake, `libasan`/`libubsan`, Xvfb and Mesa pre-installed) with a plain `docker build`, no runner involved. Run the failing command inside `docker run` against that image. This image caught two real class-of-bug misses that reproduced only on a Fedora base (missing `libasan`/`libubsan`, and a `SYS_futex` gap under clang's sanitizer runtime).
+- **Run the pre-commit `ctest` locally** (`tools/preci.sh`, see the local-gates section above) rather than using CI as your first compiler. With the heavy job homeless, this is now the main thing standing between you and a regression.
 
 ### Conventions
 
@@ -225,23 +225,23 @@ O que isso significa na prática:
 
 - `https://github.com/petrinhu/glintfx` é a URL canônica do repositório, das releases, das issues e da wiki. Todo link `codeberg.org` é um 404 futuro e não pode ser reintroduzido.
 - Os remotos git `origin` e `github` apontam os dois pro GitHub. Não existe mais "push dual": um push, um remoto.
-- Os workflows Forgejo do lado Codeberg (`.forgejo/workflows/ci.yml`, `.forgejo/workflows/core-ci.yml`, os dois `runs-on: codeberg-medium`) foram apagados como código morto. Só sobra o `.forgejo/workflows/heavy.yml` (`runs-on: docker`, o runner local `claudio`).
+- **O diretório `.forgejo/` inteiro sumiu**, apagado em 2026-07-25: tanto os dois workflows do Codeberg (`ci.yml`, `core-ci.yml`, `runs-on: codeberg-medium`) quanto o `heavy.yml` (o runner local `claudio`). Não recriar.
 - A prosa histórica do `CHANGELOG.md` continua descrevendo o que releases passadas de fato fizeram, menções a remoto dual incluídas. Isso é registro, não instrução: não reescrever.
 
 ### Política de CI: o que roda onde
 
-**Todo CI roda no GitHub, inclusive os checks pesados. O GitHub é o único gate de release.** (Decisão do líder, 2026-07-25, quando o projeto saiu do Codeberg; ver "O GitHub é o único rosto público" abaixo.)
+**Todo CI roda no GitHub. O `.github/workflows/` é o único CI que existe.** (Decisão do líder, 2026-07-25.)
 
-- **`github`** (`.github/workflows/ci.yml`, `ubuntu-latest`) é o **gate**. Roda em push para `main`, em tags e em PRs; matriz sobre `GLINTFX_BACKEND_GLFW` (ON/OFF). Um run verde aqui é o que autoriza merge ou tag.
-- **`claudio`** (`.forgejo/workflows/heavy.yml`, `runs-on: docker`, `container: fedora:42`) é o runner self-hosted local do Forgejo, mantido **só como fallback**. Ele ainda carrega os checks de profundidade (ASan `sanitize` e o build do motor de fonte próprio `fonteng`) em PR→`main`, tag e dispatch manual, mas não faz mais parte de uma ordem de gate: use quando o GitHub não consegue responder a pergunta, não como segunda opinião a esperar.
-- **Nightly ASan** (`.github/workflows/nightly.yml`, cron do GitHub) permanece como **rede de segurança**, independente do gate de PR/tag.
+- **`.github/workflows/ci.yml`** (`ubuntu-latest`) é o **gate**. Roda em push para `main`, em tags e em PRs; matriz sobre `GLINTFX_BACKEND_GLFW` (ON/OFF). Um run verde aqui é o que autoriza merge ou tag.
+- **`.github/workflows/nightly.yml`** (cron do GitHub) é a **rede de segurança** noturna de ASan, independente do gate de PR/tag.
+- **Não existe mais CI nesta máquina.** O runner self-hosted `claudio` do Forgejo foi desligado e removido em 2026-07-25, e o `.forgejo/` não existe mais no repositório. `forgejo-runner exec` não se aplica aqui: não sobrou workflow Forgejo pra validar com ele.
 
-**Pendência declarada:** o líder pretende registrar o `claudio` como runner self-hosted **no GitHub**, depois, para os checks pesados rodarem na mesma superfície que o resto. Até ele mesmo fazer isso, **não configure runner self-hosted no GitHub** e não migre o `heavy.yml`: o arquivo fica onde está, como está.
+**Pendência declarada: o job pesado ficou temporariamente sem casa.** A perna `sanitize` (ASan/LSan/UBSan) e a perna `fonteng` (motor de fonte próprio) só rodavam no `claudio`. Hoje ninguém as roda num servidor. O líder vai montar um runner self-hosted no GitHub depois e portar o job pra lá; a receita a portar está salva fora do repositório, em `~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml` (e segue recuperável do histórico git). **Até o líder fazer isso ele mesmo, não configure runner self-hosted no GitHub.**
 
-Duas práticas sobrevivem à mudança sem alteração, e as duas continuam importando:
+Duas práticas sobrevivem à mudança, e as duas continuam importando:
 
-- **Reproduzir falha de container localmente antes de iterar por push.** Qualquer coisa que só falhe sob `fedora:42` é reproduzida primeiro em `tools/ci/Containerfile.f42`. Isso já pegou dois achados reais que só reproduziam nessa imagem-base (`libasan`/`libubsan` faltando, e um gap de `SYS_futex` sob o runtime de sanitizer do clang).
-- **Rodar o `ctest` de pre-commit localmente** (`tools/preci.sh`, ver a seção de gates locais acima) em vez de usar o CI como primeiro compilador.
+- **Reproduzir falha de container localmente, à mão, antes de iterar por push.** O `tools/ci/Containerfile.f42` e o `tools/ci/build_image.sh` continuam funcionando sozinhos: constroem a `localhost/glintfx-ci:f42` (fedora:42 com clang, cmake, `libasan`/`libubsan`, Xvfb e Mesa pré-instalados) com um `docker build` comum, sem runner nenhum envolvido. Rode o comando que falha dentro de um `docker run` contra essa imagem. Foi essa imagem que pegou dois achados reais que só reproduziam numa base Fedora (`libasan`/`libubsan` faltando, e um gap de `SYS_futex` sob o runtime de sanitizer do clang).
+- **Rodar o `ctest` de pre-commit localmente** (`tools/preci.sh`, ver a seção de gates locais acima) em vez de usar o CI como primeiro compilador. Com o job pesado sem casa, isto virou a principal coisa entre você e uma regressão.
 
 ### Gotchas críticos (RmlUi / GL3 / embed mode): leia antes de mexer no renderer
 

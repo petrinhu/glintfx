@@ -2,7 +2,7 @@
 // EN: draw2d_hostile_sanity (D2D-1B) -- the fail-high surface of `glintfx::Draw2d` (D7/D10/D11).
 //     Every case below must degrade gracefully (a false/invalid/no-op result) and MUST NOT
 //     crash -- ASan-clean is the actual gate (see AGENTS.md's CI policy: this suite runs under
-//     the `claudio` sanitize leg). A small, FIXED corpus (re-derived here, a DIFFERENT test
+//     the sanitize leg). A small, FIXED corpus (re-derived here, a DIFFERENT test
 //     binary from image_decode_sanity.cpp/asset_decode_hostile_sanity.cpp -- same "not a fuzz
 //     campaign" reasoning those files' own top comments give: stb_image is already one of the
 //     world's most fuzzed OSS targets, this module's own code around it is a handful of lines).
@@ -14,7 +14,7 @@
 // PT: draw2d_hostile_sanity (D2D-1B) -- a superfície fail-high do `glintfx::Draw2d` (D7/D10/D11).
 //     Todo caso abaixo precisa degradar graciosamente (um resultado false/inválido/no-op) e NÃO
 //     PODE crashar -- ASan-limpo é o gate de fato (ver a política de CI do AGENTS.md: esta suíte
-//     roda sob a perna sanitize do `claudio`). Um corpus pequeno e FIXO (re-derivado aqui, um
+//     roda sob a perna sanitize). Um corpus pequeno e FIXO (re-derivado aqui, um
 //     binário de teste DIFERENTE de image_decode_sanity.cpp/asset_decode_hostile_sanity.cpp --
 //     mesmo racional de "não é campanha de fuzz" que os próprios comentários de topo daqueles
 //     arquivos dão: o stb_image já é um dos alvos OSS mais fuzzados do mundo, o código próprio

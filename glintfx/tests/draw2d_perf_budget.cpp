@@ -28,12 +28,14 @@
 //     10k-sprite bracket (no texture-switch stream) -- the worst-case multi-texture-interleave
 //     cost is a DIFFERENT, un-measured axis (seed SEED-PERF-TEXSWITCH if it ever needs pricing).
 //
-//     THE GATE, TWO-TIER (D30, literal): with GLINTFX_PERF_STRICT=1 in the environment (set ONLY
-//     by .forgejo/workflows/heavy.yml's claudio jobs, never by ci.yml/nightly.yml), metrics (a)
-//     and (c) FAIL if they cross their own BASELINE constant below by more than 1.5x (worse
-//     direction: lower quads/s for (a), higher ms for (c)). Without the env var (every other
-//     runner, every dev machine), only a blunt 10x SANITY ceiling fails the test -- the number is
-//     still printed either way. The RATIO gate (b, layered <= 4.0x streaming, revised 2026-07-23
+//     THE GATE, TWO-TIER (D30, literal): with GLINTFX_PERF_STRICT=1 in the environment, metrics
+//     (a) and (c) FAIL if they cross their own BASELINE constant below by more than 1.5x (worse
+//     direction: lower quads/s for (a), higher ms for (c)). Without the env var, only a blunt 10x
+//     SANITY ceiling fails the test -- the number is still printed either way.
+//     !! SINCE 2026-07-25, NOTHING SETS GLINTFX_PERF_STRICT=1: the only job that armed it ran on
+//     the self-hosted runner, retired together with the whole .forgejo/ directory. The strict
+//     tier is DORMANT, not removed -- set the variable by hand on a machine whose baselines you
+//     trust. See AGENTS.md's CI-policy section for the pending item that gives it a home again. The RATIO gate (b, layered <= 4.0x streaming, revised 2026-07-23
 //     -- see the finding paragraph below) is MACHINE-RELATIVE by construction (both arms run on
 //     the SAME machine, SAME process, SAME invocation) so it is STRICT EVERYWHERE, unconditional
 //     on GLINTFX_PERF_STRICT -- it is the direct, always-on answer to this wave's risk 2 ("layers
@@ -42,15 +44,15 @@
 //     BASELINE PROVENANCE (honesty over invention -- the house's own named rule: "baseline
 //     medida, nunca inventada"): the three constants below were MEASURED by this agent run on
 //     2026-07-23, on the sandboxed dev container this session had shell access to (Fedora 44,
-//     12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM) -- NOT the literal `claudio`
-//     self-hosted Forgejo runner named in the brief (a different physical machine this agent
-//     process cannot reach). This is a REAL measurement, never a guess, but it is a STAND-IN
-//     baseline: the first `claudio` CI run of this file prints its own GLINTFX_PERF lines in the
-//     job log, and per D30 the leader/orchestrator should swap these three constants for THAT
-//     run's numbers once available (a one-line diff each, this comment's date/host updated) --
-//     the whole point of GLINTFX_PERF_STRICT being claudio-only is that the strict gate is
-//     meaningless until its baseline actually comes from claudio. Flagged explicitly in this
-//     wave's report, not silently left as if it were the real thing.
+//     12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM) -- NOT the self-hosted runner
+//     named in the brief (a different physical machine this agent process cannot reach). This is
+//     a REAL measurement, never a guess, but it is a STAND-IN baseline: per D30 the
+//     leader/orchestrator should swap these three constants for the numbers a dedicated, stable
+//     machine prints (a one-line diff each, this comment's date/host updated). That machine was
+//     the self-hosted runner retired on 2026-07-25, so the swap is BLOCKED until the heavy job
+//     gets a home again -- the strict gate stays meaningless until its baseline comes from a
+//     machine worth trusting. Flagged explicitly, not silently left as if it were the real
+//     thing.
 //
 //     A REAL FINDING FROM THIS MEASUREMENT, A REVERTED OPTIMIZATION, AND THE CEILING REVISED BY
 //     THE LEADER (reported, not hidden -- "recomendações de tuning com evidência" is this role's
@@ -65,7 +67,7 @@
 //     (PERF-D2D3B, 2026-07-23): a version of `drain_grouped()` that sorted a `{layer, push_index}`
 //     key (8 B) instead of the full struct measured ~2.9x on THIS machine -- but that measurement
 //     used the system's default g++, a METHOD ERROR: every CI workflow that builds this repo
-//     (`.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`/`heavy.yml`) pins
+//     (`.github/workflows/ci.yml`) pins
 //     `-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`, never the default compiler. Rebuilt
 //     and re-measured with clang (the only comparison that matters): the lightweight-key sort
 //     measured ~3.69x, WORSE than the original `std::stable_sort`'s ~3.39x under clang -O0's own
@@ -113,12 +115,14 @@
 //     multi-textura é um eixo DIFERENTE, não medido aqui (semente SEED-PERF-TEXSWITCH se algum
 //     dia precisar de preço).
 //
-//     O GATE, DOIS NÍVEIS (D30, literal): com GLINTFX_PERF_STRICT=1 no ambiente (setado SÓ pelos
-//     jobs claudio de .forgejo/workflows/heavy.yml, nunca por ci.yml/nightly.yml), as métricas (a)
+//     O GATE, DOIS NÍVEIS (D30, literal): com GLINTFX_PERF_STRICT=1 no ambiente, as métricas (a)
 //     e (c) FALHAM se cruzarem a própria constante BASELINE abaixo em mais de 1,5x (direção
-//     pior: quads/s mais baixo pra (a), ms mais alto pra (c)). Sem a env (qualquer outro runner,
-//     qualquer máquina de dev), só um teto de SANIDADE grosseiro de 10x falha o teste -- o número
-//     é sempre impresso dos dois jeitos. O gate de RATIO (b, camadas <= 4,0x streaming, revisado
+//     pior: quads/s mais baixo pra (a), ms mais alto pra (c)). Sem a env, só um teto de SANIDADE
+//     grosseiro de 10x falha o teste -- o número é sempre impresso dos dois jeitos.
+//     !! DESDE 2026-07-25, NADA SETA GLINTFX_PERF_STRICT=1: o único job que a armava rodava no
+//     runner self-hosted, aposentado junto com o diretório .forgejo/ inteiro. O nível estrito
+//     está DORMENTE, não removido -- sete a variável à mão numa máquina cujas baselines você
+//     confia. Ver a seção de política de CI do AGENTS.md pra pendência que lhe dá casa de novo. O gate de RATIO (b, camadas <= 4,0x streaming, revisado
 //     em 2026-07-23 -- ver o parágrafo do achado abaixo) é RELATIVO-À-MÁQUINA por construção (os
 //     dois braços rodam na MESMA máquina, MESMO processo, MESMA invocação) então é ESTRITO EM
 //     TODO LUGAR, incondicional a GLINTFX_PERF_STRICT -- é a resposta direta e sempre-ligada ao
@@ -128,14 +132,13 @@
 //     "baseline medida, nunca inventada"): as três constantes abaixo foram MEDIDAS por este
 //     agente em 2026-07-23, no container de dev sandboxed ao qual esta sessão teve acesso de
 //     shell (Fedora 44, Intel Core i5-12500H de 12ª geração, 16 núcleos lógicos, 31 GiB RAM) --
-//     NÃO o runner self-hosted `claudio` do Forgejo nomeado no brief (uma máquina física
-//     diferente que este processo de agente não alcança). É uma medição REAL, nunca um chute, mas
-//     é uma baseline PROVISÓRIA: a primeira execução de CI deste arquivo no `claudio` imprime as
-//     próprias linhas GLINTFX_PERF no log do job, e pelo D30 o líder/orquestrador deveria trocar
-//     estas três constantes pelos números DAQUELA execução assim que disponíveis (um diff de uma
-//     linha cada, data/host deste comentário atualizados) -- o ponto inteiro de
-//     GLINTFX_PERF_STRICT ser exclusivo do claudio é que o gate estrito não significa nada até a
-//     própria baseline vir do claudio de fato. Flagrado explicitamente no relatório desta onda,
+//     NÃO o runner self-hosted nomeado no brief (uma máquina física diferente que este processo
+//     de agente não alcança). É uma medição REAL, nunca um chute, mas é uma baseline PROVISÓRIA:
+//     pelo D30 o líder/orquestrador deveria trocar estas três constantes pelos números que uma
+//     máquina dedicada e estável imprimir (um diff de uma linha cada, data/host deste comentário
+//     atualizados). Essa máquina era o runner self-hosted aposentado em 2026-07-25, então a troca
+//     está BLOQUEADA até o job pesado ganhar casa de novo -- o gate estrito segue não
+//     significando nada até a baseline vir de uma máquina confiável. Flagrado explicitamente,
 //     não deixado em silêncio como se fosse a coisa real.
 //
 //     UM ACHADO REAL DESTA MEDIÇÃO, UMA OTIMIZAÇÃO REVERTIDA, E O TETO REVISADO PELO LÍDER
@@ -152,7 +155,7 @@
 //     `drain_grouped()` que ordenava uma chave `{layer, push_index}` (8 B) em vez da struct
 //     inteira mediu ~2,9x NESTA máquina -- mas essa medição usou o g++ padrão do sistema, um ERRO
 //     DE MÉTODO: todo workflow de CI que builda este repo (`.github/workflows/ci.yml`,
-//     `.forgejo/workflows/ci.yml`/`heavy.yml`) fixa `-DCMAKE_C_COMPILER=clang
+//     ) fixa `-DCMAKE_C_COMPILER=clang
 //     -DCMAKE_CXX_COMPILER=clang++`, nunca o compilador padrão. Rebuildado e re-medido com clang
 //     (a única comparação que importa): a ordenação de chave leve mediu ~3,69x, PIOR que o
 //     `std::stable_sort` original (~3,39x sob clang) -- a teoria da "chave mais barata" se
@@ -477,13 +480,14 @@ int main() {
 
   // EN: BASELINES (see this file's own header comment for full provenance/caveat) -- measured on
   //     2026-07-23, sandboxed dev container, Fedora 44, Intel Core i5-12500H (12th gen, 16
-  //     logical cores), 31 GiB RAM. NOT the `claudio` self-hosted runner -- STAND-IN until
-  //     claudio's own first run of this file produces real numbers to swap in (D30).
+  //     logical cores), 31 GiB RAM. NOT a dedicated stable machine -- STAND-IN until one exists
+  //     again and produces real numbers to swap in (D30); the self-hosted runner that was going
+  //     to do it was retired on 2026-07-25.
   // PT: BASELINES (ver o comentário de cabeçalho deste arquivo pra proveniência/ressalva
   //     completas) -- medidas em 2026-07-23, container de dev sandboxed, Fedora 44, Intel Core
-  //     i5-12500H (12ª geração, 16 núcleos lógicos), 31 GiB RAM. NÃO o runner self-hosted
-  //     `claudio` -- PROVISÓRIA até a primeira execução do claudio neste arquivo produzir números
-  //     reais para substituir (D30).
+  //     i5-12500H (12ª geração, 16 núcleos lógicos), 31 GiB RAM. NÃO uma máquina dedicada e
+  //     estável -- PROVISÓRIA até existir uma de novo que produza números reais para substituir
+  //     (D30); o runner self-hosted que faria isso foi aposentado em 2026-07-25.
   constexpr double kBaselinePureBatcherQuadsPerS = 8500000.0;
   constexpr double kBaselineE2eMedianMs = 5.0;
   constexpr double kStrictFactor = 1.5;

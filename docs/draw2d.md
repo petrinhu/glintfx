@@ -728,11 +728,15 @@ regardless of gate outcome):
 GUARD, not a GPU throughput/bandwidth/vsync-pacing truth. Metrics 1 and 2 ARE real CPU numbers
 (no GL involved at all).
 
-**The gate, two-tier:** with `GLINTFX_PERF_STRICT=1` in the environment (set ONLY by the
-`claudio` self-hosted runner's job in `.forgejo/workflows/heavy.yml`, never by
-`ci.yml`/`nightly.yml`), metrics 1 and 3 FAIL if they cross their own BASELINE constant by more
-than 1.5x. Without the env var (every other runner, every dev machine), only a blunt 10x
-SANITY ceiling fails the test -- the number is still printed either way. The RATIO gate (metric
+**The gate, two-tier:** with `GLINTFX_PERF_STRICT=1` in the environment, metrics 1 and 3 FAIL if
+they cross their own BASELINE constant by more than 1.5x. Without the env var, only a blunt 10x
+SANITY ceiling fails the test -- the number is still printed either way.
+⚠️ **Since 2026-07-25, nothing sets `GLINTFX_PERF_STRICT=1`:** the only job that ever armed it
+ran on the self-hosted `claudio` runner, which was retired along with the whole `.forgejo/`
+directory. The strict tier is therefore dormant, not removed -- set the variable by hand
+(`GLINTFX_PERF_STRICT=1 ctest -R draw2d_perf_budget`) on a machine whose baselines you trust,
+and see `AGENTS.md`'s CI-policy section for the pending item that will give the heavy job a home
+again. The RATIO gate (metric
 2) is MACHINE-RELATIVE by construction (both arms run on the same machine, same process, same
 invocation), so it is STRICT EVERYWHERE, unconditional on `GLINTFX_PERF_STRICT` -- it is the
 direct, always-on answer to this wave's own risk 2 ("layers vs batching is where performance can
@@ -756,13 +760,13 @@ measured WITH CLANG is the honest price of that feature, not a regression to cha
 constants dated in-file): `pure_batcher_quads_per_s` baseline = **8 500 000**,
 `e2e_10k_sprite_1k_prim_median_ms` baseline = **5.0**, `layered_streaming_ratio` ceiling =
 **4.0x** (revised, clang-measured) -- all measured on **2026-07-23**, on a Fedora 44 sandboxed
-dev container (12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM), **NOT** the literal
-`claudio` self-hosted Forgejo runner named by this wave's plan (a different physical machine).
-This is a real measurement, never a guess, but a STAND-IN baseline: the first `claudio` CI run
-of this test prints its own `GLINTFX_PERF` lines in the job log, and per D30 these three
-constants should be swapped for that run's numbers once available (a one-line diff each, this
-comment's date/host updated in `draw2d_perf_budget.cpp`) -- flagged here explicitly, not silently
-left as if it were the final number.
+dev container (12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM), **NOT** the
+self-hosted runner named by this wave's plan (a different physical machine). This is a real
+measurement, never a guess, but a STAND-IN baseline: per D30 these three constants should be
+swapped for the numbers a dedicated, stable machine prints once one exists again. That machine
+was the self-hosted runner retired on 2026-07-25, so **the swap is blocked** until the heavy job
+gets a home (see `AGENTS.md`'s CI-policy section) -- flagged here explicitly, not silently left
+as if it were the final number.
 
 ### Limits declared
 
@@ -1595,11 +1599,15 @@ do resultado do gate):
 RASTER DE CPU, não uma verdade de throughput/banda/pacing-de-vsync de GPU. As métricas 1 e 2 SÃO
 números reais de CPU (nenhum GL envolvido).
 
-**O gate, dois níveis:** com `GLINTFX_PERF_STRICT=1` no ambiente (setada SÓ pelo job do runner
-self-hosted `claudio` em `.forgejo/workflows/heavy.yml`, nunca por `ci.yml`/`nightly.yml`), as
-métricas 1 e 3 FALHAM se cruzarem a própria constante BASELINE em mais de 1,5x. Sem a env
-(qualquer outro runner, qualquer máquina de dev), só um teto de SANIDADE grosseiro de 10x falha o
-teste -- o número é impresso de qualquer forma. O gate de RATIO (métrica 2) é MACHINE-RELATIVE
+**O gate, dois níveis:** com `GLINTFX_PERF_STRICT=1` no ambiente, as métricas 1 e 3 FALHAM se
+cruzarem a própria constante BASELINE em mais de 1,5x. Sem a env, só um teto de SANIDADE
+grosseiro de 10x falha o teste -- o número é impresso de qualquer forma.
+⚠️ **Desde 2026-07-25, nada seta `GLINTFX_PERF_STRICT=1`:** o único job que a armava rodava no
+runner self-hosted `claudio`, aposentado junto com o diretório `.forgejo/` inteiro. O nível
+estrito está portanto dormente, não removido -- sete a variável à mão
+(`GLINTFX_PERF_STRICT=1 ctest -R draw2d_perf_budget`) numa máquina cujas baselines você confia,
+e veja a seção de política de CI do `AGENTS.md` pra pendência que vai dar casa de novo ao job
+pesado. O gate de RATIO (métrica 2) é MACHINE-RELATIVE
 por construção (os dois braços rodam na mesma máquina, mesmo processo, mesma invocação), então é
 ESTRITO EM TODO LUGAR, incondicional a `GLINTFX_PERF_STRICT` -- é a resposta direta e sempre-ligada
 ao próprio risco 2 desta onda ("layers vs batching é onde a performance pode degradar").
@@ -1624,13 +1632,12 @@ de baseline datadas no próprio arquivo): baseline de `pure_batcher_quads_per_s`
 baseline de `e2e_10k_sprite_1k_prim_median_ms` = **5,0**, teto de `layered_streaming_ratio` =
 **4,0x** (revisado, medido com clang) -- todos medidos em **2026-07-23**, num container de dev
 sandboxed Fedora 44 (Intel Core i5-12500H 12ª geração, 16 núcleos lógicos, 31 GiB RAM), **NÃO** o
-próprio runner Forgejo self-hosted `claudio` nomeado pelo plano desta onda (uma máquina física
-diferente). Esta é uma medição real, nunca um chute, mas uma baseline PROVISÓRIA: a 1ª execução
-de CI no `claudio` deste teste imprime as próprias linhas `GLINTFX_PERF` no log do job, e
-conforme o D30 essas três constantes devem ser trocadas pelos números daquela execução assim que
-disponíveis (um diff de uma linha cada, a data/máquina deste comentário atualizada em
-`draw2d_perf_budget.cpp`) -- flagado aqui explicitamente, não deixado em silêncio como se fosse
-o número final.
+runner self-hosted nomeado pelo plano desta onda (uma máquina física diferente). Esta é uma
+medição real, nunca um chute, mas uma baseline PROVISÓRIA: conforme o D30 essas três constantes
+devem ser trocadas pelos números que uma máquina dedicada e estável imprimir, quando existir uma
+de novo. Essa máquina era o runner self-hosted aposentado em 2026-07-25, então **a troca está
+bloqueada** até o job pesado ganhar casa (ver a seção de política de CI do `AGENTS.md`) --
+flagado aqui explicitamente, não deixado em silêncio como se fosse o número final.
 
 ### Limites declarados
 

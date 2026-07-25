@@ -1,39 +1,44 @@
 # SPDX-License-Identifier: MPL-2.0
-# EN: CI image for the self-hosted `claudio` Forgejo runner (see
-#     .forgejo/workflows/heavy.yml, TODO.md CI policy canônica). Two reasons this image
-#     is built and versioned locally instead of pulling a stock distro image at job
-#     time:
-#       1. Speed -- `claudio` is a single always-on machine, not an elastic pool; a
-#          pre-baked image with every dep already installed turns
-#          a ~5 min "apt/dnf install" step into a docker pull-from-local-cache no-op
-#          (see build_image.sh -- rebuild only when this file or the dep list changes).
-#       2. Node.js is MANDATORY, not optional -- Forgejo's `actions/checkout@v4` runs
-#          as a JavaScript action inside the job container and requires a Node.js
-#          runtime to execute at all (this is the exact bug this image exists to avoid:
-#          a bare `fedora:42` base has no Node, and `actions/checkout` silently fails/
-#          hangs without it -- there is no clang/cmake substitute for this requirement).
-#     Base is fedora:42 to match the líder's ratified canonical CI policy (memória
-#     feedback_ci_policy_canonica) -- NOT ubuntu/act-latest. This image is exclusively
-#     for the `claudio` self-hosted runner's heavy jobs.
+# EN: Local reproduction image for glintfx's heavy checks (ASan/LSan/UBSan and the
+#     own-font-engine build) on a Fedora 42 base. Build and use it BY HAND, with plain
+#     docker -- there is no CI runner on this machine any more (the self-hosted
+#     `claudio` Forgejo runner was shut down on 2026-07-25 and `.forgejo/` was deleted
+#     from the repository):
 #
-# PT: Imagem de CI para o runner self-hosted `claudio` do Forgejo (ver
-#     .forgejo/workflows/heavy.yml, política canônica de CI do TODO.md). Dois motivos
-#     para esta imagem ser buildada e versionada localmente em vez de puxar uma imagem
-#     de distro crua na hora do job:
-#       1. Velocidade -- `claudio` é uma única máquina sempre ligada, não um pool
-#          elástico; uma imagem pré-assada com toda dep já
-#          instalada transforma um passo "apt/dnf install" de ~5 min num pull local em
-#          cache, sem custo (ver build_image.sh -- rebuild só quando este arquivo ou a
-#          lista de deps muda).
-#       2. Node.js é OBRIGATÓRIO, não opcional -- o `actions/checkout@v4` do Forgejo
-#          roda como uma JavaScript action dentro do container do job e precisa de um
-#          runtime Node.js pra sequer executar (este é exatamente o bug que esta imagem
-#          existe pra evitar: uma base `fedora:42` crua não tem Node, e o
-#          `actions/checkout` falha/trava em silêncio sem ele -- não há substituto
-#          clang/cmake para este requisito).
-#     Base é fedora:42 para casar com a política canônica de CI ratificada pelo líder
-#     (memória feedback_ci_policy_canonica) -- NÃO ubuntu/act-latest. Esta imagem é
-#     exclusiva para os jobs pesados do runner self-hosted `claudio`.
+#       tools/ci/build_image.sh                       # builds localhost/glintfx-ci:f42
+#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f42 bash -c '<cmd>'
+#
+#     Why a pre-baked image instead of a stock distro image: every dep is already
+#     installed, so a ~5 min "dnf install" becomes a no-op against the local image
+#     cache (rebuild only when this file or the dep list changes). Node.js is included
+#     because a JavaScript-based `actions/checkout` needs a Node runtime to run at all
+#     inside a job container -- kept so this image stays drop-in usable if the heavy
+#     job is ever ported to a self-hosted GitHub runner (the pending item; the recipe
+#     to port lives at ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml).
+#     Base is fedora:42 deliberately, NOT ubuntu/act-latest: reproducing a
+#     Fedora-specific failure is the entire point (missing libasan/libubsan and a
+#     clang-only SYS_futex gap were both found this way).
+#
+# PT: Imagem de reprodução local dos checks pesados da glintfx (ASan/LSan/UBSan e o
+#     build do motor de fonte próprio) sobre uma base Fedora 42. Builde e use À MÃO,
+#     com docker comum -- não existe mais runner de CI nesta máquina (o runner
+#     self-hosted `claudio` do Forgejo foi desligado em 2026-07-25 e o `.forgejo/` foi
+#     apagado do repositório):
+#
+#       tools/ci/build_image.sh                       # builda localhost/glintfx-ci:f42
+#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f42 bash -c '<cmd>'
+#
+#     Por que uma imagem pré-assada em vez de uma imagem de distro crua: toda dep já
+#     vem instalada, então um "dnf install" de ~5 min vira um no-op contra o cache
+#     local de imagens (rebuild só quando este arquivo ou a lista de deps muda). O
+#     Node.js está incluído porque um `actions/checkout` baseado em JavaScript precisa
+#     de um runtime Node pra sequer rodar dentro de um container de job -- mantido pra
+#     esta imagem seguir usável de imediato caso o job pesado seja portado pra um
+#     runner self-hosted do GitHub (a pendência declarada; a receita a portar está em
+#     ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml). A base é fedora:42 de
+#     propósito, NÃO ubuntu/act-latest: reproduzir falha específica do Fedora é o
+#     objetivo inteiro (libasan/libubsan faltando e um gap de SYS_futex só-do-clang
+#     foram os dois achados assim).
 
 FROM fedora:42
 
@@ -53,16 +58,16 @@ FROM fedora:42
 #       - mesa-libGL-devel   : OpenGL headers/libs (CMake FindOpenGL).
 #       - mesa-libEGL-devel  : EGL headers/libs (FindOpenGL EGL component).
 #       - mesa-dri-drivers   : llvmpipe -- Mesa software GL renderer, needed under Xvfb
-#                               (no real GPU on `claudio`'s container).
+#                               (no real GPU inside the container).
 #       - libxkbcommon-devel : GLFW's XKB keyboard-layout header dependency.
 #       - xorg-x11-server-Xvfb : virtual X display + xvfb-run, used by
-#                               tests/run_xvfb.cmake and .forgejo/workflows/*.yml.
+#                               tests/run_xvfb.cmake and .github/workflows/*.yml.
 #       - llvm               : llvm-cov/llvm-profdata (tools/coverage_report.sh) and a
 #                               matching sanitizer runtime for clang's ASan/UBSan.
 #       - valgrind           : available for ad-hoc memory debugging on the heavy
 #                               runner (not wired into a CI gate by this Onda 1 change).
 #       - cppcheck           : static analysis (mirrors the GitHub lint-and-scan job so
-#                               the same tool is available locally on claudio).
+#                               the same tool is available locally).
 #       - libasan, libubsan  : REQUIRED, found the hard way (Onda 1 validation, política
 #                               (e), live reproduction inside this exact image before
 #                               these 2 lines were added). Fedora 42's `gcc` package
@@ -117,18 +122,17 @@ FROM fedora:42
 #       - mesa-libGL-devel   : headers/libs OpenGL (FindOpenGL do CMake).
 #       - mesa-libEGL-devel  : headers/libs EGL (componente EGL do FindOpenGL).
 #       - mesa-dri-drivers   : llvmpipe -- renderer software GL do Mesa, necessário sob
-#                               Xvfb (sem GPU real no container do `claudio`).
+#                               Xvfb (sem GPU real dentro do container).
 #       - libxkbcommon-devel : dependência de header de layout de teclado XKB do GLFW.
 #       - xorg-x11-server-Xvfb : display X virtual + xvfb-run, usado por
-#                               tests/run_xvfb.cmake e .forgejo/workflows/*.yml.
+#                               tests/run_xvfb.cmake e .github/workflows/*.yml.
 #       - llvm               : llvm-cov/llvm-profdata (tools/coverage_report.sh) e um
 #                               runtime de sanitizer compatível com o ASan/UBSan do clang.
 #       - valgrind           : disponível para debug de memória ad-hoc no runner
 #                               pesado (não conectado a um gate de CI nesta mudança da
 #                               Onda 1).
 #       - cppcheck           : análise estática (espelha o job lint-and-scan do GitHub
-#                               para a mesma ferramenta estar disponível localmente no
-#                               claudio).
+#                               para a mesma ferramenta estar disponível localmente).
 RUN dnf -y update && \
     dnf -y install \
         nodejs \
@@ -156,4 +160,4 @@ RUN dnf -y update && \
 # PT: Apenas marcador de sanidade (não consumido por nenhum workflow) -- permite um
 #     humano confirmar que a imagem certa chegou via
 #     `docker run --rm localhost/glintfx-ci:f42 cat /etc/glintfx-ci-image`.
-RUN echo "glintfx-ci:f42 (fedora:42, built for the claudio self-hosted runner)" > /etc/glintfx-ci-image
+RUN echo "glintfx-ci:f42 (fedora:42, local reproduction image for the heavy checks)" > /etc/glintfx-ci-image

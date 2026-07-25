@@ -102,7 +102,8 @@ A glintfx é um sub-projeto C++/OpenGL (pasta `glintfx/`) com stack completament
 
 **Pipeline de CI automatizado (item L1.2-CI):** **todo CI roda no GitHub, inclusive os pesados**; o GitHub é o único gate de release (política canônica desde 2026-07-25) — detalhe operacional completo em [`AGENTS.md`](AGENTS.md#política-de-ci-o-que-roda-onde).
 - **GitHub Actions:** `.github/workflows/ci.yml` (`ubuntu-latest`), **o gate**: matriz `GLINTFX_BACKEND_GLFW` ON/OFF + `lint-and-scan` (`TST-L1-STATIC/SECRETS/DEPS`) + `coverage` (`TST-L1-COV`). Dispara em push para `main`, tags `v*` e PR.
-- **`claudio` (runner self-hosted local):** `.forgejo/workflows/heavy.yml` (`runs-on: docker`, `container: fedora:42`), **fallback apenas**, carrega os checks de profundidade `sanitize` (ASan/UBSan) + `fonteng` (`GLINTFX_OWN_FONT_ENGINE=ON`). Dispara em PR→`main`, tags e dispatch manual. Pendência declarada: o líder vai registrar o `claudio` no GitHub depois; até lá não configurar runner self-hosted lá.
+- **GitHub Actions (nightly):** `.github/workflows/nightly.yml` (cron), rede de segurança ASan independente do gate.
+- ⚠️ **Os checks pesados `sanitize` (ASan/LSan/UBSan) + `fonteng` (`GLINTFX_OWN_FONT_ENGINE=ON`) estão SEM CASA desde 2026-07-25.** Rodavam só no runner self-hosted `claudio` (Forgejo), desligado e removido da máquina junto com o diretório `.forgejo/`. O líder vai montar um runner self-hosted no GitHub depois e portar a receita salva em `~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml`; até lá **não configurar runner self-hosted no GitHub**. Substituto manual enquanto isso: `tools/ci/build_image.sh` + `docker run` contra a `localhost/glintfx-ci:f42`.
 
 Gate LOCAL espelhando o CI antes do push: `tools/preci.sh` via `.githooks/pre-push` (`TST-L1-PRECI`, ver subseção abaixo).
 

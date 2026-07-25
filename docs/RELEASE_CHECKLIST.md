@@ -21,7 +21,7 @@ None of these were security-critical, but each one is exactly the kind of thing 
 
 Run all five before `git tag vX.Y.Z`. Do not tag if (a) or (e) fails.
 
-**(a) Full suite green on GitHub.** `.github/workflows/ci.yml` green on the commit being tagged: that is the release gate. The self-hosted `claudio` runner (`.forgejo/workflows/heavy.yml`, ASan+UBSan+the own-font-engine job) is a fallback for depth, not a second gate to wait on (see `AGENTS.md`'s CI-policy section).
+**(a) Full suite green on GitHub.** `.github/workflows/ci.yml` green on the commit being tagged: that is the release gate. ⚠️ Since 2026-07-25 the deep ASan+UBSan and own-font-engine legs no longer run anywhere on a server (the self-hosted runner that carried them was retired). Until a replacement exists, run them by hand before tagging: `tools/ci/build_image.sh`, then the sanitize build inside `docker run` against `localhost/glintfx-ci:f42` (see `AGENTS.md`'s CI-policy section).
 
 **(b) `CHANGELOG.md` has a `[vX.Y.Z]` entry.** Dated, bilingual (EN then PT), following the existing entries' shape (a one-paragraph summary plus an "Added/Changed/Fixed" breakdown). `[Unreleased]` gets renamed to the tag, not left dangling.
 
@@ -57,7 +57,7 @@ Nenhum destes era crítico de segurança, mas cada um é exatamente o tipo de co
 
 Rodar os cinco antes do `git tag vX.Y.Z`. Não taggear se (a) ou (e) falhar.
 
-**(a) Suíte completa verde no GitHub.** O `.github/workflows/ci.yml` verde no commit sendo taggeado: esse é o gate de release. O runner self-hosted `claudio` (`.forgejo/workflows/heavy.yml`, ASan+UBSan+a job do motor de fonte próprio) é fallback de profundidade, não um segundo gate a esperar (ver a seção de política de CI do `AGENTS.md`).
+**(a) Suíte completa verde no GitHub.** O `.github/workflows/ci.yml` verde no commit sendo taggeado: esse é o gate de release. ⚠️ Desde 2026-07-25 as pernas profundas de ASan+UBSan e do motor de fonte próprio não rodam mais em servidor nenhum (o runner self-hosted que as carregava foi aposentado). Até existir substituto, rode-as à mão antes de taggear: `tools/ci/build_image.sh`, depois o build sanitize dentro de um `docker run` contra a `localhost/glintfx-ci:f42` (ver a seção de política de CI do `AGENTS.md`).
 
 **(b) `CHANGELOG.md` tem uma entrada `[vX.Y.Z]`.** Datada, bilíngue (EN depois PT), seguindo a forma das entradas existentes (um resumo de um parágrafo mais uma repartição "Added/Changed/Fixed"). `[Unreleased]` é renomeado para a tag, não deixado pendurado.
 

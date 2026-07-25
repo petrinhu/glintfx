@@ -81,9 +81,33 @@
 #     parede total é a soma, não o máximo.
 name: heavy
 
+# EN: PATH FILTER (added 2026-07-25, lead's decision). Without it every commit woke
+#     the self-hosted runner for a ~39 min cycle, including docs-only and TODO.md
+#     commits, which is most of this repo's traffic. The filter lists what can
+#     actually change the outcome of a sanitizer or font-engine run: library
+#     sources, public headers, tests, the build files, and this workflow itself.
+#     `workflow_dispatch` stays as the manual override for when you want a run
+#     anyway (for example after a docs commit that touches a code snippet).
+# PT: FILTRO DE CAMINHO (posto em 2026-07-25, decisão do líder). Sem ele todo commit
+#     acordava o runner self-hosted para um ciclo de ~39 min, incluindo commits só
+#     de documentação e de TODO.md, que são a maior parte do tráfego deste repo. O
+#     filtro lista o que de fato muda o resultado de um run de sanitizer ou de motor
+#     de fonte: fontes da lib, headers públicos, testes, os arquivos de build e este
+#     próprio workflow. O `workflow_dispatch` continua sendo a saída manual pra
+#     quando você quiser rodar mesmo assim.
 on:
   push:
     branches: [main]
+    paths:
+      - 'glintfx/src/**'
+      - 'glintfx/include/**'
+      - 'glintfx/tests/**'
+      - 'glintfx/third_party/**'
+      - 'glintfx/CMakeLists.txt'
+      - 'src/**'
+      - 'include/**'
+      - 'tools/ci/**'
+      - '.github/workflows/heavy.yml'
   workflow_dispatch:
 
 concurrency:

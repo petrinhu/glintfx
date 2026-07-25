@@ -2425,7 +2425,7 @@ if(GLINTFX_MODULE_DRAW2D)
   #     with GLINTFX_PERF_STRICT=1 in the environment (NOTHING sets it since 2026-07-25 -- the
   #     self-hosted runner job that did was retired; set it by hand to arm the strict tier);
   #     everywhere else only a loose 10x sanity ceiling and the
-  #     machine-relative layered<=2x-streaming ratio gate are checked -- see the test file's own
+  #     machine-relative layered<=3.9x-streaming ratio gate are checked -- see the test file's own
   #     header comment for the full two-tier gate design and baseline provenance.
   # PT: draw2d_perf_budget (PERF-D2D3, D30, onda 5) -- a fatia do performance-engineer, uma
   #     preocupação DIFERENTE de todo teste draw2d_*_sanity acima (medição, não correção). Imprime
@@ -2437,7 +2437,7 @@ if(GLINTFX_MODULE_DRAW2D)
   #     de baseline 1,5x só morde com GLINTFX_PERF_STRICT=1 no ambiente (NADA a seta desde
   #     2026-07-25 -- o job do runner self-hosted que a setava foi aposentado; sete à mão pra
   #     armar o nível estrito); em todo outro lugar só um teto de sanidade frouxo
-  #     de 10x e o gate de razão camadas<=2x-streaming relativo-à-máquina são checados -- ver o
+  #     de 10x e o gate de razão camadas<=3,9x-streaming relativo-à-máquina são checados -- ver o
   #     comentário de cabeçalho do próprio arquivo de teste pro desenho completo do gate de dois
   #     níveis e a proveniência da baseline.
   # ---------------------------------------------------------------------------

@@ -712,13 +712,14 @@ host does not need to order Draw2D's `init()` relative to `App`'s/`UiLayer`'s ow
 machine-readable `GLINTFX_PERF <key>=<value>` lines on every run (visible in the CI log
 regardless of gate outcome):
 
-1. **`pure_batcher_quads_per_s`** -- 100k quads through `SpriteBatch` alone (CPU, no GL/display
-   involved).
-2. **`layered_streaming_ratio`** -- the SAME 100k-command stream through the buffered path
+1. **`pure_batcher_quads_per_s`** -- 50k quads through `SpriteBatch` alone (CPU, no GL/display
+   involved), taken from the fastest of 63 timed repeats.
+2. **`layered_streaming_ratio`** -- the SAME 50k-command stream through the buffered path
    (`LayerQueue::push` -> `drain_grouped()` -> replay via `SpriteBatch::draw_quad()`, the EXACT
    sequence `Draw2d::end()`'s own replay runs), reported as `time_layered / time_streaming`
    (`>= 1.0` -- the layered path can only ADD work, it reuses the SAME batcher underneath, D31's
-   zero-diff set).
+   zero-diff set), each arm taken from its own fastest thread-CPU-time repeat (see "How the ratio
+   is measured" below).
 3. **`e2e_10k_sprite_1k_prim_median_ms`** -- a real `Draw2d` bracket of 10k sprites (one
    texture) plus a real bracket of 1k `draw_filled_rect` primitives, under a live GL 3.3 context
    on Xvfb/llvmpipe, `glFinish()`'d before the clock stops -- median over 30 frames (first 2
@@ -742,6 +743,31 @@ invocation), so it is STRICT EVERYWHERE, unconditional on `GLINTFX_PERF_STRICT` 
 direct, always-on answer to this wave's own risk 2 ("layers vs batching is where performance can
 degrade").
 
+**How the ratio is measured (rewritten 2026-07-25 after a real CI failure):** the gate read
+4.482 on the self-hosted runner and reddened `main`, while 12 clean runs of the same code in the
+same container measured 3.592 to 3.806. That runner shares a physical machine with its owner's
+interactive work, so contention there is structural and will recur. The version that failed
+already took a **median of 8 paired per-repeat ratios**, which is why a bigger N was not the
+answer: a median filters isolated spikes, and sustained contention is not a spike. Two changes
+were measured and adopted instead. First, each arm is timed on `CLOCK_THREAD_CPUTIME_ID` rather
+than the wall clock, because both arms are pure single-threaded CPU with no I/O and no sleeping,
+so being descheduled is pure measurement error. Second, each arm is reduced to its own
+**minimum** across 63 repeats, independently of the other, because contention can only add time,
+never remove it, so the fastest repeat is the best estimate of the uncontended cost. Pairing the
+two arms per repeat, which the old statistic did, is itself the flaw: a burst that lands on one
+arm distorts that repeat's ratio in whichever direction it hit. Measured over 30 process launches
+spanning idle, in-cgroup contention and host contention, the old statistic ranged **2.23 to
+7.80** while the new one ranged **2.965 to 3.558**, with its idle and loaded distributions
+overlapping. The per-repeat workload also dropped from 100k to 50k commands, measured for the
+same reason: at 100k the layered arm holds about 9.6 MiB of `LayerCommand`, a co-runner evicts it
+from a shared L3, and those are real CPU cycles no clock choice can filter. Metric 1 is unchanged
+by that (9.36 M quads/s at 50k against 9.32 M at 100k); metric 2 is workload-size dependent by
+construction, since the sort is `n log n` while the rest of both arms is linear, so **the ceiling
+is only meaningful for the workload size as it stands**. The old paired median is still computed
+and printed as `layered_streaming_ratio_paired_median_wall`, never gated on: when the two numbers
+disagree, the machine was contended while the test ran. Cost of all this: the test goes from
+about 3.8 s to about 5.0 s in the CI container.
+
 **A real finding, reported not hidden:** the ratio gate measures ~3.4-3.6x on the machine that
 measured this wave's baselines, consistently across repeated runs -- above the 2.0x ceiling this
 wave first set. Root cause: `LayerQueue::drain_grouped()`'s `std::stable_sort`
@@ -751,15 +777,33 @@ standalone probe) -- `Draw2d::end()`'s own replay runs the EXACT same `drain_gro
 this benchmark does, so this is not a benchmark artifact. A lightweight-key sort was tried and
 reverted: it measured better under gcc but WORSE under clang -- the only compiler every CI
 workflow in this repo actually pins (`-DCMAKE_CXX_COMPILER=clang++`). The house's own call: keep
-the plain `std::stable_sort` and REVISE THE CEILING to **4.0x** instead of chasing a
+the plain `std::stable_sort` and REVISE THE CEILING (4.0x at the time) instead of chasing a
 compiler-specific micro-optimization that regresses on the compiler CI actually runs -- layered
 mode is opt-in by construction (the untouched streaming path pays none of this), so ~3.4x
 measured WITH CLANG is the honest price of that feature, not a regression to chase further.
 
+**The ceiling, re-derived from measurement (2026-07-25):** **3.9x**, superseding the 4.0x above,
+which belonged to the old wall-clock statistic and does not transfer. It is the worst reading
+over 30 process launches across the three contention conditions (3.558) plus a declared 10%
+margin. The margin covers the cross-launch spread that repetition cannot remove, since a whole
+process can land on a slow core on a hybrid P-core/E-core part and both arms are then measured
+there. The gate therefore trips on any change that makes the layered path more than about **16%**
+slower relative to streaming (3.9 / 3.351 idle median). Both directions were proven, not assumed:
+a deliberate regression in `drain_grouped()` that runs the same `std::stable_sort` a second,
+redundant time took the gate from 3.342/3.365/3.495 PASS to 4.185/4.199/4.357 FAIL, three of
+three, and restoring the header put it back at 3.412/3.456/3.468 PASS; and with 16 CPU burners
+saturating the host outside the container the gate read 2.723 to 3.102, plus 2.978 to 3.336 with
+6 further burners inside the container's own CPU quota, all PASS, in runs where the printed
+wall-clock diagnostic (the old statistic) read 4.397 to 4.820 and would have failed. The declared
+sensitivity limit, from the same session: a milder regression of about +6% (copying the command
+vector instead of moving it) reads 3.459/3.571/3.729 and does NOT fail. This gate guards against
+a grave regression, not single-digit drift.
+
 **Declared numbers, honest provenance** (`glintfx/tests/draw2d_perf_budget.cpp`, baseline
 constants dated in-file): `pure_batcher_quads_per_s` baseline = **8 500 000**,
 `e2e_10k_sprite_1k_prim_median_ms` baseline = **5.0**, `layered_streaming_ratio` ceiling =
-**4.0x** (revised, clang-measured) -- all measured on **2026-07-23**, on a Fedora 44 sandboxed
+**3.9x** (re-derived 2026-07-25 under the CI container's own 4-CPU/8 GiB limits; the two baseline
+constants above still date from 2026-07-23) -- measured on a Fedora 44 sandboxed
 dev container (12th Gen Intel Core i5-12500H, 16 logical cores, 31 GiB RAM), **NOT** the
 self-hosted runner named by this wave's plan (a different physical machine). This is a real
 measurement, never a guess, but a STAND-IN baseline: per D30 these three constants should be
@@ -1583,13 +1627,14 @@ re-resolve redundante e inofensivo, não um risco de estado. Um host não precis
 machine-readable `GLINTFX_PERF <chave>=<valor>` toda execução (visíveis no log de CI independente
 do resultado do gate):
 
-1. **`pure_batcher_quads_per_s`** -- 100k quads pelo `SpriteBatch` sozinho (CPU, sem GL/display
-   envolvido).
-2. **`layered_streaming_ratio`** -- o MESMO stream de 100k comandos pelo caminho bufferizado
+1. **`pure_batcher_quads_per_s`** -- 50k quads pelo `SpriteBatch` sozinho (CPU, sem GL/display
+   envolvido), tirado da mais rápida de 63 repetições cronometradas.
+2. **`layered_streaming_ratio`** -- o MESMO stream de 50k comandos pelo caminho bufferizado
    (`LayerQueue::push` -> `drain_grouped()` -> replay via `SpriteBatch::draw_quad()`, a MESMA
    sequência que o próprio replay do `Draw2d::end()` roda), reportado como
    `time_layered / time_streaming` (`>= 1.0` -- o caminho bufferizado só pode ADICIONAR trabalho,
-   reusa o MESMO batcher por baixo, o conjunto zero-diff do D31).
+   reusa o MESMO batcher por baixo, o conjunto zero-diff do D31), cada braço tirado da própria
+   repetição mais rápida de tempo de CPU da thread (ver "Como a razão é medida" abaixo).
 3. **`e2e_10k_sprite_1k_prim_median_ms`** -- um bracket real de `Draw2d` de 10k sprites (uma
    textura) mais um bracket real de 1k primitivas `draw_filled_rect`, sob um contexto GL 3.3 vivo
    no Xvfb/llvmpipe, com `glFinish()` antes do cronômetro parar -- mediana sobre 30 frames (2
@@ -1612,6 +1657,32 @@ por construção (os dois braços rodam na mesma máquina, mesmo processo, mesma
 ESTRITO EM TODO LUGAR, incondicional a `GLINTFX_PERF_STRICT` -- é a resposta direta e sempre-ligada
 ao próprio risco 2 desta onda ("layers vs batching é onde a performance pode degradar").
 
+**Como a razão é medida (reescrito em 2026-07-25 depois de uma falha real de CI):** o gate leu
+4,482 no runner self-hosted e deixou a `main` vermelha, enquanto 12 execuções limpas do mesmo
+código no mesmo container mediram de 3,592 a 3,806. Esse runner divide uma máquina física com o
+trabalho interativo do dono, então a disputa por CPU ali é estrutural e vai se repetir. A versão
+que falhou já tirava a **mediana de 8 razões pareadas por repetição**, e é por isso que aumentar
+o N não era a resposta: mediana filtra picos isolados, e disputa sustentada não é pico. Duas
+mudanças foram medidas e adotadas no lugar. Primeiro, cada braço é cronometrado em
+`CLOCK_THREAD_CPUTIME_ID` em vez do relógio de parede, porque os dois braços são CPU pura de uma
+thread só, sem I/O e sem dormir, então ser tirado do processador é puro erro de medição. Segundo,
+cada braço é reduzido ao próprio **mínimo** ao longo de 63 repetições, independentemente do
+outro, porque disputa só pode adicionar tempo, nunca tirar, então a repetição mais rápida é a
+melhor estimativa do custo sem disputa. Parear os dois braços por repetição, o que a estatística
+antiga fazia, é em si o defeito: uma rajada que cai num dos braços distorce a razão daquela
+repetição na direção em que bateu. Medida em 30 lançamentos de processo cobrindo máquina ociosa,
+disputa dentro do cgroup e disputa no host, a estatística antiga foi de **2,23 a 7,80** e a nova
+de **2,965 a 3,558**, com as distribuições ociosa e sob carga se sobrepondo. A carga por
+repetição também caiu de 100k para 50k comandos, medida pela mesma razão: em 100k o braço em
+camadas segura cerca de 9,6 MiB de `LayerCommand`, um processo vizinho o expulsa de um L3
+compartilhado, e isso são ciclos de CPU reais que escolha de relógio nenhuma filtra. A métrica 1
+não muda com isso (9,36 M quads/s em 50k contra 9,32 M em 100k); a métrica 2 depende do tamanho
+da carga por construção, já que a ordenação é `n log n` enquanto o resto dos dois braços é
+linear, então **o teto só faz sentido para o tamanho de carga como ele está**. A mediana pareada
+antiga continua sendo calculada e impressa como `layered_streaming_ratio_paired_median_wall`,
+nunca gateada: quando os dois números discordam, a máquina estava disputada enquanto o teste
+rodava. Custo de tudo isso: o teste sai de cerca de 3,8 s para cerca de 5,0 s no container de CI.
+
 **Um achado real, reportado e não escondido:** o gate de razão mede ~3,4-3,6x na máquina que
 mediu as baselines desta onda, de forma consistente em corridas repetidas -- acima do teto de
 2,0x que esta onda setou primeiro. Causa-raiz: o `std::stable_sort` (`glintfx/src/layer_queue.hpp:206`)
@@ -1622,15 +1693,33 @@ a EXATA mesma `drain_grouped()` que este benchmark roda, então não é artefato
 ordenação por chave leve foi tentada e revertida: media melhor sob gcc mas PIOR sob clang -- o
 único compilador que todo workflow de CI deste repo de fato pina
 (`-DCMAKE_CXX_COMPILER=clang++`). A decisão da casa: manter o `std::stable_sort` simples e
-REVISAR O TETO pra **4,0x** em vez de perseguir uma micro-otimização específica de compilador
+REVISAR O TETO (4,0x na época) em vez de perseguir uma micro-otimização específica de compilador
 que regride no compilador que o CI de fato roda -- o modo em camadas é opt-in por construção (o
 caminho streaming intocado não paga nada disso), então ~3,4x medido COM CLANG é o preço honesto
 dessa feature, não uma regressão a perseguir mais.
 
+**O teto, rederivado da medição (2026-07-25):** **3,9x**, sucedendo o 4,0x acima, que pertencia à
+estatística antiga de relógio de parede e não se transfere. É a pior leitura em 30 lançamentos de
+processo nas três condições de disputa (3,558) mais uma margem declarada de 10%. A margem cobre a
+dispersão entre lançamentos que repetição nenhuma remove, já que um processo inteiro pode cair
+num núcleo lento num chip híbrido de núcleos P e E e aí os dois braços são medidos ali. O gate
+portanto morde em qualquer mudança que deixe o caminho em camadas mais de uns **16%** mais lento
+em relação ao streaming (3,9 / 3,351 de mediana ociosa). As duas direções foram provadas, não
+presumidas: uma regressão deliberada no `drain_grouped()` que roda o mesmo `std::stable_sort` uma
+segunda vez, redundante, levou o gate de 3,342/3,365/3,495 PASSA para 4,185/4,199/4,357 FALHA,
+três em três, e restaurar o header o devolveu a 3,412/3,456/3,468 PASSA; e com 16 queimadores de
+CPU saturando o host fora do container o gate leu de 2,723 a 3,102, mais de 2,978 a 3,336 com
+outros 6 queimadores dentro da própria cota de CPU do container, todas PASSA, em execuções nas
+quais o diagnóstico de relógio de parede impresso (a estatística antiga) leu de 4,397 a 4,820 e
+teria falhado. O limite de sensibilidade declarado, da mesma sessão: uma regressão mais branda de
+cerca de +6% (copiar o vetor de comandos em vez de movê-lo) lê 3,459/3,571/3,729 e NÃO falha.
+Este gate guarda contra regressão grave, não contra deriva de um dígito.
+
 **Números declarados, proveniência honesta** (`glintfx/tests/draw2d_perf_budget.cpp`, constantes
 de baseline datadas no próprio arquivo): baseline de `pure_batcher_quads_per_s` = **8 500 000**,
 baseline de `e2e_10k_sprite_1k_prim_median_ms` = **5,0**, teto de `layered_streaming_ratio` =
-**4,0x** (revisado, medido com clang) -- todos medidos em **2026-07-23**, num container de dev
+**3,9x** (rederivado em 2026-07-25 sob os próprios limites de 4 CPUs/8 GiB do container de CI; as
+duas constantes de baseline acima seguem datadas de 2026-07-23) -- medidos num container de dev
 sandboxed Fedora 44 (Intel Core i5-12500H 12ª geração, 16 núcleos lógicos, 31 GiB RAM), **NÃO** o
 runner self-hosted nomeado pelo plano desta onda (uma máquina física diferente). Esta é uma
 medição real, nunca um chute, mas uma baseline PROVISÓRIA: conforme o D30 essas três constantes

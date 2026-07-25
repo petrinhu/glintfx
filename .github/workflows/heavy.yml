@@ -1,0 +1,268 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: Heavy CI gates for glintfx, on the self-hosted containerized runner of this
+#     machine. Ported from the Forgejo recipe that ran on the retired `claudio` runner
+#     (preserved at ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml); the project
+#     left Codeberg on 2026-07-25 and `.forgejo/` was deleted, which left these two gates
+#     with no home. Four jobs, two gates on a two-value matrix:
+#       - `sanitize` (GLFW=ON, GLFW=OFF) : the ASan/LSan/UBSan memory-safety gate
+#         (TST-L1-MEM). Default compiler on this image, which is gcc -- matching what the
+#         retired recipe built. .github/workflows/nightly.yml keeps running the same gate
+#         nightly on ubuntu-latest, so this is the Fedora/gcc leg, not a replacement.
+#       - `fonteng`  (GLFW=ON, GLFW=OFF) : the L1.20-FONTFLIP regression gate for
+#         glintfx's own font engine (GLINTFX_OWN_FONT_ENGINE=ON), clang-pinned.
+#
+#     TRIGGERS ARE THE SECURITY BOUNDARY. `push` to main and `workflow_dispatch` ONLY.
+#     There is deliberately NO pull_request trigger, not even for branches of this
+#     repository: the repository is PUBLIC, and GitHub explicitly warns that a
+#     self-hosted runner on a public repository lets a fork's pull request execute
+#     arbitrary code on the host machine. Removing the trigger removes the attack path;
+#     the ephemeral container and its dropped privileges are the second and third layers,
+#     not the first. Do not add `pull_request` here.
+#
+#     NO `container:` KEY, ON PURPOSE. The retired Forgejo recipe used
+#     `runs-on: docker` + `container: localhost/glintfx-ci:f42` because the runner lived
+#     on the host and spawned a container per job. Here the runner ITSELF is the
+#     container (tools/ci/Containerfile.runner, built on top of that same
+#     glintfx-ci:f42), so every build dependency is already present in the job's own
+#     filesystem. Adding `container:` would require docker-in-docker or a mounted docker
+#     socket -- more machinery and a way out of the sandbox, for no gain.
+#
+#     `-j2` IS A LITERAL, NEVER `$(nproc)`. Inside the container nproc still reports the
+#     host's 16 cores, so `--build -j$(nproc)` (what the retired recipe used) would spawn
+#     16 compilers under the container's 8 GiB memory cap. That is the exact recipe for
+#     the OOM this machine already suffered. The container itself is capped at
+#     `--memory=8g --memory-swap=8g` (8 GiB and zero swap) and `--cpus=4` by
+#     tools/ci/runner_up.sh, which explains both the ceiling and why -j2 rather than -j4.
+#
+#     ONE JOB AT A TIME. The runner is `--ephemeral`: it takes exactly one job, then the
+#     container is destroyed and the supervisor starts a fresh one. These four jobs
+#     therefore run SEQUENTIALLY, with a few seconds of container start-up between them.
+#     Total wall time is the sum, not the max.
+#
+# PT: Gates pesados de CI da glintfx, no runner self-hosted conteinerizado desta máquina.
+#     Portados da receita Forgejo que rodava no runner `claudio` aposentado (preservada em
+#     ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml); o projeto saiu do Codeberg
+#     em 2026-07-25 e o `.forgejo/` foi apagado, o que deixou estes dois gates sem casa.
+#     Quatro jobs, dois gates numa matriz de dois valores:
+#       - `sanitize` (GLFW=ON, GLFW=OFF) : o gate de memory-safety ASan/LSan/UBSan
+#         (TST-L1-MEM). Compilador default desta imagem, que é o gcc -- batendo com o que
+#         a receita aposentada buildava. O .github/workflows/nightly.yml segue rodando o
+#         mesmo gate toda noite no ubuntu-latest, então esta é a perna Fedora/gcc, não uma
+#         substituição.
+#       - `fonteng`  (GLFW=ON, GLFW=OFF) : o gate de regressão L1.20-FONTFLIP do motor de
+#         fonte próprio da glintfx (GLINTFX_OWN_FONT_ENGINE=ON), fixado no clang.
+#
+#     OS GATILHOS SÃO A FRONTEIRA DE SEGURANÇA. `push` na main e `workflow_dispatch`
+#     SOMENTE. NÃO há gatilho de pull_request de propósito, nem para branches deste
+#     repositório: o repositório é PÚBLICO, e o GitHub avisa explicitamente que um runner
+#     self-hosted em repositório público deixa o pull request de um fork executar código
+#     arbitrário na máquina host. Tirar o gatilho tira o caminho de ataque; o container
+#     efêmero e os privilégios derrubados são a segunda e a terceira camadas, não a
+#     primeira. Não adicione `pull_request` aqui.
+#
+#     SEM A CHAVE `container:`, DE PROPÓSITO. A receita Forgejo aposentada usava
+#     `runs-on: docker` + `container: localhost/glintfx-ci:f42` porque o runner morava no
+#     host e criava um container por job. Aqui o runner É o container
+#     (tools/ci/Containerfile.runner, buildado em cima daquela mesma glintfx-ci:f42),
+#     então toda dependência de build já está no filesystem do próprio job. Adicionar
+#     `container:` exigiria docker-in-docker ou um socket do docker montado -- mais
+#     maquinaria e uma saída do sandbox, sem ganho nenhum.
+#
+#     `-j2` É LITERAL, NUNCA `$(nproc)`. Dentro do container o nproc continua reportando
+#     os 16 núcleos do host, então `--build -j$(nproc)` (o que a receita aposentada usava)
+#     dispararia 16 compiladores sob o teto de 8 GiB de memória do container. É exatamente
+#     a receita do OOM que esta máquina já sofreu. O container em si é limitado a
+#     `--memory=8g --memory-swap=8g` (8 GiB e swap zerado) e `--cpus=4` pelo
+#     tools/ci/runner_up.sh, o que explica tanto o teto quanto o porquê de -j2 e não -j4.
+#
+#     UM JOB POR VEZ. O runner é `--ephemeral`: pega exatamente um job, e então o
+#     container é destruído e o supervisor sobe outro. Estes quatro jobs, portanto, rodam
+#     SEQUENCIALMENTE, com alguns segundos de partida de container entre eles. O tempo de
+#     parede total é a soma, não o máximo.
+name: heavy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: heavy-${{ github.ref }}
+  cancel-in-progress: true
+
+# EN: Read-only token. These jobs only check the code out; nothing here publishes.
+# PT: Token só-de-leitura. Estes jobs só fazem checkout do código; nada aqui publica.
+permissions:
+  contents: read
+
+jobs:
+  # EN: sanitize -- ASan/LSan/UBSan memory-safety gate (TST-L1-MEM, TODO.md LW-TST).
+  #     Ported from the retired recipe's `sanitize` job: same matrix, same configure
+  #     flags, same un-pinned default compiler (gcc on this image). The clang-only
+  #     SYS_futex workaround the `fonteng` job carries is therefore not needed here.
+  # PT: sanitize -- gate de memory-safety ASan/LSan/UBSan (TST-L1-MEM, TODO.md LW-TST).
+  #     Portado do job `sanitize` da receita aposentada: mesma matriz, mesmas flags de
+  #     configure, mesmo compilador default não-fixado (gcc nesta imagem). O workaround
+  #     SYS_futex, que só o clang precisa e o job `fonteng` carrega, portanto não faz
+  #     falta aqui.
+  sanitize:
+    name: sanitize (self-hosted / GLFW=${{ matrix.backend }})
+    runs-on: [self-hosted, linux, x64, glintfx-heavy]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # EN: Cache key namespaced "selfhosted-f42" -- deliberately DIFFERENT from the
+      #     ubuntu-latest jobs' "rmlui-${{ runner.os }}-..." keys. The cached path holds
+      #     RmlUi's BUILT objects (FetchContent's _deps), so reusing an ubuntu entry here
+      #     would risk linking ABI-mismatched objects from a different libc and compiler.
+      #     Never unify these keys. On an ephemeral runner the cache is the only thing
+      #     that survives between runs, which is exactly why it is worth keeping.
+      # PT: Chave de cache com namespace "selfhosted-f42" -- deliberadamente DIFERENTE das
+      #     chaves "rmlui-${{ runner.os }}-..." dos jobs ubuntu-latest. O path cacheado
+      #     guarda os objetos JÁ BUILDADOS do RmlUi (_deps do FetchContent), então reusar
+      #     uma entrada de ubuntu aqui arriscaria linkar objetos com ABI incompatível, de
+      #     outra libc e outro compilador. Nunca unifique estas chaves. Num runner efêmero
+      #     o cache é a única coisa que sobrevive entre execuções, que é justamente por
+      #     que vale a pena mantê-lo.
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-asan-${{ matrix.backend }}/_deps
+          key: rmlui-selfhosted-f42-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Every dep (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan) is
+      #     baked into the runner image, so there is no install step at all. That is the
+      #     payoff of tools/ci/Containerfile.f42.
+      # PT: Toda dep (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan) vem
+      #     embutida na imagem do runner, então não existe passo de instalação nenhum. É o
+      #     ganho do tools/ci/Containerfile.f42.
+      - name: configure (GLINTFX_SANITIZE=ON)
+        run: |
+          cmake -S glintfx -B glintfx/build-asan-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_SANITIZE=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: build
+        run: cmake --build glintfx/build-asan-${{ matrix.backend }} -j2
+
+      # EN: Window-opening tests never touch a live graphical session -- house rule, and
+      #     an incident here once locked up the lead's touchpad until a reboot. The whole
+      #     invocation from glintfx/tests/run_xvfb.cmake is reproduced, not half of it:
+      #     unset WAYLAND_DISPLAY *and* point XDG_RUNTIME_DIR at a fresh empty 0700
+      #     directory. Unsetting the variable alone is NOT protection, because
+      #     wl_display_connect(NULL) falls back to the built-in socket name "wayland-0"
+      #     resolved inside $XDG_RUNTIME_DIR. Inside this container there is no compositor
+      #     to reach anyway; the belt-and-braces stays so the step is safe to copy
+      #     elsewhere and so it matches what every other ctest invocation in this repo
+      #     does.
+      # PT: Teste que abre janela nunca toca uma sessão gráfica viva -- regra da casa, e um
+      #     incidente aqui já travou o touchpad do líder até precisar de reboot. A
+      #     invocação INTEIRA de glintfx/tests/run_xvfb.cmake é reproduzida, não metade
+      #     dela: remover WAYLAND_DISPLAY *e* apontar XDG_RUNTIME_DIR pra um diretório
+      #     novo, vazio, modo 0700. Remover só a variável NÃO protege, porque
+      #     wl_display_connect(NULL) cai no nome de socket embutido "wayland-0" resolvido
+      #     dentro do $XDG_RUNTIME_DIR. Dentro deste container não há compositor a
+      #     alcançar de qualquer forma; o cinto-e-suspensório fica pra este passo ser
+      #     seguro de copiar pra outro lugar e pra bater com o que toda outra chamada de
+      #     ctest deste repositório faz.
+      - name: test (ASan + LSan + UBSan)
+        run: |
+          unset WAYLAND_DISPLAY
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          trap 'rm -rf "${XDG_RUNTIME_DIR}"' EXIT
+          xvfb-run -a ctest --test-dir glintfx/build-asan-${{ matrix.backend }} --output-on-failure
+
+  # EN: fonteng -- L1.20-FONTFLIP regression gate for the own font engine. Ported
+  #     step-for-step from the retired recipe's `fonteng` job.
+  #     NOTE on GLINTFX_PERF_STRICT: the retired recipe set it here, arming the strict
+  #     1.5x-of-baseline tier of glintfx/tests/draw2d_perf_budget.cpp. It is deliberately
+  #     NOT set on this runner. Those baselines were measured on an unconstrained machine
+  #     (16 cores, no cgroup cap); this container is capped at 4 CPUs, so the strict tier
+  #     would fail on the cap, not on a regression. Re-arming it needs baselines measured
+  #     HERE first -- tracked in TODO.md under GH-ONLY-RUNNER. The test still runs and
+  #     still prints its GLINTFX_PERF lines under the loose 10x sanity ceiling, and the
+  #     machine-relative ratio gate is unaffected either way.
+  # PT: fonteng -- gate de regressão L1.20-FONTFLIP do motor de fonte próprio. Portado
+  #     passo a passo do job `fonteng` da receita aposentada.
+  #     NOTA sobre GLINTFX_PERF_STRICT: a receita aposentada setava a variável aqui,
+  #     armando o nível estrito de 1,5x da baseline em
+  #     glintfx/tests/draw2d_perf_budget.cpp. Ela NÃO é setada neste runner, de propósito.
+  #     Aquelas baselines foram medidas numa máquina sem limite (16 núcleos, sem teto de
+  #     cgroup); este container é limitado a 4 CPUs, então o nível estrito falharia pelo
+  #     teto, não por regressão. Re-armar exige baselines medidas AQUI primeiro --
+  #     rastreado no TODO.md em GH-ONLY-RUNNER. O teste continua rodando e continua
+  #     imprimindo as linhas GLINTFX_PERF sob o teto frouxo de 10x, e o gate de razão
+  #     relativo-à-máquina não é afetado de todo jeito.
+  fonteng:
+    name: fonteng (self-hosted / GLFW=${{ matrix.backend }})
+    runs-on: [self-hosted, linux, x64, glintfx-heavy]
+    timeout-minutes: 120
+    # EN: SYS_futex workaround, CLANG-SPECIFIC and load-bearing -- do not remove it as a
+    #     leftover. Building RmlUi from scratch with clang++ against Fedora's libstdc++15
+    #     fails with "use of undeclared identifier 'SYS_futex'" in <bits/atomic_wait.h>
+    #     (a GCC 15 header): gcc's own driver pulls <sys/syscall.h> in transitively,
+    #     clang's does not. Proven by a live CI failure on this exact base image (run #51
+    #     of the retired recipe, BOTH matrix configs), fixed by this env block, confirmed
+    #     green by run #53. The gcc `sanitize` job above never needed it.
+    # PT: Workaround SYS_futex, ESPECÍFICO DO CLANG e estrutural -- não remova como se
+    #     fosse sobra. Buildar o RmlUi do zero com clang++ contra o libstdc++15 do Fedora
+    #     falha com "use of undeclared identifier 'SYS_futex'" em <bits/atomic_wait.h>
+    #     (header do GCC 15): o driver do próprio gcc puxa <sys/syscall.h> de forma
+    #     transitiva, o do clang não. Provado por uma falha real de CI nesta mesma imagem
+    #     base (run #51 da receita aposentada, AS DUAS configs da matriz), corrigido por
+    #     este bloco env, confirmado verde pelo run #53. O job gcc `sanitize` acima nunca
+    #     precisou dele.
+    env:
+      CXXFLAGS: "-include sys/syscall.h"
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ON, OFF]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
+          key: rmlui-selfhosted-f42-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      - name: configure
+        run: |
+          cmake -S glintfx -B glintfx/build-fonteng-${{ matrix.backend }} \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=${{ matrix.backend }} \
+            -DGLINTFX_OWN_FONT_ENGINE=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
+
+      - name: build
+        run: cmake --build glintfx/build-fonteng-${{ matrix.backend }} -j2
+
+      # EN: Same Xvfb + isolated XDG_RUNTIME_DIR discipline as the sanitize job above --
+      #     see the long comment there for why unsetting WAYLAND_DISPLAY alone is not
+      #     enough.
+      # PT: Mesma disciplina de Xvfb + XDG_RUNTIME_DIR isolado do job sanitize acima --
+      #     ver o comentário longo lá pra entender por que remover só o WAYLAND_DISPLAY
+      #     não basta.
+      - name: test
+        run: |
+          unset WAYLAND_DISPLAY
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          trap 'rm -rf "${XDG_RUNTIME_DIR}"' EXIT
+          xvfb-run -a ctest --test-dir glintfx/build-fonteng-${{ matrix.backend }} --output-on-failure

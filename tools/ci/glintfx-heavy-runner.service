@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: Supervisor for the containerized GitHub Actions runner that hosts glintfx's heavy
+#     checks (.github/workflows/heavy.yml). Deliberately a `systemd --user` unit and NOT
+#     a system unit in /etc/systemd/system: the previous self-hosted runner on this
+#     machine was a system service and became hard-to-trace leftovers. A user unit lives
+#     with the lead's session, is inspected with plain `systemctl --user`, and needs no
+#     root to install, start, stop or remove.
+#
+#     Install (the unit file stays in the repository, systemd only links to it):
+#       systemctl --user link  /home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c_asm/tools/ci/glintfx-heavy-runner.service
+#       systemctl --user enable --now glintfx-heavy-runner
+#     Status, log, stop, remove:
+#       systemctl --user status  glintfx-heavy-runner
+#       journalctl --user -u glintfx-heavy-runner -f
+#       systemctl --user stop    glintfx-heavy-runner
+#       systemctl --user disable --now glintfx-heavy-runner
+#
+#     Restart=always is not a failure policy here, it is the NORMAL cycle: the runner is
+#     `--ephemeral`, so it exits cleanly after exactly one job and the supervisor brings
+#     up a fresh container for the next one. RestartSec=5 is therefore also the idle gap
+#     between two queued jobs.
+#
+#     Two operational caveats, stated because they will bite otherwise:
+#       1. `gh` reads its token from the login keyring, so this unit can only mint a
+#          registration token while that keyring is unlocked (in practice: while the lead
+#          is logged in). Lingering is enabled on this account, so the unit survives a
+#          terminal closing, but after a full logout it will restart-loop harmlessly
+#          every 5s until the session is back.
+#       2. It needs no network target of its own beyond the standard one; the container
+#          uses the default docker bridge.
+#
+# PT: Supervisor do runner do GitHub Actions conteinerizado que hospeda os checks pesados
+#     da glintfx (.github/workflows/heavy.yml). É de propósito uma unit `systemd --user`
+#     e NÃO uma unit de sistema em /etc/systemd/system: o runner self-hosted anterior
+#     desta máquina era serviço de sistema e virou sobra difícil de rastrear. Uma user
+#     unit vive junto da sessão do líder, se inspeciona com `systemctl --user` puro, e não
+#     precisa de root pra instalar, subir, parar ou remover.
+#
+#     Instalar (o arquivo da unit fica no repositório, o systemd só linka pra ele):
+#       systemctl --user link  /home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c_asm/tools/ci/glintfx-heavy-runner.service
+#       systemctl --user enable --now glintfx-heavy-runner
+#     Status, log, parar, remover:
+#       systemctl --user status  glintfx-heavy-runner
+#       journalctl --user -u glintfx-heavy-runner -f
+#       systemctl --user stop    glintfx-heavy-runner
+#       systemctl --user disable --now glintfx-heavy-runner
+#
+#     Restart=always aqui não é política de falha, é o ciclo NORMAL: o runner é
+#     `--ephemeral`, então sai limpo depois de exatamente um job e o supervisor sobe um
+#     container novo pro próximo. RestartSec=5 é, portanto, também o intervalo ocioso
+#     entre dois jobs enfileirados.
+#
+#     Duas ressalvas operacionais, ditas porque senão mordem:
+#       1. O `gh` lê o token do keyring de login, então esta unit só consegue mintar token
+#          de registro enquanto aquele keyring estiver destravado (na prática: enquanto o
+#          líder estiver logado). O lingering está ligado nesta conta, então a unit
+#          sobrevive ao fechamento de um terminal, mas depois de um logout completo ela
+#          entra em restart-loop inofensivo a cada 5s até a sessão voltar.
+#       2. Não precisa de nenhum alvo de rede próprio além do padrão; o container usa a
+#          bridge default do docker.
+
+[Unit]
+Description=glintfx heavy CI: ephemeral containerized GitHub Actions runner
+Documentation=file:///home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c_asm/tools/ci/runner_up.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c_asm/tools/ci/runner_up.sh
+# EN: Best-effort cleanup if the docker client died without taking the container with it.
+# PT: Limpeza best-effort caso o cliente docker tenha morrido sem levar o container junto.
+ExecStopPost=-/usr/bin/docker rm -f glintfx-heavy-runner
+Restart=always
+RestartSec=5
+# EN: The ephemeral cycle restarts constantly by design, so systemd's default start-rate
+#     limit would eventually shut the unit down for "restarting too quickly". Disable it.
+# PT: O ciclo efêmero reinicia o tempo todo por desenho, então o limite padrão de taxa de
+#     partida do systemd acabaria desligando a unit por "reiniciando rápido demais".
+#     Desligado.
+StartLimitIntervalSec=0
+# EN: A job can legitimately take a while (ASan build of RmlUi from scratch at -j2); give
+#     an in-flight container time to wind down before SIGKILL.
+# PT: Um job pode legitimamente demorar (build ASan do RmlUi do zero a -j2); dá tempo pro
+#     container em voo se encerrar antes do SIGKILL.
+TimeoutStopSec=180
+
+[Install]
+WantedBy=default.target

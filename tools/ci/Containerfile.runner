@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MPL-2.0
+# EN: The GitHub Actions self-hosted runner for glintfx's heavy checks, as a container
+#     image. Built ON TOP of localhost/glintfx-ci:f42 (tools/ci/Containerfile.f42), so
+#     every build dependency is already baked in and the workflow needs NO `container:`
+#     key: the runner process and the job steps share this one image. That is deliberate
+#     -- the alternative (runner on the host creating a job container) would need
+#     docker-in-docker or a mounted docker socket, which is both extra machinery and an
+#     escape hatch out of the container we do not want on a machine the lead works on.
+#
+#     How it is used (see tools/ci/runner_up.sh for the host side):
+#       tools/ci/build_runner_image.sh          # builds localhost/glintfx-runner:f42
+#       tools/ci/runner_up.sh                   # mints a token and runs ONE ephemeral runner
+#     and, as a supervised service, tools/ci/glintfx-heavy-runner.service
+#     (`systemd --user`, Restart=always, because an --ephemeral runner exits after
+#     exactly one job).
+#
+#     Security posture (the repository is PUBLIC, and GitHub explicitly warns against
+#     self-hosted runners on public repos because a fork's pull request could otherwise
+#     run arbitrary code on this machine):
+#       1. .github/workflows/heavy.yml triggers on `push` to main and on
+#          `workflow_dispatch` ONLY. There is no pull_request trigger, so a fork cannot
+#          reach this runner at all. This is the primary mitigation.
+#       2. `--ephemeral`: one job per container, then the container is destroyed. No
+#          state survives between jobs.
+#       3. No docker socket, no host $HOME, no secrets mounted (see runner_up.sh).
+#       4. Non-root `runner` user, dropped capabilities, no-new-privileges.
+#
+#     Runner version is PINNED and checksum-verified below. Bump it by hand (edit the
+#     two ARGs) when a new actions/runner release is wanted; `--disableupdate` in
+#     tools/ci/runner_entrypoint.sh keeps the runner from silently self-updating, so the
+#     image is the single source of truth for which runner binary is in use.
+#
+# PT: O runner self-hosted do GitHub Actions para os checks pesados da glintfx, como
+#     imagem de container. Buildado EM CIMA da localhost/glintfx-ci:f42
+#     (tools/ci/Containerfile.f42), então toda dependência de build já vem embutida e o
+#     workflow NÃO precisa da chave `container:`: o processo do runner e os passos do job
+#     compartilham esta mesma imagem. Isso é deliberado -- a alternativa (runner no host
+#     criando um container de job) exigiria docker-in-docker ou um socket do docker
+#     montado, que é maquinaria extra e uma porta de fuga do container que não queremos
+#     numa máquina em que o líder trabalha.
+#
+#     Como se usa (o lado do host está em tools/ci/runner_up.sh):
+#       tools/ci/build_runner_image.sh          # builda localhost/glintfx-runner:f42
+#       tools/ci/runner_up.sh                   # minta um token e roda UM runner efêmero
+#     e, como serviço supervisionado, tools/ci/glintfx-heavy-runner.service
+#     (`systemd --user`, Restart=always, porque um runner `--ephemeral` sai depois de
+#     exatamente um job).
+#
+#     Postura de segurança (o repositório é PÚBLICO, e o GitHub desaconselha
+#     explicitamente runner self-hosted em repo público porque um pull request de fork
+#     poderia, de outro modo, rodar código arbitrário nesta máquina):
+#       1. O .github/workflows/heavy.yml dispara SOMENTE em `push` na main e em
+#          `workflow_dispatch`. Não há gatilho de pull_request, logo um fork não alcança
+#          este runner de jeito nenhum. Esta é a mitigação principal.
+#       2. `--ephemeral`: um job por container, e o container é destruído. Nenhum estado
+#          sobrevive entre jobs.
+#       3. Sem socket do docker, sem $HOME do host, sem segredo montado (ver
+#          runner_up.sh).
+#       4. Usuário `runner` não-root, capabilities derrubadas, no-new-privileges.
+#
+#     A versão do runner é FIXADA e verificada por checksum abaixo. Suba-a à mão (edite
+#     os dois ARGs) quando quiser uma release nova do actions/runner; o `--disableupdate`
+#     em tools/ci/runner_entrypoint.sh impede o runner de se auto-atualizar em silêncio,
+#     então a imagem é a fonte única de verdade sobre qual binário de runner está em uso.
+
+FROM localhost/glintfx-ci:f42
+
+# EN: Pinned runner release + the SHA256 published by GitHub in that release's own body
+#     (`gh api repos/actions/runner/releases/latest --jq .body`, the
+#     "BEGIN SHA linux-x64" marker). Verified against the downloaded tarball below; the
+#     build FAILS loudly if it does not match.
+# PT: Release fixada do runner + o SHA256 publicado pelo GitHub no corpo daquela release
+#     (`gh api repos/actions/runner/releases/latest --jq .body`, marcador
+#     "BEGIN SHA linux-x64"). Conferido contra o tarball baixado abaixo; o build FALHA
+#     alto se não bater.
+ARG RUNNER_VERSION=2.336.0
+ARG RUNNER_SHA256=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
+
+# EN: Runtime deps of the runner itself, on top of the build deps already in the base
+#     image. The runner is a .NET application:
+#       - libicu, openssl-libs, krb5-libs, zlib : the .NET runtime's own shared libs.
+#       - curl, tar                             : fetch and unpack the runner tarball.
+#       - procps-ng                             : ps/top inside the container when
+#                                                 diagnosing a stuck job.
+#     Node is NOT installed here for the runner's sake: the runner ships its own
+#     externals/node (that is what runs actions/checkout). The base image's nodejs stays
+#     useful for anything else a step may want.
+# PT: Deps de runtime do runner em si, além das deps de build já presentes na imagem
+#     base. O runner é uma aplicação .NET:
+#       - libicu, openssl-libs, krb5-libs, zlib : shared libs do próprio runtime .NET.
+#       - curl, tar                             : baixar e desempacotar o tarball do runner.
+#       - procps-ng                             : ps/top dentro do container ao
+#                                                 diagnosticar job travado.
+#     O Node NÃO é instalado aqui por causa do runner: ele traz o próprio externals/node
+#     (é esse que roda o actions/checkout). O nodejs da imagem base segue útil pra
+#     qualquer outra coisa que um passo queira.
+RUN dnf -y install \
+        libicu \
+        openssl-libs \
+        krb5-libs \
+        zlib \
+        curl \
+        tar \
+        procps-ng \
+    && dnf clean all
+
+# EN: Non-root user. The GitHub runner refuses to run as root unless
+#     RUNNER_ALLOW_RUNASROOT=1 is set, and we do NOT want to set it: the job steps
+#     execute repository code, so the smaller the blast radius inside the container the
+#     better. uid 1001 avoids colliding with the base image's own accounts.
+# PT: Usuário não-root. O runner do GitHub se recusa a rodar como root a menos que
+#     RUNNER_ALLOW_RUNASROOT=1 esteja setado, e NÃO queremos setar: os passos do job
+#     executam código do repositório, então quanto menor o blast radius dentro do
+#     container, melhor. O uid 1001 evita colisão com as contas da imagem base.
+RUN useradd --create-home --uid 1001 --shell /bin/bash runner
+
+USER runner
+WORKDIR /home/runner/actions-runner
+
+# EN: Download, verify, unpack. Done as the `runner` user so every file is already owned
+#     by it (no recursive chown layer). The tarball is deleted in the same layer so it
+#     does not bloat the image.
+# PT: Baixar, verificar, desempacotar. Feito como usuário `runner` pra todo arquivo já
+#     nascer com o dono certo (sem camada de chown recursivo). O tarball é apagado na
+#     mesma camada pra não inchar a imagem.
+RUN curl -fsSL -o runner.tar.gz \
+      "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+    && echo "${RUNNER_SHA256}  runner.tar.gz" | sha256sum -c - \
+    && tar xzf runner.tar.gz \
+    && rm -f runner.tar.gz
+
+# EN: _work is where the runner checks the repository out. Inside an ephemeral container
+#     it is thrown away with the container.
+# PT: _work é onde o runner faz o checkout do repositório. Dentro de um container efêmero
+#     ele vai embora junto com o container.
+RUN mkdir -p /home/runner/_work
+
+COPY --chown=runner:runner runner_entrypoint.sh /home/runner/runner_entrypoint.sh
+
+# EN: Sanity marker, same convention as the base image.
+# PT: Marcador de sanidade, mesma convenção da imagem base.
+USER root
+RUN echo "glintfx-runner:f42 (actions/runner ${RUNNER_VERSION} on glintfx-ci:f42)" > /etc/glintfx-runner-image \
+    && chmod 0755 /home/runner/runner_entrypoint.sh
+USER runner
+
+ENTRYPOINT ["/home/runner/runner_entrypoint.sh"]

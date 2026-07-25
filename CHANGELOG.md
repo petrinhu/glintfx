@@ -3,8 +3,8 @@
 > **EN:** All notable changes to glintfx. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project follows [Semantic Versioning](https://semver.org/).
 > **PT:** Todas as mudanças notáveis do glintfx. Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); o projeto segue [Versionamento Semântico](https://semver.org/).
 >
-> **EN:** Mirrored on [Codeberg](https://codeberg.org/petrinhu/glintfx) · [GitHub](https://github.com/petrinhu/glintfx) -- every `vX.Y.Z` tag exists identically on both remotes.
-> **PT:** Espelhado no [Codeberg](https://codeberg.org/petrinhu/glintfx) · [GitHub](https://github.com/petrinhu/glintfx) -- cada tag `vX.Y.Z` existe idêntica nos dois remotos.
+> **EN:** Published on [GitHub](https://github.com/petrinhu/glintfx), where every `vX.Y.Z` tag lives. Releases up to `v0.23.0` were also mirrored on Codeberg; that mirror was retired on 2026-07-25 and its links are gone, so the entries below that mention a "dual remote" describe what the project did at the time.
+> **PT:** Publicado no [GitHub](https://github.com/petrinhu/glintfx), onde vive cada tag `vX.Y.Z`. As releases até a `v0.23.0` também eram espelhadas no Codeberg; esse espelho foi aposentado em 2026-07-25 e os links dele sumiram, então as entradas abaixo que mencionam "remoto dual" descrevem o que o projeto fazia na época.
 
 ---
 
@@ -969,7 +969,7 @@
 - **EN:** 3 new tests this release: `polygon_sanity` (runs in both build configs) -- geometry proofs (alpha-shape hexagon vs octagon, negative-rotation applied) plus the full input-validation matrix (empty/negative/below-floor rejected; floor=3 and ceiling=1024 accepted; above-ceiling and `1e30` rejected with no UB); `input_hardening_sanity` (embed, both build configs) -- `load(nullptr)` returns `false` without aborting, an invalid `dp_ratio` (`NaN`, `0`, negative) leaves the previous baseline untouched, and `set_viewport(0, h)` / `set_viewport(w, 0)` are silent no-ops; `app_input_hardening_smoke` (GLFW-only) -- `App` parity for the same three guards. All UBSan-clean under `GLINTFX_SANITIZE=ON`. Suite size: **26 tests** with `GLINTFX_BACKEND_GLFW=ON`, **13** with `=OFF` (embed-only).
   **PT:** 3 testes novos nesta release: `polygon_sanity` (roda nos 2 configs de build) -- provas de geometria (alpha-shape hexágono vs octógono, rotação negativa aplicada) mais a matriz completa de validação de entrada (vazio/negativo/abaixo-do-piso rejeitados; piso=3 e teto=1024 aceitos; acima-do-teto e `1e30` rejeitados sem UB); `input_hardening_sanity` (embed, nos 2 configs de build) -- `load(nullptr)` retorna `false` sem abortar, um `dp_ratio` inválido (`NaN`, `0`, negativo) mantém a baseline anterior intocada, e `set_viewport(0, h)` / `set_viewport(w, 0)` são no-ops silenciosos; `app_input_hardening_smoke` (GLFW-only) -- paridade do `App` para os mesmos três guards. Todos UBSan-limpos sob `GLINTFX_SANITIZE=ON`. Tamanho da suíte: **26 testes** com `GLINTFX_BACKEND_GLFW=ON`, **13** com `=OFF` (embed-only).
 
-[0.3.0]: https://codeberg.org/petrinhu/glintfx/releases/tag/v0.3.0
+[0.3.0]: https://github.com/petrinhu/glintfx/releases/tag/v0.3.0
 
 ---
 
@@ -996,7 +996,7 @@
 - **EN:** 5 new tests this release (`click_callback_sanity`, `app_click_callback_smoke`, `element_box_sanity`, `app_element_box_smoke`, `viewport_origin_sanity`; 3 of the 5 run in both build configs). Suite size: **23 tests** with `GLINTFX_BACKEND_GLFW=ON`, **11** with `=OFF` (embed-only).
   **PT:** 5 testes novos nesta release (`click_callback_sanity`, `app_click_callback_smoke`, `element_box_sanity`, `app_element_box_smoke`, `viewport_origin_sanity`; 3 dos 5 rodam nos 2 configs de build). Tamanho da suíte: **23 testes** com `GLINTFX_BACKEND_GLFW=ON`, **11** com `=OFF` (embed-only).
 
-[0.2.5]: https://codeberg.org/petrinhu/glintfx/releases/tag/v0.2.5
+[0.2.5]: https://github.com/petrinhu/glintfx/releases/tag/v0.2.5
 
 ---
 
@@ -1137,4 +1137,4 @@ First release of **glintfx**: a drop-in C++ library for Linux x86-64 that fuses 
 
 > **Note / Nota:** Layer 0 (`loucura_c_asm`, the pure C/ASM runtime) is not part of this release; it is an independent experimental track with its own future tag. / A Camada 0 (`loucura_c_asm`, o runtime C/ASM puro) não faz parte deste lançamento; é uma trilha experimental independente com tag futura própria.
 
-[0.1.0]: https://codeberg.org/petrinhu/glintfx/releases/tag/v0.1.0
+[0.1.0]: https://github.com/petrinhu/glintfx/releases/tag/v0.1.0

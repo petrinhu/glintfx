@@ -69,7 +69,7 @@ The project is **MPL-2.0** and currently has a single author, which keeps relice
 
 ### Reporting issues
 
-Open an issue on [Codeberg](https://codeberg.org/petrinhu/glintfx) or [GitHub](https://github.com/petrinhu/glintfx). For security-sensitive reports, follow [`SECURITY.md`](SECURITY.md) instead.
+Open an issue on [GitHub](https://github.com/petrinhu/glintfx). For security-sensitive reports, follow [`SECURITY.md`](SECURITY.md) instead.
 
 ---
 
@@ -137,4 +137,4 @@ O projeto é **MPL-2.0** e tem atualmente um único autor, o que mantém o relic
 
 ### Reportar problemas
 
-Abra uma issue no [Codeberg](https://codeberg.org/petrinhu/glintfx) ou no [GitHub](https://github.com/petrinhu/glintfx). Para reportes sensíveis de segurança, siga o [`SECURITY.md`](SECURITY.md).
+Abra uma issue no [GitHub](https://github.com/petrinhu/glintfx). Para reportes sensíveis de segurança, siga o [`SECURITY.md`](SECURITY.md).

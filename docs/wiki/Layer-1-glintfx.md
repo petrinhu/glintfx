@@ -2,7 +2,7 @@
 
 ## English
 
-**glintfx** is a drop-in C++ library for Linux x86-64 (MPL-2.0 license) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.11.2**, full history in [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
+**glintfx** is a drop-in C++ library for Linux x86-64 (MPL-2.0 license) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.23.0**, full history in [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
 
 Two ways to consume it:
 
@@ -11,29 +11,35 @@ Two ways to consume it:
 
 ### What's new since v0.9.0
 
-- **`v0.9.2`:** the generated GL loader gained a Windows codepath (`wglGetProcAddress` + `opengl32.dll`, MinGW-w64 cross-compile-validated) -- a real step for consumers targeting Windows, but **not** a change to the project's officially supported platform, which stays Linux x86-64 (see the main [`README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/README.md#known-limitations)'s "Known limitations").
+- **`v0.9.2`:** the generated GL loader gained a Windows codepath (`wglGetProcAddress` + `opengl32.dll`, MinGW-w64 cross-compile-validated) -- a real step for consumers targeting Windows, but **not** a change to the project's officially supported platform, which stays Linux x86-64 (see the main [`README.md`](https://github.com/petrinhu/glintfx/blob/main/README.md#known-limitations)'s "Known limitations").
 - **`v0.10.0` (`L1.20-FONTFLIP`):** glintfx's own clean-room font engine -- built on Layer 0's `glx_sfnt`/`glx_raster`/`glx_hint` -- became the **default** rasteriser (`GLINTFX_OWN_FONT_ENGINE=ON` at build time, `FontEngine::Own` at runtime). This is a **soft** flip: FreeType stays fully linked and selectable per-instance, no rebuild required --
   ```cpp
   glintfx::AppConfig cfg;   // or glintfx::UiLayerConfig
   cfg.font_engine = glintfx::FontEngine::FreeType;  // one-line rollback to the pre-v0.10.0 default
   ```
-  See [ADR-0011](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0011-soft-font-flip.md) and `docs/embed-integration.md` section 17.
-- **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** a `decorator: ripple(...)` RCSS decorator captures the host's FBO 0 and refracts it screen-space over glintfx's own composed UI -- a shimmer/water-ripple look, driven entirely by RCSS custom properties (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, all animatable via `@keyframes`), no new C++ API. Embed/`UiLayer` mode only. See [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) for the syntax and [ADR-0012](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0012-backdrop-capture.md) for the design rationale (a documented, opt-in, cost-zero-when-inactive exception to `UiLayer`'s compose-only guarantee).
+  See [ADR-0011](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0011-soft-font-flip.md) and `docs/embed-integration.md` section 17.
+- **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** a `decorator: ripple(...)` RCSS decorator captures the host's FBO 0 and refracts it screen-space over glintfx's own composed UI -- a shimmer/water-ripple look, driven entirely by RCSS custom properties (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, all animatable via `@keyframes`), no new C++ API. Embed/`UiLayer` mode only. See [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md) for the syntax and [ADR-0012](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0012-backdrop-capture.md) for the design rationale (a documented, opt-in, cost-zero-when-inactive exception to `UiLayer`'s compose-only guarantee).
 - **`v0.11.1`:** a safety net so a huge or corrupted image/font file can never crash the app that uses glintfx: any asset over 256 MiB is now politely rejected (logged, not loaded) instead of being read into memory wholesale.
-- **`v0.11.2` (`AUD-L1-GLSYM`):** fixes a subtle "ghost symbol" bug. glintfx's OpenGL loader used to publish 344 internal placeholder variables under the exact same names as real graphics-driver functions (`glClear`, and so on). If a host program happened to link glintfx's compiled library before the graphics driver's own library, it could accidentally grab glintfx's empty placeholder instead of the real function and crash instantly. Every placeholder now carries a private `glx_`-prefixed name, so it can never be mistaken for the real thing. Nothing a normal app author needs to change; see [ADR-0013](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0013-gl-symbol-boundary.md) for the full story.
+- **`v0.11.2` (`AUD-L1-GLSYM`):** fixes a subtle "ghost symbol" bug. glintfx's OpenGL loader used to publish 344 internal placeholder variables under the exact same names as real graphics-driver functions (`glClear`, and so on). If a host program happened to link glintfx's compiled library before the graphics driver's own library, it could accidentally grab glintfx's empty placeholder instead of the real function and crash instantly. Every placeholder now carries a private `glx_`-prefixed name, so it can never be mistaken for the real thing. Nothing a normal app author needs to change; see [ADR-0013](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0013-gl-symbol-boundary.md) for the full story.
+- **`v0.12.0` through `v0.23.0` are not summarised on this page yet.** Those releases turned glintfx
+  from a UI library into an atomized 2D game framework (audio, gamepad, i18n, window modes, color
+  emoji, a physical-input channel, and the `Draw2d` sprite/camera/primitive/text renderer). Read
+  [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md) and
+  [ADR-0015](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0015-framework-2d-atomized-architecture.md)
+  for what actually shipped; this page is the older, UI-only view of the product.
 
 ### Where to go
 
 | Need | Link |
 | :--- | :--- |
-| First tutorial (assumes C++/CMake) | [`docs/getting-started.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/getting-started.md) |
-| Total-beginner explanation | [`docs/GUIA_INICIANTE.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/GUIA_INICIANTE.md) |
-| Effects syntax (how-to + reference) | [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) |
-| Embedding into your own app | [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) |
-| Installing a pre-built copy | [`docs/packaging.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/packaging.md) |
-| Fixing a build/integration error | [`docs/troubleshooting.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/troubleshooting.md) |
-| Design rationale | [`docs/adr/README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/README.md) (see especially ADR-0006, the two-layer split, and ADR-0008, embed mode) |
-| Public API (always current, doc-commented) | [`glintfx/include/glintfx/`](https://codeberg.org/petrinhu/glintfx/src/branch/main/glintfx/include/glintfx) |
+| First tutorial (assumes C++/CMake) | [`docs/getting-started.md`](https://github.com/petrinhu/glintfx/blob/main/docs/getting-started.md) |
+| Total-beginner explanation | [`docs/GUIA_INICIANTE.md`](https://github.com/petrinhu/glintfx/blob/main/docs/GUIA_INICIANTE.md) |
+| Effects syntax (how-to + reference) | [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md) |
+| Embedding into your own app | [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md) |
+| Installing a pre-built copy | [`docs/packaging.md`](https://github.com/petrinhu/glintfx/blob/main/docs/packaging.md) |
+| Fixing a build/integration error | [`docs/troubleshooting.md`](https://github.com/petrinhu/glintfx/blob/main/docs/troubleshooting.md) |
+| Design rationale | [`docs/adr/README.md`](https://github.com/petrinhu/glintfx/blob/main/docs/adr/README.md) (see especially ADR-0006, the two-layer split, and ADR-0008, embed mode) |
+| Public API (always current, doc-commented) | [`glintfx/include/glintfx/`](https://github.com/petrinhu/glintfx/tree/main/glintfx/include/glintfx) |
 
 ### The long-term angle
 
@@ -41,13 +47,13 @@ glintfx currently depends on three real, mature third-party libraries: RmlUi, GL
 
 ### Credit / crediting RmlUi
 
-glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License), the HTML/CSS-style UI engine glintfx wraps and drives from `.rcss` -- our thanks to mikke89 and the RmlUi contributors for a mature, well-documented project to build on. When we find and fix a genuine bug in RmlUi itself, we track the fix as an explicit, reviewed source patch applied automatically at `FetchContent` time (`glintfx/patches/`, see `glintfx/patches/README.md`), and aim to report/submit it back upstream. Current example: `rmlui-2cd28864-teardown-ub.patch` fixes two undefined-behavior findings in RmlUi's own document/element teardown order (see [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) section 18 and the [`NOTICE`](https://codeberg.org/petrinhu/glintfx/src/branch/main/NOTICE) file). Every such patch is meant to be temporary: retired once the equivalent fix lands upstream.
+glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License), the HTML/CSS-style UI engine glintfx wraps and drives from `.rcss` -- our thanks to mikke89 and the RmlUi contributors for a mature, well-documented project to build on. When we find and fix a genuine bug in RmlUi itself, we track the fix as an explicit, reviewed source patch applied automatically at `FetchContent` time (`glintfx/patches/`, see `glintfx/patches/README.md`), and aim to report/submit it back upstream. Current example: `rmlui-2cd28864-teardown-ub.patch` fixes two undefined-behavior findings in RmlUi's own document/element teardown order (see [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md) section 18 and the [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE) file). Every such patch is meant to be temporary: retired once the equivalent fix lands upstream.
 
 ---
 
 ## Português
 
-O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença MPL-2.0) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.11.2**, histórico completo em [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md).
+O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença MPL-2.0) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.23.0**, histórico completo em [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
 
 Dois jeitos de consumir:
 
@@ -56,29 +62,35 @@ Dois jeitos de consumir:
 
 ### O que há de novo desde a v0.9.0
 
-- **`v0.9.2`:** o loader GL gerado ganhou um codepath Windows (`wglGetProcAddress` + `opengl32.dll`, validado por cross-compile MinGW-w64) -- um passo real pra consumidores mirando Windows, mas **não** uma mudança na plataforma oficialmente suportada do projeto, que continua Linux x86-64 (ver a seção "Limitações conhecidas" do [`README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/README.md#limitações-conhecidas) principal).
+- **`v0.9.2`:** o loader GL gerado ganhou um codepath Windows (`wglGetProcAddress` + `opengl32.dll`, validado por cross-compile MinGW-w64) -- um passo real pra consumidores mirando Windows, mas **não** uma mudança na plataforma oficialmente suportada do projeto, que continua Linux x86-64 (ver a seção "Limitações conhecidas" do [`README.md`](https://github.com/petrinhu/glintfx/blob/main/README.md#limitações-conhecidas) principal).
 - **`v0.10.0` (`L1.20-FONTFLIP`):** o motor de fonte próprio clean-room da glintfx -- construído sobre `glx_sfnt`/`glx_raster`/`glx_hint` da Camada 0 -- virou o rasterizador **default** (`GLINTFX_OWN_FONT_ENGINE=ON` em tempo de build, `FontEngine::Own` em runtime). É um flip **suave**: o FreeType continua plenamente linkado e selecionável por-instância, sem rebuild --
   ```cpp
   glintfx::AppConfig cfg;   // ou glintfx::UiLayerConfig
   cfg.font_engine = glintfx::FontEngine::FreeType;  // rollback de uma linha pro default pré-v0.10.0
   ```
-  Ver [ADR-0011](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0011-soft-font-flip.md) e a seção 17 de `docs/embed-integration.md`.
-- **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** um decorator RCSS `decorator: ripple(...)` captura o FBO 0 do host e o refrata em screen-space sobre a própria UI composta da glintfx -- um visual de shimmer/ondulação na água, dirigido inteiramente por propriedades customizadas RCSS (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, todas animáveis via `@keyframes`), sem API C++ nova. Só em modo embed/`UiLayer`. Ver [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) pra sintaxe e [ADR-0012](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0012-backdrop-capture.md) pra racional de design (uma exceção documentada, opt-in, custo-zero-quando-inativa à garantia compose-only do `UiLayer`).
+  Ver [ADR-0011](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0011-soft-font-flip.md) e a seção 17 de `docs/embed-integration.md`.
+- **`v0.11.0` (`L1.22-WAVE`/`L1.22-CAPTURE`):** um decorator RCSS `decorator: ripple(...)` captura o FBO 0 do host e o refrata em screen-space sobre a própria UI composta da glintfx -- um visual de shimmer/ondulação na água, dirigido inteiramente por propriedades customizadas RCSS (`ripple-origin-x`/`-y`/`-phase`/`-strength`/`-width`, todas animáveis via `@keyframes`), sem API C++ nova. Só em modo embed/`UiLayer`. Ver [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md) pra sintaxe e [ADR-0012](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0012-backdrop-capture.md) pra racional de design (uma exceção documentada, opt-in, custo-zero-quando-inativa à garantia compose-only do `UiLayer`).
 - **`v0.11.1`:** uma rede de segurança pra que um arquivo de imagem ou fonte gigante ou corrompido nunca derrube o app que usa a glintfx: todo asset acima de 256 MiB agora é educadamente rejeitado (registrado em log, não carregado) em vez de ser lido inteiro pra memória.
-- **`v0.11.2` (`AUD-L1-GLSYM`):** corrige um bug sutil de "símbolo fantasma". O loader OpenGL da glintfx publicava 344 variáveis internas de placeholder com o MESMO nome de funções reais do driver gráfico (`glClear`, e por aí vai). Se um programa host por acaso linkasse a biblioteca compilada da glintfx antes da própria biblioteca do driver gráfico, ele podia sem querer pegar o placeholder vazio da glintfx em vez da função real e crashar na hora. Todo placeholder agora carrega um nome privado com prefixo `glx_`, então nunca mais pode ser confundido com o de verdade. Nada que um autor de app comum precise mudar; ver [ADR-0013](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/0013-gl-symbol-boundary.md) pra história completa.
+- **`v0.11.2` (`AUD-L1-GLSYM`):** corrige um bug sutil de "símbolo fantasma". O loader OpenGL da glintfx publicava 344 variáveis internas de placeholder com o MESMO nome de funções reais do driver gráfico (`glClear`, e por aí vai). Se um programa host por acaso linkasse a biblioteca compilada da glintfx antes da própria biblioteca do driver gráfico, ele podia sem querer pegar o placeholder vazio da glintfx em vez da função real e crashar na hora. Todo placeholder agora carrega um nome privado com prefixo `glx_`, então nunca mais pode ser confundido com o de verdade. Nada que um autor de app comum precise mudar; ver [ADR-0013](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0013-gl-symbol-boundary.md) pra história completa.
+- **A `v0.12.0` até a `v0.23.0` ainda não estão resumidas nesta página.** Essas releases transformaram
+  a glintfx de biblioteca de UI em framework de jogos 2D atomizado (áudio, gamepad, i18n, modos de
+  janela, emoji colorido, um canal de input físico, e o renderer `Draw2d` de sprite/câmera/primitiva/
+  texto). Leia o [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md) e a
+  [ADR-0015](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0015-framework-2d-atomized-architecture.md)
+  pro que de fato foi entregue; esta página é a visão antiga, só-de-UI, do produto.
 
 ### Pra onde ir
 
 | Preciso de | Link |
 | :--- | :--- |
-| Primeiro tutorial (assume C++/CMake) | [`docs/getting-started.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/getting-started.md) |
-| Explicação pra iniciante total | [`docs/GUIA_INICIANTE.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/GUIA_INICIANTE.md) |
-| Sintaxe dos efeitos (how-to + referência) | [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md) |
-| Embutir no seu próprio app | [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) |
-| Instalar uma cópia pré-buildada | [`docs/packaging.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/packaging.md) |
-| Resolver um erro de build/integração | [`docs/troubleshooting.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/troubleshooting.md) |
-| Racional de design | [`docs/adr/README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/README.md) (ver especialmente ADR-0006, a divisão em duas camadas, e ADR-0008, o modo embed) |
-| API pública (sempre atual, doc-commented) | [`glintfx/include/glintfx/`](https://codeberg.org/petrinhu/glintfx/src/branch/main/glintfx/include/glintfx) |
+| Primeiro tutorial (assume C++/CMake) | [`docs/getting-started.md`](https://github.com/petrinhu/glintfx/blob/main/docs/getting-started.md) |
+| Explicação pra iniciante total | [`docs/GUIA_INICIANTE.md`](https://github.com/petrinhu/glintfx/blob/main/docs/GUIA_INICIANTE.md) |
+| Sintaxe dos efeitos (how-to + referência) | [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md) |
+| Embutir no seu próprio app | [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md) |
+| Instalar uma cópia pré-buildada | [`docs/packaging.md`](https://github.com/petrinhu/glintfx/blob/main/docs/packaging.md) |
+| Resolver um erro de build/integração | [`docs/troubleshooting.md`](https://github.com/petrinhu/glintfx/blob/main/docs/troubleshooting.md) |
+| Racional de design | [`docs/adr/README.md`](https://github.com/petrinhu/glintfx/blob/main/docs/adr/README.md) (ver especialmente ADR-0006, a divisão em duas camadas, e ADR-0008, o modo embed) |
+| API pública (sempre atual, doc-commented) | [`glintfx/include/glintfx/`](https://github.com/petrinhu/glintfx/tree/main/glintfx/include/glintfx) |
 
 ### O ângulo de longo prazo
 
@@ -86,4 +98,4 @@ O glintfx hoje depende de três bibliotecas reais e maduras de terceiros: RmlUi,
 
 ### Crédito ao RmlUi
 
-O glintfx é construído sobre o [RmlUi](https://github.com/mikke89/RmlUi) (licença MIT), o motor de UI estilo HTML/CSS que o glintfx embrulha e comanda a partir de `.rcss` -- nosso agradecimento ao mikke89 e aos contribuidores do RmlUi por um projeto maduro e bem documentado sobre o qual construir. Quando encontramos e corrigimos um bug genuíno no próprio RmlUi, rastreamos a correção como um patch de fonte explícito e revisado, aplicado automaticamente em tempo de `FetchContent` (`glintfx/patches/`, ver `glintfx/patches/README.md`), e buscamos reportá-lo/submetê-lo de volta ao upstream. Exemplo atual: o `rmlui-2cd28864-teardown-ub.patch` corrige dois achados de undefined behavior na própria ordem de teardown de documento/elemento do RmlUi (ver [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md) seção 18 e o arquivo [`NOTICE`](https://codeberg.org/petrinhu/glintfx/src/branch/main/NOTICE)). Todo patch assim é pensado para ser temporário: aposentado assim que a correção equivalente chegar no upstream.
+O glintfx é construído sobre o [RmlUi](https://github.com/mikke89/RmlUi) (licença MIT), o motor de UI estilo HTML/CSS que o glintfx embrulha e comanda a partir de `.rcss` -- nosso agradecimento ao mikke89 e aos contribuidores do RmlUi por um projeto maduro e bem documentado sobre o qual construir. Quando encontramos e corrigimos um bug genuíno no próprio RmlUi, rastreamos a correção como um patch de fonte explícito e revisado, aplicado automaticamente em tempo de `FetchContent` (`glintfx/patches/`, ver `glintfx/patches/README.md`), e buscamos reportá-lo/submetê-lo de volta ao upstream. Exemplo atual: o `rmlui-2cd28864-teardown-ub.patch` corrige dois achados de undefined behavior na própria ordem de teardown de documento/elemento do RmlUi (ver [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md) seção 18 e o arquivo [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE)). Todo patch assim é pensado para ser temporário: aposentado assim que a correção equivalente chegar no upstream.

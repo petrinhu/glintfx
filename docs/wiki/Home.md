@@ -1,18 +1,17 @@
 # Home
 
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/LICENSE)
-[![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-blue.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
-[![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](https://github.com/petrinhu/glintfx/blob/main/LICENSE)
+[![Version: 0.23.0](https://img.shields.io/badge/Version-0.23.0-blue.svg)](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md)
+[![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
 [![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3-5586A4.svg)](#)
 [![CI (GitHub)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
-[![CI (Codeberg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml/badge.svg)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://codeberg.org/petrinhu/glintfx/raw/branch/main/glintfx/coverage-badge.json)](https://codeberg.org/petrinhu/glintfx/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/petrinhu/glintfx/main/glintfx/coverage-badge.json)](https://github.com/petrinhu/glintfx/actions/workflows/ci.yml)
 
-> Repository: [Codeberg](https://codeberg.org/petrinhu/glintfx) (primary) / [GitHub](https://github.com/petrinhu/glintfx) (mirror). This wiki is a lightweight index; the real documentation lives as versioned files inside the repository itself, under `docs/`.
-> Repositório: [Codeberg](https://codeberg.org/petrinhu/glintfx) (principal) / [GitHub](https://github.com/petrinhu/glintfx) (espelho). Esta wiki é um índice leve; a documentação de verdade vive como arquivos versionados dentro do próprio repositório, em `docs/`.
+> Repository: [GitHub](https://github.com/petrinhu/glintfx). This wiki is a lightweight index; the real documentation lives as versioned files inside the repository itself, under `docs/`.
+> Repositório: [GitHub](https://github.com/petrinhu/glintfx). Esta wiki é um índice leve; a documentação de verdade vive como arquivos versionados dentro do próprio repositório, em `docs/`.
 
 ## English
 
@@ -31,13 +30,13 @@ Other useful pages:
 
 Direct links into the repository's own docs (these are the source of truth, this wiki only points at them):
 
-- [`README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/README.md), the project's front page.
-- [`docs/GUIA_INICIANTE.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/GUIA_INICIANTE.md), the extensive beginner guide (bilingual, assumes no prior computing knowledge).
-- [`docs/getting-started.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/getting-started.md), the developer tutorial (assumes basic C++/CMake).
-- [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md), the visual-effects how-to and reference (RCSS syntax).
-- [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md), the reference for embedding glintfx into a host application.
-- [`docs/adr/README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/README.md), the index of Architecture Decision Records (the "why" behind every major design choice).
-- [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md), the dated history of every released version.
+- [`README.md`](https://github.com/petrinhu/glintfx/blob/main/README.md), the project's front page.
+- [`docs/GUIA_INICIANTE.md`](https://github.com/petrinhu/glintfx/blob/main/docs/GUIA_INICIANTE.md), the extensive beginner guide (bilingual, assumes no prior computing knowledge).
+- [`docs/getting-started.md`](https://github.com/petrinhu/glintfx/blob/main/docs/getting-started.md), the developer tutorial (assumes basic C++/CMake).
+- [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md), the visual-effects how-to and reference (RCSS syntax).
+- [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md), the reference for embedding glintfx into a host application.
+- [`docs/adr/README.md`](https://github.com/petrinhu/glintfx/blob/main/docs/adr/README.md), the index of Architecture Decision Records (the "why" behind every major design choice).
+- [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md), the dated history of every released version.
 
 ---
 
@@ -58,10 +57,10 @@ Outras páginas úteis:
 
 Links diretos pros docs de verdade do repositório (eles são a fonte de verdade, esta wiki só aponta pra eles):
 
-- [`README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/README.md), a página de rosto do projeto.
-- [`docs/GUIA_INICIANTE.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/GUIA_INICIANTE.md), o guia extenso para iniciantes (bilíngue, não assume conhecimento prévio de computação).
-- [`docs/getting-started.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/getting-started.md), o tutorial de dev (assume C++/CMake básico).
-- [`docs/effects.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/effects.md), o how-to e referência de efeitos visuais (sintaxe RCSS).
-- [`docs/embed-integration.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/embed-integration.md), a referência pra embutir o glintfx numa aplicação host.
-- [`docs/adr/README.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/docs/adr/README.md), o índice de Architecture Decision Records (o "porquê" de cada escolha de design importante).
-- [`CHANGELOG.md`](https://codeberg.org/petrinhu/glintfx/src/branch/main/CHANGELOG.md), o histórico datado de toda versão lançada.
+- [`README.md`](https://github.com/petrinhu/glintfx/blob/main/README.md), a página de rosto do projeto.
+- [`docs/GUIA_INICIANTE.md`](https://github.com/petrinhu/glintfx/blob/main/docs/GUIA_INICIANTE.md), o guia extenso para iniciantes (bilíngue, não assume conhecimento prévio de computação).
+- [`docs/getting-started.md`](https://github.com/petrinhu/glintfx/blob/main/docs/getting-started.md), o tutorial de dev (assume C++/CMake básico).
+- [`docs/effects.md`](https://github.com/petrinhu/glintfx/blob/main/docs/effects.md), o how-to e referência de efeitos visuais (sintaxe RCSS).
+- [`docs/embed-integration.md`](https://github.com/petrinhu/glintfx/blob/main/docs/embed-integration.md), a referência pra embutir o glintfx numa aplicação host.
+- [`docs/adr/README.md`](https://github.com/petrinhu/glintfx/blob/main/docs/adr/README.md), o índice de Architecture Decision Records (o "porquê" de cada escolha de design importante).
+- [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md), o histórico datado de toda versão lançada.

@@ -12,7 +12,6 @@ PT: Tipo Diátaxis: how-to guide (troubleshooting). Audience: dev integrando o g
 Languages / Idiomas: **[English](#english)** · **[Português](#português)**
 
 If your problem is not covered here, open an issue on
-[Codeberg](https://codeberg.org/petrinhu/glintfx/issues) or
 [GitHub](https://github.com/petrinhu/glintfx/issues) with your OS, compiler, and the exact
 error output.
 

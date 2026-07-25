@@ -6,16 +6,17 @@
 #     gate on Codeberg's side -- that file was deleted (it is fully subsumed by this
 #     one, promoted from cron to a blocking check). The GitHub-side nightly cron
 #     (.github/workflows/nightly.yml) stays intact and unchanged as the redundant
-#     safety net; .forgejo/workflows/ci.yml also stays, but shrunk to minimal parity
-#     (see that file's own header). Two jobs:
+#     safety net. (.forgejo/workflows/ci.yml, the Codeberg minimal-parity workflow,
+#     was itself deleted on 2026-07-25 -- this is now the only Forgejo workflow left.)
+#     Two jobs:
 #       - `sanitize`  -- the ASan/LSan/UBSan memory-safety gate (same flags the
 #         deleted .forgejo/workflows/nightly.yml used), a PR->main + tag gate (the
 #         líder's ratified decision: the nightly cron on GitHub remains as a
 #         redundant safety net -- see .github/workflows/nightly.yml -- this job does
 #         NOT replace that GitHub cron, only the now-deleted Forgejo-side nightly
 #         file).
-#       - `fonteng`   -- ported step-for-step from .forgejo/workflows/ci.yml's
-#         `build-and-test-fonteng` job (L1.20-FONTFLIP regression gate for glintfx's own
+#       - `fonteng`   -- ported step-for-step from the `build-and-test-fonteng` job of
+#         the since-deleted .forgejo/workflows/ci.yml (L1.20-FONTFLIP regression gate for glintfx's own
 #         font engine, GLINTFX_OWN_FONT_ENGINE=ON).
 #
 #     Runner: `claudio` (UUID 700b0e93-9831-4011-9fcd-1ff30f92e91d in this machine's
@@ -23,11 +24,14 @@
 #     forgejo-runner.service already active as a system service -- this workflow does
 #     NOT register/reconfigure the runner). `claudio` is a SINGLE always-on machine, not
 #     an elastic pool: it can be offline/busy/rebooting outside the líder's control.
-#     Policy: a green run on EITHER remote is enough (github > claudio > codeberg in
-#     gate authority) -- GitHub's nightly cron (.github/workflows/nightly.yml) is the
-#     primary safety net; if `claudio` is unreachable when a PR/tag needs this gate,
-#     that is an operational finding to surface to the líder, not a reason to
-#     silently relax the gate here.
+#     Policy (updated 2026-07-25, when the project moved to GitHub-only): GitHub is
+#     the single release gate; this workflow is a FALLBACK for depth, not a gate to
+#     wait on. GitHub's nightly cron (.github/workflows/nightly.yml) is the primary
+#     safety net. If `claudio` is unreachable when a PR/tag would use this gate, that
+#     is an operational finding to surface to the líder, not a reason to silently
+#     relax anything here. The líder intends to register `claudio` on GitHub later;
+#     until he does it himself, do NOT set up a self-hosted runner on GitHub and do
+#     NOT migrate this file.
 #
 #     Container: `container: image: localhost/glintfx-ci:f42` -- built by
 #     tools/ci/build_image.sh from tools/ci/Containerfile.f42 (fedora:42 base + every
@@ -39,8 +43,9 @@
 #     image must be (re)built with tools/ci/build_image.sh on `claudio` itself whenever
 #     Containerfile.f42 changes, this workflow does not build it.
 #
-#     SYS_futex / libstdc+++clang workaround: .forgejo/workflows/ci.yml's
-#     `build-and-test` job (ubuntu act-latest, libstdc++14) needs
+#     SYS_futex / libstdc+++clang workaround: the since-deleted
+#     .forgejo/workflows/ci.yml's `build-and-test` job (ubuntu act-latest,
+#     libstdc++14) needed
 #     `CXXFLAGS: "-include sys/syscall.h"` to build RmlUi from scratch with clang++
 #     (see that file's `env:` comment for the full bug rationale). CORRECTED
 #     2026-07-10 (this note previously claimed Fedora 42 did NOT need the same
@@ -77,16 +82,17 @@
 #     aquele arquivo foi deletado (fica totalmente subsumido por este, promovido de
 #     cron para checagem bloqueante). O cron noturno do lado GitHub
 #     (.github/workflows/nightly.yml) permanece intacto e inalterado como rede de
-#     segurança redundante; .forgejo/workflows/ci.yml também permanece, mas encolhido
-#     a paridade mínima (ver o cabeçalho daquele arquivo). Dois jobs:
+#     segurança redundante. (O .forgejo/workflows/ci.yml, workflow de paridade mínima
+#     do Codeberg, foi ele mesmo deletado em 2026-07-25 -- este é agora o único
+#     workflow Forgejo restante.) Dois jobs:
 #       - `sanitize`  -- o gate de memory-safety ASan/LSan/UBSan (mesmas flags que o
 #         .forgejo/workflows/nightly.yml deletado usava), gate de PR->main + tag
 #         (decisão ratificada pelo líder: o cron noturno no GitHub permanece como
 #         rede de segurança redundante -- ver .github/workflows/nightly.yml -- este
 #         job NÃO substitui aquele cron do GitHub, só o arquivo nightly do lado
 #         Forgejo, agora deletado).
-#       - `fonteng`   -- portado passo a passo do job `build-and-test-fonteng` de
-#         .forgejo/workflows/ci.yml (gate de regressão L1.20-FONTFLIP do motor de fonte
+#       - `fonteng`   -- portado passo a passo do job `build-and-test-fonteng` do
+#         .forgejo/workflows/ci.yml (desde então deletado) (gate de regressão L1.20-FONTFLIP do motor de fonte
 #         próprio do glintfx, GLINTFX_OWN_FONT_ENGINE=ON).
 #
 #     Runner: `claudio` (UUID 700b0e93-9831-4011-9fcd-1ff30f92e91d no
@@ -94,11 +100,14 @@
 #     `docker:docker://node:lts`, forgejo-runner.service já ativo como serviço de
 #     sistema -- este workflow NÃO registra/reconfigura o runner). `claudio` é uma ÚNICA
 #     máquina sempre ligada, não um pool elástico: pode estar offline/ocupada/reiniciando
-#     fora do controle do líder. Política: um run verde em QUALQUER dos 2 remotos basta
-#     (github > claudio > codeberg em autoridade de gate) -- o cron noturno do GitHub
-#     (.github/workflows/nightly.yml) é a rede de segurança primária; se o `claudio`
-#     estiver inalcançável quando um PR/tag precisar deste gate, isso é um achado
-#     operacional a reportar ao líder, não motivo para relaxar o gate em silêncio aqui.
+#     fora do controle do líder. Política (atualizada em 2026-07-25, quando o projeto
+#     passou a viver só no GitHub): o GitHub é o único gate de release; este workflow é
+#     FALLBACK de profundidade, não um gate a esperar. O cron noturno do GitHub
+#     (.github/workflows/nightly.yml) é a rede de segurança primária. Se o `claudio`
+#     estiver inalcançável quando um PR/tag usaria este gate, isso é um achado
+#     operacional a reportar ao líder, não motivo para relaxar nada em silêncio aqui.
+#     O líder pretende registrar o `claudio` no GitHub depois; até ele mesmo fazer
+#     isso, NÃO configurar runner self-hosted no GitHub e NÃO migrar este arquivo.
 #
 #     Container: `container: image: localhost/glintfx-ci:f42` -- buildado por
 #     tools/ci/build_image.sh a partir de tools/ci/Containerfile.f42 (base fedora:42 +
@@ -110,8 +119,9 @@
 #     precisa ser (re)buildada com tools/ci/build_image.sh no próprio `claudio` sempre
 #     que Containerfile.f42 mudar, este workflow não a builda.
 #
-#     Workaround SYS_futex / libstdc+++clang: o job `build-and-test` de
-#     .forgejo/workflows/ci.yml (ubuntu act-latest, libstdc++14) precisa de
+#     Workaround SYS_futex / libstdc+++clang: o job `build-and-test` do
+#     .forgejo/workflows/ci.yml (desde então deletado; ubuntu act-latest,
+#     libstdc++14) precisava de
 #     `CXXFLAGS: "-include sys/syscall.h"` para buildar o RmlUi do zero com clang++
 #     (ver o comentário `env:` daquele arquivo para o racional completo do bug).
 #     CORRIGIDO em 2026-07-10 (esta nota antes afirmava que o Fedora 42 NÃO precisava
@@ -147,13 +157,12 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-# EN: Own concurrency group, independent of ci.yml's -- these jobs run on a
-#     different runner (claudio, not codeberg-medium) so they never contend for the same
-#     runner-pool slot, but still cancel a stale in-progress run on the same ref.
-# PT: Grupo de concorrência próprio, independente do de ci.yml -- estes jobs
-#     rodam num runner diferente (claudio, não codeberg-medium) então nunca disputam a
-#     mesma vaga do pool, mas ainda assim cancelam um run em andamento obsoleto no mesmo
+# EN: Own concurrency group -- these jobs run on their own runner (claudio) and never
+#     contend with anything else, but still cancel a stale in-progress run on the same
 #     ref.
+# PT: Grupo de concorrência próprio -- estes jobs rodam no runner deles (claudio) e não
+#     disputam vaga com mais nada, mas ainda assim cancelam um run em andamento obsoleto
+#     no mesmo ref.
 concurrency:
   group: heavy-${{ github.ref }}
   cancel-in-progress: true
@@ -190,21 +199,19 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
 
-      # EN: Cache key namespaced with "claudio-f42" -- deliberately DIFFERENT from
-      #     ci.yml's "rmlui-${{ runner.os }}-..." keys (the deleted nightly.yml used
-      #     the same convention). The cached path
-      #     includes RmlUi's BUILT object files (FetchContent's _deps/rmlui-build), not
-      #     just cloned source -- reusing a codeberg-medium (ubuntu act-latest,
-      #     different libc/compiler ABI) cache entry here would risk linking
-      #     ABI-mismatched objects. Never unify this key with the codeberg-medium jobs'.
-      # PT: Chave de cache namespaced com "claudio-f42" -- deliberadamente DIFERENTE das
-      #     chaves "rmlui-${{ runner.os }}-..." de ci.yml (o nightly.yml deletado usava
-      #     a mesma convenção). O path cacheado
-      #     inclui os object files JÁ BUILDADOS do RmlUi (_deps/rmlui-build do
-      #     FetchContent), não só o source clonado -- reusar uma entrada de cache do
-      #     codeberg-medium (ubuntu act-latest, ABI de libc/compilador diferente) aqui
-      #     arriscaria linkar objetos com ABI incompatível. Nunca unificar esta chave com
-      #     a dos jobs codeberg-medium.
+      # EN: Cache key namespaced with "claudio-f42" -- deliberately DIFFERENT from any
+      #     "rmlui-${{ runner.os }}-..." key used by a GitHub-hosted job. The cached
+      #     path includes RmlUi's BUILT object files (FetchContent's _deps/rmlui-build),
+      #     not just cloned source -- reusing a cache entry produced on a different base
+      #     image (different libc/compiler ABI) here would risk linking ABI-mismatched
+      #     objects. Never unify this key with a GitHub-runner job's.
+      # PT: Chave de cache namespaced com "claudio-f42" -- deliberadamente DIFERENTE de
+      #     qualquer chave "rmlui-${{ runner.os }}-..." usada por job hospedado no
+      #     GitHub. O path cacheado inclui os object files JÁ BUILDADOS do RmlUi
+      #     (_deps/rmlui-build do FetchContent), não só o source clonado -- reusar uma
+      #     entrada de cache produzida em outra imagem-base (ABI de libc/compilador
+      #     diferente) aqui arriscaria linkar objetos com ABI incompatível. Nunca
+      #     unificar esta chave com a de um job de runner do GitHub.
       - name: cache rmlui (fetchcontent)
         uses: actions/cache@v4
         with:
@@ -213,13 +220,13 @@ jobs:
 
       # EN: All deps (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan)
       #     already baked into localhost/glintfx-ci:f42 -- no install step needed,
-      #     unlike the codeberg-medium jobs which install into a stock catthehacker
-      #     image every run. This IS the speed payoff described in
+      #     unlike a GitHub-hosted job, which installs them into a stock image every
+      #     run. This IS the speed payoff described in
       #     tools/ci/Containerfile.f42's header comment.
       # PT: Todas as deps (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan)
       #     já vêm embutidas em localhost/glintfx-ci:f42 -- nenhum passo de instalação
-      #     necessário, diferente dos jobs codeberg-medium que instalam numa imagem
-      #     catthehacker crua a cada execução. Este É o ganho de velocidade descrito no
+      #     necessário, diferente de um job hospedado no GitHub, que as instala numa
+      #     imagem crua a cada execução. Este É o ganho de velocidade descrito no
       #     comentário de cabeçalho de tools/ci/Containerfile.f42.
       - name: configure (GLINTFX_SANITIZE=ON)
         run: |
@@ -237,14 +244,14 @@ jobs:
         run: xvfb-run -a ctest --test-dir glintfx/build-asan-${{ matrix.backend }} --output-on-failure
 
   # EN: fonteng -- L1.20-FONTFLIP. Ported step-for-step from
-  #     .forgejo/workflows/ci.yml's `build-and-test-fonteng` job -- see that job's own
-  #     header comment for the full rationale (regression gate for glintfx's own
+  #     the `build-and-test-fonteng` job of the since-deleted .forgejo/workflows/ci.yml
+  #     (regression gate for glintfx's own
   #     SOV-SFNT/SOV-RAST font engine). Clang-pinned, WITHOUT the SYS_futex CXXFLAGS
   #     workaround -- see this file's top-of-file comment for why that workaround was
   #     tested and found unnecessary on this image.
   # PT: fonteng -- L1.20-FONTFLIP. Portado passo a passo do job `build-and-test-fonteng`
-  #     de .forgejo/workflows/ci.yml -- ver o comentário de cabeçalho daquele job para o
-  #     racional completo (gate de regressão do motor de fonte próprio
+  #     do .forgejo/workflows/ci.yml (desde então deletado)
+  #     (gate de regressão do motor de fonte próprio
   #     SOV-SFNT/SOV-RAST do glintfx). Clang-fixado, SEM o workaround CXXFLAGS
   #     SYS_futex -- ver o comentário de topo deste arquivo para o porquê desse
   #     workaround ter sido testado e considerado desnecessário nesta imagem.
@@ -260,7 +267,8 @@ jobs:
     #     The bug is CLANG-SPECIFIC (gcc pulls <sys/syscall.h> transitively, clang does
     #     not) -- which is exactly why the gcc `sanitize` jobs above are unaffected and
     #     PASS, while these clang `fonteng` jobs need the flag. Identical to the same env
-    #     in .forgejo/workflows/ci.yml; purely additive (supplies a missing declaration,
+    #     in the since-deleted .forgejo/workflows/ci.yml; purely additive (supplies a
+    #     missing declaration,
     #     changes no behaviour). The file-header note above claiming this image doesn't
     #     need it is superseded by this finding.
     # PT: O workaround SYS_futex É necessário aqui. A sonda local da Onda 1 que concluiu
@@ -270,7 +278,8 @@ jobs:
     #     ESPECÍFICO DO CLANG (gcc puxa <sys/syscall.h> transitivo, clang não) -- é por
     #     isso que os jobs gcc `sanitize` acima não são afetados e PASSAM, enquanto estes
     #     jobs clang `fonteng` precisam da flag. Idêntico ao mesmo env em
-    #     .forgejo/workflows/ci.yml; puramente aditivo. A nota do cabeçalho do arquivo
+    #     .forgejo/workflows/ci.yml (desde então deletado); puramente aditivo. A nota
+    #     do cabeçalho do arquivo
     #     acima que afirma que esta imagem não precisa fica superada por este achado.
     # EN: GLINTFX_PERF_STRICT=1 (PERF-D2D3, D30) -- arms the strict 1.5x-baseline gate in
     #     tests/draw2d_perf_budget.cpp, ONLY on this claudio job (never in ci.yml/nightly.yml):

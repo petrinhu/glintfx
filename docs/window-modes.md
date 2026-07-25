@@ -17,7 +17,7 @@ This is `App`-only (standalone). `glintfx::UiLayer` (embed/guest mode) is untouc
 owns the window there ([ADR-0008](adr/0008-embed-guest-mode.md)); window modes make no sense for
 a library that doesn't create a window.
 
-**Origin:** consumer-driven ([GusWorld](https://codeberg.org/petrinhu/glintfx), via the
+**Origin:** consumer-driven (GusWorld, via the
 cross-project bus). Maximizing the window used to invade the KDE taskbar -- the root cause was
 ours: `glintfx::App` had no window-mode handling at all, `AppConfig` had only `width`/`height`.
 Table-stakes gap for a 2D game framework (SFML/Raylib/LÖVE all have it).

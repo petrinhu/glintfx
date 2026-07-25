@@ -163,10 +163,9 @@ jobs:
       #     create a hidden GLFW window as a test-only GL context fixture; the library
       #     itself does not link GLFW in that config.
       #     libgl1-mesa-dri: llvmpipe (Mesa software GL renderer required by Xvfb).
-      #     libxkbcommon-dev: GLFW keyboard-layout header (QW-XKB, parity with
-      #     .forgejo/workflows/ci.yml -- the Codeberg runner's minimal container needed it
-      #     explicit since ubuntu-latest's preinstalled stack silently covered the same
-      #     dependency here; adding it is a defensive no-op today, closes the drift).
+      #     libxkbcommon-dev: GLFW keyboard-layout header (QW-XKB). ubuntu-latest's
+      #     preinstalled stack already covers this dependency silently, so listing it is
+      #     a defensive no-op that keeps the requirement explicit rather than implicit.
       # PT: Instala dependencias de build e runtime do sistema.
       #     clang: o README.md declara "Compiler: clang" -- o build-and-test precisa
       #     de fato buildar a lib com clang, nao so lintar (lint-and-scan ja roda
@@ -175,10 +174,9 @@ jobs:
       #     criam uma janela GLFW oculta como fixture de contexto GL so-de-teste; a biblioteca
       #     em si nao linka GLFW nessa config.
       #     libgl1-mesa-dri: llvmpipe (renderer software GL do Mesa necessario pelo Xvfb).
-      #     libxkbcommon-dev: header de layout de teclado do GLFW (QW-XKB, paridade com
-      #     .forgejo/workflows/ci.yml -- o container minimo do runner Codeberg precisava
-      #     dele explicito porque a stack pre-instalada do ubuntu-latest ja cobria a mesma
-      #     dependencia aqui; adiciona-lo e um no-op defensivo hoje, fecha o desvio).
+      #     libxkbcommon-dev: header de layout de teclado do GLFW (QW-XKB). A stack
+      #     pre-instalada do ubuntu-latest ja cobre essa dependencia em silencio, entao
+      #     lista-la e um no-op defensivo que mantem o requisito explicito.
       - name: install deps
         run: |
           sudo apt-get update -q

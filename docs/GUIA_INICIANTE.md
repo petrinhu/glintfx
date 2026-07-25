@@ -5,8 +5,8 @@
 
 - **Audience / Audiência:** someone with **little or no prior computing knowledge** - you do not need to know what "compiling" or "a library" means before starting. / Alguém com **pouco ou nenhum conhecimento prévio de computação** - você não precisa saber o que é "compilar" ou "uma biblioteca" antes de começar.
 - **Owner:** `technical-writer` agent (loucura_c_asm project) - maintained alongside the codebase.
-- **Last reviewed / Última revisão:** 2026-07-16, against `glintfx v0.11.0` and Layer 0 tag `core-v0.3.0`.
-- **Found something wrong? / Achou algo errado?** Open an issue on the repository (Codeberg or GitHub, links below) describing what you read and what actually happened on your machine. / Abra uma issue no repositório (Codeberg ou GitHub, links abaixo) descrevendo o que você leu e o que de fato aconteceu na sua máquina.
+- **Last reviewed / Última revisão:** 2026-07-16, against `glintfx v0.11.0` and Layer 0 tag `core-v0.3.0`. A hosting-only pass on 2026-07-25 replaced every Codeberg reference with GitHub; the technical content has **not** been re-verified against the current `v0.23.0` yet. / Uma passagem só-de-hospedagem em 2026-07-25 trocou toda referência ao Codeberg por GitHub; o conteúdo técnico **não** foi re-verificado contra a `v0.23.0` atual ainda.
+- **Found something wrong? / Achou algo errado?** Open an issue on the repository (GitHub, link below) describing what you read and what actually happened on your machine. / Abra uma issue no repositório (GitHub, link abaixo) descrevendo o que você leu e o que de fato aconteceu na sua máquina.
 
 ---
 
@@ -17,9 +17,8 @@
 You'll meet most jargon in context below (each term is explained the first time it appears, and again in the [Glossary](#glossary) at the end). Just two words up front, because you'll see them in literally the first paragraph:
 
 - **Repository ("repo"):** a folder whose history of changes is tracked by a tool called **git**. Every file you'll read about lives inside one repository - this one.
-- **Codeberg / GitHub:** two websites that host git repositories "in the cloud" so people can download (`clone`) and collaborate on them. This project publishes to both:
-  - Codeberg (primary): https://codeberg.org/petrinhu/glintfx
-  - GitHub (mirror): https://github.com/petrinhu/glintfx
+- **GitHub:** a website that hosts git repositories "in the cloud" so people can download (`clone`) and collaborate on them. This project publishes there, and only there:
+  - https://github.com/petrinhu/glintfx
 
 ### 1. What even is this project? (the two-floor-building analogy)
 
@@ -83,7 +82,7 @@ loucura_c_asm/            <- the repo root (this file's folder's parent)
 │   ├── getting-started.md  developer tutorial for glintfx (assumes you already know C++/CMake)
 │   ├── effects.md          how-to + reference for glintfx's visual effects (RCSS syntax)
 │   ├── embed-integration.md  reference for the advanced "embed mode" of glintfx
-│   ├── wiki/                source files for this project's Codeberg/Forgejo Wiki (see below)
+│   ├── wiki/                source files for this project's GitHub Wiki (see below)
 │   └── GUIA_INICIANTE.md   <- you are reading this file right now
 ├── Makefile                the build recipe for Floor 0 (see section 5)
 ├── README.md               the project's front page (bilingual, both floors)
@@ -218,7 +217,7 @@ This guide you're reading is the one deliberate exception, because a total begin
 
 ### About the project's Wiki
 
-Besides the files in `docs/`, this project also publishes a lightweight **Wiki** (a separate, small collection of short, heavily cross-linked pages, hosted natively by Codeberg/GitHub rather than living as files in this repository's main history). The Wiki's *source* files are prepared in [`docs/wiki/`](wiki/) in this repository - see [`docs/wiki/README.md`](wiki/README.md) for what the Wiki is for and how it gets published.
+Besides the files in `docs/`, this project also publishes a lightweight **Wiki** (a separate, small collection of short, heavily cross-linked pages, hosted natively by GitHub rather than living as files in this repository's main history). The Wiki's *source* files are prepared in [`docs/wiki/`](wiki/) in this repository - see [`docs/wiki/README.md`](wiki/README.md) for what the Wiki is for and how it gets published.
 
 ### Glossary
 
@@ -228,7 +227,7 @@ Alphabetical. Every term used anywhere above is defined here again, in isolation
 - **API (Application Programming Interface):** the set of functions/types a piece of code exposes for other code to call - the "front door" of a library, as opposed to its internal plumbing.
 - **ASan / UBSan (AddressSanitizer / UndefinedBehaviorSanitizer):** compiler-provided tools that make certain classes of programming bugs (writing past the end of a block of memory; using memory after it was freed; undefined/nonsensical operations) crash loudly and immediately with a precise report, instead of silently corrupting things or working "by luck." This project runs its test suite under both on a schedule ("nightly").
 - **Assembly (ASM):** the lowest-level programming language a human can realistically read and write; each instruction maps almost one-to-one to a single operation the processor itself performs (move this number here, add these two numbers, jump to this instruction). This project's Floor 0 uses it, via the **NASM** assembler, for the handful of operations C cannot express directly (like the very first instruction a program runs, or the raw `syscall` instruction).
-- **CI (Continuous Integration):** an automated robot that builds and tests the project every single time someone proposes a change (a `push` or a Pull Request), so mistakes get caught immediately instead of days later. This project runs CI on both GitHub Actions and Codeberg's Forgejo Actions.
+- **CI (Continuous Integration):** an automated robot that builds and tests the project every single time someone proposes a change (a `push` or a Pull Request), so mistakes get caught immediately instead of days later. This project runs its CI on GitHub Actions.
 - **Clean-room (reimplementation):** rewriting a piece of software from an understanding of *what it should do*, without ever looking at (or copying from) the original's source code - the opposite of copy-pasting. This project's long-term "internalization" ambition is explicitly clean-room: study how something works, then write an original implementation of the same idea.
 - **CLI:** see "command" in section 2 above.
 - **CMake:** a tool that generates the actual low-level build instructions (for compilers/linkers) from a higher-level recipe file (`CMakeLists.txt`), so the same recipe can produce a working build across different machines/toolchains. Used by glintfx (Floor 1); Floor 0 uses a plain `Makefile` instead, deliberately, since it has no cross-platform ambitions.
@@ -265,9 +264,8 @@ Alphabetical. Every term used anywhere above is defined here again, in isolation
 Você vai encontrar a maior parte do jargão no contexto abaixo (cada termo é explicado na primeira vez que aparece, e de novo no [Glossário](#glossário) ao fim). Só duas palavras logo de cara, porque você vai vê-las literalmente no primeiro parágrafo:
 
 - **Repositório ("repo"):** uma pasta cujo histórico de mudanças é rastreado por uma ferramenta chamada **git**. Todo arquivo sobre o qual você vai ler mora dentro de um repositório - este aqui.
-- **Codeberg / GitHub:** dois sites que hospedam repositórios git "na nuvem" pra que as pessoas possam baixar (`clone`) e colaborar neles. Este projeto publica nos dois:
-  - Codeberg (principal): https://codeberg.org/petrinhu/glintfx
-  - GitHub (espelho): https://github.com/petrinhu/glintfx
+- **GitHub:** um site que hospeda repositórios git "na nuvem" pra que as pessoas possam baixar (`clone`) e colaborar neles. Este projeto publica lá, e só lá:
+  - https://github.com/petrinhu/glintfx
 
 ### 1. Afinal, o que É este projeto? (a analogia do prédio de dois andares)
 
@@ -331,7 +329,7 @@ loucura_c_asm/            <- a raiz do repo (o pai da pasta deste arquivo)
 │   ├── getting-started.md  tutorial de dev para o glintfx (assume que você já sabe C++/CMake)
 │   ├── effects.md          how-to + referência dos efeitos visuais do glintfx (sintaxe RCSS)
 │   ├── embed-integration.md  referência do modo avançado "embed" do glintfx
-│   ├── wiki/                arquivos-fonte da Wiki deste projeto no Codeberg/Forgejo (ver abaixo)
+│   ├── wiki/                arquivos-fonte da Wiki deste projeto no GitHub (ver abaixo)
 │   └── GUIA_INICIANTE.md   <- você está lendo este arquivo agora
 ├── Makefile                a receita de build da Camada 0 (ver seção 5)
 ├── README.md               a página de rosto do projeto (bilíngue, as duas camadas)
@@ -466,7 +464,7 @@ Este guia que você está lendo é a exceção deliberada, porque um iniciante t
 
 ### Sobre a Wiki do projeto
 
-Além dos arquivos em `docs/`, este projeto também publica uma **Wiki** leve (uma coleção separada e pequena de páginas curtas e bastante interligadas, hospedada nativamente pelo Codeberg/GitHub em vez de viver como arquivos no histórico principal deste repositório). Os arquivos-*fonte* da Wiki estão preparados em [`docs/wiki/`](wiki/) neste repositório - ver [`docs/wiki/README.md`](wiki/README.md) pra que serve a Wiki e como ela é publicada.
+Além dos arquivos em `docs/`, este projeto também publica uma **Wiki** leve (uma coleção separada e pequena de páginas curtas e bastante interligadas, hospedada nativamente pelo GitHub em vez de viver como arquivos no histórico principal deste repositório). Os arquivos-*fonte* da Wiki estão preparados em [`docs/wiki/`](wiki/) neste repositório - ver [`docs/wiki/README.md`](wiki/README.md) pra que serve a Wiki e como ela é publicada.
 
 ### Glossário
 
@@ -477,7 +475,7 @@ Em ordem alfabética. Todo termo usado em qualquer lugar acima é definido aqui 
 - **ASan / UBSan (AddressSanitizer / UndefinedBehaviorSanitizer):** ferramentas fornecidas pelo compilador que fazem certas classes de bug de programação (escrever além do fim de um bloco de memória; usar memória depois de liberada; operações indefinidas/sem sentido) crasharem alto e imediatamente com um relatório preciso, em vez de corromper coisas em silêncio ou "funcionar por sorte". Este projeto roda sua suíte de testes sob os dois numa agenda ("nightly").
 - **Assembly (ASM):** a linguagem de programação de mais baixo nível que um humano consegue realisticamente ler e escrever; cada instrução mapeia quase um-pra-um numa única operação que o próprio processador executa (mova este número pra cá, some estes dois números, pule pra esta instrução). A Camada 0 deste projeto a usa, via o assembler **NASM**, pro punhado de operações que C não consegue expressar diretamente (como a primeiríssima instrução que um programa roda, ou a instrução crua de `syscall`).
 - **Biblioteca (library):** ver seção 2.
-- **CI (Continuous Integration, Integração Contínua):** um robô automatizado que builda e testa o projeto toda vez que alguém propõe uma mudança (um `push` ou um Pull Request), pra erros serem pegos imediatamente em vez de dias depois. Este projeto roda CI tanto no GitHub Actions quanto no Forgejo Actions do Codeberg.
+- **CI (Continuous Integration, Integração Contínua):** um robô automatizado que builda e testa o projeto toda vez que alguém propõe uma mudança (um `push` ou um Pull Request), pra erros serem pegos imediatamente em vez de dias depois. Este projeto roda seu CI no GitHub Actions.
 - **Clean-room (reimplementação):** reescrever um pedaço de software a partir do entendimento de *o que ele deveria fazer*, sem nunca olhar pro (ou copiar do) código-fonte do original - o oposto de copiar-e-colar. A ambição de longo prazo de "internalização" deste projeto é explicitamente clean-room: estudar como algo funciona, depois escrever uma implementação original da mesma ideia.
 - **CLI:** ver "comando" na seção 2 acima.
 - **CMake:** uma ferramenta que gera as instruções de build de baixo nível de fato (para compiladores/linkers) a partir de um arquivo de receita de mais alto nível (`CMakeLists.txt`), pra que a mesma receita produza um build funcionando em máquinas/toolchains diferentes. Usado pelo glintfx (Andar 1); a Camada 0 usa um `Makefile` simples em vez disso, deliberadamente, já que não tem ambição multiplataforma.

@@ -21,7 +21,7 @@ None of these were security-critical, but each one is exactly the kind of thing 
 
 Run all five before `git tag vX.Y.Z`. Do not tag if (a) or (e) fails.
 
-**(a) Full suite green on both CIs.** `github` (primary gate) and `claudio` (self-hosted, `.forgejo/workflows/heavy.yml`, ASan+UBSan+the own-font-engine job) both green on the commit being tagged. `codeberg`'s single parity job is best-effort, not a blocker (see `AGENTS.md`'s CI-policy section for the full `github > claudio > codeberg` rationale) — but check it did not silently break either.
+**(a) Full suite green on GitHub.** `.github/workflows/ci.yml` green on the commit being tagged: that is the release gate. The self-hosted `claudio` runner (`.forgejo/workflows/heavy.yml`, ASan+UBSan+the own-font-engine job) is a fallback for depth, not a second gate to wait on (see `AGENTS.md`'s CI-policy section).
 
 **(b) `CHANGELOG.md` has a `[vX.Y.Z]` entry.** Dated, bilingual (EN then PT), following the existing entries' shape (a one-paragraph summary plus an "Added/Changed/Fixed" breakdown). `[Unreleased]` gets renamed to the tag, not left dangling.
 
@@ -29,7 +29,7 @@ Run all five before `git tag vX.Y.Z`. Do not tag if (a) or (e) fails.
    - `SECURITY.md` — the "Supported versions" table's version line (both EN and PT tables).
    - `CONTRIBUTING.md` — the "default suite has N tests" sentence (both EN and PT); list the test names too if any changed.
    - `README.md` — the version badge (top of file), the "Current release: vX.Y.Z" line, and the GLFW=ON/embed test counts mentioned in the CI bullet under "Known limitations".
-   - `docs/wiki/Home.md` badges (version + any test-count claim) — the wiki is a separate git repo per remote (`.wiki.git`); re-sync per `docs/wiki/README.md` if this file changed.
+   - `docs/wiki/Home.md` badges (version + any test-count claim) — the wiki is a separate git repo (`glintfx.wiki.git` on GitHub); re-sync per `docs/wiki/README.md` if this file changed.
 
 **(d) `NOTICE` matches the real dependency graph.** Diff `NOTICE`'s entries against `glintfx/CMakeLists.txt`'s actual `FetchContent`/`find_package`/`target_link_libraries` blocks and `glintfx/third_party/`'s actual file tree. This is the artifact that matters for license compliance (not `AUDITORIAS.md`/`TODO.md`'s catalog prose, which is planning text, not a legal notice) — if a dependency was added, removed, or its FTL/MIT/Apache-2.0 status changed, `NOTICE` must reflect it before the tag, not after.
 
@@ -37,7 +37,7 @@ Run all five before `git tag vX.Y.Z`. Do not tag if (a) or (e) fails.
 
 ### After tagging
 
-Push the tag to both remotes (Codeberg + GitHub, dual), confirm both CI runs for the tag itself go green, and — only then — update `docs/auditoria/README.md`'s "what changed since the last consolidation" note if this release touched anything audited.
+Push the tag to GitHub, confirm the CI run for the tag itself goes green, and — only then — update `docs/auditoria/README.md`'s "what changed since the last consolidation" note if this release touched anything audited.
 
 ---
 
@@ -57,7 +57,7 @@ Nenhum destes era crítico de segurança, mas cada um é exatamente o tipo de co
 
 Rodar os cinco antes do `git tag vX.Y.Z`. Não taggear se (a) ou (e) falhar.
 
-**(a) Suíte completa verde nos 2 CIs.** `github` (gate principal) e `claudio` (self-hosted, `.forgejo/workflows/heavy.yml`, ASan+UBSan+a job do motor de fonte próprio) ambos verdes no commit sendo taggeado. A job única de paridade do `codeberg` é best-effort, não bloqueia (ver a seção de política de CI do `AGENTS.md` pro racional completo `github > claudio > codeberg`) — mas checar que não quebrou silenciosamente também.
+**(a) Suíte completa verde no GitHub.** O `.github/workflows/ci.yml` verde no commit sendo taggeado: esse é o gate de release. O runner self-hosted `claudio` (`.forgejo/workflows/heavy.yml`, ASan+UBSan+a job do motor de fonte próprio) é fallback de profundidade, não um segundo gate a esperar (ver a seção de política de CI do `AGENTS.md`).
 
 **(b) `CHANGELOG.md` tem uma entrada `[vX.Y.Z]`.** Datada, bilíngue (EN depois PT), seguindo a forma das entradas existentes (um resumo de um parágrafo mais uma repartição "Added/Changed/Fixed"). `[Unreleased]` é renomeado para a tag, não deixado pendurado.
 
@@ -65,7 +65,7 @@ Rodar os cinco antes do `git tag vX.Y.Z`. Não taggear se (a) ou (e) falhar.
    - `SECURITY.md` — a linha de versão da tabela "Supported versions"/"Versões suportadas" (as duas tabelas, EN e PT).
    - `CONTRIBUTING.md` — a frase "a suíte padrão tem N testes" (EN e PT); listar os nomes dos testes também se algum mudou.
    - `README.md` — o badge de versão (topo do arquivo), a linha "Current release: vX.Y.Z", e as contagens de teste GLFW=ON/embed citadas no bullet de CI sob "Known limitations".
-   - badges do `docs/wiki/Home.md` (versão + qualquer alegação de contagem de teste) — a wiki é um repo git separado por remoto (`.wiki.git`); re-sincronizar conforme `docs/wiki/README.md` se este arquivo mudou.
+   - badges do `docs/wiki/Home.md` (versão + qualquer alegação de contagem de teste) — a wiki é um repo git separado (`glintfx.wiki.git` no GitHub); re-sincronizar conforme `docs/wiki/README.md` se este arquivo mudou.
 
 **(d) `NOTICE` bate com o grafo de dependências real.** Diff das entradas do `NOTICE` contra os blocos reais `FetchContent`/`find_package`/`target_link_libraries` do `glintfx/CMakeLists.txt` e a árvore de arquivos real de `glintfx/third_party/`. Este é o artefato que importa pra conformidade de licença (não a prosa de catálogo do `AUDITORIAS.md`/`TODO.md`, que é texto de planejamento, não um aviso legal) — se uma dependência foi adicionada, removida, ou o status FTL/MIT/Apache-2.0 dela mudou, o `NOTICE` precisa refletir isso antes da tag, não depois.
 
@@ -73,4 +73,4 @@ Rodar os cinco antes do `git tag vX.Y.Z`. Não taggear se (a) ou (e) falhar.
 
 ### Depois de taggear
 
-Empurrar a tag pros dois remotos (Codeberg + GitHub, dual), confirmar que os dois runs de CI da própria tag ficam verdes, e — só então — atualizar a nota "o que mudou desde a última consolidação" do `docs/auditoria/README.md` se esta release tocou algo auditado.
+Empurrar a tag pro GitHub, confirmar que o run de CI da própria tag fica verde, e — só então — atualizar a nota "o que mudou desde a última consolidação" do `docs/auditoria/README.md` se esta release tocou algo auditado.

@@ -4,7 +4,7 @@
 #     Self-hosted per the líder's 2026-07-04 decision -- llvm-cov (Clang source-based
 #     coverage), NOT Codecov or any third-party uploader; zero data leaves this machine
 #     (or the CI runner, when the CI `coverage` job calls this SAME script -- see
-#     .github/workflows/ci.yml and .forgejo/workflows/ci.yml). Local-first per the
+#     .github/workflows/ci.yml). Local-first per the
 #     "gêmeo local que o CI chama" preference (CLAUDE.md global,
 #     feedback_execucao_local_cross_platform): this script IS the mechanism, the CI job
 #     is a thin wrapper around it.
@@ -24,7 +24,7 @@
 #     Self-hosted conforme decisão do líder de 2026-07-04 -- llvm-cov (cobertura
 #     source-based do Clang), NÃO Codecov nem nenhum uploader de terceiro; zero dado sai
 #     desta máquina (ou do runner de CI, quando o job `coverage` do CI chama este MESMO
-#     script -- ver .github/workflows/ci.yml e .forgejo/workflows/ci.yml). Local-first
+#     script -- ver .github/workflows/ci.yml). Local-first
 #     conforme a preferência "gêmeo local que o CI chama" (CLAUDE.md global,
 #     feedback_execucao_local_cross_platform): este script É o mecanismo, o job de CI é
 #     um wrapper fino em torno dele.

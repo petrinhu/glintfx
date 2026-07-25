@@ -22,7 +22,7 @@
 
 Please report security issues **privately**, not in a public issue, so a fix can be prepared before disclosure.
 
-- **Preferred:** open a confidential / private security report on [Codeberg](https://codeberg.org/petrinhu/glintfx) or use [GitHub private vulnerability reporting](https://github.com/petrinhu/glintfx/security/advisories).
+- **Preferred:** use [GitHub private vulnerability reporting](https://github.com/petrinhu/glintfx/security/advisories).
 - **Alternative:** open a minimal public issue asking for a private contact channel, without disclosing the details.
 
 Please include, where possible:
@@ -70,7 +70,7 @@ O `glintfx` está em estágio inicial. Apenas a última linha de release recebe 
 
 Reporte problemas de segurança de forma **privada**, não em issue pública, para que a correção seja preparada antes da divulgação.
 
-- **Preferido:** abra um reporte de segurança confidencial / privado no [Codeberg](https://codeberg.org/petrinhu/glintfx) ou use o [reporte privado de vulnerabilidade do GitHub](https://github.com/petrinhu/glintfx/security/advisories).
+- **Preferido:** use o [reporte privado de vulnerabilidade do GitHub](https://github.com/petrinhu/glintfx/security/advisories).
 - **Alternativa:** abra uma issue pública mínima pedindo um canal de contato privado, sem revelar os detalhes.
 
 Inclua, quando possível:

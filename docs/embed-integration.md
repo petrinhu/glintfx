@@ -1332,6 +1332,108 @@ Contrato e limites completos: seção "Texto" de `docs/draw2d.md`.
 - **`fallback_face = true` destrava o MESMO mecanismo de fallback por-glyph que a propriedade RCSS `-rmlui-fallback-face: true;` de `@font-face` dirige** (`FontEngineOwn::fallback_faces_`/`BakeGlyph()`, `src/font_engine_own.cpp`), agora alcançável sem autorar um documento só pra registrar uma face de fallback -- o RmlUi percorre toda face registrada como fallback em ORDEM DE REGISTRO, em nível de processo, quando a fonte primária de um span não tem um glyph.
 - **Teste:** `tests/fontface_load_sanity.cpp` (registrado em `tests/CMakeLists.txt` sob `if(GLINTFX_OWN_FONT_ENGINE)`, nos dois lados de `GLINTFX_BACKEND_GLFW`, dirige tudo pelo `UiLayer`) -- sete critérios: registro+render válido, entrada hostil (caminho `nullptr`/`""`/inexistente/não-fonte), uma execução A/B de dois motores provando que uma `family` explícita resolve a assimetria acima, a própria assimetria de derivação do `family=nullptr` (documentada, não forçada igual entre motores), `fallback_face=true` programático, guards white-box de antes-de-`init()`/ainda-não-`attach()`ado direto no `Bootstrap`/`Engine`, e um cheque de mapeamento `style`/`weight` (duas faces da mesma família diferindo em exatamente um eixo cada, resolvidas via o próprio escore de `FontEngineOwn::FindBestFace`). O fio de forward ESPECÍFICO do `App` (um corpo de método separado, `src/app.cpp`, que por acaso compartilha o mesmo `Engine::load_font_face` por baixo) é coberto por um segundo arquivo, `tests/app_font_face_sanity.cpp` (só `if(GLINTFX_BACKEND_GLFW)`) -- um review adversarial achou `App::load_font_face` completamente sem exercício pela suíte só-`UiLayer` (uma mutação curto-circuitando pra `false` ainda passava 99/100 dos testes rastreados) antes deste segundo arquivo existir.
 
+## 25. Pressed-state feedback: `:active` (mouse) vs. the `add_class`/timer pattern (keyboard/gamepad) (`UI-ACTIVE`, `DOC-ACTIVE`) / Feedback de estado pressionado: `:active` (mouse) vs. o padrão `add_class`/timer (teclado/gamepad) (`UI-ACTIVE`, `DOC-ACTIVE`)
+
+**EN:** A spike (`UI-ACTIVE`) settled a question that comes up for any button-like RCSS element: does glintfx support a "pressed" visual state, and how? The answer splits cleanly by input device.
+
+**PT:** Um spike (`UI-ACTIVE`) resolveu uma pergunta que surge para qualquer elemento RCSS tipo-botão: o glintfx suporta um estado visual "pressionado", e como? A resposta se divide claramente por dispositivo de input.
+
+### Mouse: `:active` works today, zero glintfx code / Mouse: `:active` já funciona hoje, zero código glintfx
+
+**EN:** RmlUi's own `Element::ProcessDefaultAction` sets the `active` pseudo-class on `EventId::Mousedown`, when the click point is inside the element and the button is the primary (left) one -- confirmed by reading the pinned RmlUi 6.3 source (`examples/RmlUi/Source/Core/Element.cpp:2015-2022`):
+
+```cpp
+void Element::ProcessDefaultAction(Event& event)
+{
+	if (event == EventId::Mousedown)
+	{
+		const Vector2f mouse_pos(event.GetParameter("mouse_x", 0.f), event.GetParameter("mouse_y", 0.f));
+
+		if (IsPointWithinElement(mouse_pos) && event.GetParameter("button", 0) == 0)
+			SetPseudoClass("active", true);
+	}
+	...
+```
+
+glintfx's own GLFW input route (`window_glfw.cpp`) and the shared `Engine::process_event` (`engine.cpp`) forward `UiEvent::Type::MouseButton` straight into RmlUi's `Context::ProcessMouseButtonDown/Up` -- the SAME neutral route `:hover` already relies on (no glintfx-specific plumbing exists for `:active`, and none is needed). Authoring `:active { ... }` in your own RCSS is enough:
+
+```css
+button {
+  background-color: #3a3a3a;
+}
+button:active {
+  background-color: #1a1a1a; /* pressed feedback while the mouse button is held over the element */
+}
+```
+
+This applies identically to `App` and `UiLayer` -- both route mouse input through the same `Engine::process_event`.
+
+**PT:** O próprio `Element::ProcessDefaultAction` do RmlUi seta a pseudo-classe `active` em `EventId::Mousedown`, quando o ponto do clique está dentro do elemento e o botão é o primário (esquerdo) -- confirmado lendo o source pinado do RmlUi 6.3 (`examples/RmlUi/Source/Core/Element.cpp:2015-2022`, trecho acima).
+
+A rota de input GLFW da própria glintfx (`window_glfw.cpp`) e o `Engine::process_event` compartilhado (`engine.cpp`) encaminham `UiEvent::Type::MouseButton` direto para `Context::ProcessMouseButtonDown/Up` do RmlUi -- a MESMA rota neutra que o `:hover` já usa (não existe encanamento específico da glintfx para `:active`, e nenhum é necessário). Autorar `:active { ... }` no seu próprio RCSS já basta (exemplo acima).
+
+Isto se aplica identicamente a `App` e `UiLayer` -- ambos roteiam input de mouse pelo mesmo `Engine::process_event`.
+
+### Keyboard/gamepad: `:active` does not exist, and the gap is upstream / Teclado/gamepad: `:active` não existe, e a lacuna é do upstream
+
+**EN:** `Context::ProcessKeyDown`/`ProcessKeyUp` (`examples/RmlUi/Source/Core/Context.cpp:527-550`) dispatch `EventId::Keydown`/`Keyup` exclusively:
+
+```cpp
+bool Context::ProcessKeyDown(Input::KeyIdentifier key_identifier, int key_modifier_state)
+{
+	...
+	if (focus)
+		return focus->DispatchEvent(EventId::Keydown, parameters);
+	else
+		return root->DispatchEvent(EventId::Keydown, parameters);
+}
+```
+
+`ProcessDefaultAction`'s `active`-setting branch (quoted above) checks exclusively `event == EventId::Mousedown` -- no key press, however it arrives at the `Rml::Context`, ever flips the `active` pseudo-class. This is a structural absence in RmlUi 6.3 itself, not a gap in glintfx's own `Key`-route forwarding (`Engine::process_event`, `engine.cpp`, already forwards `UiEvent::Type::Key` faithfully -- there is simply nothing on the RmlUi side to forward to).
+
+**PT:** `Context::ProcessKeyDown`/`ProcessKeyUp` (`examples/RmlUi/Source/Core/Context.cpp:527-550`) despacham exclusivamente `EventId::Keydown`/`Keyup` (trecho acima). O ramo de `ProcessDefaultAction` que seta `active` (citado acima) checa exclusivamente `event == EventId::Mousedown` -- nenhuma tecla pressionada, de nenhum jeito que chegue ao `Rml::Context`, jamais vira a pseudo-classe `active`. Esta é uma ausência estrutural do próprio RmlUi 6.3, não uma lacuna no encaminhamento da rota `Key` da glintfx (`Engine::process_event`, `engine.cpp`, já encaminha `UiEvent::Type::Key` fielmente -- simplesmente não há nada do lado do RmlUi para encaminhar até).
+
+### The supported pattern: `add_class` + a host-owned timer / O padrão suportado: `add_class` + um timer de posse do host
+
+**EN:** For keyboard/gamepad press feedback -- glintfx's native navigation mode, section 5 -- the pattern is a host-driven class toggle using `add_class`/`remove_class` (`UiLayer`/`App`, `L1.16-DOMRW`, section 15), already available today with no new glintfx API:
+
+```cpp
+// on the confirm key going down (App::set_key_callback, HOSTIN-2, section 22):
+app.set_key_callback([&](glintfx::Key k, glintfx::KeyAction action, int /*mods*/) {
+  if (k == glintfx::Key::Enter && action == glintfx::KeyAction::Press) {
+    app.add_class("confirm-button", "pressed");
+    pressed_frames_left = 4;   // the host decides the duration, e.g. 4 frames
+  }
+});
+
+// per-frame draw hook (App::set_frame_callback, section 21):
+app.set_frame_callback([&](float /*dt_seconds*/) {
+  if (pressed_frames_left > 0 && --pressed_frames_left == 0)
+    app.remove_class("confirm-button", "pressed");
+});
+```
+
+```css
+#confirm-button.pressed {
+  background-color: #1a1a1a; /* same visual as :active above, driven by the host instead of RmlUi */
+}
+```
+
+The same pattern applies to `UiLayer` (identical `add_class`/`remove_class` signatures, section 15) driven from the host's own frame loop instead of `App::set_frame_callback`.
+
+**Why glintfx does not synthesise `active` from a key press on the consumer's behalf:** the press duration is a design decision that belongs to the HOST, not the framework. A host that needs the flash to survive a single very short tap (so the player actually perceives it) needs a FIXED minimum duration decoupled from how long the physical key was actually held -- exactly the pattern GusWorld's own `system_menu_loop.cpp` implements, per its own code comment: *"a lib não tem estado 'active' disparado por teclado, só :focus/:hover via classe"*, resolved with a `flash_pressed_()` helper and a fixed 4-frame class toggle. A hypothetical glintfx-synthesised key-triggered `active` bound to physical key-up could not offer this guarantee without inventing its own duration policy -- which is exactly the decision this pattern leaves with the host.
+
+**PT:** Para feedback de pressão por teclado/gamepad -- o modo de navegação nativo da glintfx, seção 5 -- o padrão é um toggle de classe dirigido pelo host usando `add_class`/`remove_class` (`UiLayer`/`App`, `L1.16-DOMRW`, seção 15), já disponível hoje, sem nenhuma API nova da glintfx (exemplo C++/RCSS acima).
+
+O mesmo padrão se aplica ao `UiLayer` (assinaturas `add_class`/`remove_class` idênticas, seção 15), dirigido pelo próprio loop de frame do host em vez do `App::set_frame_callback`.
+
+**Por que a glintfx não sintetiza `active` a partir de uma tecla pressionada em nome do consumidor:** a duração da pressão é uma decisão de design que pertence ao HOST, não ao framework. Um host que precisa que o flash sobreviva a um toque físico muito curto (para que o jogador de fato o perceba) precisa de uma duração mínima FIXA, desacoplada de quanto tempo a tecla física ficou de fato segurada -- exatamente o padrão que o próprio `system_menu_loop.cpp` do GusWorld implementa, conforme o próprio comentário de código dele: *"a lib não tem estado 'active' disparado por teclado, só :focus/:hover via classe"*, resolvido com um helper `flash_pressed_()` e um toggle de classe de 4 frames fixos. Um hipotético `active` sintetizado pela glintfx e disparado por tecla, vinculado ao key-up físico, não conseguiria oferecer essa garantia sem inventar sua própria política de duração -- exatamente a decisão que este padrão deixa com o host.
+
+### Verification note / Nota de verificação
+
+**EN:** The `:active`-by-mouse claim above was proven live under Xvfb by pixel readback in the `UI-ACTIVE` spike (`TODO.md`); the RmlUi source citations in this section (`Element.cpp:2015-2022`, `Context.cpp:527-550`) were re-verified independently while writing this section, against the pinned copy at `examples/RmlUi/` -- line numbers may drift slightly if the pinned RmlUi revision changes; re-grep before trusting them verbatim.
+
+**PT:** A afirmação de `:active`-por-mouse acima foi provada ao vivo sob Xvfb por readback de pixel no spike `UI-ACTIVE` (`TODO.md`); as citações de source do RmlUi nesta seção (`Element.cpp:2015-2022`, `Context.cpp:527-550`) foram re-verificadas independentemente ao escrever esta seção, contra a cópia pinada em `examples/RmlUi/` -- os números de linha podem derivar levemente se a revisão pinada do RmlUi mudar; re-grep antes de confiar neles ao pé da letra.
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

@@ -90,6 +90,30 @@
   `load_texture()` aplica -- nunca um crash. Ver `docs/draw2d.md` ("Forçando GL sem fechar o
   bracket" / "Textura a partir de pixels") pro contrato completo.
 
+### Tests / Testes
+
+- **EN:** **`D2D-R8CAP`** -- closed a real coverage gap found by the adversarial review of
+  `D2D-TEXPIXELS`: a `bytes_per_pixel` 1->4 mutation in `create_texture()`'s `PixelFormat::R8`
+  switch arm survived the whole suite. The obvious fix (mirror the existing oversized-dimension
+  hostile case in R8) would NOT have caught it: a dimension large enough to be "hostile" is
+  rejected identically at 1 or 4 bytes per pixel, leaving the mutation invisible. Proving a cap
+  requires the BOUNDARY, not the extreme -- `pixel_count` inside `(cap/4, cap]` =
+  `(67,108,864, 268,435,456]`, where correct code ACCEPTS and mutated code REJECTS. New test
+  `create_texture_r8cap_boundary` uses 10000x10000 R8 (100,000,000 px), sized to sit mid-window
+  and to stay under the host's actual `GL_MAX_TEXTURE_SIZE` (measured, not assumed). Mutation
+  re-verified independently of the test's author: exactly one check fails, no collateral.
+- **PT:** **`D2D-R8CAP`** -- fechou um gap de cobertura real achado pelo review adversarial do
+  `D2D-TEXPIXELS`: a mutação `bytes_per_pixel` 1->4 no braço `PixelFormat::R8` do
+  `create_texture()` sobrevivia à suíte inteira. A correção óbvia (espelhar em R8 o caso hostil de
+  dimensão exagerada que já existia) NÃO a pegaria: uma dimensão grande o bastante para ser
+  "hostil" é rejeitada igual a 1 ou a 4 bytes por pixel, e a mutação fica invisível. Provar um teto
+  exige a FRONTEIRA, não o exagero -- `pixel_count` dentro de `(cap/4, cap]` =
+  `(67.108.864, 268.435.456]`, onde o código correto ACEITA e o mutado REJEITA. O teste novo
+  `create_texture_r8cap_boundary` usa 10000x10000 R8 (100.000.000 px), dimensionado para cair no
+  meio da janela e ficar abaixo do `GL_MAX_TEXTURE_SIZE` real do host (medido, não suposto).
+  Mutação re-verificada de forma independente de quem escreveu o teste: cai exatamente um check,
+  sem colateral.
+
 ### Security / Segurança
 
 - **EN:** **`SEC-CI-HARDEN`** (`AUD-CI-RUNNER` remediation, 2 of 3 IMPORTANT findings): the

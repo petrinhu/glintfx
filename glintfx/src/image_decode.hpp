@@ -193,6 +193,47 @@ inline DecodedImage decode_premultiplied_rgba(const unsigned char* data, std::si
   return out;
 }
 
+// EN: D2D-TEXPIXELS -- the SAME per-pixel premultiply formula `decode_premultiplied_rgba()`
+//     applies above, factored into its own pure/total helper so `Draw2d::create_texture()`
+//     (draw2d.cpp) can premultiply a caller-supplied RGBA8 buffer with the identical math
+//     (single source, D8's own "one alpha convention" rule) instead of hand-rolling a second
+//     copy of this loop at a different call site. `decode_premultiplied_rgba()` above is left
+//     BYTE-FOR-BYTE UNTOUCHED on purpose (it is an existing, tested, doc-cited function --
+//     `image_decode.hpp:150` -- and this is a pure ADDITION, not a refactor of it): the two
+//     loops are independently written to the SAME formula, pinned equal by
+//     `image_decode_sanity.cpp`'s own drift test (D2D-TEXPIXELS addition). `rgba` is mutated
+//     IN PLACE and must already hold `pixel_count * 4` bytes, straight (non-premultiplied)
+//     alpha on entry -- the caller's job (this is a private-header pure helper, not a public
+//     API surface). `rgba == nullptr` or `pixel_count == 0` is a safe, total no-op (never
+//     dereferences past a null/zero-length buffer, same discipline as
+//     `compute_content_bbox()` below).
+// PT: D2D-TEXPIXELS -- a MESMA fórmula de premultiply por-pixel que o
+//     `decode_premultiplied_rgba()` acima aplica, fatorada no próprio helper puro/total pra
+//     que o `Draw2d::create_texture()` (draw2d.cpp) premultiplique um buffer RGBA8 fornecido
+//     pelo chamador com a matemática idêntica (fonte única, a própria regra "uma convenção de
+//     alpha só" do D8) em vez de reescrever uma segunda cópia deste loop num sítio de chamada
+//     diferente. O `decode_premultiplied_rgba()` acima fica INTOCADO AO PÉ DA LETRA de
+//     propósito (é uma função existente, testada, citada em doc -- `image_decode.hpp:150` --
+//     e isto é uma ADIÇÃO pura, não um refactor dela): os dois loops são escritos de forma
+//     independente pra MESMA fórmula, fixados iguais pelo próprio teste de desalinhamento do
+//     `image_decode_sanity.cpp` (adição do D2D-TEXPIXELS). `rgba` é mutado IN PLACE e precisa
+//     já guardar `pixel_count * 4` bytes, alpha straight (não-premultiplicado) na entrada --
+//     responsabilidade do chamador (este é um helper puro de header privado, não superfície de
+//     API pública). `rgba == nullptr` ou `pixel_count == 0` é um no-op seguro e total (nunca
+//     desreferencia além de um buffer nulo/de comprimento zero, mesma disciplina do
+//     `compute_content_bbox()` abaixo).
+inline void premultiply_rgba_inplace(unsigned char* rgba, std::size_t pixel_count) {
+  if (rgba == nullptr || pixel_count == 0)
+    return;
+  for (std::size_t i = 0; i < pixel_count; ++i) {
+    const unsigned int a = rgba[i * 4 + 3];
+    rgba[i * 4 + 0] = static_cast<unsigned char>(rgba[i * 4 + 0] * a / 255u);
+    rgba[i * 4 + 1] = static_cast<unsigned char>(rgba[i * 4 + 1] * a / 255u);
+    rgba[i * 4 + 2] = static_cast<unsigned char>(rgba[i * 4 + 2] * a / 255u);
+    // alpha (index 3) unchanged -- same D8 contract as decode_premultiplied_rgba() above.
+  }
+}
+
 // EN: D2D-3, decision D29 -- the pure bbox-of-non-transparent-texels computation. Called ONCE
 //     inside `load_texture()` (draw2d.cpp, D2D-3B) on the SAME `DecodedImage::rgba` buffer
 //     `decode_premultiplied_rgba()` above just produced, before that buffer is discarded after

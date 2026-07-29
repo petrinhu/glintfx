@@ -2498,6 +2498,32 @@ if(GLINTFX_MODULE_DRAW2D)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+  # EN: draw2d_pixels_flush_render_sanity (D2D-TEXPIXELS / D2D-FLUSH, onda W19) -- pixel-readback
+  #     proof for Draw2d::create_texture()/Draw2d::flush(): create_texture(Rgba8) renders
+  #     identically to the same colour loaded via load_texture() and premultiplies straight alpha
+  #     on ingest exactly like load_texture() does; create_texture(R8) swizzles a coverage texel
+  #     through the SAME GL_R8 path the font-glyph atlas already relies on; flush() pushes
+  #     pending draws to GL WITHOUT closing the bracket (readback taken BEFORE end() already
+  #     shows the flushed draw) and leaves camera/scissor state intact across the call. Same
+  #     embed fixture idiom as the sibling draw2d tests above (${_embed_dep} glloader, run under
+  #     Xvfb, both build configurations).
+  # PT: draw2d_pixels_flush_render_sanity (D2D-TEXPIXELS / D2D-FLUSH, onda W19) -- prova de
+  #     pixel-readback pro Draw2d::create_texture()/Draw2d::flush(): create_texture(Rgba8)
+  #     renderiza identicamente à mesma cor carregada via load_texture() e premultiplica alpha
+  #     straight na entrada exatamente como o load_texture() faz; create_texture(R8) faz swizzle
+  #     de um texel de cobertura pelo MESMO caminho GL_R8 que o atlas de glifo de fonte já
+  #     depende; flush() empurra desenhos pendentes pra GL SEM fechar o bracket (um readback
+  #     tirado ANTES do end() já mostra o desenho flushado) e deixa o estado de câmera/scissor
+  #     intacto através da chamada. Mesmo idioma de fixture embed dos testes irmãos de draw2d
+  #     acima (${_embed_dep} glloader, roda sob Xvfb, nas duas configurações de build).
+  add_executable(draw2d_pixels_flush_render_sanity draw2d_pixels_flush_render_sanity.cpp)
+  target_link_libraries(draw2d_pixels_flush_render_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_pixels_flush_render_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_pixels_flush_render_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
   # EN: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- pixel-readback proof for the
   #     primitives/layers/scissor/bbox surface this wave adds (D23-D29): filled rect region-mean
   #     equals the D8 premultiplied colour formula on the white texel; alpha-0.5 outline

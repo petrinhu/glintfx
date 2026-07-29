@@ -263,6 +263,13 @@ int main() {
     d2d.reset_scissor();
     const glintfx::TextureBbox bbox_pre = d2d.texture_content_bbox(t);
     check(!bbox_pre.found, "pre-init: texture_content_bbox() on a never-loaded handle is found==false");
+    // D2D-FLUSH / D2D-TEXPIXELS: the two NEW public methods this wave adds share the SAME
+    // null-safe-before-init contract as every other public method (draw2d.hpp's own class
+    // comment).
+    const unsigned char pre_px[4] = {1, 2, 3, 4};
+    Texture2d ct_pre = d2d.create_texture(pre_px, 1, 1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!ct_pre.ok(), "pre-init: create_texture() returns ok()==false");
+    d2d.flush();
     check(true, "pre-init operations did not crash"); // reaching this line IS the proof.
   }
 
@@ -312,6 +319,12 @@ int main() {
     moved_from.reset_scissor();
     const glintfx::TextureBbox bbox_moved = moved_from.texture_content_bbox(t);
     check(!bbox_moved.found, "moved-from: texture_content_bbox() is found==false, no crash");
+    // D2D-FLUSH / D2D-TEXPIXELS: same null-safe sweep as the pre-init block above, on a
+    // moved-from instance.
+    const unsigned char moved_px[4] = {1, 2, 3, 4};
+    Texture2d ct_moved = moved_from.create_texture(moved_px, 1, 1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!ct_moved.ok(), "moved-from: create_texture() returns ok()==false, no crash");
+    moved_from.flush();
     moved_from.shutdown();
     check(true, "moved-from: full public surface did not crash");
     check(sink.ok() == false, "moved-from: the move target was never init()'d, also not ok()");
@@ -688,6 +701,80 @@ int main() {
     other_bbox.shutdown();
 
     check(d2d.ok(), "bbox_hostile: d2d survives the whole handle corpus");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-TEXPIXELS -- create_texture() hostile corpus (D7/D10): nullptr pixels, non-positive
+  // width/height, an out-of-range PixelFormat (a hostile enum cast). Must fail-high
+  // (ok()==false), no crash, and d2d must remain fully usable right after (a REAL
+  // create_texture() call still works, same "still usable" oracle idiom as load_texture()'s own
+  // hostile corpus above).
+  // -------------------------------------------------------------------------------------------
+  {
+    const unsigned char px_rgba[4] = {10, 20, 30, 255};
+    Texture2d t1 = d2d.create_texture(nullptr, 1, 1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!t1.ok(), "create_texture_hostile: nullptr pixels rejected");
+    Texture2d t2 = d2d.create_texture(px_rgba, 0, 1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!t2.ok(), "create_texture_hostile: w==0 rejected");
+    Texture2d t3 = d2d.create_texture(px_rgba, 1, -1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!t3.ok(), "create_texture_hostile: negative h rejected");
+    const auto hostile_format = static_cast<glintfx::Draw2d::PixelFormat>(99);
+    Texture2d t4 = d2d.create_texture(px_rgba, 1, 1, hostile_format);
+    check(!t4.ok(), "create_texture_hostile: out-of-range PixelFormat rejected");
+    // D2D-TEXPIXELS: the 256 MiB w*h*bytes_per_pixel cap MUST reject BEFORE ever touching
+    // `pixels` (same "guard 1/2, pre-allocation" idiom load_texture()'s own 256 MiB cap uses) --
+    // `px_rgba` above is only 4 bytes; if this guard let 10000x10000 (400 MB nominal, deliberately
+    // kept small-but-over-cap rather than a multi-GB figure -- this machine runs several
+    // concurrent build agents, and a genuinely huge allocation attempt is an unnecessary memory
+    // risk to the whole session for a case the guard is provably supposed to reject before
+    // allocating anything at all) through, the copy/premultiply that follows would read wildly
+    // out of that 4-byte buffer.
+    Texture2d t5 = d2d.create_texture(px_rgba, 10000, 10000, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(!t5.ok(),
+          "create_texture_hostile: w*h*bytes_per_pixel over the 256 MiB cap rejected "
+          "before ever reading the (far too small) pixel buffer");
+    check(d2d.ok(), "create_texture_hostile: d2d survives the whole hostile corpus");
+
+    Texture2d real = d2d.create_texture(px_rgba, 1, 1, glintfx::Draw2d::PixelFormat::Rgba8);
+    check(real.ok() && real.width() == 1 && real.height() == 1,
+          "create_texture_hostile: a real create_texture() call still works right after the corpus");
+    d2d.destroy_texture(real);
+    check(!real.ok(),
+          "create_texture_hostile: destroy_texture() on a create_texture() handle "
+          "zeroes it like any other (D7 equivalence)");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-FLUSH -- flush() hostile/edge surface: outside any bracket, on an empty (never-drawn-
+  // into) bracket, and during a degenerate begin(0,0) bracket. Must not crash, and the bracket
+  // must remain usable (further draws still queue/render) right after each case.
+  // -------------------------------------------------------------------------------------------
+  {
+    d2d.flush(); // outside any bracket -- must no-op, no crash.
+    check(d2d.ok(), "flush_hostile: flush() outside a bracket did not crash");
+
+    d2d.begin(W, H);
+    d2d.flush(); // empty bracket, nothing drawn yet -- must no-op.
+    d2d.draw_sprite(tex_real, RectF{0, 0, 4, 4});
+    d2d.end();
+    check(d2d.ok(),
+          "flush_hostile: flush() on an empty bracket did not crash, draw after it still worked");
+
+    d2d.begin(0, 0); // degenerate bracket (D10).
+    d2d.draw_sprite(tex_real, RectF{0, 0, 4, 4});
+    d2d.flush();
+    d2d.draw_sprite(tex_real, RectF{0, 0, 4, 4});
+    d2d.end();
+    check(d2d.ok(), "flush_hostile: flush() during a degenerate bracket did not crash");
+
+    // flush() while set_layer() is armed (buffered mode) -- the replay_layer_queue() path.
+    d2d.begin(W, H);
+    d2d.set_layer(1);
+    d2d.draw_sprite(tex_real, RectF{0, 0, 4, 4});
+    d2d.flush();
+    d2d.draw_sprite(tex_real, RectF{4, 4, 4, 4});
+    d2d.end();
+    check(d2d.ok(), "flush_hostile: flush() during a layer-armed (buffered) bracket did not crash");
   }
 
   // -------------------------------------------------------------------------------------------

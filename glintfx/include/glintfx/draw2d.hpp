@@ -1029,6 +1029,182 @@ public:
   TextMetrics measure_text(const Font2d& font, const char* utf8, float size,
                            const TextOptions& options);
 
+  // EN: D2D-TEXPIXELS -- pixel-buffer source format `create_texture()` below accepts. NESTED in
+  //     `Draw2d` on purpose (unlike the free-standing `TextAlign` above) -- purely an
+  //     appended-at-the-end-of-the-class placement choice (this whole block, PixelFormat through
+  //     flush() below, is added AFTER measure_text() so none of this header's ~60 existing
+  //     `file:line` doc citations in docs/draw2d.md/embed-integration.md have to be reflowed;
+  //     `docs/draw2d.md`'s own writeup for this pair cites this block by name, not line). `R8`
+  //     is single-channel grayscale/coverage (the SAME shape `load_font()`'s glyph atlas already
+  //     uploads, `kAtlasPageDim`-sized pages in draw2d.cpp): NOT premultiplied on ingest -- there
+  //     is no separate colour channel to premultiply, coverage alone already IS both the
+  //     premultiplied-white RGB and the alpha D8's tint formula expects. `Rgba8` is treated as
+  //     STRAIGHT (non-premultiplied) alpha and premultiplied on ingest by `create_texture()`,
+  //     the EXACT SAME convention `load_texture()` applies to a decoded file (D7/D8's "one alpha
+  //     convention" rule, no raw/already-premultiplied toggle by design -- see `create_texture()`
+  //     below for the double-premultiply consequence of ignoring this).
+  // PT: D2D-TEXPIXELS -- formato de origem do buffer de pixel que o `create_texture()` abaixo
+  //     aceita. ANINHADO em `Draw2d` de propósito (diferente do `TextAlign` de topo-de-namespace
+  //     acima) -- puramente uma escolha de posicionamento no-fim-da-classe (este bloco inteiro,
+  //     PixelFormat até o flush() abaixo, é somado DEPOIS do measure_text() pra que nenhuma das
+  //     ~60 citações `arquivo:linha` já existentes deste header em docs/draw2d.md/
+  //     embed-integration.md precise ser refluída; o próprio relato de docs/draw2d.md pra este
+  //     par cita este bloco por nome, não por linha). `R8` é grayscale/cobertura de canal único
+  //     (a MESMA forma que o atlas de glifo do `load_font()` já sobe, páginas de tamanho
+  //     `kAtlasPageDim` em draw2d.cpp): NÃO premultiplicado na entrada -- não há canal de cor
+  //     separado pra premultiplicar, a cobertura sozinha JÁ É tanto o RGB branco-premultiplicado
+  //     quanto o alpha que a fórmula de tint D8 espera. `Rgba8` é tratado como alpha STRAIGHT
+  //     (não-premultiplicado) e premultiplicado na entrada pelo `create_texture()`, a MESMA
+  //     convenção exata que o `load_texture()` aplica a um arquivo decodificado (a regra "uma
+  //     convenção de alpha só" do D7/D8, sem alternância cru/já-premultiplicado por desenho --
+  //     ver o `create_texture()` abaixo pra consequência de double-premultiply de ignorar isto).
+  enum class PixelFormat { R8,
+                           Rgba8 };
+
+  // EN: D2D-TEXPIXELS -- creates a `Texture2d` from a caller-owned pixel buffer already in
+  //     memory (an atlas baked at runtime, a procedural/generated texture, a composition target
+  //     -- anything that is not a file on disk), the general-case sibling `load_texture()` above
+  //     lacks. Same handle type, same registry, same lifetime, same `destroy_texture()` release
+  //     -- a `Texture2d` this call returns is indistinguishable, at every other call site, from
+  //     one `load_texture()` itself returned (pinned by an exact-equivalence render test,
+  //     `docs/draw2d.md`). `pixels` is read SYNCHRONOUSLY, entirely within this call (copied
+  //     into an owned buffer before GL upload, `w * h * (1 or 4)` bytes for `R8`/`Rgba8`
+  //     respectively) -- safe to free/reuse the caller's own buffer the instant this call
+  //     returns. No mipmap, no partial/`glTexSubImage2D`-style update after creation (both
+  //     declared out of this slice, same "declared, not hidden" discipline as this file's own
+  //     top-of-file "WHAT THIS SLICE DOES NOT SHIP" paragraph); `GL_LINEAR` filtering,
+  //     `GL_CLAMP_TO_EDGE` wrap -- the SAME texture parameters `load_texture()` itself sets.
+  //     `texture_content_bbox()` is NOT computed for a handle this call returns (D29's cache is
+  //     populated ONLY inside `load_texture()`, on the decoded CPU pixels already in hand there
+  //     for free -- computing it here would mean retaining or re-scanning a caller-owned buffer
+  //     this call has no other reason to keep): calling `texture_content_bbox()` on a
+  //     `create_texture()` handle is a legal, documented `found == false` (indistinguishable
+  //     from a fully-transparent texture at that one call, everywhere else the handle behaves
+  //     identically to a loaded one), not a bug.
+  //
+  //     Fail-high (D7/D10's own discipline, same shape as `load_texture()`), guard order
+  //     literal, every check BEFORE touching `pixels`: `pixels == nullptr` -> `ok() == false`;
+  //     `w <= 0 || h <= 0` -> `ok() == false`; an out-of-range `format` (a hostile enum cast) ->
+  //     `ok() == false`; `w * h * bytes_per_pixel` over the SAME 256 MiB cap `load_texture()`
+  //     enforces on its own encoded-file input (`kMaxImageDecodeBytes`, `image_decode.hpp`) ->
+  //     `ok() == false` (rejected BEFORE ever copying or uploading a hostile/huge buffer) -- one
+  //     dedup'd log line per rejection class, never a crash. Also returns an invalid handle when
+  //     called before `init()` or after `shutdown()`, the SAME null-safe contract as
+  //     `load_texture()`.
+  //
+  //     PREMULTIPLY, stated loudly (the halo-vs-double-darken class of bug this decision
+  //     answers, same one `render_gl3.cpp`'s own top-of-class comment names for the file-decode
+  //     path): `format == Rgba8` is ALWAYS premultiplied on ingest by this call
+  //     (`image_decode.hpp`'s `premultiply_rgba_inplace()`, the SAME formula
+  //     `decode_premultiplied_rgba()` applies to a decoded file) -- pass STRAIGHT alpha, the
+  //     ordinary convention for a hand-built/generated RGBA buffer. Passing ALREADY-
+  //     premultiplied pixels premultiplies them a SECOND time (a documented darkening at
+  //     partially-transparent edges, never a crash, never UB) -- there is no raw/
+  //     already-premultiplied toggle parameter by design: ONE alpha convention across this
+  //     module's entire public surface, file-loaded or memory-created, is worth more than a
+  //     footgun-shaped opt-out. `format == R8` has no premultiply step at all (see
+  //     `PixelFormat`'s own doc-comment above for why coverage needs none).
+  // PT: D2D-TEXPIXELS -- cria uma `Texture2d` a partir de um buffer de pixel já em memória, de
+  //     posse do chamador (um atlas assado em runtime, uma textura procedural/gerada, um alvo de
+  //     composição -- qualquer coisa que não seja um arquivo em disco), o irmão caso-geral que o
+  //     `load_texture()` acima não tem. Mesmo tipo de handle, mesmo registry, mesmo ciclo de
+  //     vida, mesma liberação por `destroy_texture()` -- uma `Texture2d` que esta chamada
+  //     devolve é indistinguível, em todo outro sítio de chamada, de uma que o próprio
+  //     `load_texture()` devolveu (fixado por um teste de renderização de equivalência exata,
+  //     `docs/draw2d.md`). `pixels` é lido DE FORMA SÍNCRONA, inteiramente dentro desta chamada
+  //     (copiado pra um buffer próprio antes do upload GL, `w * h * (1 ou 4)` bytes pra
+  //     `R8`/`Rgba8` respectivamente) -- seguro liberar/reusar o buffer do próprio chamador no
+  //     instante em que esta chamada retorna. Sem mipmap, sem atualização parcial/estilo
+  //     `glTexSubImage2D` depois da criação (as duas declaradas fora desta fatia, mesma
+  //     disciplina "declarado, não escondido" do próprio parágrafo "O QUE ESTA FATIA NÃO
+  //     ENTREGA" do topo deste arquivo); filtro `GL_LINEAR`, wrap `GL_CLAMP_TO_EDGE` -- os
+  //     MESMOS parâmetros de textura que o próprio `load_texture()` seta. `texture_content_bbox()`
+  //     NÃO é computado pra um handle que esta chamada devolve (o cache do D29 é populado SÓ
+  //     dentro do `load_texture()`, sobre os pixels decodificados na CPU que já estão em mãos lá
+  //     de graça -- computá-lo aqui significaria reter ou re-varrer um buffer de posse do
+  //     chamador que esta chamada não tem outro motivo pra guardar): chamar
+  //     `texture_content_bbox()` num handle do `create_texture()` é um `found == false` legal e
+  //     documentado (indistinguível de uma textura totalmente transparente NAQUELA chamada, em
+  //     todo outro lugar o handle se comporta identicamente a um carregado), não um bug.
+  //
+  //     Fail-high (a própria disciplina do D7/D10, mesma forma do `load_texture()`), ordem de
+  //     guarda literal, toda checagem ANTES de tocar `pixels`: `pixels == nullptr` ->
+  //     `ok() == false`; `w <= 0 || h <= 0` -> `ok() == false`; um `format` fora da faixa (um
+  //     cast hostil de enum) -> `ok() == false`; `w * h * bytes_por_pixel` acima do MESMO teto de
+  //     256 MiB que o `load_texture()` aplica ao próprio input de arquivo codificado
+  //     (`kMaxImageDecodeBytes`, `image_decode.hpp`) -> `ok() == false` (rejeitado ANTES de
+  //     sequer copiar ou subir um buffer hostil/enorme) -- uma linha de log dedup'd por classe de
+  //     rejeição, nunca um crash. Também devolve um handle inválido se chamado antes de `init()`
+  //     ou depois de `shutdown()`, o MESMO contrato null-safe do `load_texture()`.
+  //
+  //     PREMULTIPLY, dito em voz alta (a classe de bug halo-vs-escurecimento-duplo que esta
+  //     decisão responde, a MESMA que o próprio comentário de topo-de-classe de `render_gl3.cpp`
+  //     nomeia pro caminho de decode de arquivo): `format == Rgba8` é SEMPRE premultiplicado na
+  //     entrada por esta chamada (`premultiply_rgba_inplace()` de `image_decode.hpp`, a MESMA
+  //     fórmula que `decode_premultiplied_rgba()` aplica a um arquivo decodificado) -- entregue
+  //     alpha STRAIGHT, a convenção comum de um buffer RGBA feito-à-mão/gerado. Entregar pixels
+  //     JÁ-premultiplicados os premultiplica uma SEGUNDA vez (um escurecimento documentado nas
+  //     bordas parcialmente-transparentes, nunca um crash, nunca UB) -- não existe parâmetro de
+  //     alternância cru/já-premultiplicado por desenho: UMA convenção de alpha na superfície
+  //     pública inteira deste módulo, carregado-de-arquivo ou criado-em-memória, vale mais que
+  //     um opt-out em forma de armadilha. `format == R8` não tem passo de premultiply nenhum (ver
+  //     o próprio doc-comment do `PixelFormat` acima pro porquê da cobertura não precisar de
+  //     nenhum).
+  Texture2d create_texture(const void* pixels, int w, int h, PixelFormat format);
+
+  // EN: D2D-FLUSH -- forces every draw queued so far in the CURRENT bracket to GL WITHOUT
+  //     closing it (`begin()`'d still, still needs its own matching `end()`): the missing third
+  //     option between "keep batching" (do nothing) and "close the bracket" (`end()`) this
+  //     module's own consumer needed to interleave its sprites/text with a COHABITING renderer's
+  //     own raw GL draw calls inside ONE begin()/end() pair, instead of paying `end()`+`begin()`
+  //     (which forces the SAME GL work this call does, but ALSO closes and immediately reopens
+  //     the bracket -- extra bookkeeping for a caller that never wanted the bracket closed in
+  //     the first place). Contrast with `end()` precisely: `end()` finalizes+drains AND resets
+  //     layer/current_layer to disarmed/0 (D27's own "not sticky across brackets" rule); `flush()`
+  //     does NEITHER -- camera (D13, CPU-side, pre-batcher, untouched by ANY flush, forced or
+  //     not), the CURRENT scissor (D28), and layer-armed/current_layer (D27) all read back
+  //     EXACTLY as they were immediately before this call, immediately after it. In STREAMING
+  //     mode (the default, `set_layer()` never called) this is the SAME internal run-boundary
+  //     `set_layer()`/`set_scissor()` already force mid-bracket (`SpriteBatch::flush_pending()`,
+  //     sprite_batch.hpp's own D31 addition) -- zero new GL-execution path, exposed here as its
+  //     own public entry point for the first time. In BUFFERED mode (after `set_layer()` armed
+  //     it) the buffered queue is drained/sorted/replayed through the SAME path `end()` itself
+  //     uses at bracket-close -- the CURRENT scissor state is saved before that replay and
+  //     restored after it (the replay's own per-group loop would otherwise leave it at the LAST
+  //     group's snapshot instead of the caller's actual current value, a discrepancy this call's
+  //     own "scissor intact" contract above does not allow). Safe no-op: outside a begin()/end()
+  //     bracket (nothing pending to force), on an empty/never-drawn-into bracket (finalizing an
+  //     empty run is itself a no-op, same as `end()`'s own idiom), and on a
+  //     never-init/moved-from/post-shutdown `Draw2d` (this module's null-safe contract, D15).
+  // PT: D2D-FLUSH -- força todo desenho enfileirado até agora no bracket CORRENTE pra GL SEM
+  //     fechá-lo (continua `begin()`'d, ainda precisa do próprio `end()` correspondente): a
+  //     terceira opção que faltava entre "continuar batchando" (não fazer nada) e "fechar o
+  //     bracket" (`end()`) que o próprio consumidor deste módulo precisava pra intercalar os
+  //     próprios sprites/texto com as chamadas GL cruas de um renderer COABITANTE dentro de UM
+  //     par begin()/end() só, em vez de pagar `end()`+`begin()` (que força o MESMO trabalho GL
+  //     desta chamada, mas TAMBÉM fecha e reabre o bracket na hora -- contabilidade extra pra um
+  //     chamador que nunca quis fechar o bracket, pra começo de conversa). Contraste com o
+  //     `end()` de forma precisa: `end()` finaliza+drena E reseta camada/current_layer pra
+  //     desarmado/0 (a própria regra do D27 de "não sticky entre brackets"); `flush()` NÃO faz
+  //     nenhum dos dois -- a câmera (D13, CPU-side, pré-batcher, intocada por QUALQUER flush,
+  //     forçado ou não), o scissor CORRENTE (D28), e camada-armada/current_layer (D27) todos lêem
+  //     de volta EXATAMENTE como estavam imediatamente antes desta chamada, imediatamente depois
+  //     dela. Em modo STREAMING (o default, `set_layer()` nunca chamado) isto é a MESMA fronteira
+  //     de corrida interna que `set_layer()`/`set_scissor()` já forçam no meio do bracket
+  //     (`SpriteBatch::flush_pending()`, a própria adição D31 de sprite_batch.hpp) -- zero
+  //     caminho de execução GL novo, exposto aqui como o próprio ponto de entrada público pela
+  //     primeira vez. Em modo BUFFERIZADO (depois de `set_layer()` armá-lo) a fila bufferizada é
+  //     drenada/ordenada/reproduzida pelo MESMO caminho que o próprio `end()` usa no fechamento
+  //     do bracket -- o estado de scissor CORRENTE é salvo antes daquele replay e restaurado
+  //     depois dele (o próprio loop por-grupo do replay senão o deixaria no snapshot do ÚLTIMO
+  //     grupo, em vez do valor corrente de fato do chamador, uma discrepância que o próprio
+  //     contrato "scissor intacto" desta chamada acima não permite). No-op seguro: fora de um
+  //     bracket begin()/end() (nada pendente pra forçar), num bracket vazio/nunca-desenhado
+  //     (finalizar uma corrida vazia já é um no-op, mesmo idioma do próprio `end()`), e num
+  //     `Draw2d` nunca-inicializado/movido-de/pós-shutdown (o contrato null-safe deste módulo,
+  //     D15).
+  void flush();
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

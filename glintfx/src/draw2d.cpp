@@ -1887,4 +1887,238 @@ Camera2d camera_from_world_rect(const RectF& world_rect, int viewport_w, int vie
   return draw2d_detail::camera_from_world_rect(world_rect, viewport_w, viewport_h);
 }
 
+// -------------------------------------------------------------------------------------------
+// EN: D2D-FLUSH / D2D-TEXPIXELS -- appended at the very END of this file, deliberately out of
+//     their "natural" reading order (flush() logically sits beside end() near line 1630;
+//     create_texture() beside load_texture()/destroy_texture() near line 1086) -- this file is
+//     cited by EXACT line number from docs/draw2d.md at ~20 different points (369, 405, 458,
+//     463-474, 621, 728, 937, 1023-1091, 1144, 1558, ...); inserting anywhere in the body above
+//     would reflow every one of them for a doc file this wave does not otherwise touch.
+//     Appending here keeps every existing citation byte-exact. Both pieces are still ORDINARY
+//     `Draw2d`/`Draw2d::Impl` members with full access to `impl_`'s fields -- their physical
+//     location in the translation unit has no effect on that.
+// PT: D2D-FLUSH / D2D-TEXPIXELS -- somados bem no FIM deste arquivo, deliberadamente fora da
+//     própria ordem de leitura "natural" (o flush() logicamente ficaria ao lado do end() perto
+//     da linha 1630; o create_texture() ao lado do load_texture()/destroy_texture() perto da
+//     linha 1086) -- este arquivo é citado por número de linha EXATO a partir de
+//     docs/draw2d.md em ~20 pontos diferentes (369, 405, 458, 463-474, 621, 728, 937,
+//     1023-1091, 1144, 1558, ...); inserir em qualquer lugar do corpo acima refluiria todas
+//     elas por um arquivo de doc que esta onda não toca por outro motivo. Somar aqui mantém
+//     toda citação existente byte-exata. As duas peças continuam membros ORDINÁRIOS de
+//     `Draw2d`/`Draw2d::Impl`, com acesso completo aos campos de `impl_` -- a localização
+//     física delas na unidade de tradução não tem efeito nenhum sobre isso.
+// -------------------------------------------------------------------------------------------
+
+// EN: D2D-FLUSH -- forces the CURRENT bracket's pending draws to GL without closing it (see
+//     draw2d.hpp's own doc-comment for the full contract). Streaming mode reuses the EXACT
+//     run-boundary pair set_layer()/set_scissor() already force mid-bracket
+//     (`SpriteBatch::flush_pending()` + `Impl::drain_ready()`, D31) -- zero new GL-execution
+//     path. Buffered mode reuses end()'s OWN replay (`Impl::replay_layer_queue()`), with the
+//     scissor STATE saved/restored around it: replay_layer_queue()'s per-group loop overwrites
+//     `scissor_active`/`scissor_rect` with each group's OWN snapshot as it drains them (needed
+//     so each group's GL draw executes under the RIGHT glScissor, D28) and leaves them at
+//     whatever the LAST group's snapshot was -- fine at end() (the whole bracket is closing,
+//     nothing reads that state again before the NEXT begin()/set_scissor()), but flush() must
+//     hand the caller back the scissor state exactly as it was, since the bracket -- and
+//     drawing under CURRENT scissor -- continues right after this call.
+// PT: D2D-FLUSH -- força os desenhos pendentes do bracket CORRENTE pra GL sem fechá-lo (ver o
+//     próprio doc-comment de draw2d.hpp pro contrato completo). O modo streaming reusa o MESMO
+//     par de fronteira-de-corrida que set_layer()/set_scissor() já forçam no meio do bracket
+//     (`SpriteBatch::flush_pending()` + `Impl::drain_ready()`, D31) -- zero caminho de execução
+//     GL novo. O modo bufferizado reusa o PRÓPRIO replay do end() (`Impl::replay_layer_queue()`),
+//     com o ESTADO de scissor salvo/restaurado ao redor dele: o loop por-grupo do
+//     replay_layer_queue() sobrescreve `scissor_active`/`scissor_rect` com o PRÓPRIO snapshot de
+//     cada grupo à medida que os drena (necessário pra que o desenho GL de cada grupo execute
+//     sob o glScissor CERTO, D28) e os deixa no que quer que fosse o snapshot do ÚLTIMO grupo --
+//     tudo bem no end() (o bracket inteiro está fechando, nada lê aquele estado de novo antes do
+//     PRÓXIMO begin()/set_scissor()), mas o flush() precisa devolver ao chamador o estado de
+//     scissor exatamente como estava, já que o bracket -- e o desenho sob o scissor CORRENTE --
+//     continua logo depois desta chamada.
+void Draw2d::flush() {
+  if (!impl_ || !impl_->initialized) return;
+  if (!impl_->batch.in_bracket()) return; // D4: nothing open, nothing to force.
+
+  if (impl_->layer_armed) {
+    const bool saved_scissor_active = impl_->scissor_active;
+    const RectF saved_scissor_rect = impl_->scissor_rect;
+    impl_->replay_layer_queue(); // drains+sorts+flushes the WHOLE buffered queue so far.
+    impl_->scissor_active = saved_scissor_active;
+    impl_->scissor_rect = saved_scissor_rect;
+  } else {
+    impl_->batch.flush_pending();
+    impl_->drain_ready();
+  }
+}
+
+namespace {
+
+// EN: D2D-TEXPIXELS -- raw pixel upload for create_texture(), a sibling to
+//     `Impl::upload_gl_texture(const DecodedImage&)` (RGBA8-only, the file-decode path
+//     load_texture()/create_white_texture() use) and to `Impl::create_atlas_page_texture()`
+//     (R8-only, an always-zeroed atlas page) -- this one is the GENERAL case: caller-supplied
+//     dimensions and bytes, either format. `format == PixelFormat::R8` mirrors
+//     create_atlas_page_texture()'s own swizzle-to-RRRR trick (GL_TEXTURE_SWIZZLE_R/G/B/A ->
+//     GL_RED) so a single-channel coverage texel reads as RGBA (c,c,c,c) at the shader -- the
+//     SAME premultiplied-white shape the D8 tint formula already expects, zero new shader --
+//     plus that SAME function's own GL_UNPACK_ALIGNMENT=1 (R8 rows of arbitrary width upload
+//     tightly packed; the default 4 would corrupt an odd-width row). `format ==
+//     PixelFormat::Rgba8` mirrors `upload_gl_texture(const DecodedImage&)` verbatim
+//     (GL_RGBA8/GL_RGBA, naturally 4-byte-aligned, default GL_UNPACK_ALIGNMENT left untouched).
+//     A free function (not an Impl member) -- touches no Draw2d state, only its own arguments
+//     and GL global state, the SAME "cppcheck functionStatic" reasoning
+//     `Impl::upload_gl_texture` documents for itself. Returns 0 on any GL upload failure
+//     (glGetError checked, same fail-high contract as create_atlas_page_texture()) -- the
+//     caller (Draw2d::create_texture()) turns that into an ok()==false Texture2d, one dedup'd
+//     log line, never a crash.
+// PT: D2D-TEXPIXELS -- upload de pixel cru pro create_texture(), irmão do
+//     `Impl::upload_gl_texture(const DecodedImage&)` (só RGBA8, o caminho de decode de arquivo
+//     que load_texture()/create_white_texture() usam) e do `Impl::create_atlas_page_texture()`
+//     (só R8, uma página de atlas sempre zerada) -- este é o caso GERAL: dimensões e bytes
+//     fornecidos pelo chamador, qualquer formato. `format == PixelFormat::R8` espelha o próprio
+//     truque de swizzle-pra-RRRR do create_atlas_page_texture() (GL_TEXTURE_SWIZZLE_R/G/B/A ->
+//     GL_RED) pra que um texel de canal único de cobertura seja lido como RGBA (c,c,c,c) no
+//     shader -- a MESMA forma de branco-premultiplicado que a fórmula de tint D8 já espera, zero
+//     shader novo -- mais o próprio GL_UNPACK_ALIGNMENT=1 daquela mesma função (linhas R8 de
+//     largura arbitrária sobem empacotadas justas; o default 4 corromperia uma linha de largura
+//     ímpar). `format == PixelFormat::Rgba8` espelha o upload_gl_texture(const DecodedImage&) ao
+//     pé da letra (GL_RGBA8/GL_RGBA, naturalmente alinhado a 4 bytes, GL_UNPACK_ALIGNMENT default
+//     intocado). Uma free function (não um membro de Impl) -- não toca em estado nenhum do
+//     Draw2d, só nos próprios argumentos e no estado global de GL, o MESMO raciocínio
+//     "cppcheck functionStatic" que o próprio Impl::upload_gl_texture documenta pra si. Devolve
+//     0 em qualquer falha de upload GL (glGetError checado, mesmo contrato fail-high do
+//     create_atlas_page_texture()) -- o chamador (Draw2d::create_texture()) transforma isso numa
+//     Texture2d ok()==false, uma linha de log dedup'd, nunca um crash.
+GLuint upload_gl_texture_raw(const void* pixels, int w, int h, Draw2d::PixelFormat format) {
+  GLuint id = 0;
+  glGenTextures(1, &id);
+  if (id == 0) return 0;
+  glBindTexture(GL_TEXTURE_2D, id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  if (format == Draw2d::PixelFormat::R8) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
+  } else {
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+  }
+  const GLenum err = glGetError();
+  glBindTexture(GL_TEXTURE_2D, 0);
+  if (err != GL_NO_ERROR) {
+    glDeleteTextures(1, &id);
+    return 0;
+  }
+  return id;
+}
+
+} // namespace
+
+// EN: D2D-TEXPIXELS -- creates a Texture2d from a caller-owned pixel buffer (see draw2d.hpp's
+//     own doc-comment for the full contract: guard order, the 256 MiB cap, the premultiply
+//     decision, the declared texture_content_bbox() limitation). Registers a NORMAL registry
+//     slot -- same `impl_->textures`/`impl_->free_slots` bookkeeping load_texture() itself uses
+//     just below, so destroy_texture()/draw_sprite()/every other consumer of a Texture2d cannot
+//     tell the two apart.
+// PT: D2D-TEXPIXELS -- cria uma Texture2d a partir de um buffer de pixel de posse do chamador
+//     (ver o próprio doc-comment de draw2d.hpp pro contrato completo: ordem de guarda, o teto
+//     de 256 MiB, a decisão de premultiply, a limitação declarada do texture_content_bbox()).
+//     Registra um slot NORMAL do registry -- a MESMA contabilidade `impl_->textures`/
+//     `impl_->free_slots` que o próprio load_texture() usa logo acima, então
+//     destroy_texture()/draw_sprite()/todo outro consumidor de uma Texture2d não consegue
+//     distinguir os dois.
+Texture2d Draw2d::create_texture(const void* pixels, int w, int h, PixelFormat format) {
+  Texture2d out; // ok_ == false by default.
+  if (!impl_) return out;
+  if (!impl_->initialized) {
+    impl_->log_warn("create_texture() called before init()/after shutdown() -- ignored.");
+    return out;
+  }
+  if (pixels == nullptr) {
+    impl_->log_warn("create_texture(nullptr) -- ignored.");
+    return out;
+  }
+  if (w <= 0 || h <= 0) {
+    impl_->log_warn("create_texture(): non-positive width/height -- ignored.");
+    return out;
+  }
+
+  std::size_t bytes_per_pixel;
+  switch (format) {
+    case PixelFormat::R8:
+      bytes_per_pixel = 1;
+      break;
+    case PixelFormat::Rgba8:
+      bytes_per_pixel = 4;
+      break;
+    default:
+      impl_->log_warn("create_texture(): unknown PixelFormat -- ignored.");
+      return out;
+  }
+
+  // D2D-TEXPIXELS: the SAME 256 MiB ceiling load_texture() enforces on its own encoded-file
+  // input (kMaxImageDecodeBytes, image_decode.hpp) -- reused here as the memory bound on a
+  // caller-supplied w*h*bytes_per_pixel buffer, rejected BEFORE ever copying/uploading a
+  // hostile/huge one. std::size_t multiplication -- w/h already proven > 0 above, so no
+  // negative-to-huge-unsigned wraparound risk from the cast alone.
+  const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+  const std::size_t byte_count = pixel_count * bytes_per_pixel;
+  if (byte_count > kMaxImageDecodeBytes) {
+    impl_->log_warn("create_texture(): " + std::to_string(w) + "x" + std::to_string(h) +
+                    " exceeds the " + std::to_string(kMaxImageDecodeBytes) +
+                    "-byte cap -- refusing to create.");
+    return out;
+  }
+
+  GLuint gl_name = 0;
+  if (format == PixelFormat::Rgba8) {
+    // D2D-TEXPIXELS, D7/D8: this module's ONE alpha convention -- straight alpha in, premultiply
+    // on ingest, EXACTLY like load_texture() does for a decoded file. Copies into an owned
+    // buffer first (never mutates the caller's own `pixels`) before premultiplying in place.
+    std::vector<unsigned char> premultiplied(static_cast<const unsigned char*>(pixels),
+                                             static_cast<const unsigned char*>(pixels) +
+                                                 byte_count);
+    premultiply_rgba_inplace(premultiplied.data(), pixel_count);
+    gl_name = upload_gl_texture_raw(premultiplied.data(), w, h, format);
+  } else {
+    gl_name = upload_gl_texture_raw(pixels, w, h, format);
+  }
+  if (!gl_name) {
+    impl_->log_warn("create_texture(): GL texture upload failed.");
+    return out;
+  }
+
+  std::size_t idx;
+  if (!impl_->free_slots.empty()) {
+    idx = impl_->free_slots.back();
+    impl_->free_slots.pop_back();
+  } else {
+    idx = impl_->textures.size();
+    impl_->textures.push_back(Impl::TextureSlot{});
+  }
+  Impl::TextureSlot& slot = impl_->textures[idx];
+  slot.gl_name = gl_name;
+  slot.width = w;
+  slot.height = h;
+  slot.alive = true;
+  // D2D-TEXPIXELS: content bbox is NOT computed for a create_texture()-made slot (see this
+  // method's own doc-comment in draw2d.hpp for why) -- texture_content_bbox() on this handle is
+  // a legal, documented found==false, same shape as a fully-transparent load_texture() image.
+  slot.bbox = ContentBbox{};
+  // slot.generation left as-is: 1 for a never-used slot, already bumped by destroy_texture() for
+  // a reused one -- same idiom load_texture() itself relies on just above.
+
+  out.ok_ = true;
+  out.width_ = w;
+  out.height_ = h;
+  out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
+  out.generation_ = slot.generation;
+  out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
+  return out;
+}
+
 } // namespace glintfx

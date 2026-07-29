@@ -301,6 +301,85 @@ public:
   bool is_window_focused() const;
   bool is_window_iconified() const;
 
+  // EN: WIN-ICON (framework-2D) -- sets the window/taskbar icon from a caller-owned RGBA8 pixel
+  //     buffer already in memory (the consumer decodes its own PNG, e.g. with stb_image, and
+  //     hands the decoded pixels here -- this call never touches a file path or does any
+  //     decoding of its own). Wraps `glfwSetWindowIcon()` directly. VOCABULARY, deliberately the
+  //     SAME as `glintfx::Draw2d::PixelFormat::Rgba8` (`glintfx/include/glintfx/draw2d.hpp`,
+  //     D2D-TEXPIXELS) for the pixel LAYOUT -- 8 bits per channel, red first, row-major,
+  //     top-left origin, `w * h * 4` bytes total -- but this call does NOT reuse that enum type
+  //     (window chrome has no dependency on the Draw2D module, which is independently
+  //     OFF-able) and, UNLIKE `Draw2d::create_texture`'s own `Rgba8`, does NOT premultiply
+  //     alpha on ingest: `Draw2d`'s premultiply exists because ITS pixels feed glintfx's own
+  //     `GL_ONE, GL_ONE_MINUS_SRC_ALPHA` blend pipeline (`docs/draw2d.md`'s "Premultiply and the
+  //     tint formula" section); an OS window/taskbar icon is composited by the WINDOW MANAGER,
+  //     never by glintfx's own GL blend state, so `pixels_rgba8` is taken STRAIGHT
+  //     (non-premultiplied) -- the same convention GLFW's own `GLFWimage` documentation states
+  //     for `glfwSetWindowIcon`. `pixels_rgba8` is read SYNCHRONOUSLY and copied into an
+  //     internal buffer before this call returns (GLFW itself converts to the platform's native
+  //     icon format synchronously inside `glfwSetWindowIcon`, keeping no reference afterwards)
+  //     -- safe to free/reuse the caller's own buffer the instant this call returns.
+  //
+  //     Fail-high (D5's own discipline, same shape as `create()`'s non-positive-size guard
+  //     above), guard order literal, every check BEFORE touching `pixels_rgba8`: `win_ == nullptr`
+  //     (`create()` not called or failed) -> `false`; `pixels_rgba8 == nullptr` -> `false`;
+  //     `w <= 0 || h <= 0` -> `false`; `w > kMaxIconDim || h > kMaxIconDim` (2048, generous
+  //     headroom over any real OS/WM icon size while bounding the worst-case copy to 16 MiB and
+  //     keeping `w * h * 4` far below any `int`/`size_t` overflow BEFORE the multiply ever runs,
+  //     window_glfw.cpp's own doc-comment on this method has the full derivation) -> `false` --
+  //     one dedup'd stderr line per rejection, never a crash, never a read past the caller's
+  //     buffer. `nullptr` is REJECTED, not treated as "reset to the default icon" (GLFW's own
+  //     `count == 0` convention for that) -- out of scope for this slice by design, a follow-up
+  //     if a consumer asks for it explicitly.
+  //
+  //     No return-value distinction between "rejected by this guard" and "GLFW/the WM silently
+  //     ignored the request" -- `glfwSetWindowIcon` itself returns `void` and some platforms
+  //     (documented GLFW limitation, e.g. certain window managers with no icon concept at all)
+  //     simply do nothing with a well-formed request; this call cannot observe that and does not
+  //     claim to.
+  // PT: WIN-ICON (framework-2D) -- define o ícone de janela/barra de tarefas a partir de um
+  //     buffer de pixel RGBA8 já em memória, de posse do chamador (o consumidor decodifica o
+  //     próprio PNG, ex.: com stb_image, e entrega os pixels decodificados aqui -- esta chamada
+  //     nunca toca um caminho de arquivo nem faz decode nenhum por conta própria). Encapsula
+  //     `glfwSetWindowIcon()` diretamente. VOCABULÁRIO, deliberadamente o MESMO de
+  //     `glintfx::Draw2d::PixelFormat::Rgba8` (`glintfx/include/glintfx/draw2d.hpp`,
+  //     D2D-TEXPIXELS) pro LAYOUT de pixel -- 8 bits por canal, vermelho primeiro, row-major,
+  //     origem superior-esquerda, `w * h * 4` bytes no total -- mas esta chamada NÃO reusa
+  //     aquele tipo enum (janela/chrome não tem dependência do módulo Draw2D, que é
+  //     independentemente desligável) e, DIFERENTE do próprio `Rgba8` do
+  //     `Draw2d::create_texture`, NÃO premultiplica alpha na entrada: o premultiply do `Draw2d`
+  //     existe porque os PRÓPRIOS pixels dele alimentam o pipeline de blend
+  //     `GL_ONE, GL_ONE_MINUS_SRC_ALPHA` da própria glintfx (seção "Premultiply and the tint
+  //     formula" de `docs/draw2d.md`); um ícone de janela/barra de tarefas do SO é composto pelo
+  //     WINDOW MANAGER, nunca pelo próprio estado de blend GL da glintfx, então
+  //     `pixels_rgba8` é recebido STRAIGHT (não-premultiplicado) -- a mesma convenção que a
+  //     própria documentação do `GLFWimage` do GLFW declara para `glfwSetWindowIcon`.
+  //     `pixels_rgba8` é lido DE FORMA SÍNCRONA e copiado pra um buffer interno antes desta
+  //     chamada retornar (o próprio GLFW converte pro formato de ícone nativo da plataforma de
+  //     forma síncrona dentro de `glfwSetWindowIcon`, sem reter referência depois) -- seguro
+  //     liberar/reusar o buffer do próprio chamador no instante em que esta chamada retorna.
+  //
+  //     Fail-high (a própria disciplina do D5, mesma forma da guarda de tamanho não-positivo do
+  //     `create()` acima), ordem de guarda literal, toda checagem ANTES de tocar
+  //     `pixels_rgba8`: `win_ == nullptr` (`create()` não chamado ou falhou) -> `false`;
+  //     `pixels_rgba8 == nullptr` -> `false`; `w <= 0 || h <= 0` -> `false`;
+  //     `w > kMaxIconDim || h > kMaxIconDim` (2048, folga generosa sobre qualquer tamanho real
+  //     de ícone de SO/WM enquanto limita a cópia de pior caso a 16 MiB e mantém `w * h * 4`
+  //     bem abaixo de qualquer overflow de `int`/`size_t` ANTES da multiplicação sequer rodar,
+  //     o próprio doc-comment deste método em window_glfw.cpp tem a derivação completa) ->
+  //     `false` -- uma linha de stderr dedup'd por classe de rejeição, nunca um crash, nunca
+  //     uma leitura além do buffer do chamador. `nullptr` é REJEITADO, não tratado como
+  //     "restaurar o ícone default" (a própria convenção `count == 0` do GLFW pra isso) -- fora
+  //     de escopo desta fatia por desenho, um desdobramento se um consumidor pedir
+  //     explicitamente.
+  //
+  //     Sem distinção de valor de retorno entre "rejeitado por esta guarda" e "GLFW/o WM
+  //     ignorou o pedido silenciosamente" -- o próprio `glfwSetWindowIcon` retorna `void` e
+  //     algumas plataformas (limitação documentada do GLFW, ex.: certos window managers sem
+  //     conceito de ícone nenhum) simplesmente não fazem nada com um pedido bem-formado; esta
+  //     chamada não consegue observar isso e não alega o contrário.
+  bool set_window_icon(const void* pixels_rgba8, int w, int h);
+
 private:
   GLFWwindow* win_        = nullptr;
   bool        glfw_inited_ = false; // EN: true only after glfwInit() succeeds. PT: true somente após glfwInit() com sucesso.

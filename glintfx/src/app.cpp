@@ -300,6 +300,15 @@ void App::get_window_size(int& w, int& h) const {
   impl_->window.size(w, h);
 }
 
+// EN: WIN-ICON -- thin forward to WindowGlfw::set_window_icon (window_glfw.hpp/.cpp), same
+//     `!impl_->ok` guard every other App method in this family uses.
+// PT: WIN-ICON -- repasse fino pro WindowGlfw::set_window_icon (window_glfw.hpp/.cpp), mesma
+//     guarda `!impl_->ok` que todo outro método do App nesta família usa.
+bool App::set_window_icon(const void* pixels_rgba8, int w, int h) {
+  if (!impl_->ok) return false;
+  return impl_->window.set_window_icon(pixels_rgba8, w, h);
+}
+
 bool App::ok() const noexcept {
   return impl_ && impl_->ok;
 }

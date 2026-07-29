@@ -13,6 +13,8 @@
 #include "glfw_event_translate.hpp"
 #include <GLFW/glfw3.h>
 #include <cstdio>  // EN: A4-WINMODES -- stderr fallback note (D5). PT: A4-WINMODES -- aviso de fallback em stderr (D5).
+#include <cstring> // EN: WIN-ICON -- std::memcpy into the owned icon buffer. PT: WIN-ICON -- std::memcpy pro buffer próprio do ícone.
+#include <vector>  // EN: WIN-ICON -- owned copy of the caller's pixel buffer. PT: WIN-ICON -- cópia própria do buffer de pixel do chamador.
 namespace glintfx {
 
 WindowGlfw::~WindowGlfw() {
@@ -517,6 +519,77 @@ bool WindowGlfw::is_window_focused() const {
 
 bool WindowGlfw::is_window_iconified() const {
   return win_ && glfwGetWindowAttrib(win_, GLFW_ICONIFIED);
+}
+
+// EN: WIN-ICON -- see the doc-comment on the declaration (window_glfw.hpp) for the full
+//     contract; this is the derivation behind the `kMaxIconDim` cap cited there. 2048 is
+//     generous headroom over any real OS/WM icon size seen in practice (Windows taskbar/alt-tab
+//     icons top out well under 256px; even a hi-DPI macOS-style app-bundle icon set tops out at
+//     1024) while bounding the worst-case copy below to 2048*2048*4 == 16 MiB, and keeping
+//     `w * h * 4` (computed as `std::size_t` below, AFTER this per-dimension guard has already
+//     run) nowhere near overflowing `int`/`std::size_t` on any platform this library targets --
+//     same "cap each dimension BEFORE multiplying" guard order `Draw2d::create_texture`'s own
+//     `kMaxImageDecodeBytes` check uses (glintfx/src/image_decode.hpp), applied here to a
+//     smaller, window-icon-specific ceiling instead of that module's general-purpose 256 MiB one
+//     (this call has no dependency on GLINTFX_MODULE_DRAW2D and does not reuse its constant).
+// PT: WIN-ICON -- ver o doc-comment na declaração (window_glfw.hpp) pro contrato completo; esta
+//     é a derivação por trás do teto `kMaxIconDim` citado lá. 2048 é folga generosa sobre
+//     qualquer tamanho real de ícone de SO/WM visto na prática (ícones de barra de
+//     tarefas/alt-tab do Windows ficam bem abaixo de 256px; até um conjunto de ícone de app
+//     bundle estilo macOS hi-DPI para em 1024) enquanto limita a cópia de pior caso abaixo a
+//     2048*2048*4 == 16 MiB, e mantém `w * h * 4` (computado como `std::size_t` abaixo, DEPOIS
+//     desta guarda por-dimensão já ter rodado) longe de estourar `int`/`std::size_t` em
+//     qualquer plataforma que esta biblioteca mira -- mesma ordem de guarda "limita cada
+//     dimensão ANTES de multiplicar" que o próprio check `kMaxImageDecodeBytes` do
+//     `Draw2d::create_texture` usa (glintfx/src/image_decode.hpp), aplicada aqui a um teto menor
+//     e específico de ícone de janela em vez do teto geral de 256 MiB daquele módulo (esta
+//     chamada não tem dependência de GLINTFX_MODULE_DRAW2D e não reusa a constante dele).
+namespace {
+constexpr int kMaxIconDim = 2048;
+} // namespace
+
+bool WindowGlfw::set_window_icon(const void* pixels_rgba8, int w, int h) {
+  if (!win_) {
+    std::fprintf(stderr,
+                 "glintfx: WindowGlfw::set_window_icon: called before a successful create(), ignored\n");
+    return false;
+  }
+  if (!pixels_rgba8) {
+    std::fprintf(stderr,
+                 "glintfx: WindowGlfw::set_window_icon: null pixels, ignored\n");
+    return false;
+  }
+  if (w <= 0 || h <= 0) {
+    std::fprintf(stderr,
+                 "glintfx: WindowGlfw::set_window_icon: non-positive size %dx%d, ignored\n", w, h);
+    return false;
+  }
+  if (w > kMaxIconDim || h > kMaxIconDim) {
+    std::fprintf(stderr,
+                 "glintfx: WindowGlfw::set_window_icon: size %dx%d exceeds the %dx%d cap, ignored\n",
+                 w, h, kMaxIconDim, kMaxIconDim);
+    return false;
+  }
+
+  // EN: Copy into an owned buffer -- see the "safe to free/reuse the caller's own buffer"
+  //     contract on the declaration. GLFWimage::pixels is a non-const `unsigned char*` (the C
+  //     struct's own field type, unrelated to whether GLFW writes through it -- it does not);
+  //     owning a local copy sidesteps needing a const_cast onto the caller's buffer entirely.
+  // PT: Copia pra um buffer próprio -- ver o contrato "seguro liberar/reusar o buffer do
+  //     próprio chamador" na declaração. GLFWimage::pixels é um `unsigned char*` não-const (o
+  //     próprio tipo do campo da struct C, sem relação com o GLFW escrever através dele -- não
+  //     escreve); ter uma cópia local própria evita por completo precisar de um const_cast sobre
+  //     o buffer do chamador.
+  const std::size_t byte_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4u;
+  std::vector<unsigned char> owned(byte_count);
+  std::memcpy(owned.data(), pixels_rgba8, byte_count);
+
+  GLFWimage icon;
+  icon.width = w;
+  icon.height = h;
+  icon.pixels = owned.data();
+  glfwSetWindowIcon(win_, 1, &icon);
+  return true;
 }
 
 // ---------------------------------------------------------------------------

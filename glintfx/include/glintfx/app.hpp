@@ -229,6 +229,45 @@ public:
   //     que render()/snapshot() compõem (A4-WINMODES). w=h=0 quando !ok().
   void get_window_size(int& w, int& h) const;
 
+  // EN: Set the window/taskbar icon from a caller-owned RGBA8 pixel buffer already in memory
+  //     (WIN-ICON, framework-2D; consumer-driven -- GusWorld decodes its own PNG icon with
+  //     stb_image and calls SDL_SetWindowIcon today; this is the App-mode equivalent, closing
+  //     the gap that would otherwise lose the window icon on cutover to App). Wraps GLFW's own
+  //     `glfwSetWindowIcon` -- see WindowGlfw::set_window_icon's doc-comment
+  //     (glintfx/src/window_glfw.hpp) for the full contract, including the deliberate
+  //     vocabulary match (not type reuse) with `Draw2d::PixelFormat::Rgba8`
+  //     (glintfx/include/glintfx/draw2d.hpp, D2D-TEXPIXELS) and the ONE deliberate divergence
+  //     from it: this call does NOT premultiply alpha (an OS icon is composited by the window
+  //     manager, never by glintfx's own GL blend pipeline). Only on `App` -- `UiLayer` is a
+  //     guest that never owns the window, so it has no icon to set.
+  //     `pixels_rgba8` is read synchronously and copied before this call returns -- safe to
+  //     free/reuse the caller's own buffer immediately after. Fail-high, never a crash: returns
+  //     `false` (one dedup'd stderr line, window untouched) when `!ok()`, `pixels_rgba8` is
+  //     null, `w`/`h` is non-positive, or `w`/`h` exceeds the 2048px-per-dimension cap
+  //     (WindowGlfw::set_window_icon's own doc-comment, window_glfw.cpp, has the full
+  //     derivation). `nullptr` is REJECTED, not treated as "reset to the platform default icon"
+  //     (out of scope for this slice by design).
+  // PT: Define o ícone de janela/barra de tarefas a partir de um buffer de pixel RGBA8 já em
+  //     memória, de posse do chamador (WIN-ICON, framework-2D; consumer-driven -- o GusWorld
+  //     decodifica o próprio PNG de ícone com stb_image e chama SDL_SetWindowIcon hoje; este é o
+  //     equivalente em modo App, fechando a lacuna que faria perder o ícone da janela no cutover
+  //     pro App). Encapsula o próprio `glfwSetWindowIcon` do GLFW -- ver o doc-comment de
+  //     WindowGlfw::set_window_icon (glintfx/src/window_glfw.hpp) pro contrato completo,
+  //     incluindo o casamento deliberado de vocabulário (não reuso de tipo) com
+  //     `Draw2d::PixelFormat::Rgba8` (glintfx/include/glintfx/draw2d.hpp, D2D-TEXPIXELS) e a
+  //     ÚNICA divergência deliberada dele: esta chamada NÃO premultiplica alpha (um ícone de SO
+  //     é composto pelo window manager, nunca pelo próprio pipeline de blend GL da glintfx). Só
+  //     no `App` -- o `UiLayer` é um convidado que nunca é dono da janela, então não tem ícone
+  //     pra definir.
+  //     `pixels_rgba8` é lido de forma síncrona e copiado antes desta chamada retornar --
+  //     seguro liberar/reusar o buffer do próprio chamador logo em seguida. Fail-high, nunca um
+  //     crash: retorna `false` (uma linha de stderr dedup'd, janela intocada) quando `!ok()`,
+  //     `pixels_rgba8` é nulo, `w`/`h` é não-positivo, ou `w`/`h` excede o teto de 2048px por
+  //     dimensão (o próprio doc-comment de WindowGlfw::set_window_icon, window_glfw.cpp, tem a
+  //     derivação completa). `nullptr` é REJEITADO, não tratado como "restaurar o ícone default
+  //     da plataforma" (fora de escopo desta fatia por desenho).
+  bool set_window_icon(const void* pixels_rgba8, int w, int h);
+
   // EN: Returns false if the window was closed or initialization failed.
   //     To distinguish the two cases check ok() once after construction.
   // PT: Retorna false se a janela foi fechada ou se a inicialização falhou.

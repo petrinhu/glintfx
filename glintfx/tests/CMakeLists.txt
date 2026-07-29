@@ -599,6 +599,29 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: app_window_icon_sanity (WIN-ICON, framework-2D, consumer-driven) -- contract + App-PATH
+  #     FORWARD-COVERAGE gate for App::set_window_icon/WindowGlfw::set_window_icon. Same
+  #     "WindowGlfw direct, then through App" two-stage pattern as app_vsync_sanity.cpp above --
+  #     see that file's own header comment for the rationale, and this file's own header comment
+  #     for the headless-honesty limitation it names (no window manager under Xvfb to visually
+  #     confirm an icon on).
+  # PT: app_window_icon_sanity (WIN-ICON, framework-2D, consumer-driven) -- gate de contrato +
+  #     COBERTURA DE FORWARD do caminho App pra App::set_window_icon/WindowGlfw::set_window_icon.
+  #     Mesmo padrão em dois estágios "WindowGlfw direto, depois pelo App" do
+  #     app_vsync_sanity.cpp acima -- ver o próprio comentário de cabeçalho daquele arquivo pro
+  #     racional, e o próprio comentário de cabeçalho deste arquivo pra limitação de honestidade
+  #     headless que ele nomeia (nenhum window manager sob Xvfb pra confirmar visualmente um
+  #     ícone).
+  # ---------------------------------------------------------------------------
+  add_executable(app_window_icon_sanity app_window_icon_sanity.cpp)
+  target_link_libraries(app_window_icon_sanity PRIVATE glintfx)
+  add_test(NAME app_window_icon_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_window_icon_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
   #     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
   #     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000

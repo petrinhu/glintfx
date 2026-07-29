@@ -35,7 +35,7 @@ cmake --build glintfx/build
 ctest --test-dir glintfx/build --output-on-failure
 ```
 
-The default suite has 5 tests: `window_smoke`, `render_smoke`, `bootstrap_smoke`, `app_smoke`, and `render_sanity`. The pixel-exact `golden_test` is opt-in (`-DGLINTFX_GOLDEN_TEST=ON`) and is flaky under software GL; run it only on real GPU hardware. Effects are validated visually on a real GPU.
+The default suite has **102 tests** with `-DGLINTFX_BACKEND_GLFW=ON` (the default) and **71 tests** in an embed-only build (`-DGLINTFX_BACKEND_GLFW=OFF`), including `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`, and `render_sanity`. `bootstrap_smoke` from earlier releases was replaced by `engine_smoke` once `Bootstrap::init` stopped accepting `WindowGlfw` directly. `ctest -N` lists every test name currently registered. The pixel-exact `golden_test` is opt-in (`-DGLINTFX_GOLDEN_TEST=ON`) and is flaky under software GL; run it only on real GPU hardware. Effects are validated visually on a real GPU.
 
 Before submitting, build the `consumer-example/` too, to confirm the drop-in path still works.
 
@@ -103,7 +103,7 @@ cmake --build glintfx/build
 ctest --test-dir glintfx/build --output-on-failure
 ```
 
-A suíte padrão tem 5 testes: `window_smoke`, `render_smoke`, `bootstrap_smoke`, `app_smoke` e `render_sanity`. O `golden_test` pixel-exato é opt-in (`-DGLINTFX_GOLDEN_TEST=ON`) e é flaky sob GL de software; rode só em GPU real. Os efeitos são validados visualmente em GPU real.
+A suíte padrão tem **102 testes** com `-DGLINTFX_BACKEND_GLFW=ON` (o default) e **71 testes** num build embed-only (`-DGLINTFX_BACKEND_GLFW=OFF`), incluindo `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke` e `render_sanity`. O `bootstrap_smoke` de releases anteriores foi substituído pelo `engine_smoke` quando o `Bootstrap::init` parou de aceitar `WindowGlfw` diretamente. `ctest -N` lista todo teste registrado atualmente. O `golden_test` pixel-exato é opt-in (`-DGLINTFX_GOLDEN_TEST=ON`) e é flaky sob GL de software; rode só em GPU real. Os efeitos são validados visualmente em GPU real.
 
 Antes de enviar, builde também o `consumer-example/` para confirmar que o caminho drop-in continua funcionando.
 

@@ -8,7 +8,11 @@
 
 ---
 
-## [Unreleased]
+## [0.24.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.24.0)
+
+**EN:** **Minor** release -- two additive public-API waves (`UI-FONTFACE`, `WM-VSYNC`), no existing signature changed; **drop-in from v0.23.0**. `UiLayer::load_font_face`/`App::load_font_face` open the first C++ path to `Rml::LoadFontFace`, so a host can register a font AFTER resolving a localisation pack, DLC, or user preference, without authoring an RCSS `@font-face` block. `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz` give the standalone `App` its first vsync control and a multi-monitor-aware refresh-rate query, closing a documented gap (glintfx never called `glfwSwapInterval` before this release). Both are consumer-driven (GusWorld), App-only for vsync (embed mode's host owns its own swap primitive).
+
+**PT:** Release **minor** -- duas ondas aditivas de API pública (`UI-FONTFACE`, `WM-VSYNC`), nenhuma assinatura existente mudou; **drop-in a partir da v0.23.0**. `UiLayer::load_font_face`/`App::load_font_face` abrem o primeiro caminho C++ pro `Rml::LoadFontFace`, então um host pode registrar uma fonte DEPOIS de resolver um pacote de localização, uma DLC, ou uma preferência de usuário, sem autorar um bloco RCSS `@font-face`. `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz` dão ao `App` standalone seu primeiro controle de vsync e uma consulta de taxa de atualização multi-monitor-aware, fechando uma lacuna documentada (a glintfx nunca chamou `glfwSwapInterval` antes deste release). As duas são consumer-driven (GusWorld), vsync é só-App (o host do modo embed é dono do próprio primitivo de swap).
 
 ### Added / Adicionado
 

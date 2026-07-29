@@ -622,6 +622,29 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: gl_proc_address_sanity (DOC-GLCOHAB (b)) -- contract test for
+  #     glintfx::gl_proc_address(const char*) (glintfx/include/glintfx/gl_proc.hpp). App-mode
+  #     only (same GLINTFX_BACKEND_GLFW gate as gl_proc.hpp itself), so it lives in this
+  #     GLFW-only block. See the file's own header comment for the driver-honesty limitation it
+  #     names instead of faking coverage for (a made-up name does not reliably resolve to
+  #     nullptr on every driver -- measured on this library's own Mesa/llvmpipe CI environment).
+  # PT: gl_proc_address_sanity (DOC-GLCOHAB (b)) -- teste de contrato para
+  #     glintfx::gl_proc_address(const char*) (glintfx/include/glintfx/gl_proc.hpp). Só modo App
+  #     (mesma guarda GLINTFX_BACKEND_GLFW do próprio gl_proc.hpp), então vive neste bloco
+  #     só-GLFW. Ver o próprio comentário de cabeçalho do arquivo pra limitação de honestidade
+  #     de driver que ele nomeia em vez de forjar cobertura (um nome inventado não resolve pra
+  #     nullptr de forma confiável em todo driver -- medido no próprio ambiente de CI
+  #     Mesa/llvmpipe desta biblioteca).
+  # ---------------------------------------------------------------------------
+  add_executable(gl_proc_address_sanity gl_proc_address_sanity.cpp)
+  target_link_libraries(gl_proc_address_sanity PRIVATE glintfx)
+  add_test(NAME gl_proc_address_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:gl_proc_address_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
   #     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
   #     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000

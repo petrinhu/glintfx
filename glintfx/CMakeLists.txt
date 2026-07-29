@@ -849,8 +849,24 @@ if(GLINTFX_MODULE_APP)
   #     glintfx_window mais abaixo e linkado sempre que GLINTFX_MODULE_WINDOW=ON
   #     (dependência que GLINTFX_MODULE_APP reforça via sua própria guarda
   #     FATAL_ERROR acima).
+  # EN: src/gl_proc.cpp (DOC-GLCOHAB) -- the one-line delegation backing the public
+  #     glintfx::gl_proc_address() free function (glintfx/include/glintfx/gl_proc.hpp), gated
+  #     the SAME as app.cpp/gl_proc.hpp itself (App-mode-only: a UiLayer/embed host already
+  #     owns its own GL context and loader, docs/embed-integration.md section 0). Needs nothing
+  #     this block does not already provide: gl_loader.h comes from linking glloader PRIVATE
+  #     into the aggregate `glintfx` target further below (unconditional, same as app.cpp's own
+  #     glloader dependency), and glintfx/gl_proc.hpp comes from the same PUBLIC include dir
+  #     app.cpp itself already resolves against.
+  # PT: src/gl_proc.cpp (DOC-GLCOHAB) -- a delegação de uma linha por trás da função livre
+  #     pública glintfx::gl_proc_address() (glintfx/include/glintfx/gl_proc.hpp), gateada IGUAL
+  #     ao próprio app.cpp/gl_proc.hpp (só modo App: um host UiLayer/embed já é dono do próprio
+  #     contexto GL e loader, docs/embed-integration.md seção 0). Não precisa de nada que este
+  #     bloco já não forneça: gl_loader.h vem de linkar glloader PRIVATE no alvo agregado
+  #     `glintfx` mais abaixo (incondicional, mesma dependência de glloader do próprio app.cpp),
+  #     e glintfx/gl_proc.hpp vem do mesmo include dir PÚBLICO que o próprio app.cpp já resolve.
   list(APPEND _glintfx_sources
     src/app.cpp
+    src/gl_proc.cpp
     ${_rml_backends}/RmlUi_Platform_GLFW.cpp)
 endif()
 

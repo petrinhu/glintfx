@@ -780,6 +780,60 @@ extern PFNGLWAITSYNCPROC glx_glWaitSync;
 //     Retorna 0 em sucesso, 1 se um ou mais símbolos core falharem ao resolver.
 int glx_gl_load(void);
 
+// EN: DOC-GLCOHAB (framework-2D) -- resolve exactly ONE GL/GLX/EGL/WGL function pointer by
+//     name, for a HOST that cohabits glintfx::App's GL context (set_frame_callback,
+//     app.hpp) and needs an SDL_GL_GetProcAddress-equivalent without linking SDL, GLFW, or
+//     any other loader itself. The sole public entry point into this file's loader: every
+//     other symbol here (glintfx_resolve_symbol, the glintfx_gl_symbol_table, the glX/EGL/
+//     dlopen state) stays internal-linkage/local to this translation unit, so this call
+//     cannot be used to reach anything but the ONE pointer it returns -- see this file's own
+//     header comment for why the batch glx_gl_load() entry point above is deliberately NOT
+//     the public surface for this use case (it would pull in and expose the whole GL 3.3 core
+//     symbol table this loader privately owns, ADR-0013's own glx_-prefix boundary). Delegates
+//     to the EXACT SAME glintfx_resolve_symbol() static function glx_gl_load() itself calls
+//     per table entry (gl_loader.c) -- zero duplicated resolution logic, glX->EGL->dlsym on
+//     POSIX / wglGetProcAddress->GetProcAddress on Win32, both already-battle-tested paths.
+//     NULL-safe for the caller's OWN input: `name == NULL || name[0] == '\0'` returns NULL
+//     without touching the resolver; a call made BEFORE glx_gl_load() has run at least once in
+//     this process also returns NULL (the underlying glX/EGL/dlopen/wgl handles
+//     glintfx_resolve_symbol() reads are only populated there, so every branch falls through).
+//     ⚠ NOT NULL-safe for a name that names no real symbol: measured empirically under this
+//     library's own Mesa/llvmpipe CI environment, glintfx_resolve_symbol() can return a
+//     NON-NULL pointer for a made-up name -- this is GLX_ARB_get_proc_address's own documented
+//     behaviour (an implementation MAY hand back a non-NULL pointer for a name it does not
+//     actually recognise; the caller is expected to confirm the extension/function exists
+//     BEFORE calling the returned pointer), not a bug in this resolver. Only ever pass a name
+//     you already know should exist for the current GL version/extension set -- same caveat
+//     that applies to calling glXGetProcAddressARB/SDL_GL_GetProcAddress directly.
+// PT: DOC-GLCOHAB (framework-2D) -- resolve exatamente UM ponteiro de função GL/GLX/EGL/WGL
+//     por nome, para um HOST que coabita o contexto GL do glintfx::App (set_frame_callback,
+//     app.hpp) e precisa de um equivalente a SDL_GL_GetProcAddress sem linkar SDL, GLFW, ou
+//     qualquer outro loader por conta própria. O único ponto de entrada público neste loader:
+//     todo outro símbolo aqui (glintfx_resolve_symbol, a glintfx_gl_symbol_table, o estado
+//     glX/EGL/dlopen) permanece de linkagem interna/local a esta unidade de tradução, então
+//     esta chamada não pode ser usada para alcançar nada além do ÚNICO ponteiro que devolve --
+//     ver o próprio comentário de cabeçalho deste arquivo pro motivo do ponto de entrada em
+//     lote glx_gl_load() acima ser deliberadamente NÃO a superfície pública pra este caso de
+//     uso (puxaria e exporia a tabela de símbolos GL 3.3 core inteira que este loader possui em
+//     privado, a própria fronteira de prefixo glx_ da ADR-0013). Delega pro MESMO
+//     glintfx_resolve_symbol() estático exato que o próprio glx_gl_load() chama por entrada de
+//     tabela (gl_loader.c) -- zero lógica de resolução duplicada, glX->EGL->dlsym no POSIX /
+//     wglGetProcAddress->GetProcAddress no Win32, os dois caminhos já testados em batalha.
+//     Seguro a NULL pra entrada PRÓPRIA do chamador: `name == NULL || name[0] == '\0'` retorna
+//     NULL sem tocar o resolver; uma chamada feita ANTES do glx_gl_load() ter rodado ao menos
+//     uma vez neste processo também retorna NULL (os handles glX/EGL/dlopen/wgl subjacentes que
+//     glintfx_resolve_symbol() lê só são populados lá, então todo ramo cai por falta de handle).
+//     ⚠ NÃO é seguro a NULL pra um nome que não nomeia símbolo nenhum: medido empiricamente sob
+//     o próprio ambiente de CI Mesa/llvmpipe desta biblioteca, o glintfx_resolve_symbol() pode
+//     retornar um ponteiro NÃO-NULO pra um nome inventado -- este é o próprio comportamento
+//     documentado do GLX_ARB_get_proc_address (uma implementação PODE devolver um ponteiro
+//     não-nulo pra um nome que não reconhece de fato; o chamador é esperado a confirmar que a
+//     extensão/função existe ANTES de chamar o ponteiro devolvido), não um bug deste resolver.
+//     Só passe um nome que você já sabe que deveria existir pro conjunto corrente de
+//     versão/extensão GL -- a mesma ressalva que se aplica a chamar
+//     glXGetProcAddressARB/SDL_GL_GetProcAddress diretamente.
+void* glx_gl_get_proc_address(const char* name);
+
 #ifdef __cplusplus
 }
 #endif

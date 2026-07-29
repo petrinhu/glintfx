@@ -846,6 +846,21 @@ int glx_gl_load(void) {
   }
   return missing ? 1 : 0;
 }
+
+// EN: DOC-GLCOHAB -- public single-symbol resolver, Win32 branch. See the doc-comment on the
+//     declaration (gl_loader.h) for the full contract; this is a one-line delegation to the
+//     exact glintfx_resolve_symbol() the batch loader above uses, plus the null/empty `name`
+//     guard that resolver itself never needed (its only caller until now was the fixed
+//     internal symbol table, which never passes NULL).
+// PT: DOC-GLCOHAB -- resolvedor público de símbolo único, ramo Win32. Ver o doc-comment da
+//     declaração (gl_loader.h) pro contrato completo; isto é uma delegação de uma linha pro
+//     mesmo glintfx_resolve_symbol() que o loader em lote acima usa, mais a guarda de `name`
+//     nulo/vazio que aquele resolver nunca precisou por conta própria (seu único chamador até
+//     agora era a tabela interna fixa de símbolos, que nunca passa NULL).
+void* glx_gl_get_proc_address(const char* name) {
+  if (!name || !name[0]) return NULL;
+  return glintfx_resolve_symbol(name);
+}
 #else
 typedef glintfx_glx_fn_t (*glintfx_glXGetProcAddress_t)(const unsigned char*);
 typedef void* (*glintfx_eglGetProcAddress_t)(const char*);
@@ -934,6 +949,30 @@ int glx_gl_load(void) {
     if (!resolved) ++missing;
   }
   return missing ? 1 : 0;
+}
+
+// EN: DOC-GLCOHAB -- public single-symbol resolver, POSIX branch. See the doc-comment on the
+//     declaration (gl_loader.h) for the full contract; this is a one-line delegation to the
+//     exact glintfx_resolve_symbol() the batch loader above uses (glX -> EGL -> dlsym), plus
+//     the null/empty `name` guard that resolver itself never needed (its only caller until now
+//     was the fixed internal symbol table, which never passes NULL). NULL-safe before
+//     glx_gl_load() has ever run too: glintfx_glx_get_proc_address/glintfx_egl_get_proc_address/
+//     glintfx_gl_lib_handle are all zero-initialised statics until glx_gl_load() populates them,
+//     so glintfx_resolve_symbol() itself falls through every branch and returns NULL --
+//     documented fail-high, not a crash.
+// PT: DOC-GLCOHAB -- resolvedor público de símbolo único, ramo POSIX. Ver o doc-comment da
+//     declaração (gl_loader.h) pro contrato completo; isto é uma delegação de uma linha pro
+//     mesmo glintfx_resolve_symbol() que o loader em lote acima usa (glX -> EGL -> dlsym), mais
+//     a guarda de `name` nulo/vazio que aquele resolver nunca precisou por conta própria (seu
+//     único chamador até agora era a tabela interna fixa de símbolos, que nunca passa NULL).
+//     Seguro a NULL mesmo antes do glx_gl_load() ter rodado alguma vez:
+//     glintfx_glx_get_proc_address/glintfx_egl_get_proc_address/glintfx_gl_lib_handle são todos
+//     estáticos zero-inicializados até o glx_gl_load() populá-los, então o próprio
+//     glintfx_resolve_symbol() cai por todo ramo e retorna NULL -- fail-high documentado, não um
+//     crash.
+void* glx_gl_get_proc_address(const char* name) {
+  if (!name || !name[0]) return NULL;
+  return glintfx_resolve_symbol(name);
 }
 #endif // _WIN32
 

@@ -24,12 +24,17 @@
 //     independência do i18n/audio, porém Linux-only por natureza); draw2d.hpp é incluído quando
 //     GLINTFX_MODULE_DRAW2D está habilitado (padrão ON, átomo "draw2d" do ADR-0017, fatia
 //     D2D-1B -- depende de core + a costura interna de decode de imagem + o gl-loader interno;
-//     NÃO de ui/fx/window, mesmo padrão de independência do i18n/audio/gamepad acima).
+//     NÃO de ui/fx/window, mesmo padrão de independência do i18n/audio/gamepad acima); gl_proc.hpp
+//     (DOC-GLCOHAB) é incluído no MESMO bloco `#if GLINTFX_BACKEND_GLFW` do app.hpp --
+//     glintfx::gl_proc_address() resolve símbolos contra o contexto GL que o glintfx::App possui,
+//     então não tem sentido num build embed-only (um host UiLayer já é dono do próprio
+//     contexto GL/loader).
 #pragma once
 #include <glintfx/config.hpp>
 #include <glintfx/version.hpp>
 #if GLINTFX_BACKEND_GLFW
 #include <glintfx/app.hpp>
+#include <glintfx/gl_proc.hpp>
 #endif
 #include <glintfx/ui_layer.hpp>
 #if GLINTFX_MODULE_I18N

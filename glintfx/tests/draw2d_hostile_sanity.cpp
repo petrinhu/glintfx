@@ -733,6 +733,24 @@ int main() {
     check(!t5.ok(),
           "create_texture_hostile: w*h*bytes_per_pixel over the 256 MiB cap rejected "
           "before ever reading the (far too small) pixel buffer");
+    // D2D-R8CAP: `t5` above only exercised the cap with `bytes_per_pixel == 4` (Rgba8) -- the
+    // R8 arm of the `switch` (bytes_per_pixel == 1) is a SEPARATE mutation target and needs its
+    // own hostile corpus entry, proportionally LARGER (w*h, not w*h*4) to cross the SAME 256
+    // MiB byte-count cap. 20000x20000 R8 = 400,000,000 bytes (~400 MB nominal, safely small --
+    // same "kept small-but-over-cap" reasoning as t5's own comment above: several concurrent
+    // build agents share this machine).
+    Texture2d t6 = d2d.create_texture(px_rgba, 20000, 20000, glintfx::Draw2d::PixelFormat::R8);
+    check(!t6.ok(),
+          "create_texture_hostile: w*h*bytes_per_pixel over the 256 MiB cap rejected for R8 too "
+          "(bytes_per_pixel==1, a SEPARATE switch arm from t5's Rgba8 case)");
+
+    // D2D-R8CAP -- `t6` above does NOT by itself discriminate a mutation that changes ONLY R8's
+    // `bytes_per_pixel` (1 -> some other value): at 20000x20000, byte_count is over the 256 MiB
+    // cap at bytes_per_pixel==1 (400,000,000 bytes) AND at ==4 (1,600,000,000 bytes) -- both
+    // reject, so a mutant that swaps the multiplier is INVISIBLE at that size (measured: this
+    // exact mutation -- `bytes_per_pixel = 4;` in the `PixelFormat::R8` arm, draw2d.cpp -- left
+    // the suite green with only `t6` in place). The dedicated straddle-zone case that DOES catch
+    // it is `t7`, its own block right after this one (`create_texture_r8cap_boundary`).
     check(d2d.ok(), "create_texture_hostile: d2d survives the whole hostile corpus");
 
     Texture2d real = d2d.create_texture(px_rgba, 1, 1, glintfx::Draw2d::PixelFormat::Rgba8);
@@ -742,6 +760,36 @@ int main() {
     check(!real.ok(),
           "create_texture_hostile: destroy_texture() on a create_texture() handle "
           "zeroes it like any other (D7 equivalence)");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // D2D-R8CAP -- the GREY-ZONE boundary the `t5`/`t6` shape above CANNOT catch. A mutation that
+  // swaps R8's own `bytes_per_pixel` (1) for a stray `4` makes the cap MORE conservative, never
+  // less (D2D-R8CAP's own review finding) -- so a dimension chosen to be "way over cap either
+  // way" (like `t6` above) rejects identically under BOTH the correct and the mutated
+  // arithmetic, and the mutation survives invisibly. The only shape that can distinguish them is
+  // a pixel count strictly between `cap/4` (67,108,864) and `cap` (268,435,456): CORRECT code
+  // (1 B/px) must ACCEPT it; MUTATED code (wrongly reading 4 B/px) computes 4x the true byte
+  // count and REJECTS it instead. 10000x10000 = 100,000,000 px sits inside that window, and
+  // `10000 <= GL_MAX_TEXTURE_SIZE` (confirmed 16384 under this Xvfb/llvmpipe host, well above
+  // the ~8192-16384 range this window's own side length needs -- see this file's own top comment
+  // on why this suite avoids GL-implementation-defined limits elsewhere; this ONE case needs a
+  // REAL GL upload to prove the ACCEPT half, so it is unavoidable here). Needs a REAL 100 MB
+  // buffer (a tiny dummy pointer, as `t5`/`t6` use, would make the ACCEPT case read out of
+  // bounds during the real GL upload) -- allocated once, filled with a fixed byte, safe on a
+  // machine with several concurrent build agents (single ~100 MB allocation, well under any
+  // memory pressure margin).
+  // -------------------------------------------------------------------------------------------
+  {
+    constexpr int kSide = 10000; // 100,000,000 px: cap/4 (67,108,864) < px_count <= cap (268,435,456).
+    std::vector<unsigned char> big_r8(static_cast<std::size_t>(kSide) * kSide, 0x80);
+    Texture2d t7 = d2d.create_texture(big_r8.data(), kSide, kSide, glintfx::Draw2d::PixelFormat::R8);
+    check(t7.ok() && t7.width() == kSide && t7.height() == kSide,
+          "create_texture_r8cap_boundary: a 100M-pixel R8 buffer (100 MB, under the 256 MiB cap "
+          "at the correct 1 byte/pixel) is ACCEPTED -- this is the case a bytes_per_pixel 1->4 "
+          "mutation in the R8 switch arm would wrongly reject (400 MB nominal > cap)");
+    d2d.destroy_texture(t7);
+    check(d2d.ok(), "create_texture_r8cap_boundary: d2d survives the 100 MB R8 boundary case");
   }
 
   // -------------------------------------------------------------------------------------------

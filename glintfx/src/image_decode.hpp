@@ -326,4 +326,63 @@ inline ContentBbox compute_content_bbox(const unsigned char* rgba, int w, int h)
   return out;
 }
 
+// EN: IMG-DECODE -- straight-alpha sibling of `decode_premultiplied_rgba()` above (`:150`),
+//     added at the END of this file so its line number stays put (that line is cited verbatim
+//     by `docs/draw2d.md` twice AND by this file's own D2D-TEXPIXELS comment above). Guard order
+//     and stb-decode call are BYTE-FOR-BYTE the same as `decode_premultiplied_rgba()` -- only
+//     the final loop differs: this one COPIES stb's decoded buffer into the owned `rgba` vector
+//     verbatim, with NO premultiply pass. Exists because `glintfx/include/glintfx/image.hpp`
+//     (IMG-DECODE, public) needs to hand a caller straight (non-premultiplied) alpha -- the
+//     honest default for a general "give me the pixels" API and, not by accident, the EXACT
+//     input `Draw2d::create_texture(..., PixelFormat::Rgba8)` expects (see that public header's
+//     own top comment for the full "why straight, not premultiplied" rationale) --
+//     `decode_premultiplied_rgba()` itself stays BYTE-FOR-BYTE UNTOUCHED (same "pure ADDITION,
+//     not a refactor" discipline the D2D-TEXPIXELS comment above already established for this
+//     file): the two decode paths are independently written, pinned to decode identically
+//     (modulo the premultiply step) by `image_decode_sanity.cpp`'s own equivalence test.
+// PT: IMG-DECODE -- irmã alpha-straight do `decode_premultiplied_rgba()` acima (`:150`),
+//     somada no FIM deste arquivo pra que o número de linha dela fique parado (aquela linha é
+//     citada ao pé da letra pelo `docs/draw2d.md` duas vezes E pelo próprio comentário
+//     D2D-TEXPIXELS deste arquivo acima). Ordem de guarda e a chamada de decode do stb são
+//     BYTE-A-BYTE as mesmas do `decode_premultiplied_rgba()` -- só o loop final difere: este
+//     COPIA o buffer decodificado do stb pro vector `rgba` próprio ao pé da letra, SEM passo de
+//     premultiply. Existe porque `glintfx/include/glintfx/image.hpp` (IMG-DECODE, público)
+//     precisa entregar ao chamador alpha straight (não-premultiplicado) -- o default honesto
+//     pra uma API geral de "me dê os pixels" e, não por acaso, o INPUT EXATO que
+//     `Draw2d::create_texture(..., PixelFormat::Rgba8)` espera (ver o próprio comentário do topo
+//     daquele header público pro racional completo de "por que straight, não premultiplicado")
+//     -- o próprio `decode_premultiplied_rgba()` fica BYTE-A-BYTE INTOCADO (mesma disciplina
+//     "ADIÇÃO pura, não um refactor" que o próprio comentário D2D-TEXPIXELS deste arquivo já
+//     estabeleceu): os dois caminhos de decode são escritos de forma independente, fixados pra
+//     decodificar de forma idêntica (módulo o passo de premultiply) pelo próprio teste de
+//     equivalência do `image_decode_sanity.cpp`.
+inline DecodedImage decode_straight_rgba(const unsigned char* data, std::size_t len) {
+  DecodedImage out;
+
+  if (data == nullptr || len == 0)
+    return out; // EN: ok stays false. PT: ok permanece false.
+
+  if (len > kMaxImageDecodeBytes)
+    return out; // EN: rejected before ever calling stb. PT: rejeitado antes de chamar o stb.
+
+  int w = 0, h = 0, n = 0;
+  std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
+      stbi_load_from_memory(data, static_cast<int>(len), &w, &h, &n, 4),
+      &stbi_image_free);
+  if (!px || w <= 0 || h <= 0)
+    return out; // EN: unknown format / decode error. PT: formato desconhecido / erro de decode.
+
+  // EN: Straight copy -- no premultiply pass, the ONE difference from
+  //     decode_premultiplied_rgba()'s own final loop above.
+  // PT: Cópia straight -- sem passo de premultiply, a ÚNICA diferença do próprio loop final de
+  //     decode_premultiplied_rgba() acima.
+  const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+  out.rgba.assign(px.get(), px.get() + pixel_count * 4u);
+
+  out.ok = true;
+  out.width = w;
+  out.height = h;
+  return out;
+}
+
 } // namespace glintfx

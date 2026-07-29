@@ -1037,9 +1037,35 @@ glintfx_instrument_coverage(glintfx_core)
 add_library(glintfx::core ALIAS glintfx_core)
 
 # --- glintfx_image (GLINTFX_MODULE_IMAGE forced ON in A0, see option() above) ---
-add_library(glintfx_image OBJECT src/stb_image_impl.cpp)
+# EN: IMG-DECODE (2026-07-29) -- src/image.cpp (the public glintfx/image.hpp decode pair,
+#     decode_image_file()/decode_image_memory()) joins stb_image_impl.cpp in this SAME
+#     unconditional OBJECT library on purpose: it is the module's other consumer of the vendored
+#     stb_image decoder (via the private src/image_decode.hpp seam it #includes, same as
+#     draw2d.cpp/render_gl3.cpp already do), and GLINTFX_MODULE_IMAGE is forced ON (never
+#     OFF-able today, see this option's own FATAL_ERROR guard above) -- there is no module gate
+#     to give it a separate target for. Needs the PUBLIC glintfx include dirs (new: this target's
+#     own compile did not need them before, stb_image_impl.cpp has zero glintfx/ include) to
+#     resolve its own #include "glintfx/image.hpp"; the PRIVATE third_party/stb dir already set
+#     below is inherited automatically (image_decode.hpp's own #include "stb_image.h" needs it,
+#     same reason stb_image_impl.cpp needed it before this addition).
+# PT: IMG-DECODE (2026-07-29) -- src/image.cpp (o par público de decode de glintfx/image.hpp,
+#     decode_image_file()/decode_image_memory()) entra nesta MESMA biblioteca OBJECT
+#     incondicional de propósito: é o outro consumidor do módulo do decoder stb_image
+#     vendorizado (via a costura privada src/image_decode.hpp que ele inclui, igual ao que
+#     draw2d.cpp/render_gl3.cpp já fazem), e GLINTFX_MODULE_IMAGE fica forçada ON (nunca
+#     desligável hoje, ver a própria guarda FATAL_ERROR desta opção acima) -- não há gate de
+#     módulo pra justificar um alvo separado. Precisa dos include dirs PÚBLICOS da glintfx (novo:
+#     a própria compilação deste alvo não precisava deles antes, stb_image_impl.cpp tem zero
+#     include de glintfx/) pra resolver o próprio #include "glintfx/image.hpp"; o dir PRIVATE
+#     third_party/stb já setado abaixo é herdado automaticamente (o próprio #include
+#     "stb_image.h" de image_decode.hpp precisa dele, mesmo motivo que stb_image_impl.cpp
+#     precisava antes desta adição).
+add_library(glintfx_image OBJECT src/stb_image_impl.cpp src/image.cpp)
 target_include_directories(glintfx_image PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+target_include_directories(glintfx_image PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 target_compile_options(glintfx_image PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
 glintfx_instrument_coverage(glintfx_image)
 add_library(glintfx::image ALIAS glintfx_image)

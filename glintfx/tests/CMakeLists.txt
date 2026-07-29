@@ -954,6 +954,34 @@ target_link_libraries(image_decode_sanity PRIVATE glintfx)
 add_test(NAME image_decode_sanity COMMAND image_decode_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_sanity (IMG-DECODE, onda W19, 2026-07-29) -- PURE unit test for the PUBLIC
+#     glintfx/image.hpp decode pair (decode_image_file()/decode_image_memory()), the sibling of
+#     image_decode_sanity.cpp right above but exercising the PUBLIC header instead of the private
+#     src/image_decode.hpp seam -- no third_party/stb include needed here (this test never
+#     touches stb_image.h directly, only the public API). Registered UNCONDITIONALLY, same
+#     "no display to isolate here" reasoning -- runs in BOTH build configurations. Reuses the
+#     SAME two fixtures configured just above (no second configure_file() call -- both test
+#     executables share CMAKE_CURRENT_BINARY_DIR as their default ctest WORKING_DIRECTORY). See
+#     the test file's own header for the full oracle: the straight-alpha contract proven BY VALUE
+#     against the SAME PNG fixture image_decode_sanity.cpp decodes premultiplied, plus a hostile
+#     corpus that mirrors that file's own (re-derived, not shared -- same convention) with the
+#     two failure modes unique to decode_image_file()'s own file-I/O step.
+# PT: image_sanity (IMG-DECODE, onda W19, 2026-07-29) -- teste unit PURO para o par PÚBLICO de
+#     decode de glintfx/image.hpp (decode_image_file()/decode_image_memory()), irmão do
+#     image_decode_sanity.cpp logo acima mas exercitando o header PÚBLICO em vez da costura
+#     privada src/image_decode.hpp -- nenhum include de third_party/stb necessário aqui (este
+#     teste nunca toca stb_image.h diretamente, só a API pública). Registrado
+#     INCONDICIONALMENTE, mesma racional "nada relacionado a display pra isolar aqui" -- roda nas
+#     DUAS configurações de build. Reusa as MESMAS duas fixtures configuradas logo acima (nenhuma
+#     segunda chamada configure_file() -- os dois executáveis de teste compartilham
+#     CMAKE_CURRENT_BINARY_DIR como o próprio WORKING_DIRECTORY padrão do ctest). Ver o próprio
+#     cabeçalho de arquivo do teste pro oráculo completo.
+# ---------------------------------------------------------------------------
+add_executable(image_sanity image_sanity.cpp)
+target_link_libraries(image_sanity PRIVATE glintfx)
+add_test(NAME image_sanity COMMAND image_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
 #     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
 #     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered

@@ -429,6 +429,49 @@ computed for a `create_texture()`-made handle (D29's cache is populated only ins
 handle is a legal, documented `found == false`, indistinguishable from a fully-transparent
 texture at that one call.
 
+### Decoding images to pixels (IMG-DECODE)
+
+`create_texture()` above takes pixels a caller already has and makes a GPU texture. Its missing
+other half lives in a SEPARATE public header, `<glintfx/image.hpp>` (a free function pair, not a
+`Draw2d` method -- decoding bytes into pixels needs no GL context and no `init()`/`shutdown()`
+lifecycle):
+
+```cpp
+#include <glintfx/image.hpp>
+
+glintfx::DecodedImagePixels img = glintfx::decode_image_file("atlas.png");
+if (img.ok) {
+  // img.pixels is img.width * img.height * 4 bytes, RGBA8, STRAIGHT alpha -- feed it straight
+  // into create_texture() (the same input contract, no conversion needed):
+  glintfx::Texture2d tex =
+      draw2d.create_texture(img.pixels.data(), img.width, img.height,
+                             glintfx::Draw2d::PixelFormat::Rgba8);
+}
+```
+
+`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:184`) reads a file from
+disk; `decode_image_memory(const unsigned char* data, std::size_t len)`
+(`glintfx/include/glintfx/image.hpp:199`) decodes an already-in-memory buffer (the former reads
+the file, then calls the latter). Both return `DecodedImagePixels{ok, width, height, pixels}`
+(`glintfx/include/glintfx/image.hpp:164`) -- an OWNED `std::vector<unsigned char>`, RAII, no raw
+pointer or manual free ever crosses the boundary.
+
+**Alpha convention, a DELIBERATE divergence from `load_texture()`'s own internal decode:**
+`load_texture()` premultiplies on decode (its own GL upload assumes premultiplied input for its
+`GL_ONE, GL_ONE_MINUS_SRC_ALPHA` blend mode). `decode_image_file()`/`decode_image_memory()`
+return STRAIGHT (non-premultiplied) alpha instead -- the honest default for a general
+"give me the pixels" call (measuring content, inspecting a channel, compositing with a different
+blend convention) and, not by accident, the EXACT input `create_texture(...,
+PixelFormat::Rgba8)` expects; feeding this pair's own output straight into that call needs no
+conversion.
+
+Fail-high, same shape as `create_texture()`/`load_texture()`: `ok == false` is the only failure
+signal (`width`/`height`/`pixels` left default-constructed) on a null path/buffer, a file that
+cannot be opened/sized/fully read, a 0-byte or over-`kMaxImageDecodeBytes` (256 MiB) file/buffer
+(rejected BEFORE ever allocating a read buffer for it), or an unknown/corrupt format -- never a
+crash. Neither function can log (no `Draw2d`/`Impl` instance exists to log through here) -- a
+caller that wants a diagnostic decides what to log around the call.
+
 ### Text (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
 
 Draw2D renders UTF-8 text through the **sovereign C font core**
@@ -1419,6 +1462,50 @@ mipmap, sem atualização parcial/estilo `glTexSubImage2D` depois da criação;
 do D29 é populado só dentro do `load_texture()`, sobre pixels decodificados já em mãos ali de
 graça) -- chamá-lo num handle desses é um `found == false` legal e documentado, indistinguível
 de uma textura totalmente transparente naquela chamada.
+
+### Decodificando imagens em pixels (IMG-DECODE)
+
+O `create_texture()` acima pega pixels que o chamador já tem e faz uma textura GPU. A metade que
+faltava a ele mora num header público SEPARADO, `<glintfx/image.hpp>` (um par de free functions,
+não um método de `Draw2d` -- decodificar bytes em pixels não precisa de contexto GL nem de ciclo
+de vida `init()`/`shutdown()`):
+
+```cpp
+#include <glintfx/image.hpp>
+
+glintfx::DecodedImagePixels img = glintfx::decode_image_file("atlas.png");
+if (img.ok) {
+  // img.pixels tem img.width * img.height * 4 bytes, RGBA8, alpha STRAIGHT -- entregue direto
+  // ao create_texture() (o mesmo contrato de input, sem conversão necessária):
+  glintfx::Texture2d tex =
+      draw2d.create_texture(img.pixels.data(), img.width, img.height,
+                             glintfx::Draw2d::PixelFormat::Rgba8);
+}
+```
+
+`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:184`) lê um arquivo do
+disco; `decode_image_memory(const unsigned char* data, std::size_t len)`
+(`glintfx/include/glintfx/image.hpp:199`) decodifica um buffer já em memória (o primeiro lê o
+arquivo e depois chama o segundo). As duas devolvem `DecodedImagePixels{ok, width, height,
+pixels}` (`glintfx/include/glintfx/image.hpp:164`) -- um `std::vector<unsigned char>` de posse
+própria, RAII, nenhum ponteiro cru ou free manual cruza a fronteira.
+
+**Convenção de alpha, uma divergência DELIBERADA do próprio decode interno do
+`load_texture()`:** o `load_texture()` premultiplica no decode (o próprio upload GL dele assume
+input premultiplicado pro modo de blend `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`).
+`decode_image_file()`/`decode_image_memory()` devolvem alpha STRAIGHT (não-premultiplicado) em
+vez disso -- o default honesto pra uma chamada geral de "me dê os pixels" (medir conteúdo,
+inspecionar um canal, compor com uma convenção de blend diferente) e, não por acaso, o input
+EXATO que `create_texture(..., PixelFormat::Rgba8)` espera; alimentar a própria saída deste par
+direto naquela chamada não precisa de conversão nenhuma.
+
+Fail-high, mesma forma do `create_texture()`/`load_texture()`: `ok == false` é o único sinal de
+falha (`width`/`height`/`pixels` ficam nos próprios valores default-construídos) num path/buffer
+nulo, num arquivo que não pode ser aberto/medido/lido por completo, num arquivo/buffer de 0
+bytes ou acima de `kMaxImageDecodeBytes` (256 MiB) (rejeitado ANTES de sequer alocar um buffer de
+leitura pra ele), ou num formato desconhecido/corrompido -- nunca um crash. Nenhuma das duas
+funções pode logar (não existe instância `Draw2d`/`Impl` pra logar através aqui) -- um chamador
+que quer um diagnóstico decide o que logar em volta da chamada.
 
 ### Texto (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
 

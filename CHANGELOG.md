@@ -12,6 +12,44 @@
 
 ### Added / Adicionado
 
+- **EN:** **`IMG-DECODE`** (onda W19, consumer-reported by GusWorld -- 6 direct `stbi_load()`
+  call sites in a layer of its own that, by its own layering contract, is not supposed to touch
+  a decode library at all): a new public header, `<glintfx/image.hpp>`, exposes
+  `decode_image_file(const char* path)` / `decode_image_memory(const unsigned char* data,
+  std::size_t len)` -- decode an encoded image (PNG/JPG/TGA) into CPU-side pixels WITHOUT
+  creating any GPU resource, no GL context required. `Draw2d::create_texture()`'s (D2D-TEXPIXELS)
+  missing other half: that call takes pixels a caller already has and makes a GPU texture; this
+  pair takes an encoded file/buffer and hands back the pixels. Returns an owned
+  `DecodedImagePixels{ok, width, height, pixels}` (`std::vector<unsigned char>`, RAII, no raw
+  pointer/manual free ever crosses the boundary). Pixels are STRAIGHT (non-premultiplied) alpha
+  -- a deliberate divergence from the private decode seam `load_texture()` itself uses
+  internally (which premultiplies for its own GL blend mode) -- matching, not by accident, the
+  exact input `create_texture(..., PixelFormat::Rgba8)` expects: feeding this pair's own output
+  straight into that call needs no conversion. Fail-high on a null path/buffer, a 0-byte or
+  over-256-MiB file/buffer (the same `kMaxImageDecodeBytes` cap `load_texture()`/
+  `create_texture()` already enforce), or an unknown/corrupt format -- `ok == false` is the only
+  signal, never a crash. Free functions, not `Draw2d` methods: no GL context, no `init()`/
+  `shutdown()` lifecycle needed to call them.
+- **PT:** **`IMG-DECODE`** (onda W19, reportado pelo consumidor GusWorld -- 6 sítios de chamada
+  diretos a `stbi_load()` numa camada dele que, pelo próprio contrato de camadas, nem deveria
+  tocar biblioteca de decode nenhuma): um novo header público, `<glintfx/image.hpp>`, expõe
+  `decode_image_file(const char* path)` / `decode_image_memory(const unsigned char* data,
+  std::size_t len)` -- decodifica uma imagem codificada (PNG/JPG/TGA) em pixels do lado da CPU
+  SEM criar recurso de GPU nenhum, sem exigir contexto GL. A metade que faltava ao
+  `Draw2d::create_texture()` (D2D-TEXPIXELS): aquela chamada pega pixels que o chamador já tem e
+  faz uma textura GPU; este par pega um arquivo/buffer codificado e devolve os pixels. Devolve
+  um `DecodedImagePixels{ok, width, height, pixels}` de posse própria (`std::vector<unsigned
+  char>`, RAII, nenhum ponteiro cru/free manual cruza a fronteira). Pixels são alpha STRAIGHT
+  (não-premultiplicado) -- uma divergência deliberada da costura de decode privada que o próprio
+  `load_texture()` usa internamente (que premultiplica pro próprio modo de blend GL dele) --
+  batendo, não por acaso, com o input exato que `create_texture(..., PixelFormat::Rgba8)`
+  espera: alimentar a própria saída deste par direto naquela chamada não precisa de conversão.
+  Fail-high em path/buffer nulo, arquivo/buffer de 0 bytes ou acima de 256 MiB (o mesmo teto
+  `kMaxImageDecodeBytes` que `load_texture()`/`create_texture()` já aplicam), ou formato
+  desconhecido/corrompido -- `ok == false` é o único sinal, nunca um crash. Free functions, não
+  métodos de `Draw2d`: nenhum contexto GL, nenhum ciclo de vida `init()`/`shutdown()` necessário
+  pra chamá-las.
+
 - **EN:** **`D2D-FLUSH`** / **`D2D-TEXPIXELS`** (onda W19, consumer-reported by GusWorld):
   `Draw2d::flush()` forces every draw queued so far in the current bracket to GL WITHOUT closing
   it (`begin()`'d still, its own `end()` still owed) -- lets a host interleave Draw2D

@@ -22,6 +22,7 @@
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/font_face.hpp>
 #include <glintfx/window_mode.hpp>  // EN: window mode (A4-WINMODES, framework-2D). PT: modo de janela (A4-WINMODES, framework-2D).
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 namespace glintfx {
@@ -764,6 +765,18 @@ public:
   //     para a propriedade nomeada).
   bool set_property(const char* id, const char* prop, const char* value) const;
 
+  // EN: Register a font face programmatically (UI-FONTFACE, v0.24.0). Parity with
+  //     UiLayer::load_font_face (same signature/semantics -- see there, and
+  //     glintfx/include/glintfx/font_face.hpp's own header comment, for the full contract
+  //     including the family=nullptr own-vs-FreeType engine-asymmetry). No document/load()
+  //     ordering constraint: font registration is process-wide RmlUi state.
+  // PT: Registra uma face de fonte programaticamente (UI-FONTFACE, v0.24.0). Paridade com
+  //     UiLayer::load_font_face (mesma assinatura/semântica -- ver lá, e o próprio comentário
+  //     de cabeçalho de glintfx/include/glintfx/font_face.hpp, pro contrato completo incluindo
+  //     a assimetria de motor próprio-vs-FreeType do family=nullptr). Sem restrição de ordem
+  //     vs. documento/load(): registro de fonte é estado do RmlUi em nível de processo.
+  bool load_font_face(const FontFaceDesc& desc);
+
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) — parity with UiLayer. Call order: create_data_model
   //     -> bind_* -> load() -> set_*(). Engine enforces the ordering constraint
@@ -859,6 +872,92 @@ public:
   //     onde o back buffer fica indefinido após glfwSwapBuffers.
   //     Retorna true em caso de sucesso.
   bool snapshot(const char* ppm_path);
+
+  // -------------------------------------------------------------------------
+  // EN: Vsync control + monitor refresh-rate query (`WM-VSYNC`, window-modes finish wave,
+  //     consumer-driven -- GusWorld, decision approved by the líder 2026-07-23). App-ONLY: the
+  //     App is the one that owns the window and calls swap() (render()'s doc-comment above,
+  //     "VSYNC HONESTY", documents that glintfx never called `glfwSwapInterval` anywhere before
+  //     this -- these two setters are that runtime control, finally shipped). NOT on UiLayer:
+  //     in embed mode the HOST calls glfwSwapBuffers (or whatever swap primitive it uses), never
+  //     glintfx -- vsync is the host's own call, glintfx has nothing to set an interval ON.
+  // PT: Controle de vsync + consulta de taxa de atualização do monitor (`WM-VSYNC`, onda de
+  //     fechamento de window-modes, consumer-driven -- GusWorld, decisão aprovada pelo líder
+  //     2026-07-23). SÓ-App: o App é quem é dono da janela e chama swap() (o doc-comment de
+  //     render() acima, "VSYNC HONESTY", documenta que a glintfx nunca chamou
+  //     `glfwSwapInterval` em lugar nenhum antes disto -- estes dois setters são esse controle
+  //     em runtime, finalmente entregue). NÃO no UiLayer: em modo embed é o HOST que chama
+  //     glfwSwapBuffers (ou o primitivo de swap que usar), nunca a glintfx -- vsync é chamada do
+  //     próprio host, a glintfx não tem nada pra setar intervalo EM CIMA.
+  // -------------------------------------------------------------------------
+
+  // EN: Set the swap interval directly -- `glfwSwapInterval`'s own primitive, forwarded
+  //     unchanged (see WindowGlfw::set_swap_interval's doc-comment, window_glfw.hpp, for the
+  //     full contract this wraps). `0` = vsync off (unlimited swaps); `1` = sync to the
+  //     monitor's refresh rate (standard vsync); `n>1` = sync to every Nth refresh (half-rate,
+  //     third-rate, ...). Returns `false` (no-op, nothing requested to the driver) when `!ok()`
+  //     or `interval` is negative -- a negative value is GLFW's own signal for adaptive/tearing
+  //     vsync, deliberately OUT of scope here (no arbitrary-cap/adaptive machinery in this
+  //     slice; seed a follow-up if a consumer needs it). `set_vsync(bool)` below is sugar over
+  //     this exact call -- both are exposed because the consumer's request named both forms and
+  //     `n>1` (half-rate) has no boolean equivalent. DRIVER HONESTY: like `set_window_mode()`
+  //     above, this is a REQUEST to the platform driver/compositor, which has final say -- some
+  //     combinations are clamped or ignored outside glintfx's control (documented GLFW/driver
+  //     limitation). ORDER: only ever callable on a constructed App (RAII -- there is no "before
+  //     init()" call site from outside this class); WindowGlfw's own pre-create() guard is
+  //     exercised directly by this method's unit-level test (window_glfw.hpp is private, not
+  //     reachable from a consumer, so this is purely an internal-consistency note, not a
+  //     caller-facing ordering constraint).
+  // PT: Define o intervalo de swap diretamente -- o próprio primitivo do `glfwSwapInterval`,
+  //     repassado sem mudança (ver o doc-comment de WindowGlfw::set_swap_interval,
+  //     window_glfw.hpp, pro contrato completo que isto encapsula). `0` = vsync desligado
+  //     (swaps ilimitados); `1` = sincroniza com a taxa de atualização do monitor (vsync
+  //     padrão); `n>1` = sincroniza a cada N-ésimo refresh (meia-taxa, terça-taxa, ...). Retorna
+  //     `false` (no-op, nada pedido ao driver) quando `!ok()` ou `interval` é negativo -- um
+  //     valor negativo é o próprio sinal do GLFW pra vsync adaptativo/com tearing,
+  //     deliberadamente FORA de escopo aqui (nenhuma máquina de cap-arbitrário/adaptativo nesta
+  //     fatia; semear um desdobramento se um consumidor precisar). `set_vsync(bool)` abaixo é
+  //     açúcar sobre esta mesma chamada -- os dois são expostos porque o pedido do consumidor
+  //     nomeou as duas formas e `n>1` (meia-taxa) não tem equivalente booleano. HONESTIDADE DE
+  //     DRIVER: igual ao `set_window_mode()` acima, isto é um PEDIDO ao driver/compositor da
+  //     plataforma, que tem a palavra final -- algumas combinações são fixadas ou ignoradas fora
+  //     do controle da glintfx (limitação documentada do GLFW/driver). ORDEM: só chamável num
+  //     App já construído (RAII -- não existe call site "antes do init()" de fora desta classe);
+  //     a própria guarda pré-create() do WindowGlfw é exercitada diretamente pelo teste em
+  //     nível-de-unidade deste método (window_glfw.hpp é privado, inalcançável por um
+  //     consumidor, então isto é puramente uma nota de consistência interna, não uma restrição
+  //     de ordem voltada ao chamador).
+  bool set_swap_interval(int interval);
+
+  // EN: Sugar over set_swap_interval() above: `true` -> `set_swap_interval(1)` (standard
+  //     vsync), `false` -> `set_swap_interval(0)` (vsync off). Same return-value contract
+  //     (`false` only when `!ok()` -- a bool argument can never trigger the negative-interval
+  //     rejection set_swap_interval() has).
+  // PT: Açúcar sobre o set_swap_interval() acima: `true` -> `set_swap_interval(1)` (vsync
+  //     padrão), `false` -> `set_swap_interval(0)` (vsync desligado). Mesmo contrato de valor
+  //     de retorno (`false` só quando `!ok()` -- um argumento bool nunca dispara a rejeição de
+  //     intervalo negativo que set_swap_interval() tem).
+  bool set_vsync(bool enabled);
+
+  // EN: Query the refresh rate (Hz) of the monitor the window is CURRENTLY on -- see
+  //     WindowGlfw::get_monitor_refresh_hz's doc-comment (window_glfw.hpp) for the full monitor-
+  //     resolution contract (fullscreen: exact monitor; windowed/maximized: largest-overlap
+  //     heuristic across every connected monitor, distribution-general multi-monitor scope, not
+  //     just the primary). Returns a value `<= 0` when `!ok()` or the refresh rate could not be
+  //     determined -- DOCUMENTED INDETERMINATE, not an error: headless (Xvfb, no real display)
+  //     is the expected case that hits this path, not a bug. NOT an echo of
+  //     set_swap_interval()'s own request -- this reads the monitor's own reported mode,
+  //     independent of whether vsync is currently on, off, or was never set at all.
+  // PT: Consulta a taxa de atualização (Hz) do monitor em que a janela está ATUALMENTE -- ver o
+  //     doc-comment de WindowGlfw::get_monitor_refresh_hz (window_glfw.hpp) pro contrato
+  //     completo de resolução de monitor (fullscreen: monitor exato; windowed/maximized:
+  //     heurística de maior overlap através de todo monitor conectado, escopo multi-monitor de
+  //     distribuição geral, não só o primário). Retorna um valor `<= 0` quando `!ok()` ou a
+  //     taxa não pôde ser determinada -- INDETERMINADO DOCUMENTADO, não um erro: headless
+  //     (Xvfb, sem display real) é o caso esperado que bate neste caminho, não um bug. NÃO é um
+  //     eco do próprio pedido de set_swap_interval() -- isto lê o modo próprio reportado pelo
+  //     monitor, independente de vsync estar ligado, desligado, ou nunca ter sido setado.
+  int get_monitor_refresh_hz() const;
 
 private:
   struct Impl;

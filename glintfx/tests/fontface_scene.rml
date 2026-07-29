@@ -1,0 +1,50 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: fontface_scene.rml -- fixture for tests/fontface_load_sanity.cpp (UI-FONTFACE). Deliberately
+      has NO `@font-face` block: every family this scene ever renders with is registered
+      PROGRAMMATICALLY, via glintfx::UiLayer::load_font_face(), which is the exact thing this
+      fixture exists to exercise (the point of the test is that a family becomes usable WITHOUT
+      authoring an `@font-face` block in the document at all).
+      "#txt" is `display: inline-block`, zero padding/border/margin, `white-space: nowrap` --
+      same get_element_box()-oracle convention every other fonteng_*_scene.rml in this suite
+      uses. `font-family` and `color`/text content are left UNSET here; the test sets both
+      dynamically per probe via UiLayer::set_property(id, "font-family", ...) /
+      UiLayer::set_text(id, ...), so ONE static document serves every session in the test.
+  PT: fontface_scene.rml -- fixture pra tests/fontface_load_sanity.cpp (UI-FONTFACE). Deliberadamente
+      NÃO tem bloco `@font-face` nenhum: toda família que esta cena algum dia renderiza é
+      registrada PROGRAMATICAMENTE, via glintfx::UiLayer::load_font_face(), que é exatamente o
+      que esta fixture existe pra exercitar (o ponto do teste é que uma família fica usável SEM
+      autorar um bloco `@font-face` no documento nenhum).
+      "#txt" é `display: inline-block`, padding/borda/margem zero, `white-space: nowrap` --
+      mesma convenção de oráculo via get_element_box() que todo outro fonteng_*_scene.rml desta
+      suíte usa. `font-family` e `color`/conteúdo de texto ficam SEM DEFINIR aqui; o teste define
+      os dois dinamicamente por sonda via UiLayer::set_property(id, "font-family", ...) /
+      UiLayer::set_text(id, ...), então UM documento estático serve toda sessão do teste.
+-->
+<rml>
+<head>
+  <title>fontface_load_sanity</title>
+  <style>
+    body {
+      background-color: #000000;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+    #txt {
+      display: inline-block;
+      padding: 0;
+      margin: 0;
+      white-space: nowrap;
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      font-size: 40px;
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <div id="txt"></div>
+</body>
+</rml>

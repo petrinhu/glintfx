@@ -171,15 +171,27 @@ knowing before you decide when and how often to call it.
 | `App::set_window_mode(WindowMode mode) -> bool` | Runtime switch. `false` (no-op) when `!ok()` or `mode` is invalid; `true` when the request was issued to the window system (the WM/compositor has final say -- query `window_mode()` for the live result). Re-requesting the current mode is a safe no-op returning `true`. |
 | `App::window_mode() const -> WindowMode` | Live, derived from the window system, not an echo of the last request. `Windowed` when `!ok()`. |
 | `App::get_window_size(int& w, int& h) const -> void` | Current framebuffer size in physical pixels -- the same size `render()`/`snapshot()` compose at. `w = h = 0` when `!ok()`. |
+| `App::set_swap_interval(int interval) -> bool` (`WM-VSYNC`, window-modes finish wave) | `glfwSwapInterval`'s own primitive, forwarded unchanged. `0` = vsync off, `1` = standard vsync, `n>1` = every Nth refresh. `false` (no-op) when `!ok()` or `interval < 0` (adaptive/tearing vsync is deliberately out of scope -- see below). A REQUEST to the driver/compositor, same "final say" honesty as `set_window_mode()`. Full contract: `glintfx/include/glintfx/app.hpp`. |
+| `App::set_vsync(bool enabled) -> bool` (`WM-VSYNC`) | Sugar over `set_swap_interval`: `true` -> `set_swap_interval(1)`, `false` -> `set_swap_interval(0)`. |
+| `App::get_monitor_refresh_hz() const -> int` (`WM-VSYNC`) | Refresh rate (Hz) of the monitor the window is currently on -- fullscreen uses the exact monitor, windowed/maximized uses a largest-overlap heuristic across every connected monitor (multi-monitor, not just primary). `<= 0` when `!ok()` or indeterminate (documented, not an error -- the expected headless/Xvfb result). Not an echo of `set_swap_interval()`'s own request. |
 
 ### Out of scope (this slice)
 
 - **Multi-monitor / `monitor_index`.** Primary monitor only; exposing an index without a
   monitor-enumeration API would be a half-API. A future slice if a real consumer needs picking a
-  specific display.
+  specific display. (`get_monitor_refresh_hz()`'s own windowed/maximized monitor RESOLUTION is
+  already multi-monitor-aware -- see the API reference row above -- this bullet is about a
+  general monitor-ENUMERATION/selection API, still absent.)
 - **`resizable`, borderless-windowed (a non-fullscreen undecorated window), min/max window size,
-  a mode-change callback, vsync/refresh-rate control.** None has a confirmed consumer yet; each
-  would be new public surface on its own.
+  a mode-change callback.** None has a confirmed consumer yet; each would be new public surface
+  on its own.
+- **Vsync/refresh-rate control** shipped as `WM-VSYNC` (`App::set_swap_interval`/`set_vsync`/
+  `get_monitor_refresh_hz`, table above) -- removed from this list, no longer out of scope.
+  **Adaptive/tearing vsync** (a negative `glfwSwapInterval` argument,
+  `*_EXT_swap_control_tear`) is a NARROWER carve-out that remains out of scope: `set_swap_interval`
+  rejects negative values outright (no arbitrary-cap/adaptive machinery in this slice, per the
+  same "no arbitrary software cap" call the líder made when this item was scoped -- seed a
+  follow-up if a consumer asks).
 - **Mouse-wheel forwarding in `App`.** A separate, pre-existing gap (`App` has no wheel path at
   all, `UiLayer` has had it since v0.4.0) -- unrelated to window modes, not touched by this slice.
 
@@ -359,15 +371,28 @@ conhecer antes de decidir quando e com que frequência chamá-lo.
 | `App::set_window_mode(WindowMode mode) -> bool` | Troca em runtime. `false` (no-op) quando `!ok()` ou `mode` inválido; `true` quando o pedido foi emitido pro window system (o WM/compositor tem a palavra final -- consulte `window_mode()` pro resultado vivo). Repedir o modo corrente é um no-op seguro retornando `true`. |
 | `App::window_mode() const -> WindowMode` | Vivo, derivado do window system, não um eco do último pedido. `Windowed` quando `!ok()`. |
 | `App::get_window_size(int& w, int& h) const -> void` | Tamanho corrente do framebuffer em pixels físicos -- o mesmo tamanho em que `render()`/`snapshot()` compõem. `w = h = 0` quando `!ok()`. |
+| `App::set_swap_interval(int interval) -> bool` (`WM-VSYNC`, onda de fechamento de window-modes) | O próprio primitivo do `glfwSwapInterval`, repassado sem mudança. `0` = vsync desligado, `1` = vsync padrão, `n>1` = a cada N-ésimo refresh. `false` (no-op) quando `!ok()` ou `interval < 0` (vsync adaptativo/com tearing é deliberadamente fora de escopo -- ver abaixo). Um PEDIDO ao driver/compositor, mesma honestidade de "palavra final" do `set_window_mode()`. Contrato completo: `glintfx/include/glintfx/app.hpp`. |
+| `App::set_vsync(bool enabled) -> bool` (`WM-VSYNC`) | Açúcar sobre `set_swap_interval`: `true` -> `set_swap_interval(1)`, `false` -> `set_swap_interval(0)`. |
+| `App::get_monitor_refresh_hz() const -> int` (`WM-VSYNC`) | Taxa de atualização (Hz) do monitor em que a janela está atualmente -- fullscreen usa o monitor exato, windowed/maximized usa uma heurística de maior overlap através de todo monitor conectado (multi-monitor, não só o primário). `<= 0` quando `!ok()` ou indeterminado (documentado, não um erro -- o resultado esperado sob headless/Xvfb). Não é um eco do próprio pedido de `set_swap_interval()`. |
 
 ### Fora de escopo (nesta fatia)
 
 - **Multi-monitor / `monitor_index`.** Só monitor primário; expor um índice sem API de
   enumeração de monitores seria meia-API. Fatia futura se um consumidor real precisar escolher um
-  display específico.
+  display específico. (a própria RESOLUÇÃO de monitor windowed/maximized do
+  `get_monitor_refresh_hz()` já é multi-monitor-aware -- ver a linha da referência de API acima
+  -- este bullet é sobre uma API geral de ENUMERAÇÃO/seleção de monitor, ainda ausente.)
 - **`resizable`, borderless-windowed (janela sem borda NÃO-fullscreen), tamanho mín/máx de
-  janela, callback de mudança de modo, controle de vsync/refresh-rate.** Nenhum tem consumidor
-  confirmado ainda; cada um seria superfície pública nova por conta própria.
+  janela, callback de mudança de modo.** Nenhum tem consumidor confirmado ainda; cada um seria
+  superfície pública nova por conta própria.
+- **Controle de vsync/refresh-rate** entregue como `WM-VSYNC` (`App::set_swap_interval`/
+  `set_vsync`/`get_monitor_refresh_hz`, tabela acima) -- removido desta lista, não mais fora de
+  escopo. **Vsync adaptativo/com tearing** (argumento negativo de `glfwSwapInterval`,
+  `*_EXT_swap_control_tear`) é um recorte MAIS ESTREITO que permanece fora de escopo:
+  `set_swap_interval` rejeita valores negativos de cara (nenhuma máquina de
+  cap-arbitrário/adaptativo nesta fatia, seguindo a mesma decisão de "sem cap arbitrário por
+  software" que o líder tomou quando este item foi escopado -- semear um desdobramento se um
+  consumidor pedir).
 - **Encaminhamento de roda do mouse no `App`.** Uma lacuna separada e pré-existente (`App` não
   tem NENHUM caminho de wheel; `UiLayer` tem desde a v0.4.0) -- não relacionada a modos de janela,
   não tocada por esta fatia.

@@ -24,6 +24,7 @@ class Element;
 #include <functional>
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/font_face.hpp>
 
 namespace glintfx {
 
@@ -942,6 +943,74 @@ public:
   //     set_text/DataBinder::set_string) e encaminhado como está -- o próprio parser do RmlUi é
   //     a autoridade sobre se um valor vazio é aceitável para a propriedade nomeada.
   bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // EN: Register a font face programmatically (UI-FONTFACE, v0.24.0) -- the ONE place in
+  //     glintfx that ever calls the free function `Rml::LoadFontFace` (confirmed by grep before
+  //     this change: 0 call sites outside font_engine_own.cpp, which is an ENGINE
+  //     implementation of the interface those free functions dispatch to, not a caller of
+  //     them). Selects one of the 3 vendored `Rml::LoadFontFace` overloads
+  //     (Include/RmlUi/Core/Core.h in the pinned RmlUi source) purely from `desc.family`:
+  //       - `desc.family` null/empty -> the FAMILY-LESS overload,
+  //         `Rml::LoadFontFace(desc.path, desc.fallback_face, weight)` -- style is NOT
+  //         forwarded (that overload has no style parameter; see FontFaceDesc::style's own
+  //         doc-comment). ENGINE-DEPENDENT: see glintfx/include/glintfx/font_face.hpp's own
+  //         header comment for the full own-vs-FreeType family-derivation asymmetry this path
+  //         exposes.
+  //       - `desc.family` non-null, non-empty -> the FAMILY-WITH-PARAMETERS overload,
+  //         `Rml::LoadFontFace(desc.path, desc.family, style, weight, desc.fallback_face)` --
+  //         registers `desc.family` VERBATIM on both engines (engine-independent path; see the
+  //         same header comment).
+  //     `face_index` is never exposed here (both overloads default it to 0) -- no confirmed
+  //     caller needs a specific face inside a font COLLECTION file; a natural, additive
+  //     extension (a `face_index` field on FontFaceDesc) if one ever does.
+  //     GUARDS (AUD-TEC-5 fail-high, same discipline as every other Bootstrap method): `false`,
+  //     no RmlUi call made, when `!impl_` (called before a successful init() -- e.g. on a
+  //     default-constructed Bootstrap, or one whose init() failed/was never called; see
+  //     Bootstrap::init()'s own doc-comment for what `impl_` guards) or when `desc.path` is
+  //     null or empty (""). Unlike most other Bootstrap methods, this one does NOT require a
+  //     loaded document (`impl_->doc`) -- font registration is a process-wide RmlUi operation
+  //     (Rml::LoadFontFace has no Context/document parameter at all), so it is safe to call
+  //     any time after a successful init(), before or after load(). Beyond the two guards
+  //     above, this method returns RmlUi's OWN `Rml::LoadFontFace` result UNCHANGED (a
+  //     malformed/non-font file, a file the FileInterface cannot open, or a face RmlUi's own
+  //     font engine otherwise rejects all surface as `false` here, exactly as RmlUi itself
+  //     reports them -- no glintfx-level re-interpretation of that failure).
+  // PT: Registra uma face de fonte programaticamente (UI-FONTFACE, v0.24.0) -- o ÚNICO lugar na
+  //     glintfx que algum dia chama a função livre `Rml::LoadFontFace` (confirmado por grep
+  //     antes desta mudança: 0 pontos de chamada fora de font_engine_own.cpp, que é uma
+  //     IMPLEMENTAÇÃO de motor da interface pra qual essas funções livres despacham, não uma
+  //     chamadora delas). Seleciona uma das 3 sobrecargas vendorizadas de `Rml::LoadFontFace`
+  //     (Include/RmlUi/Core/Core.h no source pinado do RmlUi) puramente a partir de
+  //     `desc.family`:
+  //       - `desc.family` nulo/vazio -> a sobrecarga SEM-FAMÍLIA,
+  //         `Rml::LoadFontFace(desc.path, desc.fallback_face, weight)` -- style NÃO é
+  //         encaminhado (aquela sobrecarga não tem parâmetro style; ver o próprio doc-comment
+  //         de FontFaceDesc::style). DEPENDENTE-DE-MOTOR: ver o próprio comentário de cabeçalho
+  //         de glintfx/include/glintfx/font_face.hpp pra assimetria completa de
+  //         derivação-de-família próprio-vs-FreeType que este caminho expõe.
+  //       - `desc.family` não-nulo e não-vazio -> a sobrecarga COM-PARÂMETROS-DE-FAMÍLIA,
+  //         `Rml::LoadFontFace(desc.path, desc.family, style, weight, desc.fallback_face)` --
+  //         registra `desc.family` VERBATIM nos dois motores (caminho independente de motor;
+  //         ver o mesmo comentário de cabeçalho).
+  //     `face_index` nunca é exposto aqui (as duas sobrecargas o default para 0) -- nenhum
+  //     chamador confirmado precisa de uma face específica dentro de um arquivo de COLEÇÃO de
+  //     fontes; uma extensão natural e aditiva (um campo `face_index` em FontFaceDesc) se algum
+  //     dia precisar.
+  //     GUARDS (fail-high AUD-TEC-5, mesma disciplina de todo outro método do Bootstrap):
+  //     `false`, sem chamada ao RmlUi, quando `!impl_` (chamado antes de um init() bem-sucedido
+  //     -- ex.: num Bootstrap default-construído, ou um cujo init() falhou/nunca foi chamado;
+  //     ver o próprio doc-comment de Bootstrap::init() pro que `impl_` guarda) ou quando
+  //     `desc.path` é nulo ou vazio (""). Diferente da maioria dos outros métodos do Bootstrap,
+  //     este NÃO exige um documento carregado (`impl_->doc`) -- registro de fonte é uma
+  //     operação do RmlUi em nível de PROCESSO (Rml::LoadFontFace não tem parâmetro nenhum de
+  //     Context/documento), então é seguro chamar a qualquer momento após um init() bem-
+  //     sucedido, antes ou depois de load(). Além dos dois guards acima, este método retorna o
+  //     PRÓPRIO resultado de `Rml::LoadFontFace` do RmlUi INALTERADO (um arquivo malformado/
+  //     não-fonte, um arquivo que a FileInterface não consegue abrir, ou uma face que o próprio
+  //     motor de fonte do RmlUi rejeitar por outro motivo, tudo isso surge como `false` aqui,
+  //     exatamente como o próprio RmlUi reporta -- nenhuma reinterpretação em nível glintfx
+  //     dessa falha).
+  bool load_font_face(const FontFaceDesc& desc);
 
   // EN: Shutdown RmlUi and release all resources. Safe to call multiple times.
   //     Does NOT delete the SystemInterface — the caller owns it.

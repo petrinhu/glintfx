@@ -460,6 +460,11 @@ bool Engine::set_property(const char* id, const char* prop, const char* value) c
   return impl_->boot.set_property(id, prop, value);
 }
 
+bool Engine::load_font_face(const FontFaceDesc& desc) {
+  if (!impl_->ok) return false;
+  return impl_->boot.load_font_face(desc);
+}
+
 // ---------------------------------------------------------------------------
 // EN: Data-model API — delegates to DataBinder with lifecycle guards.
 //     create_data_model / bind_*: blocked when !ok or after load().

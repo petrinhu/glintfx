@@ -1,0 +1,47 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!--
+  EN: app_font_face_scene.rml -- fixture for tests/app_font_face_sanity.cpp (UI-FONTFACE,
+      App-path forward-coverage gate). Same shape as tests/fontface_scene.rml (the UiLayer-path
+      fixture): NO `@font-face` block -- every family this scene ever renders with is registered
+      PROGRAMMATICALLY, via glintfx::App::load_font_face(), which is the exact call this fixture
+      exists to exercise. "#txt" is `display: inline-block`, zero padding/border/margin,
+      `white-space: nowrap` -- same get_element_box()-oracle convention every other fonteng_*
+      scene in this suite uses. `font-family`/text content are set dynamically per probe via
+      App::set_property(id, "font-family", ...) / App::set_text(id, ...).
+  PT: app_font_face_scene.rml -- fixture pra tests/app_font_face_sanity.cpp (UI-FONTFACE, gate de
+      cobertura de forward do caminho App). Mesmo formato de tests/fontface_scene.rml (a fixture
+      do caminho UiLayer): SEM bloco `@font-face` -- toda família que esta cena algum dia
+      renderiza é registrada PROGRAMATICAMENTE, via glintfx::App::load_font_face(), que é
+      exatamente a chamada que esta fixture existe pra exercitar. "#txt" é
+      `display: inline-block`, padding/borda/margem zero, `white-space: nowrap` -- mesma
+      convenção de oráculo via get_element_box() que todo outro fonteng_* desta suíte usa.
+      `font-family`/conteúdo de texto são definidos dinamicamente por sonda via
+      App::set_property(id, "font-family", ...) / App::set_text(id, ...).
+-->
+<rml>
+<head>
+  <title>app_font_face_sanity</title>
+  <style>
+    body {
+      background-color: #000000;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+    #txt {
+      display: inline-block;
+      padding: 0;
+      margin: 0;
+      white-space: nowrap;
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      font-size: 40px;
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <div id="txt"></div>
+</body>
+</rml>

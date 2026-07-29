@@ -1559,6 +1559,75 @@ void Bootstrap::set_asset_base_url(const char* url) {
   if (impl_) impl_->file_iface.set_base_url(url);
 }
 
+// EN: Translation helpers -- glintfx::FontStyle/FontWeight (glintfx/include/glintfx/
+//     font_face.hpp) to the RmlUi-level types Rml::LoadFontFace expects. `static` free
+//     functions, not a class member -- same idiom as engine.cpp's to_rml_key/to_rml_mods
+//     (internal, never exposed in a public header).
+// PT: Helpers de tradução -- glintfx::FontStyle/FontWeight (glintfx/include/glintfx/
+//     font_face.hpp) para os tipos em nível RmlUi que Rml::LoadFontFace espera. Funções livres
+//     `static`, não membro de classe -- mesmo idioma de to_rml_key/to_rml_mods de engine.cpp
+//     (internos, nunca expostos num header público).
+static Rml::Style::FontStyle to_rml_font_style(FontStyle style) noexcept {
+  switch (style) {
+    case FontStyle::Italic:
+      return Rml::Style::FontStyle::Italic;
+    case FontStyle::Normal:
+    default:
+      return Rml::Style::FontStyle::Normal;
+  }
+}
+
+static Rml::Style::FontWeight to_rml_font_weight(FontWeight weight) noexcept {
+  switch (weight) {
+    case FontWeight::Normal:
+      return Rml::Style::FontWeight::Normal;
+    case FontWeight::Bold:
+      return Rml::Style::FontWeight::Bold;
+    case FontWeight::Auto:
+    default:
+      return Rml::Style::FontWeight::Auto;
+  }
+}
+
+bool Bootstrap::load_font_face(const FontFaceDesc& desc) {
+  // EN: Guard 1 (AUD-TEC-5): called before a successful init() -- impl_ does not exist yet
+  //     (default-constructed Bootstrap, or one whose init() failed/was never called). No RmlUi
+  //     call is safe here (Rml::LoadFontFace touches the GLOBAL Rml::GetFontEngineInterface(),
+  //     which init() installs -- see Bootstrap::init()'s doc-comment).
+  // PT: Guard 1 (AUD-TEC-5): chamado antes de um init() bem-sucedido -- impl_ ainda não existe
+  //     (Bootstrap default-construído, ou um cujo init() falhou/nunca foi chamado). Nenhuma
+  //     chamada ao RmlUi é segura aqui (Rml::LoadFontFace toca o
+  //     Rml::GetFontEngineInterface() GLOBAL, que o init() instala -- ver o doc-comment de
+  //     Bootstrap::init()).
+  if (!impl_) return false;
+  // EN: Guard 2 (AUD-TEC-5): desc.path null/empty is structurally-invalid caller input --
+  //     nothing to load. Same fail-high discipline as every id-keyed guard in this file.
+  // PT: Guard 2 (AUD-TEC-5): desc.path nulo/vazio é entrada estruturalmente inválida do
+  //     chamador -- nada a carregar. Mesma disciplina fail-high de todo guard indexado por id
+  //     deste arquivo.
+  if (!desc.path || !*desc.path) return false;
+
+  const Rml::Style::FontWeight weight = to_rml_font_weight(desc.weight);
+
+  // EN: family=nullptr/"" -> the FAMILY-LESS Rml::LoadFontFace overload (ENGINE-DEPENDENT
+  //     derivation -- see glintfx/include/glintfx/font_face.hpp's header comment). `style` is
+  //     deliberately NOT forwarded here: that overload has no style parameter at all.
+  // PT: family=nullptr/"" -> a sobrecarga SEM-FAMÍLIA de Rml::LoadFontFace (derivação
+  //     DEPENDENTE-DE-MOTOR -- ver o comentário de cabeçalho de glintfx/include/glintfx/
+  //     font_face.hpp). `style` deliberadamente NÃO é encaminhado aqui: aquela sobrecarga não
+  //     tem parâmetro style nenhum.
+  if (!desc.family || !*desc.family) {
+    return Rml::LoadFontFace(desc.path, desc.fallback_face, weight);
+  }
+
+  // EN: family non-null/non-empty -> the FAMILY-WITH-PARAMETERS overload -- registers
+  //     desc.family VERBATIM, identically on both engines (engine-independent path).
+  // PT: family não-nulo/não-vazio -> a sobrecarga COM-PARÂMETROS-DE-FAMÍLIA -- registra
+  //     desc.family VERBATIM, identicamente nos dois motores (caminho independente de motor).
+  const Rml::Style::FontStyle style = to_rml_font_style(desc.style);
+  return Rml::LoadFontFace(desc.path, desc.family, style, weight, desc.fallback_face);
+}
+
 void Bootstrap::shutdown() {
   if (!impl_) return;
   if (impl_->initialised) {

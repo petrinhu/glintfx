@@ -668,6 +668,11 @@ bool App::set_property(const char* id, const char* prop, const char* value) cons
   return impl_->engine.set_property(id, prop, value);
 }
 
+bool App::load_font_face(const FontFaceDesc& desc) {
+  if (!impl_->ok) return false;
+  return impl_->engine.load_font_face(desc);
+}
+
 bool App::get_number(const char* key, double& out) const {
   if (!impl_->ok) return false;
   return impl_->engine.get_number(key, out);
@@ -681,6 +686,26 @@ bool App::get_string(const char* key, std::string& out) const {
 bool App::get_bool(const char* key, bool& out) const {
   if (!impl_->ok) return false;
   return impl_->engine.get_bool(key, out);
+}
+
+// EN: WM-VSYNC -- thin forwards to WindowGlfw with the App-wide !ok() guard (same pattern as
+//     every other method in this file). WindowGlfw::set_swap_interval/get_monitor_refresh_hz
+//     carry the real logic (window_glfw.cpp/.hpp).
+// PT: WM-VSYNC -- repasses finos a WindowGlfw com a guarda !ok() de todo o App (mesmo padrão de
+//     todo outro método deste arquivo). WindowGlfw::set_swap_interval/get_monitor_refresh_hz
+//     carregam a lógica de fato (window_glfw.cpp/.hpp).
+bool App::set_swap_interval(int interval) {
+  if (!impl_->ok) return false;
+  return impl_->window.set_swap_interval(interval);
+}
+
+bool App::set_vsync(bool enabled) {
+  return set_swap_interval(enabled ? 1 : 0);
+}
+
+int App::get_monitor_refresh_hz() const {
+  if (!impl_->ok) return 0;
+  return impl_->window.get_monitor_refresh_hz();
 }
 
 void App::run() {

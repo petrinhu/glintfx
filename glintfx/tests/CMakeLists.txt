@@ -536,6 +536,69 @@ if(GLINTFX_BACKEND_GLFW)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+  # ---------------------------------------------------------------------------
+  # EN: app_font_face_sanity (UI-FONTFACE, review follow-up, w18-rev) -- App-PATH FORWARD-
+  #     COVERAGE gate for App::load_font_face. fontface_load_sanity.cpp (embed-mode section,
+  #     GLINTFX_OWN_FONT_ENGINE block below) exercises UiLayer::load_font_face six ways but
+  #     NEVER touches App::load_font_face -- two separate method bodies (src/app.cpp vs
+  #     src/ui_layer.cpp) that both happen to forward to Engine::load_font_face. The adversarial
+  #     review confirmed this was exploitable: mutating App::load_font_face to unconditionally
+  #     return false (no call into Engine at all) still passed 99/100 of this suite. Same
+  #     registration pattern as fonteng_own_sanity right above (App-only, WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR, "tests/" prefix, App::snapshot()+PPM readback -- no glloader link
+  #     needed). Reuses tests/assets/OpenSans-Regular.ttf, already copied by the showcase block
+  #     above. See app_font_face_sanity.cpp's own header for the full 3-check rationale.
+  # PT: app_font_face_sanity (UI-FONTFACE, follow-up de review, w18-rev) -- gate de COBERTURA DE
+  #     FORWARD do caminho App pro App::load_font_face. O fontface_load_sanity.cpp (seção
+  #     embed-mode, bloco GLINTFX_OWN_FONT_ENGINE abaixo) exercita UiLayer::load_font_face de
+  #     seis jeitos mas NUNCA toca App::load_font_face -- dois corpos de método separados
+  #     (src/app.cpp vs src/ui_layer.cpp) que ambos por acaso encaminham a
+  #     Engine::load_font_face. O review adversarial confirmou que isso era explorável: mutar
+  #     App::load_font_face pra sempre retornar false (sem chamar o Engine nenhuma vez) ainda
+  #     passava 99/100 desta suíte. Mesmo padrão de registro do fonteng_own_sanity logo acima
+  #     (só-App, WORKING_DIRECTORY = CMAKE_BINARY_DIR, prefixo "tests/", App::snapshot()+leitura
+  #     de PPM -- sem precisar linkar glloader). Reusa tests/assets/OpenSans-Regular.ttf, já
+  #     copiado pelo bloco showcase acima. Ver o próprio cabeçalho de app_font_face_sanity.cpp
+  #     pro racional completo dos 3 cheques.
+  # ---------------------------------------------------------------------------
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app_font_face_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/app_font_face_scene.rml COPYONLY)
+
+  add_executable(app_font_face_sanity app_font_face_sanity.cpp)
+  target_link_libraries(app_font_face_sanity PRIVATE glintfx)
+  add_test(NAME app_font_face_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_font_face_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_vsync_sanity (WM-VSYNC, window-modes finish wave, consumer-driven) -- contract +
+  #     App-PATH FORWARD-COVERAGE gate for App::set_swap_interval/set_vsync/
+  #     get_monitor_refresh_hz. Includes "../src/window_glfw.hpp" directly (same pattern as
+  #     window_smoke.cpp) to exercise WindowGlfw's own guards pre-/post-create() BEFORE
+  #     re-exercising the same guard through the App facade -- see the file's own header
+  #     comment for the full 3-check rationale and the two headless-honesty limitations it
+  #     names instead of faking coverage for. WORKING_DIRECTORY = CMAKE_BINARY_DIR so
+  #     "tests/min.rml" resolves (min.rml is copied unconditionally at the top of this file).
+  # PT: app_vsync_sanity (WM-VSYNC, onda de fechamento de window-modes, consumer-driven) --
+  #     gate de contrato + COBERTURA DE FORWARD do caminho App pra
+  #     App::set_swap_interval/set_vsync/get_monitor_refresh_hz. Inclui "../src/window_glfw.hpp"
+  #     diretamente (mesmo padrão de window_smoke.cpp) pra exercitar as próprias guardas do
+  #     WindowGlfw pré-/pós-create() ANTES de reexercitar a mesma guarda pela fachada App -- ver
+  #     o próprio comentário de cabeçalho do arquivo pro racional completo dos 3 cheques e as
+  #     duas limitações de honestidade headless que ele nomeia em vez de forjar cobertura.
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml" resolva (min.rml é
+  #     copiado incondicionalmente no topo deste arquivo).
+  # ---------------------------------------------------------------------------
+  add_executable(app_vsync_sanity app_vsync_sanity.cpp)
+  target_link_libraries(app_vsync_sanity PRIVATE glintfx)
+  add_test(NAME app_vsync_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_vsync_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
   # EN: golden_test — pixel-exact MSE comparison against a stored PPM reference.
   #     FLAKY under Mesa llvmpipe / Xvfb: llvmpipe renders blur/glow convolution in parallel
   #     tiles; floating-point non-associativity across thread schedules yields MSE ~3 000
@@ -1790,6 +1853,59 @@ if(GLINTFX_OWN_FONT_ENGINE)
   add_test(NAME fonteng_colr_sanity
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:fonteng_colr_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+  # -------------------------------------------------------------------------
+  # EN: fontface_load_sanity (UI-FONTFACE, v0.24.0) -- TDD gate for
+  #     UiLayer::load_font_face(const FontFaceDesc&) / App::load_font_face, the ONE public path
+  #     to Rml::LoadFontFace without authoring an RCSS `@font-face` block. Seven criteria in one
+  #     file (see fontface_load_sanity.cpp's own header for the full per-criterion rationale):
+  #     valid registration+render, hostile input (nullptr/empty/nonexistent/non-font path),
+  #     two-engine A/B with an explicit family, the family=nullptr own-vs-FreeType derivation
+  #     asymmetry (documented, not forced equal), programmatic fallback_face=true,
+  #     before-init/not-yet-attached white-box guards on Bootstrap/Engine directly, and
+  #     (review follow-up, w18-rev) style/weight mapping via FindBestFace's own scoring. The
+  #     App-SPECIFIC forwarding wire is a separate gate, app_font_face_sanity, registered
+  #     inside if(GLINTFX_BACKEND_GLFW) above (App::load_font_face was found completely
+  #     unexercised by the adversarial review; mutating it to a hardcoded false still passed
+  #     99/100 of the suite before that test existed). Same
+  #     registration pattern as fonteng_colr_sanity right above (OUTSIDE if(GLINTFX_BACKEND_GLFW),
+  #     via ${_embed_dep} + glloader) so it builds and runs identically with GLINTFX_BACKEND_GLFW
+  #     ON or OFF. Gated behind GLINTFX_OWN_FONT_ENGINE (like every fonteng_own_*/fonteng_ab_*
+  #     sibling above): criteria [3]/[4] need BOTH engines compiled in, and the font assets
+  #     (assets/OpenSans-Regular.ttf, assets/PixelOperatorMono.ttf) are copied to
+  #     CMAKE_CURRENT_BINARY_DIR by the fonteng_own_embed_sanity block earlier in this same
+  #     if(GLINTFX_OWN_FONT_ENGINE) section -- no further file(COPY) needed here.
+  # PT: fontface_load_sanity (UI-FONTFACE, v0.24.0) -- gate de TDD pro
+  #     UiLayer::load_font_face(const FontFaceDesc&) / App::load_font_face, o ÚNICO caminho
+  #     público pro Rml::LoadFontFace sem autorar um bloco RCSS `@font-face`. Sete critérios num
+  #     único arquivo (ver o próprio cabeçalho de fontface_load_sanity.cpp pro racional completo
+  #     por critério): registro+render válido, entrada hostil (caminho nullptr/vazio/
+  #     inexistente/não-fonte), A/B de dois motores com família explícita, a assimetria de
+  #     derivação própria-vs-FreeType do family=nullptr (documentada, não forçada igual),
+  #     fallback_face=true programático, guards white-box de antes-de-init/ainda-não-anexado
+  #     direto no Bootstrap/Engine, e (follow-up de review, w18-rev) mapeamento de style/weight
+  #     via o próprio escore do FindBestFace. O fio de forward ESPECÍFICO do App é um gate
+  #     separado, app_font_face_sanity, registrado dentro de if(GLINTFX_BACKEND_GLFW) acima
+  #     (App::load_font_face foi achado completamente sem exercício pelo review adversarial;
+  #     mutá-lo pra false fixo ainda passava 99/100 da suíte antes deste teste existir). Mesmo
+  #     padrão de registro do fonteng_colr_sanity logo acima
+  #     (FORA de if(GLINTFX_BACKEND_GLFW), via ${_embed_dep} + glloader) para buildar e rodar
+  #     identicamente com GLINTFX_BACKEND_GLFW ON ou OFF. Bloqueado atrás de
+  #     GLINTFX_OWN_FONT_ENGINE (como todo irmão fonteng_own_*/fonteng_ab_* acima): os critérios
+  #     [3]/[4] precisam dos DOIS motores compilados, e os assets de fonte
+  #     (assets/OpenSans-Regular.ttf, assets/PixelOperatorMono.ttf) já são copiados para
+  #     CMAKE_CURRENT_BINARY_DIR pelo bloco fonteng_own_embed_sanity mais acima nesta mesma
+  #     seção if(GLINTFX_OWN_FONT_ENGINE) -- nenhum file(COPY) adicional necessário aqui.
+  # -------------------------------------------------------------------------
+  add_executable(fontface_load_sanity fontface_load_sanity.cpp)
+  target_link_libraries(fontface_load_sanity PRIVATE ${_embed_dep} glloader)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fontface_scene.rml
+                 ${CMAKE_CURRENT_BINARY_DIR}/fontface_scene.rml COPYONLY)
+  add_test(NAME fontface_load_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:fontface_load_sanity>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()

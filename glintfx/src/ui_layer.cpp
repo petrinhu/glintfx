@@ -435,6 +435,18 @@ bool UiLayer::set_property(const char* id, const char* prop, const char* value) 
   return impl_->engine.set_property(id, prop, value);
 }
 
+bool UiLayer::load_font_face(const FontFaceDesc& desc) {
+  if (!impl_->ok) return false;
+  // EN: Straight passthrough (UI-FONTFACE) -- no coordinate translation applicable (font
+  //     registration carries no geometry), no document-loaded requirement either (unlike the
+  //     id-keyed DOM methods above -- see this method's own doc-comment in ui_layer.hpp).
+  // PT: Repasse direto (UI-FONTFACE) -- sem tradução de coordenada aplicável (registro de
+  //     fonte não carrega geometria), sem exigência de documento carregado também (diferente
+  //     dos métodos de DOM indexados por id acima -- ver o próprio doc-comment deste método em
+  //     ui_layer.hpp).
+  return impl_->engine.load_font_face(desc);
+}
+
 bool UiLayer::get_number(const char* key, double& out) const {
   if (!impl_->ok) return false;
   return impl_->engine.get_number(key, out);

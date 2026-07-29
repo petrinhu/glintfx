@@ -13,6 +13,7 @@
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/font_face.hpp>
 
 namespace glintfx {
 
@@ -623,6 +624,36 @@ public:
   //     válidos para quais propriedades). `value` nulo é normalizado para `""` (mesma convenção
   //     do `set_text` acima) e encaminhado como está.
   bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // EN: Register a font face programmatically (UI-FONTFACE, v0.24.0) -- the ONE public way to
+  //     call the underlying `Rml::LoadFontFace` without authoring an RCSS `@font-face` block
+  //     inside a `.rml` document (e.g. a font shipped as a game asset resolved only after some
+  //     other subsystem picks a localisation/DLC pack). Parity with App::load_font_face (same
+  //     signature). See glintfx/include/glintfx/font_face.hpp's own header comment for the full
+  //     contract, INCLUDING the family=nullptr own-vs-FreeType engine-asymmetry every caller
+  //     must read before relying on a derived (rather than explicit) family. No ordering
+  //     constraint versus load(): font registration is process-wide RmlUi state (Rml::
+  //     LoadFontFace has no Context/document parameter), so it is safe to call before OR after
+  //     load() -- unlike the id-keyed DOM methods above, it needs no loaded document. Returns
+  //     `false` when not `ok()`, when `desc.path` is null/empty (""), or when RmlUi's own font
+  //     engine rejects the face (a malformed/non-font file, one the FileInterface cannot open,
+  //     etc.) -- RmlUi's own `Rml::LoadFontFace` result, unchanged.
+  // PT: Registra uma face de fonte programaticamente (UI-FONTFACE, v0.24.0) -- a ÚNICA forma
+  //     pública de chamar o `Rml::LoadFontFace` subjacente sem autorar um bloco RCSS
+  //     `@font-face` dentro de um documento `.rml` (ex.: uma fonte distribuída como asset de
+  //     jogo, resolvida só depois de algum outro subsistema escolher um pacote de
+  //     localização/DLC). Paridade com App::load_font_face (mesma assinatura). Ver o próprio
+  //     comentário de cabeçalho de glintfx/include/glintfx/font_face.hpp pro contrato completo,
+  //     INCLUINDO a assimetria de motor próprio-vs-FreeType do family=nullptr que todo chamador
+  //     precisa ler antes de depender de uma família derivada (em vez de explícita). Sem
+  //     restrição de ordem vs. load(): registro de fonte é estado do RmlUi em nível de processo
+  //     (Rml::LoadFontFace não tem parâmetro nenhum de Context/documento), então é seguro
+  //     chamar antes OU depois de load() -- diferente dos métodos de DOM indexados por id
+  //     acima, não precisa de documento carregado nenhum. Retorna `false` quando não `ok()`,
+  //     quando `desc.path` é nulo/vazio (""), ou quando o próprio motor de fonte do RmlUi
+  //     rejeita a face (um arquivo malformado/não-fonte, um que a FileInterface não consegue
+  //     abrir, etc.) -- o próprio resultado de `Rml::LoadFontFace` do RmlUi, inalterado.
+  bool load_font_face(const FontFaceDesc& desc);
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1) -- parity with App. Call order: create_data_model

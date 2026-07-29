@@ -20,6 +20,7 @@ namespace Rml { class Context; class SystemInterface; }
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
+#include <glintfx/font_face.hpp>
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 
 namespace glintfx {
@@ -360,6 +361,22 @@ public:
   //     `false` do RmlUi, não um inventado pela glintfx. `prop` nulo/vazio é rejeitado (false)
   //     antes de sequer chegar no RmlUi, mesma disciplina AUD-TEC-5 de `id`.
   bool set_property(const char* id, const char* prop, const char* value) const;
+
+  // EN: Register a font face programmatically (UI-FONTFACE, v0.24.0) -- forwards to
+  //     Bootstrap::load_font_face verbatim (see there for the full overload-selection/
+  //     engine-asymmetry contract). Unlike the id-keyed DOM methods above, this one does NOT
+  //     require a loaded document -- font registration is process-wide RmlUi state -- but DOES
+  //     require a successful attach() (`!ok() -> false`, same gate as every other Engine
+  //     method), since Bootstrap::load_font_face itself needs `impl_` (populated by a
+  //     successful Bootstrap::init(), which attach() drives).
+  // PT: Registra uma face de fonte programaticamente (UI-FONTFACE, v0.24.0) -- encaminha a
+  //     Bootstrap::load_font_face tal-e-qual (ver lá o contrato completo de seleção-de-
+  //     sobrecarga/assimetria-de-motor). Diferente dos métodos de DOM indexados por id acima,
+  //     este NÃO exige um documento carregado -- registro de fonte é estado do RmlUi em nível
+  //     de processo -- mas EXIGE um attach() bem-sucedido (`!ok() -> false`, mesmo gate de todo
+  //     outro método do Engine), já que o próprio Bootstrap::load_font_face precisa de `impl_`
+  //     (populado por um Bootstrap::init() bem-sucedido, que o attach() dirige).
+  bool load_font_face(const FontFaceDesc& desc);
 
   // -------------------------------------------------------------------------
   // EN: Data-model API (T1). Call order: create_data_model -> bind_* -> load -> set_*.

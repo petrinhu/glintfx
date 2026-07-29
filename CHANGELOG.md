@@ -8,6 +8,97 @@
 
 ---
 
+## [Unreleased]
+
+### Added / Adicionado
+
+- **EN:** **Programmatic font-face registration: `UiLayer::load_font_face` / `App::load_font_face`**
+  (`UI-FONTFACE`): a new `FontFaceDesc` struct (`glintfx/include/glintfx/font_face.hpp` --
+  `path`, `family`, `style`, `weight`, `fallback_face`) plus a `load_font_face(const
+  FontFaceDesc&)` method on both facades is the first public path to the underlying
+  `Rml::LoadFontFace` -- until now the ONLY way to register a font was an RCSS `@font-face`
+  block inside a `.rml` document; a host that only decides which font file to load AFTER some
+  other subsystem resolves a localisation pack, a DLC, or a user preference had no way to do
+  that from C++. No document/`load()` ordering constraint (font registration is process-wide
+  RmlUi state); guards `false`/no-crash on a null/empty `path`, same `AUD-TEC-5` fail-high
+  discipline as every other Bootstrap method; the return value beyond that is RmlUi's own
+  `Rml::LoadFontFace` result, unchanged. **`family = nullptr` is ENGINE-DEPENDENT** --
+  `FontEngine::Own` derives the family from the file's own STEM, lower-cased; `FontEngine::
+  FreeType` reads the font's own SFNT `'name'` table instead (a DIFFERENT string, e.g.
+  `"opensans-regular"` vs. `"Open Sans"` for the same file) -- a caller that needs a
+  predictable, portable family across either engine MUST pass an explicit `family`, which
+  drives both engines through the SAME code path and registers that exact string on either.
+  `fallback_face = true` unlocks the SAME per-glyph fallback walk RCSS's
+  `-rmlui-fallback-face: true;` drives, now reachable without authoring a document. Full
+  contract: `docs/embed-integration.md` section 24; seven-criterion test:
+  `glintfx/tests/fontface_load_sanity.cpp` (`UiLayer` path); a separate, adversarial-review-
+  driven test proves the `App`-specific forwarding wire: `glintfx/tests/app_font_face_sanity.cpp`.
+- **PT:** **Registro programático de face de fonte: `UiLayer::load_font_face` /
+  `App::load_font_face`** (`UI-FONTFACE`): uma struct nova `FontFaceDesc`
+  (`glintfx/include/glintfx/font_face.hpp` -- `path`, `family`, `style`, `weight`,
+  `fallback_face`) mais um método `load_font_face(const FontFaceDesc&)` nas duas fachadas é o
+  primeiro caminho público pro `Rml::LoadFontFace` subjacente -- até agora a ÚNICA forma de
+  registrar uma fonte era um bloco RCSS `@font-face` dentro de um documento `.rml`; um host que
+  só decide qual arquivo de fonte carregar DEPOIS de algum outro subsistema resolver um pacote
+  de localização, uma DLC, ou uma preferência de usuário não tinha como fazer isso a partir de
+  C++. Sem restrição de ordem vs. documento/`load()` (registro de fonte é estado do RmlUi em
+  nível de processo); guarda `false`/sem-crash num `path` nulo/vazio, mesma disciplina
+  fail-high `AUD-TEC-5` de todo outro método do Bootstrap; o valor de retorno além disso É o
+  próprio resultado de `Rml::LoadFontFace` do RmlUi, inalterado. **`family = nullptr` é
+  DEPENDENTE-DE-MOTOR** -- `FontEngine::Own` deriva a família do próprio STEM do arquivo,
+  minusculizado; `FontEngine::FreeType` lê a própria tabela `'name'` SFNT da fonte em vez disso
+  (uma string DIFERENTE, ex.: `"opensans-regular"` vs. `"Open Sans"` pro mesmo arquivo) -- um
+  chamador que precisa de uma família previsível e portável através de qualquer um dos motores
+  PRECISA passar um `family` explícito, o que dirige os dois motores pelo MESMO caminho de
+  código e registra essa string exata em qualquer um deles. `fallback_face = true` destrava o
+  MESMO passeio de fallback por-glyph que `-rmlui-fallback-face: true;` do RCSS dirige, agora
+  alcançável sem autorar um documento. Contrato completo: `docs/embed-integration.md` seção 24;
+  teste de sete critérios: `glintfx/tests/fontface_load_sanity.cpp` (caminho `UiLayer`); um teste
+  separado, motivado por review adversarial, prova o fio de forward específico do `App`:
+  `glintfx/tests/app_font_face_sanity.cpp`.
+- **EN:** **Vsync control + monitor refresh-rate query: `App::set_swap_interval`/`set_vsync`/
+  `get_monitor_refresh_hz`** (`WM-VSYNC`, window-modes finish wave, consumer-driven -- GusWorld,
+  scope approved by the líder 2026-07-23): `App::set_swap_interval(int)` is `glfwSwapInterval`'s
+  own primitive, forwarded unchanged (`0` off, `1` standard vsync, `n>1` every Nth refresh);
+  `App::set_vsync(bool)` is sugar over it (`true`->`1`, `false`->`0`). `App::get_monitor_refresh_hz()`
+  reads the refresh rate (Hz) of the monitor the window is CURRENTLY on -- exact monitor when
+  fullscreen, a largest-rectangle-overlap heuristic across every connected monitor otherwise
+  (multi-monitor-aware, not just the primary). Closes a documented gap: glintfx never called
+  `glfwSwapInterval` anywhere before this release (see `App::render()`'s pre-existing "VSYNC
+  HONESTY" doc-comment), so the platform driver/compositor's own default governed entirely with
+  no way for a host to opt in or out. Guards: `false`/`<= 0` (no-op / indeterminate, never a
+  crash) when `!ok()`; `set_swap_interval` additionally rejects a negative `interval` --
+  negative is GLFW's own signal for adaptive/tearing vsync, deliberately OUT of scope for this
+  slice (no arbitrary-cap/adaptive machinery here, per the same "no arbitrary software cap on a
+  frame rate" call the líder made when this item was scoped). App-only (the App owns the window
+  and calls swap(); in embed mode the HOST calls its own swap primitive, so `UiLayer` has nothing
+  to set an interval on). Full contract + API reference table: `docs/window-modes.md`; contract
+  test (guards, idempotency, App-path forward-coverage): `glintfx/tests/app_vsync_sanity.cpp`.
+- **PT:** **Controle de vsync + consulta de taxa de atualização do monitor:
+  `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz`** (`WM-VSYNC`, onda de
+  fechamento de window-modes, consumer-driven -- GusWorld, escopo aprovado pelo líder
+  2026-07-23): `App::set_swap_interval(int)` é o próprio primitivo do `glfwSwapInterval`,
+  repassado sem mudança (`0` desligado, `1` vsync padrão, `n>1` a cada N-ésimo refresh);
+  `App::set_vsync(bool)` é açúcar sobre ele (`true`->`1`, `false`->`0`).
+  `App::get_monitor_refresh_hz()` lê a taxa de atualização (Hz) do monitor em que a janela está
+  ATUALMENTE -- monitor exato quando fullscreen, uma heurística de maior overlap de retângulo
+  através de todo monitor conectado senão (multi-monitor-aware, não só o primário). Fecha uma
+  lacuna documentada: a glintfx nunca chamou `glfwSwapInterval` em lugar nenhum antes deste
+  release (ver o doc-comment pré-existente "VSYNC HONESTY" de `App::render()`), então o default
+  do driver/compositor da plataforma governava por inteiro, sem forma de um host optar por
+  dentro ou por fora. Guardas: `false`/`<= 0` (no-op / indeterminado, nunca um crash) quando
+  `!ok()`; `set_swap_interval` também rejeita um `interval` negativo -- negativo é o próprio
+  sinal do GLFW pra vsync adaptativo/com tearing, deliberadamente FORA de escopo nesta fatia
+  (nenhuma máquina de cap-arbitrário/adaptativo aqui, seguindo a mesma decisão de "sem cap
+  arbitrário por software numa taxa de frame" que o líder tomou quando este item foi escopado).
+  Só-App (o App é dono da janela e chama swap(); em modo embed é o HOST que chama o próprio
+  primitivo de swap, então o `UiLayer` não tem nada pra setar intervalo em cima). Contrato
+  completo + tabela de referência de API: `docs/window-modes.md`; teste de contrato (guardas,
+  idempotência, cobertura de forward do caminho App):
+  `glintfx/tests/app_vsync_sanity.cpp`.
+
+---
+
 ## [0.23.0] - 2026-07-24 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.23.0)
 
 ### Added / Adicionado

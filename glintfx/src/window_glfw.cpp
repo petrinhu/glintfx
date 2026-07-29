@@ -400,6 +400,81 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
   }
 }
 
+// EN: WM-VSYNC -- see the doc-comment on the declaration (window_glfw.hpp) for the full
+//     contract; this is the implementation. No re-assertion of the current GL context here (the
+//     header comment explains why it is not needed); the only work is the guard + the direct
+//     glfwSwapInterval() forward.
+// PT: WM-VSYNC -- ver o doc-comment na declaração (window_glfw.hpp) pro contrato completo; esta
+//     é a implementação. Nenhuma reafirmação do contexto GL corrente aqui (o comentário do
+//     header explica por que não é necessário); o único trabalho é a guarda + o repasse direto a
+//     glfwSwapInterval().
+bool WindowGlfw::set_swap_interval(int interval) {
+  if (!win_) return false;
+  if (interval < 0) return false; // EN: adaptive/tearing vsync -- out of scope, D5 fail-high.
+                                  // PT: vsync adaptativo/com tearing -- fora de escopo, fail-high D5.
+  glfwSwapInterval(interval);
+  return true;
+}
+
+// EN: WM-VSYNC -- see the doc-comment on the declaration (window_glfw.hpp) for the full
+//     contract; this is the implementation.
+// PT: WM-VSYNC -- ver o doc-comment na declaração (window_glfw.hpp) pro contrato completo; esta
+//     é a implementação.
+int WindowGlfw::get_monitor_refresh_hz() const {
+  if (!win_) return 0;
+  // EN: Fullscreen: GLFW already knows the exact monitor, same signal mode() reads (D4).
+  // PT: Fullscreen: o GLFW já sabe o monitor exato, mesmo sinal que mode() lê (D4).
+  GLFWmonitor* monitor = glfwGetWindowMonitor(win_);
+  if (!monitor) monitor = monitor_for_window();
+  if (!monitor) return 0;
+  const GLFWvidmode* vm = glfwGetVideoMode(monitor);
+  if (!vm) return 0;
+  return vm->refreshRate;
+}
+
+// EN: WM-VSYNC -- see the doc-comment on the declaration (window_glfw.hpp) for the full
+//     contract; this is the implementation. Manual min/max (no <algorithm> include) to match
+//     this file's existing minimal-include style.
+// PT: WM-VSYNC -- ver o doc-comment na declaração (window_glfw.hpp) pro contrato completo; esta
+//     é a implementação. min/max manuais (sem incluir <algorithm>) pra bater com o estilo de
+//     includes mínimos já existente neste arquivo.
+GLFWmonitor* WindowGlfw::monitor_for_window() const {
+  if (!win_) return nullptr;
+  int win_x = 0, win_y = 0, win_w = 0, win_h = 0;
+  glfwGetWindowPos(win_, &win_x, &win_y);
+  glfwGetWindowSize(win_, &win_w, &win_h);
+
+  int count = 0;
+  GLFWmonitor** monitors = glfwGetMonitors(&count);
+  GLFWmonitor* best = nullptr;
+  long best_overlap = 0;
+  for (int i = 0; i < count; ++i) {
+    int mon_x = 0, mon_y = 0;
+    glfwGetMonitorPos(monitors[i], &mon_x, &mon_y);
+    const GLFWvidmode* vm = glfwGetVideoMode(monitors[i]);
+    if (!vm) continue;
+    const int ox0 = win_x > mon_x ? win_x : mon_x;
+    const int oy0 = win_y > mon_y ? win_y : mon_y;
+    const int win_x1 = win_x + win_w, mon_x1 = mon_x + vm->width;
+    const int win_y1 = win_y + win_h, mon_y1 = mon_y + vm->height;
+    const int ox1 = win_x1 < mon_x1 ? win_x1 : mon_x1;
+    const int oy1 = win_y1 < mon_y1 ? win_y1 : mon_y1;
+    if (ox1 <= ox0 || oy1 <= oy0) continue; // EN: no overlap. PT: sem overlap.
+    const long overlap = (long)(ox1 - ox0) * (long)(oy1 - oy0);
+    if (overlap > best_overlap) {
+      best_overlap = overlap;
+      best = monitors[i];
+    }
+  }
+  // EN: No monitor overlapped at all (observed under Xvfb) -- fall back to the primary monitor
+  //     rather than returning null, so get_monitor_refresh_hz() still has SOMETHING to read
+  //     instead of unconditionally reporting indeterminate on every headless run.
+  // PT: Nenhum monitor sobrepôs (observado sob Xvfb) -- cai pro monitor primário em vez de
+  //     retornar nulo, para que get_monitor_refresh_hz() ainda tenha ALGO pra ler em vez de
+  //     reportar indeterminado incondicionalmente em toda rodada headless.
+  return best ? best : glfwGetPrimaryMonitor();
+}
+
 void WindowGlfw::set_event_sink(std::function<void(const UiEvent&)> sink) {
   sink_ = std::move(sink);
 }

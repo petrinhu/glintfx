@@ -6,6 +6,8 @@
 #include <glintfx/window_mode.hpp>  // EN: A4-WINMODES. PT: A4-WINMODES.
 #include "input_state.hpp"          // EN: HOSTIN-1, Onda 2. PT: HOSTIN-1, Onda 2.
 struct GLFWwindow;
+struct GLFWmonitor; // EN: WM-VSYNC -- forward-declared, same pattern as GLFWwindow above.
+                    // PT: WM-VSYNC -- forward-declarado, mesmo padrão de GLFWwindow acima.
 namespace glintfx {
 class WindowGlfw {
 public:
@@ -103,6 +105,97 @@ public:
   //     Windowed -- tolerado pela suíte headless, provado de verdade pelo smoke manual numa
   //     sessão KDE/GNOME real (ver docs/window-modes.md).
   WindowMode mode() const;
+
+  // EN: WM-VSYNC -- request a swap interval (`glfwSwapInterval`), the real GLFW primitive
+  //     `App::set_vsync`/`App::set_swap_interval` (app.hpp) forward to. `interval`: `0` disables
+  //     vsync (unlimited swaps), `1` synchronises to the monitor's refresh rate, `n>1`
+  //     synchronises to every Nth refresh (half-rate, third-rate, ...). Returns `false` (no-op,
+  //     nothing requested to the driver) when `win_` is null (create() not called/failed -- same
+  //     fail-high discipline as mode()/set_mode() above) OR `interval` is negative -- a
+  //     NEGATIVE interval is GLFW's own signal for adaptive/tearing vsync
+  //     (`GLX_EXT_swap_control_tear`/`WGL_EXT_swap_control_tear`), which is EXPLICITLY
+  //     out-of-scope for this slice (TODO.md `WM-VSYNC`'s own scope note: no arbitrary
+  //     cap/adaptive-vsync machinery here, seed a follow-up if a consumer asks) -- rejecting it
+  //     here means a caller can never silently opt into a driver behaviour this API was not
+  //     designed to promise. CONTEXT (D-ORDER): `glfwSwapInterval` requires the GL context to be
+  //     CURRENT on the calling thread; `create()` above already makes `win_`'s context current
+  //     immediately after `glfwCreateWindow` and this class never switches it away for the rest
+  //     of the App's lifetime (the same single-context invariant `render()`/`snapshot()`'s direct
+  //     `glReadPixels`/`glBindFramebuffer` calls in app.cpp already rely on without
+  //     re-asserting it) -- so this call does NOT re-call `glfwMakeContextCurrent` itself; it is
+  //     only ever safe to call after a successful `create()`, which the `win_` null-guard above
+  //     already enforces. Idempotent: calling with the SAME interval twice (or any interval at
+  //     all) is a safe, cheap no-op-if-unchanged request to the driver -- GLFW/the driver own
+  //     any actual state, this class keeps none of its own (unlike `dispatched_mode_` for window
+  //     mode) because there is no GLFW query to desync from. DRIVER HONESTY: like `set_mode()`
+  //     above, this is a REQUEST -- some drivers/compositors clamp or ignore it (documented GLFW
+  //     limitation, not a glintfx one); `get_monitor_refresh_hz()` below is a SEPARATE read path,
+  //     never an echo of the interval requested here.
+  // PT: WM-VSYNC -- pede um intervalo de swap (`glfwSwapInterval`), o primitivo GLFW real que
+  //     `App::set_vsync`/`App::set_swap_interval` (app.hpp) encaminham. `interval`: `0` desliga
+  //     vsync (swaps ilimitados), `1` sincroniza com a taxa de atualização do monitor, `n>1`
+  //     sincroniza a cada N-ésimo refresh (meia-taxa, terça-taxa, ...). Retorna `false` (no-op,
+  //     nada pedido ao driver) quando `win_` é nulo (create() não chamado/falhou -- mesma
+  //     disciplina fail-high de mode()/set_mode() acima) OU `interval` é negativo -- um
+  //     intervalo NEGATIVO é o próprio sinal do GLFW pra vsync adaptativo/com tearing
+  //     (`GLX_EXT_swap_control_tear`/`WGL_EXT_swap_control_tear`), que é EXPLICITAMENTE fora de
+  //     escopo desta fatia (a própria nota de escopo do `WM-VSYNC` no TODO.md: nenhuma máquina
+  //     de cap arbitrário/vsync-adaptativo aqui, semear um desdobramento se um consumidor pedir)
+  //     -- rejeitar aqui significa que um chamador nunca entra silenciosamente num comportamento
+  //     de driver que esta API não foi desenhada pra prometer. CONTEXTO (D-ORDEM):
+  //     `glfwSwapInterval` exige o contexto GL CORRENTE na thread chamadora; o create() acima já
+  //     torna o contexto de `win_` corrente logo após `glfwCreateWindow` e esta classe nunca o
+  //     troca pelo resto da vida do App (o mesmo invariante de contexto único que as chamadas
+  //     diretas `glReadPixels`/`glBindFramebuffer` de `render()`/`snapshot()` em app.cpp já
+  //     assumem sem reafirmá-lo) -- então esta chamada NÃO rechama `glfwMakeContextCurrent`
+  //     sozinha; só é seguro chamar depois de um create() bem-sucedido, o que a guarda de `win_`
+  //     nulo acima já garante. Idempotente: chamar com o MESMO intervalo duas vezes (ou qualquer
+  //     intervalo) é um pedido seguro e barato de no-op-se-inalterado ao driver -- GLFW/o driver
+  //     são donos de qualquer estado de fato, esta classe não guarda nenhum próprio (diferente
+  //     de `dispatched_mode_` pro modo de janela) porque não existe query do GLFW pra desincronizar
+  //     dele. HONESTIDADE DE DRIVER: igual ao `set_mode()` acima, isto é um PEDIDO -- alguns
+  //     drivers/compositores fixam ou ignoram (limitação documentada do GLFW, não da glintfx);
+  //     `get_monitor_refresh_hz()` abaixo é um caminho de LEITURA SEPARADO, nunca um eco do
+  //     intervalo pedido aqui.
+  bool set_swap_interval(int interval);
+
+  // EN: WM-VSYNC -- query the refresh rate (Hz) of the monitor the window is CURRENTLY on, so a
+  //     host can reason about half-rate/third-rate `set_swap_interval` targets or a HUD readout
+  //     without depending on `set_swap_interval`'s own request having been honoured. Returns `0`
+  //     when `win_` is null, no monitor can be resolved, or the resolved monitor reports no
+  //     video mode (D5 fail-high, twin of create()'s own null-vm guard) -- documented
+  //     INDETERMINATE, not an error: headless (Xvfb, no real display) is the expected case that
+  //     hits this path, not a bug. MONITOR RESOLUTION (cheap: `glfwGetMonitors()` is O(few) on
+  //     every real desktop, this is not a per-frame call): fullscreen
+  //     (`glfwGetWindowMonitor(win_) != nullptr`, same signal `mode()` above reads) uses that
+  //     EXACT monitor -- GLFW already knows it, no guessing needed. Otherwise (Windowed/
+  //     Maximized) GLFW has NO "which monitor is this window on" query of its own, so
+  //     `monitor_for_window()` (private, below) computes the monitor with the LARGEST rectangle
+  //     overlap against the window's current position+size across `glfwGetMonitors()` -- correct
+  //     multi-monitor behaviour (distribution-general scope, not just the primary), falling back
+  //     to the primary monitor only when NO monitor overlaps at all (observed under Xvfb: the
+  //     virtual display's reported geometry does not always overlap the window's reported
+  //     position, since there is no real WM placing it) -- see that method's own doc-comment for
+  //     the overlap arithmetic.
+  // PT: WM-VSYNC -- consulta a taxa de atualização (Hz) do monitor em que a janela está
+  //     ATUALMENTE, para que um host possa raciocinar sobre alvos de `set_swap_interval` de
+  //     meia-taxa/terça-taxa ou uma leitura de HUD sem depender do próprio pedido de
+  //     `set_swap_interval` ter sido honrado. Retorna `0` quando `win_` é nulo, nenhum monitor
+  //     é resolvível, ou o monitor resolvido não reporta video mode (fail-high D5, gêmeo da
+  //     própria guarda de vm nulo do create()) -- documentado como INDETERMINADO, não um erro:
+  //     headless (Xvfb, sem display real) é o caso esperado que bate neste caminho, não um bug.
+  //     RESOLUÇÃO DE MONITOR (barato: `glfwGetMonitors()` é O(poucos) em todo desktop real, isto
+  //     não é uma chamada por-frame): fullscreen (`glfwGetWindowMonitor(win_) != nullptr`, o
+  //     mesmo sinal que mode() acima lê) usa EXATAMENTE aquele monitor -- o GLFW já sabe, sem
+  //     precisar adivinhar. Senão (Windowed/Maximized) o GLFW NÃO tem query própria de "em qual
+  //     monitor esta janela está", então `monitor_for_window()` (privado, abaixo) computa o
+  //     monitor com o MAIOR overlap de retângulo contra a posição+tamanho corrente da janela
+  //     através de `glfwGetMonitors()` -- comportamento multi-monitor correto (escopo de
+  //     distribuição geral, não só o primário), caindo pro monitor primário só quando NENHUM
+  //     monitor tem overlap nenhum (observado sob Xvfb: a geometria reportada do display
+  //     virtual nem sempre sobrepõe a posição reportada da janela, já que não há WM real
+  //     posicionando-a) -- ver o doc-comment daquele método pra aritmética do overlap.
+  int get_monitor_refresh_hz() const;
 
   // EN: Register the sink that receives physical input translated to the neutral UiEvent
   //     format (A1, framework-2D). The 5 GLFW callbacks (key/char/mouse-button/cursor-pos/
@@ -316,6 +409,52 @@ private:
   static void settle_window_system_request();
 
   void save_windowed_geometry();
+
+  // EN: WM-VSYNC -- resolves the monitor with the LARGEST overlap against the window's current
+  //     `glfwGetWindowPos`/`glfwGetWindowSize` rectangle, iterating `glfwGetMonitors()` (a
+  //     handful of entries on every real desktop -- cheap, not a per-frame call). Falls back to
+  //     `glfwGetPrimaryMonitor()` when no monitor overlaps at all (`win_` null, no monitors
+  //     reported, or every candidate's overlap area is zero -- observed under Xvfb). Only called
+  //     by `get_monitor_refresh_hz()` (its public doc-comment, above, carries the full contract
+  //     this backs) for the non-fullscreen case -- fullscreen already has the exact monitor from
+  //     `glfwGetWindowMonitor(win_)`, no need to guess.
+  // PT: WM-VSYNC -- resolve o monitor com o MAIOR overlap contra o retângulo corrente da janela
+  //     (`glfwGetWindowPos`/`glfwGetWindowSize`), iterando `glfwGetMonitors()` (um punhado de
+  //     entradas em todo desktop real -- barato, não é chamada por-frame). Cai pra
+  //     `glfwGetPrimaryMonitor()` quando nenhum monitor tem overlap nenhum (`win_` nulo, nenhum
+  //     monitor reportado, ou todo candidato com área de overlap zero -- observado sob Xvfb). Só
+  //     chamado por `get_monitor_refresh_hz()` (seu doc-comment público, acima, carrega o
+  //     contrato completo que isto sustenta) pro caso não-fullscreen -- fullscreen já tem o
+  //     monitor exato via `glfwGetWindowMonitor(win_)`, sem precisar adivinhar.
+  //
+  // EN: COVERAGE GAP (found by adversarial review, w18-rev2) -- the overlap ARITHMETIC above
+  //     (largest-rectangle-overlap selection across multiple candidate monitors) has NO
+  //     automated test proving it picks the CORRECT monitor. Measured: sabotaging this method to
+  //     unconditionally `return glfwGetPrimaryMonitor();` (skipping the overlap loop entirely)
+  //     survives the FULL suite (102/102 GLFW=ON) -- because Xvfb always reports exactly ONE
+  //     virtual monitor, "largest overlap" and "always the primary" are INDISTINGUISHABLE in
+  //     every environment this suite runs in. The suite only proves this method does not crash
+  //     and returns a monitor whose `glfwGetVideoMode()` is readable -- NOT that the overlap
+  //     comparison itself is correct when more than one monitor is a candidate. Same class of
+  //     limitation as the window-focus/iconify observation: only a REAL multi-monitor desktop
+  //     session (nested compositor or otherwise) would exercise more than one candidate and
+  //     prove the arithmetic picks the right one. Whoever touches this method's overlap logic
+  //     next: the suite will NOT catch a wrong answer here, only a crash.
+  // PT: LACUNA DE COBERTURA (achada por review adversarial, w18-rev2) -- a ARITMÉTICA de overlap
+  //     acima (seleção por maior overlap de retângulo entre múltiplos monitores candidatos) NÃO
+  //     tem teste automatizado provando que escolhe o monitor CORRETO. Medido: sabotar este
+  //     método pra `return glfwGetPrimaryMonitor();` incondicional (pulando o laço de overlap
+  //     inteiro) sobrevive à suíte COMPLETA (102/102 GLFW=ON) -- porque o Xvfb sempre reporta
+  //     exatamente UM monitor virtual, "maior overlap" e "sempre o primário" são
+  //     INDISTINGUÍVEIS em todo ambiente onde esta suíte roda. A suíte só prova que este método
+  //     não crasha e retorna um monitor cujo `glfwGetVideoMode()` é legível -- NÃO que a própria
+  //     comparação de overlap está correta quando mais de um monitor é candidato. Mesma classe
+  //     de limitação da observação de focus/iconify de janela: só uma sessão de desktop
+  //     multi-monitor REAL (compositor aninhado ou não) exercitaria mais de um candidato e
+  //     provaria que a aritmética escolhe o certo. Quem mexer na lógica de overlap deste método
+  //     depois: a suíte NÃO vai pegar uma resposta errada aqui, só um crash.
+  GLFWmonitor* monitor_for_window() const;
+
   // EN: Last known modifier bitmask (glintfx::Mod), updated by the key and mouse-button
   //     trampolins and reused for the cursor-pos/scroll callbacks, which GLFW does NOT hand a
   //     mods parameter to -- same pattern the pinned RmlUi GLFW backend uses

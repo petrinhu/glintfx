@@ -139,8 +139,37 @@ jobs:
         backend: [ON, OFF]
 
     steps:
+      # EN: SEC-CI-HARDEN (IMP-1, AUD-CI-RUNNER) -- pinned to a full commit SHA, not
+      #     the mutable `@v4` tag. Both actions below (checkout, cache) run inside this
+      #     REPO's own self-hosted container, on the lead's own machine -- a materially
+      #     different risk from the same actions on a GitHub-hosted ephemeral VM (see
+      #     ci.yml's own unpinned `@v4` uses, which stay unpinned deliberately: that
+      #     tier is the "well-understood, generally-accepted" one AUD-CI-RUNNER's IMP-1
+      #     finding itself calls out). If `v4` were ever repointed upstream (account
+      #     compromise, the tj-actions/changed-files 2025 supply-chain pattern), the
+      #     new code would run inside this container's sandbox -- narrow (no
+      #     capabilities, non-root, no host mount, per the audit's own runtime-verified
+      #     isolation axis) but still more machine-adjacent than a disposable cloud VM.
+      #     SHA re-verified against GitHub's own tag ref (`gh api
+      #     repos/actions/checkout/git/ref/tags/v4.4.0`), confirmed identical to what
+      #     the `v4` major tag currently resolves to.
+      # PT: SEC-CI-HARDEN (IMP-1, AUD-CI-RUNNER) -- fixado num SHA de commit completo,
+      #     não na tag mutável `@v4`. As duas actions abaixo (checkout, cache) rodam
+      #     dentro do container self-hosted DESTE repo, na própria máquina do líder --
+      #     um risco materialmente diferente das mesmas actions numa VM efêmera
+      #     GitHub-hosted (ver os `@v4` não-pinados do próprio ci.yml, deliberadamente
+      #     mantidos assim: esse nível é o "bem entendido e geralmente aceito" que o
+      #     próprio achado IMP-1 da AUD-CI-RUNNER cita). Se a tag `v4` fosse repontada
+      #     upstream (conta comprometida, o padrão de supply-chain do
+      #     tj-actions/changed-files de 2025), o código novo rodaria dentro do sandbox
+      #     deste container -- estreito (sem capabilities, não-root, sem mount do host,
+      #     conforme o eixo de isolamento verificado em runtime pela própria auditoria)
+      #     mas ainda mais próximo da máquina que uma VM de nuvem descartável. SHA
+      #     re-verificado contra a própria ref de tag do GitHub (`gh api
+      #     repos/actions/checkout/git/ref/tags/v4.4.0`), confirmado idêntico ao que a
+      #     tag major `v4` resolve hoje.
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # EN: Cache key namespaced "selfhosted-f42" -- deliberately DIFFERENT from the
       #     ubuntu-latest jobs' "rmlui-${{ runner.os }}-..." keys. The cached path holds
@@ -156,7 +185,7 @@ jobs:
       #     o cache é a única coisa que sobrevive entre execuções, que é justamente por
       #     que vale a pena mantê-lo.
       - name: cache rmlui (fetchcontent)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: glintfx/build-asan-${{ matrix.backend }}/_deps
           key: rmlui-selfhosted-f42-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
@@ -255,11 +284,18 @@ jobs:
         backend: [ON, OFF]
 
     steps:
+      # EN: Pinned by commit SHA -- see the long SEC-CI-HARDEN (IMP-1) comment on the
+      #     `sanitize` job's own checkout step above for the full rationale; same SHAs,
+      #     same reasoning, this is the fonteng job's copy of the same two actions.
+      # PT: Fixado por SHA de commit -- ver o comentário longo SEC-CI-HARDEN (IMP-1) no
+      #     próprio passo de checkout do job `sanitize` acima para a racional completa;
+      #     mesmos SHAs, mesmo raciocínio, esta é a cópia do job fonteng das mesmas
+      #     duas actions.
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: cache rmlui (fetchcontent)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
           key: rmlui-selfhosted-f42-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}

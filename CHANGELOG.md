@@ -8,6 +8,38 @@
 
 ---
 
+## [Unreleased]
+
+### Security / Segurança
+
+- **EN:** **`SEC-CI-HARDEN`** (`AUD-CI-RUNNER` remediation, 2 of 3 IMPORTANT findings): the
+  self-hosted CI runner's anti-fork boundary is now a mechanically-enforced gate, not just a
+  header comment. `.github/workflows/ci.yml`'s `lint-and-scan` job runs the new
+  `tools/check_workflow_self_hosted_gate.py` (structural PyYAML parse, not `grep` -- avoids the
+  false sense of coverage a raw text match gives, since `heavy.yml`'s own explanatory comments
+  contain the string `pull_request`) on every push/PR, failing if any workflow ever pairs a
+  `self-hosted` job with a `pull_request`/`pull_request_target`/`issue_comment` trigger.
+  Separately, `heavy.yml`'s four third-party `uses:` lines (`actions/checkout`, `actions/cache`,
+  both matrix jobs) are now pinned to a full commit SHA (with the version as a trailing comment)
+  instead of the mutable `@v4` tag -- closes the supply-chain exposure specific to a self-hosted
+  runner (a repointed upstream tag would otherwise run inside this repo's own container on the
+  lead's machine). No functional/build change; CI-only.
+- **PT:** **`SEC-CI-HARDEN`** (remediação da `AUD-CI-RUNNER`, 2 dos 3 achados IMPORTANTE): a
+  fronteira anti-fork do runner self-hosted de CI agora é um gate imposto mecanicamente, não só
+  um comentário de cabeçalho. O job `lint-and-scan` de `.github/workflows/ci.yml` roda o novo
+  `tools/check_workflow_self_hosted_gate.py` (parse estrutural com PyYAML, não `grep` -- evita a
+  falsa sensação de cobertura que um casamento de texto cru daria, já que os próprios comentários
+  explicativos do `heavy.yml` contêm a string `pull_request`) em todo push/PR, falhando se algum
+  workflow algum dia parear um job `self-hosted` com gatilho
+  `pull_request`/`pull_request_target`/`issue_comment`. Separadamente, as quatro linhas `uses:`
+  de terceiro do `heavy.yml` (`actions/checkout`, `actions/cache`, nos dois jobs de matrix) agora
+  estão fixadas por SHA de commit completo (com a versão em comentário à direita) em vez da tag
+  mutável `@v4` -- fecha a exposição de supply-chain específica de um runner self-hosted (uma tag
+  upstream repontada rodaria dentro do próprio container deste repo, na máquina do líder).
+  Nenhuma mudança funcional/de build; só CI.
+
+---
+
 ## [0.24.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.24.0)
 
 **EN:** **Minor** release -- two additive public-API waves (`UI-FONTFACE`, `WM-VSYNC`), no existing signature changed; **drop-in from v0.23.0**. `UiLayer::load_font_face`/`App::load_font_face` open the first C++ path to `Rml::LoadFontFace`, so a host can register a font AFTER resolving a localisation pack, DLC, or user preference, without authoring an RCSS `@font-face` block. `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz` give the standalone `App` its first vsync control and a multi-monitor-aware refresh-rate query, closing a documented gap (glintfx never called `glfwSwapInterval` before this release). Both are consumer-driven (GusWorld), App-only for vsync (embed mode's host owns its own swap primitive).

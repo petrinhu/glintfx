@@ -367,6 +367,7 @@ jobs:
     env:
       GITLEAKS_VERSION: "8.30.0"
       GRYPE_VERSION: "0.112.0"
+      PYYAML_VERSION: "6.0.3"
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -409,6 +410,44 @@ jobs:
       #     #include de terceiro nos headers publicos.
       - name: TST-L1-STATIC -- encapsulation gate
         run: ./tools/check_encapsulation.sh glintfx/include/glintfx
+
+      # EN: SEC-CI-HARDEN (IMP-2, AUD-CI-RUNNER) -- enforced anti-fork gate for the
+      #     self-hosted runner (heavy.yml). Runs here, on ubuntu-latest, deliberately
+      #     never on the self-hosted label itself -- it is a read-only YAML-structure
+      #     check with no runner privilege and no secret in scope, so it is safe to run
+      #     on every PR including fork PRs, which is the whole point: it must catch a
+      #     bad trigger change BEFORE it ever reaches a self-hosted runner. See
+      #     tools/check_workflow_self_hosted_gate.py's own header for why this has to
+      #     be structural (PyYAML) and not textual (grep): a raw `grep pull_request
+      #     heavy.yml` matches that file's own 4 explanatory comment lines and would
+      #     give a false sense of coverage. PyYAML itself is pinned by version (not by
+      #     commit SHA -- this step runs on a GitHub-hosted, ephemeral runner, the
+      #     "well-understood, generally-accepted risk" tier per AUD-CI-RUNNER's own
+      #     IMP-1 finding, not the self-hosted tier IMP-1 is about); `--break-system-
+      #     packages` is required on this runner image's PEP 668-managed system
+      #     Python, and is safe here because the install is scoped to this ephemeral
+      #     VM, never persisted or reused.
+      # PT: SEC-CI-HARDEN (IMP-2, AUD-CI-RUNNER) -- gate anti-fork imposto pro runner
+      #     self-hosted (heavy.yml). Roda aqui, no ubuntu-latest, deliberadamente nunca
+      #     no label self-hosted em si -- é uma checagem read-only de estrutura YAML,
+      #     sem privilégio de runner e sem segredo no escopo, então é seguro rodar em
+      #     todo PR inclusive de fork, que é o objetivo inteiro: precisa pegar uma
+      #     mudança ruim de gatilho ANTES dela alcançar um runner self-hosted. Ver o
+      #     cabeçalho do próprio tools/check_workflow_self_hosted_gate.py pra entender
+      #     por que isto precisa ser estrutural (PyYAML) e não textual (grep): um
+      #     `grep pull_request heavy.yml` cru casa as 4 linhas de comentário
+      #     explicativo daquele arquivo e daria uma falsa sensação de cobertura. O
+      #     próprio PyYAML é fixado por versão (não por SHA de commit -- este passo
+      #     roda num runner GitHub-hosted efêmero, o nível "risco bem entendido e
+      #     geralmente aceito" do próprio achado IMP-1 da AUD-CI-RUNNER, não o nível
+      #     self-hosted de que o IMP-1 trata); `--break-system-packages` é exigido pelo
+      #     Python de sistema gerenciado por PEP 668 desta imagem de runner, e é
+      #     seguro aqui porque a instalação fica escopada a esta VM efêmera, nunca
+      #     persistida nem reusada.
+      - name: SEC-CI-HARDEN -- self-hosted anti-fork trigger gate
+        run: |
+          pip install --quiet --break-system-packages "PyYAML==${PYYAML_VERSION}"
+          python3 tools/check_workflow_self_hosted_gate.py .github/workflows
 
       # EN: ADR-0015 phase A0 -- configure-only smoke check for the two named
       #     CMakePresets.json compositions (glintfx/CMakePresets.json, "full" and

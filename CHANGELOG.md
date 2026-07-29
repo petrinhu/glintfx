@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.25.0)
+
 ### Added / Adicionado
 
 - **EN:** **`IMG-DECODE`** (onda W19, consumer-reported by GusWorld -- 6 direct `stbi_load()`

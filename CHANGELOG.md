@@ -10,6 +10,48 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** **`D2D-FLUSH`** / **`D2D-TEXPIXELS`** (onda W19, consumer-reported by GusWorld):
+  `Draw2d::flush()` forces every draw queued so far in the current bracket to GL WITHOUT closing
+  it (`begin()`'d still, its own `end()` still owed) -- lets a host interleave Draw2D
+  sprites/text with a cohabiting renderer's own raw GL calls inside ONE `begin()`/`end()` pair,
+  replacing the `end()`+`begin()` workaround that also (unnecessarily) closed and reopened the
+  bracket. Camera (D13), the current scissor (D28), and layer-armed/current-layer (D27) all
+  survive the call unchanged, including in buffered (`set_layer()`-armed) mode, where the
+  scissor state is explicitly saved/restored around the replay. `Draw2d::create_texture(const
+  void* pixels, int w, int h, PixelFormat format)` is `load_texture`'s general-case sibling: a
+  `Texture2d` from a caller-owned pixel buffer already in memory (a runtime-baked glyph atlas, a
+  procedural texture, a composition target), same handle type/registry/`destroy_texture()`
+  release, indistinguishable at every call site from a file-loaded one. `PixelFormat::R8`
+  (grayscale/coverage, uploaded through the same `GL_R8` + swizzle-to-RRRR path the font-glyph
+  atlas already uses, no premultiply step) and `PixelFormat::Rgba8` (straight alpha on input,
+  premultiplied on ingest -- the SAME convention `load_texture()` applies to a decoded file, one
+  alpha convention across the whole public surface). Fail-high on `nullptr`/non-positive
+  dimensions/an out-of-range format/over the SAME 256 MiB cap `load_texture()` enforces -- never
+  a crash. See `docs/draw2d.md` ("Forcing GL without closing the bracket" / "Texture from
+  pixels") for the full contract.
+- **PT:** **`D2D-FLUSH`** / **`D2D-TEXPIXELS`** (onda W19, reportado pelo consumidor GusWorld):
+  `Draw2d::flush()` força todo desenho enfileirado até agora no bracket corrente pra GL SEM
+  fechá-lo (continua `begin()`'d, o próprio `end()` ainda é devido) -- deixa um host intercalar
+  sprites/texto do Draw2D com as chamadas GL cruas de um renderer coabitante dentro de UM par
+  `begin()`/`end()` só, substituindo o contorno `end()`+`begin()` que também fechava e reabria o
+  bracket (desnecessariamente). Câmera (D13), o scissor corrente (D28), e camada-armada/camada-
+  corrente (D27) sobrevivem todos à chamada inalterados, inclusive em modo bufferizado
+  (`set_layer()` armado), onde o estado de scissor é explicitamente salvo/restaurado ao redor do
+  replay. `Draw2d::create_texture(const void* pixels, int w, int h, PixelFormat format)` é o
+  irmão caso-geral do `load_texture`: uma `Texture2d` a partir de um buffer de pixel já em
+  memória, de posse do chamador (um atlas de glifo assado em runtime, uma textura procedural, um
+  alvo de composição), mesmo tipo de handle/registry/liberação por `destroy_texture()`,
+  indistinguível em todo sítio de chamada de uma carregada de arquivo. `PixelFormat::R8`
+  (grayscale/cobertura, subido pelo mesmo caminho `GL_R8` + swizzle-pra-RRRR que o atlas de
+  glifo de fonte já usa, sem passo de premultiply) e `PixelFormat::Rgba8` (alpha straight na
+  entrada, premultiplicado no ingresso -- a MESMA convenção que o `load_texture()` aplica a um
+  arquivo decodificado, uma convenção de alpha só na superfície pública inteira). Fail-high em
+  `nullptr`/dimensões não-positivas/um formato fora da faixa/acima do MESMO teto de 256 MiB que o
+  `load_texture()` aplica -- nunca um crash. Ver `docs/draw2d.md` ("Forçando GL sem fechar o
+  bracket" / "Textura a partir de pixels") pro contrato completo.
+
 ### Security / Segurança
 
 - **EN:** **`SEC-CI-HARDEN`** (`AUD-CI-RUNNER` remediation, 2 of 3 IMPORTANT findings): the

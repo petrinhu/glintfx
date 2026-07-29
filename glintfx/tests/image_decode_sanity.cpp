@@ -312,6 +312,47 @@ int main() {
     check(!decode_premultiplied_rgba(nullptr, 4).ok, "hostile: null data with non-zero len rejected (ok == false)");
   }
 
+  // ===========================================================================================
+  // EN: D2D-TEXPIXELS -- premultiply_rgba_inplace(), the standalone helper Draw2d::create_texture()
+  //     (draw2d.cpp) uses so its OWN premultiply matches decode_premultiplied_rgba()'s formula
+  //     exactly (this file's own drift-detection role, named in image_decode.hpp's own doc-comment
+  //     for the helper). Same four hand-derived pixels as Group 1a above (opaque, transparent,
+  //     half-alpha, opaque white) -- fed through the STANDALONE helper directly (not via a decode),
+  //     proving the two independently-written loops agree byte-for-byte. Plus the guard: nullptr/
+  //     zero pixel_count is a safe total no-op.
+  // PT: D2D-TEXPIXELS -- premultiply_rgba_inplace(), o helper avulso que o Draw2d::create_texture()
+  //     (draw2d.cpp) usa pra que o PRÓPRIO premultiply dele bata exatamente com a fórmula do
+  //     decode_premultiplied_rgba() (o próprio papel de detecção de desalinhamento deste arquivo,
+  //     nomeado no próprio doc-comment do helper em image_decode.hpp). Os MESMOS quatro pixels
+  //     derivados à mão do Grupo 1a acima (opaco, transparente, meio-alpha, branco opaco) --
+  //     entregues direto pelo helper AVULSO (não via decode), provando que os dois loops escritos
+  //     de forma independente concordam byte a byte. Mais a guarda: pixel_count/nullptr zero é um
+  //     no-op total seguro.
+  {
+    unsigned char px[16] = {
+        200, 100, 50, 255, // opaque -> no-op.
+        200, 100, 50, 0,   // transparent -> RGB zeroed.
+        10, 20, 30, 128,   // half alpha -> hand-derived (5,10,15,128).
+        255, 255, 255, 255 // opaque white -> no-op.
+    };
+    premultiply_rgba_inplace(px, 4);
+    const unsigned char expect[16] = {200, 100, 50, 255, 0, 0, 0, 0, 5, 10, 15, 128,
+                                      255, 255, 255, 255};
+    bool matches = true;
+    for (int i = 0; i < 16; ++i) matches = matches && (px[i] == expect[i]);
+    check(matches,
+          "premultiply_rgba_inplace: matches decode_premultiplied_rgba()'s own formula "
+          "byte-for-byte on the SAME four hand-derived pixels (Group 1a)");
+
+    // Guard: nullptr / pixel_count == 0 -- safe total no-op, no crash.
+    premultiply_rgba_inplace(nullptr, 4);
+    unsigned char empty_buf[1] = {77};
+    premultiply_rgba_inplace(empty_buf, 0);
+    check(empty_buf[0] == 77,
+          "premultiply_rgba_inplace: pixel_count==0 is a total no-op, buffer left untouched");
+    check(true, "premultiply_rgba_inplace: nullptr with pixel_count>0 did not crash");
+  }
+
   if (g_failures > 0) {
     std::fprintf(stderr, "image_decode_sanity: %d assertion(s) FAILED\n", g_failures);
     return 1;

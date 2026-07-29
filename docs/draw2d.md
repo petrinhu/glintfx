@@ -385,6 +385,50 @@ handle (the full D7 validation chain, dedup'd log -- same rejection story as `dr
 fully-transparent texture -- distinct from a 1x1 opaque texture, which returns
 `{true, 0, 0, 1, 1}`.
 
+### Texture from pixels (D2D-TEXPIXELS)
+
+`create_texture(const void* pixels, int w, int h, PixelFormat format)` is `load_texture`'s
+general-case sibling: same `Texture2d` handle, same registry, same `destroy_texture()` release --
+indistinguishable at every other call site from a texture `load_texture()` itself returned. Use
+it for anything that is not a file on disk: a glyph atlas baked at runtime, a procedural texture,
+a composition target.
+
+```cpp
+std::vector<unsigned char> pixels = bake_atlas(64, 64); // caller-owned, straight alpha
+glintfx::Texture2d atlas =
+    draw2d.create_texture(pixels.data(), 64, 64, glintfx::Draw2d::PixelFormat::Rgba8);
+```
+
+`PixelFormat` is a nested enum, two values:
+
+- **`R8`** -- single-channel grayscale/coverage, the SAME shape `load_font()`'s glyph atlas
+  already uploads (`draw2d.cpp`'s `create_atlas_page_texture()`, `kAtlasPageDim`-sized pages).
+  Uploaded through `GL_R8` with `GL_TEXTURE_SWIZZLE_R/G/B/A -> GL_RED`, so a single coverage byte
+  `c` reads at the shader as RGBA `(c,c,c,c)` -- the premultiplied-white shape the D8 tint
+  formula already expects, zero new shader. **No premultiply step** (there is no colour channel
+  to premultiply; coverage alone already IS both the RGB and the alpha).
+- **`Rgba8`** -- 4-channel, **STRAIGHT (non-premultiplied) alpha on input**, premultiplied by
+  `create_texture()` on ingest, the EXACT SAME convention `load_texture()` applies to a decoded
+  file (`image_decode.hpp`'s `premultiply_rgba_inplace()`, the identical formula
+  `decode_premultiplied_rgba()` uses -- pinned equal by `image_decode_sanity.cpp`). **Passing
+  already-premultiplied pixels premultiplies them a SECOND time** (a darkening at
+  partially-transparent edges, never a crash) -- there is no raw/already-premultiplied toggle by
+  design: one alpha convention across the whole public surface, file-loaded or memory-created.
+
+Fail-high, guard order literal, every check BEFORE touching `pixels`: `pixels == nullptr` ->
+`ok() == false`; `w <= 0 || h <= 0` -> `ok() == false`; an out-of-range `format` (a hostile enum
+cast) -> `ok() == false`; `w * h * bytes_per_pixel` over the SAME 256 MiB cap `load_texture()`
+enforces on its own encoded-file input (`kMaxImageDecodeBytes`) -> `ok() == false`, rejected
+BEFORE ever copying or uploading a hostile/huge buffer. Also returns an invalid handle before
+`init()`/after `shutdown()`.
+
+Declared limitations (not hidden, same discipline as "Limits declared" below): no mipmap, no
+partial/`glTexSubImage2D`-style update after creation; `texture_content_bbox()` is **not**
+computed for a `create_texture()`-made handle (D29's cache is populated only inside
+`load_texture()`, on decoded pixels already in hand there for free) -- calling it on such a
+handle is a legal, documented `found == false`, indistinguishable from a fully-transparent
+texture at that one call.
+
 ### Text (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
 
 Draw2D renders UTF-8 text through the **sovereign C font core**
@@ -530,6 +574,8 @@ already in-tree, pure C, and already compiles in the MSVC job.
 | `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | TX15/TX16 overload -- word-wrap (`max_width > 0`) + per-line alignment (left/center/right/justify). See "Word-wrap and alignment" above. |
 | `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout WITHOUT drawing; `{ok,width,height,ascent,line_height,line_count}`. Same layout + fail-high chain as `draw_text`. See "Text" above. |
 | `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | TX15/TX16 overload -- measures with wrap + alignment active (`line_count`/`height` reflect the wrapped lines). |
+| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- `load_texture`'s general-case sibling, from a caller-owned pixel buffer. `R8`/`Rgba8`, `Rgba8` premultiplied on ingest. `ok() == false` on `nullptr`, non-positive `w`/`h`, an out-of-range `format`, or over the 256 MiB cap -- never a crash. See "Texture from pixels" above. |
+| `flush()` (`glintfx/include/glintfx/draw2d.hpp:1206`) | `void` | D2D-FLUSH -- forces the current bracket's pending draws to GL WITHOUT closing it. Camera/scissor/layer state all survive it unchanged. Safe no-op outside a bracket. See "Forcing GL without closing the bracket" above. |
 
 ### Premultiply and the tint formula (D8)
 
@@ -673,6 +719,42 @@ stream, transparent to the caller. **This is a memory bound, not a performance c
 All batching DECISIONS live in the pure `sprite_batch.hpp` (zero GL calls: it takes draw commands
 and emits vertex data + flush ranges, unit-testable headless); `draw2d.cpp` owns only the GL
 execution of what the pure batcher decided.
+
+### Forcing GL without closing the bracket (D2D-FLUSH)
+
+`flush()` pushes every draw queued so far in the CURRENT bracket to GL **without** closing it --
+the bracket stays `begin()`'d and still needs its own matching `end()`. This is the missing third
+option between "keep batching" (do nothing) and "close the bracket" (`end()`): a host that needs
+to interleave Draw2D sprites/text with a COHABITING renderer's own raw GL draw calls, inside ONE
+`begin()`/`end()` pair, no longer has to pay `end()`+`begin()` (which forces the SAME GL work but
+also closes and immediately reopens the bracket).
+
+```cpp
+draw2d.begin(w, h);
+draw2d.draw_sprite(background, RectF{0, 0, w, h});
+draw2d.flush();     // pushes the background sprite to GL NOW -- bracket stays open.
+host_own_gl_draw();  // a cohabiting renderer's raw GL calls, e.g. the font engine's own pipeline.
+draw2d.draw_sprite(foreground, RectF{0, 0, w, h});
+draw2d.end();        // closes the bracket, flushing the foreground sprite.
+```
+
+Contrast with `end()` precisely: `end()` finalizes+drains AND resets layer/current layer to
+disarmed/0 (D27's own "not sticky across brackets" rule); `flush()` does **neither** -- camera
+(D13, CPU-side, pre-batcher, untouched by any flush), the current scissor (D28), and
+layer-armed/current-layer (D27) all read back exactly as they were immediately before the call,
+immediately after it.
+
+Mechanics: in STREAMING mode (the default, `set_layer()` never called), `flush()` reuses the
+EXACT run-boundary pair `set_layer()`/`set_scissor()` already force mid-bracket
+(`SpriteBatch::flush_pending()` + `Impl::drain_ready()`) -- zero new GL-execution path. In
+BUFFERED mode (`set_layer()` armed), `flush()` reuses `end()`'s own replay
+(`Impl::replay_layer_queue()`), with the current scissor state saved before that replay and
+restored after it -- the replay's own per-group loop would otherwise leave `scissor_active`/
+`scissor_rect` at whatever the LAST group's snapshot was instead of the caller's actual current
+value.
+
+Safe no-op: outside a `begin()`/`end()` bracket, on an empty/never-drawn-into bracket, and on a
+never-init/moved-from/post-shutdown `Draw2d` (D15).
 
 ### Fail-high input surface (D10)
 
@@ -1292,6 +1374,52 @@ nunca-carregado (a cadeia completa de validação D7, log dedup'd -- mesma hist�
 `draw_sprite`) OU uma textura totalmente transparente -- distinta de uma textura opaca 1x1, que
 devolve `{true, 0, 0, 1, 1}`.
 
+### Textura a partir de pixels (D2D-TEXPIXELS)
+
+`create_texture(const void* pixels, int w, int h, PixelFormat format)` é o irmão caso-geral do
+`load_texture`: mesmo handle `Texture2d`, mesmo registry, mesma liberação por
+`destroy_texture()` -- indistinguível, em todo outro sítio de chamada, de uma textura que o
+próprio `load_texture()` devolveu. Use pra qualquer coisa que não seja um arquivo em disco: um
+atlas de glifo assado em runtime, uma textura procedural, um alvo de composição.
+
+```cpp
+std::vector<unsigned char> pixels = bake_atlas(64, 64); // de posse do chamador, alpha straight
+glintfx::Texture2d atlas =
+    draw2d.create_texture(pixels.data(), 64, 64, glintfx::Draw2d::PixelFormat::Rgba8);
+```
+
+`PixelFormat` é um enum aninhado, dois valores:
+
+- **`R8`** -- grayscale/cobertura de canal único, a MESMA forma que o atlas de glifo do
+  `load_font()` já sobe (`create_atlas_page_texture()` de `draw2d.cpp`, páginas de tamanho
+  `kAtlasPageDim`). Subido via `GL_R8` com `GL_TEXTURE_SWIZZLE_R/G/B/A -> GL_RED`, então um
+  byte de cobertura `c` é lido no shader como RGBA `(c,c,c,c)` -- a forma
+  branco-premultiplicado que a fórmula de tint D8 já espera, zero shader novo. **Sem passo de
+  premultiply** (não há canal de cor pra premultiplicar; a cobertura sozinha JÁ É tanto o RGB
+  quanto o alpha).
+- **`Rgba8`** -- 4 canais, **alpha STRAIGHT (não-premultiplicado) na entrada**, premultiplicado
+  pelo `create_texture()` no ingresso, a MESMA convenção exata que o `load_texture()` aplica a
+  um arquivo decodificado (`premultiply_rgba_inplace()` de `image_decode.hpp`, a fórmula idêntica
+  que `decode_premultiplied_rgba()` usa -- fixados iguais pelo `image_decode_sanity.cpp`).
+  **Entregar pixels JÁ-premultiplicados os premultiplica uma SEGUNDA vez** (um escurecimento nas
+  bordas parcialmente-transparentes, nunca um crash) -- não existe alternância cru/já-
+  premultiplicado por desenho: uma convenção de alpha só na superfície pública inteira,
+  carregado-de-arquivo ou criado-em-memória.
+
+Fail-high, ordem de guarda literal, toda checagem ANTES de tocar `pixels`: `pixels == nullptr`
+-> `ok() == false`; `w <= 0 || h <= 0` -> `ok() == false`; um `format` fora da faixa (um cast
+hostil de enum) -> `ok() == false`; `w * h * bytes_por_pixel` acima do MESMO teto de 256 MiB que
+o `load_texture()` aplica ao próprio input de arquivo codificado (`kMaxImageDecodeBytes`) ->
+`ok() == false`, rejeitado ANTES de sequer copiar ou subir um buffer hostil/enorme. Também
+devolve um handle inválido antes de `init()`/depois de `shutdown()`.
+
+Limitações declaradas (não escondidas, mesma disciplina de "Limites declarados" abaixo): sem
+mipmap, sem atualização parcial/estilo `glTexSubImage2D` depois da criação;
+`texture_content_bbox()` **não** é computado pra um handle feito por `create_texture()` (o cache
+do D29 é populado só dentro do `load_texture()`, sobre pixels decodificados já em mãos ali de
+graça) -- chamá-lo num handle desses é um `found == false` legal e documentado, indistinguível
+de uma textura totalmente transparente naquela chamada.
+
 ### Texto (D2D-TEXT -- `load_font`/`draw_text`/`measure_text`)
 
 O Draw2D renderiza texto UTF-8 pelo **núcleo C soberano de fonte**
@@ -1438,6 +1566,8 @@ C a mais (custo aceito, sem sub-flag por-feature). Nenhuma aresta de dependênci
 | `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | Overload TX15/TX16 -- word-wrap (`max_width > 0`) + alinhamento por linha (left/center/right/justify). Ver "Word-wrap e alinhamento" acima. |
 | `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout SEM desenhar; `{ok,width,height,ascent,line_height,line_count}`. Mesmo layout + cadeia fail-high do `draw_text`. Ver "Texto" acima. |
 | `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | Overload TX15/TX16 -- mede com wrap + alinhamento ativos (`line_count`/`height` refletem as linhas quebradas). |
+| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- irmão caso-geral do `load_texture`, a partir de um buffer de pixel de posse do chamador. `R8`/`Rgba8`, `Rgba8` premultiplicado no ingresso. `ok() == false` em `nullptr`, `w`/`h` não-positivo, `format` fora da faixa, ou acima do teto de 256 MiB -- nunca um crash. Ver "Textura a partir de pixels" acima. |
+| `flush()` (`glintfx/include/glintfx/draw2d.hpp:1206`) | `void` | D2D-FLUSH -- força os desenhos pendentes do bracket corrente pra GL SEM fechá-lo. Câmera/scissor/camada sobrevivem inalterados. No-op seguro fora de um bracket. Ver "Forçando GL sem fechar o bracket" acima. |
 
 ### Premultiply e a fórmula do tint (D8)
 
@@ -1586,6 +1716,41 @@ performance** -- ver "Limites declarados" abaixo pro D2D-3.
 Toda DECISÃO de batching mora no `sprite_batch.hpp` puro (zero chamada GL: recebe comandos de
 desenho e emite dado de vértice + faixas de flush, testável headless); `draw2d.cpp` é dono só da
 execução GL do que o batcher puro decidiu.
+
+### Forçando GL sem fechar o bracket (D2D-FLUSH)
+
+`flush()` empurra todo desenho enfileirado até agora no bracket CORRENTE pra GL **sem** fechá-lo
+-- o bracket continua `begin()`'d e ainda precisa do próprio `end()` correspondente. É a terceira
+opção que faltava entre "continuar batchando" (não fazer nada) e "fechar o bracket" (`end()`):
+um host que precisa intercalar sprites/texto do Draw2D com as chamadas GL cruas de um renderer
+COABITANTE, dentro de UM par `begin()`/`end()` só, não paga mais `end()`+`begin()` (que força o
+MESMO trabalho GL mas também fecha e reabre o bracket na hora).
+
+```cpp
+draw2d.begin(w, h);
+draw2d.draw_sprite(background, RectF{0, 0, w, h});
+draw2d.flush();     // empurra o sprite de fundo pra GL AGORA -- bracket continua aberto.
+host_own_gl_draw();  // chamadas GL cruas de um renderer coabitante, ex.: o próprio pipeline do motor de fonte.
+draw2d.draw_sprite(foreground, RectF{0, 0, w, h});
+draw2d.end();        // fecha o bracket, fazendo flush do sprite de frente.
+```
+
+Contraste com o `end()` de forma precisa: `end()` finaliza+drena E reseta camada/camada corrente
+pra desarmado/0 (a própria regra do D27 de "não sticky entre brackets"); `flush()` NÃO faz
+nenhum dos dois -- a câmera (D13, CPU-side, pré-batcher, intocada por qualquer flush), o scissor
+corrente (D28), e camada-armada/camada-corrente (D27) todos lêem de volta exatamente como
+estavam imediatamente antes da chamada, imediatamente depois dela.
+
+Mecânica: em modo STREAMING (o default, `set_layer()` nunca chamado), `flush()` reusa o MESMO par
+de fronteira-de-corrida que `set_layer()`/`set_scissor()` já forçam no meio do bracket
+(`SpriteBatch::flush_pending()` + `Impl::drain_ready()`) -- zero caminho de execução GL novo. Em
+modo BUFFERIZADO (`set_layer()` armado), `flush()` reusa o próprio replay do `end()`
+(`Impl::replay_layer_queue()`), com o estado de scissor corrente salvo antes daquele replay e
+restaurado depois dele -- o próprio loop por-grupo do replay senão deixaria `scissor_active`/
+`scissor_rect` no snapshot do ÚLTIMO grupo, em vez do valor corrente de fato do chamador.
+
+No-op seguro: fora de um bracket `begin()`/`end()`, num bracket vazio/nunca-desenhado, e num
+`Draw2d` nunca-inicializado/movido-de/pós-shutdown (D15).
 
 ### Superfície de entrada fail-high (D10)
 

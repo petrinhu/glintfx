@@ -35,6 +35,26 @@
 //     `operator=(const vector&)`, uma cópia silenciosa, não em `operator=(vector&&)`; fixado pelo
 //     próprio oráculo de contagem de alocação de `image_decode_hardening_sanity.cpp`).
 //
+//     DEC-FORMAT-SURFACE (W22, 2026-07-30): `decode_png_file()`, appended at the end of this
+//     file, is a PNG-ONLY sibling of `decode_image_file()` -- see `glintfx/image.hpp`'s own
+//     top-of-file addendum and that function's own doc-comment for the full rationale (the
+//     82-byte fake-TGA-header coador the general 3-format dispatch tolerates). Reads the file
+//     with the SAME literal-ported guard order as `decode_image_file()` (kept as an
+//     independent copy on purpose, not a shared helper -- same "pure ADDITION, not a refactor
+//     of working code" discipline this file already follows for its own two functions), then
+//     rejects any buffer whose first 8 bytes are not the fixed PNG file signature BEFORE ever
+//     delegating to `decode_image_memory()` above.
+// PT: DEC-FORMAT-SURFACE (W22, 2026-07-30): `decode_png_file()`, somado no fim deste arquivo,
+//     é uma irmã SÓ-PNG do `decode_image_file()` -- ver o próprio adendo de topo de
+//     `glintfx/image.hpp` e o próprio doc-comment daquela função pro racional completo (o
+//     coador de header-TGA-falso de 82 bytes que o dispatch geral de 3 formatos tolera). Lê o
+//     arquivo com a MESMA ordem de guarda portada literalmente do `decode_image_file()`
+//     (mantida como cópia independente de propósito, não um helper compartilhado -- mesma
+//     disciplina "ADIÇÃO pura, não um refactor de código funcionando" que este arquivo já
+//     segue pras próprias duas funções dele), depois rejeita qualquer buffer cujos primeiros
+//     8 bytes não sejam a assinatura fixa de arquivo PNG ANTES de sequer delegar ao
+//     `decode_image_memory()` acima.
+//
 //     DEC-NOTHROW (W21): as duas funções abaixo são `noexcept` -- o próprio contrato FAIL-HIGH de
 //     `glintfx/image.hpp` promete que `ok == false` é o ÚNICO sinal de falha, "nunca um crash". A
 //     UMA forma de aquela promessa quebrar sem um `try`/`catch` aqui: `std::bad_alloc` (ou
@@ -133,6 +153,88 @@ DecodedImagePixels decode_image_file(const char* path) noexcept {
     // EN/PT: same DEC-NOTHROW discipline as decode_image_memory() above -- the `buf(len)`
     // allocation is this function's OWN failure mode (decode_image_memory()'s own failures are
     // already caught inside that function and never reach this catch at all).
+    return DecodedImagePixels{};
+  } catch (...) {
+    return DecodedImagePixels{};
+  }
+}
+
+namespace {
+
+// EN: DEC-FORMAT-SURFACE (W22) -- the fixed 8-byte PNG file signature (PNG specification,
+//     RFC 2083 / ISO 15948 -- the SAME 8 bytes every PNG encoder in existence writes as the
+//     first 8 bytes of the file). See `decode_png_file()` below and `glintfx/image.hpp`'s own
+//     top-of-file DEC-FORMAT-SURFACE addendum for why this check exists and what it does (and
+//     does not) guard.
+// PT: DEC-FORMAT-SURFACE (W22) -- a assinatura fixa de 8 bytes de arquivo PNG (especificação
+//     PNG, RFC 2083 / ISO 15948 -- os MESMOS 8 bytes que todo encoder de PNG já existente
+//     escreve como os primeiros 8 bytes do arquivo). Ver o `decode_png_file()` abaixo e o
+//     próprio adendo de topo DEC-FORMAT-SURFACE de `glintfx/image.hpp` pro porquê desta
+//     checagem existir e o que ela guarda (e não guarda).
+constexpr unsigned char kPngSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+
+// EN: Total, pure, cannot log (same discipline as every other helper in this module) --
+//     `data == nullptr` or `len` shorter than the 8-byte signature is a clean `false`, never a
+//     read past the end of a short/hostile buffer.
+// PT: Total, pura, não pode logar (mesma disciplina de todo outro helper deste módulo) --
+//     `data == nullptr` ou `len` mais curto que a assinatura de 8 bytes é um `false` limpo,
+//     nunca uma leitura além do fim de um buffer curto/hostil.
+bool has_png_signature(const unsigned char* data, std::size_t len) noexcept {
+  if (data == nullptr || len < sizeof(kPngSignature))
+    return false;
+  for (std::size_t i = 0; i < sizeof(kPngSignature); ++i) {
+    if (data[i] != kPngSignature[i])
+      return false;
+  }
+  return true;
+}
+
+} // namespace
+
+DecodedImagePixels decode_png_file(const char* path) noexcept {
+  DecodedImagePixels out; // ok == false by default.
+  if (path == nullptr)
+    return out;
+
+  // EN: Literal port of decode_image_file()'s own file-read guard order above (open,
+  //     seek-to-end, size check BEFORE ever allocating a read buffer, seek back, read) -- see
+  //     this file's own top comment (DEC-FORMAT-SURFACE) for why this stays a SEPARATE copy
+  //     rather than a shared helper.
+  // PT: Port literal da própria ordem de guarda de leitura de arquivo do decode_image_file()
+  //     acima (abre, seek-até-o-fim, checa tamanho ANTES de sequer alocar um buffer de
+  //     leitura, volta o seek, lê) -- ver o próprio comentário de topo deste arquivo
+  //     (DEC-FORMAT-SURFACE) pro porquê disto ficar como cópia SEPARADA em vez de helper
+  //     compartilhado.
+  std::ifstream file(path, std::ios::binary);
+  if (!file)
+    return out;
+  file.seekg(0, std::ios::end);
+  const std::streamoff len_off = file.tellg();
+  if (len_off < 0)
+    return out;
+  const std::size_t len = static_cast<std::size_t>(len_off);
+  if (len == 0 || len > kMaxImageDecodeBytes)
+    return out;
+  file.seekg(0, std::ios::beg);
+
+  try {
+    std::vector<unsigned char> buf(len);
+    if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len)))
+      return out;
+    // EN: DEC-FORMAT-SURFACE's own gate -- reject BEFORE the buffer ever reaches the shared
+    //     PNG/JPG/TGA decode seam (decode_image_memory() below, which would otherwise happily
+    //     decode a non-PNG buffer -- including the exact 82-byte fake-TGA-header case named in
+    //     glintfx/image.hpp's own top-of-file addendum).
+    // PT: A PRÓPRIA guarda do DEC-FORMAT-SURFACE -- rejeita ANTES do buffer sequer alcançar a
+    //     costura de decode PNG/JPG/TGA compartilhada (decode_image_memory() abaixo, que senão
+    //     decodificaria de bom grado um buffer não-PNG -- inclusive o caso exato de header-TGA-
+    //     falso de 82 bytes nomeado no próprio adendo de topo de glintfx/image.hpp).
+    if (!has_png_signature(buf.data(), buf.size()))
+      return out;
+    return decode_image_memory(buf.data(), buf.size());
+  } catch (const std::exception&) {
+    // EN/PT: same DEC-NOTHROW discipline as decode_image_file() above -- the buf(len)
+    // allocation is this function's OWN failure mode.
     return DecodedImagePixels{};
   } catch (...) {
     return DecodedImagePixels{};

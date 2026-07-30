@@ -532,4 +532,162 @@ bool encode_image_file(const char* path, ImageFormat format, int width, int heig
                        const unsigned char* pixels,
                        const EncodeImageOptions& options = EncodeImageOptions{}) noexcept;
 
+// EN: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- two facts about `decode_image_file()`/
+//     `decode_image_memory()` above that were NOT written down anywhere before this addendum
+//     (confirmed: this header already said "PNG/JPG/TGA" in four places -- `:2`, `:70`,
+//     `:171`, `:177` -- so that much was never the gap; these two specifics were), added at
+//     the END of this file on purpose (same "append, do not insert" discipline this file's
+//     own top comment already states for `decode_image_file()`/`decode_image_memory()`'s own
+//     line numbers, cited verbatim by `docs/draw2d.md`) so nothing above shifts:
+//
+//     (1) FORMAT DETECTION IS BY CONTENT, NEVER BY FILENAME EXTENSION. Neither function
+//     above ever inspects `path`'s extension (there is no substring/suffix parsing of `path`
+//     anywhere in this module -- `decode_image_memory()` does not even RECEIVE a path to
+//     parse in the first place). The ONLY signal either function ever looks at is the byte
+//     content itself, handed to `stb_image`'s own format-sniffing dispatch. Concretely: a
+//     file named `sprite.png` whose BYTES are actually a JPEG stream decodes successfully AS
+//     A JPEG (there is no rejection, no "extension says PNG but content is JPEG" mismatch
+//     error) -- and the reverse (a `.jpg`-named file containing real PNG bytes) decodes as a
+//     PNG the same way. A caller that wants to REJECT a mismatch between a filename's own
+//     extension and its actual content must check that itself, upstream of this call; this
+//     module has no opinion on `path`'s spelling.
+//
+//     (2) THE TGA DECODER TOLERATES A SHORT/TRUNCATED BUFFER, SILENTLY ZERO-FILLING THE
+//     MISSING PIXEL DATA, RATHER THAN FAILING. `decode_image_file()`/`decode_image_memory()`
+//     compile in THREE formats (`STBI_ONLY_PNG` + `STBI_ONLY_JPEG` + `STBI_ONLY_TGA`,
+//     `src/stb_image_impl.cpp`), tried in that order -- TGA is the LAST format `stb_image`
+//     tries, and its own signature test is notoriously loose (a plausible `image_type` byte
+//     plus a plausible `bits_per_pixel` is enough to pass; it does not require the pixel data
+//     that follows the 18-byte header to actually be present). Consumer-measured: an 18-byte
+//     plausible-looking TGA header (declaring 4096x4096, 32 bits per pixel) followed by only
+//     64 bytes of unrelated noise -- 82 bytes total -- decodes "successfully" through
+//     `decode_image_file()`/`decode_image_memory()` into a 4096x4096, all-zero-alpha RGBA8
+//     image (67 108 864 bytes allocated from 82 bytes of input, a ~818 000x amplification).
+//     The result is a VALID `ok == true` handle, not a rejection -- a caller whose own
+//     fallback logic keys off "is the handle valid" (not "did anything get zero-filled") will
+//     not notice anything went wrong: the asset silently becomes a large transparent square
+//     instead of failing loudly. `decode_png_file()` below exists PRECISELY to give a caller
+//     that only ever wants PNG a way to close this specific hole at its own call site,
+//     without the general 3-format dispatch above needing to change for every OTHER caller
+//     that still wants JPG/TGA.
+// PT: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- dois fatos sobre `decode_image_file()`/
+//     `decode_image_memory()` acima que NÃO estavam escritos em lugar nenhum antes deste
+//     adendo (confirmado: este header já dizia "PNG/JPG/TGA" em quatro lugares -- `:2`, `:70`,
+//     `:171`, `:177` -- então aquilo nunca foi a lacuna; estes dois detalhes específicos
+//     eram), somado no FIM deste arquivo de propósito (mesma disciplina "acrescenta, não
+//     insere" que o próprio comentário de topo deste arquivo já declara pros próprios números
+//     de linha de `decode_image_file()`/`decode_image_memory()`, citados ao pé da letra pelo
+//     `docs/draw2d.md`) pra que nada acima se desloque:
+//
+//     (1) A DETECÇÃO DE FORMATO É POR CONTEÚDO, NUNCA POR EXTENSÃO DE NOME DE ARQUIVO.
+//     Nenhuma das duas funções acima jamais inspeciona a extensão de `path` (não há parse de
+//     substring/sufixo de `path` em lugar nenhum deste módulo -- o `decode_image_memory()`
+//     nem RECEBE um path pra parsear, pra começo de conversa). O ÚNICO sinal que qualquer uma
+//     das duas funções olha é o próprio conteúdo de bytes, entregue ao dispatch de sniff de
+//     formato próprio do `stb_image`. Concretamente: um arquivo chamado `sprite.png` cujos
+//     BYTES são na verdade um fluxo JPEG decodifica com sucesso COMO UM JPEG (não há
+//     rejeição, não há erro de "extensão diz PNG mas conteúdo é JPEG") -- e o inverso (um
+//     arquivo nomeado `.jpg` contendo bytes PNG de verdade) decodifica como PNG da mesma
+//     forma. Um chamador que quer REJEITAR uma incompatibilidade entre a extensão do próprio
+//     nome de arquivo e o conteúdo real precisa checar isso ele mesmo, a montante desta
+//     chamada; este módulo não tem opinião sobre a grafia de `path`.
+//
+//     (2) O DECODER DE TGA TOLERA UM BUFFER CURTO/TRUNCADO, PREENCHENDO SILENCIOSAMENTE O
+//     DADO DE PIXEL AUSENTE COM ZEROS, EM VEZ DE FALHAR. `decode_image_file()`/
+//     `decode_image_memory()` compilam TRÊS formatos (`STBI_ONLY_PNG` + `STBI_ONLY_JPEG` +
+//     `STBI_ONLY_TGA`, `src/stb_image_impl.cpp`), tentados nessa ordem -- TGA é o ÚLTIMO
+//     formato que o `stb_image` tenta, e o próprio teste de assinatura dele é notoriamente
+//     frouxo (um byte `image_type` plausível mais um `bits_per_pixel` plausível já basta pra
+//     passar; ele não exige que o dado de pixel que segue o header de 18 bytes esteja de fato
+//     presente). Medido pelo consumidor: um header TGA plausível de 18 bytes (declarando
+//     4096x4096, 32 bits por pixel) seguido de só 64 bytes de ruído sem relação -- 82 bytes no
+//     total -- decodifica "com sucesso" através de `decode_image_file()`/
+//     `decode_image_memory()` numa imagem RGBA8 4096x4096, alpha-zero-em-tudo
+//     (67.108.864 bytes alocados a partir de 82 bytes de input, uma amplificação de
+//     ~818.000x). O resultado é um handle `ok == true` VÁLIDO, não uma rejeição -- um
+//     chamador cuja própria lógica de fallback depende de "o handle é válido" (não "algo foi
+//     preenchido com zero") não vai perceber que algo deu errado: o asset silenciosamente
+//     vira um quadrado grande transparente em vez de falhar alto. O `decode_png_file()`
+//     abaixo existe PRECISAMENTE pra dar a um chamador que só quer PNG uma forma de fechar
+//     este buraco específico no próprio call site dele, sem que o dispatch geral de 3
+//     formatos acima precise mudar pra todo OUTRO chamador que ainda quer JPG/TGA.
+
+// EN: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- a PNG-ONLY sibling of `decode_image_file()`
+//     above (`:209`), for a caller whose OWN asset pipeline only ever produces/accepts PNG
+//     and wants that intent declared, and ENFORCED, at the call site -- rather than trusting
+//     `decode_image_file()`'s general PNG/JPG/TGA dispatch (see this file's own top-of-file
+//     DEC-FORMAT-SURFACE addendum, just above, for the concrete failure mode this closes: a
+//     short/malformed buffer that merely resembles a TGA header decoding "successfully" into
+//     a large all-zero image via the TGA leg of that dispatch).
+//
+//     HOW: reads the file exactly like `decode_image_file()` does (same pre-allocation size
+//     guard, same `kMaxImageDecodeBytes` cap), then checks the FIRST 8 BYTES against the
+//     fixed PNG file signature (`0x89 'P' 'N' 'G' \r \n 0x1A \n` -- the magic number every
+//     PNG encoder in existence writes, from the PNG specification itself, RFC 2083/ISO 15948)
+//     BEFORE the buffer ever reaches the shared decode seam. A buffer whose first 8 bytes do
+//     not match -- including one deliberately crafted to pass `stb_image`'s own loose
+//     TGA/JPEG sniffing (the exact 82-byte case named above) -- is rejected right there,
+//     never reaching `stb_image` at all. A buffer that DOES pass the signature check still
+//     goes through the full PNG decode afterwards (`decode_straight_rgba()`, the SAME seam
+//     `decode_image_file()` uses internally) -- the signature check is a FIRST gate, not a
+//     replacement for real decoding: a file with a valid PNG signature but a corrupt or
+//     truncated body still fails at decode, exactly like `decode_image_file()` already does
+//     for corrupt PNG input.
+//
+//     NOT a general allowlist API (`decode_image_file(path, AllowedFormats)` or similar) --
+//     the team's own consumer-driven scope decision (`TODO.md`'s `DEC-FORMAT-SURFACE`, W22):
+//     the two call sites that need format restriction want to say "only PNG" and nothing more
+//     expressive; a combinatorial allowlist would trade one function for a design surface
+//     (precedence rules, multi-format sets, its own test matrix) nobody asked for. If a
+//     JPG-only or TGA-only sibling is ever needed, it is the SAME small shape (swap the
+//     magic-byte table) added on measured demand -- not built speculatively here.
+//
+//     Same FAIL-HIGH/ownership/alpha contract as `decode_image_file()` above in every other
+//     respect (`ok == false` the only failure signal, straight non-premultiplied RGBA8 on
+//     success, `noexcept`, cannot log -- see this file's own top comment for the shared
+//     rationale). `path == nullptr`, an unopenable/unsizeable file, a 0-byte or
+//     over-`kMaxImageDecodeBytes` file, a short read, a signature mismatch, or a genuine PNG
+//     decode failure (corrupt/truncated body) all yield `DecodedImagePixels{}` (`ok ==
+//     false`).
+// PT: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- uma irmã SÓ-PNG do `decode_image_file()` acima
+//     (`:209`), pra um chamador cujo PRÓPRIO pipeline de asset só produz/aceita PNG e quer
+//     essa intenção declarada, e IMPOSTA, no próprio call site -- em vez de confiar no
+//     dispatch geral PNG/JPG/TGA do `decode_image_file()` (ver o próprio adendo DEC-FORMAT-
+//     SURFACE do topo deste arquivo, logo acima, pro modo de falha concreto que isto fecha:
+//     um buffer curto/malformado que só PARECE um header TGA decodificando "com sucesso" numa
+//     imagem grande toda-alpha-zero via a perna TGA daquele dispatch).
+//
+//     COMO: lê o arquivo exatamente como o `decode_image_file()` faz (mesma guarda de tamanho
+//     pré-alocação, mesmo teto `kMaxImageDecodeBytes`), depois checa os PRIMEIROS 8 BYTES
+//     contra a assinatura fixa de arquivo PNG (`0x89 'P' 'N' 'G' \r \n 0x1A \n` -- o número
+//     mágico que todo encoder de PNG já existente escreve, da própria especificação PNG, RFC
+//     2083/ISO 15948) ANTES do buffer sequer alcançar a costura de decode compartilhada. Um
+//     buffer cujos primeiros 8 bytes não batem -- inclusive um deliberadamente forjado pra
+//     passar no próprio sniff frouxo de TGA/JPEG do `stb_image` (o caso exato de 82 bytes
+//     nomeado acima) -- é rejeitado ali mesmo, nunca chega a alcançar o `stb_image`. Um buffer
+//     que PASSA na checagem de assinatura ainda passa pelo decode PNG completo depois
+//     (`decode_straight_rgba()`, a MESMA costura que o `decode_image_file()` usa
+//     internamente) -- a checagem de assinatura é uma PRIMEIRA guarda, não um substituto do
+//     decode de verdade: um arquivo com assinatura PNG válida mas corpo corrompido ou
+//     truncado ainda falha no decode, exatamente como o `decode_image_file()` já faz pra
+//     input PNG corrompido.
+//
+//     NÃO é uma API de allowlist geral (`decode_image_file(path, AllowedFormats)` ou
+//     similar) -- a própria decisão de escopo consumer-driven do time (`DEC-FORMAT-SURFACE`
+//     do `TODO.md`, W22): os dois call sites que precisam de restrição de formato querem
+//     dizer "só PNG" e nada mais expressivo; uma allowlist combinatória trocaria uma função
+//     por uma superfície de desenho (regras de precedência, conjuntos multi-formato, a
+//     própria matriz de teste) que ninguém pediu. Se algum dia surgir necessidade de uma irmã
+//     só-JPG ou só-TGA, é a MESMA forma pequena (troca a tabela de magic bytes) somada sob
+//     demanda medida -- não construída especulativamente aqui.
+//
+//     Mesmo contrato FAIL-HIGH/posse/alpha do `decode_image_file()` acima em todo outro
+//     aspecto (`ok == false` é o ÚNICO sinal de falha, RGBA8 straight não-premultiplicado em
+//     sucesso, `noexcept`, não pode logar -- ver o próprio comentário de topo deste arquivo
+//     pro racional compartilhado). `path == nullptr`, um arquivo não-abrível/não-mensurável,
+//     um arquivo de 0 bytes ou acima de `kMaxImageDecodeBytes`, uma leitura curta, uma
+//     assinatura que não bate, ou uma falha de decode PNG genuína (corpo corrompido/truncado)
+//     todos rendem `DecodedImagePixels{}` (`ok == false`).
+DecodedImagePixels decode_png_file(const char* path) noexcept;
+
 } // namespace glintfx

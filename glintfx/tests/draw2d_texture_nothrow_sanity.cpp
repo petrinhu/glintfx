@@ -80,11 +80,31 @@
 //       Group C (`create_texture()`) -- `179x151` px (`108116` bytes), no decode/PNG involved at
 //       all: a plain, caller-owned `Rgba8` pixel buffer built directly in memory.
 //
-//     MUTATION-TESTED (house discipline, `feedback_auditoria_domino`): both groups were proven to
-//     go RED against a build with the `try`/`catch` removed from the method under test (the armed
-//     child SIGABRTs instead of exiting 0) before this file was considered done -- see this slice's
-//     own delivery notes for the exact procedure (commit the fix first, mutate the tracked file
-//     transiently, rebuild, observe red, `git checkout --` restore, rebuild green again).
+//     DECLARED COVERAGE GAP (do not "fix" this by widening the injection without reading this
+//     first): the size-matched injection above exercises ONLY the decode allocation (Group L) /
+//     the `Rgba8` ingest copy (Group C) -- the consumer-reported failure mode. `draw2d.cpp`'s own
+//     `impl_->textures.push_back()` (the registry-growth allocation, reached AFTER either targeted
+//     allocation succeeds) sits inside the SAME `try`/`catch` and is therefore protected BY
+//     CONSTRUCTION -- the whole-body mutation test right below proves this (removing the `try`
+//     drops EVERYTHING inside it, `push_back()` included) -- but it is covered STRUCTURALLY, not
+//     EXERCISED-AND-OBSERVED the way the two targeted allocations are: this file does NOT also
+//     arm a second, `push_back()`-sized injection. That is a deliberate choice, not an oversight:
+//     the exact byte count a `std::vector<Impl::TextureSlot>` growth allocates depends on
+//     libstdc++'s own capacity-growth policy (an implementation detail, not part of this
+//     library's own contract) -- a THIRD injection target pinned to that number would be a
+//     fragile oracle coupled to a toolchain detail that could shift on a compiler/stdlib bump
+//     with nobody understanding why the test started failing. Declared, structural coverage here
+//     beats a silently fragile, "more thorough-looking" one.
+//
+//     MUTATION-TESTED (house discipline, `feedback_auditoria_domino`): the `try`/`catch` was
+//     removed from `load_texture()` and `create_texture()` in TWO SEPARATE rounds (one function
+//     mutated at a time, the tracked file committed with the real fix BEFORE either round, restored
+//     via `git checkout --` and rebuilt green after each) -- not just to prove each group goes RED
+//     (the armed child SIGABRTs instead of exiting 0), but to prove SPECIFICITY: mutating only
+//     `load_texture()` failed ONLY Group L, `create_texture()`'s own Group C staying green in the
+//     same run, and vice versa -- ruling out the mutation merely crashing the whole binary or
+//     tripping some shared, unrelated state. See this slice's own delivery notes for the exact
+//     procedure.
 //
 //     Linux-only in the sense every other GL-context'd test in this suite already is (`WindowGlfw`
 //     under Xvfb, `fork()`) -- matches this whole library's own "Linux x86-64" platform scope
@@ -183,12 +203,32 @@
 //       de jeito nenhum: um buffer de pixel `Rgba8` simples, de posse do chamador, construído
 //       direto em memória.
 //
-//     TESTADO POR MUTAÇÃO (disciplina da casa, `feedback_auditoria_domino`): os dois grupos foram
-//     provados ficarem VERMELHOS contra um build com o `try`/`catch` removido do método sob teste
-//     (o filho armado sofre SIGABRT em vez de sair com 0) antes deste arquivo ser considerado
-//     pronto -- ver as próprias notas de entrega desta fatia pro procedimento exato (comita o
-//     conserto primeiro, muta o arquivo rastreado transitoriamente, rebuilda, observa vermelho,
-//     `git checkout --` restaura, rebuilda verde de novo).
+//     LACUNA DE COBERTURA DECLARADA (não "conserte" isto alargando a injeção sem ler primeiro): a
+//     injeção casada por tamanho acima exercita SÓ a alocação de decode (Grupo L) / a cópia de
+//     ingestão `Rgba8` (Grupo C) -- o modo de falha reportado pelo consumidor. O próprio
+//     `impl_->textures.push_back()` de `draw2d.cpp` (a alocação de crescimento do registry,
+//     alcançada DEPOIS de qualquer uma das duas alocações miradas ter sucesso) fica dentro do
+//     MESMO `try`/`catch` e por isso é protegido POR CONSTRUÇÃO -- o teste de mutação de corpo
+//     inteiro logo abaixo prova isso (remover o `try` derruba TUDO que está dentro, `push_back()`
+//     incluído) -- mas é coberto ESTRUTURALMENTE, não EXERCITADO-E-OBSERVADO do jeito que as duas
+//     alocações miradas são: este arquivo NÃO arma uma segunda injeção do tamanho do `push_back()`.
+//     É uma escolha deliberada, não um esquecimento: a contagem exata de bytes que um crescimento
+//     de `std::vector<Impl::TextureSlot>` aloca depende da própria política de crescimento de
+//     capacidade do libstdc++ (um detalhe de implementação, não parte do próprio contrato desta
+//     biblioteca) -- um TERCEIRO alvo de injeção fixado naquele número seria um oráculo frágil,
+//     acoplado a um detalhe de toolchain que poderia mudar num bump de compilador/stdlib sem
+//     ninguém entender por que o teste começou a falhar. Cobertura estrutural declarada aqui vale
+//     mais que uma "de aparência mais completa" mas silenciosamente frágil.
+//
+//     TESTADO POR MUTAÇÃO (disciplina da casa, `feedback_auditoria_domino`): o `try`/`catch` foi
+//     removido de `load_texture()` e de `create_texture()` em DUAS RODADAS SEPARADAS (uma função
+//     mutada por vez, o arquivo rastreado commitado com o conserto real ANTES de cada rodada,
+//     restaurado via `git checkout --` e rebuildado verde depois de cada uma) -- não só pra provar
+//     que cada grupo fica VERMELHO (o filho armado sofre SIGABRT em vez de sair com 0), mas pra
+//     provar ESPECIFICIDADE: mutar só `load_texture()` falhou SÓ o Grupo L, o próprio Grupo C de
+//     `create_texture()` ficando verde na mesma execução, e vice-versa -- descartando a hipótese
+//     da mutação simplesmente crashar o binário inteiro ou tropeçar em algum estado compartilhado
+//     não relacionado. Ver as próprias notas de entrega desta fatia pro procedimento exato.
 //
 //     Só Linux no sentido em que todo outro teste com contexto GL desta suíte já é (`WindowGlfw`
 //     sob Xvfb, `fork()`) -- bate com o próprio escopo de plataforma "Linux x86-64" de toda esta

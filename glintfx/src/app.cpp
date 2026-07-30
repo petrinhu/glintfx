@@ -473,6 +473,77 @@ bool App::snapshot(const char* ppm_path) {
   return true;
 }
 
+App::CapturedFrame App::capture_frame() {
+  // EN: `FRAMEGRAB-TEX` -- see the CapturedFrame/capture_frame() doc-comment in app.hpp (right
+  //     before `private:`) for the full rationale: form (b) vs (a), pixel format, ownership,
+  //     fail-high. This body is deliberately a close structural twin of snapshot() above: same
+  //     render_frame() call, same FBO 0 read point (between EndFrame and the buffer swap), same
+  //     GL_RGB glReadPixels call -- only the destination (an owned CPU buffer instead of a PPM
+  //     file) and the extra RGB -> RGBA8 expansion (synthetic alpha=255) differ.
+  // PT: `FRAMEGRAB-TEX` -- ver o doc-comment de CapturedFrame/capture_frame() em app.hpp (logo
+  //     antes de `private:`) pro racional completo: forma (b) vs (a), formato de pixel, posse,
+  //     fail-high. Este corpo é de propósito um gêmeo estrutural próximo do snapshot() acima:
+  //     mesma chamada render_frame(), mesmo ponto de leitura do FBO 0 (entre o EndFrame e a
+  //     troca de buffer), mesma chamada glReadPixels com GL_RGB -- só o destino (buffer de CPU
+  //     de posse própria em vez de arquivo PPM) e a expansão extra RGB -> RGBA8 (alpha
+  //     sintético=255) diferem.
+  if (!impl_->ok) return CapturedFrame{};
+  int w = 0, h = 0;
+  impl_->window.size(w, h);
+  // EN: Defensive fail-high (not reachable through normal App construction, but the same
+  //     w<=0||h<=0 shape create_texture()'s own guard documents) -- never call glReadPixels
+  //     with a degenerate rectangle.
+  // PT: Fail-high defensivo (não alcançável através da construção normal do App, mas a mesma
+  //     forma w<=0||h<=0 que o próprio guard do create_texture() documenta) -- nunca chama
+  //     glReadPixels com um retângulo degenerado.
+  if (w <= 0 || h <= 0) return CapturedFrame{};
+  impl_->sync_viewport(w, h);
+  impl_->render_frame(w, h);
+  // EN: FBO 0 now contains the complete composited frame. Read before swap (same rationale as
+  //     snapshot() above: back-buffer content is undefined on many GL implementations AFTER
+  //     glfwSwapBuffers).
+  // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap (mesmo racional do
+  //     snapshot() acima: conteúdo do back-buffer é indefinido em muitas implementações GL
+  //     DEPOIS de glfwSwapBuffers).
+  glBindFramebuffer(0x8D40, 0); // GL_FRAMEBUFFER, 0 = window
+  glReadBuffer(0x0402);         // GL_BACK
+  glPixelStorei(0x0D05, 1);     // GL_PACK_ALIGNMENT = 1
+  std::vector<unsigned char> rgb((size_t)w * h * 3);
+  glReadPixels(0, 0, w, h, 0x1907, 0x1401, rgb.data()); // GL_RGB, GL_UNSIGNED_BYTE
+  glPixelStorei(0x0D05, 4);                             // restore GL_PACK_ALIGNMENT = 4
+  impl_->window.swap();
+
+  CapturedFrame out;
+  out.width = w;
+  out.height = h;
+  out.byte_count = (size_t)w * h * 4;
+  out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
+  // EN: glReadPixels origin is bottom-left; CapturedFrame's row 0 is top (matches
+  //     decode_image_file()/decode_image_memory(), image.hpp -- see the CapturedFrame
+  //     doc-comment in app.hpp). Flip rows while expanding RGB -> RGBA8 with a synthetic
+  //     alpha=255 (see that same doc-comment for why 255, not a real alpha-channel read, is the
+  //     honest value here).
+  // PT: A origem do glReadPixels é bottom-left; a linha 0 do CapturedFrame é o topo (bate com
+  //     decode_image_file()/decode_image_memory(), image.hpp -- ver o doc-comment de
+  //     CapturedFrame em app.hpp). Inverte linhas enquanto expande RGB -> RGBA8 com alpha
+  //     sintético=255 (ver o mesmo doc-comment pro porquê de 255, não uma leitura real de canal
+  //     alpha, ser o valor honesto aqui).
+  const size_t row_bytes_src = (size_t)w * 3;
+  for (int dst_row = 0; dst_row < h; ++dst_row) {
+    const int src_row = h - 1 - dst_row;
+    const unsigned char* src = rgb.data() + (size_t)src_row * row_bytes_src;
+    unsigned char* dst = out.pixels.get() + (size_t)dst_row * (size_t)w * 4;
+    for (int x = 0; x < w; ++x) {
+      dst[x * 4 + 0] = src[x * 3 + 0];
+      dst[x * 4 + 1] = src[x * 3 + 1];
+      dst[x * 4 + 2] = src[x * 3 + 2];
+      dst[x * 4 + 3] = 255;
+    }
+  }
+  out.ok = true;
+  return out;
+}
+
 void App::process_event(const UiEvent& ev) {
   if (!impl_->ok) return;
   // EN: Resize documented no-op (see app.hpp doc-comment) -- App owns the window and is

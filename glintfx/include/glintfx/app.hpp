@@ -1003,6 +1003,176 @@ public:
   //     monitor, independente de vsync estar ligado, desligado, ou nunca ter sido setado.
   int get_monitor_refresh_hz() const;
 
+  // -------------------------------------------------------------------------
+  // EN: `FRAMEGRAB-TEX` -- read the COMPOSITED frame back into an owned CPU buffer, feedable
+  //     straight into `Draw2d::create_texture(..., PixelFormat::Rgba8)` with zero conversion by
+  //     the host. Twin of `snapshot()` above MINUS the file write -- same capture point (render
+  //     one frame via `render_frame()`, read FBO 0 -- see `snapshot()`'s own doc-comment for why
+  //     the read happens between EndFrame and the buffer swap, not after), same
+  //     `sync_viewport()`/`render_frame()` plumbing, same guard shape. `snapshot()` itself is
+  //     UNCHANGED and NOT deprecated -- a consumer that still wants a PPM on disk keeps using it
+  //     (explicit consumer request, GusWorld, 2026-07-30).
+  //
+  //     WHY THIS EXISTS (found via `docs/embed-integration.md`'s own GL-cohabitation section,
+  //     not a test of ours -- the case lives entirely in a HOST's code, not glintfx's): before
+  //     this, the ONLY point at which FBO 0 held the fully-composited frame was inside
+  //     `snapshot()`, and `snapshot()` could only hand that frame to a FILE. A host doing an
+  //     in-memory "freeze the scene, draw it as a texture behind a paused/dialog/menu overlay"
+  //     pattern (GusWorld's actual production feature, not a QA tool) had no way to reach that
+  //     frame without a round-trip through disk (render -> read -> write PNG -> read file ->
+  //     decode -> upload), a cycle that never needed to exist once
+  //     `Draw2d::create_texture(pixels, w, h, PixelFormat)` (D2D-TEXPIXELS) could already accept
+  //     pixels directly. This call is the missing middle: FBO 0 pixels, in memory, in the exact
+  //     shape `create_texture()` wants.
+  //
+  //     FORM (a) vs (b), DECIDED: this is form (b) from the item's own two options -- a
+  //     buffer-returning SIBLING of `snapshot()`, not a NEW 14th callback firing at the
+  //     post-composite instant. A callback would be more general (any host logic could run at
+  //     that instant, not just a capture), but it adds a permanent new extension point with its
+  //     own "what is legal to do here" contract to document and maintain forever (GL state,
+  //     re-entrancy into `render()`, ordering versus `frame_cb` -- the SAME class of surface
+  //     `frame_callback`'s own doc-comment already has to police). The consumer's own request
+  //     names a BUFFER, not a hook, and `snapshot()` already proves the exact capture point is a
+  //     plain synchronous call, not something that needs a callback to reach -- the narrower,
+  //     already-proven shape wins.
+  //
+  //     PIXEL FORMAT: RGBA8, straight alpha, row 0 of `pixels` is the TOP of the image (the SAME
+  //     row order `decode_image_file()`/`decode_image_memory()` hand back, `image.hpp` --
+  //     matching that convention, not `glReadPixels`'s own bottom-up one, means a host that
+  //     already knows how to consume a decoded image's pixels needs zero new mental model for
+  //     this call's output). The alpha byte is ALWAYS 255 (fully opaque) -- FBO 0 is the WINDOW
+  //     surface, which composites to opaque; there is no meaningful "the window itself is
+  //     partially transparent" alpha to preserve here, so a real read of whatever bit pattern
+  //     the driver happens to leave in the framebuffer's alpha channel (if it has one at all --
+  //     this library never requests `GLFW_ALPHA_BITS`, so it is driver-default and UNSPECIFIED,
+  //     `window_glfw.cpp`) would be noise, not signal. A synthetic 255 also makes
+  //     `create_texture()`'s own premultiply-on-ingest step for `PixelFormat::Rgba8`
+  //     (`draw2d.hpp`'s own doc-comment) a documented NO-OP here (multiplying by `255/255 ==
+  //     1.0`) -- the RGB bytes this call hands back reach the GPU byte-for-byte unchanged,
+  //     exactly the same 3-channel values `snapshot()`'s own `GL_RGB` read already proved
+  //     correct (this call reuses that exact `glReadPixels(..., GL_RGB, ...)` call, only
+  //     expanding to 4 bytes/pixel and flipping rows in CPU memory afterward -- it does NOT ask
+  //     the driver for an alpha channel it would then have to trust).
+  //
+  //     OWNERSHIP: `std::unique_ptr<unsigned char[]>`, NOT `std::vector<unsigned char>` unlike
+  //     this struct's closest sibling `DecodedImagePixels` (`image.hpp`) -- a deliberate
+  //     divergence from that precedent, for a reason specific to THIS header: this header's own
+  //     `file:line` citation gate (`tools/check_doc_line_refs.sh`, scanning
+  //     `docs/embed-integration.md`) re-derives every `app.hpp:N` citation against the file's
+  //     CURRENT line numbers, and the highest such citation (`app.hpp:551`,
+  //     `set_frame_callback`) sits well above this struct/method's own placement (end of the
+  //     public surface, right before `private:`) -- adding a NEW top-of-file `#include <vector>`
+  //     would shift every line below it, including that one, and reflow ~15 citations for a
+  //     header change that touches none of their documented symbols. `<memory>`/`<cstddef>` are
+  //     already included at the top of this file for unrelated reasons (the `Impl` pimpl,
+  //     `get_string`'s adjacent uses) -- `unique_ptr<unsigned char[]>` costs this header NO new
+  //     include. Move-only (the SAME discipline `App` itself already has) is also the CORRECT
+  //     default for a full-frame buffer that can be several MiB: an accidental copy is a real
+  //     cost, not a convenience, and a host that wants a duplicate explicitly copies
+  //     `pixels.get()`/`byte_count` bytes.
+  //
+  //     FAIL-HIGH: `!ok()` -> `CapturedFrame{}` (`ok=false`, `width=height=0`, `pixels=null`,
+  //     `byte_count=0`) WITHOUT touching GL at all -- same guard `snapshot()` itself has. A
+  //     window with an invalid/zero framebuffer size (defensive; not reachable through normal
+  //     `App` construction, but the SAME `w<=0||h<=0` shape `create_texture()`'s own guard
+  //     documents) also returns `CapturedFrame{}` rather than call `glReadPixels` with a
+  //     degenerate rectangle.
+  // PT: `FRAMEGRAB-TEX` -- lê o frame COMPOSTO de volta num buffer de CPU de posse própria,
+  //     alimentável direto em `Draw2d::create_texture(..., PixelFormat::Rgba8)` sem conversão
+  //     nenhuma pelo host. Gêmeo do `snapshot()` acima MENOS a escrita em arquivo -- mesmo ponto
+  //     de captura (renderiza um frame via `render_frame()`, lê o FBO 0 -- ver o próprio
+  //     doc-comment de `snapshot()` pro porquê a leitura acontece entre o EndFrame e a troca de
+  //     buffer, não depois), mesma plomberia `sync_viewport()`/`render_frame()`, mesmo formato de
+  //     guarda. O próprio `snapshot()` fica INALTERADO e NÃO é depreciado -- um consumidor que
+  //     ainda quer um PPM em disco continua usando ele (pedido explícito do consumidor,
+  //     GusWorld, 2026-07-30).
+  //
+  //     POR QUE ISTO EXISTE (achado pela própria seção de coabitação GL de
+  //     `docs/embed-integration.md`, não um teste nosso -- o caso vive inteiramente no código de
+  //     um HOST, não da glintfx): antes disto, o ÚNICO ponto em que o FBO 0 guardava o frame
+  //     totalmente composto era dentro do `snapshot()`, e o `snapshot()` só sabia entregar esse
+  //     frame a um ARQUIVO. Um host fazendo um padrão em memória de "congelar a cena, desenhar
+  //     como textura atrás de um overlay de pausa/diálogo/menu" (a feature de PRODUÇÃO real do
+  //     GusWorld, não uma ferramenta de QA) não tinha como alcançar aquele frame sem um
+  //     round-trip por disco (renderiza -> lê -> grava PNG -> lê arquivo -> decodifica -> sobe),
+  //     um ciclo que nunca precisou existir assim que o `Draw2d::create_texture(pixels, w, h,
+  //     PixelFormat)` (D2D-TEXPIXELS) já podia aceitar pixels diretamente. Esta chamada é o meio
+  //     que faltava: pixels do FBO 0, em memória, na forma exata que o `create_texture()` quer.
+  //
+  //     FORMA (a) vs (b), DECIDIDO: esta é a forma (b) das duas opções do próprio item -- um
+  //     IRMÃO do `snapshot()` que devolve buffer, não um 14º callback novo disparando no
+  //     instante pós-composição. Um callback seria mais geral (qualquer lógica do host poderia
+  //     rodar naquele instante, não só captura), mas soma um ponto de extensão novo permanente
+  //     com o próprio contrato de "o que é legal fazer aqui" pra documentar e manter pra sempre
+  //     (estado GL, reentrância em `render()`, ordem versus `frame_cb` -- a MESMA classe de
+  //     superfície que o próprio doc-comment de `frame_callback` já tem que policiar). O próprio
+  //     pedido do consumidor nomeia um BUFFER, não um hook, e o `snapshot()` já prova que o ponto
+  //     de captura exato é uma chamada síncrona comum, não algo que precise de callback pra
+  //     alcançar -- a forma mais estreita e já provada vence.
+  //
+  //     FORMATO DE PIXEL: RGBA8, alpha straight, a linha 0 de `pixels` é o TOPO da imagem (a
+  //     MESMA ordem de linha que `decode_image_file()`/`decode_image_memory()` devolvem,
+  //     `image.hpp` -- bater com aquela convenção, não a bottom-up do próprio `glReadPixels`,
+  //     significa que um host que já sabe consumir os pixels de uma imagem decodificada não
+  //     precisa de modelo mental novo nenhum pra saída desta chamada). O byte de alpha é SEMPRE
+  //     255 (totalmente opaco) -- o FBO 0 é a superfície da JANELA, que compõe pra opaco; não há
+  //     alpha significativo de "a própria janela é parcialmente transparente" pra preservar
+  //     aqui, então uma leitura real de qualquer padrão de bit que o driver porventura deixe no
+  //     canal alpha do framebuffer (se é que ele tem um -- esta biblioteca nunca pede
+  //     `GLFW_ALPHA_BITS`, então é default-do-driver e NÃO ESPECIFICADO, `window_glfw.cpp`)
+  //     seria ruído, não sinal. Um 255 sintético também torna o próprio passo de
+  //     premultiply-na-entrada do `create_texture()` pra `PixelFormat::Rgba8` (doc-comment do
+  //     próprio `draw2d.hpp`) um NO-OP documentado aqui (multiplicar por `255/255 == 1.0`) -- os
+  //     bytes RGB que esta chamada devolve chegam à GPU byte-a-byte inalterados, exatamente os
+  //     mesmos valores de 3 canais que a própria leitura `GL_RGB` do `snapshot()` já provou
+  //     corretos (esta chamada reusa aquela MESMA chamada `glReadPixels(..., GL_RGB, ...)`, só
+  //     expandindo pra 4 bytes/pixel e invertendo linhas em memória de CPU depois -- NÃO pede ao
+  //     driver um canal alpha que teria depois que confiar).
+  //
+  //     POSSE: `std::unique_ptr<unsigned char[]>`, NÃO `std::vector<unsigned char>` diferente do
+  //     irmão mais próximo desta struct, `DecodedImagePixels` (`image.hpp`) -- uma divergência
+  //     deliberada daquele precedente, por um motivo específico a ESTE header: o próprio gate de
+  //     citação `file:line` deste header (`tools/check_doc_line_refs.sh`, varrendo
+  //     `docs/embed-integration.md`) re-deriva toda citação `app.hpp:N` contra os números de
+  //     linha CORRENTES do arquivo, e a citação mais alta assim (`app.hpp:551`,
+  //     `set_frame_callback`) fica bem acima do posicionamento desta struct/método (fim da
+  //     superfície pública, logo antes do `private:`) -- somar um `#include <vector>` NOVO no
+  //     topo do arquivo deslocaria toda linha abaixo dele, incluindo aquela, e refluiria ~15
+  //     citações por uma mudança de header que não toca nenhum dos símbolos documentados delas.
+  //     `<memory>`/`<cstddef>` já estão incluídos no topo deste arquivo por motivos
+  //     não-relacionados (o pimpl `Impl`, usos adjacentes de `get_string`) --
+  //     `unique_ptr<unsigned char[]>` não custa NENHUM include novo a este header. Move-only (a
+  //     MESMA disciplina que o próprio `App` já tem) também é o default CORRETO pra um buffer de
+  //     frame inteiro que pode ter vários MiB: uma cópia acidental é um custo real, não uma
+  //     conveniência, e um host que quer uma cópia explicitamente copia `pixels.get()`/
+  //     `byte_count` bytes.
+  //
+  //     FAIL-HIGH: `!ok()` -> `CapturedFrame{}` (`ok=false`, `width=height=0`, `pixels=nulo`,
+  //     `byte_count=0`) SEM tocar GL nenhum -- mesma guarda que o próprio `snapshot()` já tem.
+  //     Uma janela com tamanho de framebuffer inválido/zero (defensivo; não alcançável através
+  //     da construção normal do `App`, mas a MESMA forma `w<=0||h<=0` que o próprio guard do
+  //     `create_texture()` documenta) também devolve `CapturedFrame{}` em vez de chamar
+  //     `glReadPixels` com um retângulo degenerado.
+  // -------------------------------------------------------------------------
+
+  // EN: Result of capture_frame() below. `ok == false` on ANY failure -- width/height/pixels/
+  //     byte_count stay at their default-constructed values in that case (never partially
+  //     filled). See capture_frame()'s own doc-comment (immediately above) for the full
+  //     pixel-format, ownership, and fail-high contract.
+  // PT: Resultado do capture_frame() abaixo. `ok == false` em QUALQUER falha -- width/height/
+  //     pixels/byte_count ficam nos próprios valores default-construídos nesse caso (nunca
+  //     parcialmente preenchidos). Ver o próprio doc-comment de capture_frame() (imediatamente
+  //     acima) pro contrato completo de formato de pixel, posse e fail-high.
+  struct CapturedFrame {
+    bool ok = false;
+    int width = 0;
+    int height = 0;
+    std::unique_ptr<unsigned char[]> pixels;
+    std::size_t byte_count = 0;
+  };
+
+  CapturedFrame capture_frame();
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

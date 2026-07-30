@@ -366,6 +366,41 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_capture_frame_smoke (`FRAMEGRAB-TEX`) -- verifies App::capture_frame(): the
+  #     composited-frame-to-memory sibling of App::snapshot() (app.hpp, right before
+  #     `private:`). Samples THREE disjoint, known-colour regions (frame_callback hook's blue,
+  #     #btn_a's own red, plain body background) in the SAME captured buffer to prove the
+  #     returned pixels are the FULLY composited frame, not the RmlUi internal offscreen layer
+  #     the item's own investigation found `frame_callback` runs against, and not a stale/
+  #     garbage read. See the test file's own header for the full oracle/geometry derivation and
+  #     the mutation-proof note. Links glloader explicitly for gl_loader.h (glScissor/
+  #     glClearColor/glClear calls inside the test's own hook lambda; glloader is a PRIVATE dep
+  #     of glintfx, not propagated to callers -- same rationale as app_frame_callback_smoke
+  #     above). WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide GLFW-block convention); reuses
+  #     app_process_event_scene.rml/.rcss copied above.
+  # PT: app_capture_frame_smoke (`FRAMEGRAB-TEX`) -- verifica App::capture_frame(): o irmão do
+  #     App::snapshot() (app.hpp, logo antes do `private:`) que devolve o frame composto para
+  #     memória. Amostra TRÊS regiões disjuntas, de cor conhecida (azul do hook frame_callback,
+  #     o próprio vermelho de #btn_a, fundo simples do body) no MESMO buffer capturado pra provar
+  #     que os pixels devolvidos são o frame TOTALMENTE composto, não a layer offscreen interna
+  #     do RmlUi contra a qual a própria investigação do item achou que o `frame_callback` roda,
+  #     e não uma leitura obsoleta/lixo. Ver o cabeçalho do próprio arquivo de teste pra
+  #     derivação completa do oráculo/geometria e a nota de prova de mutação. Linka glloader
+  #     explicitamente para gl_loader.h (chamadas glScissor/glClearColor/glClear dentro da
+  #     própria lambda de hook do teste; glloader é dep PRIVATE da glintfx, não propagada a
+  #     callers -- mesma racional do app_frame_callback_smoke acima). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR (convenção do bloco GLFW em todo o repo); reusa
+  #     app_process_event_scene.rml/.rcss copiado acima.
+  # ---------------------------------------------------------------------------
+  add_executable(app_capture_frame_smoke app_capture_frame_smoke.cpp)
+  target_link_libraries(app_capture_frame_smoke PRIVATE glintfx glloader)
+  add_test(NAME app_capture_frame_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_capture_frame_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
   # EN: app_window_mode_smoke (A4-WINMODES, v0.16.0) -- ONE binary, parameterized by the
   #     GLINTFX_TEST_WINDOW_MODE environment variable, registered 6x below (App's N3 contract
   #     forbids 4+ App instances in one process, so per-config isolation happens at the ctest
@@ -1074,6 +1109,35 @@ add_test(NAME image_decode_sanity COMMAND image_decode_sanity)
 add_executable(image_sanity image_sanity.cpp)
 target_link_libraries(image_sanity PRIVATE glintfx)
 add_test(NAME image_sanity COMMAND image_sanity)
+
+# ---------------------------------------------------------------------------
+# EN: image_encode_sanity (IMG-ENCODE, onda W21, 2026-07-30) -- PURE unit test for the PUBLIC
+#     glintfx/image.hpp encode pair (encode_image_memory()/encode_image_file()), the symmetric
+#     sibling of image_sanity.cpp right above (which tests the DECODE pair). No third_party/stb
+#     include needed here (this test never touches stb_image.h/stb_image_write.h directly, only
+#     the public API + its own hand-rolled, TEST-ONLY QOI decoder). Registered UNCONDITIONALLY,
+#     same "no display to isolate here" reasoning -- runs in BOTH build configurations. Exercises
+#     all seven ImageFormat values (PNG/TGA byte-exact round-trip through this library's own
+#     decode_image_memory(); JPG tolerance round-trip through the same; BMP/HDR hand-decoded
+#     against stb_image_write's own fixed, documented wire layout; PPM hand-checked against this
+#     module's own P6 writer; QOI round-tripped through this test's own independent decoder), the
+#     64 MiB kMaxImageEncodeBytes boundary attacked with REAL buffers on both sides, and the full
+#     hostile corpus TODO.md's own IMG-ENCODE item names. See the test file's own header for the
+#     complete oracle rationale per format.
+# PT: image_encode_sanity (IMG-ENCODE, onda W21, 2026-07-30) -- teste unit PURO para o par
+#     PÚBLICO de encode de glintfx/image.hpp (encode_image_memory()/encode_image_file()), irmão
+#     simétrico do image_sanity.cpp logo acima (que testa o par DECODE). Nenhum include de
+#     third_party/stb necessário aqui (este teste nunca toca stb_image.h/stb_image_write.h
+#     diretamente, só a API pública + o próprio decoder QOI SÓ-DE-TESTE, escrito à mão).
+#     Registrado INCONDICIONALMENTE, mesma racional "nada relacionado a display pra isolar aqui"
+#     -- roda nas DUAS configurações de build. Exercita os sete valores de ImageFormat, a
+#     fronteira de 64 MiB do kMaxImageEncodeBytes atacada com buffers REAIS dos dois lados, e o
+#     corpus hostil completo que o próprio item IMG-ENCODE do TODO.md nomeia. Ver o próprio
+#     cabeçalho do arquivo de teste pro racional de oráculo completo por formato.
+# ---------------------------------------------------------------------------
+add_executable(image_encode_sanity image_encode_sanity.cpp)
+target_link_libraries(image_encode_sanity PRIVATE glintfx)
+add_test(NAME image_encode_sanity COMMAND image_encode_sanity)
 
 # ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL

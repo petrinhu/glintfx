@@ -39,7 +39,7 @@
 #           TST-L1-PRECI is not actually wired on this exact clone until someone
 #           symlinks it too -- a pre-existing gap, not something this gate introduced.
 #
-#     Three gates, STAGED FILES ONLY (never the whole tree -- keeps the cost proportional
+#     Four gates, STAGED FILES ONLY (never the whole tree -- keeps the cost proportional
 #     to what is actually being committed, not to repo size):
 #       1) cppcheck on staged glintfx/src/*.cpp|*.hpp -- same flag set as CI's
 #          TST-L1-STATIC (3/3) job. Prefers glintfx/build-lint/compile_commands.json
@@ -89,6 +89,15 @@
 #          of which file changed) yet the vast majority of commits touch nothing any doc
 #          cites, so skipping it in the common case is what keeps the hook's typical
 #          cost near the cppcheck+format budget instead of always paying the full 1.6s.
+#       4) tools/check_test_sources_committed.py, ONLY when
+#          `glintfx/tests/CMakeLists.txt` itself is staged (see run_test_sources_gate()
+#          below) -- catches an `add_executable(<target> <source>)` whose `<source>` is
+#          NOT part of the same INDEX state as the file, an "orphan target" that leaves
+#          this exact commit unconfigurable in a clean checkout even though the ordinary
+#          working tree (everyone else's uncommitted files still sitting on disk) looks
+#          fine. Born from two real, measured incidents in one day (`ca173cf`,
+#          `838e10c`) -- see that script's own header comment for the full rationale and
+#          the declared CMake-variable-source scope limit.
 #
 #     WHY `git diff --cached` and not `origin/main` (unlike preci.sh's pre-push gate):
 #     pre-push's question is "what is about to become visible on a remote" -> diff
@@ -144,7 +153,7 @@
 #           enganchado nesta clone exata até alguém symlinkar também -- lacuna
 #           pré-existente, não algo que este gate introduziu.
 #
-#     Três gates, SÓ ARQUIVOS STAGED (nunca a árvore inteira -- mantém o custo
+#     Quatro gates, SÓ ARQUIVOS STAGED (nunca a árvore inteira -- mantém o custo
 #     proporcional ao que de fato está sendo commitado, não ao tamanho do repo):
 #       1) cppcheck nos glintfx/src/*.cpp|*.hpp staged -- mesmo conjunto de flags do job
 #          TST-L1-STATIC (3/3) do CI. Prefere
@@ -197,6 +206,16 @@
 #          não toca nada que alguma doc cite, então pular no caso comum é o que mantém o
 #          custo típico do hook perto do orçamento cppcheck+format em vez de sempre pagar
 #          o 1,6s inteiro.
+#       4) tools/check_test_sources_committed.py, SÓ quando o próprio
+#          `glintfx/tests/CMakeLists.txt` está staged (ver run_test_sources_gate()
+#          abaixo) -- pega um `add_executable(<alvo> <fonte>)` cuja `<fonte>` NÃO faz
+#          parte do mesmo estado de ÍNDICE que o arquivo, um "alvo órfão" que deixa este
+#          commit exato não-configurável num checkout limpo mesmo que a working tree
+#          comum (os arquivos não-commitados de todo mundo ainda sentados no disco)
+#          pareça normal. Nasceu de dois incidentes reais, medidos, no mesmo dia
+#          (`ca173cf`, `838e10c`) -- ver o próprio comentário de cabeçalho daquele script
+#          pro racional completo e o limite de escopo declarado pra fonte baseada em
+#          variável CMake.
 #
 #     POR QUE `git diff --cached` e não `origin/main` (diferente do gate de pre-push do
 #     preci.sh): a pergunta do pre-push é "o que está prestes a ficar visível num
@@ -562,6 +581,60 @@ run_doc_refs_gate() {
 }
 
 if ! run_doc_refs_gate; then
+  gate_failed=1
+fi
+
+# -----------------------------------------------------------------------------
+# EN: 4) tools/check_test_sources_committed.py (BISECT-CMAKE follow-up, W22) -- catches an
+#     `add_executable(<target> <source>)` in `glintfx/tests/CMakeLists.txt` whose `<source>`
+#     is NOT part of the SAME INDEX state as the file itself: an orphan target that would
+#     make the resulting commit unconfigurable in a clean checkout, even though the ordinary
+#     working tree looks fine (another agent's uncommitted `.cpp` is still sitting right
+#     there on disk, masking the gap). See that script's own header comment for the full
+#     rationale and the two real, historical commits (`ca173cf`, `838e10c`) it is built to
+#     catch. GATED like check_doc_line_refs.sh above (only when
+#     `glintfx/tests/CMakeLists.txt` itself is staged -- an orphan target can only be
+#     INTRODUCED by a commit that touches that file; auditing a HISTORICAL commit for a
+#     pre-existing orphan is this same script's OTHER mode, `<commit-ish>` as argv[1], not
+#     this hook's job). Runs against the INDEX (no argument), the same ground truth every
+#     other gate in this file uses via `git diff --cached`.
+# PT: 4) tools/check_test_sources_committed.py (follow-up do BISECT-CMAKE, W22) -- pega um
+#     `add_executable(<alvo> <fonte>)` em `glintfx/tests/CMakeLists.txt` cuja `<fonte>` NÃO
+#     faz parte do MESMO estado de ÍNDICE que o próprio arquivo: um alvo órfão que tornaria
+#     o commit resultante não-configurável num checkout limpo, mesmo que a working tree
+#     comum pareça normal (o `.cpp` não-commitado de outro agente ainda está sentado ali no
+#     disco, mascarando a lacuna). Ver o próprio comentário de cabeçalho daquele script pro
+#     racional completo e os dois commits históricos reais (`ca173cf`, `838e10c`) que ele
+#     foi construído pra pegar. GATEADO como o check_doc_line_refs.sh acima (só quando o
+#     próprio `glintfx/tests/CMakeLists.txt` está staged -- um alvo órfão só pode ser
+#     INTRODUZIDO por um commit que toca aquele arquivo; auditar um commit HISTÓRICO atrás
+#     de um órfão pré-existente é o OUTRO modo deste mesmo script, `<commit-ish>` como
+#     argv[1], não o trabalho deste hook). Roda contra o ÍNDICE (sem argumento), a mesma
+#     verdade-terrestre que todo outro gate deste arquivo usa via `git diff --cached`.
+# -----------------------------------------------------------------------------
+run_test_sources_gate() {
+  local f relevant=0
+
+  for f in "${staged_files[@]}"; do
+    if [[ "${f}" == "glintfx/tests/CMakeLists.txt" ]]; then
+      relevant=1
+      break
+    fi
+  done
+
+  [[ "${relevant}" -eq 0 ]] && return 0
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "precommit: python3 not found -- skipping check_test_sources_committed.py (WARNING, not a failure)" >&2
+    return 0
+  fi
+
+  section "check_test_sources_committed.py (glintfx/tests/CMakeLists.txt staged)"
+  python3 "${SCRIPT_DIR}/check_test_sources_committed.py" || return 1
+  return 0
+}
+
+if ! run_test_sources_gate; then
   gate_failed=1
 fi
 

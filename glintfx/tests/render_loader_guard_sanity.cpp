@@ -121,9 +121,31 @@ int main() {
   // [2]/[3] The regression proof: this construction must NOT crash. If RenderGl3::init()'s
   //         loader-not-ready guard regresses, this line SIGSEGVs and ctest reports the crash
   //         directly -- that IS the failure signal for this specific check.
+  //
+  //         ⚠ CRASH-BASED DETECTION, NOT ASSERTION-BASED -- name the difference, do not blur it
+  //         (2026-07-30, mutation run confirmed this empirically: neutering the guard reproduces
+  //         the ORIGINAL SIGSEGV, ctest reports `***Failed` with a nonzero signal exit, not a
+  //         printed FAIL line): the failures[i] counters and stderr messages further down in
+  //         this file are NORMAL assertion-based checks -- they run, print a reason, and return
+  //         a failure count. This ONE check is different in kind: with the guard removed, the
+  //         PROCESS DIES inside RmlUi's own constructor (RenderInterface_GL3, vendored, not this
+  //         file's code) before a single line after this construction ever executes -- there is
+  //         no `if`/`++failures`/`fprintf` possible for THIS specific regression, because nothing
+  //         downstream of the crash runs at all. ctest's own hard-failure-on-signal behaviour IS
+  //         the check; there is no softer assertion this file could add that would fire instead
+  //         (an assertion needs live code after the crash point to execute it). Do not read a
+  //         green run of THIS check as "the assertion passed" -- read it as "the process did not
+  //         die here", a distinct and slightly weaker claim: a crash ANYWHERE else on this same
+  //         call path (not just a regressed loader guard) would ALSO fail this check the same
+  //         way, which is a feature for a regression test (broad net) but means a failure here
+  //         needs a backtrace (gdb) to attribute to THIS specific guard, not just this test's
+  //         own pass/fail text.
   // ---------------------------------------------------------------------------
   glintfx::UiLayer ui({.logical_width = 64, .logical_height = 64, .load_gl = false});
-  std::puts("render_loader_guard_sanity [2] PASS: UiLayer{.load_gl=false} construction did not crash");
+  std::puts(
+      "render_loader_guard_sanity [2] PASS: UiLayer{.load_gl=false} construction did not crash "
+      "(crash-based check -- see this call site's own comment: absence of a signal IS the "
+      "pass condition, not an assertion that fired)");
 
   if (ui.ok()) {
     std::fprintf(stderr,

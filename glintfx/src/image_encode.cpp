@@ -116,12 +116,20 @@
 //     NOTHROW's own Group B test oracle lying to itself, see `image_decode_hardening_sanity.cpp`'s
 //     own top comment for that story) allocation points across the WHOLE call graph, every one of
 //     them a real `std::vector`/`std::ofstream` operation that can throw `std::bad_alloc`:
-//       - `write_cb` below (`bytes->insert(...)`) -- called repeatedly by stb_image_write's own C
-//         code for every one of the five stb-backed formats (PNG/JPG/BMP/TGA/HDR); an exception
-//         thrown from inside this callback unwinds normally back through stb's own call frames
-//         (same TU, same C++ exception ABI throughout -- stb_image_write.h is included directly
-//         into this .cpp, never compiled as a separate C object or behind an `extern "C"`
-//         boundary that would block unwinding).
+//       - `write_cb` below (`bytes->insert(...)`) -- called repeatedly, via a function pointer,
+//         by every one of the five stb-backed formats' own write functions (PNG/JPG/BMP/TGA/HDR).
+//         Those functions live in a SEPARATE translation unit (`stb_image_write_impl.cpp`) and are
+//         declared `extern "C"` (via `STBIWDEF` under `__cplusplus`, `stb_image_write.h`) -- but
+//         `extern "C"` changes ONLY name mangling and calling convention, not exception-handling
+//         metadata: `stb_image_write_impl.cpp` is still a `.cpp` TU, compiled by a C++ compiler,
+//         so normal C++ unwind tables ARE emitted for these functions, and an exception thrown
+//         inside `write_cb` unwinds through them exactly as it would through any other C++ frame
+//         -- confirmed empirically, not just argued, by this SAME `try`/`catch`'s own mutation
+//         test (removing it correctly turns the escape into a `std::terminate()` at
+//         `encode_image_memory()`'s own `noexcept` boundary, never a silent loss or corruption at
+//         the `extern "C"` frames in between). This would NOT hold if `stb_image_write` were ever
+//         swapped for a genuinely pre-compiled C library (a prebuilt `.a`/`.so` built by a C
+//         compiler, no unwind tables at all) -- worth flagging here for whoever makes that swap.
 //       - `ImageFormat::Hdr`'s own `std::vector<float> rgb(pixel_count * 3u)` -- allocated BEFORE
 //         `stbi_write_hdr_to_func()` is ever called.
 //       - `ImageFormat::Ppm`'s own `out.bytes.reserve(...)` plus the `push_back()` loop after it.
@@ -140,7 +148,15 @@
 //     file never calls `.exceptions(...)` on `file` (same as `image.cpp`'s own `decode_image_file()`
 //     ifstream), so there is no risk of a formatting/state failure ALSO throwing on top of that;
 //     the `try` around this function's own file-write section exists specifically for the
-//     allocation-failure case, not a state-exception one.
+//     allocation-failure case, not a state-exception one. ⚠️ UNTESTED BY CONSTRUCTION, not by
+//     execution (adversarial review, W21): `image_encode_hardening_sanity.cpp`'s own `RLIMIT_AS`
+//     oracle can never reach THIS specific `try` under mutation, because `encode_image_memory()`
+//     is itself `noexcept` with its own `try` -- any allocation failure inside it (which the
+//     squeeze always hits first, since its own peak dwarfs the ofstream's tiny default buffer)
+//     terminates AT that boundary and never propagates to `encode_image_file()`'s frame at all;
+//     removing only THIS `try` therefore does not turn the test red. See that test file's own
+//     top comment for the full declared-gap rationale (the honest alternative to a coverage claim
+//     this file cannot back with a passing mutation).
 // PT: FALHA DE ESCRITA DE ARQUIVO NÃO DEIXA ARQUIVO PARCIAL (ver acima em inglês pro racional
 //     completo, repetido em português abaixo por continuidade): `encode_image_file()` abre com
 //     `std::ios::trunc` e, numa `write()` curta/falha, chama `std::remove(path)` antes de devolver
@@ -153,12 +169,22 @@
 //     comentário de topo de `image_decode_hardening_sanity.cpp` pra essa história) os pontos de
 //     alocação do caminho de chamada INTEIRO, cada um deles uma operação `std::vector`/
 //     `std::ofstream` real que pode lançar `std::bad_alloc`:
-//       - `write_cb` abaixo (`bytes->insert(...)`) -- chamado repetidamente pelo próprio código C
-//         do stb_image_write pra cada um dos cinco formatos apoiados em stb (PNG/JPG/BMP/TGA/HDR);
-//         uma exceção lançada de dentro deste callback desenrola normalmente de volta através dos
-//         próprios quadros de chamada do stb (mesma TU, mesma ABI de exceção C++ o tempo todo --
-//         `stb_image_write.h` é incluído direto nesta `.cpp`, nunca compilado como um objeto C
-//         separado nem atrás de uma fronteira `extern "C"` que bloquearia o desenrolamento).
+//       - `write_cb` abaixo (`bytes->insert(...)`) -- chamado repetidamente, via ponteiro de
+//         função, pelas próprias funções de escrita de cada um dos cinco formatos apoiados em stb
+//         (PNG/JPG/BMP/TGA/HDR). Aquelas funções vivem numa TU SEPARADA
+//         (`stb_image_write_impl.cpp`) e são declaradas `extern "C"` (via `STBIWDEF` sob
+//         `__cplusplus`, `stb_image_write.h`) -- mas `extern "C"` muda SÓ o mangling de nome e a
+//         convenção de chamada, não o metadado de tratamento de exceção: `stb_image_write_impl.cpp`
+//         continua sendo uma TU `.cpp`, compilada por um compilador C++, então tabelas de
+//         desenrolamento C++ normais SÃO emitidas pra essas funções, e uma exceção lançada dentro
+//         de `write_cb` desenrola através delas exatamente como desenrolaria através de qualquer
+//         outro quadro C++ -- confirmado empiricamente, não só argumentado, pelo próprio teste de
+//         mutação DESTE `try`/`catch` (removê-lo vira corretamente um `std::terminate()` na
+//         própria fronteira `noexcept` de `encode_image_memory()`, nunca uma perda silenciosa ou
+//         corrupção nos quadros `extern "C"` no meio do caminho). Isto NÃO valeria se o
+//         `stb_image_write` algum dia fosse trocado por uma biblioteca C genuinamente
+//         pré-compilada (um `.a`/`.so` pronto, construído por um compilador C, sem tabela de
+//         desenrolamento nenhuma) -- vale sinalizar aqui pra quem fizer essa troca.
 //       - o próprio `std::vector<float> rgb(pixel_count * 3u)` do `ImageFormat::Hdr` -- alocado
 //         ANTES de `stbi_write_hdr_to_func()` sequer ser chamado.
 //       - o próprio `out.bytes.reserve(...)` do `ImageFormat::Ppm` mais o loop de `push_back()`
@@ -180,7 +206,16 @@
 //     ao próprio ifstream do `decode_image_file()` de `image.cpp`), então não há risco de uma
 //     falha de formatação/estado TAMBÉM lançar em cima disso; o `try` em volta da própria seção de
 //     escrita de arquivo desta função existe especificamente pro caso de falha de alocação, não um
-//     de exceção de estado.
+//     de exceção de estado. ⚠️ NÃO-TESTADO POR CONSTRUÇÃO, não por execução (review adversarial,
+//     W21): o próprio oráculo `RLIMIT_AS` de `image_encode_hardening_sanity.cpp` nunca consegue
+//     alcançar ESTE `try` específico sob mutação, porque `encode_image_memory()` em si é
+//     `noexcept` com o próprio `try` -- qualquer falha de alocação dentro dela (que o aperto
+//     SEMPRE acerta primeiro, já que o próprio pico dela ofusca o buffer default minúsculo do
+//     ofstream) termina NAQUELA fronteira e nunca se propaga até o quadro de
+//     `encode_image_file()`. Remover só ESTE `try`, portanto, não vira o teste vermelho. Ver o
+//     próprio comentário de topo daquele arquivo de teste pro racional completo de lacuna
+//     declarada (a alternativa honesta a uma alegação de cobertura que este arquivo não consegue
+//     sustentar com uma mutação que passe).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "glintfx/image.hpp"
 

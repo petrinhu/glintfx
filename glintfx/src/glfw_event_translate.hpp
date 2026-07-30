@@ -615,4 +615,51 @@ inline bool glfw_decide_window_close(bool has_callback, bool callback_allows_clo
   return !has_callback || callback_allows_close;
 }
 
+// EN: APP-MINIMIZED (W22, S5) -- pure decision seam behind App::run()'s CPU-spin fix: is the
+//     framebuffer degenerate (<=0 in either dimension)? Extracted here, alongside
+//     glfw_decide_window_close above, so the branch is directly unit-testable without ever
+//     creating a window (see tests/glfw_event_translate_sanity.cpp) -- Xvfb has no window
+//     manager, so a real minimize can never be exercised there; this seam is what stands in
+//     for it. App::run() (app.cpp) reads the SAME framebuffer size WindowGlfw::size() already
+//     reports for render()/snapshot() (glfwGetFramebufferSize -- window_glfw.cpp), and when
+//     this returns true, calls glfwWaitEvents() instead of the normal
+//     poll_events()+update()+render() iteration for that pass.
+//     WHY WAIT INSTEAD OF SLEEP (the CTO's call, discovered because the consumer ASKED "do you
+//     handle this?" -- see TODO.md's APP-MINIMIZED entry): under Wayland a minimized window
+//     reports a 0x0 framebuffer -- no framebuffer means no swap, no swap means vsync provides
+//     ZERO pacing, and a naive poll/update/render loop spins at thousands of iterations/second
+//     burning CPU. "vsync already paces the loop" is true EXCEPT when there is no swap to pace
+//     against -- exactly this branch's condition. glfwWaitEvents() BLOCKS the calling thread
+//     until at least one event is queued and wakes EXACTLY on the restore event, never later
+//     and never on a clock guess -- a sleep(N ms) would either wake too early (still 0x0,
+//     spins again for one more nap) or too late (N ms of extra latency before the game resumes
+//     rendering once restored). No new public sleep API was added for this fix (that is the
+//     separate, not-yet-scheduled FW-SLEEP item) -- this seam only decides when to yield, the
+//     yielding itself is entirely GLFW's own glfwWaitEvents().
+// PT: APP-MINIMIZED (W22, S5) -- seam de decisão pura por trás do fix de queima-de-CPU do
+//     App::run(): o framebuffer está degenerado (<=0 em qualquer dimensão)? Extraído aqui,
+//     junto do glfw_decide_window_close acima, para que o ramo seja diretamente testável por
+//     unidade sem nunca criar uma janela (ver tests/glfw_event_translate_sanity.cpp) -- o
+//     Xvfb não tem window manager, então um minimizar de verdade nunca é exercitável lá; este
+//     seam é o que substitui isso. App::run() (app.cpp) lê o MESMO tamanho de framebuffer que
+//     WindowGlfw::size() já reporta para render()/snapshot() (glfwGetFramebufferSize --
+//     window_glfw.cpp), e quando isto retorna true, chama glfwWaitEvents() em vez da iteração
+//     normal poll_events()+update()+render() naquele passo.
+//     POR QUE ESPERAR EM VEZ DE DORMIR (decisão do CTO, descoberta porque o consumidor
+//     PERGUNTOU "vocês tratam isso?" -- ver a entrada APP-MINIMIZED do TODO.md): sob Wayland
+//     uma janela minimizada reporta framebuffer 0x0 -- sem framebuffer não há swap, sem swap o
+//     vsync não dá ritmo NENHUM, e um laço ingênuo de poll/update/render gira a milhares de
+//     iterações por segundo queimando CPU. "o vsync já dá ritmo ao laço" é verdade EXCETO
+//     quando não há swap contra o qual dar ritmo -- exatamente a condição deste ramo.
+//     glfwWaitEvents() BLOQUEIA a thread chamadora até que ao menos um evento esteja na fila e
+//     acorda EXATAMENTE no evento de restaurar, nunca depois disso e nunca por um chute de
+//     relógio -- um sleep(N ms) acordaria cedo demais (ainda 0x0, dorme de novo por mais uma
+//     soneca) ou tarde demais (N ms de latência extra antes do jogo voltar a renderizar depois
+//     de restaurado). Nenhuma API pública nova de sleep foi acrescentada por este fix (isso é o
+//     item separado e ainda não agendado FW-SLEEP) -- este seam só decide QUANDO ceder, o
+//     próprio ceder é inteiramente o glfwWaitEvents() do GLFW.
+inline bool glfw_decide_wait_for_events(int fb_w, int fb_h) noexcept {
+  return fb_w <= 0 || fb_h <= 0;
+}
+
 } // namespace glintfx

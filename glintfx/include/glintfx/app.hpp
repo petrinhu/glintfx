@@ -1173,6 +1173,33 @@ public:
 
   CapturedFrame capture_frame();
 
+  // EN: APP-MINIMIZED (W22, S5) -- addendum to run()'s doc-comment above (appended HERE,
+  //     not inserted next to run() itself, to avoid shifting every app.hpp:N citation
+  //     docs/embed-integration.md pins below this point -- see AGENTS.md's doc-citation
+  //     discipline). run() no longer spins the CPU while the window's framebuffer is
+  //     degenerate (commonly 0x0 under a Wayland-minimized window): it detects this via the
+  //     same framebuffer size render()/snapshot() already read, and calls GLFW's own
+  //     glfwWaitEvents() instead of poll_events()+update()+render() for that pass --
+  //     glfwWaitEvents() blocks until at least one event is queued and wakes exactly on the
+  //     restore event, which is why it was chosen over any form of sleep (vsync alone cannot
+  //     pace the loop here: no framebuffer means no swap, and no swap means no vsync pacing).
+  //     No new public sleep API was introduced by this fix -- see
+  //     glintfx/src/glfw_event_translate.hpp's glfw_decide_wait_for_events for the pure
+  //     decision seam and the full rationale.
+  // PT: APP-MINIMIZED (W22, S5) -- adendo ao doc-comment do run() acima (acrescentado AQUI,
+  //     não inserido junto do próprio run(), para não deslocar toda citação app.hpp:N que o
+  //     docs/embed-integration.md fixa abaixo deste ponto -- ver a disciplina de citação de
+  //     doc do AGENTS.md). O run() não gira mais a CPU enquanto o framebuffer da janela está
+  //     degenerado (comumente 0x0 sob uma janela minimizada no Wayland): detecta isto via o
+  //     mesmo tamanho de framebuffer que render()/snapshot() já leem, e chama o próprio
+  //     glfwWaitEvents() do GLFW em vez de poll_events()+update()+render() naquele passo --
+  //     glfwWaitEvents() bloqueia até que ao menos um evento esteja na fila e acorda
+  //     exatamente no evento de restaurar, motivo pelo qual foi escolhido em vez de qualquer
+  //     forma de sleep (o vsync sozinho não consegue dar ritmo ao laço aqui: sem framebuffer
+  //     não há swap, e sem swap não há ritmo de vsync). Nenhuma API pública nova de sleep foi
+  //     introduzida por este fix -- ver glfw_decide_wait_for_events em
+  //     glintfx/src/glfw_event_translate.hpp pro seam de decisão pura e a racional completa.
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

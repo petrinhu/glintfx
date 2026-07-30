@@ -373,6 +373,50 @@ int main() {
   check(glfw_decide_window_close(true, true) == true, "callback returned true -> close proceeds");
   check(glfw_decide_window_close(true, false) == false, "callback returned false -> close is VETOED");
 
+  // ---------------------------------------------------------------------------
+  // EN: glfw_decide_wait_for_events (APP-MINIMIZED, W22 S5) -- pure decision seam behind
+  //     App::run()'s CPU-spin fix (see the header's own doc-comment for the "why
+  //     glfwWaitEvents(), not sleep" rationale from the CTO). HONEST DOWNGRADE, stated
+  //     explicitly per the CTO's own instruction: this proves the DECISION only -- that a
+  //     degenerate (<=0) framebuffer size routes to "wait", and a healthy one does not. It
+  //     does NOT prove App::run() actually reaches glfwWaitEvents() end-to-end under a real
+  //     window minimize: Xvfb has no window manager, so nothing in this suite (nor anywhere
+  //     else under Xvfb) can minimize a window for real (see this house's own memory
+  //     feedback_nunca_stress_janela_sessao_viva -- a window-mode stress test under a REAL
+  //     compositor once froze the leader's touchpad until a reboot). Exercising the full
+  //     App::run() path under an actual minimize would require a nested compositor
+  //     (kwin_wayland) -- that is a separate fatia, not this one, and is NOT attempted here.
+  //     Mutation-testability note for the adversarial reviewer: inverting either comparison
+  //     below, or flipping `||` to `&&` in glfw_decide_wait_for_events, MUST turn one of these
+  //     assertions red -- that is the whole point of this block existing (the isolated
+  //     width==0-only and height==0-only cases below are what specifically catches an `&&`
+  //     mutation; the 0x0 case alone would not).
+  // PT: glfw_decide_wait_for_events (APP-MINIMIZED, W22 S5) -- seam de decisão pura por trás
+  //     do fix de queima-de-CPU do App::run() (ver o próprio doc-comment do header pra
+  //     racional "por que glfwWaitEvents(), não sleep" do CTO). DOWNGRADE HONESTO, declarado
+  //     explicitamente por instrução do próprio CTO: isto prova só a DECISÃO -- que um tamanho
+  //     de framebuffer degenerado (<=0) roteia para "esperar", e um saudável não. NÃO prova
+  //     que o App::run() de fato alcança glfwWaitEvents() ponta-a-ponta sob um minimizar de
+  //     janela de verdade: o Xvfb não tem window manager, então nada nesta suíte (nem em
+  //     lugar nenhum sob Xvfb) consegue minimizar uma janela de verdade (ver a própria
+  //     memória desta casa feedback_nunca_stress_janela_sessao_viva -- um smoke de modos de
+  //     janela sob um compositor REAL já travou o touchpad do líder até precisar reboot).
+  //     Exercitar o caminho completo do App::run() sob um minimizar de fato exigiria um
+  //     compositor aninhado (kwin_wayland) -- isso é uma fatia própria, não esta, e NÃO é
+  //     tentado aqui. Nota de mutation-testability pro reviewer adversarial: inverter
+  //     qualquer comparação abaixo, ou trocar `||` por `&&` em glfw_decide_wait_for_events,
+  //     PRECISA deixar alguma destas asserções vermelha -- esse é o ponto inteiro deste bloco
+  //     existir (os casos isolados só-width==0 e só-height==0 abaixo são o que especificamente
+  //     pega uma mutação para `&&`; o caso 0x0 sozinho não pegaria).
+  // ---------------------------------------------------------------------------
+  check(glfw_decide_wait_for_events(1280, 720) == false, "healthy framebuffer (1280x720) -> do not wait, render normally");
+  check(glfw_decide_wait_for_events(1, 1) == false, "1x1 framebuffer (tiny but not zero/negative) -> still renders");
+  check(glfw_decide_wait_for_events(0, 720) == true, "width==0 (Wayland-minimized shape) -> wait for events");
+  check(glfw_decide_wait_for_events(1280, 0) == true, "height==0 (Wayland-minimized shape) -> wait for events");
+  check(glfw_decide_wait_for_events(0, 0) == true, "0x0 (the documented Wayland-minimized case) -> wait for events");
+  check(glfw_decide_wait_for_events(-1, 720) == true, "negative width (defensive, same <=0 shape as create_texture's own guard) -> wait for events");
+  check(glfw_decide_wait_for_events(1280, -1) == true, "negative height -> wait for events");
+
   if (g_failures > 0) {
     std::fprintf(stderr, "glfw_event_translate_sanity: %d assertion(s) FAILED\n", g_failures);
     return 1;

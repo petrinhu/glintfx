@@ -775,8 +775,83 @@ int App::get_monitor_refresh_hz() const {
   return impl_->window.get_monitor_refresh_hz();
 }
 
+} // namespace glintfx
+
+// EN: APP-MINIMIZED (W22, S5) -- glfw_decide_wait_for_events, the pure decision seam run()
+//     below calls into. See that function's own doc-comment (glfw_event_translate.hpp) for
+//     the full "why glfwWaitEvents(), not sleep" rationale. The namespace above is closed and
+//     reopened around this #include ON PURPOSE, instead of grouping it with the top-of-file
+//     includes (window_glfw.cpp's own pattern) or #include-ing it directly inside the
+//     still-open `namespace glintfx { ... }` this file uses for everything above: the header
+//     opens ITS OWN `namespace glintfx { ... }`, and splicing that in while already inside
+//     this file's outer `namespace glintfx` nests it into `glintfx::glintfx` -- the compiler
+//     then cannot resolve `glfw_decide_wait_for_events` from inside run() below (confirmed by
+//     hand: it suggested the fully-qualified `::glintfx::glintfx::glfw_decide_wait_for_events`
+//     right back). Moving the #include to the true top of the file (before line 33's
+//     `namespace glintfx {`) would fix the nesting but shifts every app.cpp:N line
+//     docs/embed-integration.md cites (app.cpp:476 for capture_frame(), among others -- see
+//     AGENTS.md's doc-citation discipline) -- this file's own namespace block is closed and
+//     reopened here, immediately above run() (the LAST function in this translation unit,
+//     after every cited line), so nothing above this point moves.
+// PT: APP-MINIMIZED (W22, S5) -- glfw_decide_wait_for_events, o seam de decisão pura que o
+//     run() abaixo chama. Ver o próprio doc-comment daquela função (glfw_event_translate.hpp)
+//     pra racional completa de "por que glfwWaitEvents(), não sleep". O namespace acima é
+//     fechado e reaberto ao redor deste #include DE PROPÓSITO, em vez de agrupá-lo com os
+//     includes do topo do arquivo (o próprio padrão do window_glfw.cpp) ou incluí-lo direto
+//     dentro do `namespace glintfx { ... }` ainda aberto que este arquivo usa para tudo acima:
+//     o header abre O PRÓPRIO `namespace glintfx { ... }`, e emendar isso enquanto já se está
+//     dentro do `namespace glintfx` externo deste arquivo aninha em `glintfx::glintfx` -- o
+//     compilador então não consegue resolver `glfw_decide_wait_for_events` de dentro do run()
+//     abaixo (confirmado na mão: ele sugeriu de volta o nome totalmente qualificado
+//     `::glintfx::glintfx::glfw_decide_wait_for_events`). Mover o #include pro topo de fato do
+//     arquivo (antes do `namespace glintfx {` da linha 33) resolveria o aninhamento mas
+//     deslocaria toda linha app.cpp:N que o docs/embed-integration.md cita (app.cpp:476 pro
+//     capture_frame(), entre outras -- ver a disciplina de citação de doc do AGENTS.md) --
+//     o namespace deste arquivo é fechado e reaberto aqui, logo acima do run() (a ÚLTIMA
+//     função desta unidade de tradução, depois de toda linha citada), então nada acima deste
+//     ponto se move.
+#include "glfw_event_translate.hpp"
+
+namespace glintfx {
+
 void App::run() {
   while (running()) {
+    // EN: APP-MINIMIZED (W22, S5) -- BUG FIX: this loop used to be an unconditional
+    //     poll_events()+update()+render(), which burns CPU when the window's framebuffer is
+    //     degenerate (commonly 0x0 under a Wayland-minimized window -- glfwGetFramebufferSize,
+    //     read below via the SAME impl_->window.size() render()/snapshot() already use). No
+    //     framebuffer means no swap, no swap means vsync provides ZERO pacing, so the naive
+    //     loop spun at thousands of iterations/second. Found because the GusWorld consumer
+    //     asked "does your own App::run() loop have this problem too?" while explaining its
+    //     own 3 SDL_Delay(16) guards -- it did (see TODO.md's APP-MINIMIZED entry for the full
+    //     story). Decision (CTO): degenerate framebuffer -> glfwWaitEvents(), never a sleep --
+    //     see glfw_decide_wait_for_events's doc-comment (glfw_event_translate.hpp) for the full
+    //     "wakes exactly on restore, not on a clock guess" rationale. glfwWaitEvents() itself
+    //     blocks-and-drains the event queue (same effect poll_events() has on the events it
+    //     processes), so poll_events()/update()/render() are skipped entirely for this pass --
+    //     calling poll_events() too would be redundant, not merely harmless.
+    // PT: APP-MINIMIZED (W22, S5) -- CONSERTO DE BUG: este laço costumava ser um
+    //     poll_events()+update()+render() incondicional, que queima CPU quando o framebuffer
+    //     da janela está degenerado (comumente 0x0 sob uma janela minimizada no Wayland --
+    //     glfwGetFramebufferSize, lido abaixo via o MESMO impl_->window.size() que
+    //     render()/snapshot() já usam). Sem framebuffer não há swap, sem swap o vsync não dá
+    //     ritmo NENHUM, então o laço ingênuo girava a milhares de iterações por segundo.
+    //     Achado porque o consumidor GusWorld perguntou "o laço App::run() de vocês tem esse
+    //     mesmo problema?" ao explicar as 3 guardas SDL_Delay(16) próprias -- tinha (ver a
+    //     entrada APP-MINIMIZED do TODO.md pra história completa). Decisão (CTO): framebuffer
+    //     degenerado -> glfwWaitEvents(), nunca um sleep -- ver o doc-comment de
+    //     glfw_decide_wait_for_events (glfw_event_translate.hpp) pra racional completa de
+    //     "acorda exatamente no restaurar, não por um chute de relógio". O próprio
+    //     glfwWaitEvents() bloqueia-e-drena a fila de eventos (o mesmo efeito que
+    //     poll_events() tem sobre os eventos que processa), então poll_events()/update()/
+    //     render() são pulados inteiramente neste passo -- chamar poll_events() também seria
+    //     redundante, não só inofensivo.
+    int w = 0, h = 0;
+    impl_->window.size(w, h);
+    if (glfw_decide_wait_for_events(w, h)) {
+      glfwWaitEvents();
+      continue;
+    }
     poll_events();
     update();
     render();

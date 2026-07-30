@@ -1787,76 +1787,167 @@ void Draw2d::end() {
 //     (nullptr/open-fail/blob-cap/parse-fail all yield an ok()==false Font2d, one dedup'd log), with
 //     the 64 MiB font-blob cap (kMaxFontBlobBytes, TX6) in place of load_texture()'s 256 MiB image
 //     cap. GL is NOT touched here -- the per-size glyph atlas is created lazily at draw_text().
+//
+//     FONT-NOTHROW (W22, 2026-07-30) -- the FOURTH and LAST member of the `never a crash` family
+//     (DEC-NOTHROW/ENC-NOTHROW/TEX-NOTHROW above, `src/image.cpp`/`src/image_encode.cpp`/this same
+//     file's own load_texture()): this function's own doc-comment above already promised
+//     "ok()==false ... never a crash" for a parse failure, but had ZERO try/catch -- literally the
+//     same text `load_texture()` carried before TEX-NOTHROW closed the identical gap. Unlike the
+//     other three (all found by auditoria-dominó against the consumer's OWN reported bug, a
+//     paletted-PNG decode/texture-upload failure), this one reached the consumer directly:
+//     GusEngine's `render2d_glintfx.cpp:72` calls `load_font()` on a runtime-resolved path with no
+//     `try`/`catch` of its own, its own `:53` comment documenting the WRITTEN assumption that this
+//     call never throws (TODO.md's own FONT-NOTHROW entry).
+//
+//     Allocation points enumerated (not guessed), all reachable from this function's own body:
+//     `buf(len)` below, the file-read buffer, up to the 64 MiB kMaxFontBlobBytes cap; a SECOND,
+//     independent copy of those same bytes inside `TextFace::open()` (`text_raster.cpp`'s own
+//     `face.blob_.assign(blob, blob + len)` -- TextFace OWNS a private copy of the font blob, see
+//     that class' own doc-comment in `text_raster.hpp`, the identical shape `decode_image_file()`'s
+//     own DEC-NOTHROW already covers for the image-decode sibling); `impl_->fonts.push_back()` on
+//     the registry-growth path (mirrors `impl_->textures.push_back()` in load_texture()); and
+//     `impl_->log_warn()` string concatenation on EVERY failure branch, reachable well before the
+//     parse ever runs (the SAME reason load_texture()'s own TEX-NOTHROW top comment gives for using
+//     ONE function-wide try/catch here too, not several call-scoped ones -- see that comment above
+//     for the full "why one try, not several" rationale, it applies here unchanged). `glx_sfnt_open`
+//     (`vendor/core/src/sfnt.c`) is a plain C translation unit -- it cannot throw a C++ exception by
+//     construction, so it is not on this list; `std::ifstream` never has `.exceptions()` enabled
+//     anywhere in this file, so a stream-state failure degrades via `if (!file)`/`if (!file.read
+//     (...))`, never a throw.
+//
+//     Unlike load_texture()/create_texture(), there is no GL resource to release on the exception
+//     path -- GL is never touched here (the per-size glyph atlas is created lazily at draw_text()),
+//     so the catch blocks below are a plain `return Font2d{};`, no
+//     `release_gl_texture_on_exception()`-equivalent needed.
+//
+//     Proven under a REAL, forced `std::bad_alloc` (not a hypothetical one) by
+//     `font_nothrow_sanity.cpp`'s own size-matched `operator new` injection oracle -- the SAME
+//     technique `draw2d_texture_nothrow_sanity.cpp` already established for `load_texture()`, no
+//     GL context needed for this function's own group (`load_font()` never reaches GL).
 // PT: D2D-TEXT/TX1/TX6 -- parseia um arquivo de fonte num TextFace (o parser endurecido do núcleo C
 //     soberano) e o registra. Espelha a própria disciplina de leitura-de-arquivo + fail-high do
 //     load_texture() (nullptr/falha-de-open/teto-de-blob/falha-de-parse todos rendem uma Font2d
 //     ok()==false, um log dedup'd), com o teto de 64 MiB de blob de fonte (kMaxFontBlobBytes, TX6)
 //     no lugar do teto de 256 MiB de imagem do load_texture(). GL NÃO é tocado aqui -- o atlas de
 //     glifo por-tamanho é criado preguiçosamente no draw_text().
-Font2d Draw2d::load_font(const char* path) {
+//
+//     FONT-NOTHROW (W22, 2026-07-30) -- o QUARTO e ÚLTIMO membro da família `never a crash`
+//     (DEC-NOTHROW/ENC-NOTHROW/TEX-NOTHROW acima, `src/image.cpp`/`src/image_encode.cpp`/o próprio
+//     load_texture() deste mesmo arquivo): o próprio doc-comment desta função acima já prometia
+//     "ok()==false ... nunca um crash" pra uma falha de parse, mas tinha ZERO try/catch -- literalmente
+//     o mesmo texto que o load_texture() carregava antes do TEX-NOTHROW fechar a lacuna idêntica.
+//     Diferente dos outros três (todos achados por auditoria-dominó contra o PRÓPRIO bug reportado
+//     do consumidor, uma falha de decode/upload-de-textura em PNG paletizado), esta alcançou o
+//     consumidor direto: o `render2d_glintfx.cpp:72` do GusEngine chama `load_font()` num caminho
+//     resolvido em runtime sem `try`/`catch` próprio, o próprio comentário da `:53` documentando a
+//     suposição ESCRITA de que esta chamada nunca lança (entrada FONT-NOTHROW do próprio TODO.md).
+//
+//     Pontos de alocação enumerados (não chutados), todos alcançáveis a partir do próprio corpo
+//     desta função: `buf(len)` abaixo, o buffer de leitura de arquivo, até o teto de 64 MiB do
+//     kMaxFontBlobBytes; uma SEGUNDA cópia, independente, desses mesmos bytes dentro do
+//     `TextFace::open()` (o próprio `face.blob_.assign(blob, blob + len)` de `text_raster.cpp` --
+//     TextFace POSSUI uma cópia privada do blob de fonte, ver o doc-comment próprio daquela classe
+//     em `text_raster.hpp`, a MESMA forma que o próprio DEC-NOTHROW do `decode_image_file()` já
+//     cobre pro irmão de decode de imagem); `impl_->fonts.push_back()` no caminho de crescimento do
+//     registry (espelha `impl_->textures.push_back()` no load_texture()); e a concatenação de string
+//     do `impl_->log_warn()` em TODO ramo de falha, alcançável bem antes do parse sequer rodar (o
+//     MESMO motivo que o próprio comentário de topo TEX-NOTHROW do load_texture() dá pra usar UM
+//     try/catch do tamanho da função aqui também, não vários escopados por chamada -- ver aquele
+//     comentário acima pro racional completo "por que um try, não vários", ele se aplica aqui sem
+//     mudança). O `glx_sfnt_open` (`vendor/core/src/sfnt.c`) é uma unidade de tradução C pura -- não
+//     consegue lançar uma exceção C++ por construção, então não entra nesta lista; o `std::ifstream`
+//     nunca tem `.exceptions()` habilitado em lugar nenhum deste arquivo, então uma falha de estado
+//     de stream degrada via `if (!file)`/`if (!file.read(...))`, nunca um lançamento.
+//
+//     Diferente do load_texture()/create_texture(), não há recurso GL a liberar no caminho de
+//     exceção -- GL nunca é tocado aqui (o atlas de glifo por-tamanho é criado preguiçosamente no
+//     draw_text()), então os blocos catch abaixo são um `return Font2d{};` simples, sem equivalente
+//     ao `release_gl_texture_on_exception()`.
+//
+//     Provado sob um `std::bad_alloc` REAL, forçado (não hipotético) pelo próprio oráculo de
+//     injeção em `operator new` casada por tamanho de `font_nothrow_sanity.cpp` -- a MESMA técnica
+//     que `draw2d_texture_nothrow_sanity.cpp` já estabeleceu pro `load_texture()`, sem precisar de
+//     contexto GL pro próprio grupo desta função (`load_font()` nunca alcança GL).
+Font2d Draw2d::load_font(const char* path) noexcept {
   Font2d out; // ok_ == false by default.
   if (!impl_) return out;
-  if (!impl_->initialized) {
-    impl_->log_warn("load_font() called before init()/after shutdown() -- ignored.");
-    return out;
-  }
-  if (path == nullptr) {
-    impl_->log_warn("load_font(nullptr) -- ignored.");
-    return out;
-  }
 
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    impl_->log_warn(std::string("load_font(): could not open '") + path + "'.");
-    return out;
-  }
-  file.seekg(0, std::ios::end);
-  const std::streamoff len_off = file.tellg();
-  if (len_off < 0) {
-    impl_->log_warn(std::string("load_font(): could not determine size of '") + path + "'.");
-    return out;
-  }
-  const std::size_t len = static_cast<std::size_t>(len_off);
-  if (len == 0 || len > kMaxFontBlobBytes) {
-    impl_->log_warn(std::string("load_font(): '") + path + "' is " + std::to_string(len) +
-                    " bytes (0 or over the " + std::to_string(kMaxFontBlobBytes) +
-                    " byte cap) -- refusing to load.");
-    return out;
-  }
-  file.seekg(0, std::ios::beg);
-  std::vector<std::uint8_t> buf(len);
-  if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len))) {
-    impl_->log_warn(std::string("load_font(): short read on '") + path + "'.");
-    return out;
-  }
+  try {
+    if (!impl_->initialized) {
+      impl_->log_warn("load_font() called before init()/after shutdown() -- ignored.");
+      return out;
+    }
+    if (path == nullptr) {
+      impl_->log_warn("load_font(nullptr) -- ignored.");
+      return out;
+    }
 
-  TextFace face = TextFace::open(buf.data(), buf.size());
-  if (!face.ok()) {
-    impl_->log_warn(std::string("load_font(): '") + path +
-                    "' failed to parse (unknown/corrupt/unsupported font).");
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+      impl_->log_warn(std::string("load_font(): could not open '") + path + "'.");
+      return out;
+    }
+    file.seekg(0, std::ios::end);
+    const std::streamoff len_off = file.tellg();
+    if (len_off < 0) {
+      impl_->log_warn(std::string("load_font(): could not determine size of '") + path + "'.");
+      return out;
+    }
+    const std::size_t len = static_cast<std::size_t>(len_off);
+    if (len == 0 || len > kMaxFontBlobBytes) {
+      impl_->log_warn(std::string("load_font(): '") + path + "' is " + std::to_string(len) +
+                      " bytes (0 or over the " + std::to_string(kMaxFontBlobBytes) +
+                      " byte cap) -- refusing to load.");
+      return out;
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<std::uint8_t> buf(len);
+    if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len))) {
+      impl_->log_warn(std::string("load_font(): short read on '") + path + "'.");
+      return out;
+    }
+
+    TextFace face = TextFace::open(buf.data(), buf.size());
+    if (!face.ok()) {
+      impl_->log_warn(std::string("load_font(): '") + path +
+                      "' failed to parse (unknown/corrupt/unsupported font).");
+      return out;
+    }
+
+    std::size_t idx;
+    if (!impl_->free_font_slots.empty()) {
+      idx = impl_->free_font_slots.back();
+      impl_->free_font_slots.pop_back();
+    } else {
+      idx = impl_->fonts.size();
+      impl_->fonts.push_back(Impl::FontSlot{});
+    }
+    Impl::FontSlot& fs = impl_->fonts[idx];
+    fs.face = std::move(face);
+    fs.by_size.clear();
+    fs.alive = true;
+    // fs.generation is left as-is: 1 for a never-used slot, already bumped by destroy_font() for a
+    // reused one -- either way it is the CURRENT valid generation for this slot.
+
+    out.ok_ = true;
+    out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
+    out.generation_ = fs.generation;
+    out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
     return out;
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc (the expected case -- see this function's own top comment) or any other
+    //     std::exception -- degrade to a clean ok()==false Font2d, never a partially-filled `out`.
+    //     No GL resource to release here (see top comment).
+    // PT: std::bad_alloc (o caso esperado -- ver o próprio comentário de topo desta função) ou
+    //     qualquer outro std::exception -- degrada pra um Font2d limpo, ok()==false, nunca um `out`
+    //     parcialmente preenchido. Nenhum recurso GL a liberar aqui (ver comentário de topo).
+    return Font2d{};
+  } catch (...) {
+    // EN/PT: belt-and-suspenders, same "never a crash" discipline as this file's own
+    // load_texture()/create_texture() catch(...) -- an exception type that is not even a
+    // std::exception must not escape this noexcept boundary either.
+    return Font2d{};
   }
-
-  std::size_t idx;
-  if (!impl_->free_font_slots.empty()) {
-    idx = impl_->free_font_slots.back();
-    impl_->free_font_slots.pop_back();
-  } else {
-    idx = impl_->fonts.size();
-    impl_->fonts.push_back(Impl::FontSlot{});
-  }
-  Impl::FontSlot& fs = impl_->fonts[idx];
-  fs.face = std::move(face);
-  fs.by_size.clear();
-  fs.alive = true;
-  // fs.generation is left as-is: 1 for a never-used slot, already bumped by destroy_font() for a
-  // reused one -- either way it is the CURRENT valid generation for this slot.
-
-  out.ok_ = true;
-  out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
-  out.generation_ = fs.generation;
-  out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
-  return out;
 }
 
 // EN: D2D-TEXT/TX1 -- releases the font's atlas page GL textures, tears the slot down (generation

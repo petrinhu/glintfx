@@ -945,7 +945,7 @@ public:
   //     arquivo, o teto de 64 MiB de blob de fonte (TX6), ou uma falha de parse (fonte
   //     desconhecida/corrompida/não-suportada -- outlines CFF/OTF, uma tabela truncada, ...) --
   //     mesma disciplina fail-high do load_texture(), uma linha de log dedup'd.
-  Font2d load_font(const char* path);
+  Font2d load_font(const char* path) noexcept;
   // EN: Releases the glyph atlas GL textures the font `font` accumulated (if any) and ALWAYS zeroes
   //     `font` on return (a handle you tried to destroy never looks valid afterwards, D7) -- except
   //     when `font` was already the invalid sentinel (a true no-op). Every failure mode is
@@ -1250,6 +1250,54 @@ public:
   //     próprio comentário de topo TEX-NOTHROW de `draw2d.cpp` em cada função pro racional completo
   //     (por que UM `try` do tamanho da função, não vários escopados por chamada) e os pontos de
   //     alocação enumerados.
+
+  // EN: FONT-NOTHROW (W22, 2026-07-30) -- ADDED AT THE END of the class, same "append, do not
+  //     insert" discipline TEX-NOTHROW immediately above already established for this exact
+  //     reason: `load_font()`'s own doc-comment above is cited by exact `file:line` from
+  //     `docs/draw2d.md` (`tools/check_doc_line_refs.sh`), so growing it in place would shift that
+  //     citation and every one below it. The FOURTH and LAST member of the `never a crash` family
+  //     (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW` above) -- `load_font()`'s own "never a crash"
+  //     wording was, until W22, a guideline honoured by convention only: the same shape of
+  //     out-of-memory condition TEX-NOTHROW fixed in `load_texture()` could throw `std::bad_alloc`
+  //     straight through THIS API boundary too, and unlike the other three, this one reached a real
+  //     consumer (GusWorld's `render2d_glintfx.cpp:72`, `load_font()` on a runtime-resolved path, no
+  //     `try`/`catch` around it, the call site's own comment documenting the assumption that it
+  //     never throws). `load_font()` is now `noexcept`, wrapping its own body in ONE function-wide
+  //     `try`/`catch` (`draw2d.cpp`, mirroring `load_texture()`'s own "why one try, not several"
+  //     rationale -- log_warn() concatenation on every guard-clause branch is itself
+  //     allocation-bearing and reachable before the parse ever runs) that degrades ANY exception to
+  //     a clean, default-constructed `Font2d{}` (`ok() == false`) -- proven under a REAL, forced
+  //     allocation failure by `font_nothrow_sanity.cpp`'s own size-matched `operator new` injection
+  //     oracle (the same technique `draw2d_texture_nothrow_sanity.cpp` already established, no
+  //     GL context needed here -- `load_font()` never touches GL). Unlike `load_texture()`, there is
+  //     no GL resource to release on the exception path (the doc-comment above already states GL is
+  //     untouched here, the per-size glyph atlas is created lazily at `draw_text()`), so the catch
+  //     blocks are a plain `return Font2d{};`, no `release_gl_texture_on_exception()`-equivalent
+  //     needed.
+  // PT: FONT-NOTHROW (W22, 2026-07-30) -- SOMADO NO FIM da classe, mesma disciplina "somar, não
+  //     inserir" que o TEX-NOTHROW logo acima já estabeleceu por este exato motivo: o próprio
+  //     doc-comment do `load_font()` acima é citado por `arquivo:linha` exato a partir de
+  //     `docs/draw2d.md` (`tools/check_doc_line_refs.sh`), então crescê-lo no lugar deslocaria
+  //     aquela citação e toda citação abaixo dela. O QUARTO e ÚLTIMO membro da família
+  //     `never a crash` (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW` acima) -- o próprio texto "nunca
+  //     um crash" do `load_font()` era, até a W22, uma diretriz honrada só por convenção: a MESMA
+  //     forma de condição de esgotamento de memória que o TEX-NOTHROW consertou no `load_texture()`
+  //     podia lançar `std::bad_alloc` direto através DESTA fronteira de API também, e diferente dos
+  //     outros três, esta alcançou um consumidor real (o `render2d_glintfx.cpp:72` do GusWorld,
+  //     `load_font()` num caminho resolvido em runtime, sem `try`/`catch` em volta, o próprio
+  //     comentário do call site documentando a suposição de que nunca lança). `load_font()` agora é
+  //     `noexcept`, envolvendo o PRÓPRIO corpo num `try`/`catch` do tamanho da função inteira
+  //     (`draw2d.cpp`, espelhando o próprio racional "por que um try, não vários" do
+  //     `load_texture()` -- a concatenação de `log_warn()` em toda guarda de falha é ela mesma
+  //     portadora de alocação e alcançável antes do parse sequer rodar) que degrada QUALQUER exceção
+  //     pra um `Font2d{}` limpo, default-construído (`ok() == false`) -- provado sob uma falha de
+  //     alocação REAL, forçada, pelo próprio oráculo de injeção em `operator new` casada por tamanho
+  //     de `font_nothrow_sanity.cpp` (a MESMA técnica que `draw2d_texture_nothrow_sanity.cpp` já
+  //     estabeleceu, sem precisar de contexto GL aqui -- `load_font()` nunca toca GL). Diferente do
+  //     `load_texture()`, não há recurso GL a liberar no caminho de exceção (o próprio doc-comment
+  //     acima já afirma que GL não é tocado aqui, o atlas de glifo por-tamanho é criado
+  //     preguiçosamente no `draw_text()`), então os blocos catch são um `return Font2d{};` simples,
+  //     sem equivalente ao `release_gl_texture_on_exception()`.
 
 private:
   struct Impl;

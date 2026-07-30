@@ -449,11 +449,11 @@ if (img.ok) {
 }
 ```
 
-`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:184`) reads a file from
+`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:209`) reads a file from
 disk; `decode_image_memory(const unsigned char* data, std::size_t len)`
-(`glintfx/include/glintfx/image.hpp:199`) decodes an already-in-memory buffer (the former reads
+(`glintfx/include/glintfx/image.hpp:226`) decodes an already-in-memory buffer (the former reads
 the file, then calls the latter). Both return `DecodedImagePixels{ok, width, height, pixels}`
-(`glintfx/include/glintfx/image.hpp:164`) -- an OWNED `std::vector<unsigned char>`, RAII, no raw
+(`glintfx/include/glintfx/image.hpp:187`) -- an OWNED `std::vector<unsigned char>`, RAII, no raw
 pointer or manual free ever crosses the boundary.
 
 **Alpha convention, a DELIBERATE divergence from `load_texture()`'s own internal decode:**
@@ -1483,11 +1483,11 @@ if (img.ok) {
 }
 ```
 
-`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:184`) lê um arquivo do
+`decode_image_file(const char* path)` (`glintfx/include/glintfx/image.hpp:209`) lê um arquivo do
 disco; `decode_image_memory(const unsigned char* data, std::size_t len)`
-(`glintfx/include/glintfx/image.hpp:199`) decodifica um buffer já em memória (o primeiro lê o
+(`glintfx/include/glintfx/image.hpp:226`) decodifica um buffer já em memória (o primeiro lê o
 arquivo e depois chama o segundo). As duas devolvem `DecodedImagePixels{ok, width, height,
-pixels}` (`glintfx/include/glintfx/image.hpp:164`) -- um `std::vector<unsigned char>` de posse
+pixels}` (`glintfx/include/glintfx/image.hpp:187`) -- um `std::vector<unsigned char>` de posse
 própria, RAII, nenhum ponteiro cru ou free manual cruza a fronteira.
 
 **Convenção de alpha, uma divergência DELIBERADA do próprio decode interno do

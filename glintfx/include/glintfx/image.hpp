@@ -67,6 +67,17 @@
 //     `decode_premultiplied_rgba()` already documents): a caller that wants a diagnostic message
 //     decides what to log around the call, exactly like every other pure/headless helper in this
 //     library.
+//
+//     BOTH FUNCTIONS ARE `noexcept` (DEC-NOTHROW, W21, 2026-07-30): "never a crash" above is not
+//     just a guideline, it is a `noexcept` guarantee at the signature -- an out-of-memory
+//     condition during decode (a real, measured failure mode: a caller-supplied buffer large
+//     enough to decode successfully but too large to also copy, e.g. a paletted PNG whose
+//     compressed-to-decoded size ratio makes the decode's own intermediate buffer SMALLER than
+//     the final pixel buffer) degrades to `ok == false`, exactly like every other rejection above,
+//     never a `std::bad_alloc` escaping across this API boundary. See `src/image.cpp`'s own top
+//     comment for the `try`/`catch` this guarantee is implemented with, and
+//     `image_decode_hardening_sanity.cpp` for the forced-allocation-failure test that proves it
+//     under a REAL `RLIMIT_AS` squeeze, not a hypothetical one.
 // PT: IMG-DECODE -- decodifica uma imagem codificada (PNG/JPG/TGA, o que o próprio
 //     `Draw2d::load_texture()` já aceita) em pixels do lado da CPU, SEM criar nenhum recurso de
 //     GPU. Este é a metade que sempre faltou ao irmão `Draw2d::create_texture()` (D2D-TEXPIXELS,
@@ -140,6 +151,18 @@
 //     a mesma disciplina "não pode logar, `ok` é o único sinal" que `decode_premultiplied_rgba()`
 //     já documenta): um chamador que quer uma mensagem de diagnóstico decide o que logar em volta
 //     da chamada, igual a todo outro helper puro/headless desta biblioteca.
+//
+//     AS DUAS FUNÇÕES SÃO `noexcept` (DEC-NOTHROW, W21, 2026-07-30): "nunca um crash" acima não é
+//     só uma diretriz, é uma garantia `noexcept` na própria assinatura -- uma condição de
+//     esgotamento de memória durante o decode (um modo de falha real, medido: um buffer fornecido
+//     pelo chamador grande o bastante pra decodificar com sucesso mas grande demais pra TAMBÉM
+//     copiar, ex.: um PNG paletizado cuja razão tamanho-comprimido/tamanho-decodificado deixa o
+//     próprio buffer intermediário do decode MENOR que o buffer de pixel final) degrada pra
+//     `ok == false`, exatamente como toda outra rejeição acima, nunca um `std::bad_alloc`
+//     escapando através desta fronteira de API. Ver o próprio comentário de topo de
+//     `src/image.cpp` pro `try`/`catch` com que esta garantia é implementada, e
+//     `image_decode_hardening_sanity.cpp` pro teste de falha-de-alocação-forçada que prova isto
+//     sob um aperto REAL de `RLIMIT_AS`, não hipotético.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
@@ -171,40 +194,47 @@ struct DecodedImagePixels {
 // EN: Decodes the file at `path` (PNG/JPG/TGA -- whatever `stb_image` recognises, the same
 //     formats `Draw2d::load_texture()` accepts) into straight-alpha RGBA8 pixels. `path ==
 //     nullptr`, a file that cannot be opened/sized, a 0-byte or over-`kMaxImageDecodeBytes` file
-//     (rejected BEFORE ever allocating a read buffer for it), a short read, or a decode failure
-//     (unknown/corrupt format) all yield `DecodedImagePixels{}` (`ok == false`). See this file's
-//     own top comment for the full guard order and the "cannot log" contract.
+//     (rejected BEFORE ever allocating a read buffer for it), a short read, an out-of-memory
+//     condition (DEC-NOTHROW -- see this file's own top comment), or a decode failure
+//     (unknown/corrupt format) all yield `DecodedImagePixels{}` (`ok == false`). `noexcept`: see
+//     this file's own top comment for the full guard order and the "cannot log" contract.
 // PT: Decodifica o arquivo em `path` (PNG/JPG/TGA -- o que o `stb_image` reconhecer, os mesmos
 //     formatos que `Draw2d::load_texture()` aceita) em pixels RGBA8 alpha straight. `path ==
 //     nullptr`, um arquivo que não pode ser aberto/medido, um arquivo de 0 bytes ou acima de
 //     `kMaxImageDecodeBytes` (rejeitado ANTES de sequer alocar um buffer de leitura pra ele), uma
-//     leitura curta, ou uma falha de decode (formato desconhecido/corrompido) todos rendem
-//     `DecodedImagePixels{}` (`ok == false`). Ver o próprio comentário do topo deste arquivo pra
-//     ordem de guarda completa e o contrato "não pode logar".
-DecodedImagePixels decode_image_file(const char* path);
+//     leitura curta, uma condição de esgotamento de memória (DEC-NOTHROW -- ver o próprio
+//     comentário de topo deste arquivo), ou uma falha de decode (formato desconhecido/corrompido)
+//     todos rendem `DecodedImagePixels{}` (`ok == false`). `noexcept`: ver o próprio comentário do
+//     topo deste arquivo pra ordem de guarda completa e o contrato "não pode logar".
+DecodedImagePixels decode_image_file(const char* path) noexcept;
 
 // EN: Decodes `len` bytes of an already-in-memory encoded image (a buffer downloaded, embedded
 //     as a resource, or read by the caller through its own I/O path) into straight-alpha RGBA8
 //     pixels. `data == nullptr`, `len == 0`, `len` over `kMaxImageDecodeBytes` (rejected BEFORE
-//     ever touching `data`), or a decode failure all yield `DecodedImagePixels{}` (`ok ==
-//     false`). This is the memory-buffer sibling `decode_image_file()` above delegates to
-//     internally after its own file-read step.
+//     ever touching `data`), an out-of-memory condition (DEC-NOTHROW -- see this file's own top
+//     comment), or a decode failure all yield `DecodedImagePixels{}` (`ok == false`). `noexcept`.
+//     This is the memory-buffer sibling `decode_image_file()` above delegates to internally after
+//     its own file-read step.
 // PT: Decodifica `len` bytes de uma imagem codificada já em memória (um buffer baixado,
 //     embutido como recurso, ou lido pelo próprio chamador via caminho de I/O próprio) em pixels
 //     RGBA8 alpha straight. `data == nullptr`, `len == 0`, `len` acima de `kMaxImageDecodeBytes`
-//     (rejeitado ANTES de sequer tocar `data`), ou uma falha de decode todos rendem
-//     `DecodedImagePixels{}` (`ok == false`). É o irmão de buffer-em-memória pro qual o próprio
-//     `decode_image_file()` acima delega internamente após o próprio passo de leitura de
-//     arquivo.
-DecodedImagePixels decode_image_memory(const unsigned char* data, std::size_t len);
+//     (rejeitado ANTES de sequer tocar `data`), uma condição de esgotamento de memória
+//     (DEC-NOTHROW -- ver o próprio comentário de topo deste arquivo), ou uma falha de decode
+//     todos rendem `DecodedImagePixels{}` (`ok == false`). `noexcept`. É o irmão de
+//     buffer-em-memória pro qual o próprio `decode_image_file()` acima delega internamente após
+//     o próprio passo de leitura de arquivo.
+DecodedImagePixels decode_image_memory(const unsigned char* data, std::size_t len) noexcept;
 
 // EN: IMG-ENCODE (W21, 2026-07-30) -- the symmetric counterpart to the decode pair above:
 //     encode already-in-memory pixels INTO an encoded file/buffer, the direction
 //     `decode_image_file()`/`decode_image_memory()` never covered. Added at the END of this
 //     file, after the decode pair, so `decode_image_file()`/`decode_image_memory()`'s own line
-//     numbers (164/184/199 -- cited verbatim by `docs/draw2d.md` in four places) stay put; same
-//     "append, do not insert" discipline `image_decode.hpp`'s own IMG-DECODE addition already
-//     used for the identical reason (see that file's own top comment on `decode_straight_rgba`).
+//     numbers (187/209/226 as of DEC-NOTHROW/DEC-MOVE, W21 2026-07-30 -- cited verbatim by
+//     `docs/draw2d.md` in six places; the earlier 164/184/199 pins predate that same slice's own
+//     `noexcept`-and-guard doc-comment growth above, re-derived and fixed up in the same commit)
+//     stay put; same "append, do not insert" discipline `image_decode.hpp`'s own IMG-DECODE
+//     addition already used for the identical reason (see that file's own top comment on
+//     `decode_straight_rgba`).
 //
 //     SEVEN FORMATS, the team lead's own explicit scope decision (TODO.md `IMG-ENCODE`, W21):
 //     PNG, JPG, PPM, BMP, TGA, HDR, QOI -- and no others. `ImageFormat` is an ENUM, not a
@@ -294,10 +324,13 @@ DecodedImagePixels decode_image_memory(const unsigned char* data, std::size_t le
 //     pixels já em memória PARA um arquivo/buffer codificado, a direção que
 //     `decode_image_file()`/`decode_image_memory()` nunca cobriu. Somado no FIM deste arquivo,
 //     depois do par de decode, pra que os próprios números de linha de
-//     `decode_image_file()`/`decode_image_memory()` (164/184/199 -- citados ao pé da letra pelo
-//     `docs/draw2d.md` em quatro lugares) fiquem parados; mesma disciplina "acrescenta, não
-//     insere" que a própria adição IMG-DECODE de `image_decode.hpp` já usou pelo motivo idêntico
-//     (ver o próprio comentário de topo daquele arquivo sobre `decode_straight_rgba`).
+//     `decode_image_file()`/`decode_image_memory()` (187/209/226 desde DEC-NOTHROW/DEC-MOVE, W21
+//     2026-07-30 -- citados ao pé da letra pelo `docs/draw2d.md` em seis lugares; os antigos
+//     164/184/199 são de antes do crescimento de doc-comment de `noexcept`-e-guarda daquela mesma
+//     fatia acima, re-derivados e corrigidos no mesmo commit) fiquem parados; mesma disciplina
+//     "acrescenta, não insere" que a própria adição IMG-DECODE de `image_decode.hpp` já usou pelo
+//     motivo idêntico (ver o próprio comentário de topo daquele arquivo sobre
+//     `decode_straight_rgba`).
 //
 //     SETE FORMATOS, a própria decisão de escopo explícita do líder de time (TODO.md
 //     `IMG-ENCODE`, W21): PNG, JPG, PPM, BMP, TGA, HDR, QOI -- e nenhum outro. `ImageFormat` é um

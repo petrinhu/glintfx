@@ -1140,6 +1140,39 @@ target_link_libraries(image_encode_sanity PRIVATE glintfx)
 add_test(NAME image_encode_sanity COMMAND image_encode_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_decode_hardening_sanity (DEC-MOVE/DEC-NOTHROW, W21, 2026-07-30) -- consumer-driven,
+#     blocking fix: proves the PUBLIC decode pair's `noexcept` FAIL-HIGH contract
+#     (`glintfx/image.hpp`) with REAL, observable evidence -- an allocation-COUNT oracle (global
+#     operator new/delete override) for DEC-MOVE's "exactly one copy, not two", and a
+#     `fork()`+`RLIMIT_AS` forced-allocation-failure oracle for DEC-NOTHROW's "never a crash,
+#     ok == false is the only signal", calibrated against THIS process's own measured baseline
+#     VmSize rather than a hardcoded constant (so it does not depend on the host/CI machine's
+#     free memory). Linux-only (`/proc/self/status`, `fork()`, `setrlimit()`), matching this
+#     whole library's own platform scope -- no `#ifdef` needed. No third_party/stb include (only
+#     the public API + this library's own encode_image_memory() to self-build the fixture PNG).
+#     Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as
+#     image_sanity.cpp/image_encode_sanity.cpp right above -- runs in BOTH build configurations.
+#     See the test file's own top comment for the complete oracle rationale.
+# PT: image_decode_hardening_sanity (DEC-MOVE/DEC-NOTHROW, W21, 2026-07-30) -- conserto
+#     consumer-driven, bloqueante: prova o contrato FAIL-HIGH `noexcept` do par PÚBLICO de decode
+#     (`glintfx/image.hpp`) com evidência REAL, observável -- um oráculo de CONTAGEM de alocação
+#     (override global de operator new/delete) pro "exatamente uma cópia, não duas" do DEC-MOVE,
+#     e um oráculo de falha-de-alocação-forçada `fork()`+`RLIMIT_AS` pro "nunca um crash,
+#     ok == false é o único sinal" do DEC-NOTHROW, calibrado contra a PRÓPRIA linha de base
+#     medida de VmSize deste processo em vez de uma constante fixa (pra não depender da memória
+#     livre da máquina hospedeira/CI). Só Linux (`/proc/self/status`, `fork()`, `setrlimit()`),
+#     batendo com o próprio escopo de plataforma de toda esta biblioteca -- nenhum `#ifdef`
+#     necessário. Nenhum include de third_party/stb (só a API pública + o próprio
+#     encode_image_memory() desta biblioteca pra autoconstruir a fixture PNG). Registrado
+#     INCONDICIONALMENTE, mesma racional "nada relacionado a display pra isolar aqui" de
+#     image_sanity.cpp/image_encode_sanity.cpp logo acima -- roda nas DUAS configurações de
+#     build. Ver o próprio cabeçalho do arquivo de teste pro racional de oráculo completo.
+# ---------------------------------------------------------------------------
+add_executable(image_decode_hardening_sanity image_decode_hardening_sanity.cpp)
+target_link_libraries(image_decode_hardening_sanity PRIVATE glintfx)
+add_test(NAME image_decode_hardening_sanity COMMAND image_decode_hardening_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
 #     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
 #     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered
@@ -1440,6 +1473,52 @@ target_link_libraries(gl_state_guard PRIVATE ${_embed_dep} glloader)
 add_test(NAME gl_state_guard
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:gl_state_guard>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: ui_layer_capture_frame_smoke (`FRAMEGRAB-EMBED`) -- verifies UiLayer::capture_frame():
+#     composite correctness (host scene + UI content + background, three disjoint colours,
+#     same method as app_capture_frame_smoke.cpp), a capture-then-render-again regression
+#     check, calling before load(), the moved-from !ok() guard, the letterbox REGION ceiling
+#     (captures the current viewport, not the whole render target), and the odd-width
+#     GL_PACK_ALIGNMENT regression class (multi-row sampling, not just corners). Links
+#     glloader explicitly: the test paints the host scene rect and reads FBO 0 directly.
+#     min_partial.rml already copied unconditionally above (ui_layer_compose block).
+# PT: ui_layer_capture_frame_smoke (`FRAMEGRAB-EMBED`) -- verifica UiLayer::capture_frame():
+#     correção do composto (cena do host + conteúdo UI + fundo, três cores disjuntas, mesmo
+#     método de app_capture_frame_smoke.cpp), uma checagem de regressão captura-depois-
+#     render-de-novo, chamar antes de load(), o guard `!ok()` de movido-de, o teto de REGIÃO
+#     de letterbox (captura o viewport corrente, não o render target inteiro), e a classe de
+#     regressão de GL_PACK_ALIGNMENT com largura ímpar (amostragem multi-linha, não só
+#     cantos). Linka glloader explicitamente: o teste pinta o retângulo de cena do host e lê
+#     o FBO 0 diretamente. min_partial.rml já copiado incondicionalmente acima (bloco
+#     ui_layer_compose).
+add_executable(ui_layer_capture_frame_smoke ui_layer_capture_frame_smoke.cpp)
+target_link_libraries(ui_layer_capture_frame_smoke PRIVATE ${_embed_dep} glloader)
+add_test(NAME ui_layer_capture_frame_smoke
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_capture_frame_smoke>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# EN: ui_layer_capture_frame_state (`FRAMEGRAB-EMBED`) -- GL state captured before and after
+#     UiLayer::capture_frame() must be identical: GL_READ_FRAMEBUFFER binding, GL_READ_BUFFER,
+#     GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, GL_PIXEL_PACK_BUFFER binding -- the 5 pieces of
+#     state a pixel readback touches, NONE of which gl_state_guard.cpp above already covers
+#     (that one guards the render-PASS state a render() call touches). Links glloader
+#     explicitly: the test creates a dummy read-FBO + PBO directly.
+# PT: ui_layer_capture_frame_state (`FRAMEGRAB-EMBED`) -- estado GL capturado antes e depois
+#     de UiLayer::capture_frame() deve ser idêntico: binding de GL_READ_FRAMEBUFFER,
+#     GL_READ_BUFFER, GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, binding de
+#     GL_PIXEL_PACK_BUFFER -- as 5 peças de estado que um readback de pixel toca, NENHUMA das
+#     quais o gl_state_guard.cpp acima já cobre (aquele guarda o estado do PASSE de render que
+#     uma chamada render() toca). Linka glloader explicitamente: o teste cria um read-FBO +
+#     PBO dummy diretamente.
+add_executable(ui_layer_capture_frame_state ui_layer_capture_frame_state.cpp)
+target_link_libraries(ui_layer_capture_frame_state PRIVATE ${_embed_dep} glloader)
+add_test(NAME ui_layer_capture_frame_state
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_capture_frame_state>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 

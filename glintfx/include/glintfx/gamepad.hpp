@@ -405,15 +405,32 @@ public:
   // EN: Reads `path` and parses it as gamecontrollerdb.txt-format text (MappingDb::parse_text(),
   //     src/gamepad_mapping.hpp), merging matched entries into this instance's mapping database
   //     (last-write-wins per GUID). Returns the number of entries added/replaced -- `0` when not
-  //     initialized, `path` is `nullptr`, the file cannot be opened/read, or it contains zero
-  //     valid `platform:Linux` entries. Never crashes on a hostile/binary-garbage file.
+  //     initialized, `path` is `nullptr`, the file cannot be opened/read, it exceeds the internal
+  //     256 MiB read cap (GAMEPAD-NOTHROW, src/gamepad.cpp's own `kMaxMappingsFileBytes` -- this
+  //     is what makes an EOF-less path such as `/dev/zero` degrade cleanly instead of growing the
+  //     read buffer without bound), or it contains zero valid `platform:Linux` entries. `noexcept`
+  //     (GAMEPAD-NOTHROW, W22, 2026-07-30): the whole read-and-parse path is audited to have
+  //     exactly one throwing failure mode, `std::bad_alloc` from a real allocation failure
+  //     (never a different exception type -- every numeric field in the parser is read via
+  //     `std::from_chars`, which never throws), caught internally and degraded to `0`, the SAME
+  //     clean signal every other rejection above already returns -- see this method's own
+  //     implementation comment (gamepad.cpp) for the full audit. Never crashes on a hostile/
+  //     binary-garbage file.
   // PT: Lê `path` e faz parse dele como texto em formato gamecontrollerdb.txt
   //     (MappingDb::parse_text(), src/gamepad_mapping.hpp), mesclando as entradas casadas na base
   //     de mapeamento desta instância (último-escreve-vence por GUID). Retorna o número de
   //     entradas adicionadas/substituídas -- `0` quando não inicializado, `path` é `nullptr`, o
-  //     arquivo não pode ser aberto/lido, ou ele contém zero entradas `platform:Linux` válidas.
-  //     Nunca crasha num arquivo hostil/lixo binário.
-  int load_mappings_file(const char* path);
+  //     arquivo não pode ser aberto/lido, excede o teto interno de leitura de 256 MiB
+  //     (GAMEPAD-NOTHROW, o próprio `kMaxMappingsFileBytes` de src/gamepad.cpp -- é isto que faz
+  //     um path sem EOF como `/dev/zero` degradar limpo em vez de crescer o buffer de leitura sem
+  //     limite), ou contém zero entradas `platform:Linux` válidas. `noexcept` (GAMEPAD-NOTHROW,
+  //     W22, 2026-07-30): o caminho inteiro de leitura-e-parse é auditado e tem exatamente um
+  //     modo de falha que lança, `std::bad_alloc` de uma falha de alocação real (nunca um tipo de
+  //     exceção diferente -- todo campo numérico do parser é lido via `std::from_chars`, que
+  //     nunca lança), capturado internamente e degradado pra `0`, o MESMO sinal limpo que toda
+  //     outra rejeição acima já retorna -- ver o próprio comentário de implementação deste método
+  //     (gamepad.cpp) pra auditoria completa. Nunca crasha num arquivo hostil/lixo binário.
+  int load_mappings_file(const char* path) noexcept;
 
   // EN: Same as load_mappings_file(), but `text` is already in memory. `0` when not initialized
   //     or `text` is `nullptr`.

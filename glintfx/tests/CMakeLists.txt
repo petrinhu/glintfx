@@ -3863,6 +3863,29 @@ if(GLINTFX_MODULE_GAMEPAD)
   add_executable(gamepad_api_hardening gamepad_api_hardening.cpp)
   target_link_libraries(gamepad_api_hardening PRIVATE glintfx)
   add_test(NAME gamepad_api_hardening COMMAND gamepad_api_hardening)
+
+  # EN: gamepad_mappings_file_nothrow_sanity (GAMEPAD-NOTHROW, W22, 2026-07-30) -- the SIXTH
+  #     member of the `never a crash` family. Proves Gamepads::load_mappings_file() degrades to a
+  #     clean 0, never a crash, against the ORIGINAL measured repro (load_mappings_file("/dev/
+  #     zero") escaping std::bad_alloc to std::terminate()/abort()) and the sibling finite-but-
+  #     huge-file scenario the same 256 MiB incremental cap protects against. Complementary to
+  #     gamepad_mapping_hostile.cpp above (which attacks MappingDb::parse_text() directly, in
+  #     memory, never touching the file-I/O path this file exists to cover). See the test file's
+  #     own top comment for the full oracle rationale, fork()-per-group crash isolation, and why
+  #     no ulimit is needed (the incremental cap bounds the read on its own).
+  # PT: gamepad_mappings_file_nothrow_sanity (GAMEPAD-NOTHROW, W22, 2026-07-30) -- o SEXTO membro
+  #     da família `never a crash`. Prova que Gamepads::load_mappings_file() degrada pra um 0
+  #     limpo, nunca um crash, contra a reprodução ORIGINAL medida (load_mappings_file("/dev/
+  #     zero") escapando std::bad_alloc até std::terminate()/abort()) e o cenário irmão de
+  #     arquivo finito-mas-enorme que o MESMO teto incremental de 256 MiB protege. Complementar
+  #     ao gamepad_mapping_hostile.cpp acima (que ataca o MappingDb::parse_text() direto, em
+  #     memória, nunca tocando o caminho de I/O de arquivo que este arquivo existe pra cobrir).
+  #     Ver o próprio comentário de topo do arquivo de teste pro racional completo do oráculo,
+  #     isolamento de crash por fork()-por-grupo, e o porquê de nenhum ulimit ser necessário (o
+  #     teto incremental limita a leitura sozinho).
+  add_executable(gamepad_mappings_file_nothrow_sanity gamepad_mappings_file_nothrow_sanity.cpp)
+  target_link_libraries(gamepad_mappings_file_nothrow_sanity PRIVATE glintfx)
+  add_test(NAME gamepad_mappings_file_nothrow_sanity COMMAND gamepad_mappings_file_nothrow_sanity)
 endif()
 
 # ---------------------------------------------------------------------------

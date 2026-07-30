@@ -76,8 +76,8 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -143,24 +143,85 @@ std::array<unsigned char, 24> make_synthetic_event(std::uint16_t type, std::uint
   return buf;
 }
 
+// EN: GAMEPAD-NOTHROW (W22, 2026-07-30) -- byte-count cap, checked INCREMENTALLY (block-by-
+//     block), not via a single `ss << f.rdbuf()` slurp (the pre-fix shape). MEASURED, not
+//     theoretical: `read_whole_file("/dev/zero")` under the pre-fix `rdbuf()` slurp grew the
+//     destination `std::string` without bound (a character device has no EOF, so the stream
+//     extraction never stops on its own) until `std::bad_alloc` escaped uncaught all the way to
+//     `std::terminate()`/`abort()` -- reproduced under `ulimit -v` to keep the process' own
+//     memory footprint bounded during the repro, not the cause of the crash itself; the SAME
+//     class of failure is reachable with any sufficiently large or infinite-appearing path
+//     (a legitimately huge file, a sparse file, another zero-like special device), no fault
+//     injection needed, contradicting `gamepad.hpp`'s own documented `load_mappings_file()`
+//     contract ("Never crashes on a hostile/binary-garbage file"). A post-hoc size check via
+//     `seek`/`tell` would NOT have caught this: `/dev/zero` and other character devices are not
+//     seekable in the way a regular file is (no reliable `st_size`), so the only guard that
+//     actually bounds an EOF-less stream is one applied WHILE reading, not before or after.
+//     `kMaxMappingsFileBytes` reuses the SAME 256 MiB VALUE `BaseUrlFileInterface::kMaxFileBytes`
+//     (AUD-L1-PARSE, `base_url_file_interface.hpp`) already established as this codebase's own
+//     generic per-asset-file ceiling -- declared locally here (not shared/`#include`d), same
+//     "reuse the VALUE, not the symbol" discipline `CAPTURE-NOTHROW`'s own `kMaxCaptureBytes`
+//     already used for `kMaxImageDecodeBytes`. The community `gamecontrollerdb.txt` this format
+//     mirrors is on the order of a few hundred KiB to a few MiB in the wild -- 256 MiB is
+//     generous headroom over any plausible legitimate file, not a tight fit.
+// PT: GAMEPAD-NOTHROW (W22, 2026-07-30) -- teto de contagem de bytes, checado
+//     INCREMENTALMENTE (bloco a bloco), não via um único slurp `ss << f.rdbuf()` (a forma
+//     pré-conserto). MEDIDO, não teórico: `read_whole_file("/dev/zero")` sob o slurp `rdbuf()`
+//     pré-conserto crescia a `std::string` de destino sem limite (um device de caractere não
+//     tem EOF, então a extração do stream nunca para sozinha) até o `std::bad_alloc` escapar
+//     sem captura até `std::terminate()`/`abort()` -- reproduzido sob `ulimit -v` só pra manter
+//     a própria pegada de memória do processo limitada durante a reprodução, não a causa do
+//     crash em si; a MESMA classe de falha é alcançável com qualquer path suficientemente
+//     grande ou aparentemente infinito (um arquivo legitimamente enorme, um arquivo esparso,
+//     outro device especial parecido com zero), sem injeção de falha nenhuma necessária,
+//     contradizendo o próprio contrato documentado de `load_mappings_file()` em `gamepad.hpp`
+//     ("Never crashes on a hostile/binary-garbage file"). Uma checagem de tamanho a posteriori
+//     via `seek`/`tell` NÃO teria pego isto: `/dev/zero` e outros devices de caractere não são
+//     seekable do jeito que um arquivo comum é (sem `st_size` confiável), então a única guarda
+//     que de fato limita um stream sem EOF é uma aplicada DURANTE a leitura, não antes nem
+//     depois. `kMaxMappingsFileBytes` reusa o MESMO VALOR de 256 MiB que
+//     `BaseUrlFileInterface::kMaxFileBytes` (AUD-L1-PARSE, `base_url_file_interface.hpp`) já
+//     estabeleceu como o próprio teto genérico por-arquivo-de-asset deste código-base --
+//     declarado localmente aqui (não compartilhado/`#include`do), mesma disciplina "reusa o
+//     VALOR, não o símbolo" que o próprio `kMaxCaptureBytes` do `CAPTURE-NOTHROW` já usou pro
+//     `kMaxImageDecodeBytes`. O `gamecontrollerdb.txt` da comunidade que este formato espelha
+//     fica na ordem de algumas centenas de KiB a poucos MiB no mundo real -- 256 MiB é folga
+//     generosa sobre qualquer arquivo legítimo plausível, não um ajuste apertado.
+constexpr std::size_t kMaxMappingsFileBytes = 256u * 1024u * 1024u; // 256 MiB.
+
 // EN: Reads the whole file into memory, binary-safe (embedded NUL bytes survive the read, though
 //     MappingDb::parse_text()'s own std::string(text) construction from the returned c_str()
 //     later stops at the first one -- documented truncation, never a crash). Returns an empty
-//     string on any open/read failure -- indistinguishable from "empty file", which is fine: both
-//     cases legitimately parse to 0 entries.
+//     string on any open/read failure, OR once the running byte count exceeds
+//     `kMaxMappingsFileBytes` (see this function's own top comment) -- indistinguishable from
+//     "empty file" either way, which is fine: all cases legitimately parse to 0 entries.
 // PT: Lê o arquivo inteiro pra memória, binary-safe (bytes NUL embutidos sobrevivem à leitura,
 //     embora a própria construção std::string(text) do MappingDb::parse_text() a partir do
 //     c_str() retornado depois pare no primeiro -- truncamento documentado, nunca um crash).
-//     Retorna uma string vazia em qualquer falha de open/read -- indistinguível de "arquivo
-//     vazio", o que é aceitável: os dois casos legitimamente fazem parse pra 0 entradas.
+//     Retorna uma string vazia em qualquer falha de open/read, OU assim que a contagem de bytes
+//     corrente ultrapassar `kMaxMappingsFileBytes` (ver o próprio comentário de topo desta
+//     função) -- indistinguível de "arquivo vazio" de qualquer jeito, o que é aceitável: todos
+//     os casos legitimamente fazem parse pra 0 entradas.
 std::string read_whole_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
   if (!f.is_open()) {
     return {};
   }
-  std::ostringstream ss;
-  ss << f.rdbuf();
-  return ss.str();
+  std::string content;
+  char buf[65536];
+  std::size_t total = 0;
+  while (f) {
+    f.read(buf, sizeof(buf));
+    const std::streamsize n = f.gcount();
+    if (n <= 0) break;
+    total += static_cast<std::size_t>(n);
+    if (total > kMaxMappingsFileBytes) {
+      return {}; // EN: hostile/unbounded stream -- reject, never accumulate past the cap.
+                 // PT: stream hostil/sem limite -- rejeita, nunca acumula além do teto.
+    }
+    content.append(buf, static_cast<std::size_t>(n));
+  }
+  return content;
 }
 
 } // namespace
@@ -685,15 +746,65 @@ std::uint16_t Gamepads::raw_axis_code(int pad, int index) const {
   return p.layout.axis_codes[static_cast<std::size_t>(index)];
 }
 
-int Gamepads::load_mappings_file(const char* path) {
+// EN: GAMEPAD-NOTHROW (W22, 2026-07-30) -- ONE function-wide try/catch, not several call-scoped
+//     ones (same rationale FONT-NOTHROW's own load_font() states, draw2d.cpp): both
+//     `read_whole_file()`'s own `content.append()` growth (even under `kMaxMappingsFileBytes`,
+//     a machine already low on memory can still fail an allocation well below the cap) and
+//     `MappingDb::parse_text()`'s own `std::string full(text)` COPY of the entire (up to 256
+//     MiB) content plus its own per-line `substr()`/`trimmed` copies and `by_guid_[guid] =
+//     mapping` map insertion (gamepad_mapping.cpp) can throw `std::bad_alloc` -- AUDITED, not
+//     assumed: neither this file's own parser helpers nor gamepad_mapping.cpp's own
+//     `parse_line()`/`parse_value_spec()` use `std::stoi`/`.at()`/anything else that could throw
+//     a DIFFERENT exception type; every numeric field is parsed via `std::from_chars` (never
+//     throws, reports failure through its own return value), so `std::bad_alloc` is the ONLY
+//     exception class reachable on this call path -- `catch (const std::exception&)` therefore
+//     covers the real risk, `catch (...)` is belt-and-suspenders for the same reason every other
+//     `never a crash` sibling in this codebase keeps it (a future third-party dependency this
+//     seam might grow). `MappingDb::parse_text()`'s own body is left BYTE-FOR-BYTE UNTOUCHED
+//     (`load_mappings_text()`'s own direct call to it, below, is unaffected -- it receives
+//     caller-owned memory already in hand, no read/cap concern of its own, per this fatia's own
+//     scope decision) -- only the CALL to it from inside this function's own try is what changes.
+// PT: GAMEPAD-NOTHROW (W22, 2026-07-30) -- UM try/catch do tamanho da função, não vários
+//     escopados por chamada (mesmo racional que o próprio load_font() do FONT-NOTHROW afirma,
+//     draw2d.cpp): tanto o próprio crescimento `content.append()` de `read_whole_file()` (mesmo
+//     sob `kMaxMappingsFileBytes`, uma máquina já com pouca memória ainda pode falhar uma
+//     alocação bem abaixo do teto) quanto a própria cópia `std::string full(text)` do conteúdo
+//     inteiro (até 256 MiB) de `MappingDb::parse_text()`, mais as próprias cópias `substr()`/
+//     `trimmed` por-linha e a inserção de mapa `by_guid_[guid] = mapping` (gamepad_mapping.cpp)
+//     podem lançar `std::bad_alloc` -- AUDITADO, não presumido: nem os próprios helpers de
+//     parser deste arquivo nem o próprio `parse_line()`/`parse_value_spec()` de
+//     gamepad_mapping.cpp usam `std::stoi`/`.at()`/qualquer outra coisa que pudesse lançar um
+//     tipo de exceção DIFERENTE -- todo campo numérico é parseado via `std::from_chars` (nunca
+//     lança, reporta falha pelo próprio valor de retorno), então `std::bad_alloc` é a ÚNICA
+//     classe de exceção alcançável neste caminho de chamada -- `catch (const std::exception&)`
+//     portanto cobre o risco real, `catch (...)` é cinto-e-suspensório pelo mesmo motivo que
+//     todo outro irmão `never a crash` deste código-base mantém (uma dependência de terceiro
+//     futura que esta costura possa ganhar). O próprio corpo do `MappingDb::parse_text()` fica
+//     BYTE-A-BYTE INTOCADO (a própria chamada direta do `load_mappings_text()` a ele, abaixo,
+//     fica sem efeito -- ele recebe memória de posse do chamador já em mãos, sem preocupação de
+//     leitura/teto própria, pela própria decisão de escopo desta fatia) -- só a CHAMADA a ele de
+//     dentro do próprio try desta função é o que muda.
+int Gamepads::load_mappings_file(const char* path) noexcept {
   if (!impl_->initialized || path == nullptr) {
     return 0;
   }
-  const std::string content = read_whole_file(path);
-  if (content.empty()) {
-    return 0; // EN: unreadable/nonexistent/empty file -- 0, never a crash. PT: arquivo ilegível/inexistente/vazio -- 0, nunca um crash.
+  try {
+    const std::string content = read_whole_file(path);
+    if (content.empty()) {
+      return 0; // EN: unreadable/nonexistent/empty file -- 0, never a crash. PT: arquivo ilegível/inexistente/vazio -- 0, nunca um crash.
+    }
+    return impl_->db.parse_text(content.c_str());
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc (the expected case, see this function's own top comment) or any other
+    //     std::exception -- degrade to 0, the SAME clean signal every other rejection above
+    //     already returns.
+    // PT: std::bad_alloc (o caso esperado, ver o próprio comentário de topo desta função) ou
+    //     qualquer outro std::exception -- degrada pra 0, o MESMO sinal limpo que toda outra
+    //     rejeição acima já retorna.
+    return 0;
+  } catch (...) {
+    return 0;
   }
-  return impl_->db.parse_text(content.c_str());
 }
 
 int Gamepads::load_mappings_text(const char* text) {

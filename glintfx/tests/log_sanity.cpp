@@ -209,6 +209,114 @@ int main() {
   }
 
   // ---------------------------------------------------------------------------
+  // EN: EVERY `%n` VARIANT this module has identified (FW-LOG positional-argument bypass,
+  //     `%1$n`, found by adversarial review and confirmed by an independent E2E run against the
+  //     real compiled library BEFORE this fix) -- not just the bare `%n` case above. The bug that
+  //     shipped in 76519bb was a blocklist that skipped a fixed "known" character set and only
+  //     rejected a LITERAL `n`; `$` (the POSIX/glibc positional-argument separator) was not in
+  //     that set, so `%1$n` reached `vsnprintf` unrejected and wrote through a real pointer. This
+  //     block enumerates the syntactic space around that bug (positional index, EVERY length
+  //     modifier the POSIX/glibc grammar defines, and combinations) rather than re-testing only
+  //     the one form that was already caught -- "attack the boundary/space, not the one example"
+  //     (this session's own rule). Every case here MUST both (a) never let the sink see the
+  //     caller's arguments interpreted, and (b) leave a canary pointer untouched -- the same
+  //     load-bearing double-check as the bare `%n` case above, not just a string comparison.
+  // PT: TODA VARIANTE de `%n` que este módulo identificou (bypass de argumento posicional do
+  //     FW-LOG, `%1$n`, achado por review adversarial e confirmado por uma execução E2E
+  //     independente contra a lib real compilada ANTES deste conserto) -- não só o caso `%n` puro
+  //     acima. O bug que foi pro ar em 76519bb era uma blocklist que pulava um conjunto fixo de
+  //     caracteres "conhecidos" e só rejeitava um `n` LITERAL; `$` (o separador de argumento
+  //     posicional POSIX/glibc) não estava nesse conjunto, então `%1$n` chegava ao `vsnprintf`
+  //     sem rejeição e escrevia através de um ponteiro real. Este bloco enumera o espaço
+  //     sintático ao redor desse bug (índice posicional, TODO modificador de comprimento que a
+  //     gramática POSIX/glibc define, e combinações) em vez de retestar só a forma que já estava
+  //     pega -- "ataque a fronteira/o espaço, não o exemplo único" (regra desta própria sessão).
+  //     Todo caso aqui PRECISA tanto (a) nunca deixar o sink ver os argumentos do chamador
+  //     interpretados, QUANTO (b) deixar um ponteiro-canário intocado -- a mesma checagem dupla
+  //     que sustenta o caso `%n` puro acima, não só uma comparação de string.
+  // ---------------------------------------------------------------------------
+  {
+    struct NVariant {
+      const char* fmt;
+      const char* label;
+    };
+    // NOLINTBEGIN -- every entry is deliberately hostile, this table IS the attack surface.
+    static const NVariant kHostileNVariants[] = {
+        {"%1$n", "positional (the exact FW-LOG bypass, %1$n)"},
+        {"%2$n", "positional, index 2 (%2$n)"},
+        {"%ln", "length modifier 'l' (%ln)"},
+        {"%lln", "length modifier 'll' (%lln)"},
+        {"%hn", "length modifier 'h' (%hn)"},
+        {"%hhn", "length modifier 'hh' (%hhn)"},
+        {"%qn", "length modifier 'q' (BSD/glibc long-long alias, %qn)"},
+        {"%jn", "length modifier 'j' (intmax_t, %jn)"},
+        {"%zn", "length modifier 'z' (size_t, %zn)"},
+        {"%tn", "length modifier 't' (ptrdiff_t, %tn)"},
+        {"%Ln", "length modifier 'L' (%Ln)"},
+        {"%1$ln", "positional + length modifier (%1$ln)"},
+        {"%1$hhn", "positional + length modifier 'hh' (%1$hhn)"},
+        {"%*n", "'*' width before the conversion (%*n)"},
+        {"%1$*2$n", "positional index + positional width (%1$*2$n)"},
+        {"hello %1$s world %2$n", "%n embedded after an earlier positional %s"},
+    };
+    // NOLINTEND
+
+    for (const NVariant& variant : kHostileNVariants) {
+      std::vector<Captured> got;
+      set_log_sink([&](LogLevel level, const char* message) {
+        got.push_back({level, message});
+      });
+
+      volatile int canary = 0x5EED;
+      // NOLINTNEXTLINE -- deliberately hostile format, this is the exact case under test.
+      log_warn(variant.fmt, "arg1", const_cast<int*>(&canary));
+
+      check(got.size() == 1, variant.label);
+      check(canary == 0x5EED, variant.label);
+      if (got.size() == 1) {
+        check(!got[0].message.empty(), variant.label);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: The allowlist rewrite must NOT reject legitimate, non-writing uses of the exact syntactic
+  //     features the %n variants above use to hide (positional args, length modifiers, '*'
+  //     width/precision) -- otherwise the fix would have traded a security bug for a usability
+  //     regression on real SDL_Log-style call sites. Every case below is a SAFE conversion using
+  //     one of those features and must format normally, verbatim.
+  // PT: A reescrita em allowlist NÃO pode rejeitar usos legítimos e não-destrutivos das MESMAS
+  //     features sintáticas que as variantes de %n acima usam pra se esconder (argumentos
+  //     posicionais, modificadores de comprimento, largura/precisão '*') -- senão o conserto
+  //     teria trocado um bug de segurança por uma regressão de usabilidade em pontos de chamada
+  //     reais estilo SDL_Log. Todo caso abaixo é uma conversão SEGURA usando uma dessas features
+  //     e precisa formatar normalmente, verbatim.
+  // ---------------------------------------------------------------------------
+  {
+    std::vector<Captured> got;
+    set_log_sink([&](LogLevel level, const char* message) {
+      got.push_back({level, message});
+    });
+
+    log_warn("%lld", static_cast<long long>(-42));
+    log_warn("%hhd", static_cast<int>(7));
+    log_warn("%1$s and %2$s", "first", "second");
+    log_warn("%*d", 6, 5);
+    log_warn("%.*f", 2, 3.14159);
+    log_warn("%1$*2$d", 9, 4);
+
+    check(got.size() == 6, "safe allowlist regression: all 6 calls reached the sink");
+    if (got.size() == 6) {
+      check(got[0].message == "-42", "safe: length modifier 'll' (%lld) formats normally");
+      check(got[1].message == "7", "safe: length modifier 'hh' (%hhd) formats normally");
+      check(got[2].message == "first and second", "safe: positional args (%1$s/%2$s) format normally");
+      check(got[3].message == "     5", "safe: '*' width (%*d) formats normally");
+      check(got[4].message == "3.14", "safe: '*' precision (%.*f) formats normally");
+      check(got[5].message == "   9", "safe: positional index + positional width (%1$*2$d) formats normally");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // EN: kLogMaxMessageBytes truncation BOUNDARY -- exactly cap-1 (accepted verbatim, no marker)
   //     vs exactly cap (truncated, visible marker) -- the fronteira itself, not an absurdly large
   //     value (an oversized input would be rejected by ANY reasonable cap and would not prove the

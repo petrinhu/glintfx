@@ -80,15 +80,30 @@
 //     visible `"...[truncated]"` marker replacing its final bytes, so a caller can tell the
 //     difference between "the message really ended here" and "the message was cut" -- never a
 //     buffer overrun (this module never writes past its own fixed-size internal buffer,
-//     regardless of how long `fmt`'s EXPANSION would have been); a `fmt` containing a `%n`
-//     conversion (the one conversion specifier whose ENTIRE purpose is to WRITE to a
-//     caller-supplied pointer -- the specific, historically-exploited half of the format-string
-//     bug class CWE-134 that plain input-length hardening cannot neutralise) is rejected
-//     WHOLESALE before `vsnprintf` ever runs: the sink receives a fixed, safe diagnostic message
-//     instead of the caller's `fmt`, never the caller's variadic arguments interpreted against a
-//     hostile format string. A dangling `%` at the very end of `fmt` (an incomplete conversion --
-//     undefined behaviour per the C standard if handed to the platform's own `vsnprintf`) is
-//     rejected the same way, for the same reason.
+//     regardless of how long `fmt`'s EXPANSION would have been); `fmt` is validated against an
+//     ALLOWLIST of conversion specifiers (`diouxXeEfFgGaAcsp` -- see `format_is_hostile()` in
+//     log.cpp), not a blocklist of specific known-bad ones: a conversion whose trailing character
+//     is NOT on that allowlist is rejected WHOLESALE before `vsnprintf` ever runs, in EVERY
+//     syntactic form the POSIX/glibc printf grammar allows for it (a bare `%n`, the POSIX/glibc
+//     positional-argument form `%1$n`, any length-modified form `%ln`/`%lln`/`%hn`/`%hhn`/`%qn`/
+//     `%jn`/`%zn`/`%tn`/`%Ln`, and combinations thereof such as `%1$ln`) -- the sink receives a
+//     fixed, safe diagnostic message instead of the caller's `fmt`, never the caller's variadic
+//     arguments interpreted against a hostile format string. `%n` -- the one conversion specifier
+//     whose ENTIRE purpose is to WRITE to a caller-supplied pointer, the specific,
+//     historically-exploited write-primitive half of the format-string bug class CWE-134 that
+//     plain input-length hardening cannot neutralise -- is the reason this allowlist exists; it is
+//     an allowlist rather than a blocklist specifically because an earlier version of this guard
+//     (a blocklist that skipped a fixed set of "known" flag/width/length characters before
+//     checking for a literal `n`) did not include the POSIX/glibc positional-argument separator
+//     `$` in that skipped set, so `%1$n` reached `vsnprintf` unrejected -- a real, proven
+//     arbitrary-memory-write via this library's public API, closed by this allowlist rewrite (see
+//     `CHANGELOG.md`, `FW-LOG`). A dangling `%` at the very end of `fmt` (an incomplete conversion
+//     -- undefined behaviour per the C standard if handed to the platform's own `vsnprintf`) is
+//     rejected the same way, for the same reason. This allowlist does NOT protect against `%s`
+//     with a mismatched/invalid argument (a classic printf footgun, but not a write primitive) --
+//     that risk is inherent to any printf-style API and remains the CALLING CODE's documented
+//     responsibility (see the "TWO DISTINCT ENTRY POINTS" paragraph above: pass untrusted text as
+//     an ARGUMENT via `%s`, never as `fmt` itself).
 // PT: FW-LOG (framework-2D, W20, pedido D do consumidor GusWorld 2026-07-29) -- a ÚNICA
 //     superfície pública que esta biblioteca oferece para a própria saída de diagnóstico. Até
 //     este header existir, a glintfx escrevia todo aviso direto no `stderr` com ZERO API: 95
@@ -173,15 +188,32 @@
 //     os bytes finais, para que o chamador consiga distinguir "a mensagem realmente terminou
 //     aqui" de "a mensagem foi cortada" -- nunca um estouro de buffer (este módulo nunca escreve
 //     além do próprio buffer interno de tamanho fixo, independente de quão longa a EXPANSÃO de
-//     `fmt` teria sido); um `fmt` contendo uma conversão `%n` (o único especificador de conversão
-//     cujo PROPÓSITO INTEIRO é ESCREVER num ponteiro fornecido pelo chamador -- a metade
-//     específica, historicamente explorada, da classe de bug format-string CWE-134 que hardening
-//     de tamanho de input sozinho não neutraliza) é rejeitado POR INTEIRO antes do `vsnprintf`
-//     sequer rodar: o sink recebe uma mensagem de diagnóstico fixa e segura no lugar do `fmt` do
-//     chamador, nunca os argumentos variádicos do chamador interpretados contra um format string
-//     hostil. Um `%` pendurado bem no final de `fmt` (uma conversão incompleta -- comportamento
-//     indefinido pelo padrão C se entregue ao `vsnprintf` da própria plataforma) é rejeitado do
-//     mesmo jeito, pelo mesmo motivo.
+//     `fmt` teria sido); `fmt` é validado contra uma ALLOWLIST de especificadores de conversão
+//     (`diouxXeEfFgGaAcsp` -- ver `format_is_hostile()` em log.cpp), não uma blocklist de casos
+//     específicos conhecidamente ruins: uma conversão cujo caractere final NÃO está nessa
+//     allowlist é rejeitada POR INTEIRO antes do `vsnprintf` sequer rodar, em TODA forma sintática
+//     que a gramática POSIX/glibc de printf permite pra ela (um `%n` puro, a forma posicional
+//     POSIX/glibc `%1$n`, qualquer forma com modificador de comprimento `%ln`/`%lln`/`%hn`/
+//     `%hhn`/`%qn`/`%jn`/`%zn`/`%tn`/`%Ln`, e combinações como `%1$ln`) -- o sink recebe uma
+//     mensagem de diagnóstico fixa e segura no lugar do `fmt` do chamador, nunca os argumentos
+//     variádicos do chamador interpretados contra um format string hostil. `%n` -- o único
+//     especificador de conversão cujo PROPÓSITO INTEIRO é ESCREVER num ponteiro fornecido pelo
+//     chamador, a metade de primitiva-de-escrita específica e historicamente explorada da classe
+//     de bug format-string CWE-134 que hardening de tamanho de input sozinho não neutraliza -- é
+//     o motivo desta allowlist existir; ela é uma allowlist em vez de uma blocklist
+//     especificamente porque uma versão anterior desta guarda (uma blocklist que pulava um
+//     conjunto fixo de caracteres "conhecidos" de flag/largura/comprimento antes de checar por um
+//     `n` literal) não incluía o separador de argumento posicional POSIX/glibc `$` nesse conjunto
+//     pulado, então `%1$n` chegava ao `vsnprintf` sem rejeição -- uma escrita arbitrária de
+//     memória real e comprovada via a API pública desta biblioteca, fechada por esta reescrita em
+//     allowlist (ver `CHANGELOG.md`, `FW-LOG`). Um `%` pendurado bem no final de `fmt` (uma
+//     conversão incompleta -- comportamento indefinido pelo padrão C se entregue ao `vsnprintf`
+//     da própria plataforma) é rejeitado do mesmo jeito, pelo mesmo motivo. Esta allowlist NÃO
+//     protege contra `%s` com argumento incompatível/inválido (um footgun clássico de printf, mas
+//     não uma primitiva de escrita) -- esse risco é inerente a qualquer API estilo printf e
+//     continua sendo responsabilidade documentada do CÓDIGO CHAMADOR (ver o parágrafo "DOIS
+//     PONTOS DE ENTRADA DISTINTOS" acima: passe texto não-confiável como um ARGUMENTO via `%s`,
+//     nunca como o próprio `fmt`).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 

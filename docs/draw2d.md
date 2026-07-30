@@ -344,9 +344,9 @@ with `w`/`h` (the GL "extents") clamped to non-negative BEFORE the int cast; `x`
 origin) are cast straight through, un-clamped, per D28's own "clamping is the GPU's job" rule.
 
 **The ONE declared behavioural diff in existing code (D31), and the D9 contract update it
-forces:** `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:458`) used to call
+forces:** `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:480`) used to call
 `glDisable(GL_SCISSOR_TEST)` unconditionally, every flush. It is now conditional
-(`glintfx/src/draw2d.cpp:463-474`): if a scissor is set, `glEnable(GL_SCISSOR_TEST)` +
+(`glintfx/src/draw2d.cpp:489-496`): if a scissor is set, `glEnable(GL_SCISSOR_TEST)` +
 `glScissor(mapped rect)`; otherwise `glDisable(GL_SCISSOR_TEST)`, still asserting EVERYTHING
 this state depends on at every flush, per D9's own no-caching rule, unchanged. With no scissor
 EVER set, the emitted GL calls are IDENTICAL to v0.21.0. The GL-state contract (D9, below)
@@ -652,7 +652,7 @@ of touched state (same style as `gl_state.hpp`'s captured list, `glintfx/src/gl_
 - Vertex array object (`glBindVertexArray`)
 - Depth test (explicitly `glDisable(GL_DEPTH_TEST)`)
 - Face culling (explicitly `glDisable(GL_CULL_FACE)`)
-- Scissor test (CONDITIONAL since D2D-3/D28, `glintfx/src/draw2d.cpp:463-474`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` when a scissor is set via `set_scissor`, otherwise `glDisable(GL_SCISSOR_TEST)` as before -- see "Scissor" above for the CONTRACT CHANGE this represents)
+- Scissor test (CONDITIONAL since D2D-3/D28, `glintfx/src/draw2d.cpp:489-496`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` when a scissor is set via `set_scissor`, otherwise `glDisable(GL_SCISSOR_TEST)` as before -- see "Scissor" above for the CONTRACT CHANGE this represents)
 - Blend enable (`glEnable(GL_BLEND)`)
 - Blend func, both RGB and alpha (`glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`)
 - Blend equation (`glBlendEquation(GL_FUNC_ADD)`)
@@ -737,8 +737,8 @@ Internally it carries an opaque id, a generation counter, and an **owner tag** (
 registry before use.
 
 **A handle is NOT interchangeable between `Draw2d` instances.** `load_texture()` stamps the
-returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:1073`); both
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1144`/`728`) reject a handle whose
+returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:1106`); both
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1166`/`750`) reject a handle whose
 `owner_` tag does not match `this`, logged once and treated exactly like any other
 unknown/stale handle -- never dereferenced as a raw GL name.
 This is a guarantee by construction, not a numeric coincidence: id and generation alone cannot
@@ -1375,9 +1375,9 @@ com `w`/`h` (a "extensão" GL) clampados a não-negativo ANTES do cast pra int; 
 são convertidos direto, sem clamp, pela própria regra "clampar é trabalho da GPU" do D28.
 
 **O ÚNICO diff comportamental declarado em código existente (D31), e a atualização de contrato
-D9 que ele força:** o `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:458`) costumava chamar
+D9 que ele força:** o `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:480`) costumava chamar
 `glDisable(GL_SCISSOR_TEST)` incondicionalmente, a cada flush. Agora é condicional
-(`glintfx/src/draw2d.cpp:463-474`): se um scissor está setado, `glEnable(GL_SCISSOR_TEST)` +
+(`glintfx/src/draw2d.cpp:489-496`): se um scissor está setado, `glEnable(GL_SCISSOR_TEST)` +
 `glScissor(retângulo mapeado)`; senão `glDisable(GL_SCISSOR_TEST)`, ainda afirmando TUDO de que
 este estado depende a cada flush, pela própria regra de não-cachear do D9, inalterada. Sem
 scissor NUNCA setado, os GL calls emitidos são IDÊNTICOS à v0.21.0. O contrato de estado GL
@@ -1689,7 +1689,7 @@ enumerada do estado tocado (mesmo estilo da lista capturada em `gl_state.hpp`,
 - Vertex array object (`glBindVertexArray`)
 - Depth test (explicitamente `glDisable(GL_DEPTH_TEST)`)
 - Face culling (explicitamente `glDisable(GL_CULL_FACE)`)
-- Scissor test (CONDICIONAL desde o D2D-3/D28, `glintfx/src/draw2d.cpp:463-474`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` quando um scissor está setado via `set_scissor`, senão `glDisable(GL_SCISSOR_TEST)` como antes -- ver "Scissor" acima pra MUDANÇA DE CONTRATO que isto representa)
+- Scissor test (CONDICIONAL desde o D2D-3/D28, `glintfx/src/draw2d.cpp:489-496`: `glEnable(GL_SCISSOR_TEST)` + `glScissor(...)` quando um scissor está setado via `set_scissor`, senão `glDisable(GL_SCISSOR_TEST)` como antes -- ver "Scissor" acima pra MUDANÇA DE CONTRATO que isto representa)
 - Blend enable (`glEnable(GL_BLEND)`)
 - Blend func, RGB e alpha (`glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`)
 - Blend equation (`glBlendEquation(GL_FUNC_ADD)`)
@@ -1777,8 +1777,8 @@ própria do `Draw2d` emissor): uma instância `Draw2d` valida todo handle contra
 interno antes de usar.
 
 **Um handle NÃO é intercambiável entre instâncias `Draw2d`.** `load_texture()` carimba o handle
-retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:1073`); tanto
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1144`/`728`) rejeitam um handle cuja
+retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:1106`); tanto
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1166`/`750`) rejeitam um handle cuja
 tag `owner_` não bate com `this`, logado uma vez e tratado exatamente como qualquer outro handle
 desconhecido/obsoleto -- nunca desreferenciado como nome GL cru. É uma garantia por construção,
 não uma coincidência numérica:

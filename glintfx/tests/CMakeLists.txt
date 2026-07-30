@@ -957,6 +957,31 @@ target_link_libraries(log_dedup_sanity PRIVATE glintfx)
 add_test(NAME log_dedup_sanity COMMAND log_dedup_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: log_sanity (FW-LOG, W20) -- PURE unit test for glintfx/include/glintfx/log.hpp: no window,
+#     no GL context, no RmlUi/GLFW dependency AT ALL (glintfx::log()/log_info()/log_warn()/
+#     log_error() are plain functions over a single process-wide sink, verified entirely through
+#     glintfx::set_log_sink() capturing (level, message) in-process). Registered UNCONDITIONALLY,
+#     same "no display to isolate here" reasoning as input_state_sanity/log_dedup_sanity right
+#     above -- runs in BOTH build configurations. See the test file's own header for the full
+#     oracle (level dispatch, plain-vs-printf entry points, nullptr hardening, %n/dangling-'%'
+#     rejection with a canary-pointer check, the exact kLogMaxMessageBytes truncation boundary,
+#     sink replacement/reset, and sink reentrancy).
+# PT: log_sanity (FW-LOG, W20) -- teste unit PURO para glintfx/include/glintfx/log.hpp: sem
+#     janela, sem contexto GL, sem dependência de RmlUi/GLFW NENHUMA (glintfx::log()/log_info()/
+#     log_warn()/log_error() são funções simples sobre um único sink processo-inteiro, verificadas
+#     inteiramente via glintfx::set_log_sink() capturando (level, message) em processo).
+#     Registrado INCONDICIONALMENTE, mesma racional "nada relacionado a display pra isolar aqui"
+#     do input_state_sanity/log_dedup_sanity logo acima -- roda em AMBAS as configurações de
+#     build. Ver o cabeçalho do próprio arquivo de teste pro oráculo completo (despacho de nível,
+#     pontos de entrada plano-vs-printf, hardening de nullptr, rejeição de %n/'%'-pendurado com
+#     checagem de ponteiro-canário, a fronteira exata de truncamento kLogMaxMessageBytes,
+#     substituição/reset de sink, e reentrância de sink).
+# ---------------------------------------------------------------------------
+add_executable(log_sanity log_sanity.cpp)
+target_link_libraries(log_sanity PRIVATE glintfx)
+add_test(NAME log_sanity COMMAND log_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
 #     decision D3) -- PURE unit test for src/image_decode.hpp: no window, no GL context, no
 #     RmlUi/GLFW dependency AT ALL (decode_premultiplied_rgba is a plain "bytes in, pixels out"

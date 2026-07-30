@@ -38,6 +38,7 @@
 //     draw2d.hpp pra quem é dono da restauração em App vs. modo embed).
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/draw2d.hpp>
+#include <glintfx/log.hpp>
 
 #include "gl_loader.h"
 #include "image_decode.hpp"
@@ -166,9 +167,13 @@ bool compile_stage(GLuint& out_shader, GLenum stage, const char* src, std::strin
   if (status == GL_FALSE) {
     GLint log_len = 0;
     glGetShaderiv(id, GL_INFO_LOG_LENGTH, &log_len);
-    std::vector<char> log(static_cast<std::size_t>(log_len) + 1, '\0');
-    glGetShaderInfoLog(id, log_len, nullptr, log.data());
-    out_error = log.data();
+    // EN: Named info_log, not log -- cppcheck shadowFunction: `log` would shadow the free
+    //     function glintfx::log() (FW-LOG, W20) now visible in this translation unit.
+    // PT: Nomeado info_log, não log -- cppcheck shadowFunction: `log` sombrearia a função livre
+    //     glintfx::log() (FW-LOG, W20) agora visível nesta unidade de tradução.
+    std::vector<char> info_log(static_cast<std::size_t>(log_len) + 1, '\0');
+    glGetShaderInfoLog(id, log_len, nullptr, info_log.data());
+    out_error = info_log.data();
     glDeleteShader(id);
     return false;
   }
@@ -303,21 +308,38 @@ struct Draw2d::Impl {
   Camera2d camera{};
 
   // EN: log_dedup.hpp is ZERO-RmlUi (its own header comment) -- Draw2D has no Rml::Log to reach
-  //     (unlike render_gl3.cpp/decorator_polygon.cpp), so this dedup table gates a plain
-  //     std::fprintf(stderr, ...) instead. `type` is always 0 (this module has only one log
-  //     "channel"; the message text itself disambiguates, same key discipline log_dedup.hpp
-  //     documents).
+  //     (unlike render_gl3.cpp/decorator_polygon.cpp), so this dedup table gates a call into the
+  //     public glintfx::log() (FW-LOG, W20) instead of a raw std::fprintf(stderr, ...) -- see
+  //     glintfx/include/glintfx/log.hpp's "DEDUP/THROTTLE HAPPENS BEFORE THE SINK" paragraph:
+  //     this dedup table runs FIRST, exactly as before FW-LOG existed, so a host's custom sink
+  //     (glintfx::set_log_sink()) still only ever sees the already-curated stream, never the raw
+  //     per-frame flood. `type` is always 0 (this module has only one log "channel"; the message
+  //     text itself disambiguates, same key discipline log_dedup.hpp documents). `glintfx::log()`
+  //     (the PLAIN, non-formatting entry point -- not log_warn()/logf-style) is used deliberately:
+  //     `message` here routinely embeds a caller-supplied filesystem path or a GL shader-compile
+  //     error string, either of which may legitimately contain a literal '%' -- see log.hpp's own
+  //     "TWO DISTINCT ENTRY POINTS" paragraph for why passing that through a printf-style
+  //     formatter would be a format-string bug.
   // PT: log_dedup.hpp é ZERO-RmlUi (comentário próprio do header) -- o Draw2D não tem um
   //     Rml::Log pra alcançar (diferente de render_gl3.cpp/decorator_polygon.cpp), então esta
-  //     tabela de dedup gateia um std::fprintf(stderr, ...) puro em vez disso. `type` é sempre 0
-  //     (este módulo só tem um "canal" de log; o próprio texto da mensagem desambigua, mesma
-  //     disciplina de chave que log_dedup.hpp documenta).
+  //     tabela de dedup gateia uma chamada ao glintfx::log() público (FW-LOG, W20) em vez de um
+  //     std::fprintf(stderr, ...) cru -- ver o parágrafo "DEDUP/THROTTLE ACONTECE ANTES DO SINK"
+  //     de glintfx/include/glintfx/log.hpp: esta tabela de dedup roda PRIMEIRO, exatamente como
+  //     antes do FW-LOG existir, então um sink customizado de host (glintfx::set_log_sink())
+  //     ainda só vê o stream já curado, nunca o flood cru por-frame. `type` é sempre 0 (este
+  //     módulo só tem um "canal" de log; o próprio texto da mensagem desambigua, mesma disciplina
+  //     de chave que log_dedup.hpp documenta). O `glintfx::log()` (o ponto de entrada PLANO, sem
+  //     formatação -- não o estilo log_warn()/logf) é usado deliberadamente: `message` aqui
+  //     rotineiramente embute um caminho de filesystem ou uma string de erro de compile de shader
+  //     GL fornecidos pelo chamador, qualquer um dos quais pode legitimamente conter um '%'
+  //     literal -- ver o próprio parágrafo "DOIS PONTOS DE ENTRADA DISTINTOS" do log.hpp pro
+  //     motivo de passar isso por um formatador estilo printf ser um bug de format-string.
   LogDedup log{LogDedup::kDefaultCapacity};
 
   void log_warn(const std::string& message) {
     std::string line;
     if (log.should_print(0, message, /*is_error=*/false, line))
-      std::fprintf(stderr, "glintfx::Draw2d: %s\n", line.c_str());
+      glintfx::log(LogLevel::Warn, ("glintfx::Draw2d: " + line).c_str());
   }
 
   bool compile_program() {

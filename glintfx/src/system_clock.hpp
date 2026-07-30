@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: MPL-2.0
 // EN: Minimal RmlUi SystemInterface for embed mode — provides the clock and (LOGTHR-1, Onda 2,
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, decision D8) a dedup/throttle
-//     LogMessage override. No GLFW/SDL dependency (the host owns window/input).
+//     LogMessage override. No GLFW/SDL dependency (the host owns window/input). LogMessage below
+//     routes its already-deduped output through glintfx::log() (FW-LOG, W20,
+//     glintfx/include/glintfx/log.hpp) instead of a raw std::fprintf(stderr, ...) -- the dedup
+//     table still runs FIRST, exactly as before FW-LOG existed (see log.hpp's own "DEDUP/
+//     THROTTLE HAPPENS BEFORE THE SINK" paragraph), so a host's glintfx::set_log_sink() sees the
+//     curated stream, never the raw per-element-per-frame flood LOGTHR-1 exists to prevent.
 // PT: SystemInterface mínimo do RmlUi para embed — provê o relógio e (LOGTHR-1, Onda 2,
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, decisão D8) um override de
 //     LogMessage com dedup/throttle. Sem dependência de GLFW/SDL (o host é dono de janela/input).
+//     O LogMessage abaixo roteia a própria saída já deduplicada pelo glintfx::log() (FW-LOG, W20,
+//     glintfx/include/glintfx/log.hpp) em vez de um std::fprintf(stderr, ...) cru -- a tabela de
+//     dedup continua rodando PRIMEIRO, exatamente como antes do FW-LOG existir (ver o próprio
+//     parágrafo "DEDUP/THROTTLE ACONTECE ANTES DO SINK" do log.hpp), então o
+//     glintfx::set_log_sink() de um host vê o stream curado, nunca o flood cru
+//     por-elemento-por-frame que o LOGTHR-1 existe para prevenir.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 #include <RmlUi/Core/SystemInterface.h>
+#include <glintfx/log.hpp>
 #include <chrono>
-#include <cstdio>
 #include <string>
 #include "log_dedup.hpp"
 
@@ -21,7 +32,8 @@ public:
 
   double GetElapsedTime() override {
     return std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - start_).count();
+               std::chrono::steady_clock::now() - start_)
+        .count();
   }
 
   // EN: LOGTHR-1 (D8) -- overrides RmlUi's default LogMessage (which would otherwise print
@@ -44,7 +56,14 @@ public:
     const bool is_error = (type == Rml::Log::LT_ERROR || type == Rml::Log::LT_ASSERT);
     std::string out_line;
     if (dedup_.should_print(static_cast<int>(type), message, is_error, out_line)) {
-      std::fprintf(stderr, "%s\n", out_line.c_str());
+      // EN: glintfx::log() -- the PLAIN, non-formatting entry point (FW-LOG, W20) -- `out_line`
+      //     is RmlUi's own message text, which may legitimately contain a literal '%' (e.g. an
+      //     element attribute value); see log.hpp's "TWO DISTINCT ENTRY POINTS" paragraph.
+      // PT: glintfx::log() -- o ponto de entrada PLANO, sem formatação (FW-LOG, W20) --
+      //     `out_line` é o próprio texto de mensagem do RmlUi, que pode legitimamente conter um
+      //     '%' literal (ex.: um valor de atributo de elemento); ver o parágrafo "DOIS PONTOS DE
+      //     ENTRADA DISTINTOS" do log.hpp.
+      glintfx::log(is_error ? LogLevel::Error : LogLevel::Warn, out_line.c_str());
     }
     return true;
   }

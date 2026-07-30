@@ -10,6 +10,48 @@
 
 ## [Unreleased]
 
+### Added / Adicionado
+
+- **EN:** **`FW-LOG`** (onda W20, consumer-requested by GusWorld -- 30 `SDL_Log` call sites
+  measured in its own production code, 2026-07-29, **zero** of which specify a severity level): a
+  new public header, `<glintfx/log.hpp>`, gives this library its first-ever public logging API,
+  replacing every internal `fprintf(stderr, ...)` written with zero API before this slice (95
+  call sites in `draw2d.cpp` alone, plus RmlUi's own message channel funneled through
+  `system_clock.hpp`/`system_glfw_dedup.hpp`). Two entry points, deliberately distinct:
+  `log(LogLevel, const char*)` -- a PLAIN message, safe for arbitrary/untrusted text (used by
+  every internal call site, since a filesystem path or a GL error string may legitimately contain
+  a literal `%`); `log_info()`/`log_warn()`/`log_error()` -- printf-style convenience, the direct
+  `SDL_Log(fmt, ...)` replacement. A single, global, redirectable `LogSink`
+  (`glintfx::set_log_sink()`) receives every message AFTER this library's own dedup/throttle
+  policy (`LOGTHR-1`/D8, unchanged) already ran, so a custom sink sees the curated stream, never
+  the raw per-frame flood. Hardened against a `nullptr` message/format, a message over
+  `kLogMaxMessageBytes` (4096, truncated with a visible marker, never overflowing its own fixed
+  buffer), and a hostile/malformed format string (`%n` -- the one conversion that writes to a
+  caller-supplied pointer -- or a dangling `%` at the end, both rejected before `vsnprintf` ever
+  runs). **Deliberate, permanent ceiling** (see `docs/capabilities.md`'s Log row): no file
+  rotation, no structured/JSON output, no asynchronous delivery, only ONE sink at a time, no
+  per-module filtering -- already more than the measured need, on purpose.
+- **PT:** **`FW-LOG`** (onda W20, pedido do consumidor GusWorld -- 30 sítios de chamada
+  `SDL_Log` medidos na própria produção dele, 2026-07-29, **zero** deles especificando nível de
+  severidade): um novo header público, `<glintfx/log.hpp>`, dá a esta biblioteca a primeira API
+  pública de log da história dela, substituindo todo `fprintf(stderr, ...)` interno escrito com
+  zero API antes desta fatia (95 sítios de chamada só em `draw2d.cpp`, mais o próprio canal de
+  mensagem do RmlUi canalizado por `system_clock.hpp`/`system_glfw_dedup.hpp`). Dois pontos de
+  entrada, deliberadamente distintos: `log(LogLevel, const char*)` -- mensagem PLANA, segura para
+  texto arbitrário/não-confiável (usada por todo ponto de chamada interno, já que um caminho de
+  filesystem ou uma string de erro GL pode legitimamente conter um `%` literal);
+  `log_info()`/`log_warn()`/`log_error()` -- conveniência estilo printf, o substituto direto de
+  `SDL_Log(fmt, ...)`. Um único `LogSink` global e redirecionável (`glintfx::set_log_sink()`)
+  recebe toda mensagem DEPOIS da própria política de dedup/throttle desta biblioteca
+  (`LOGTHR-1`/D8, inalterada) já ter rodado, então um sink customizado vê o stream curado, nunca
+  o flood cru por-frame. Protegido contra message/format `nullptr`, uma mensagem acima de
+  `kLogMaxMessageBytes` (4096, truncada com marcador visível, nunca estourando o próprio buffer
+  fixo), e um format string hostil/malformado (`%n` -- a única conversão que escreve num ponteiro
+  fornecido pelo chamador -- ou um `%` pendurado no final, ambos rejeitados antes do `vsnprintf`
+  sequer rodar). **Teto deliberado e permanente** (ver a linha de Log do `docs/capabilities.md`):
+  sem rotação de arquivo, sem saída estruturada/JSON, sem entrega assíncrona, só UM sink por vez,
+  sem filtro por-módulo -- já mais do que a necessidade medida, de propósito.
+
 ## [0.25.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.25.0)
 
 ### Added / Adicionado

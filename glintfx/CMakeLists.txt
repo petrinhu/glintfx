@@ -1018,7 +1018,19 @@ endif()
 #     ADR-0015 (b) sugere -- a tabela descreve a fronteira de estado-alvo da
 #     ADR, não todo detalhe de implementação atual; o A0 não muda a
 #     dependência real do SystemClock, só a documenta com exatidão aqui).
-add_library(glintfx_core OBJECT src/system_clock.cpp src/version.cpp)
+# EN: src/log.cpp (FW-LOG, W20) joins system_clock.cpp/version.cpp in this SAME always-ON OBJECT
+#     library on purpose: it is core, zero-RmlUi/GLFW/GL, no GLINTFX_MODULE_* flag needed (same
+#     independence class as version() -- glintfx::log()/log_info()/log_warn()/log_error() must be
+#     reachable from an embed-only build exactly like glintfx::version() already is, and
+#     system_clock.cpp's own LogMessage override now calls INTO log.cpp -- see system_clock.hpp's
+#     header comment).
+# PT: src/log.cpp (FW-LOG, W20) se junta a system_clock.cpp/version.cpp nesta MESMA biblioteca
+#     OBJECT sempre-ON de propósito: é core, zero RmlUi/GLFW/GL, sem flag GLINTFX_MODULE_*
+#     necessária (mesma classe de independência do version() -- glintfx::log()/log_info()/
+#     log_warn()/log_error() precisam ser alcançáveis de um build embed-only exatamente como o
+#     glintfx::version() já é, e o próprio override de LogMessage do system_clock.cpp agora chama
+#     PARA DENTRO do log.cpp -- ver o comentário de cabeçalho do system_clock.hpp).
+add_library(glintfx_core OBJECT src/system_clock.cpp src/version.cpp src/log.cpp)
 target_include_directories(glintfx_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)

@@ -16,7 +16,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 #include "RmlUi_Platform_GLFW.h"
-#include <cstdio>
+#include <glintfx/log.hpp>
 #include <string>
 #include "log_dedup.hpp"
 
@@ -25,11 +25,18 @@ namespace glintfx {
 // EN: See src/system_clock.hpp's own LogMessage override for the full rationale (D8 policy,
 //     why the Rml::Log::Type -> int + is_error translation happens here and not in
 //     log_dedup.hpp, and why the return value is unconditionally true) -- identical here, only
-//     the base class differs (SystemInterface_GLFW instead of SystemClock).
+//     the base class differs (SystemInterface_GLFW instead of SystemClock). Also identical: this
+//     override routes its already-deduped output through glintfx::log() (FW-LOG, W20,
+//     glintfx/include/glintfx/log.hpp) instead of a raw std::fprintf(stderr, ...) -- see
+//     system_clock.hpp's own header comment for why the dedup table still running FIRST matters.
 // PT: Ver o próprio override de LogMessage de src/system_clock.hpp para o racional completo
 //     (política D8, por que a tradução Rml::Log::Type -> int + is_error acontece aqui e não em
 //     log_dedup.hpp, e por que o valor de retorno é incondicionalmente true) -- idêntico aqui,
-//     só a classe-base difere (SystemInterface_GLFW em vez de SystemClock).
+//     só a classe-base difere (SystemInterface_GLFW em vez de SystemClock). Também idêntico:
+//     este override roteia a própria saída já deduplicada pelo glintfx::log() (FW-LOG, W20,
+//     glintfx/include/glintfx/log.hpp) em vez de um std::fprintf(stderr, ...) cru -- ver o
+//     próprio comentário de cabeçalho do system_clock.hpp pro motivo da tabela de dedup continuar
+//     rodando PRIMEIRO importar.
 class SystemInterfaceGlfwDedup final : public SystemInterface_GLFW {
 public:
   explicit SystemInterfaceGlfwDedup(GLFWwindow* window) : SystemInterface_GLFW(window) {}
@@ -38,7 +45,7 @@ public:
     const bool is_error = (type == Rml::Log::LT_ERROR || type == Rml::Log::LT_ASSERT);
     std::string out_line;
     if (dedup_.should_print(static_cast<int>(type), message, is_error, out_line)) {
-      std::fprintf(stderr, "%s\n", out_line.c_str());
+      glintfx::log(is_error ? LogLevel::Error : LogLevel::Warn, out_line.c_str());
     }
     return true;
   }

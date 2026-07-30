@@ -109,6 +109,78 @@
 //     fazer com segurança a respeito, e o chamador já recebeu `false` -- o mesmo raciocínio "não
 //     dá pra degradar mais, o false já disse a verdade" que o próprio sink default embutido de
 //     `glintfx::log()` usa pro `fprintf` que ele mesmo não verifica.
+//
+//     ENC-NOTHROW (W21, 2026-07-30, same "never a crash" gap DEC-NOTHROW closed on the decode
+//     side, `image.cpp`): both functions below are `noexcept`, wrapping every allocation-bearing
+//     step in `try`/`catch`. ENUMERATED (not guessed -- the exact discipline that caught DEC-
+//     NOTHROW's own Group B test oracle lying to itself, see `image_decode_hardening_sanity.cpp`'s
+//     own top comment for that story) allocation points across the WHOLE call graph, every one of
+//     them a real `std::vector`/`std::ofstream` operation that can throw `std::bad_alloc`:
+//       - `write_cb` below (`bytes->insert(...)`) -- called repeatedly by stb_image_write's own C
+//         code for every one of the five stb-backed formats (PNG/JPG/BMP/TGA/HDR); an exception
+//         thrown from inside this callback unwinds normally back through stb's own call frames
+//         (same TU, same C++ exception ABI throughout -- stb_image_write.h is included directly
+//         into this .cpp, never compiled as a separate C object or behind an `extern "C"`
+//         boundary that would block unwinding).
+//       - `ImageFormat::Hdr`'s own `std::vector<float> rgb(pixel_count * 3u)` -- allocated BEFORE
+//         `stbi_write_hdr_to_func()` is ever called.
+//       - `ImageFormat::Ppm`'s own `out.bytes.reserve(...)` plus the `push_back()` loop after it.
+//       - `ImageFormat::Qoi`'s own `qoi_encode_rgba()` (`qoi_encode.hpp`) -- its OWN `out.reserve()`
+//         plus every `push_back()` in its own chunk-emission loop, all growing the SAME
+//         `EncodedImageBytes::bytes` this function owns.
+//     All of the above are reached from `encode_image_memory()`'s own `switch`, so ONE `try` around
+//     the whole switch covers every format's own allocation-bearing step in a single place, rather
+//     than seven separate per-case guards that would rot independently as formats are added.
+//     `encode_image_file()`'s OWN additional risk, past the (now noexcept-safe) delegated call to
+//     `encode_image_memory()`: `std::ofstream file(path, ...)`'s own internal streambuf allocates
+//     its buffer via a plain `operator new` call -- this can throw `std::bad_alloc` REGARDLESS of
+//     the stream's own `exceptions()` mask (that mask governs only whether `failbit`/`badbit`
+//     STATE trigger an `ios_base::failure`; it has no bearing on an ordinary allocation failure,
+//     which always propagates as a normal C++ exception) -- checked here, by inspection, that this
+//     file never calls `.exceptions(...)` on `file` (same as `image.cpp`'s own `decode_image_file()`
+//     ifstream), so there is no risk of a formatting/state failure ALSO throwing on top of that;
+//     the `try` around this function's own file-write section exists specifically for the
+//     allocation-failure case, not a state-exception one.
+// PT: FALHA DE ESCRITA DE ARQUIVO NÃO DEIXA ARQUIVO PARCIAL (ver acima em inglês pro racional
+//     completo, repetido em português abaixo por continuidade): `encode_image_file()` abre com
+//     `std::ios::trunc` e, numa `write()` curta/falha, chama `std::remove(path)` antes de devolver
+//     `false`.
+//
+//     ENC-NOTHROW (W21, 2026-07-30, a MESMA lacuna "nunca um crash" que o DEC-NOTHROW fechou do
+//     lado decode, `image.cpp`): as duas funções abaixo são `noexcept`, envolvendo todo passo
+//     portador de alocação num `try`/`catch`. ENUMERADOS (não chutados -- a MESMA disciplina que
+//     pegou o próprio oráculo do Grupo B do teste DEC-NOTHROW mentindo pra si mesmo, ver o próprio
+//     comentário de topo de `image_decode_hardening_sanity.cpp` pra essa história) os pontos de
+//     alocação do caminho de chamada INTEIRO, cada um deles uma operação `std::vector`/
+//     `std::ofstream` real que pode lançar `std::bad_alloc`:
+//       - `write_cb` abaixo (`bytes->insert(...)`) -- chamado repetidamente pelo próprio código C
+//         do stb_image_write pra cada um dos cinco formatos apoiados em stb (PNG/JPG/BMP/TGA/HDR);
+//         uma exceção lançada de dentro deste callback desenrola normalmente de volta através dos
+//         próprios quadros de chamada do stb (mesma TU, mesma ABI de exceção C++ o tempo todo --
+//         `stb_image_write.h` é incluído direto nesta `.cpp`, nunca compilado como um objeto C
+//         separado nem atrás de uma fronteira `extern "C"` que bloquearia o desenrolamento).
+//       - o próprio `std::vector<float> rgb(pixel_count * 3u)` do `ImageFormat::Hdr` -- alocado
+//         ANTES de `stbi_write_hdr_to_func()` sequer ser chamado.
+//       - o próprio `out.bytes.reserve(...)` do `ImageFormat::Ppm` mais o loop de `push_back()`
+//         depois dele.
+//       - o próprio `qoi_encode_rgba()` (`qoi_encode.hpp`) do `ImageFormat::Qoi` -- o PRÓPRIO
+//         `out.reserve()` dele mais todo `push_back()` no próprio loop de emissão de chunk dele,
+//         todos crescendo o MESMO `EncodedImageBytes::bytes` que esta função possui.
+//     Todos os itens acima são alcançados a partir do próprio `switch` de `encode_image_memory()`,
+//     então UM `try` em volta do switch inteiro cobre o próprio passo portador de alocação de todo
+//     formato num lugar só, em vez de sete guardas por-caso separadas que apodreceriam
+//     independentemente conforme formatos forem adicionados. O próprio risco ADICIONAL de
+//     `encode_image_file()`, além da chamada delegada (agora noexcept-segura) pra
+//     `encode_image_memory()`: o próprio streambuf interno de `std::ofstream file(path, ...)`
+//     aloca o próprio buffer via uma chamada `operator new` pura -- isto pode lançar
+//     `std::bad_alloc` INDEPENDENTE da própria máscara `exceptions()` do stream (aquela máscara só
+//     governa se ESTADO `failbit`/`badbit` dispara um `ios_base::failure`; não tem relação nenhuma
+//     com uma falha de alocação comum, que sempre se propaga como uma exceção C++ normal) --
+//     checado aqui, por inspeção, que este arquivo nunca chama `.exceptions(...)` em `file` (igual
+//     ao próprio ifstream do `decode_image_file()` de `image.cpp`), então não há risco de uma
+//     falha de formatação/estado TAMBÉM lançar em cima disso; o `try` em volta da própria seção de
+//     escrita de arquivo desta função existe especificamente pro caso de falha de alocação, não um
+//     de exceção de estado.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "glintfx/image.hpp"
 
@@ -131,9 +203,11 @@
 #include "qoi_encode.hpp"
 
 #include <cstdio>
+#include <exception>
 #include <fstream>
 #include <ios>
 #include <limits>
+#include <new>
 #include <vector>
 
 namespace glintfx {
@@ -199,7 +273,7 @@ void write_cb(void* context, void* data, int size) {
 
 EncodedImageBytes encode_image_memory(ImageFormat format, int width, int height,
                                       const unsigned char* pixels,
-                                      const EncodeImageOptions& options) {
+                                      const EncodeImageOptions& options) noexcept {
   EncodedImageBytes out; // ok == false, bytes empty, by default.
 
   if (pixels == nullptr)
@@ -230,100 +304,130 @@ EncodedImageBytes encode_image_memory(ImageFormat format, int width, int height,
   if (required_bytes > kMaxImageEncodeBytes)
     return out;
 
-  switch (format) {
-    case ImageFormat::Png: {
-      const int ok = stbi_write_png_to_func(&write_cb, &out.bytes, width, height, 4, pixels,
-                                            width * 4);
-      out.ok = (ok != 0);
-      break;
-    }
-    case ImageFormat::Jpg: {
-      // EN: comp=4 handed straight to stb's own JPEG encoder -- it reads R/G/B from offsets
-      //     0/1/2 of each `comp`-wide pixel and ignores the 4th component entirely (see
-      //     `stb_image_write.h`'s own `stbi_write_jpg_core`, "comp == 2 is grey+alpha (alpha is
-      //     ignored)" comment, which generalises identically to comp==4); no alpha-stripping
-      //     copy is needed on this side.
-      // PT: comp=4 entregue direto ao próprio encoder JPEG do stb -- ele lê R/G/B dos offsets
-      //     0/1/2 de cada pixel de largura `comp` e ignora o 4º componente por completo (ver o
-      //     próprio comentário "comp == 2 is grey+alpha (alpha is ignored)" do `stbi_write_jpg_core`
-      //     de `stb_image_write.h`, que generaliza identicamente pra comp==4); nenhuma cópia de
-      //     remoção de alpha é necessária deste lado.
-      const int ok = stbi_write_jpg_to_func(&write_cb, &out.bytes, width, height, 4, pixels,
-                                            options.jpg_quality);
-      out.ok = (ok != 0);
-      break;
-    }
-    case ImageFormat::Bmp: {
-      const int ok = stbi_write_bmp_to_func(&write_cb, &out.bytes, width, height, 4, pixels);
-      out.ok = (ok != 0);
-      break;
-    }
-    case ImageFormat::Tga: {
-      const int ok = stbi_write_tga_to_func(&write_cb, &out.bytes, width, height, 4, pixels);
-      out.ok = (ok != 0);
-      break;
-    }
-    case ImageFormat::Hdr: {
-      // EN: See glintfx/image.hpp's own top comment (HDR paragraph) for the full "this is a
-      //     declared downgrade, not real HDR capture" rationale. comp=3 (RGB only) -- the
-      //     Radiance/RGBE format itself carries no alpha channel, so the 4th input component is
-      //     read from `pixels` but never copied into `rgb` below.
-      // PT: Ver o próprio comentário de topo de glintfx/image.hpp (parágrafo HDR) pro racional
-      //     completo "isto é um downgrade declarado, não captura HDR real". comp=3 (só RGB) -- o
-      //     próprio formato Radiance/RGBE não carrega canal alpha nenhum, então o 4º componente
-      //     de input é lido de `pixels` mas nunca copiado pra `rgb` abaixo.
-      std::vector<float> rgb(pixel_count * 3u);
-      for (std::size_t i = 0; i < pixel_count; ++i) {
-        rgb[i * 3 + 0] = static_cast<float>(pixels[i * 4 + 0]) / 255.0f;
-        rgb[i * 3 + 1] = static_cast<float>(pixels[i * 4 + 1]) / 255.0f;
-        rgb[i * 3 + 2] = static_cast<float>(pixels[i * 4 + 2]) / 255.0f;
+  // EN: ENC-NOTHROW -- try/catch around every format's own allocation-bearing step, in ONE place.
+  //     See this file's own top comment for the enumerated list of what can throw here and why.
+  // PT: ENC-NOTHROW -- try/catch em volta do próprio passo portador de alocação de todo formato,
+  //     num lugar só. Ver o próprio comentário de topo deste arquivo pra lista enumerada do que
+  //     pode lançar aqui e por quê.
+  // EN: ENC-NOTHROW -- try/catch around every format's own allocation-bearing step, in ONE place.
+  //     See this file's own top comment for the enumerated list of what can throw here and why.
+  // PT: ENC-NOTHROW -- try/catch em volta do próprio passo portador de alocação de todo formato,
+  //     num lugar só. Ver o próprio comentário de topo deste arquivo pra lista enumerada do que
+  //     pode lançar aqui e por quê.
+  try {
+    switch (format) {
+      case ImageFormat::Png: {
+        const int ok = stbi_write_png_to_func(&write_cb, &out.bytes, width, height, 4, pixels,
+                                              width * 4);
+        out.ok = (ok != 0);
+        break;
       }
-      const int ok = stbi_write_hdr_to_func(&write_cb, &out.bytes, width, height, 3, rgb.data());
-      out.ok = (ok != 0);
-      break;
-    }
-    case ImageFormat::Ppm: {
-      // EN: P6 (binary RGB) -- the same textual header shape `App::snapshot()` writes
-      //     (`app.cpp`), rewritten here rather than shared (that file's `snapshot()` also
-      //     performs a GL-readback bottom-up row flip this module has no GL dependency to know
-      //     about -- see glintfx/image.hpp's own top comment's "PIXEL CONVENTION" paragraph for
-      //     why the two are not the same function in different clothes). Alpha is read (loop
-      //     touches index `i*4+3` implicitly via the `+4` stride) but never written -- PPM has no
-      //     alpha channel.
-      // PT: P6 (RGB binário) -- a mesma forma de cabeçalho textual que o próprio
-      //     `App::snapshot()` escreve (`app.cpp`), reescrita aqui em vez de compartilhada (o
-      //     `snapshot()` daquele arquivo também faz um flip de linha bottom-up de readback GL que
-      //     este módulo não tem dependência de GL nenhuma pra sequer saber que existe -- ver o
-      //     parágrafo "CONVENÇÃO DE PIXEL" do próprio comentário de topo de glintfx/image.hpp pro
-      //     porquê dos dois não serem a mesma função em roupas diferentes). O alpha é lido (o
-      //     loop passa pelo stride `+4` implicitamente) mas nunca escrito -- PPM não tem canal
-      //     alpha.
-      char header[64];
-      const int header_len = std::snprintf(header, sizeof(header), "P6\n%d %d\n255\n", width, height);
-      out.bytes.reserve(out.bytes.size() + static_cast<std::size_t>(header_len > 0 ? header_len : 0) +
-                        pixel_count * 3u);
-      if (header_len > 0)
-        out.bytes.insert(out.bytes.end(), header, header + header_len);
-      for (std::size_t i = 0; i < pixel_count; ++i) {
-        out.bytes.push_back(pixels[i * 4 + 0]);
-        out.bytes.push_back(pixels[i * 4 + 1]);
-        out.bytes.push_back(pixels[i * 4 + 2]);
+      case ImageFormat::Jpg: {
+        // EN: comp=4 handed straight to stb's own JPEG encoder -- it reads R/G/B from offsets
+        //     0/1/2 of each `comp`-wide pixel and ignores the 4th component entirely (see
+        //     `stb_image_write.h`'s own `stbi_write_jpg_core`, "comp == 2 is grey+alpha (alpha is
+        //     ignored)" comment, which generalises identically to comp==4); no alpha-stripping
+        //     copy is needed on this side.
+        // PT: comp=4 entregue direto ao próprio encoder JPEG do stb -- ele lê R/G/B dos offsets
+        //     0/1/2 de cada pixel de largura `comp` e ignora o 4º componente por completo (ver o
+        //     próprio comentário "comp == 2 is grey+alpha (alpha is ignored)" do `stbi_write_jpg_core`
+        //     de `stb_image_write.h`, que generaliza identicamente pra comp==4); nenhuma cópia de
+        //     remoção de alpha é necessária deste lado.
+        const int ok = stbi_write_jpg_to_func(&write_cb, &out.bytes, width, height, 4, pixels,
+                                              options.jpg_quality);
+        out.ok = (ok != 0);
+        break;
       }
-      out.ok = (header_len > 0);
-      break;
+      case ImageFormat::Bmp: {
+        const int ok = stbi_write_bmp_to_func(&write_cb, &out.bytes, width, height, 4, pixels);
+        out.ok = (ok != 0);
+        break;
+      }
+      case ImageFormat::Tga: {
+        const int ok = stbi_write_tga_to_func(&write_cb, &out.bytes, width, height, 4, pixels);
+        out.ok = (ok != 0);
+        break;
+      }
+      case ImageFormat::Hdr: {
+        // EN: See glintfx/image.hpp's own top comment (HDR paragraph) for the full "this is a
+        //     declared downgrade, not real HDR capture" rationale. comp=3 (RGB only) -- the
+        //     Radiance/RGBE format itself carries no alpha channel, so the 4th input component is
+        //     read from `pixels` but never copied into `rgb` below.
+        // PT: Ver o próprio comentário de topo de glintfx/image.hpp (parágrafo HDR) pro racional
+        //     completo "isto é um downgrade declarado, não captura HDR real". comp=3 (só RGB) -- o
+        //     próprio formato Radiance/RGBE não carrega canal alpha nenhum, então o 4º componente
+        //     de input é lido de `pixels` mas nunca copiado pra `rgb` abaixo.
+        std::vector<float> rgb(pixel_count * 3u);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+          rgb[i * 3 + 0] = static_cast<float>(pixels[i * 4 + 0]) / 255.0f;
+          rgb[i * 3 + 1] = static_cast<float>(pixels[i * 4 + 1]) / 255.0f;
+          rgb[i * 3 + 2] = static_cast<float>(pixels[i * 4 + 2]) / 255.0f;
+        }
+        const int ok = stbi_write_hdr_to_func(&write_cb, &out.bytes, width, height, 3, rgb.data());
+        out.ok = (ok != 0);
+        break;
+      }
+      case ImageFormat::Ppm: {
+        // EN: P6 (binary RGB) -- the same textual header shape `App::snapshot()` writes
+        //     (`app.cpp`), rewritten here rather than shared (that file's `snapshot()` also
+        //     performs a GL-readback bottom-up row flip this module has no GL dependency to know
+        //     about -- see glintfx/image.hpp's own top comment's "PIXEL CONVENTION" paragraph for
+        //     why the two are not the same function in different clothes). Alpha is read (loop
+        //     touches index `i*4+3` implicitly via the `+4` stride) but never written -- PPM has no
+        //     alpha channel.
+        // PT: P6 (RGB binário) -- a mesma forma de cabeçalho textual que o próprio
+        //     `App::snapshot()` escreve (`app.cpp`), reescrita aqui em vez de compartilhada (o
+        //     `snapshot()` daquele arquivo também faz um flip de linha bottom-up de readback GL que
+        //     este módulo não tem dependência de GL nenhuma pra sequer saber que existe -- ver o
+        //     parágrafo "CONVENÇÃO DE PIXEL" do próprio comentário de topo de glintfx/image.hpp pro
+        //     porquê dos dois não serem a mesma função em roupas diferentes). O alpha é lido (o
+        //     loop passa pelo stride `+4` implicitamente) mas nunca escrito -- PPM não tem canal
+        //     alpha.
+        char header[64];
+        const int header_len = std::snprintf(header, sizeof(header), "P6\n%d %d\n255\n", width, height);
+        out.bytes.reserve(out.bytes.size() + static_cast<std::size_t>(header_len > 0 ? header_len : 0) +
+                          pixel_count * 3u);
+        if (header_len > 0)
+          out.bytes.insert(out.bytes.end(), header, header + header_len);
+        for (std::size_t i = 0; i < pixel_count; ++i) {
+          out.bytes.push_back(pixels[i * 4 + 0]);
+          out.bytes.push_back(pixels[i * 4 + 1]);
+          out.bytes.push_back(pixels[i * 4 + 2]);
+        }
+        out.ok = (header_len > 0);
+        break;
+      }
+      case ImageFormat::Qoi: {
+        qoi_encode_rgba(pixels, width, height, out.bytes);
+        out.ok = true; // EN: qoi_encode_rgba() is total over this already-guarded input.
+                       // PT: qoi_encode_rgba() é total sobre este input já guardado.
+        break;
+      }
+      default:
+        // EN: A hostile/malformed `static_cast<ImageFormat>(n)` outside the 7 declared
+        //     enumerators -- rejected wholesale, never a fall-through into an arbitrary encoder.
+        // PT: Um `static_cast<ImageFormat>(n)` hostil/malformado fora dos 7 enumeradores
+        //     declarados -- rejeitado por completo, nunca um fall-through pra um encoder arbitrário.
+        return EncodedImageBytes{};
     }
-    case ImageFormat::Qoi: {
-      qoi_encode_rgba(pixels, width, height, out.bytes);
-      out.ok = true; // EN: qoi_encode_rgba() is total over this already-guarded input.
-                     // PT: qoi_encode_rgba() é total sobre este input já guardado.
-      break;
-    }
-    default:
-      // EN: A hostile/malformed `static_cast<ImageFormat>(n)` outside the 7 declared
-      //     enumerators -- rejected wholesale, never a fall-through into an arbitrary encoder.
-      // PT: Um `static_cast<ImageFormat>(n)` hostil/malformado fora dos 7 enumeradores
-      //     declarados -- rejeitado por completo, nunca um fall-through pra um encoder arbitrário.
-      return EncodedImageBytes{};
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc (the expected case, from any of the allocation points this file's own
+    //     top comment enumerates) or any other std::exception -- degrade to a clean,
+    //     default-constructed result, never a partially-filled `out.bytes`. See this file's own
+    //     top comment (ENC-NOTHROW).
+    // PT: std::bad_alloc (o caso esperado, de qualquer um dos pontos de alocação que o próprio
+    //     comentário de topo deste arquivo enumera) ou qualquer outro std::exception -- degrada
+    //     pra um resultado limpo, default-construído, nunca um `out.bytes` parcialmente
+    //     preenchido. Ver o próprio comentário de topo deste arquivo (ENC-NOTHROW).
+    return EncodedImageBytes{};
+  } catch (...) {
+    // EN: Belt-and-suspenders: same discipline as decode_image_memory()'s own catch-all
+    //     (image.cpp) -- an exception type that is not a std::exception at all must not escape
+    //     this noexcept boundary either.
+    // PT: Cinto-e-suspensório: mesma disciplina do próprio catch-all de decode_image_memory()
+    //     (image.cpp) -- um tipo de exceção que nem é um std::exception também não pode escapar
+    //     desta fronteira noexcept.
+    return EncodedImageBytes{};
   }
 
   if (!out.ok)
@@ -333,39 +437,61 @@ EncodedImageBytes encode_image_memory(ImageFormat format, int width, int height,
 }
 
 bool encode_image_file(const char* path, ImageFormat format, int width, int height,
-                       const unsigned char* pixels, const EncodeImageOptions& options) {
+                       const unsigned char* pixels, const EncodeImageOptions& options) noexcept {
   if (path == nullptr || path[0] == '\0')
     return false;
 
-  const EncodedImageBytes encoded = encode_image_memory(format, width, height, pixels, options);
-  if (!encoded.ok)
+  // EN: encode_image_memory() is noexcept-safe on its own (see above) -- everything it can throw
+  //     is already caught inside it. The `try` below is scoped to THIS function's own remaining
+  //     risk: `std::ofstream`'s own internal streambuf allocation (see this file's own top
+  //     comment, ENC-NOTHROW, for why that can throw regardless of the stream's `exceptions()`
+  //     mask, which this function never touches).
+  // PT: encode_image_memory() já é noexcept-segura por conta própria (ver acima) -- tudo que ela
+  //     pode lançar já é capturado dentro dela. O `try` abaixo é escopado pro próprio risco
+  //     RESTANTE desta função: a própria alocação de streambuf interno do `std::ofstream` (ver o
+  //     próprio comentário de topo deste arquivo, ENC-NOTHROW, pro porquê disto poder lançar
+  //     independente da própria máscara `exceptions()` do stream, que esta função nunca toca).
+  try {
+    const EncodedImageBytes encoded = encode_image_memory(format, width, height, pixels, options);
+    if (!encoded.ok)
+      return false;
+
+    // EN: D7-style ofstream idiom (binary, truncate any pre-existing file) -- opening a directory
+    //     path or a path whose parent does not exist both fail to open on every platform this
+    //     library targets, degrading to the SAME `false` this function already returns for every
+    //     other guard above (no separate `stat()`/`is_directory()` pre-check needed).
+    // PT: Idioma ofstream estilo D7 (binário, trunca qualquer arquivo pré-existente) -- abrir um
+    //     path de diretório ou um path cujo pai não existe ambos falham ao abrir em toda
+    //     plataforma que esta biblioteca mira, degradando pro MESMO `false` que esta função já
+    //     devolve pra toda outra guarda acima (nenhum pré-check `stat()`/`is_directory()` separado
+    //     é necessário).
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file)
+      return false;
+
+    file.write(reinterpret_cast<const char*>(encoded.bytes.data()),
+               static_cast<std::streamsize>(encoded.bytes.size()));
+    const bool write_ok = static_cast<bool>(file);
+    file.close();
+
+    if (!write_ok) {
+      std::remove(path); // EN: best-effort; see this file's own top comment on why the return
+                         //     value is ignored. PT: melhor-esforço; ver o próprio comentário de
+                         //     topo deste arquivo pro porquê do valor de retorno ser ignorado.
+      return false;
+    }
+    return true;
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc from the ofstream's own internal buffer allocation (or, defensively, any
+    //     other std::exception) -- degrade to `false`, same DEC-NOTHROW-class discipline. See this
+    //     file's own top comment (ENC-NOTHROW).
+    // PT: std::bad_alloc da própria alocação de buffer interno do ofstream (ou, defensivamente,
+    //     qualquer outro std::exception) -- degrada pra `false`, mesma disciplina classe-
+    //     DEC-NOTHROW. Ver o próprio comentário de topo deste arquivo (ENC-NOTHROW).
     return false;
-
-  // EN: D7-style ofstream idiom (binary, truncate any pre-existing file) -- opening a directory
-  //     path or a path whose parent does not exist both fail to open on every platform this
-  //     library targets, degrading to the SAME `false` this function already returns for every
-  //     other guard above (no separate `stat()`/`is_directory()` pre-check needed).
-  // PT: Idioma ofstream estilo D7 (binário, trunca qualquer arquivo pré-existente) -- abrir um
-  //     path de diretório ou um path cujo pai não existe ambos falham ao abrir em toda
-  //     plataforma que esta biblioteca mira, degradando pro MESMO `false` que esta função já
-  //     devolve pra toda outra guarda acima (nenhum pré-check `stat()`/`is_directory()` separado
-  //     é necessário).
-  std::ofstream file(path, std::ios::binary | std::ios::trunc);
-  if (!file)
-    return false;
-
-  file.write(reinterpret_cast<const char*>(encoded.bytes.data()),
-             static_cast<std::streamsize>(encoded.bytes.size()));
-  const bool write_ok = static_cast<bool>(file);
-  file.close();
-
-  if (!write_ok) {
-    std::remove(path); // EN: best-effort; see this file's own top comment on why the return
-                       //     value is ignored. PT: melhor-esforço; ver o próprio comentário de
-                       //     topo deste arquivo pro porquê do valor de retorno ser ignorado.
+  } catch (...) {
     return false;
   }
-  return true;
 }
 
 } // namespace glintfx

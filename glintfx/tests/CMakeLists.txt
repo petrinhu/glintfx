@@ -1173,6 +1173,37 @@ target_link_libraries(image_decode_hardening_sanity PRIVATE glintfx)
 add_test(NAME image_decode_hardening_sanity COMMAND image_decode_hardening_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_encode_hardening_sanity (ENC-NOTHROW, W21, 2026-07-30) -- symmetric counterpart of
+#     image_decode_hardening_sanity.cpp right above, for the PUBLIC encode pair
+#     (encode_image_memory()/encode_image_file()). Same two-stage fork()+RLIMIT_AS calibrated
+#     oracle (measure the real VmPeak-baseline delta of an unconstrained call, squeeze to 3/4 of
+#     it), now over an UNCOMPRESSED format (BMP, not PNG) so the encode's own real peak (input
+#     pixel buffer + output buffer, both alive together) is predictable and separable from a
+#     "cabe"/"não cabe" margin dominated by the caller-owned input buffer alone -- see the test
+#     file's own top comment for the full "why BMP, not PNG" rationale (the team lead's own
+#     observation that "the encode's own peak depends on format"). Linux-only
+#     (/proc/self/status, fork(), setrlimit()), same platform scope as
+#     image_decode_hardening_sanity.cpp -- no #ifdef needed. Registered UNCONDITIONALLY (no
+#     display/GL/RmlUi dependency whatsoever) -- runs in BOTH build configurations.
+# PT: image_encode_hardening_sanity (ENC-NOTHROW, W21, 2026-07-30) -- contraparte simétrica do
+#     image_decode_hardening_sanity.cpp logo acima, pro par PÚBLICO de encode
+#     (encode_image_memory()/encode_image_file()). Mesmo oráculo calibrado de dois estágios
+#     fork()+RLIMIT_AS (mede o delta real VmPeak-linha de base de uma chamada sem restrição,
+#     aperta pra 3/4 disso), agora sobre um formato SEM COMPRESSÃO (BMP, não PNG) pra que o
+#     próprio pico real do encode (buffer de pixel de entrada + buffer de saída, os dois vivos
+#     juntos) seja previsível e separável de uma margem "cabe"/"não cabe" dominada só pelo buffer
+#     de entrada de posse do chamador -- ver o próprio comentário de topo do arquivo de teste pro
+#     racional completo "por que BMP, não PNG" (a própria observação do team lead de que "o pico
+#     do encode depende do formato"). Só Linux (/proc/self/status, fork(), setrlimit()), mesmo
+#     escopo de plataforma que image_decode_hardening_sanity.cpp -- nenhum #ifdef necessário.
+#     Registrado INCONDICIONALMENTE (nenhuma dependência de display/GL/RmlUi) -- roda nas DUAS
+#     configurações de build.
+# ---------------------------------------------------------------------------
+add_executable(image_encode_hardening_sanity image_encode_hardening_sanity.cpp)
+target_link_libraries(image_encode_hardening_sanity PRIVATE glintfx)
+add_test(NAME image_encode_hardening_sanity COMMAND image_encode_hardening_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
 #     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
 #     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered
@@ -3714,4 +3745,18 @@ get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
              PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _glintfx_test_targets)
   target_compile_options(${_t} PRIVATE -Wall -Wextra)
+endforeach()
+
+# TEMPORARY #2 -- reviewer probe for FRAMEGRAB-EMBED (cffd70e) adversarial review follow-up.
+# Isolates ONE width per process (so a crash in one case doesn't erase which width was in
+# flight for the others). Removed before this review session ends; not part of the fatia.
+add_executable(reviewer_probe_align2 reviewer_probe_align2.cpp)
+target_link_libraries(reviewer_probe_align2 PRIVATE ${_embed_dep} glloader)
+foreach(_i RANGE 0 6)
+  add_test(NAME reviewer_probe_align2_${_i}
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:reviewer_probe_align2>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  set_tests_properties(reviewer_probe_align2_${_i} PROPERTIES ENVIRONMENT "PROBE_WIDTH_INDEX=${_i}")
 endforeach()

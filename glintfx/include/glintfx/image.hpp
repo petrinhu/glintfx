@@ -320,6 +320,15 @@ DecodedImagePixels decode_image_memory(const unsigned char* data, std::size_t le
 //     the SAME "no raw pointer" design call `DecodedImagePixels` above already makes) structurally
 //     ELIMINATES the "null output buffer" failure mode a caller-supplied-buffer API would need to
 //     guard: there is no output-buffer PARAMETER for a caller to pass as null in the first place.
+//
+//     BOTH FUNCTIONS ARE `noexcept` (ENC-NOTHROW, W21, 2026-07-30, the SAME "never a crash"
+//     guarantee DEC-NOTHROW gives the decode pair above): an out-of-memory condition anywhere in
+//     the encode path -- the output buffer itself, a format-specific scratch buffer (HDR's own
+//     float conversion, QOI's own chunk stream), or the destination file's own write buffer --
+//     degrades to `false`/`ok == false`, exactly like every other rejection above, never a
+//     `std::bad_alloc` escaping across this API boundary. See `image_encode.cpp`'s own top comment
+//     for the enumerated allocation points this guarantee covers and the `try`/`catch` it is
+//     implemented with.
 // PT: IMG-ENCODE (W21, 2026-07-30) -- a contraparte simétrica do par de decode acima: codifica
 //     pixels já em memória PARA um arquivo/buffer codificado, a direção que
 //     `decode_image_file()`/`decode_image_memory()` nunca cobriu. Somado no FIM deste arquivo,
@@ -424,6 +433,16 @@ DecodedImagePixels decode_image_memory(const unsigned char* data, std::size_t le
 //     `DecodedImagePixels` acima já faz) ELIMINA por construção a classe de falha "buffer de
 //     saída nulo" que uma API de buffer-fornecido-pelo-chamador precisaria guardar: não existe
 //     PARÂMETRO de buffer de saída pro chamador sequer passar como nulo, pra começo de conversa.
+//
+//     AS DUAS FUNÇÕES SÃO `noexcept` (ENC-NOTHROW, W21, 2026-07-30, a MESMA garantia "nunca um
+//     crash" que o DEC-NOTHROW dá ao par de decode acima): uma condição de esgotamento de memória
+//     em qualquer ponto do caminho de encode -- o próprio buffer de saída, um buffer de scratch
+//     específico de formato (a própria conversão float do HDR, o próprio fluxo de chunk do QOI),
+//     ou o próprio buffer de escrita do arquivo de destino -- degrada pra `false`/`ok == false`,
+//     exatamente como toda outra rejeição acima, nunca um `std::bad_alloc` escapando através
+//     desta fronteira de API. Ver o próprio comentário de topo de `image_encode.cpp` pra lista
+//     enumerada de pontos de alocação que esta garantia cobre e o `try`/`catch` com que ela é
+//     implementada.
 enum class ImageFormat {
   Png,
   Jpg,
@@ -470,36 +489,47 @@ struct EncodedImageBytes {
 //     exact layout contract) into an owned in-memory byte buffer, in `format`. This is the entry
 //     point for the two consumer-driving use cases named in TODO.md's `IMG-ENCODE` item that
 //     never want a file on disk: a screen-capture buffer handed straight to a caller's own
-//     upload/save/network path, and a frozen background composited behind a menu. See this
-//     file's own top comment for the full format-by-format contract and fail-high guard list.
+//     upload/save/network path, and a frozen background composited behind a menu. `noexcept` --
+//     an out-of-memory condition (ENC-NOTHROW, see this file's own top comment) also yields
+//     `EncodedImageBytes{}` (`ok == false`), same as every other guard. See this file's own top
+//     comment for the full format-by-format contract and fail-high guard list.
 // PT: Codifica `width * height` pixels RGBA8 alpha straight (ver o comentário de topo deste
 //     arquivo pro contrato de layout exato) num buffer de bytes em memória de posse própria, no
 //     `format`. Este é o ponto de entrada pros dois casos de uso motivadores do consumidor
 //     citados no item `IMG-ENCODE` do TODO.md que nunca querem um arquivo em disco: um buffer de
 //     captura de tela entregue direto pro próprio caminho de upload/save/rede do chamador, e um
-//     fundo congelado composto atrás de um menu. Ver o próprio comentário de topo deste arquivo
-//     pro contrato completo formato-a-formato e a lista de guarda fail-high.
+//     fundo congelado composto atrás de um menu. `noexcept` -- uma condição de esgotamento de
+//     memória (ENC-NOTHROW, ver o próprio comentário de topo deste arquivo) também rende
+//     `EncodedImageBytes{}` (`ok == false`), igual a toda outra guarda. Ver o próprio comentário
+//     de topo deste arquivo pro contrato completo formato-a-formato e a lista de guarda
+//     fail-high.
 EncodedImageBytes encode_image_memory(ImageFormat format, int width, int height,
                                       const unsigned char* pixels,
-                                      const EncodeImageOptions& options = EncodeImageOptions{});
+                                      const EncodeImageOptions& options = EncodeImageOptions{}) noexcept;
 
 // EN: Encodes `width * height` straight-alpha RGBA8 pixels to the file at `path`, in `format`.
 //     Delegates internally to `encode_image_memory()` above (encode once, write the resulting
 //     buffer to disk) -- the SAME "file entry point is a thin wrapper over the memory entry
 //     point" shape `decode_image_file()` uses in the opposite direction (file -> memory) above,
-//     so there is exactly one encode implementation per format, not two. See this file's own top
-//     comment for the full fail-high guard list, including the file-I/O-specific failure modes
-//     (`path == nullptr`, empty, a directory, or unopenable for writing).
+//     so there is exactly one encode implementation per format, not two. `noexcept` -- an
+//     out-of-memory condition (ENC-NOTHROW, see this file's own top comment), including one
+//     specific to the file-write step itself, also yields `false`, same as every other guard. See
+//     this file's own top comment for the full fail-high guard list, including the
+//     file-I/O-specific failure modes (`path == nullptr`, empty, a directory, or unopenable for
+//     writing).
 // PT: Codifica `width * height` pixels RGBA8 alpha straight pro arquivo em `path`, no `format`.
 //     Delega internamente pro próprio `encode_image_memory()` acima (codifica uma vez, escreve o
 //     buffer resultante em disco) -- a MESMA forma "ponto de entrada de arquivo é um wrapper fino
 //     sobre o ponto de entrada de memória" que o `decode_image_file()` usa na direção oposta
 //     (arquivo -> memória) acima, então existe exatamente uma implementação de encode por
-//     formato, não duas. Ver o próprio comentário de topo deste arquivo pra lista de guarda
-//     fail-high completa, incluindo os modos de falha específicos de I/O de arquivo (`path ==
-//     nullptr`, vazio, um diretório, ou não-abrível pra escrita).
+//     formato, não duas. `noexcept` -- uma condição de esgotamento de memória (ENC-NOTHROW, ver o
+//     próprio comentário de topo deste arquivo), inclusive uma específica do próprio passo de
+//     escrita de arquivo, também rende `false`, igual a toda outra guarda. Ver o próprio
+//     comentário de topo deste arquivo pra lista de guarda fail-high completa, incluindo os
+//     modos de falha específicos de I/O de arquivo (`path == nullptr`, vazio, um diretório, ou
+//     não-abrível pra escrita).
 bool encode_image_file(const char* path, ImageFormat format, int width, int height,
                        const unsigned char* pixels,
-                       const EncodeImageOptions& options = EncodeImageOptions{});
+                       const EncodeImageOptions& options = EncodeImageOptions{}) noexcept;
 
 } // namespace glintfx

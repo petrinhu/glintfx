@@ -683,6 +683,54 @@ pass then sprite pass -- `draw2d_ui_coexist_sanity.cpp`), the test that guards t
 central risk: a new GL path cohabiting the RmlUi GL3 renderer's context is exactly the bug class
 `GlStateGuard` (`glintfx/src/gl_state.hpp`) exists to guard against.
 
+### The frame preamble is the host's job, permanently (`DOC-D2D-PREAMBLE`)
+
+A consumer running a `Draw2d`-backed renderer asked a fronteira question with no request
+embedded in it: is the fact their backend still calls **7 raw GL functions** at the start of
+every frame -- `glViewport`, `glClearColor`/`glClear`, `glEnable(GL_BLEND)`/`glBlendFunc`, plus a
+matching state pair -- a **contract of the host** (a), or a **gap in glintfx** (b)? Said plainly:
+this is not left-over glue that will eventually go away. It is **(a), and it is permanent**.
+`Draw2d::begin()` does not clear the framebuffer and does not set the GL viewport -- it opens a
+batching bracket for sprites already assumed to land on a prepared surface. Clearing the
+framebuffer and defining the viewport for that frame are squarely the **host's** job, the same
+way "what colour is the background" and "how big is the window this frame" already are.
+
+This is already the letter of [ADR-0017](adr/0017-draw2d-module.md) clause (c) ("composition
+order is call order; no new ordering API") -- but that clause is stated generically, about
+*ordering* Draw2D calls relative to everything else the host draws, and does not *name* the
+preamble specifically, which is exactly why the consumer had to infer rather than read the
+answer. Naming it here closes that gap without changing the decision: a module that both draws
+sprites AND decided whether/when to clear the framebuffer first would be answering, on the
+host's behalf, a question that is the host's alone -- the same reasoning that keeps composition
+order itself out of this module's API surface (see "Composition recipes" below) also keeps frame
+setup out of it.
+
+**Why this is design, not debt.** `Draw2d` is a renderer for a bracket the host opens and
+closes; it is not a frame owner (`App` is, in standalone mode; the embed host is, in embed mode
+-- see [`docs/embed-integration.md`](embed-integration.md) section 5's "host owns clear and
+swap" discipline for `UiLayer`, the exact same principle applied here to a second renderer
+sharing the same context). A module that silently issued its own `glClear` "to be safe" would
+corrupt whatever the host already drew earlier that frame, and one gated behind a flag to avoid
+that would just be relocating the same decision the host already has to make, with a second
+place to get it wrong.
+
+**The consequence that decides whether `glad` (or any raw-GL vocabulary) can ever go away, and
+it does not:** because this preamble is raw GL the host issues itself, a host embedding `Draw2d`
+needs to keep a **minimal, permanent** GL vocabulary -- function pointers/prototypes for the
+calls named above, at minimum -- for as long as it embeds `Draw2d`. This holds true independent
+of `GLPROC-EMBED` (`glintfx::gl_proc_address()`, which relaxes glintfx's OWN internal loader
+requirement for a host that wants to skip carrying a second full GL loader): that relaxation is
+about glintfx's own function-pointer table, never about the handful of calls that were always
+the host's to make on its own behalf. Knowing this now, before a `GLPROC-EMBED` cutover is
+midway through, is the entire point of writing it down.
+
+Complements `SEED-D2D-CLEAR` (INBOX, `TODO.md`): the mirror question -- should `Draw2d` grow an
+OPT-IN preamble helper some day -- is a real, separate design question, gated behind an actual
+consumer pain that has not materialized yet (this item is a question answered, not a request).
+If that day comes, it collides head-on with [ADR-0008](adr/0008-embed-guest-mode.md)'s
+compose-only guarantee in embed mode and needs its own analysis -- it is not a small addition to
+this one.
+
 ### Composition recipes
 
 No new ordering API -- composition order is call order (ADR-0017 axis 3). Both hosting modes
@@ -1722,6 +1770,54 @@ de UI, e passe de UI depois passe de sprite -- `draw2d_ui_coexist_sanity.cpp`), 
 o risco central nomeado desta onda: um caminho GL novo coabitando o contexto do renderer GL3 do
 RmlUi é exatamente a classe de bug que o `GlStateGuard`
 (`glintfx/src/gl_state.hpp`) existe pra guardar contra.
+
+### O preâmbulo de quadro é trabalho do host, permanentemente (`DOC-D2D-PREAMBLE`)
+
+Um consumidor rodando um renderer apoiado em `Draw2d` fez uma pergunta de fronteira sem pedido
+embutido: o fato do backend dele ainda chamar **7 funções GL cruas** no início de todo quadro --
+`glViewport`, `glClearColor`/`glClear`, `glEnable(GL_BLEND)`/`glBlendFunc`, mais um par de estado
+correspondente -- é **contrato do host** (a), ou **lacuna da glintfx** (b)? Dito sem rodeios: isto
+não é cola residual que vai desaparecer um dia. É **(a), e é permanente**. O `Draw2d::begin()` não
+limpa o framebuffer e não define o viewport GL -- ele abre um bracket de batching para sprites que
+já assumem cair numa superfície preparada. Limpar o framebuffer e definir o viewport daquele quadro
+são trabalho do **host**, exatamente do mesmo jeito que "qual é a cor de fundo" e "qual é o tamanho
+da janela neste quadro" já são.
+
+Isto já é a letra do [ADR-0017](adr/0017-draw2d-module.md) cláusula (c) ("a ordem de composição é
+ordem de chamada; sem API de ordem nova") -- mas aquela cláusula é genérica, sobre *ordenar* as
+chamadas de Draw2D em relação a tudo mais que o host desenha, e não *nomeia* o preâmbulo
+especificamente, motivo exato pelo qual o consumidor teve de inferir em vez de ler a resposta.
+Nomeá-lo aqui fecha essa lacuna sem mudar a decisão: um módulo que desenhasse sprites E também
+decidisse se/quando limpar o framebuffer primeiro estaria respondendo, em nome do host, uma
+pergunta que é só do host -- o mesmo racional que mantém a própria ordem de composição fora da
+superfície de API deste módulo (ver "Receitas de composição" abaixo) também mantém a preparação de
+quadro fora dele.
+
+**Por que isto é design, não dívida.** O `Draw2d` é um renderer para um bracket que o host abre e
+fecha; ele não é dono do quadro (o `App` é, em modo standalone; o host embed é, em modo embed --
+ver a disciplina "host é dono do clear e do swap" da seção 5 de
+[`docs/embed-integration.md`](embed-integration.md), o MESMO princípio aplicado aqui a um segundo
+renderer compartilhando o mesmo contexto). Um módulo que emitisse o próprio `glClear` em silêncio
+"por segurança" corromperia o que o host já desenhou mais cedo naquele quadro, e um por trás de uma
+flag pra evitar isso só realocaria a mesma decisão que o host já tem de tomar, com um segundo lugar
+pra errar.
+
+**A consequência que decide se o `glad` (ou qualquer vocabulário GL cru) pode um dia desaparecer, e
+não pode:** como este preâmbulo é GL cru que o próprio host emite, um host que embute o `Draw2d`
+precisa manter um vocabulário GL **mínimo e permanente** -- ponteiros de função/protótipos para as
+chamadas nomeadas acima, no mínimo -- por todo o tempo em que embutir o `Draw2d`. Isto vale
+independente do `GLPROC-EMBED` (`glintfx::gl_proc_address()`, que relaxa a exigência do PRÓPRIO
+loader interno da glintfx para um host que quer pular carregar um segundo loader GL completo):
+aquele relaxamento é sobre a própria tabela de ponteiros de função da glintfx, nunca sobre o punhado
+de chamadas que sempre foram do host fazer em nome próprio. Saber isso agora, antes de um cutover do
+`GLPROC-EMBED` estar no meio do caminho, é o ponto inteiro de escrever isto.
+
+Complementa o `SEED-D2D-CLEAR` (INBOX, `TODO.md`): a pergunta espelhada -- se o `Draw2d` deveria um
+dia ganhar um helper de preâmbulo OPT-IN -- é uma pergunta de design real e separada, condicionada a
+uma dor de consumidor real que ainda não se materializou (este item é uma pergunta respondida, não
+um pedido). Se esse dia chegar, esbarra de frente na garantia compose-only do
+[ADR-0008](adr/0008-embed-guest-mode.md) em modo embed e pede análise própria -- não é um acréscimo
+pequeno a este.
 
 ### Receitas de composição
 

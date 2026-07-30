@@ -1077,6 +1077,15 @@ public:
   //     `App` construction, but the SAME `w<=0||h<=0` shape `create_texture()`'s own guard
   //     documents) also returns `CapturedFrame{}` rather than call `glReadPixels` with a
   //     degenerate rectangle.
+  //
+  //     DOES NOT NEED A PRIOR `render()` CALL, and there is no "before/after render()" question
+  //     to answer here at all (`DOC-NAO-DEPENDE`, W22 S6): unlike `UiLayer::capture_frame()`
+  //     (`ui_layer.hpp`, `docs/embed-integration.md` section 28), which is a PASSIVE readback of
+  //     whatever FBO 0 already holds, THIS call drives its OWN render pass internally
+  //     (`render_frame()`, see above) before reading -- so the frame it captures is ALWAYS the
+  //     one this very call just composited, never a stale one and never a UI-free one. A caller
+  //     never needs to sequence this call around a separate `render()`/`render_frame()` of their
+  //     own; doing so would just produce a second, redundant frame.
   // PT: `FRAMEGRAB-TEX` -- lê o frame COMPOSTO de volta num buffer de CPU de posse própria,
   //     alimentável direto em `Draw2d::create_texture(..., PixelFormat::Rgba8)` sem conversão
   //     nenhuma pelo host. Gêmeo do `snapshot()` acima MENOS a escrita em arquivo -- mesmo ponto
@@ -1153,6 +1162,16 @@ public:
   //     da construção normal do `App`, mas a MESMA forma `w<=0||h<=0` que o próprio guard do
   //     `create_texture()` documenta) também devolve `CapturedFrame{}` em vez de chamar
   //     `glReadPixels` com um retângulo degenerado.
+  //
+  //     NÃO PRECISA de uma chamada prévia a `render()`, e não há pergunta nenhuma de
+  //     "antes/depois do render()" a responder aqui (`DOC-NAO-DEPENDE`, W22 S6): diferente do
+  //     `UiLayer::capture_frame()` (`ui_layer.hpp`, `docs/embed-integration.md` seção 28), que é
+  //     um readback PASSIVO do que o FBO 0 já guarda, ESTA chamada conduz o PRÓPRIO passe de
+  //     render internamente (`render_frame()`, ver acima) antes de ler -- então o frame que ela
+  //     captura é SEMPRE o que esta própria chamada acabou de compor, nunca um obsoleto e nunca
+  //     um sem-UI. Um chamador nunca precisa sequenciar esta chamada ao redor de um
+  //     `render()`/`render_frame()` próprio e separado; fazer isso só produziria um segundo
+  //     frame redundante.
   // -------------------------------------------------------------------------
 
   // EN: Result of capture_frame() below. `ok == false` on ANY failure -- width/height/pixels/

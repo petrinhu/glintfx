@@ -1299,6 +1299,52 @@ public:
   //     preguiçosamente no `draw_text()`), então os blocos catch são um `return Font2d{};` simples,
   //     sem equivalente ao `release_gl_texture_on_exception()`.
 
+  // EN: `DOC-D2D-PREAMBLE` (W22 S6, 2026-07-30) -- ADDED AT THE END of the class, same "append,
+  //     do not insert" discipline `TEX-NOTHROW`/`FONT-NOTHROW` immediately above already
+  //     established: growing `begin()`'s own doc-comment above in place would shift every
+  //     `docs/draw2d.md` citation below it (dozens, mechanically verified by
+  //     `tools/check_doc_line_refs.sh`). `begin()` (`draw2d.hpp:577`) does NOT clear the
+  //     framebuffer and does NOT set the GL viewport. The FRAME PREAMBLE -- typically
+  //     `glViewport(0, 0, w, h)`, `glClearColor(...)` + `glClear(GL_COLOR_BUFFER_BIT[ |
+  //     GL_DEPTH_BUFFER_BIT])`, `glEnable(GL_BLEND)` + `glBlendFunc(...)` (`Draw2d` itself
+  //     requests `GL_ONE, GL_ONE_MINUS_SRC_ALPHA`, D7, but does not force it on for the host's
+  //     own preceding draws), plus whatever depth/scissor/stencil state the host's OWN drawing
+  //     needs -- is the HOST's, always, in both `App` and embed mode. This is NOT a gap this
+  //     module owes a fix for: `Draw2d` draws, it does not own the frame. `ADR-0017` clause (c)
+  //     ("composition order is call order; no new ordering API") already establishes this
+  //     precisely because the host is the one deciding WHEN in the frame `Draw2d`'s own calls
+  //     land relative to everything else -- a module that also decided WHETHER to clear first
+  //     would be deciding both ends of an ordering question that is the host's alone to answer.
+  //     CONSEQUENCE that matters beyond this module: because this preamble is raw GL the host
+  //     issues itself, a host embedding `Draw2d` needs to keep a MINIMAL GL vocabulary (function
+  //     pointers/prototypes for the calls named above) PERMANENTLY -- this does not go away
+  //     after `GLPROC-EMBED` relaxes glintfx's own loader requirement, because these specific
+  //     calls are never glintfx's to make on the host's behalf. Full contract, with the "is it a
+  //     gap" question and answer spelled out: `docs/draw2d.md`.
+  // PT: `DOC-D2D-PREAMBLE` (W22 S6, 2026-07-30) -- SOMADO NO FIM da classe, mesma disciplina
+  //     "somar, não inserir" que `TEX-NOTHROW`/`FONT-NOTHROW` logo acima já estabeleceram:
+  //     crescer o próprio doc-comment do `begin()` acima no lugar deslocaria toda citação de
+  //     `docs/draw2d.md` abaixo dele (dezenas, verificadas mecanicamente por
+  //     `tools/check_doc_line_refs.sh`). O `begin()` (`draw2d.hpp:577`) NÃO limpa o framebuffer
+  //     e NÃO define o viewport GL. O PREÂMBULO DE QUADRO -- tipicamente `glViewport(0, 0, w,
+  //     h)`, `glClearColor(...)` + `glClear(GL_COLOR_BUFFER_BIT[ | GL_DEPTH_BUFFER_BIT])`,
+  //     `glEnable(GL_BLEND)` + `glBlendFunc(...)` (o próprio `Draw2d` pede `GL_ONE,
+  //     GL_ONE_MINUS_SRC_ALPHA`, D7, mas não força isso ligado para os desenhos PRÉVIOS do
+  //     próprio host), mais qualquer estado de profundidade/scissor/stencil que o desenho
+  //     PRÓPRIO do host precisar -- é do HOST, sempre, tanto em modo `App` quanto embed. Isto
+  //     NÃO é uma lacuna que este módulo deve consertar: o `Draw2d` desenha, não é dono do
+  //     quadro. O `ADR-0017` cláusula (c) ("a ordem de composição é ordem de chamada; sem API de
+  //     ordem nova") já estabelece isto precisamente porque o host é quem decide QUANDO no
+  //     quadro as próprias chamadas do `Draw2d` caem em relação a tudo mais -- um módulo que
+  //     também decidisse SE limpar primeiro estaria decidindo os dois lados de uma pergunta de
+  //     ordenação que é só do host responder. CONSEQUÊNCIA que importa além deste módulo: como
+  //     este preâmbulo é GL cru que o próprio host emite, um host que embute o `Draw2d` precisa
+  //     manter um vocabulário GL MÍNIMO (ponteiros de função/protótipos para as chamadas
+  //     nomeadas acima) PERMANENTEMENTE -- isso não desaparece depois que o `GLPROC-EMBED`
+  //     relaxa a exigência do loader próprio da glintfx, porque estas chamadas específicas nunca
+  //     são da glintfx fazer em nome do host. Contrato completo, com a pergunta "é lacuna" e a
+  //     resposta por extenso: `docs/draw2d.md`.
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

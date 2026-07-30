@@ -914,6 +914,203 @@ public:
 
   CapturedFrame capture_frame() const;
 
+  // EN: `UILAYER-SINGLETON` (W22 S6, 2026-07-30) -- ADDED AT THE END of the class, same
+  //     "append, do not insert" discipline `glintfx/include/glintfx/draw2d.hpp`'s own
+  //     `TEX-NOTHROW`/`FONT-NOTHROW`/`DOC-D2D-PREAMBLE` additions already established: growing
+  //     the class-level moved-from comment above this class in place would shift every
+  //     `docs/embed-integration.md` citation into this file (`tools/check_doc_line_refs.sh`).
+  //
+  //     ⚠️ TWO OR MORE `UiLayer` (or `App`) instances ALIVE AT THE SAME TIME, in the SAME
+  //     PROCESS, are NOT SUPPORTED and CORRUPT GLOBAL STATE -- silently, not merely
+  //     "untested". Each instance owns its own `Engine`, which owns its own `Bootstrap` BY
+  //     VALUE (`engine.cpp`) -- there is no shared `Bootstrap`, no refcount anywhere in this
+  //     library -- but the RmlUi library the instances share underneath is process-wide global
+  //     state (`Rml::Initialise()`/`Rml::Shutdown()`, a single `Rml::Context` name), and this
+  //     library does not guard against a second instance touching it.
+  //
+  //     WHY IT IS SILENT: every `RMLUI_ASSERTMSG` in the vendored RmlUi is a NO-OP in our
+  //     builds (`RMLUI_DEBUG` is never defined -- verified across the RmlUi CMake files, our
+  //     own, and the real compiled `flags.make`). Where upstream RmlUi believed it had a
+  //     defensive check against exactly this misuse, this library has none at all -- the code
+  //     proceeds over already-initialised state instead of asserting.
+  //
+  //     THE MECHANISM, verified line-by-line against the pinned RmlUi source (`Core.cpp`,
+  //     `ControlledLifetimeResource.h`): `Rml::Initialise()` calls `core_data.Initialize()` --
+  //     `Initialize()`, NOT the sibling `InitializeIfEmpty()` that exists right next to it, so
+  //     the choice is meaningful -- which does `pointer = new T();` UNCONDITIONALLY, guarded
+  //     only by the no-op assert above. A second `Initialise()` therefore REPLACES the global
+  //     `core_data` WITHOUT deleting the first: the first `CoreData` (its `contexts` map, the
+  //     "main" `Context` in it, `render_managers`, the `default_*_interface` pointers) leaks --
+  //     still alive in memory, but unreachable from RmlUi's own global state. Consequence: the
+  //     duplicate-name check inside `CreateContext` reads `core_data->contexts`, which has just
+  //     become a NEW, EMPTY map, so the second instance's `CreateContext("main", ...)`
+  //     (hardcoded name, no per-instance parametrisation) SUCCEEDS -- it does not fail on a
+  //     name collision, which is the natural but wrong hypothesis. The first instance is
+  //     notified of NOTHING and ends up cross-contaminated ASYMMETRICALLY: `SystemInterface`
+  //     and `FontEngineInterface` are read LIVE on every use (process-wide globals, now
+  //     overwritten -- the first instance's animation timing and any subsequent
+  //     `LoadFontFace` are served by the SECOND instance's engine from that point on), but each
+  //     `Context`'s own `RenderManager` was captured BY REFERENCE at the moment that Context
+  //     was created, so the first instance's OWN render output stays correct. This is not "the
+  //     wrong backend renders it" -- it is a MIX, different subsystems drifting to different
+  //     owners independently.
+  //
+  //     ⚠️ THE TEARDOWN ASYMMETRY, worth saying with these exact words because the natural
+  //     reading is backwards: **the first instance's destructor brings down the second.**
+  //     Whichever `UiLayer`/`App` calls `Rml::Shutdown()` first destroys whatever `core_data`
+  //     is CURRENT at that moment -- and after the replacement above, "current" belongs to the
+  //     LAST instance initialised, not the one calling Shutdown. A caller who reads this
+  //     warning and concludes "then I will destroy them in the right order" is reaching for the
+  //     exact wrong lever: there is no destruction order that makes this safe, because the
+  //     danger is in CONSTRUCTING a second instance at all, not in the order two already-broken
+  //     instances are torn down. Compounding this: `Bootstrap::init()` already calls
+  //     `Rml::Shutdown()` GLOBALLY AND UNCONDITIONALLY when ONLY that one instance's own
+  //     `CreateContext` call fails -- turning a LOCAL failure (this one instance could not get
+  //     a context) into a PROCESS-WIDE one (every other live instance loses its RmlUi state
+  //     too), exactly the kind of thing that surfaces in production, not in a unit test.
+  //
+  //     SCOPE OF THIS WARNING vs. a real guard: this class does not (yet) refuse a second
+  //     construction -- doing so is `UILAYER-SINGLETON-GUARD` (a W23 item: a static counter in
+  //     `Bootstrap::init()`/`shutdown()` refusing a second `init()` while the first is alive,
+  //     and making the unconditional `Rml::Shutdown()` above conditional on being the LAST live
+  //     instance). This class-level comment states the CURRENT, unguarded truth so nobody
+  //     relies on protection that does not exist -- a doc saying "not supported" is true; code
+  //     promising a guard it does not have would repeat the exact defect this onda spent a
+  //     whole night finding elsewhere. Full contract, including the RmlUi source citations and
+  //     the consumer's own screen-state analysis: `docs/embed-integration.md` section 29
+  //     (`UILAYER-SINGLETON`).
+  // PT: `UILAYER-SINGLETON` (W22 S6, 2026-07-30) -- SOMADO NO FIM da classe, mesma disciplina
+  //     "somar, não inserir" que as próprias adições `TEX-NOTHROW`/`FONT-NOTHROW`/
+  //     `DOC-D2D-PREAMBLE` de `glintfx/include/glintfx/draw2d.hpp` já estabeleceram: crescer o
+  //     comentário de nível de classe acima desta classe no lugar deslocaria toda citação de
+  //     `docs/embed-integration.md` para dentro deste arquivo (`tools/check_doc_line_refs.sh`).
+  //
+  //     ⚠️ DOIS OU MAIS `UiLayer` (ou `App`) vivos AO MESMO TEMPO, no MESMO PROCESSO, NÃO SÃO
+  //     SUPORTADOS e CORROMPEM ESTADO GLOBAL -- em silêncio, não apenas "não testado". Cada
+  //     instância possui o próprio `Engine`, que possui o próprio `Bootstrap` POR VALOR
+  //     (`engine.cpp`) -- não há `Bootstrap` compartilhado, nem refcount em lugar nenhum desta
+  //     biblioteca -- mas o RmlUi que as instâncias compartilham por baixo é estado global de
+  //     processo (`Rml::Initialise()`/`Rml::Shutdown()`, um único nome de `Rml::Context`), e
+  //     esta biblioteca não guarda contra uma segunda instância tocando nele.
+  //
+  //     POR QUE É SILENCIOSO: todo `RMLUI_ASSERTMSG` no RmlUi vendorizado é NO-OP nos nossos
+  //     builds (`RMLUI_DEBUG` nunca é definido -- verificado nos arquivos CMake do RmlUi, no
+  //     nosso próprio, e no `flags.make` real compilado). Onde o RmlUi upstream acreditava ter
+  //     uma checagem defensiva contra exatamente este uso indevido, esta biblioteca não tem
+  //     nenhuma -- o código prossegue sobre estado já inicializado em vez de afirmar.
+  //
+  //     O MECANISMO, verificado linha a linha contra o source pinado do RmlUi (`Core.cpp`,
+  //     `ControlledLifetimeResource.h`): `Rml::Initialise()` chama `core_data.Initialize()` --
+  //     `Initialize()`, NÃO o irmão `InitializeIfEmpty()` que existe bem ao lado, então a
+  //     escolha é significativa -- que faz `pointer = new T();` INCONDICIONAL, guardado só pelo
+  //     assert no-op acima. Um segundo `Initialise()` portanto SUBSTITUI o `core_data` global
+  //     SEM deletar o primeiro: o primeiro `CoreData` (o próprio mapa `contexts`, o `Context`
+  //     "main" nele, `render_managers`, os ponteiros `default_*_interface`) vaza -- continua
+  //     vivo na memória, mas inalcançável pelo próprio estado global do RmlUi. Consequência: a
+  //     checagem anti-duplicata dentro de `CreateContext` lê `core_data->contexts`, que acabou
+  //     de virar um mapa NOVO e VAZIO, então o `CreateContext("main", ...)` da segunda instância
+  //     (nome hardcoded, sem parametrização por instância) TEM SUCESSO -- não falha por colisão
+  //     de nome, que é a hipótese natural mas errada. A primeira instância não é avisada de NADA
+  //     e fica cross-contaminada de forma ASSIMÉTRICA: `SystemInterface` e
+  //     `FontEngineInterface` são lidos AO VIVO a cada uso (globais de processo, agora
+  //     sobrescritos -- o timing de animação da primeira instância e qualquer `LoadFontFace`
+  //     seguinte passam a ser servidos pelo motor da SEGUNDA instância a partir daquele ponto),
+  //     mas o próprio `RenderManager` de cada `Context` foi capturado POR REFERÊNCIA no momento
+  //     em que aquele Context foi criado, então o PRÓPRIO render da primeira instância continua
+  //     correto. Isto não é "renderiza pelo backend errado" -- é uma MISTURA, subsistemas
+  //     diferentes derivando para donos diferentes de forma independente.
+  //
+  //     ⚠️ A ASSIMETRIA DO TEARDOWN, vale dizer com estas palavras exatas porque a leitura
+  //     natural é ao contrário: **o destrutor do primeiro derruba o segundo.** Quem quer que
+  //     chame `Rml::Shutdown()` primeiro destrói o `core_data` que estiver CORRENTE naquele
+  //     momento -- e depois da substituição acima, "corrente" pertence à ÚLTIMA instância
+  //     inicializada, não à que está chamando Shutdown. Um chamador que lê este aviso e conclui
+  //     "então eu destruo na ordem certa" está puxando exatamente a alavanca errada: não há
+  //     ordem de destruição que torne isto seguro, porque o perigo está em CONSTRUIR uma segunda
+  //     instância, não na ordem em que duas instâncias já quebradas são desfeitas. Agravando
+  //     isto: `Bootstrap::init()` já chama `Rml::Shutdown()` GLOBAL e INCONDICIONAL quando SÓ a
+  //     própria chamada `CreateContext` daquela instância falha -- transformando uma falha
+  //     LOCAL (esta instância não conseguiu um contexto) numa falha de PROCESSO INTEIRO (toda
+  //     outra instância viva perde o próprio estado do RmlUi também), exatamente o tipo de
+  //     coisa que aparece em produção, não num teste unitário, porque isso transforma um erro
+  //     local em falha do processo.
+  //
+  //     ESCOPO deste aviso vs. um guard de verdade: esta classe ainda NÃO recusa uma segunda
+  //     construção -- fazer isso é o `UILAYER-SINGLETON-GUARD` (item da W23: um contador
+  //     estático em `Bootstrap::init()`/`shutdown()` recusando um segundo `init()` enquanto o
+  //     primeiro viver, e tornando o `Rml::Shutdown()` incondicional acima condicional a ser a
+  //     ÚLTIMA instância viva). Este comentário de nível de classe declara a verdade ATUAL, sem
+  //     guarda, pra ninguém contar com uma proteção que não existe -- um doc dizendo "não
+  //     suportado" é verdadeiro; código prometendo um guard que não tem repetiria exatamente o
+  //     defeito que esta onda passou a noite inteira caçando em outro lugar. Contrato completo,
+  //     incluindo as citações do source do RmlUi e a própria análise de screen-state do
+  //     consumidor: `docs/embed-integration.md` seção 29 (`UILAYER-SINGLETON`).
+  //
+  // EN: 🔴 THIS HAS A PRODUCTION VICTIM (found by GusWorld, 2026-07-30) -- not a theoretical
+  //     risk. Opening a second `UiLayer` while a first was still alive crashed FOR REAL, live,
+  //     with the RmlUi log `"Element meta pool not empty on shutdown, 75 object(s) leaked"`
+  //     (`ElementMeta.cpp` in the pinned RmlUi we link) -- traced to a revert in the consumer's
+  //     history (a pause menu opened inside a battle screen, reverted the same day it landed).
+  //     ⚠️ THE UPSTREAM MESSAGE ITSELF MISDIRECTS, and that is the mandatory part of this note:
+  //     the full text reads *"...This will likely lead to a crash when element is destroyed.
+  //     Ensure that no Rml::Element objects are kept alive in user space at the end of
+  //     Rml::Shutdown."* -- it tells whoever reads it to go hunt for an `Element` THEY held
+  //     onto. In the real mechanism above, nobody held anything: the second `Initialise()`
+  //     swapped `core_data` out from under the first instance, and those objects became orphans
+  //     of a `Context` the global RmlUi state no longer has any record of. Following the
+  //     message's own advice sends a reader to audit their OWN code for a leak that is not
+  //     there, and the more rigorous that audit is, the more confident they become the bug
+  //     isn't theirs -- which delays, rather than speeds up, doubting the real premise (opening
+  //     a second instance at all). Displaced in TWO ways at once: in TIME (the message fires at
+  //     teardown, far from the constructor call that actually caused it, after everything
+  //     appeared to work) and in SPACE, pointing at the wrong code entirely.
+  //     IF YOU SEE THIS MESSAGE: its own instruction will tell you to go hunt for live
+  //     `Rml::Element`s in your own code. DO NOT do that first -- confirm first that there is no
+  //     second `UiLayer`/`App` alive in the same process. Only audit your own code for a
+  //     retained `Element` after ruling that out.
+  //     MANDATORY PHRASING for this specific class of warning (the consumer's own proposal,
+  //     accepted): do not write "the symptom is X, the cause is Y" -- write "the symptom is X,
+  //     it will tell you to do Z, DO NOT, confirm Y first" (exactly the instruction two lines
+  //     above) -- because whoever reaches this point already has the misdirecting message on
+  //     screen, and the first thing they need is PERMISSION to not follow its advice, not just
+  //     the correct explanation somewhere below it. One more consequence of the same no-op-assert
+  //     finding above: immediately after that log line, `ElementMeta.cpp` has an `RMLUI_ERROR`
+  //     upstream clearly meant to abort on -- also a no-op in our builds, so the crash upstream
+  //     expected to be loud is silent here too.
+  // PT: 🔴 ISTO TEM VÍTIMA EM PRODUÇÃO (achado pelo GusWorld, 2026-07-30) -- não é risco
+  //     teórico. Abrir um segundo `UiLayer` com um primeiro ainda vivo crashou DE VERDADE, ao
+  //     vivo, com o log do RmlUi `"Element meta pool not empty on shutdown, 75 object(s)
+  //     leaked"` (`ElementMeta.cpp` no RmlUi pinado que linkamos) -- rastreado a um revert no
+  //     histórico do consumidor (um menu de pausa aberto dentro de uma tela de batalha,
+  //     revertido no mesmo dia em que entrou).
+  //     ⚠️ A PRÓPRIA MENSAGEM DO UPSTREAM DESVIA A DIREÇÃO, e esta é a parte obrigatória desta
+  //     nota: o texto completo diz *"...This will likely lead to a crash when element is
+  //     destroyed. Ensure that no Rml::Element objects are kept alive in user space at the end
+  //     of Rml::Shutdown."* -- manda quem lê ir caçar um `Element` que ELE segurou. No
+  //     mecanismo real acima, ninguém segurou nada: o segundo `Initialise()` trocou o
+  //     `core_data` debaixo da primeira instância, e aqueles objetos ficaram órfãos de um
+  //     `Context` do qual o estado global do RmlUi já não tem registro nenhum. Seguir o próprio
+  //     conselho da mensagem manda o leitor auditar o PRÓPRIO código atrás de um vazamento que
+  //     não está lá, e quanto mais rigorosa essa auditoria, mais confiante ele fica de que o bug
+  //     não é dele -- o que atrasa, em vez de acelerar, desconfiar da premissa real (abrir uma
+  //     segunda instância, ponto). Deslocado de DUAS formas ao mesmo tempo: no TEMPO (a mensagem
+  //     dispara no teardown, longe da chamada de construtor que de fato causou, depois de tudo
+  //     parecer ter funcionado) e no ESPAÇO, apontando pro código errado inteiramente.
+  //     SE VOCÊ VIR ESTA MENSAGEM: a instrução dela vai mandar você procurar `Rml::Element`s
+  //     vivos no seu próprio código. NÃO FAÇA isso primeiro -- confirme antes que não há um
+  //     segundo `UiLayer`/`App` vivo no mesmo processo. Só audite o próprio código atrás de um
+  //     `Element` retido depois de descartar essa hipótese.
+  //     REDAÇÃO OBRIGATÓRIA pra esta classe específica de aviso (proposta do próprio
+  //     consumidor, aceita): não escrever "o sintoma é X, a causa é Y" -- escrever "o sintoma é
+  //     X, ele vai te mandar fazer Z, NÃO FAÇA, confirme Y primeiro" (exatamente a instrução
+  //     duas linhas acima) -- porque quem chega neste ponto já está com a mensagem desviante na
+  //     tela, e a primeira coisa que precisa é PERMISSÃO pra não seguir o conselho dela, não só
+  //     a explicação correta em algum lugar abaixo. Mais uma consequência do mesmo achado de
+  //     assert no-op acima: logo depois daquela linha de log, `ElementMeta.cpp` tem um
+  //     `RMLUI_ERROR` que o upstream claramente queria usar pra abortar -- também no-op nos
+  //     nossos builds, então o crash que o upstream esperava ser barulhento fica silencioso aqui
+  //     também.
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

@@ -167,6 +167,37 @@ enum class Key {
   KpSubtract,
   KpAdd,
   KpEqual,
+  // EN: KEY-KPENTER (Onda W20, v0.25.0+) -- vocabulary-only addition. The physical GLFW numpad
+  //     Enter key (GLFW_KEY_KP_ENTER) does NOT emit this value today -- glfw_translate_key
+  //     (src/glfw_event_translate.hpp) still folds it into Key::Enter, exactly as it has since
+  //     v0.4.0, and tests/glfw_event_translate_sanity.cpp pins that fold explicitly ("KP_ENTER
+  //     must STILL fold into Key::Enter, not a separate Kp-prefixed enumerator"). Rewiring that
+  //     fold would be a BEHAVIOURAL BREAK for any existing consumer that already treats physical
+  //     Enter (is_key_down(Key::Enter)/set_key_callback) as covering the numpad key too -- so
+  //     this wave deliberately does NOT do that (same append-then-wire-later split the codebase
+  //     already uses for SEED-UIKEYFWD/AUD-PUB-6). This token exists so the ENUM is symmetric
+  //     with every other Kp* key (each already has its own identity distinct from its main-row
+  //     counterpart -- Kp0 vs Digit0, KpEqual vs Equal), and so a non-GLFW host, or a future
+  //     GLFW backend change made as its own deliberate step, has a name to emit. Reported by the
+  //     GusWorld consumer (2026-07-29) as low-priority/no-pain today; would matter if a game
+  //     wants to remap numpad Enter to a function DIFFERENT from the main Enter key.
+  // PT: KEY-KPENTER (Onda W20, v0.25.0+) -- adição só-de-vocabulário. A tecla física Enter do
+  //     numpad do GLFW (GLFW_KEY_KP_ENTER) NÃO emite este valor hoje -- glfw_translate_key
+  //     (src/glfw_event_translate.hpp) continua dobrando ela em Key::Enter, exatamente como faz
+  //     desde v0.4.0, e tests/glfw_event_translate_sanity.cpp fixa esse dobramento
+  //     explicitamente ("KP_ENTER precisa CONTINUAR dobrando em Key::Enter, não um enumerador
+  //     separado com prefixo Kp"). Reconectar esse dobramento seria uma QUEBRA DE COMPORTAMENTO
+  //     para qualquer consumidor existente que já trata o Enter físico
+  //     (is_key_down(Key::Enter)/set_key_callback) como cobrindo também a tecla do numpad --
+  //     então esta onda deliberadamente NÃO faz isso (mesma separação anexar-depois-conectar que
+  //     o código já usa para SEED-UIKEYFWD/AUD-PUB-6). Este token existe para o ENUM ficar
+  //     simétrico com toda outra tecla Kp* (cada uma já tem identidade própria distinta da
+  //     equivalente na linha principal -- Kp0 vs Digit0, KpEqual vs Equal), e para que um host
+  //     não-GLFW, ou uma futura mudança de backend GLFW feita como passo deliberado próprio,
+  //     tenha um nome para emitir. Reportado pelo consumidor GusWorld (2026-07-29) como baixa
+  //     prioridade/sem dor hoje; importaria se um jogo quisesse remapear o Enter do numpad para
+  //     uma função DIFERENTE do Enter principal.
+  KpEnter,
 
   // EN: Sentinel -- one past the last real key. Never a valid key value on its own; used only
   //     for array sizing (src/input_state.hpp) and range checks. NEVER add an enumerator after

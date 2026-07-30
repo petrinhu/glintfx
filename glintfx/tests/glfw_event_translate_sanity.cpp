@@ -346,6 +346,17 @@ int main() {
   check(glfw_key_is_ui_forwardable(Key::F1) == false, "Key::F1 is NOT UI-forwardable (D10)");
   check(glfw_key_is_ui_forwardable(Key::LeftShift) == false, "Key::LeftShift is NOT UI-forwardable (D10)");
   check(glfw_key_is_ui_forwardable(Key::Kp0) == false, "Key::Kp0 is NOT UI-forwardable (D10)");
+  // EN: KEY-KPENTER (W20) -- Key::KpEnter follows the same D10 rule as every other Kp* key
+  //     above: not in the pre-existing 14-key nav subset, so not forwarded to RmlUi. Physical
+  //     numpad Enter still reaches RmlUi via the Key::Enter fold pinned above -- this assertion
+  //     is about the (currently unreachable) KpEnter VALUE itself, not about numpad Enter input
+  //     going missing from the UI route.
+  // PT: KEY-KPENTER (W20) -- Key::KpEnter segue a mesma regra D10 de toda outra tecla Kp* acima:
+  //     fora do subconjunto pré-existente de 14 teclas de navegação, então não encaminhada ao
+  //     RmlUi. O Enter físico do numpad continua alcançando o RmlUi via o dobramento em
+  //     Key::Enter fixado acima -- esta asserção é sobre o VALOR KpEnter em si (hoje
+  //     inalcançável), não sobre o Enter do numpad sumir da rota de UI.
+  check(glfw_key_is_ui_forwardable(Key::KpEnter) == false, "Key::KpEnter is NOT UI-forwardable (D10, vocabulary-only value)");
   check(glfw_key_is_ui_forwardable(Key::None) == false, "Key::None is NOT UI-forwardable");
   check(glfw_key_is_ui_forwardable(Key::Count) == false, "Key::Count (sentinel) is NOT UI-forwardable");
 

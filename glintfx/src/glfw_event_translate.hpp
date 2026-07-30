@@ -36,14 +36,20 @@ namespace glintfx {
 //     supported subset (out_key left untouched) -- the CALLER must not emit a Key event in
 //     that case (never synthesise Key::None; an inert-but-emitted event is a different
 //     contract than "nothing happened", see UiEvent::Type::None's doc-comment). Both
-//     GLFW_KEY_ENTER and GLFW_KEY_KP_ENTER (numpad Enter) map to Key::Enter.
+//     GLFW_KEY_ENTER and GLFW_KEY_KP_ENTER (numpad Enter) map to Key::Enter -- KEY-KPENTER
+//     (W20) added a distinct `Key::KpEnter` to the enum but deliberately did NOT rewire this
+//     fold (see Key::KpEnter's own doc-comment, ui_event.hpp, for why: it is pinned unchanged
+//     by tests/glfw_event_translate_sanity.cpp since v0.4.0).
 // PT: Código de tecla GLFW -> glintfx::Key. Subconjunto orientado a navegação (espelha o
 //     próprio to_rml_key/enum Key do UiLayer -- ver ui_event.hpp). Retorna false para
 //     qualquer glfw_key fora do subconjunto suportado (out_key intocado) -- o CHAMADOR não
 //     deve emitir um evento Key nesse caso (nunca sintetizar Key::None; um evento inerte-mas-
 //     emitido é um contrato diferente de "nada aconteceu", ver o doc-comment de
 //     UiEvent::Type::None). Tanto GLFW_KEY_ENTER quanto GLFW_KEY_KP_ENTER (Enter do numpad)
-//     mapeiam para Key::Enter.
+//     mapeiam para Key::Enter -- o KEY-KPENTER (W20) adicionou um `Key::KpEnter` distinto ao
+//     enum mas deliberadamente NÃO reconectou este dobramento (ver o próprio doc-comment de
+//     Key::KpEnter, ui_event.hpp, para o porquê: é fixado inalterado por
+//     tests/glfw_event_translate_sanity.cpp desde v0.4.0).
 inline bool glfw_translate_key(int glfw_key, Key& out_key) noexcept {
   switch (glfw_key) {
     case GLFW_KEY_UP:        out_key = Key::Up;        return true;

@@ -355,34 +355,93 @@ bool part_c_before_load() {
 }
 
 // EN: Part G (zero-width viewport, the DEGENERATE-SIZE guard -- team-lead follow-up,
-//     `w21_framegrab_embed` SIGSEGV thread, 2026-07-30) -- exercises Engine::capture_frame's
-//     own `w<=0||h<=0` defensive guard FOR REAL, closing a gap the App-side reviewer flagged
-//     as untestable under Xvfb (no window manager to minimize a real window to 0x0, so
-//     App::capture_frame's own w<=0||h<=0 branch was never live-fired). `set_viewport()`
-//     itself CANNOT be used to inject this: its own guard (ui_layer.hpp) rejects
-//     `w<=0||h<=0` and keeps the PREVIOUS viewport -- confirmed by reading the guard, not
-//     assumed. The one legitimate, non-UB way in: `UiLayerConfig` is NOT validated by the
-//     constructor before `Engine::attach()` -- `UiLayerConfig{.logical_width = 0, ...}`
-//     reaches `Engine::attach()`/`Bootstrap::init()`/`Rml::CreateContext("main", {0, h})`
-//     unchecked. MEASURED (not assumed) via a throwaway probe run before writing this
-//     assertion: `ui.ok() == true` with `logical_width=0` -- RmlUi accepts a
-//     zero-width context at creation time without crashing, so `capture_frame()`'s own guard
-//     is the ONLY thing standing between this and a `glReadPixels(..., 0, h, ...)` call.
+//     `w21_framegrab_embed` thread, 2026-07-30) -- exercises Engine::capture_frame's own
+//     `w<=0||h<=0` defensive guard FOR REAL, closing a gap the App-side reviewer flagged as
+//     untestable under Xvfb (no window manager to minimize a real window to 0x0, so
+//     App::capture_frame's own w<=0||h<=0 branch was never live-fired).
+//
+//     RECLASSIFIED (team-lead, same thread): the path this test uses is NOT a convenient
+//     "loophole a test can exploit" -- it is a VALIDATION ASYMMETRY in the public API
+//     surface, and a real one. `set_viewport()`'s own guards (`ui_layer.cpp:131`,
+//     `ui_layer.cpp:174`) reject `w<=0||h<=0` and keep the previous viewport -- but the
+//     CONSTRUCTOR does not validate `UiLayerConfig` at all before `Engine::attach()`
+//     (`ui_layer.cpp:65-66` assign `impl_->w`/`impl_->h` from `cfg.logical_width`/
+//     `cfg.logical_height` unchecked). The setter is guarded; its sibling, the ctor, is not
+//     -- the exact "guard exists on one twin, missing on the other" class this codebase has
+//     already paid for twice this week. Consequence: a host that calls
+//     `set_viewport(0, 0, ...)` is protected; the SAME host constructing
+//     `UiLayerConfig{.logical_width = 0}` (e.g. from a not-yet-sized window under Wayland,
+//     which reports 0x0 while minimized) is NOT -- the easier mistake to make is the
+//     unprotected one.
+//
+//     MEASURED, not assumed (both questions the team lead asked): (1) `ui.ok() == true` with
+//     `logical_width = 0` -- `Engine::attach()`/`Bootstrap::init()`/
+//     `Rml::CreateContext("main", {0, h})` SWALLOWS the zero width, it does not explode (no
+//     crash at construction). (2) `capture_frame()`'s own `w<=0||h<=0` guard is therefore the
+//     ONLY thing standing between this and a `glReadPixels(..., 0, h, ...)` call -- and it
+//     holds (see the assertions below).
+//
+//     SCOPE, DELIBERATE: fixing the constructor's own missing validation is NOT done in this
+//     fatia -- it changes public-API behaviour on an already-shipped, already-reviewed
+//     surface, and the house's own fail-high convention (reject, keep the previous value,
+//     log, never abort) has no "previous value" to fall back to inside a CONSTRUCTOR, so the
+//     right policy (silently clamp to `UiLayerConfig`'s own default? construct with
+//     `ok() == false`? something else?) is a scope decision for the team lead, not something
+//     to decide unilaterally at the tail end of a fatia. Reported, not fixed.
+//
+//     WARNING FOR A FUTURE READER: this test's OWN COVERAGE of `capture_frame()`'s
+//     `w<=0||h<=0` guard depends on the constructor's validation gap staying open. The day
+//     someone closes it (adds a guard to the ctor, e.g. clamping to
+//     `UiLayerConfig{}`'s defaults or leaving `ok() == false`), THIS test will need a
+//     DIFFERENT path to reach the degenerate-size branch of `capture_frame()` -- it will
+//     most likely start hitting the `!ui.ok()` early-return instead (still a pass, by
+//     accident, but no longer proving what this comment claims it proves). If you are
+//     closing that gap: re-derive this test's oracle, don't just leave it green.
 // PT: Parte G (viewport de largura zero, o guard de TAMANHO DEGENERADO -- desdobramento do
-//     team-lead, thread do SIGSEGV do `w21_framegrab_embed`, 2026-07-30) -- exercita de
-//     verdade o próprio guard defensivo `w<=0||h<=0` de Engine::capture_frame, fechando uma
-//     lacuna que o reviewer do lado App sinalizou como intestável sob Xvfb (sem window
-//     manager pra minimizar uma janela real a 0x0, então o próprio ramo w<=0||h<=0 de
-//     App::capture_frame nunca disparou ao vivo). O próprio `set_viewport()` NÃO PODE ser
-//     usado pra injetar isto: o próprio guard dele (ui_layer.hpp) rejeita `w<=0||h<=0` e
-//     mantém o viewport ANTERIOR -- confirmado lendo o guard, não presumido. O único jeito
-//     legítimo, não-UB, de entrar: `UiLayerConfig` NÃO é validado pelo construtor antes de
-//     `Engine::attach()` -- `UiLayerConfig{.logical_width = 0, ...}` alcança
-//     `Engine::attach()`/`Bootstrap::init()`/`Rml::CreateContext("main", {0, h})` sem
-//     checagem. MEDIDO (não presumido) via uma sonda descartável rodada antes de escrever
-//     esta asserção: `ui.ok() == true` com `logical_width=0` -- o RmlUi aceita um contexto
-//     de largura zero na criação sem crashar, então o próprio guard do `capture_frame()` é a
-//     ÚNICA coisa entre isto e uma chamada `glReadPixels(..., 0, h, ...)`.
+//     team-lead, thread do `w21_framegrab_embed`, 2026-07-30) -- exercita de verdade o
+//     próprio guard defensivo `w<=0||h<=0` de Engine::capture_frame, fechando uma lacuna que
+//     o reviewer do lado App sinalizou como intestável sob Xvfb (sem window manager pra
+//     minimizar uma janela real a 0x0, então o próprio ramo w<=0||h<=0 de
+//     App::capture_frame nunca disparou ao vivo).
+//
+//     RECLASSIFICADO (team-lead, mesma thread): o caminho que este teste usa NÃO é uma
+//     "brecha conveniente que um teste explora" -- é uma ASSIMETRIA DE VALIDAÇÃO na
+//     superfície de API pública, e uma real. Os próprios guards de `set_viewport()`
+//     (`ui_layer.cpp:131`, `ui_layer.cpp:174`) rejeitam `w<=0||h<=0` e mantêm o viewport
+//     anterior -- mas o CONSTRUTOR não valida `UiLayerConfig` nenhum antes de
+//     `Engine::attach()` (`ui_layer.cpp:65-66` atribuem `impl_->w`/`impl_->h` a partir de
+//     `cfg.logical_width`/`cfg.logical_height` sem checagem). O setter é guardado; o irmão
+//     dele, o construtor, não -- exatamente a classe "guard existe num gêmeo, falta no
+//     outro" que esta base já pagou duas vezes esta semana. Consequência: um host que chama
+//     `set_viewport(0, 0, ...)` é protegido; o MESMO host construindo
+//     `UiLayerConfig{.logical_width = 0}` (ex.: de uma janela ainda sem tamanho sob Wayland,
+//     que reporta 0x0 enquanto minimizada) NÃO é -- o erro mais fácil de cometer é
+//     justamente o desprotegido.
+//
+//     MEDIDO, não presumido (as duas perguntas que o team lead fez): (1) `ui.ok() == true`
+//     com `logical_width = 0` -- `Engine::attach()`/`Bootstrap::init()`/
+//     `Rml::CreateContext("main", {0, h})` ENGOLE a largura zero, não explode (sem crash na
+//     construção). (2) o próprio guard `w<=0||h<=0` de `capture_frame()` é portanto a ÚNICA
+//     coisa entre isto e uma chamada `glReadPixels(..., 0, h, ...)` -- e ele segura (ver as
+//     asserções abaixo).
+//
+//     ESCOPO, DELIBERADO: consertar a própria validação ausente do construtor NÃO é feito
+//     nesta fatia -- muda comportamento de API pública numa superfície já lançada, já
+//     revisada, e a própria convenção fail-high da casa (rejeitar, manter o valor anterior,
+//     logar, nunca abortar) não tem "valor anterior" pra cair dentro de um CONSTRUTOR, então
+//     a política certa (cair silenciosamente nos defaults do próprio `UiLayerConfig`?
+//     construir com `ok() == false`? outra coisa?) é decisão de escopo do team lead, não
+//     algo a decidir unilateralmente no fim de uma fatia. Reportado, não consertado.
+//
+//     AVISO PRA UM LEITOR FUTURO: a PRÓPRIA COBERTURA deste teste do guard `w<=0||h<=0` de
+//     `capture_frame()` depende da lacuna de validação do construtor continuar aberta. No
+//     dia em que alguém a fechar (somar um guard ao ctor, ex.: saturando nos defaults de
+//     `UiLayerConfig{}` ou deixando `ok() == false`), ESTE teste vai precisar de um caminho
+//     DIFERENTE pra alcançar o ramo de tamanho degenerado do `capture_frame()` -- muito
+//     provavelmente vai passar a bater no retorno antecipado `!ui.ok()` em vez disso (ainda
+//     um PASS, por acidente, mas não mais provando o que este comentário afirma provar). Se
+//     você está fechando essa lacuna: re-derive o oráculo deste teste, não deixe ele verde
+//     por inércia.
 bool part_g_zero_viewport() {
   glintfx::WindowGlfw host;
   if (!host.create("capture_zero_viewport_host", 100, 100)) {

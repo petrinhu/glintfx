@@ -110,20 +110,38 @@
 
 namespace glintfx {
 
+// EN: REQUIRES (read this before the "returns nullptr" guarantee below): `glx_gl_load()` must
+//     have run at least once in this process before this function can resolve anything for real.
+//     That happens as a side effect of ANY of: App's own construction (WindowGlfw::create(),
+//     src/window_glfw.cpp), UiLayer's own construction with the default `Config::load_gl = true`
+//     (src/ui_layer.cpp), or Draw2d::init() (src/draw2d.cpp) -- all three call the same
+//     glx_gl_load() internally, and it is idempotent, so any ONE of them, anywhere earlier in
+//     this same process, is enough. A HOST EMBEDDING GLINTFX VIA UiLayer WITH THE DEFAULT
+//     `Config::load_gl = true` ALREADY SATISFIES THIS -- no `App` needed, embed mode does not
+//     leave this function stranded.
+//
 // EN: Resolve a single GL function pointer by name against the CURRENT GL context -- whichever
 //     context glintfx::App or the host embedding glintfx::UiLayer owns and makes current (see
 //     this header's own top comment). Returns nullptr, never crashes, in these cases: `name` is
-//     nullptr or ""; or this is called before the underlying loader state has been populated at
-//     least once in this process. That population happens as a side effect of ANY of: App's own
-//     construction (WindowGlfw::create(), src/window_glfw.cpp), UiLayer's own construction with
-//     the default `Config::load_gl = true` (src/ui_layer.cpp), or Draw2d::init()
-//     (src/draw2d.cpp) -- all three call the same glx_gl_load() internally, and it is idempotent,
-//     so any one of them is enough. ⚠ EMBED CAVEAT: a UiLayer host that constructs with
+//     nullptr or ""; or this is called before the REQUIRES precondition above has been met.
+//     ⚠ `Config::load_gl = false` DANGER -- MEASURED BY EXECUTION (gdb backtrace), NOT A CLEAN
+//     nullptr (2026-07-30, corrects an earlier, WRONG claim in this same doc-comment that said
+//     this degrades gracefully -- it does not): a `UiLayer` host that constructs with
 //     `Config::load_gl = false` (declaring "I already loaded my own GL pointers, skip yours")
-//     causes glintfx's own glx_gl_load() to never run in that process unless something else in
-//     this list also runs -- in that specific configuration this function reliably returns
-//     nullptr for every name, because the glX/EGL/dlsym resolver state it depends on is only
-//     ever populated by glx_gl_load() itself, regardless of what the host's OWN loader resolved.
+//     skips glintfx's own `glx_gl_load()` call. If NOTHING ELSE in the REQUIRES list above has
+//     ALREADY run earlier in this same process, this function itself still returns `nullptr`
+//     safely if called BEFORE that `UiLayer` is constructed -- but the `UiLayer` CONSTRUCTOR
+//     ITSELF then SEGFAULTs (not this function, and not a graceful `ok() == false`): confirmed
+//     via `gdb`, the crash is `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` ->
+//     `RenderInterface_GL3`'s own constructor (RmlUi) compiling its GL3 shaders -> calling
+//     `glCreateShader` (== `glx_glCreateShader`, one of the ~344 pointers ONLY `glx_gl_load()`
+//     populates) through a still-NULL function pointer. This is a PRE-EXISTING gap in
+//     `UiLayer`'s own constructor (`Engine::attach()`/`RenderGl3::init()`, not this function, and
+//     not introduced by GLPROC-EMBED -- it reproduces identically regardless of this function's
+//     own gate), tracked separately; DO NOT set `Config::load_gl = false` unless you have
+//     independently confirmed an `App`, another `UiLayer`, or `Draw2d::init()` has ALREADY run at
+//     least once earlier in this exact process -- there is no supported way to be the FIRST
+//     glintfx entity in a process and also pass `load_gl = false`.
 //     ⚠ MEASURED, NOT ASSUMED (do not rely on the opposite): a NAME THAT NAMES NO REAL SYMBOL
 //     does NOT reliably return nullptr on every driver. Confirmed empirically under this
 //     library's own Mesa/llvmpipe CI environment: `gl_proc_address("totally_bogus_symbol")`
@@ -143,22 +161,39 @@ namespace glintfx {
 //     glintfx/src/gl_loader.h), so it is exactly as cheap/expensive as that (a handful of
 //     pointer-typed calls, no allocation, no caching kept here -- cache the result yourself if
 //     calling this every frame for the same name matters to your renderer).
+// PT: EXIGE (leia isto antes da garantia de "retorna nullptr" abaixo): o `glx_gl_load()` precisa
+//     ter rodado ao menos uma vez neste processo antes desta função conseguir resolver algo de
+//     verdade. Isso acontece como efeito colateral de QUALQUER um destes: a própria construção
+//     do App (WindowGlfw::create(), src/window_glfw.cpp), a própria construção do UiLayer com o
+//     `Config::load_gl = true` padrão (src/ui_layer.cpp), ou o Draw2d::init() (src/draw2d.cpp) --
+//     os três chamam internamente o mesmo glx_gl_load(), que é idempotente, então QUALQUER um
+//     deles, em qualquer ponto anterior deste mesmo processo, basta. UM HOST QUE EMBARCA A
+//     GLINTFX VIA UiLayer COM O `Config::load_gl = true` PADRÃO JÁ SATISFAZ ISTO -- nenhum `App`
+//     é necessário, o modo embed não deixa esta função encalhada.
+//
 // PT: Resolve um único ponteiro de função GL por nome contra o contexto GL CORRENTE -- qualquer
 //     que seja o contexto que o glintfx::App ou o host que embarca o glintfx::UiLayer possui e
 //     torna corrente (ver o próprio comentário de topo deste header). Retorna nullptr, nunca
-//     crasha, nestes casos: `name` é nullptr ou ""; ou isto é chamado antes do estado do loader
-//     subjacente ter sido populado ao menos uma vez neste processo. Essa população acontece como
-//     efeito colateral de QUALQUER um destes: a própria construção do App (WindowGlfw::create(),
-//     src/window_glfw.cpp), a própria construção do UiLayer com o `Config::load_gl = true`
-//     padrão (src/ui_layer.cpp), ou o Draw2d::init() (src/draw2d.cpp) -- os três chamam
-//     internamente o mesmo glx_gl_load(), que é idempotente, então qualquer um deles basta.
-//     ⚠ RESSALVA DE EMBED: um host UiLayer que constrói com `Config::load_gl = false`
-//     (declarando "já carreguei meus próprios ponteiros GL, pule os seus") faz com que o próprio
-//     glx_gl_load() da glintfx nunca rode nesse processo, a menos que outra coisa desta lista
-//     também rode -- nessa configuração específica esta função retorna nullptr de forma
-//     confiável para todo nome, porque o estado do resolvedor glX/EGL/dlsym do qual ela depende
-//     só é populado pelo próprio glx_gl_load(), independente do que o loader PRÓPRIO do host
-//     tenha resolvido.
+//     crasha, nestes casos: `name` é nullptr ou ""; ou isto é chamado antes da precondição EXIGE
+//     acima ter sido satisfeita.
+//     ⚠ PERIGO de `Config::load_gl = false` -- MEDIDO POR EXECUÇÃO (backtrace de gdb), NÃO um
+//     nullptr limpo (2026-07-30, corrige uma afirmação ANTERIOR ERRADA deste mesmo doc-comment,
+//     que dizia que isto degradava graciosamente -- não degrada): um host UiLayer que constrói
+//     com `Config::load_gl = false` (declarando "já carreguei meus próprios ponteiros GL, pule
+//     os seus") pula a própria chamada de glx_gl_load() da glintfx. Se NADA MAIS da lista EXIGE
+//     acima já rodou antes neste mesmo processo, esta função em si ainda retorna `nullptr` com
+//     segurança se chamada ANTES desse `UiLayer` ser construído -- mas o CONSTRUTOR do `UiLayer`
+//     EM SI então dá SEGFAULT (não esta função, e não um `ok() == false` gracioso): confirmado
+//     via `gdb`, o crash é `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` -> o próprio
+//     construtor de `RenderInterface_GL3` (RmlUi) compilando os shaders GL3 dele -> chamando
+//     `glCreateShader` (== `glx_glCreateShader`, um dos ~344 ponteiros que SÓ o glx_gl_load()
+//     popula) através de um ponteiro de função ainda-NULO. Isto é uma lacuna PRÉ-EXISTENTE no
+//     próprio construtor do `UiLayer` (`Engine::attach()`/`RenderGl3::init()`, não nesta função,
+//     e não introduzida pelo GLPROC-EMBED -- reproduz idêntico independente da guarda desta
+//     função), rastreada separadamente; NÃO defina `Config::load_gl = false` a menos que você
+//     tenha confirmado independentemente que um `App`, outro `UiLayer`, ou `Draw2d::init()` JÁ
+//     rodou ao menos uma vez antes neste processo exato -- não há forma suportada de ser a
+//     PRIMEIRA entidade glintfx de um processo e também passar `load_gl = false`.
 //     ⚠ MEDIDO, NÃO PRESUMIDO (não conte com o oposto): um NOME QUE NÃO NOMEIA SÍMBOLO NENHUM
 //     NÃO retorna nullptr de forma confiável em todo driver. Confirmado empiricamente sob o
 //     próprio ambiente de CI Mesa/llvmpipe desta biblioteca:

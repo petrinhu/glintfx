@@ -12,6 +12,13 @@
 //     when GLINTFX_MODULE_GAMEPAD is enabled (default ON on Linux, forced OFF elsewhere -- see
 //     CMakeLists.txt's platform gate -- ADR-0015 (b)/ADR-0016 module "gamepad", framework-2D
 //     slice A2-GAMEPAD; same independence class as i18n/audio, but Linux-only by nature).
+//     gl_proc.hpp (DOC-GLCOHAB) is included UNCONDITIONALLY, outside app.hpp's own
+//     `#if GLINTFX_BACKEND_GLFW` block (GLPROC-EMBED, 2026-07-30) -- glintfx::gl_proc_address()
+//     resolves symbols against WHATEVER GL context is current, not only an App's; a UiLayer/
+//     embed host is exactly who needs it most, to resolve its own function pointers without
+//     linking a second loader library. See gl_proc.hpp's own top comment for the full
+//     GLPROC-EMBED writeup (the old gate's premise -- "an embed host already owns its own
+//     loader" -- was right, its conclusion -- "so there is nothing to resolve" -- was backwards).
 // PT: Header público guarda-chuva — inclua este em vez dos headers individuais.
 //     version.hpp sempre incluído (L1.9-VERSEMBED: glintfx::version() deve estar disponível
 //     independente do backend); log.hpp também sempre incluído (FW-LOG, W20 -- mesma classe de
@@ -28,18 +35,22 @@
 //     independência do i18n/audio, porém Linux-only por natureza); draw2d.hpp é incluído quando
 //     GLINTFX_MODULE_DRAW2D está habilitado (padrão ON, átomo "draw2d" do ADR-0017, fatia
 //     D2D-1B -- depende de core + a costura interna de decode de imagem + o gl-loader interno;
-//     NÃO de ui/fx/window, mesmo padrão de independência do i18n/audio/gamepad acima); gl_proc.hpp
-//     (DOC-GLCOHAB) é incluído no MESMO bloco `#if GLINTFX_BACKEND_GLFW` do app.hpp --
-//     glintfx::gl_proc_address() resolve símbolos contra o contexto GL que o glintfx::App possui,
-//     então não tem sentido num build embed-only (um host UiLayer já é dono do próprio
-//     contexto GL/loader).
+//     NÃO de ui/fx/window, mesmo padrão de independência do i18n/audio/gamepad acima).
+//     gl_proc.hpp (DOC-GLCOHAB) é incluído INCONDICIONALMENTE, fora do próprio bloco
+//     `#if GLINTFX_BACKEND_GLFW` do app.hpp (GLPROC-EMBED, 2026-07-30) --
+//     glintfx::gl_proc_address() resolve símbolos contra QUALQUER contexto GL corrente, não só
+//     o de um App; um host UiLayer/embed é exatamente quem mais precisa dela, pra resolver os
+//     próprios ponteiros de função sem linkar uma segunda lib de loader. Ver o próprio
+//     comentário de topo de gl_proc.hpp pro relato completo do GLPROC-EMBED (a premissa da
+//     guarda antiga -- "um host embed já é dono do próprio loader" -- estava certa, a conclusão
+//     -- "então não há nada pra resolver" -- estava invertida).
 #pragma once
 #include <glintfx/config.hpp>
 #include <glintfx/version.hpp>
 #include <glintfx/log.hpp>
+#include <glintfx/gl_proc.hpp>
 #if GLINTFX_BACKEND_GLFW
 #include <glintfx/app.hpp>
-#include <glintfx/gl_proc.hpp>
 #endif
 #include <glintfx/ui_layer.hpp>
 #if GLINTFX_MODULE_I18N

@@ -1479,6 +1479,34 @@ add_test(NAME ui_layer_attach
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# ---------------------------------------------------------------------------
+# EN: gl_proc_address_embed_sanity (GLPROC-EMBED, 2026-07-30) -- EMBED-PATH contract test for
+#     glintfx::gl_proc_address(const char*) (glintfx/include/glintfx/gl_proc.hpp), sibling of
+#     gl_proc_address_sanity (App-mode, GLFW-only block above). Same _embed_dep pattern as
+#     ui_layer_attach right above: this is the ONLY coverage gl_proc_address() gets in a
+#     GLINTFX_BACKEND_GLFW=OFF build (before GLPROC-EMBED, the function did not even compile
+#     there); in an ON build it re-proves the same contract through a UiLayer instead of an
+#     App. See the test file's own header comment for the driver-honesty limitation it names
+#     instead of faking coverage for (the Config::load_gl = false caveat cannot be isolated in
+#     this same-process harness).
+# PT: gl_proc_address_embed_sanity (GLPROC-EMBED, 2026-07-30) -- teste de contrato do CAMINHO
+#     EMBED para glintfx::gl_proc_address(const char*) (glintfx/include/glintfx/gl_proc.hpp),
+#     irmão de gl_proc_address_sanity (modo App, bloco só-GLFW acima). Mesmo padrão _embed_dep
+#     do ui_layer_attach logo acima: esta é a ÚNICA cobertura que gl_proc_address() recebe num
+#     build GLINTFX_BACKEND_GLFW=OFF (antes do GLPROC-EMBED, a função nem compilava ali); num
+#     build ON reprova o mesmo contrato por um UiLayer em vez de um App. Ver o próprio
+#     comentário de cabeçalho do arquivo de teste pra limitação de honestidade que ele nomeia em
+#     vez de forjar cobertura (a ressalva Config::load_gl = false não é isolável neste harness
+#     de mesmo processo).
+# ---------------------------------------------------------------------------
+add_executable(gl_proc_address_embed_sanity gl_proc_address_embed_sanity.cpp)
+target_link_libraries(gl_proc_address_embed_sanity PRIVATE ${_embed_dep})
+add_test(NAME gl_proc_address_embed_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:gl_proc_address_embed_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
 #     Links glloader explicitly: offscreen.hpp calls GL functions directly and glloader is
 #     a PRIVATE dep of glintfx (not propagated to callers).

@@ -167,6 +167,43 @@ void check(bool cond, const char* what) {
 bool g_armed = false;
 std::size_t g_target_size = 0;
 
+// EN: ARRAY-NEW-COUNTED (bug found post-commit by the team lead, 2026-07-30): `rgb`
+//     (`std::vector<unsigned char>`, E1/F1) allocates via the SCALAR `operator new(size_t)`
+//     below -- but `pixels` (`std::make_unique<unsigned char[]>`, E2/F2, `frame_capture.cpp`/
+//     `engine.cpp`'s own `make_unique<unsigned char[]>(byte_count)`) allocates via a
+//     COMPLETELY SEPARATE overload, `operator new[](size_t)`, which this file did NOT override
+//     at first. In a NORMAL (non-sanitized) libstdc++ build, the default `operator new[]`
+//     happens to forward to the scalar `operator new` this file DOES override -- so E2/F2
+//     "worked", but by an implementation-defined forwarding accident, not because the injected
+//     fault ever reached the array-new path this file's own doc-comment claims to target. Under
+//     `GLINTFX_SANITIZE=ON` ASan installs its OWN array-new that does NOT forward, so the
+//     injection silently misses and E2/F2 would fail on the heavy/ASan CI leg -- this is
+//     precisely the "right result, accidental mechanism" class this whole `never a crash`
+//     family exists to rule out, discovered inside the very test built to catch it. `g_new_
+//     array_calls` below is unconditional (increments on EVERY array-new call, armed or not,
+//     matching or not) SPECIFICALLY so E2/F2 can prove-by-execution that THIS override, not
+//     some other code path, is what ran for the `pixels` allocation -- see the counter
+//     snapshot-and-check around each group's own UNARMED sanity call below.
+// PT: ARRAY-NEW-CONTADO (bug achado depois do commit pelo team lead, 2026-07-30): o `rgb`
+//     (`std::vector<unsigned char>`, E1/F1) aloca via o `operator new(size_t)` ESCALAR abaixo --
+//     mas o `pixels` (`std::make_unique<unsigned char[]>`, E2/F2, o próprio
+//     `make_unique<unsigned char[]>(byte_count)` de `frame_capture.cpp`/`engine.cpp`) aloca via
+//     uma sobrecarga COMPLETAMENTE SEPARADA, `operator new[](size_t)`, que este arquivo NÃO
+//     sobrescrevia a princípio. Num build NORMAL (sem sanitizer) da libstdc++, o `operator
+//     new[]` default por acaso encaminha pro `operator new` escalar que este arquivo JÁ
+//     sobrescreve -- então E2/F2 "funcionavam", mas por um acidente de encaminhamento definido
+//     pela implementação, não porque a falha injetada de fato alcançasse o caminho de array-new
+//     que o próprio comentário de topo deste arquivo afirma mirar. Sob `GLINTFX_SANITIZE=ON` o
+//     ASan instala o PRÓPRIO array-new que NÃO encaminha, então a injeção erra em silêncio e
+//     E2/F2 falhariam na perna heavy/ASan do CI -- exatamente a classe "resultado certo,
+//     mecanismo acidental" que esta família `never a crash` inteira existe pra descartar,
+//     descoberta dentro do próprio teste construído pra caçá-la. O `g_new_array_calls` abaixo é
+//     incondicional (incrementa em TODA chamada de array-new, armada ou não, casando ou não) DE
+//     PROPÓSITO pra que E2/F2 provem por execução que ESTE override, não algum outro caminho de
+//     código, é quem rodou pra alocação de `pixels` -- ver o snapshot-e-checagem do contador ao
+//     redor da própria chamada de sanidade DESARMADA de cada grupo abaixo.
+std::size_t g_new_array_calls = 0;
+
 } // namespace
 
 void* operator new(std::size_t sz) {
@@ -181,6 +218,20 @@ void* operator new(std::size_t sz) {
 
 void operator delete(void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+
+void* operator new[](std::size_t sz) {
+  ++g_new_array_calls;
+  if (g_armed && sz == g_target_size) {
+    g_armed = false;
+    throw std::bad_alloc();
+  }
+  void* p = std::malloc(sz);
+  if (p == nullptr) throw std::bad_alloc();
+  return p;
+}
+
+void operator delete[](void* p) noexcept { std::free(p); }
+void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
@@ -198,14 +249,23 @@ struct ChildOutcome {
 //     inconclusive), 6 = the UNARMED sanity call itself failed (a genuine FAIL -- the fixture is
 //     broken), 0 = the armed call correctly reported ok()==false, 1 = the armed call
 //     unexpectedly reported ok()==true (the injected throw never landed -- a genuine FAIL, not a
-//     skip).
+//     skip), 7 = ARRAY-NEW-COUNTED (Group E2/F2 only): `g_new_array_calls` did not increase
+//     across the UNARMED sanity call -- `operator new[]` was never observed to fire for the
+//     `pixels` allocation, meaning this run cannot prove the injected fault reaches the array-new
+//     path at all (a genuine FAIL: the size-matched arming below would be meaningless without
+//     this).
 // PT: Um filho forkado por grupo. `call_under_test` retorna se a chamada reportou `ok()` true.
 //     Códigos de saída espelham a própria convenção de draw2d_texture_nothrow_sanity.cpp:
 //     4 = criação de janela falhou, 5 = Engine::attach() falhou (só Grupo E1/E2 -- ambos
 //     PULADOS, inconclusivo), 6 = a PRÓPRIA chamada de sanidade DESARMADA falhou (uma FALHA
 //     genuína -- a fixture está quebrada), 0 = a chamada armada reportou corretamente
 //     ok()==false, 1 = a chamada armada reportou inesperadamente ok()==true (o lançamento
-//     injetado nunca chegou -- uma FALHA genuína, não um pulo).
+//     injetado nunca chegou -- uma FALHA genuína, não um pulo), 7 = ARRAY-NEW-CONTADO (só Grupo
+//     E2/F2): `g_new_array_calls` não aumentou através da chamada de sanidade DESARMADA -- o
+//     `operator new[]` nunca foi observado disparando pra alocação de `pixels`, o que significa
+//     que esta rodada não consegue provar que a falha injetada sequer alcança o caminho de
+//     array-new (uma FALHA genuína: o armamento casado-por-tamanho abaixo seria sem sentido sem
+//     isto).
 ChildOutcome run_injection_child(std::size_t target_size,
                                  const std::function<int()>& setup_and_call) {
   ChildOutcome out;
@@ -265,6 +325,13 @@ void run_injection_oracle(const char* label, std::size_t target_size,
     std::snprintf(msg, sizeof(msg),
                   "%s setup: the UNARMED sanity call succeeded (fixture itself is valid)", label);
     check(false, msg);
+  } else if (r.exit_code == 7) {
+    std::snprintf(msg, sizeof(msg),
+                  "%s setup: g_new_array_calls increased across the UNARMED sanity call -- "
+                  "operator new[] confirmed as the mechanism for the pixels allocation, not a "
+                  "scalar-forwarding accident",
+                  label);
+    check(false, msg);
   } else {
     std::snprintf(msg, sizeof(msg),
                   "%s: the armed call degraded to ok()==false under the injected, size-matched "
@@ -311,7 +378,9 @@ int main() {
                            SystemClock clock;
                            Engine engine;
                            if (!engine.attach(&clock, kW, kH)) return 5;
+                           const std::size_t before = g_new_array_calls;
                            if (!engine.capture_frame(0, 0, kW, kH).ok) return 6;
+                           if (g_new_array_calls == before) return 7; // ARRAY-NEW-COUNTED.
                            g_armed = true;
                            const bool ok = engine.capture_frame(0, 0, kW, kH).ok;
                            g_armed = false;
@@ -346,7 +415,9 @@ int main() {
                          []() -> int {
                            WindowGlfw window;
                            if (!window.create("capture_nothrow_f2_child", kW, kH)) return 4;
+                           const std::size_t before = g_new_array_calls;
                            if (!glintfx::capture_framebuffer(0, 0, kW, kH).ok) return 6;
+                           if (g_new_array_calls == before) return 7; // ARRAY-NEW-COUNTED.
                            g_armed = true;
                            const bool ok = glintfx::capture_framebuffer(0, 0, kW, kH).ok;
                            g_armed = false;

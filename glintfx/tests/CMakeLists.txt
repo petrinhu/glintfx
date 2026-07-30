@@ -3981,6 +3981,121 @@ if(GLINTFX_SANITIZE)
 endif()
 
 # ---------------------------------------------------------------------------
+# EN: CTEST-TIMEOUT (W22) -- every test in this directory gets a hard wall-clock TIMEOUT, no
+#     exceptions. Applied DIRECTORY-wide via the SAME `get_property(... DIRECTORY PROPERTY
+#     TESTS)` idiom the GLINTFX_SANITIZE block immediately above already uses -- one loop, no
+#     individual add_test() block above (GLFW=ON branch or embed branch) needs to be touched,
+#     and a future test added anywhere in this file inherits the net automatically.
+#
+#     WHY THIS EXISTS: before this block, ctest's default TIMEOUT was unset (=unlimited) for
+#     every one of the 123 (App) / 89 (embed) tests here, and tests/run_xvfb.cmake's own
+#     execute_process(COMMAND xvfb-run -a ${EXE} ...) call (the wrapper EVERY GLFW-window test
+#     in this file routes through) carries no TIMEOUT of its own either -- a genuinely hung
+#     test (window never closes, an event loop that never observes should_close(), a deadlock)
+#     would hang ctest, and therefore the whole CI job, FOREVER. "The pipeline never finishes"
+#     is a strictly worse failure mode than a fast, loud, red FAILED: a red test tells you
+#     something broke; a hung pipeline burns runner-minutes until an external watchdog (or a
+#     human) kills it, and gives zero diagnostic signal about which test caused it.
+#
+#     THE VALUE, DERIVED NOT GUESSED: 60 seconds, computed as ceil(12 x 4.99s) -- 4.99s being
+#     the SLOWEST test observed (draw2d_perf_budget) across BOTH a full App-config run (123
+#     tests, tools/ci measurement: `ctest --output-on-failure` under `xvfb-run`) AND a full
+#     embed-config run (89 tests, same method), on THIS dev machine (16 cores / 31 GiB) while
+#     ACTIVELY CONTENDED by 5 other agents building/testing concurrently in the same working
+#     tree (W22's own multi-agent wave) -- not an idle-machine best case. Every other GL/window
+#     test in both runs clustered at 3.0-3.8s (dominated by the fixed Xvfb+GLFW+Mesa-llvmpipe
+#     startup cost per process, not by the test's own logic); the ~29 pure-CPU-logic tests
+#     (glfw_event_translate_sanity, input_state_sanity, the i18n/audio/gamepad decoders, etc.)
+#     finished in well under 0.1s. The 12x multiplier is deliberate, not decorative: the CI
+#     runner this gate actually protects (tools/ci/Containerfile.runner) is SMALLER than this
+#     dev box -- 4 CPUs / 8 GiB RAM with swap OFF, versus 16 cores / 31 GiB (+29 GiB swap)
+#     measured here -- and a timeout calibrated on a comfortable machine has already caused a
+#     real flaky gate in this house once before (the draw2d perf-ratio gate, PERF-D2D3,
+#     recalibrated to best-of-64 CPU time after wall-clock noise on a loaded box produced false
+#     reds). 12x eats that gap on purpose: even a CI run several times slower than anything
+#     observed on this contended dev box still finishes inside the 60s ceiling: only an
+#     actually-hung process ever hits it.
+#
+#     WHAT THIS DOES NOT PROTECT AGAINST (read before treating a green run as a quality
+#     signal): a TIMEOUT is a rope against the test process running forever, nothing else. It
+#     does NOT make a weak assertion stronger, does NOT catch a test that passes for the wrong
+#     reason within the 60s window, and does NOT replace a test's own internal correctness or
+#     performance gate -- draw2d_perf_budget (the test that currently sets this ceiling) already
+#     has ITS OWN noise-robust internal calibration (best-of-64 CPU-time sampling, PERF-D2D3)
+#     precisely because wall-clock timing is too noisy on a shared/contended machine to gate
+#     correctness on directly; this DIRECTORY-wide 60s is the coarse "did it hang" net sitting
+#     ABOVE that fine-grained gate, not a substitute for it. A test that busy-loops asserting
+#     `true` for 59 seconds and then exits 0 passes this gate cleanly and proves nothing -- this
+#     TIMEOUT is a floor under CI liveness, not a ceiling on test quality.
+#
+#     TODAY'S MARGIN: nothing is close to the 60s ceiling -- the slowest observed test
+#     (draw2d_perf_budget, 4.99s) sits at roughly 8% of it, a ~12x margin BY DESIGN (see above).
+#     If a future test's OWN legitimate work regularly approaches 60s, that is itself a signal
+#     worth reporting (a slow test is information, per the house's own review of this gate) --
+#     the fix is understanding why that specific test grew slow, not silently raising this
+#     ceiling to make it fit.
+# PT: CTEST-TIMEOUT (W22) -- todo teste deste diretório ganha um TIMEOUT rígido de parede, sem
+#     exceção. Aplicado no diretório inteiro via o MESMO idioma `get_property(... DIRECTORY
+#     PROPERTY TESTS)` que o bloco GLINTFX_SANITIZE logo acima já usa -- um único loop, nenhum
+#     bloco add_test() individual acima (ramo GLINTFX_BACKEND_GLFW ou ramo embed) precisa ser
+#     tocado, e um teste futuro adicionado em qualquer lugar deste arquivo herda a rede
+#     automaticamente.
+#
+#     POR QUE ISTO EXISTE: antes deste bloco, o TIMEOUT padrão do ctest era indefinido
+#     (=ilimitado) para cada um dos 123 (App) / 89 (embed) testes daqui, e o próprio
+#     execute_process(COMMAND xvfb-run -a ${EXE} ...) de tests/run_xvfb.cmake (o wrapper por
+#     onde TODO teste de janela GLFW deste arquivo passa) também não carrega TIMEOUT próprio
+#     nenhum -- um teste genuinamente travado (janela que nunca fecha, laço de evento que nunca
+#     observa should_close(), um deadlock) travaria o ctest, e portanto o job de CI inteiro,
+#     PARA SEMPRE. "O pipeline nunca termina" é um modo de falha estritamente pior que um FAILED
+#     vermelho, rápido e barulhento: um teste vermelho diz que algo quebrou; um pipeline travado
+#     queima minutos de runner até um watchdog externo (ou um humano) matá-lo, e não dá sinal
+#     diagnóstico nenhum sobre qual teste causou.
+#
+#     O VALOR, DERIVADO E NÃO CHUTADO: 60 segundos, calculado como ceil(12 x 4,99s) -- sendo
+#     4,99s o teste MAIS LENTO observado (draw2d_perf_budget) em AMBAS uma rodada completa da
+#     config App (123 testes, medição via `ctest --output-on-failure` sob `xvfb-run`) E uma
+#     rodada completa da config embed (89 testes, mesmo método), nesta máquina de dev (16 cores
+#     / 31 GiB) ENQUANTO ATIVAMENTE DISPUTADA por 5 outros agentes buildando/testando ao mesmo
+#     tempo na mesma árvore de trabalho (a própria onda multi-agente do W22) -- não um melhor
+#     caso de máquina ociosa. Todo outro teste GL/janela nas duas rodadas se agrupou em
+#     3,0-3,8s (dominado pelo custo fixo de startup do Xvfb+GLFW+Mesa-llvmpipe por processo, não
+#     pela lógica própria do teste); os ~29 testes de lógica-CPU-pura (glfw_event_translate_sanity,
+#     input_state_sanity, os decoders de i18n/audio/gamepad etc.) terminaram bem abaixo de 0,1s.
+#     O multiplicador 12x é deliberado, não decorativo: o runner de CI que este gate de fato
+#     protege (tools/ci/Containerfile.runner) é MENOR que esta máquina de dev -- 4 CPUs / 8 GiB
+#     de RAM com swap DESLIGADO, contra 16 cores / 31 GiB (+29 GiB de swap) medidos aqui -- e um
+#     timeout calibrado numa máquina confortável já causou um gate flaky de verdade nesta casa
+#     uma vez (o gate de razão de performance do draw2d, PERF-D2D3, recalibrado para melhor-de-64
+#     em tempo de CPU depois que ruído de relógio de parede numa máquina carregada produziu
+#     vermelhos falsos). O 12x come essa lacuna de propósito: mesmo uma rodada de CI várias vezes
+#     mais lenta que qualquer coisa observada nesta máquina de dev disputada ainda termina dentro
+#     do teto de 60s -- só um processo de fato travado o alcança.
+#
+#     O QUE ISTO NÃO PROTEGE (ler antes de tratar uma rodada verde como sinal de qualidade): um
+#     TIMEOUT é uma corda contra o processo de teste rodar para sempre, nada mais. NÃO torna uma
+#     asserção fraca mais forte, NÃO pega um teste que passa pelo motivo errado dentro da janela
+#     de 60s, e NÃO substitui o próprio gate interno de correção ou performance de um teste --
+#     o draw2d_perf_budget (o teste que hoje define este teto) já tem a PRÓPRIA calibração
+#     interna robusta a ruído (amostragem melhor-de-64 em tempo de CPU, PERF-D2D3) justamente
+#     porque tempo de relógio de parede é ruidoso demais numa máquina compartilhada/disputada
+#     para gatear correção diretamente sobre ele; este 60s de diretório inteiro é a rede grossa
+#     de "travou ou não" sentada ACIMA daquele gate fino, não um substituto dele. Um teste que
+#     fica em busy-loop afirmando `true` por 59 segundos e depois sai com 0 passa este gate
+#     limpo e não prova nada -- este TIMEOUT é um piso sob a vivacidade do CI, não um teto sobre
+#     a qualidade do teste.
+#
+#     MARGEM DE HOJE: nada está perto do teto de 60s -- o teste mais lento observado
+#     (draw2d_perf_budget, 4,99s) fica em ~8% dele, uma margem de ~12x DE PROPÓSITO (ver acima).
+#     Se um teste futuro, pelo próprio trabalho legítimo, regularmente se aproximar de 60s, isso
+#     já é em si um sinal que vale reportar (teste lento é informação, pela própria revisão
+#     desta casa deste gate) -- o conserto é entender por que aquele teste específico ficou
+#     lento, não subir este teto em silêncio pra caber.
+# ---------------------------------------------------------------------------
+get_property(_glintfx_all_tests_timeout DIRECTORY PROPERTY TESTS)
+set_property(TEST ${_glintfx_all_tests_timeout} PROPERTY TIMEOUT 60)
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_COVERAGE (L1.18-COVCI, TST-L1-COV) -- instrument every executable/
 #     static-library target defined in THIS directory (every test binary above, plus
 #     the embed-only _glintfx_test_ctx GL-context helper) with Clang source-based

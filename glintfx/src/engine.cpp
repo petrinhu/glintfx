@@ -547,10 +547,14 @@ bool Engine::get_bool(const char* key, bool& out) const {
 //     OFFSET -- unbinding it for the read, then restoring the host's own binding afterward,
 //     is what makes this call safe to use even when a host renders through a pixel-pack PBO
 //     of its own). GL_PACK_ALIGNMENT is forced to 1 (tightly-packed rows) for the read
-//     itself -- this is the fix for the "odd width corrupts rows" class of bug the default
-//     alignment of 4 causes (a default-4-byte-aligned read of an odd-width*3-byte-per-pixel
-//     RGB row silently pads each row to the next 4-byte boundary, which the row_bytes_src
-//     stride below does NOT account for, corrupting every row after the first) -- restored to
+//     itself -- this is the fix for the "width not a multiple of 4 corrupts rows" class of
+//     bug the default alignment of 4 causes (NOT "odd width" -- the review adversarial's own
+//     reclassification, `w21_framegrab_embed` thread, 2026-07-30: gcd(3,4)=1, so an EVEN
+//     width that is not a multiple of 4, e.g. 2/6/198, corrupts the exact same way; this
+//     unconditional fix already covers the whole class regardless): a default-4-byte-aligned
+//     read of a width*3-byte-per-pixel RGB row whose byte count is not itself a multiple of
+//     4 silently pads each row to the next 4-byte boundary, which the row_bytes_src stride
+//     below does NOT account for, corrupting every row after the first -- restored to
 //     whatever the host had afterward, never left at 1.
 // PT: `FRAMEGRAB-EMBED` -- ver o próprio doc-comment deste método (engine.hpp) pro contrato
 //     completo. Readback puro: não renderiza nada, só lê o que o FBO 0 já guarda.
@@ -565,11 +569,15 @@ bool Engine::get_bool(const char* key, bool& out) const {
 //     restaurar o binding próprio do host depois, é o que torna esta chamada segura de usar
 //     mesmo quando um host renderiza através de um PBO de pixel-pack próprio).
 //     GL_PACK_ALIGNMENT é forçado a 1 (linhas compactadas sem padding) pra própria leitura --
-//     este é o conserto pra classe de bug "largura ímpar corrompe linhas" que o alinhamento
-//     default de 4 causa (uma leitura com alinhamento default-4-bytes de uma linha RGB de
-//     largura ímpar*3-bytes-por-pixel preenche silenciosamente cada linha até o próximo limite
-//     de 4 bytes, o que o passo row_bytes_src abaixo NÃO leva em conta, corrompendo toda linha
-//     após a primeira) -- restaurado ao que o host tinha depois, nunca deixado em 1.
+//     este é o conserto pra classe de bug "largura não múltipla de 4 corrompe linhas" que o
+//     alinhamento default de 4 causa (NÃO "largura ímpar" -- a própria reclassificação do
+//     review adversarial, thread do `w21_framegrab_embed`, 2026-07-30: mdc(3,4)=1, então uma
+//     largura PAR que não é múltipla de 4, ex. 2/6/198, corrompe exatamente do mesmo jeito;
+//     este conserto incondicional já cobre a classe inteira de qualquer forma): uma leitura
+//     com alinhamento default-4-bytes de uma linha RGB de 3-bytes-por-pixel cuja contagem de
+//     bytes não é ela mesma múltipla de 4 preenche silenciosamente cada linha até o próximo
+//     limite de 4 bytes, o que o passo row_bytes_src abaixo NÃO leva em conta, corrompendo
+//     toda linha após a primeira -- restaurado ao que o host tinha depois, nunca deixado em 1.
 CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) const {
   if (!impl_->ok) return CapturedFramePixels{};
   if (w <= 0 || h <= 0) return CapturedFramePixels{};

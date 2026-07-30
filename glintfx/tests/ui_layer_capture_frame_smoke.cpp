@@ -7,9 +7,14 @@
 //     content, BOTH, not a stale/garbage/wrong-surface read) -- PLUS the parts that are
 //     genuinely NEW for the embed path per the FRAMEGRAB-EMBED contract (ui_layer.hpp, right
 //     before `private:`): the declared REGION ceiling (letterbox sub-viewport, not the whole
-//     window), the ODD-WIDTH class of bug the review flagged (GL_PACK_ALIGNMENT corrupting
-//     rows past the first when the default 4-byte alignment doesn't match a tightly-packed
-//     3-bytes-per-pixel RGB row), calling BEFORE load() (capture_frame() needs no document),
+//     window), the WIDTH-NOT-A-MULTIPLE-OF-4 class of bug the review flagged
+//     (GL_PACK_ALIGNMENT corrupting rows past the first when the default 4-byte alignment
+//     doesn't match a tightly-packed 3-bytes-per-pixel RGB row -- NOT "odd width": the review
+//     adversarial's own reclassification, `w21_framegrab_embed` thread, 2026-07-30 --
+//     gcd(3,4)=1, so EVEN widths that are not multiples of 4, e.g. 2/6/198, corrupt too; the
+//     forced `GL_PACK_ALIGNMENT=1` fix is unconditional and already covers the whole class,
+//     only this comment/the test's own name were framed too narrowly), calling BEFORE load()
+//     (capture_frame() needs no document),
 //     and the zero-width DEGENERATE-SIZE guard (Part G, added after the team-lead's own
 //     follow-up on the FRAMEGRAB-EMBED thread, 2026-07-30 -- see that part's own doc-comment
 //     for the full derivation of why `set_viewport()` cannot inject it and `UiLayerConfig`
@@ -103,20 +108,30 @@
 //     is only white if the GL-native offset conversion (gl_offset_x/y, ui_layer.cpp) reads the
 //     CORRECT rectangle of the larger window, not an arbitrarily-shifted one.
 //
-//     Part F (odd width -- the GL_PACK_ALIGNMENT regression class): a 301x200 host window
-//     (ODD width, no document loaded) filled with one solid colour. Samples BOTH corners AND
-//     several interior/edge points across MULTIPLE rows (not just row 0) -- the failure mode
-//     this guards against (default GL_PACK_ALIGNMENT=4 on a tightly-packed 3-bytes/pixel RGB
-//     read) corrupts rows AFTER the first, so a corner-only or single-row check would miss it.
+//     Part F (width not a multiple of 4 -- the GL_PACK_ALIGNMENT regression class,
+//     RECLASSIFIED from "odd width" by the review adversarial, `w21_framegrab_embed`
+//     thread, 2026-07-30: gcd(3,4)=1, so EVEN widths that are not multiples of 4, e.g.
+//     2/6/198, corrupt exactly the same way -- the fix and this test's own W=301 already
+//     cover the class unconditionally, only the earlier framing/name were too narrow): a
+//     301x200 host window (no document loaded) filled with one solid colour. Samples BOTH
+//     corners AND several interior/edge points across MULTIPLE rows (not just row 0) -- the
+//     failure mode this guards against (default GL_PACK_ALIGNMENT=4 on a tightly-packed
+//     3-bytes/pixel RGB read) corrupts rows AFTER the first, so a corner-only or single-row
+//     check would miss it.
 //
 //     MUTATION PROOF (this session's own discipline: a test that passes by accident is not a
-//     test): during FRAMEGRAB-EMBED implementation, Engine::capture_frame's forced
+//     test) -- run TWICE, by two different agents, with DIFFERENT failure signatures for the
+//     SAME corruption (worth naming so neither reader assumes theirs is "the" reproduction):
+//     (1) during FRAMEGRAB-EMBED implementation, Engine::capture_frame's forced
 //     `glPixelStorei(GL_PACK_ALIGNMENT, 1)` was temporarily removed (falling back to whatever
 //     alignment the caller/driver defaults to) and this file's Part F was rebuilt and
-//     re-run -- it went RED (corrupted rows past the first, exactly the predicted class of
-//     failure). Restoring the forced alignment=1 and rebuilding turned it back GREEN. See the
-//     FRAMEGRAB-EMBED commit notes for the full sabotage-rebuild-confirm-red-restore-rebuild-
-//     confirm-green cycle.
+//     re-run -- it went RED with `double free or corruption (!prev)`. (2) the review
+//     adversarial's own probe swept W ∈ {1,2,3,4,5,198,301} under the same sabotage and got a
+//     bare `SIGSEGV` instead -- same underlying heap corruption, landing on a different
+//     allocator metadata byte depending on allocation history/width, not a different bug.
+//     Restoring the forced alignment=1 and rebuilding turned it back GREEN both times. See
+//     the FRAMEGRAB-EMBED commit notes for the full sabotage-rebuild-confirm-red-restore-
+//     rebuild-confirm-green cycle.
 // PT: `FRAMEGRAB-EMBED` -- verifica UiLayer::capture_frame(): o irmão em modo embed do
 //     App::capture_frame() (app_capture_frame_smoke.cpp), lendo o MESMO readback
 //     compartilhado Engine::capture_frame (engine.cpp) que as duas fachadas encapsulam. Este
@@ -126,10 +141,15 @@
 //     superfície errada) -- MAIS as partes que são genuinamente NOVAS pro caminho embed
 //     conforme o contrato do FRAMEGRAB-EMBED (ui_layer.hpp, logo antes de `private:`): o teto
 //     de REGIÃO declarado (sub-viewport de letterbox, não a janela inteira), a classe de bug
-//     de LARGURA ÍMPAR que o review sinalizou (GL_PACK_ALIGNMENT corrompendo linhas após a
-//     primeira quando o alinhamento default de 4 bytes não bate com uma linha RGB
-//     compactada de 3 bytes-por-pixel), chamar ANTES de load() (capture_frame() não precisa
-//     de documento), e o guard de TAMANHO DEGENERADO de largura zero (Parte G, somada após o
+//     de LARGURA NÃO MÚLTIPLA DE 4 que o review sinalizou (GL_PACK_ALIGNMENT corrompendo
+//     linhas após a primeira quando o alinhamento default de 4 bytes não bate com uma linha
+//     RGB compactada de 3 bytes-por-pixel -- NÃO "largura ímpar": a própria reclassificação
+//     do review adversarial, thread do `w21_framegrab_embed`, 2026-07-30 -- mdc(3,4)=1,
+//     então larguras PARES que não são múltiplas de 4, ex. 2/6/198, também corrompem; o
+//     conserto forçado `GL_PACK_ALIGNMENT=1` é incondicional e já cobre a classe inteira, só
+//     este comentário/o próprio nome do teste estavam enquadrados estreito demais), chamar
+//     ANTES de load() (capture_frame() não precisa de documento), e o guard de TAMANHO
+//     DEGENERADO de largura zero (Parte G, somada após o
 //     próprio desdobramento do team-lead na thread do FRAMEGRAB-EMBED, 2026-07-30 -- ver o
 //     próprio doc-comment dessa parte pra derivação completa de por que `set_viewport()` não
 //     consegue injetar isto e o `UiLayerConfig` consegue).
@@ -174,21 +194,32 @@
 //     que só é branco se a conversão de offset nativo-GL (gl_offset_x/y, ui_layer.cpp) ler o
 //     retângulo CORRETO da janela maior, não um arbitrariamente deslocado.
 //
-//     Parte F (largura ímpar -- a classe de regressão do GL_PACK_ALIGNMENT): uma janela do
-//     host 301x200 (largura ÍMPAR, nenhum documento carregado) preenchida com uma cor sólida.
-//     Amostra AMBOS os cantos E vários pontos internos/de borda através de MÚLTIPLAS linhas
-//     (não só a linha 0) -- o modo de falha contra o qual isto se defende (GL_PACK_ALIGNMENT
-//     default=4 numa leitura RGB compactada de 3 bytes/pixel) corrompe linhas APÓS a
-//     primeira, então uma checagem só-de-canto ou só-de-uma-linha o perderia.
+//     Parte F (largura NÃO MÚLTIPLA DE 4 -- a classe de regressão do GL_PACK_ALIGNMENT,
+//     RECLASSIFICADA de "largura ímpar" pelo review adversarial, thread do
+//     `w21_framegrab_embed`, 2026-07-30: mdc(3,4)=1, então larguras PARES que não são
+//     múltiplas de 4, ex. 2/6/198, corrompem exatamente do mesmo jeito -- o conserto e o
+//     próprio W=301 deste teste já cobrem a classe incondicionalmente, só o enquadramento/
+//     nome anteriores eram estreitos demais): uma janela do host 301x200 (nenhum documento
+//     carregado) preenchida com uma cor sólida. Amostra AMBOS os cantos E vários pontos
+//     internos/de borda através de MÚLTIPLAS linhas (não só a linha 0) -- o modo de falha
+//     contra o qual isto se defende (GL_PACK_ALIGNMENT default=4 numa leitura RGB compactada
+//     de 3 bytes/pixel) corrompe linhas APÓS a primeira, então uma checagem só-de-canto ou
+//     só-de-uma-linha o perderia.
 //
 //     PROVA DE MUTAÇÃO (disciplina desta sessão: um teste que passa por acidente não é
-//     teste): durante a implementação do FRAMEGRAB-EMBED, o `glPixelStorei(GL_PACK_ALIGNMENT,
-//     1)` forçado de Engine::capture_frame foi temporariamente removido (caindo no
-//     alinhamento default que o chamador/driver já tivesse) e a Parte F deste arquivo foi
-//     rebuildada e re-rodada -- ficou VERMELHA (linhas corrompidas após a primeira,
-//     exatamente a classe de falha prevista). Restaurar o alinhamento=1 forçado e rebuildar a
-//     trouxe de volta a VERDE. Ver as notas de commit do FRAMEGRAB-EMBED pro ciclo completo
-//     sabota-rebuild-confirma-vermelho-restaura-rebuild-confirma-verde.
+//     teste) -- rodada DUAS VEZES, por dois agentes diferentes, com assinaturas de falha
+//     DIFERENTES pra MESMA corrupção (vale nomear pra nenhum leitor achar que a dele é "a"
+//     reprodução): (1) durante a implementação do FRAMEGRAB-EMBED, o
+//     `glPixelStorei(GL_PACK_ALIGNMENT, 1)` forçado de Engine::capture_frame foi
+//     temporariamente removido (caindo no alinhamento default que o chamador/driver já
+//     tivesse) e a Parte F deste arquivo foi rebuildada e re-rodada -- ficou VERMELHA com
+//     `double free or corruption (!prev)`. (2) a própria sonda do review adversarial varreu
+//     W ∈ {1,2,3,4,5,198,301} sob a mesma sabotagem e obteve um `SIGSEGV` puro em vez disso
+//     -- a mesma corrupção de heap subjacente, caindo num byte diferente de metadado do
+//     alocador dependendo do histórico de alocação/largura, não um bug diferente. Restaurar
+//     o alinhamento=1 forçado e rebuildar trouxe de volta a VERDE nas duas vezes. Ver as
+//     notas de commit do FRAMEGRAB-EMBED pro ciclo completo sabota-rebuild-confirma-
+//     vermelho-restaura-rebuild-confirma-verde.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
@@ -551,14 +582,93 @@ bool part_e_letterbox_region() {
                  px[0], px[1], px[2]);
     return false;
   }
+
+  // EN: EDGE-STRADDLING samples (review adversarial finding, `w21_framegrab_embed` thread,
+  //     2026-07-30, PASS-with-a-test-gap verdict) -- the two samples above (interior box
+  //     centre, interior background) are BOTH deep inside large uniform regions, so neither
+  //     one crosses a colour boundary. A mutation shifting the read region by as little as
+  //     `gl_offset_y + 1` (`ui_layer.cpp:547`) is INVISIBLE to them: the reviewer's own
+  //     mutation proof found this test stayed GREEN under that exact mutation -- what caught
+  //     it was Part F below, by GEOMETRIC ACCIDENT (a full-window capture shifted by 1px
+  //     partly reads outside the window), not because this test actually verifies the
+  //     letterbox offset conversion. Same shape of gap as `TST-CLOCK-UNIT` (W20): a comment
+  //     that claims to prove X while the assertions only prove Y.
+  //
+  //     #box spans LOCAL x∈[10,90), y∈[10,50) (min_partial.rml's own RCSS box model: `top:
+  //     10px; left: 10px; width: 80px; height: 40px`, so the box's own last covered row/
+  //     column is 49/89, and row/column 50/90 is the FIRST one back to background). Four
+  //     pairs straddle the four edges -- ONE pixel outside, ONE pixel inside, each pair on
+  //     the axis a shift of `gl_offset_x`/`gl_offset_y` would move: a 1px offset in either
+  //     axis flips at least one member of a pair from its expected colour to the other,
+  //     which the two interior-only samples above could never detect.
+  // PT: AMOSTRAS QUE ATRAVESSAM BORDA (achado do review adversarial, thread do
+  //     `w21_framegrab_embed`, 2026-07-30, veredito PASSA-com-lacuna-de-teste) -- as duas
+  //     amostras acima (centro interior do box, fundo interior) estão as DUAS fundas demais
+  //     em regiões uniformes grandes, então nenhuma cruza uma fronteira de cor. Uma mutação
+  //     deslocando a região de leitura em tão pouco quanto `gl_offset_y + 1`
+  //     (`ui_layer.cpp:547`) é INVISÍVEL pra elas: a própria prova de mutação do reviewer
+  //     achou este teste continuando VERDE sob essa mutação exata -- quem pegou foi a Parte
+  //     F abaixo, por ACIDENTE GEOMÉTRICO (uma captura de janela inteira deslocada em 1px lê
+  //     parcialmente fora da janela), não porque este teste de fato verifica a conversão de
+  //     offset do letterbox. Mesma forma de lacuna do `TST-CLOCK-UNIT` (W20): um comentário
+  //     que alega provar X enquanto as asserções só provam Y.
+  //
+  //     O #box abrange LOCAL x∈[10,90), y∈[10,50) (o próprio box model RCSS de
+  //     min_partial.rml: `top: 10px; left: 10px; width: 80px; height: 40px`, então a última
+  //     linha/coluna própria coberta pelo box é 49/89, e a linha/coluna 50/90 é a PRIMEIRA de
+  //     volta ao fundo). Quatro pares atravessam as quatro bordas -- UM pixel fora, UM pixel
+  //     dentro, cada par no eixo que um deslocamento de `gl_offset_x`/`gl_offset_y` moveria:
+  //     um offset de 1px em qualquer eixo vira pelo menos um membro de um par da própria cor
+  //     esperada pra outra, o que as duas amostras só-interior acima nunca conseguiriam
+  //     detectar.
+  struct EdgePoint {
+    int x, y;
+    bool expect_white; // EN: true = inside the box. PT: true = dentro do box.
+    const char* label;
+  };
+  const EdgePoint edge_points[] = {
+      {9, 30, false, "left edge, 1px OUTSIDE (x=9, y=30)"},
+      {10, 30, true, "left edge, 1px INSIDE (x=10, y=30)"},
+      {89, 30, true, "right edge, 1px INSIDE (x=89, y=30)"},
+      {90, 30, false, "right edge, 1px OUTSIDE (x=90, y=30)"},
+      {50, 9, false, "top edge, 1px OUTSIDE (x=50, y=9)"},
+      {50, 10, true, "top edge, 1px INSIDE (x=50, y=10)"},
+      {50, 49, true, "bottom edge, 1px INSIDE (x=50, y=49)"},
+      {50, 50, false, "bottom edge, 1px OUTSIDE (x=50, y=50)"},
+  };
+  for (const EdgePoint& ep : edge_points) {
+    sample(frame, ep.x, ep.y, px);
+    const bool ok = ep.expect_white ? looks_like(px[0], px[1], px[2], 255, 255, 255)
+                                    : looks_like(px[0], px[1], px[2], 5, 5, 5);
+    if (!ok) {
+      std::fprintf(stderr,
+                   "FAIL: part E edge sample %s = (%d,%d,%d), expected %s -- letterbox "
+                   "offset conversion off by (at least) one pixel\n",
+                   ep.label, px[0], px[1], px[2], ep.expect_white ? "white (box)" : "anchor (background)");
+      return false;
+    }
+  }
+
   std::puts("ui_layer_capture_frame_smoke: part E (letterbox region) PASS");
   return true;
 }
 
-bool part_f_odd_width() {
-  const int W = 301, H = 200; // EN: ODD width. PT: largura ÍMPAR.
+bool part_f_width_not_multiple_of_4() {
+  // EN: W=301 is odd, which IS a member of the "not a multiple of 4" class (301 % 4 == 1)
+  //     -- but the class is broader than "odd": gcd(3,4)=1, so an EVEN width that is not a
+  //     multiple of 4 (e.g. 2, 6, 198 -- confirmed corrupting by the review adversarial's
+  //     own sweep) fails the exact same way. W=301 stays as the one width this test builds
+  //     (the fix under test is unconditional, so one representative of the class already
+  //     proves it), but the framing is the class, not parity.
+  // PT: W=301 é ímpar, que É membro da classe "não múltiplo de 4" (301 % 4 == 1) -- mas a
+  //     classe é mais ampla que "ímpar": mdc(3,4)=1, então uma largura PAR que não é
+  //     múltipla de 4 (ex. 2, 6, 198 -- confirmadas corrompendo pela própria varredura do
+  //     review adversarial) falha exatamente do mesmo jeito. W=301 continua sendo a única
+  //     largura que este teste constrói (o conserto sob teste é incondicional, então um
+  //     representante da classe já prova), mas o enquadramento é a classe, não a paridade.
+  const int W = 301, H = 200;
   glintfx::WindowGlfw host;
-  if (!host.create("capture_odd_width_host", W, H)) {
+  if (!host.create("capture_unaligned_width_host", W, H)) {
     std::puts("FAIL: part F host create");
     return false;
   }
@@ -567,10 +677,10 @@ bool part_f_odd_width() {
     std::puts("FAIL: part F ui attach");
     return false;
   }
-  // EN: No document loaded -- pure readback correctness under an odd width, independent of
-  //     RmlUi content.
-  // PT: Nenhum documento carregado -- correção de readback pura sob largura ímpar,
-  //     independente de conteúdo do RmlUi.
+  // EN: No document loaded -- pure readback correctness under a width not a multiple of 4,
+  //     independent of RmlUi content.
+  // PT: Nenhum documento carregado -- correção de readback pura sob largura não múltipla de
+  //     4, independente de conteúdo do RmlUi.
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   const int ER = 100, EG = 150, EB = 200;
   glClearColor(ER / 255.f, EG / 255.f, EB / 255.f, 1.0f);
@@ -603,14 +713,14 @@ bool part_f_odd_width() {
       if (!looks_like(px[0], px[1], px[2], ER, EG, EB, /*tol=*/4)) {
         std::fprintf(stderr,
                      "FAIL: part F pixel (%d,%d) = (%d,%d,%d), expected (%d,%d,%d) -- "
-                     "row/column corruption (odd-width PACK_ALIGNMENT regression)\n",
+                     "row/column corruption (width-not-multiple-of-4 PACK_ALIGNMENT regression)\n",
                      x, y, px[0], px[1], px[2], ER, EG, EB);
         pass = false;
       }
     }
   }
   if (!pass) return false;
-  std::puts("ui_layer_capture_frame_smoke: part F (odd width) PASS");
+  std::puts("ui_layer_capture_frame_smoke: part F (width not multiple of 4) PASS");
   return true;
 }
 
@@ -640,7 +750,7 @@ int main() {
   if (!part_c_before_load()) pass = false;
   if (!part_g_zero_viewport()) pass = false;
   if (!part_e_letterbox_region()) pass = false;
-  if (!part_f_odd_width()) pass = false;
+  if (!part_f_width_not_multiple_of_4()) pass = false;
 
   if (!pass) return 10;
   std::puts("ui_layer_capture_frame_smoke: PASS");

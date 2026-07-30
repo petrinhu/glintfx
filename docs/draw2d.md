@@ -344,7 +344,7 @@ with `w`/`h` (the GL "extents") clamped to non-negative BEFORE the int cast; `x`
 origin) are cast straight through, un-clamped, per D28's own "clamping is the GPU's job" rule.
 
 **The ONE declared behavioural diff in existing code (D31), and the D9 contract update it
-forces:** `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:480`) used to call
+forces:** `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:482`) used to call
 `glDisable(GL_SCISSOR_TEST)` unconditionally, every flush. It is now conditional
 (`glintfx/src/draw2d.cpp:489-496`): if a scissor is set, `glEnable(GL_SCISSOR_TEST)` +
 `glScissor(mapped rect)`; otherwise `glDisable(GL_SCISSOR_TEST)`, still asserting EVERYTHING
@@ -589,7 +589,7 @@ already in-tree, pure C, and already compiles in the MSVC job.
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:457`) | `bool` | Requires a current GL 3.3 core context. `false` on GL/shader failure or if already initialized. |
 | `ok()` (`glintfx/include/glintfx/draw2d.hpp:502`) | `bool` | `true` between a successful `init()` and the next `shutdown()`/destruction. |
 | `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:511`) | `void` | Idempotent GL teardown. Safe on a never-initialized instance. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:541`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, or a decode failure -- never a crash. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:541`) | `Texture2d` | PNG/JPG/TGA/BMP (whatever `image_decode.hpp`'s stb_image-backed decode recognises), premultiplied on upload. `path` read via a plain `const char*` ifstream overload (D7, MSVC-safe), 256 MiB cap. `ok() == false` on `nullptr`, open failure, the cap, a decode failure, or an out-of-memory condition during decode -- never a crash, `noexcept` (TEX-NOTHROW, W21). |
 | `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:558`) | `void` | Releases the GL texture if any, ALWAYS zeroes `tex` on return. Fail-high (never UB) on already-destroyed, tampered, or foreign handles. |
 | `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:577`) | `void` | Opens a batching bracket (D4). `target_width`/`target_height` are the viewport size in screen px this bracket's sprites project against -- the SAME size the host's own GL viewport is set to for this pass. Nested `begin()` implicitly ends the previous bracket first (flushing it, logged once). |
 | `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:611-612`) | `void` | Queues one textured quad, internally batched by texture. See "Batching" and "Fail-high input surface" below for the full guard list. |
@@ -617,7 +617,7 @@ already in-tree, pure C, and already compiles in the MSVC job.
 | `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | TX15/TX16 overload -- word-wrap (`max_width > 0`) + per-line alignment (left/center/right/justify). See "Word-wrap and alignment" above. |
 | `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout WITHOUT drawing; `{ok,width,height,ascent,line_height,line_count}`. Same layout + fail-high chain as `draw_text`. See "Text" above. |
 | `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | TX15/TX16 overload -- measures with wrap + alignment active (`line_count`/`height` reflect the wrapped lines). |
-| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- `load_texture`'s general-case sibling, from a caller-owned pixel buffer. `R8`/`Rgba8`, `Rgba8` premultiplied on ingest. `ok() == false` on `nullptr`, non-positive `w`/`h`, an out-of-range `format`, or over the 256 MiB cap -- never a crash. See "Texture from pixels" above. |
+| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- `load_texture`'s general-case sibling, from a caller-owned pixel buffer. `R8`/`Rgba8`, `Rgba8` premultiplied on ingest. `ok() == false` on `nullptr`, non-positive `w`/`h`, an out-of-range `format`, over the 256 MiB cap, or an out-of-memory condition during the `Rgba8` ingest copy -- never a crash, `noexcept` (TEX-NOTHROW, W21). See "Texture from pixels" above. |
 | `flush()` (`glintfx/include/glintfx/draw2d.hpp:1206`) | `void` | D2D-FLUSH -- forces the current bracket's pending draws to GL WITHOUT closing it. Camera/scissor/layer state all survive it unchanged. Safe no-op outside a bracket. See "Forcing GL without closing the bracket" above. |
 
 ### Premultiply and the tint formula (D8)
@@ -738,7 +738,7 @@ registry before use.
 
 **A handle is NOT interchangeable between `Draw2d` instances.** `load_texture()` stamps the
 returned handle with the emitting instance's identity (`glintfx/src/draw2d.cpp:1106`); both
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1166`/`750`) reject a handle whose
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1286`/`752`) reject a handle whose
 `owner_` tag does not match `this`, logged once and treated exactly like any other
 unknown/stale handle -- never dereferenced as a raw GL name.
 This is a guarantee by construction, not a numeric coincidence: id and generation alone cannot
@@ -1375,7 +1375,7 @@ com `w`/`h` (a "extensão" GL) clampados a não-negativo ANTES do cast pra int; 
 são convertidos direto, sem clamp, pela própria regra "clampar é trabalho da GPU" do D28.
 
 **O ÚNICO diff comportamental declarado em código existente (D31), e a atualização de contrato
-D9 que ele força:** o `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:480`) costumava chamar
+D9 que ele força:** o `set_gl_state_for_draw()` (`glintfx/src/draw2d.cpp:482`) costumava chamar
 `glDisable(GL_SCISSOR_TEST)` incondicionalmente, a cada flush. Agora é condicional
 (`glintfx/src/draw2d.cpp:489-496`): se um scissor está setado, `glEnable(GL_SCISSOR_TEST)` +
 `glScissor(retângulo mapeado)`; senão `glDisable(GL_SCISSOR_TEST)`, ainda afirmando TUDO de que
@@ -1625,7 +1625,7 @@ C a mais (custo aceito, sem sub-flag por-feature). Nenhuma aresta de dependênci
 | `init()` (`glintfx/include/glintfx/draw2d.hpp:457`) | `bool` | Exige um contexto GL 3.3 core corrente. `false` em falha de GL/shader ou se já inicializado. |
 | `ok()` (`glintfx/include/glintfx/draw2d.hpp:502`) | `bool` | `true` entre um `init()` bem-sucedido e o próximo `shutdown()`/destruição. |
 | `shutdown()` (`glintfx/include/glintfx/draw2d.hpp:511`) | `void` | Teardown GL idempotente. Seguro numa instância nunca inicializada. |
-| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:541`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, ou falha de decode -- nunca um crash. |
+| `load_texture(const char* path)` (`glintfx/include/glintfx/draw2d.hpp:541`) | `Texture2d` | PNG/JPG/TGA/BMP (o que o decode apoiado em stb_image do `image_decode.hpp` reconhecer), premultiplicado no upload. `path` lido via overload de ifstream de `const char*` puro (D7, MSVC-safe), teto de 256 MiB. `ok() == false` em `nullptr`, falha ao abrir, o teto, falha de decode, ou uma condição de esgotamento de memória durante o decode -- nunca um crash, `noexcept` (TEX-NOTHROW, W21). |
 | `destroy_texture(Texture2d& tex)` (`glintfx/include/glintfx/draw2d.hpp:558`) | `void` | Libera a textura GL se houver, SEMPRE zera `tex` ao retornar. Fail-high (nunca UB) em handle já-destruído, adulterado, ou estrangeiro. |
 | `begin(int target_width, int target_height)` (`glintfx/include/glintfx/draw2d.hpp:577`) | `void` | Abre um bracket de batching (D4). `target_width`/`target_height` são o tamanho de viewport em px de tela contra o qual os sprites deste bracket projetam -- o MESMO tamanho pro qual o próprio viewport GL do host está definido neste passe. `begin()` aninhado encerra o bracket anterior implicitamente primeiro (fazendo flush dele, logado uma vez). |
 | `draw_sprite(const Texture2d& tex, const RectF& dst, const RectF& src_px = RectF{}, const ColorF& tint = ColorF{})` (`glintfx/include/glintfx/draw2d.hpp:611-612`) | `void` | Enfileira um quad texturizado, batchado internamente por textura. Ver "Batching" e "Superfície de entrada fail-high" abaixo pra lista completa de guardas. |
@@ -1653,7 +1653,7 @@ C a mais (custo aceito, sem sub-flag por-feature). Nenhuma aresta de dependênci
 | `draw_text(const Font2d& font, const char* utf8, Vec2F pos, float size, const ColorF& color, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1006`) | `void` | Overload TX15/TX16 -- word-wrap (`max_width > 0`) + alinhamento por linha (left/center/right/justify). Ver "Word-wrap e alinhamento" acima. |
 | `measure_text(const Font2d& font, const char* utf8, float size)` (`glintfx/include/glintfx/draw2d.hpp:1023`) | `TextMetrics` | TX1 -- layout SEM desenhar; `{ok,width,height,ascent,line_height,line_count}`. Mesmo layout + cadeia fail-high do `draw_text`. Ver "Texto" acima. |
 | `measure_text(const Font2d& font, const char* utf8, float size, const TextOptions& options)` (`glintfx/include/glintfx/draw2d.hpp:1029`) | `TextMetrics` | Overload TX15/TX16 -- mede com wrap + alinhamento ativos (`line_count`/`height` refletem as linhas quebradas). |
-| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- irmão caso-geral do `load_texture`, a partir de um buffer de pixel de posse do chamador. `R8`/`Rgba8`, `Rgba8` premultiplicado no ingresso. `ok() == false` em `nullptr`, `w`/`h` não-positivo, `format` fora da faixa, ou acima do teto de 256 MiB -- nunca um crash. Ver "Textura a partir de pixels" acima. |
+| `create_texture(const void* pixels, int w, int h, PixelFormat format)` (`glintfx/include/glintfx/draw2d.hpp:1153`) | `Texture2d` | D2D-TEXPIXELS -- irmão caso-geral do `load_texture`, a partir de um buffer de pixel de posse do chamador. `R8`/`Rgba8`, `Rgba8` premultiplicado no ingresso. `ok() == false` em `nullptr`, `w`/`h` não-positivo, `format` fora da faixa, acima do teto de 256 MiB, ou uma condição de esgotamento de memória durante a cópia de ingestão `Rgba8` -- nunca um crash, `noexcept` (TEX-NOTHROW, W21). Ver "Textura a partir de pixels" acima. |
 | `flush()` (`glintfx/include/glintfx/draw2d.hpp:1206`) | `void` | D2D-FLUSH -- força os desenhos pendentes do bracket corrente pra GL SEM fechá-lo. Câmera/scissor/camada sobrevivem inalterados. No-op seguro fora de um bracket. Ver "Forçando GL sem fechar o bracket" acima. |
 
 ### Premultiply e a fórmula do tint (D8)
@@ -1778,7 +1778,7 @@ interno antes de usar.
 
 **Um handle NÃO é intercambiável entre instâncias `Draw2d`.** `load_texture()` carimba o handle
 retornado com a identidade da instância emissora (`glintfx/src/draw2d.cpp:1106`); tanto
-`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1166`/`750`) rejeitam um handle cuja
+`draw_sprite()` / `destroy_texture()` (`glintfx/src/draw2d.cpp:1286`/`752`) rejeitam um handle cuja
 tag `owner_` não bate com `this`, logado uma vez e tratado exatamente como qualquer outro handle
 desconhecido/obsoleto -- nunca desreferenciado como nome GL cru. É uma garantia por construção,
 não uma coincidência numérica:

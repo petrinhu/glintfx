@@ -538,7 +538,7 @@ public:
   //     biblioteca (`Audio::load_sound`, o tratamento de input hostil de
   //     `decorator_polygon.cpp`). Também retorna um handle inválido se chamado antes de init() ou
   //     depois de shutdown().
-  Texture2d load_texture(const char* path);
+  Texture2d load_texture(const char* path) noexcept;
   // EN: Releases the GL texture `tex` refers to (if any) and ALWAYS zeroes `tex` on return (a
   //     handle you tried to destroy never looks valid afterwards, D7) -- except when `tex` was
   //     already the invalid sentinel (`id() == 0`, effectively already zero, a true no-op).
@@ -1150,7 +1150,7 @@ public:
   //     um opt-out em forma de armadilha. `format == R8` não tem passo de premultiply nenhum (ver
   //     o próprio doc-comment do `PixelFormat` acima pro porquê da cobertura não precisar de
   //     nenhum).
-  Texture2d create_texture(const void* pixels, int w, int h, PixelFormat format);
+  Texture2d create_texture(const void* pixels, int w, int h, PixelFormat format) noexcept;
 
   // EN: D2D-FLUSH -- forces every draw queued so far in the CURRENT bracket to GL WITHOUT
   //     closing it (`begin()`'d still, still needs its own matching `end()`): the missing third
@@ -1204,6 +1204,52 @@ public:
   //     `Draw2d` nunca-inicializado/movido-de/pós-shutdown (o contrato null-safe deste módulo,
   //     D15).
   void flush();
+
+  // EN: TEX-NOTHROW (W21, 2026-07-30) -- ADDED AT THE END of the class on purpose, same
+  //     "append, do not insert" discipline `glintfx/image.hpp`'s own IMG-ENCODE addition already
+  //     used (see that file's own top comment): every method above this point is cited by exact
+  //     `file:line` from `docs/draw2d.md` in dozens of places (`tools/check_doc_line_refs.sh`
+  //     verifies every one of them mechanically), so growing THEIR OWN doc-comments in place would
+  //     shift every citation below the edit. `load_texture()` and `create_texture()` are BOTH
+  //     `noexcept` now -- the "never a crash"/"ok() == false ... never a crash" wording their own
+  //     doc-comments above already used was, until W21, a guideline honoured by convention only;
+  //     an out-of-memory condition during decode (`load_texture()`) or during the `Rgba8` ingest
+  //     copy (`create_texture()`) could throw `std::bad_alloc` straight through the API boundary,
+  //     a REAL, consumer-measured failure mode (GusWorld, a paletted PNG whose decoded RGBA8 size
+  //     exceeds stb's own intermediate buffer -- the exact sibling bug DEC-NOTHROW fixed in the
+  //     public `decode_image_file()`/`decode_image_memory()` pair, `glintfx/image.hpp`). Both
+  //     methods now wrap their own body in a `try`/`catch` (`draw2d.cpp`) that degrades ANY
+  //     exception to a clean, default-constructed `Texture2d{}` (`ok() == false`) -- proven under a
+  //     REAL, forced allocation failure, not a hypothetical one, by
+  //     `draw2d_texture_nothrow_sanity.cpp`'s own `fork()` + `RLIMIT_AS` oracle (same technique
+  //     `image_decode_hardening_sanity.cpp` uses for the sibling public pair). A GL texture object
+  //     already created before the failing allocation is released (`glDeleteTextures`), not
+  //     leaked -- see `draw2d.cpp`'s own TEX-NOTHROW top comment on each function for the full
+  //     rationale (why ONE function-wide `try`, not several call-scoped ones) and the enumerated
+  //     allocation points.
+  // PT: TEX-NOTHROW (W21, 2026-07-30) -- SOMADO NO FIM da classe de propósito, mesma disciplina
+  //     "somar, não inserir" que a própria adição IMG-ENCODE de `glintfx/image.hpp` já usa (ver o
+  //     próprio comentário de topo daquele arquivo): todo método acima deste ponto é citado por
+  //     `arquivo:linha` exato a partir de `docs/draw2d.md` em dezenas de lugares
+  //     (`tools/check_doc_line_refs.sh` verifica cada um mecanicamente), então crescer os PRÓPRIOS
+  //     doc-comments deles no lugar deslocaria toda citação abaixo da edição. `load_texture()` e
+  //     `create_texture()` agora são AMBOS `noexcept` -- o texto "nunca um crash"/"ok() == false
+  //     ... nunca um crash" que os próprios doc-comments deles acima já usavam era, até a W21, uma
+  //     diretriz honrada só por convenção; uma condição de esgotamento de memória durante o decode
+  //     (`load_texture()`) ou durante a cópia de ingestão `Rgba8` (`create_texture()`) podia lançar
+  //     `std::bad_alloc` direto através da fronteira de API, um modo de falha REAL, medido pelo
+  //     consumidor (GusWorld, um PNG paletizado cujo tamanho RGBA8 decodificado excede o próprio
+  //     buffer intermediário do stb -- o MESMO bug irmão que o DEC-NOTHROW consertou no par PÚBLICO
+  //     `decode_image_file()`/`decode_image_memory()`, `glintfx/image.hpp`). As duas funções agora
+  //     envolvem o PRÓPRIO corpo num `try`/`catch` (`draw2d.cpp`) que degrada QUALQUER exceção pra
+  //     um `Texture2d{}` limpo, default-construído (`ok() == false`) -- provado sob uma falha de
+  //     alocação REAL, forçada, não hipotética, pelo próprio oráculo `fork()` + `RLIMIT_AS` de
+  //     `draw2d_texture_nothrow_sanity.cpp` (a MESMA técnica que
+  //     `image_decode_hardening_sanity.cpp` usa pro par público irmão). Um objeto de textura GL já
+  //     criado antes da alocação que falhou é liberado (`glDeleteTextures`), não vazado -- ver o
+  //     próprio comentário de topo TEX-NOTHROW de `draw2d.cpp` em cada função pro racional completo
+  //     (por que UM `try` do tamanho da função, não vários escopados por chamada) e os pontos de
+  //     alocação enumerados.
 
 private:
   struct Impl;

@@ -54,7 +54,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <fstream>
+#include <new>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -1015,7 +1017,99 @@ void Draw2d::shutdown() {
   impl_->initialized = false;
 }
 
-Texture2d Draw2d::load_texture(const char* path) {
+namespace {
+
+// EN: TEX-NOTHROW -- shared cleanup for load_texture()/create_texture()'s own catch handlers
+//     below: releases a GL texture object that was already created before an exception struck
+//     (see each function's own top comment for why `gl_name` is hoisted above their own `try`). A
+//     SEPARATE function, not inlined at each catch site, so cppcheck's own flow analysis -- which
+//     does not model exception unwinding, and so "sees" only the straight-line path from
+//     `gl_name`'s zero-initialisation to the catch block -- does not mis-flag the check as
+//     `knownConditionTrueFalse` (measured: it does, when the same `if (gl_name) ...` is written
+//     inline at the catch site itself; passing `gl_name` as a runtime function ARGUMENT crosses a
+//     call boundary cppcheck does not constant-fold through).
+// PT: TEX-NOTHROW -- limpeza compartilhada pros próprios handlers catch de
+//     load_texture()/create_texture() abaixo: libera um objeto de textura GL que já foi criado
+//     antes de uma exceção atingir (ver o próprio comentário de topo de cada função pro porquê de
+//     `gl_name` ser hasteado acima do PRÓPRIO try delas). Uma função SEPARADA, não inlinada em
+//     cada sítio de catch, pra que a própria análise de fluxo do cppcheck -- que não modela
+//     unwind de exceção, e por isso só "enxerga" o caminho reto da zero-inicialização de
+//     `gl_name` até o bloco catch -- não flagre erroneamente a checagem como
+//     `knownConditionTrueFalse` (medido: flagra, quando o mesmo `if (gl_name) ...` é escrito
+//     inline no próprio sítio de catch; passar `gl_name` como ARGUMENTO de função em runtime
+//     cruza uma fronteira de chamada que o cppcheck não constant-folda através dela).
+void release_gl_texture_on_exception(GLuint gl_name) {
+  if (gl_name) glDeleteTextures(1, &gl_name);
+}
+
+} // namespace
+
+// EN: TEX-NOTHROW (W21, 2026-07-30) -- consumer-driven auditoria-dominó follow-up to DEC-NOTHROW/
+//     DEC-MOVE (`src/image.cpp`): `decode_premultiplied_rgba()` below (`image_decode.hpp`) is the
+//     BYTE-FOR-BYTE premultiplied sibling of the `decode_straight_rgba()` that was proven to throw
+//     `std::bad_alloc` for a REAL input (a paletted PNG whose decoded RGBA8 size exceeds stb's own
+//     intermediate buffer, `image_decode_hardening_sanity.cpp`'s own Group B) -- this function is
+//     `load_texture()`, the ACTUAL path a caller reaches for, and `draw2d.hpp`'s own doc-comment on
+//     it already promises "never a crash" in capital letters. `noexcept` on the signature turns
+//     that promise into a compiler-checked guarantee.
+//
+//     ONE function-wide `try`/`catch`, not several call-scoped ones (the shape
+//     `src/image.cpp`'s own two DEC-NOTHROW functions use): those two functions have exactly ONE
+//     allocation-bearing call each, cleanly separated from a handful of non-throwing guard
+//     clauses that cannot even log (no `Draw2d`/`Impl` instance exists there to log through).
+//     `load_texture()` is a different shape -- it interleaves MANY allocation-bearing calls (the
+//     `buf(len)` file-read buffer, `decode_premultiplied_rgba()`'s own internal `resize()`, and
+//     `impl_->textures.push_back()` on the registry-growth path) with `impl_->log_warn()` string
+//     concatenation on EVERY failure branch (itself allocation-bearing, and reachable well before
+//     the decode call) and with GL calls that are NOT allocation-bearing (GL is a C API, it does
+//     not throw). Scoping a separate `try` around each of those would either miss the `log_warn()`
+//     calls (leaving the early guard-clause returns unprotected, the exact discipline gap
+//     `src/image.cpp`'s own functions never had to close) or duplicate the SAME catch body five
+//     times over. ONE boundary, spanning everything from the first allocation-capable statement to
+//     the successful return, is both simpler to audit and strictly more complete.
+//
+//     `gl_name` is hoisted ABOVE the `try` so the `catch` handlers below can release it
+//     (`glDeleteTextures`) if an exception strikes AFTER a real GL texture object was already
+//     created (`impl_->upload_gl_texture()`) but BEFORE this texture's registry slot is committed
+//     (`compute_content_bbox()`/`impl_->textures.push_back()`/the slot-bookkeeping block) -- GL
+//     itself never throws, but the registry-growth `push_back()` right after it can. Without this,
+//     an allocation failure on that ONE narrow window would leak a live GL texture object: a
+//     lesser defect than a crash, but a real one this fix does not want to trade the crash for.
+// PT: TEX-NOTHROW (W21, 2026-07-30) -- follow-up de auditoria-dominó consumer-driven do
+//     DEC-NOTHROW/DEC-MOVE (`src/image.cpp`): o `decode_premultiplied_rgba()` abaixo
+//     (`image_decode.hpp`) é o irmão premultiplicado BYTE-A-BYTE do `decode_straight_rgba()` que
+//     foi provado lançar `std::bad_alloc` pra um input REAL (um PNG paletizado cujo tamanho RGBA8
+//     decodificado excede o próprio buffer intermediário do stb, o próprio Grupo B de
+//     `image_decode_hardening_sanity.cpp`) -- esta função é o `load_texture()`, o caminho REAL que
+//     um chamador usa, e o próprio doc-comment do `draw2d.hpp` já promete "nunca um crash" em
+//     maiúsculas. `noexcept` na assinatura transforma aquela promessa numa garantia checada pelo
+//     compilador.
+//
+//     UM `try`/`catch` do tamanho da função inteira, não vários escopados por chamada (a forma que
+//     as próprias duas funções DEC-NOTHROW de `src/image.cpp` usam): aquelas duas funções têm
+//     exatamente UMA chamada portadora de alocação cada, limpamente separada de um punhado de
+//     guardas que nem sequer conseguem logar (não existe instância `Draw2d`/`Impl` pra logar
+//     através ali). `load_texture()` tem uma forma diferente -- intercala MUITAS chamadas
+//     portadoras de alocação (o buffer de leitura de arquivo `buf(len)`, o próprio `resize()`
+//     interno de `decode_premultiplied_rgba()`, e `impl_->textures.push_back()` no caminho de
+//     crescimento do registry) com concatenação de string em `impl_->log_warn()` em TODO ramo de
+//     falha (ela mesma portadora de alocação, e alcançável bem antes da chamada de decode) e com
+//     chamadas GL que NÃO são portadoras de alocação (GL é uma API C, não lança). Escopar um `try`
+//     separado em volta de cada uma ou deixaria as chamadas `log_warn()` desprotegidas (deixando
+//     os returns antecipados de guarda sem proteção, exatamente a lacuna de disciplina que as
+//     próprias funções de `src/image.cpp` nunca precisaram fechar) ou duplicaria o MESMO corpo de
+//     catch cinco vezes. UMA fronteira só, cobrindo tudo do primeiro statement capaz de alocar até
+//     o return de sucesso, é ao mesmo tempo mais simples de auditar e estritamente mais completa.
+//
+//     `gl_name` é hasteado ACIMA do `try` pra que os handlers `catch` abaixo possam liberá-lo
+//     (`glDeleteTextures`) se uma exceção atingir DEPOIS que um objeto de textura GL real já foi
+//     criado (`impl_->upload_gl_texture()`) mas ANTES do slot de registry desta textura ser
+//     comitado (`compute_content_bbox()`/`impl_->textures.push_back()`/o bloco de contabilidade do
+//     slot) -- o próprio GL nunca lança, mas o `push_back()` de crescimento do registry logo depois
+//     dele pode. Sem isto, uma falha de alocação naquela ÚNICA janela estreita vazaria um objeto de
+//     textura GL vivo: um defeito menor que um crash, mas um real que este conserto não quer trocar
+//     pelo crash.
+Texture2d Draw2d::load_texture(const char* path) noexcept {
   Texture2d out; // ok_ == false by default.
   // D2D-1B fix: a moved-from Draw2d has impl_ == nullptr (see shutdown()'s comment on this
   // module's null-safe contract) -- there is no Impl to log through in that case, so the two
@@ -1023,88 +1117,114 @@ Texture2d Draw2d::load_texture(const char* path) {
   // fold used to deref impl_->log_warn() on a null impl_, cppcheck nullPointer, D2D-1B onda3
   // lint gate). A never-initialized-but-non-null Impl still gets the diagnostic.
   if (!impl_) return out;
-  if (!impl_->initialized) {
-    impl_->log_warn("load_texture() called before init()/after shutdown() -- ignored.");
-    return out;
-  }
-  if (path == nullptr) {
-    impl_->log_warn("load_texture(nullptr) -- ignored.");
-    return out;
-  }
 
-  // D7: const char* ifstream overload -- avoids std::filesystem::path::c_str()'s wchar_t trap
-  // on MSVC (a std::string/const char* path never goes through std::filesystem here).
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    impl_->log_warn(std::string("load_texture(): could not open '") + path + "'.");
-    return out;
-  }
-  file.seekg(0, std::ios::end);
-  const std::streamoff len_off = file.tellg();
-  if (len_off < 0) {
-    impl_->log_warn(std::string("load_texture(): could not determine size of '") + path + "'.");
-    return out;
-  }
-  const std::size_t len = static_cast<std::size_t>(len_off);
-  // D7: 256 MiB cap, same ceiling image_decode.hpp enforces internally (kMaxImageDecodeBytes) --
-  // rejected here BEFORE ever allocating a buffer for a hostile/huge asset (same "guard 1/2,
-  // pre-allocation" idiom render_gl3.cpp's own LoadTexture uses for the ui-side loader).
-  if (len == 0 || len > kMaxImageDecodeBytes) {
-    impl_->log_warn(std::string("load_texture(): '") + path + "' is " + std::to_string(len) +
-                    " bytes (0 or over the " + std::to_string(kMaxImageDecodeBytes) +
-                    " byte cap) -- refusing to load.");
-    return out;
-  }
-  file.seekg(0, std::ios::beg);
-  std::vector<unsigned char> buf(len);
-  if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len))) {
-    impl_->log_warn(std::string("load_texture(): short read on '") + path + "'.");
-    return out;
-  }
+  GLuint gl_name = 0; // TEX-NOTHROW: see this function's own top comment for why this is hoisted.
+  try {
+    if (!impl_->initialized) {
+      impl_->log_warn("load_texture() called before init()/after shutdown() -- ignored.");
+      return out;
+    }
+    if (path == nullptr) {
+      impl_->log_warn("load_texture(nullptr) -- ignored.");
+      return out;
+    }
 
-  const DecodedImage decoded = decode_premultiplied_rgba(buf.data(), buf.size());
-  if (!decoded.ok) {
-    impl_->log_warn(std::string("load_texture(): '") + path +
-                    "' failed to decode (unknown/corrupt format).");
+    // D7: const char* ifstream overload -- avoids std::filesystem::path::c_str()'s wchar_t trap
+    // on MSVC (a std::string/const char* path never goes through std::filesystem here).
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+      impl_->log_warn(std::string("load_texture(): could not open '") + path + "'.");
+      return out;
+    }
+    file.seekg(0, std::ios::end);
+    const std::streamoff len_off = file.tellg();
+    if (len_off < 0) {
+      impl_->log_warn(std::string("load_texture(): could not determine size of '") + path + "'.");
+      return out;
+    }
+    const std::size_t len = static_cast<std::size_t>(len_off);
+    // D7: 256 MiB cap, same ceiling image_decode.hpp enforces internally (kMaxImageDecodeBytes) --
+    // rejected here BEFORE ever allocating a buffer for a hostile/huge asset (same "guard 1/2,
+    // pre-allocation" idiom render_gl3.cpp's own LoadTexture uses for the ui-side loader).
+    if (len == 0 || len > kMaxImageDecodeBytes) {
+      impl_->log_warn(std::string("load_texture(): '") + path + "' is " + std::to_string(len) +
+                      " bytes (0 or over the " + std::to_string(kMaxImageDecodeBytes) +
+                      " byte cap) -- refusing to load.");
+      return out;
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<unsigned char> buf(len);
+    if (!file.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(len))) {
+      impl_->log_warn(std::string("load_texture(): short read on '") + path + "'.");
+      return out;
+    }
+
+    // TEX-NOTHROW: the ONE call in this function proven to throw std::bad_alloc for a REAL input
+    // (see this function's own top comment) -- the internal resize() inside
+    // decode_premultiplied_rgba() (image_decode.hpp), same shape as decode_straight_rgba()'s own
+    // assign() that image_decode_hardening_sanity.cpp's Group B forces under a real RLIMIT_AS
+    // squeeze.
+    const DecodedImage decoded = decode_premultiplied_rgba(buf.data(), buf.size());
+    if (!decoded.ok) {
+      impl_->log_warn(std::string("load_texture(): '") + path +
+                      "' failed to decode (unknown/corrupt format).");
+      return out;
+    }
+
+    gl_name = impl_->upload_gl_texture(decoded);
+    if (!gl_name) {
+      impl_->log_warn(std::string("load_texture(): GL texture upload failed for '") + path + "'.");
+      return out;
+    }
+
+    // D2D-3, D29 -- computed ONCE here, on the decoded pixels that already exist on the CPU (about
+    // to be discarded when `decoded` goes out of scope after this function returns) -- see
+    // image_decode.hpp's own header comment for why this seam, not a retained buffer nor a
+    // glGetTexImage readback.
+    const ContentBbox bbox = compute_content_bbox(decoded.rgba.data(), decoded.width, decoded.height);
+
+    std::size_t idx;
+    if (!impl_->free_slots.empty()) {
+      idx = impl_->free_slots.back();
+      impl_->free_slots.pop_back();
+    } else {
+      idx = impl_->textures.size();
+      impl_->textures.push_back(Impl::TextureSlot{});
+    }
+    Impl::TextureSlot& slot = impl_->textures[idx];
+    slot.gl_name = gl_name;
+    slot.width = decoded.width;
+    slot.height = decoded.height;
+    slot.alive = true;
+    slot.bbox = bbox; // D29: cached, lives and dies with this slot (D32).
+    // slot.generation is left as-is: 1 for a never-used slot, already bumped by destroy_texture()
+    // for a reused one -- either way it is the CURRENT valid generation for this slot.
+
+    out.ok_ = true;
+    out.width_ = decoded.width;
+    out.height_ = decoded.height;
+    out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
+    out.generation_ = slot.generation;
+    out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
     return out;
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc (the expected case -- see this function's own top comment) or any other
+    //     std::exception -- release the GL texture if one was already created (TEX-NOTHROW's own
+    //     leak-avoidance rationale above) and degrade to a clean ok()==false Texture2d, never a
+    //     partially-filled `out`.
+    // PT: std::bad_alloc (o caso esperado -- ver o próprio comentário de topo desta função) ou
+    //     qualquer outro std::exception -- libera a textura GL se uma já foi criada (o próprio
+    //     racional de evitar-vazamento do TEX-NOTHROW acima) e degrada pra um Texture2d limpo,
+    //     ok()==false, nunca um `out` parcialmente preenchido.
+    release_gl_texture_on_exception(gl_name);
+    return Texture2d{};
+  } catch (...) {
+    // EN/PT: belt-and-suspenders, same "never a crash" discipline as src/image.cpp's own
+    // DEC-NOTHROW catch(...) -- an exception type that is not even a std::exception must not
+    // escape this noexcept boundary either.
+    release_gl_texture_on_exception(gl_name);
+    return Texture2d{};
   }
-
-  const GLuint gl_name = impl_->upload_gl_texture(decoded);
-  if (!gl_name) {
-    impl_->log_warn(std::string("load_texture(): GL texture upload failed for '") + path + "'.");
-    return out;
-  }
-
-  // D2D-3, D29 -- computed ONCE here, on the decoded pixels that already exist on the CPU (about
-  // to be discarded when `decoded` goes out of scope after this function returns) -- see
-  // image_decode.hpp's own header comment for why this seam, not a retained buffer nor a
-  // glGetTexImage readback.
-  const ContentBbox bbox = compute_content_bbox(decoded.rgba.data(), decoded.width, decoded.height);
-
-  std::size_t idx;
-  if (!impl_->free_slots.empty()) {
-    idx = impl_->free_slots.back();
-    impl_->free_slots.pop_back();
-  } else {
-    idx = impl_->textures.size();
-    impl_->textures.push_back(Impl::TextureSlot{});
-  }
-  Impl::TextureSlot& slot = impl_->textures[idx];
-  slot.gl_name = gl_name;
-  slot.width = decoded.width;
-  slot.height = decoded.height;
-  slot.alive = true;
-  slot.bbox = bbox; // D29: cached, lives and dies with this slot (D32).
-  // slot.generation is left as-is: 1 for a never-used slot, already bumped by destroy_texture()
-  // for a reused one -- either way it is the CURRENT valid generation for this slot.
-
-  out.ok_ = true;
-  out.width_ = decoded.width;
-  out.height_ = decoded.height;
-  out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
-  out.generation_ = slot.generation;
-  out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
-  return out;
 }
 
 void Draw2d::destroy_texture(Texture2d& tex) {
@@ -2053,94 +2173,127 @@ GLuint upload_gl_texture_raw(const void* pixels, int w, int h, Draw2d::PixelForm
 //     `impl_->free_slots` que o próprio load_texture() usa logo acima, então
 //     destroy_texture()/draw_sprite()/todo outro consumidor de uma Texture2d não consegue
 //     distinguir os dois.
-Texture2d Draw2d::create_texture(const void* pixels, int w, int h, PixelFormat format) {
+// EN: TEX-NOTHROW (W21, 2026-07-30) -- the SAME "never a crash" fix as load_texture() just above
+//     (see that function's own top comment for the full DEC-NOTHROW/DEC-MOVE lineage and the
+//     "one function-wide try, not several call-scoped ones" rationale -- identical reasoning
+//     applies here verbatim, so it is not repeated). The allocation-bearing call this function can
+//     genuinely throw from is different, though: not a decode, but the `Rgba8` path's own
+//     `std::vector<unsigned char> premultiplied(...)` copy of the caller-supplied buffer (up to
+//     the SAME 256 MiB `kMaxImageDecodeBytes` cap `load_texture()` enforces on its own input) --
+//     `impl_->textures.push_back()` on the registry-growth path is the other one, shared with
+//     `load_texture()`. `gl_name` is hoisted for the identical leak-avoidance reason.
+// PT: TEX-NOTHROW (W21, 2026-07-30) -- o MESMO conserto "nunca um crash" do load_texture() logo
+//     acima (ver o próprio comentário de topo daquela função pra linhagem completa
+//     DEC-NOTHROW/DEC-MOVE e o racional "um try do tamanho da função, não vários escopados por
+//     chamada" -- o mesmo raciocínio se aplica aqui ao pé da letra, não repetido). A chamada
+//     portadora de alocação que esta função pode genuinamente lançar é diferente, porém: não um
+//     decode, e sim a própria cópia `std::vector<unsigned char> premultiplied(...)` do caminho
+//     `Rgba8` sobre o buffer fornecido pelo chamador (até o MESMO teto de 256 MiB
+//     `kMaxImageDecodeBytes` que `load_texture()` aplica ao próprio input) -- `impl_->
+//     textures.push_back()` no caminho de crescimento do registry é a outra, compartilhada com
+//     `load_texture()`. `gl_name` é hasteado pelo mesmo motivo de evitar-vazamento.
+Texture2d Draw2d::create_texture(const void* pixels, int w, int h, PixelFormat format) noexcept {
   Texture2d out; // ok_ == false by default.
   if (!impl_) return out;
-  if (!impl_->initialized) {
-    impl_->log_warn("create_texture() called before init()/after shutdown() -- ignored.");
-    return out;
-  }
-  if (pixels == nullptr) {
-    impl_->log_warn("create_texture(nullptr) -- ignored.");
-    return out;
-  }
-  if (w <= 0 || h <= 0) {
-    impl_->log_warn("create_texture(): non-positive width/height -- ignored.");
-    return out;
-  }
 
-  std::size_t bytes_per_pixel;
-  switch (format) {
-    case PixelFormat::R8:
-      bytes_per_pixel = 1;
-      break;
-    case PixelFormat::Rgba8:
-      bytes_per_pixel = 4;
-      break;
-    default:
-      impl_->log_warn("create_texture(): unknown PixelFormat -- ignored.");
+  GLuint gl_name = 0; // TEX-NOTHROW: see this function's own top comment for why this is hoisted.
+  try {
+    if (!impl_->initialized) {
+      impl_->log_warn("create_texture() called before init()/after shutdown() -- ignored.");
       return out;
-  }
+    }
+    if (pixels == nullptr) {
+      impl_->log_warn("create_texture(nullptr) -- ignored.");
+      return out;
+    }
+    if (w <= 0 || h <= 0) {
+      impl_->log_warn("create_texture(): non-positive width/height -- ignored.");
+      return out;
+    }
 
-  // D2D-TEXPIXELS: the SAME 256 MiB ceiling load_texture() enforces on its own encoded-file
-  // input (kMaxImageDecodeBytes, image_decode.hpp) -- reused here as the memory bound on a
-  // caller-supplied w*h*bytes_per_pixel buffer, rejected BEFORE ever copying/uploading a
-  // hostile/huge one. std::size_t multiplication -- w/h already proven > 0 above, so no
-  // negative-to-huge-unsigned wraparound risk from the cast alone.
-  const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
-  const std::size_t byte_count = pixel_count * bytes_per_pixel;
-  if (byte_count > kMaxImageDecodeBytes) {
-    impl_->log_warn("create_texture(): " + std::to_string(w) + "x" + std::to_string(h) +
-                    " exceeds the " + std::to_string(kMaxImageDecodeBytes) +
-                    "-byte cap -- refusing to create.");
+    std::size_t bytes_per_pixel;
+    switch (format) {
+      case PixelFormat::R8:
+        bytes_per_pixel = 1;
+        break;
+      case PixelFormat::Rgba8:
+        bytes_per_pixel = 4;
+        break;
+      default:
+        impl_->log_warn("create_texture(): unknown PixelFormat -- ignored.");
+        return out;
+    }
+
+    // D2D-TEXPIXELS: the SAME 256 MiB ceiling load_texture() enforces on its own encoded-file
+    // input (kMaxImageDecodeBytes, image_decode.hpp) -- reused here as the memory bound on a
+    // caller-supplied w*h*bytes_per_pixel buffer, rejected BEFORE ever copying/uploading a
+    // hostile/huge one. std::size_t multiplication -- w/h already proven > 0 above, so no
+    // negative-to-huge-unsigned wraparound risk from the cast alone.
+    const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    const std::size_t byte_count = pixel_count * bytes_per_pixel;
+    if (byte_count > kMaxImageDecodeBytes) {
+      impl_->log_warn("create_texture(): " + std::to_string(w) + "x" + std::to_string(h) +
+                      " exceeds the " + std::to_string(kMaxImageDecodeBytes) +
+                      "-byte cap -- refusing to create.");
+      return out;
+    }
+
+    if (format == PixelFormat::Rgba8) {
+      // D2D-TEXPIXELS, D7/D8: this module's ONE alpha convention -- straight alpha in, premultiply
+      // on ingest, EXACTLY like load_texture() does for a decoded file. Copies into an owned
+      // buffer first (never mutates the caller's own `pixels`) before premultiplying in place.
+      // TEX-NOTHROW: THE allocation-bearing call in this function proven able to throw
+      // std::bad_alloc for a large-enough caller-supplied buffer (see this function's own top
+      // comment).
+      std::vector<unsigned char> premultiplied(static_cast<const unsigned char*>(pixels),
+                                               static_cast<const unsigned char*>(pixels) +
+                                                   byte_count);
+      premultiply_rgba_inplace(premultiplied.data(), pixel_count);
+      gl_name = upload_gl_texture_raw(premultiplied.data(), w, h, format);
+    } else {
+      gl_name = upload_gl_texture_raw(pixels, w, h, format);
+    }
+    if (!gl_name) {
+      impl_->log_warn("create_texture(): GL texture upload failed.");
+      return out;
+    }
+
+    std::size_t idx;
+    if (!impl_->free_slots.empty()) {
+      idx = impl_->free_slots.back();
+      impl_->free_slots.pop_back();
+    } else {
+      idx = impl_->textures.size();
+      impl_->textures.push_back(Impl::TextureSlot{});
+    }
+    Impl::TextureSlot& slot = impl_->textures[idx];
+    slot.gl_name = gl_name;
+    slot.width = w;
+    slot.height = h;
+    slot.alive = true;
+    // D2D-TEXPIXELS: content bbox is NOT computed for a create_texture()-made slot (see this
+    // method's own doc-comment in draw2d.hpp for why) -- texture_content_bbox() on this handle is
+    // a legal, documented found==false, same shape as a fully-transparent load_texture() image.
+    slot.bbox = ContentBbox{};
+    // slot.generation left as-is: 1 for a never-used slot, already bumped by destroy_texture() for
+    // a reused one -- same idiom load_texture() itself relies on just above.
+
+    out.ok_ = true;
+    out.width_ = w;
+    out.height_ = h;
+    out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
+    out.generation_ = slot.generation;
+    out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
     return out;
+  } catch (const std::exception&) {
+    // EN/PT: same TEX-NOTHROW discipline as load_texture()'s own catch above -- release the GL
+    // texture if one was already created, degrade to a clean ok()==false Texture2d.
+    release_gl_texture_on_exception(gl_name);
+    return Texture2d{};
+  } catch (...) {
+    release_gl_texture_on_exception(gl_name);
+    return Texture2d{};
   }
-
-  GLuint gl_name = 0;
-  if (format == PixelFormat::Rgba8) {
-    // D2D-TEXPIXELS, D7/D8: this module's ONE alpha convention -- straight alpha in, premultiply
-    // on ingest, EXACTLY like load_texture() does for a decoded file. Copies into an owned
-    // buffer first (never mutates the caller's own `pixels`) before premultiplying in place.
-    std::vector<unsigned char> premultiplied(static_cast<const unsigned char*>(pixels),
-                                             static_cast<const unsigned char*>(pixels) +
-                                                 byte_count);
-    premultiply_rgba_inplace(premultiplied.data(), pixel_count);
-    gl_name = upload_gl_texture_raw(premultiplied.data(), w, h, format);
-  } else {
-    gl_name = upload_gl_texture_raw(pixels, w, h, format);
-  }
-  if (!gl_name) {
-    impl_->log_warn("create_texture(): GL texture upload failed.");
-    return out;
-  }
-
-  std::size_t idx;
-  if (!impl_->free_slots.empty()) {
-    idx = impl_->free_slots.back();
-    impl_->free_slots.pop_back();
-  } else {
-    idx = impl_->textures.size();
-    impl_->textures.push_back(Impl::TextureSlot{});
-  }
-  Impl::TextureSlot& slot = impl_->textures[idx];
-  slot.gl_name = gl_name;
-  slot.width = w;
-  slot.height = h;
-  slot.alive = true;
-  // D2D-TEXPIXELS: content bbox is NOT computed for a create_texture()-made slot (see this
-  // method's own doc-comment in draw2d.hpp for why) -- texture_content_bbox() on this handle is
-  // a legal, documented found==false, same shape as a fully-transparent load_texture() image.
-  slot.bbox = ContentBbox{};
-  // slot.generation left as-is: 1 for a never-used slot, already bumped by destroy_texture() for
-  // a reused one -- same idiom load_texture() itself relies on just above.
-
-  out.ok_ = true;
-  out.width_ = w;
-  out.height_ = h;
-  out.id_ = static_cast<std::uint32_t>(idx) + 1; // 1-based, 0 stays the invalid sentinel.
-  out.generation_ = slot.generation;
-  out.owner_ = impl_.get(); // D7: rejects a handle from a DIFFERENT Draw2d instance by construction.
-  return out;
 }
 
 } // namespace glintfx

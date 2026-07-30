@@ -2794,6 +2794,32 @@ if(GLINTFX_MODULE_DRAW2D)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+  # EN: draw2d_texture_nothrow_sanity (TEX-NOTHROW, W21, 2026-07-30) -- size-matched operator-new
+  #     fault-injection oracle proving Draw2d::load_texture()/Draw2d::create_texture() are noexcept
+  #     under a REAL, forced allocation failure, not a hypothetical one -- NOT fork()+RLIMIT_AS
+  #     (image_decode_hardening_sanity.cpp's own technique for the GL-free sibling decode pair):
+  #     see this test's own top comment for the measured, empirical reason RLIMIT_AS was tried
+  #     first and discarded for a GL-context'd process (Mesa/llvmpipe's own huge VmSize swallows or
+  #     mis-times the squeeze). Still forks (one child per group) for crash isolation/clean
+  #     reporting, standing up its OWN WindowGlfw+Draw2d per forked child (the PARENT never touches
+  #     GL/GLFW/X11).
+  # PT: draw2d_texture_nothrow_sanity (TEX-NOTHROW, W21, 2026-07-30) -- oráculo de injeção de falha
+  #     em operator-new, casado por tamanho, provando que Draw2d::load_texture()/
+  #     Draw2d::create_texture() são noexcept sob uma falha de alocação REAL, forçada, não
+  #     hipotética -- NÃO fork()+RLIMIT_AS (a própria técnica de image_decode_hardening_sanity.cpp
+  #     pro par de decode irmão livre de GL): ver o próprio comentário de topo deste teste pro
+  #     motivo medido, empírico, de o RLIMIT_AS ter sido tentado primeiro e descartado pra um
+  #     processo com contexto GL (o próprio VmSize enorme do Mesa/llvmpipe engole ou desacerta o
+  #     aperto). Ainda forka (um filho por grupo) por isolamento-de-crash/relato limpo, montando o
+  #     PRÓPRIO WindowGlfw+Draw2d por filho forkado (o PAI nunca toca GL/GLFW/X11).
+  add_executable(draw2d_texture_nothrow_sanity draw2d_texture_nothrow_sanity.cpp)
+  target_link_libraries(draw2d_texture_nothrow_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_texture_nothrow_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_texture_nothrow_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
   # EN: draw2d_pixels_flush_render_sanity (D2D-TEXPIXELS / D2D-FLUSH, onda W19) -- pixel-readback
   #     proof for Draw2d::create_texture()/Draw2d::flush(): create_texture(Rgba8) renders
   #     identically to the same colour loaded via load_texture() and premultiplies straight alpha
@@ -3745,18 +3771,4 @@ get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
              PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _glintfx_test_targets)
   target_compile_options(${_t} PRIVATE -Wall -Wextra)
-endforeach()
-
-# TEMPORARY #2 -- reviewer probe for FRAMEGRAB-EMBED (cffd70e) adversarial review follow-up.
-# Isolates ONE width per process (so a crash in one case doesn't erase which width was in
-# flight for the others). Removed before this review session ends; not part of the fatia.
-add_executable(reviewer_probe_align2 reviewer_probe_align2.cpp)
-target_link_libraries(reviewer_probe_align2 PRIVATE ${_embed_dep} glloader)
-foreach(_i RANGE 0 6)
-  add_test(NAME reviewer_probe_align2_${_i}
-    COMMAND ${CMAKE_COMMAND}
-      -DEXE=$<TARGET_FILE:reviewer_probe_align2>
-      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-  set_tests_properties(reviewer_probe_align2_${_i} PROPERTIES ENVIRONMENT "PROBE_WIDTH_INDEX=${_i}")
 endforeach()

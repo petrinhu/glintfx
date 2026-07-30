@@ -52,11 +52,23 @@
 //
 //     Também exercita: duas chamadas sempre diferem por um delta pequeno, plausível e
 //     não-negativo (prova que a função está de fato avançando, não congelada nem retornando uma
-//     constante), e que a unidade de nanossegundo é real (uma espera ocupada curta produz um
-//     delta mensuravelmente maior que um par consecutivo sem trabalho nenhum entre eles).
+//     constante), e que a unidade de nanossegundo é REAL -- não uma unidade mais grosseira
+//     silenciosamente coagida (ex.: milissegundo). A ASSERÇÃO ORIGINAL desta última checagem
+//     (comparar o delta de uma espera ocupada contra o delta de um par consecutivo sem
+//     trabalho) foi provada FALSA sob mutação pelo review adversarial da W20
+//     (`TST-CLOCK-UNIT`, TODO.md): trocar `nanoseconds` por `milliseconds` em `clock.cpp` (só a
+//     unidade, lógica intacta) deixou a suíte VERDE -- a espera ocupada de 20 milhões de
+//     iterações às vezes já dura mais de 1ms de tempo real, então mesmo em unidade de
+//     milissegundo o delta da espera ocupada podia ficar > 0 (o delta consecutivo, sem
+//     trabalho), sem provar nada sobre GRANULARIDADE. A substituta abaixo (ver o comentário do
+//     bloco correspondente) compara o delta relatado por `monotonic_now_ns()` contra um delta
+//     de referência lido diretamente de `std::chrono::steady_clock` NO MESMO INTERVALO -- uma
+//     checagem de RAZÃO, autocalibrada, e por isso estável sob carga da máquina (não depende de
+//     nenhuma duração absoluta).
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/clock.hpp>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdint>
 #include <vector>
@@ -132,21 +144,70 @@ int main() {
   }
 
   // ---------------------------------------------------------------------------
-  // EN: Two calls always differ by a plausible, non-negative delta, and the delta scales with
-  //     real elapsed work -- proves the nanosecond unit is genuine (not e.g. silently returning
-  //     milliseconds or a constant): a short busy-wait must produce a measurably larger delta
-  //     than a back-to-back pair with no work between them.
-  // PT: Duas chamadas sempre diferem por um delta plausível e não-negativo, e o delta escala com
-  //     trabalho real decorrido -- prova que a unidade de nanossegundo é genuína (não, por
-  //     exemplo, silenciosamente retornando milissegundos ou uma constante): uma espera ocupada
-  //     curta precisa produzir um delta mensuravelmente maior que um par consecutivo sem
-  //     trabalho nenhum entre eles.
+  // EN: The nanosecond unit is REAL -- not silently coarsened to e.g. milliseconds. Proved by
+  //     a RATIO check, not an absolute-duration threshold, so it stays stable under machine
+  //     load: bracket a short, real chunk of work with BOTH glintfx::monotonic_now_ns() (the
+  //     function under test) and an INDEPENDENT std::chrono::steady_clock reading taken in
+  //     this test itself (the ground truth for "how much real time actually passed" over the
+  //     SAME interval). If the unit is genuinely nanoseconds, the two deltas describe the same
+  //     physical interval in the same unit and stay close (same order of magnitude, regardless
+  //     of how long the interval happens to be -- fast machine, slow machine, quiet machine,
+  //     loaded machine: the RATIO is what matters, never the absolute duration). If the unit
+  //     were silently coarsened to milliseconds, the reported delta would undercount the SAME
+  //     real interval by a factor of ~1,000,000 (1 raw "millisecond" unit per 1,000,000 real
+  //     nanoseconds) -- a gap the generous kUnitDiscriminationFactor below (1000x, three
+  //     orders of magnitude short of the real ~1e6 gap a millisecond mutation produces) still
+  //     catches with room to spare.
+  //
+  //     THIS REPLACES THE PREVIOUS "busy-wait delta > back-to-back delta" ASSERTION, which
+  //     `TST-CLOCK-UNIT` (TODO.md, W20 review) proved FALSE UNDER MUTATION: swapping
+  //     `nanoseconds` for `milliseconds` in clock.cpp left that assertion (and the whole test)
+  //     GREEN, because the 20,000,000-iteration busy-wait below can itself take longer than
+  //     1ms of real time -- so even a millisecond-granularity clock could show a busy-wait
+  //     delta > 0 while the back-to-back delta stayed 0, which the old assertion mistook for
+  //     proof of fine granularity. A ratio against an INDEPENDENT reference clock over the SAME
+  //     bracketed interval has no such blind spot: it fails unconditionally under the
+  //     millisecond mutation, at any interval length, any machine load.
+  // PT: A unidade de nanossegundo é REAL -- não silenciosamente coagida para, por exemplo,
+  //     milissegundo. Provado por uma checagem de RAZÃO, não um limiar de duração absoluta,
+  //     para se manter estável sob carga da máquina: cerca um trecho curto e real de trabalho
+  //     com AMBOS glintfx::monotonic_now_ns() (a função sob teste) E uma leitura INDEPENDENTE
+  //     de std::chrono::steady_clock feita neste próprio teste (a referência de "quanto tempo
+  //     real de fato passou" no MESMO intervalo). Se a unidade é de fato nanossegundo, os dois
+  //     deltas descrevem o mesmo intervalo físico na mesma unidade e ficam próximos (mesma
+  //     ordem de grandeza, independente de quão longo o intervalo seja -- máquina rápida,
+  //     lenta, ociosa, sob carga: o que importa é a RAZÃO, nunca a duração absoluta). Se a
+  //     unidade fosse silenciosamente coagida para milissegundo, o delta relatado subcontaria o
+  //     MESMO intervalo real por um fator de ~1.000.000 (1 unidade "milissegundo" crua por
+  //     1.000.000 de nanossegundos reais) -- uma diferença que o generoso
+  //     kUnitDiscriminationFactor abaixo (1000x, três ordens de grandeza aquém da diferença
+  //     real de ~1e6 que a mutação de milissegundo produz) ainda pega com folga.
+  //
+  //     ISTO SUBSTITUI a asserção anterior "delta da espera ocupada > delta consecutivo", que o
+  //     `TST-CLOCK-UNIT` (TODO.md, review da W20) provou FALSA SOB MUTAÇÃO: trocar
+  //     `nanoseconds` por `milliseconds` em clock.cpp deixava aquela asserção (e a suíte
+  //     inteira) VERDE, porque a espera ocupada de 20.000.000 de iterações abaixo pode, por si
+  //     só, durar mais de 1ms de tempo real -- então mesmo um relógio de granularidade
+  //     milissegundo podia mostrar um delta de espera ocupada > 0 enquanto o delta consecutivo
+  //     ficava 0, o que a asserção antiga confundia com prova de granularidade fina. Uma razão
+  //     contra um relógio de referência INDEPENDENTE sobre o MESMO intervalo cercado não tem
+  //     esse ponto cego: falha incondicionalmente sob a mutação de milissegundo, em qualquer
+  //     duração de intervalo, qualquer carga de máquina.
   // ---------------------------------------------------------------------------
   {
     const std::uint64_t a = glintfx::monotonic_now_ns();
     const std::uint64_t b = glintfx::monotonic_now_ns();
     check(b >= a, "back-to-back pair: b >= a (non-negative delta)");
 
+    // EN: Interleaved reads -- the independent reference clock (`ref_before`/`ref_after`)
+    //     brackets the SAME calls to the function under test (`before_busy`/`after_busy`), not
+    //     a wider or narrower window, so both deltas describe as close to the identical real
+    //     interval as two clock sources can get.
+    // PT: Leituras intercaladas -- o relógio de referência independente (`ref_before`/
+    //     `ref_after`) cerca as MESMAS chamadas à função sob teste (`before_busy`/`after_busy`),
+    //     não uma janela mais larga nem mais estreita, para que os dois deltas descrevam o
+    //     intervalo real mais próximo possível um do outro entre duas fontes de relógio.
+    const auto ref_before = std::chrono::steady_clock::now();
     const std::uint64_t before_busy = glintfx::monotonic_now_ns();
     // EN: A deliberately cheap, dependency-free busy-wait -- no <thread>/sleep needed, just
     //     enough real work that the compiler cannot fold it away (volatile accumulator) to
@@ -159,12 +220,36 @@ int main() {
       sink += i;
     }
     const std::uint64_t after_busy = glintfx::monotonic_now_ns();
+    const auto ref_after = std::chrono::steady_clock::now();
     (void)sink;
 
     check(after_busy >= before_busy, "busy-wait pair: after >= before (still non-decreasing)");
-    check(after_busy - before_busy > (b - a),
-          "busy-wait delta is measurably larger than a back-to-back no-op delta "
-          "(proves the nanosecond unit is real, not a frozen/constant/coarser value)");
+
+    const std::uint64_t reported_delta_ns = after_busy - before_busy;
+    const std::uint64_t reference_delta_ns = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(ref_after - ref_before).count());
+
+    // EN: Generous, RATIO-based discrimination factor -- geometric middle ground between "1"
+    //     (the ratio a correct nanosecond unit produces: both deltas measure the same real
+    //     interval) and "~1,000,000" (the ratio a millisecond mutation produces). 1000x is
+    //     three orders of magnitude of margin on EITHER side: nowhere near tight enough to be
+    //     tripped by ordinary measurement jitter between the two clock reads, but nowhere near
+    //     loose enough to let a millisecond-scale mutation slip through.
+    // PT: Fator de discriminação generoso, baseado em RAZÃO -- meio-termo geométrico entre "1"
+    //     (a razão que uma unidade correta de nanossegundo produz: os dois deltas medem o
+    //     mesmo intervalo real) e "~1.000.000" (a razão que uma mutação de milissegundo
+    //     produz). 1000x é três ordens de grandeza de margem em QUALQUER lado: nem de longe
+    //     apertado o bastante pra ser disparado por ruído comum de medição entre as duas
+    //     leituras de relógio, nem de longe frouxo o bastante pra deixar passar uma mutação de
+    //     escala-milissegundo.
+    constexpr std::uint64_t kUnitDiscriminationFactor = 1000;
+    check(reference_delta_ns == 0 ||
+              reported_delta_ns * kUnitDiscriminationFactor >= reference_delta_ns,
+          "reported delta tracks an INDEPENDENT std::chrono::steady_clock reading of the SAME "
+          "bracketed interval within 1000x -- fails by a ~1e6x margin if the unit were "
+          "silently coarsened from nanoseconds to milliseconds (TST-CLOCK-UNIT fix: a "
+          "ratio-based check that actually distinguishes ns from ms, unlike the "
+          "duration-based check it replaces)");
   }
 
   if (g_failures > 0) {

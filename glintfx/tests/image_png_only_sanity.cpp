@@ -27,13 +27,21 @@
 //     the bug, it proves the fix catches THIS case; a test written from the description risks
 //     exercising a neighbour and passing for the wrong reason" (DEC-PROBE-CORPUS, TODO.md).
 //
-//     Groups 2-5 attack the signature-check gate itself with minimal, deliberately-NOT-real-
-//     image byte sequences (a real encoder is not needed: `decode_png_file()` rejects at the
-//     first-8-bytes check, before any decoder ever runs) -- JPEG magic, BMP magic, plain text,
-//     a too-short buffer, and a buffer whose first 8 bytes ARE the PNG signature but whose body
-//     is garbage (proving the signature check is a FIRST gate, not a substitute for the real
-//     PNG decode that still runs afterwards). Group 6 is the full file-I/O hostile corpus
-//     (null path, nonexistent path, empty path) mirrored from image_sanity.cpp's own Group 4.
+//     Groups 3-5 exercise the signature check with minimal, deliberately-NOT-real-image byte
+//     sequences (a real encoder is not needed: in NORMAL operation `decode_png_file()` rejects
+//     all of these at the first-8-bytes check, before any decoder ever runs) -- JPEG magic, BMP
+//     magic, plain text, a too-short buffer, and a buffer whose first 8 bytes ARE the PNG
+//     signature but whose body is garbage. PRECISION, stated up front because Group 3's own
+//     comment restates it in more depth: 3a/3b/3c are OBSERVABLE-BEHAVIOUR checks, not a
+//     mutation-proof of the gate -- with `has_png_signature()` disarmed, all three stay green,
+//     because the underlying PNG/JPG/TGA decode independently rejects the same malformed stubs
+//     (redundant protection, confirmed by execution). 1b (Group 1 above) is the ONLY assertion
+//     in this file that flips red under that exact mutation, and is therefore the only one that
+//     actually PINS the signature gate's own existence; Group 5's garbage-after-a-valid-
+//     signature case proves a DIFFERENT, still-true fact (the gate is a FIRST check, not a
+//     substitute for the real PNG decode that still runs afterwards) and does not depend on this
+//     distinction. Group 6 is the full file-I/O hostile corpus (null path, nonexistent path,
+//     empty path) mirrored from image_sanity.cpp's own Group 4.
 // PT: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- consumer-driven, com tempero de segurança: teste
 //     unit puro para `glintfx::decode_png_file()` (`glintfx/image.hpp`), a irmã SÓ-PNG do
 //     `decode_image_file()` somada por esta fatia. Sem RmlUi, sem GL, sem janela -- mesma
@@ -65,14 +73,22 @@
 //     um teste escrito da descrição corre o risco de exercitar um vizinho e passar por motivo
 //     errado" (DEC-PROBE-CORPUS, TODO.md).
 //
-//     Os Grupos 2-5 atacam a própria guarda de checagem de assinatura com sequências de bytes
-//     mínimas, deliberadamente NÃO-imagem-real (um encoder de verdade não é necessário: o
-//     `decode_png_file()` rejeita na checagem dos primeiros 8 bytes, antes de qualquer decoder
-//     rodar) -- magic de JPEG, magic de BMP, texto puro, um buffer curto demais, e um buffer
-//     cujos primeiros 8 bytes SÃO a assinatura PNG mas cujo corpo é lixo (provando que a
-//     checagem de assinatura é uma PRIMEIRA guarda, não um substituto do decode PNG de verdade
-//     que ainda roda depois). O Grupo 6 é o corpus hostil completo de I/O de arquivo (path
-//     nulo, path inexistente, path vazio) espelhado do próprio Grupo 4 de image_sanity.cpp.
+//     Os Grupos 3-5 exercitam a checagem de assinatura com sequências de bytes mínimas,
+//     deliberadamente NÃO-imagem-real (um encoder de verdade não é necessário: em operação
+//     NORMAL o `decode_png_file()` rejeita todas elas na checagem dos primeiros 8 bytes, antes
+//     de qualquer decoder rodar) -- magic de JPEG, magic de BMP, texto puro, um buffer curto
+//     demais, e um buffer cujos primeiros 8 bytes SÃO a assinatura PNG mas cujo corpo é lixo.
+//     PRECISÃO, dita de antemão porque o próprio comentário do Grupo 3 reafirma isto com mais
+//     profundidade: 3a/3b/3c são checagens de COMPORTAMENTO OBSERVÁVEL, não uma prova-por-
+//     mutação da guarda -- com o `has_png_signature()` desarmado, as três continuam verdes,
+//     porque o próprio decode PNG/JPG/TGA rejeita independentemente os mesmos stubs malformados
+//     (proteção redundante, confirmada por execução). O 1b (Grupo 1 acima) é a ÚNICA asserção
+//     deste arquivo que vira vermelha sob essa mutação exata, e é portanto a única que de fato
+//     PINA a própria existência da guarda de assinatura; o caso de lixo-após-assinatura-válida
+//     do Grupo 5 prova um fato DIFERENTE, ainda verdadeiro (a guarda é uma PRIMEIRA checagem,
+//     não um substituto do decode PNG de verdade que ainda roda depois) e não depende desta
+//     distinção. O Grupo 6 é o corpus hostil completo de I/O de arquivo (path nulo, path
+//     inexistente, path vazio) espelhado do próprio Grupo 4 de image_sanity.cpp.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "glintfx/image.hpp"
 
@@ -174,12 +190,37 @@ int main() {
   }
 
   // ===========================================================================================
-  // EN: Group 3 -- the signature gate rejects non-PNG magic bytes, WITHOUT needing a real
-  //     encoder for any of them (decode_png_file rejects at the first-8-bytes check, before any
-  //     decoder ever runs -- see this file's own top comment).
-  // PT: Grupo 3 -- a guarda de assinatura rejeita bytes de magic não-PNG, SEM precisar de um
-  //     encoder de verdade pra nenhum deles (decode_png_file rejeita na checagem dos primeiros
-  //     8 bytes, antes de qualquer decoder rodar -- ver o comentário de topo deste arquivo).
+  // EN: Group 3 -- OBSERVABLE-BEHAVIOUR checks, NOT a mutation-proof of the signature gate: for
+  //     none of 3a/3b/3c does removing/disarming has_png_signature() flip the result to
+  //     ok == true. JPEG-magic and BMP-magic bytes here are 16-byte STUBS (magic + zeros), never
+  //     a complete, decodable image -- the underlying PNG/JPG/TGA decode
+  //     (decode_image_memory()) already rejects all three independently of the signature gate
+  //     (no valid JPEG/BMP/TGA structure follows the magic, and plain text matches no format's
+  //     magic at all). Confirmed by mutation (2026-07-30, decode_png_file()'s own DEC-FORMAT-
+  //     SURFACE mutation run): with has_png_signature() disarmed, 1b below is the ONLY assertion
+  //     in this file that flips red -- 3a/3b/3c stay green because rejection happens downstream,
+  //     at decode, not at the gate this Group is nominally about. They are kept here anyway
+  //     because they exercise a REAL, separately-valuable contract this file's own top comment
+  //     already states (rejection is by content, decode_png_file() needs no real encoder to
+  //     prove it, extension is never consulted) -- just not the ONE fact their old wording
+  //     implied. 1b (fake TGA garbage, Group 1 above) is the ONLY assertion in this file that
+  //     pins the signature gate itself; do not read 3a/3b/3c as doing that job too.
+  // PT: Grupo 3 -- checagens de COMPORTAMENTO OBSERVÁVEL, NÃO uma prova-por-mutação da guarda de
+  //     assinatura: em nenhum de 3a/3b/3c remover/desarmar o has_png_signature() vira o
+  //     resultado pra ok == true. Os bytes de magic JPEG/BMP aqui são STUBS de 16 bytes (magic +
+  //     zeros), nunca uma imagem completa, decodificável -- o próprio decode PNG/JPG/TGA
+  //     (decode_image_memory()) já rejeita os três independentemente da guarda de assinatura
+  //     (nenhuma estrutura JPEG/BMP/TGA válida segue o magic, e texto puro não casa magic de
+  //     formato nenhum). Confirmado por mutação (2026-07-30, na própria rodada de mutação
+  //     DEC-FORMAT-SURFACE do decode_png_file()): com has_png_signature() desarmado, o 1b
+  //     abaixo é a ÚNICA asserção deste arquivo que vira vermelha -- 3a/3b/3c continuam verdes
+  //     porque a rejeição acontece rio abaixo, no decode, não na guarda que este Grupo
+  //     nominalmente diz respeitar. Ficam aqui mesmo assim porque exercitam um contrato REAL,
+  //     valioso à parte, que o próprio comentário de topo deste arquivo já declara (rejeição é
+  //     por conteúdo, decode_png_file() não precisa de encoder de verdade pra provar isso,
+  //     extensão nunca é consultada) -- só não o ÚNICO fato que a redação antiga implicava. O 1b
+  //     (lixo de TGA falso, Grupo 1 acima) é a ÚNICA asserção deste arquivo que pina a própria
+  //     guarda de assinatura; não leia 3a/3b/3c como fazendo esse trabalho também.
   // ===========================================================================================
   {
     const unsigned char jpeg_like[16] = {0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -187,7 +228,8 @@ int main() {
           "3a setup: JPEG-magic bytes written");
     check(!decode_png_file("dec_format_surface_jpeg_magic.png").ok,
           "3a: decode_png_file rejects JPEG-magic bytes even with a .png-suffixed path "
-          "(detection is by content, decode_png_file's own signature gate, never by extension)");
+          "(rejection is by content -- both the signature gate AND the underlying decode "
+          "independently reject this malformed stub, never by extension)");
   }
   {
     const unsigned char bmp_like[16] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};

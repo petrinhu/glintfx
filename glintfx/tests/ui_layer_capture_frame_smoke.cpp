@@ -9,8 +9,11 @@
 //     before `private:`): the declared REGION ceiling (letterbox sub-viewport, not the whole
 //     window), the ODD-WIDTH class of bug the review flagged (GL_PACK_ALIGNMENT corrupting
 //     rows past the first when the default 4-byte alignment doesn't match a tightly-packed
-//     3-bytes-per-pixel RGB row), and calling BEFORE load() (capture_frame() needs no
-//     document).
+//     3-bytes-per-pixel RGB row), calling BEFORE load() (capture_frame() needs no document),
+//     and the zero-width DEGENERATE-SIZE guard (Part G, added after the team-lead's own
+//     follow-up on the FRAMEGRAB-EMBED thread, 2026-07-30 -- see that part's own doc-comment
+//     for the full derivation of why `set_viewport()` cannot inject it and `UiLayerConfig`
+//     can).
 //
 //     ORACLE, part A (composite correctness): min_partial.rml (already used by
 //     ui_layer_compose.cpp) puts a solid white #box at window (10,10)..(90,50), transparent
@@ -125,8 +128,11 @@
 //     de REGIÃO declarado (sub-viewport de letterbox, não a janela inteira), a classe de bug
 //     de LARGURA ÍMPAR que o review sinalizou (GL_PACK_ALIGNMENT corrompendo linhas após a
 //     primeira quando o alinhamento default de 4 bytes não bate com uma linha RGB
-//     compactada de 3 bytes-por-pixel), e chamar ANTES de load() (capture_frame() não
-//     precisa de documento).
+//     compactada de 3 bytes-por-pixel), chamar ANTES de load() (capture_frame() não precisa
+//     de documento), e o guard de TAMANHO DEGENERADO de largura zero (Parte G, somada após o
+//     próprio desdobramento do team-lead na thread do FRAMEGRAB-EMBED, 2026-07-30 -- ver o
+//     próprio doc-comment dessa parte pra derivação completa de por que `set_viewport()` não
+//     consegue injetar isto e o `UiLayerConfig` consegue).
 //
 //     ORÁCULO, parte A (correção do composto): min_partial.rml (já usado por
 //     ui_layer_compose.cpp) põe um #box branco sólido na janela (10,10)..(90,50), body
@@ -348,6 +354,70 @@ bool part_c_before_load() {
   return true;
 }
 
+// EN: Part G (zero-width viewport, the DEGENERATE-SIZE guard -- team-lead follow-up,
+//     `w21_framegrab_embed` SIGSEGV thread, 2026-07-30) -- exercises Engine::capture_frame's
+//     own `w<=0||h<=0` defensive guard FOR REAL, closing a gap the App-side reviewer flagged
+//     as untestable under Xvfb (no window manager to minimize a real window to 0x0, so
+//     App::capture_frame's own w<=0||h<=0 branch was never live-fired). `set_viewport()`
+//     itself CANNOT be used to inject this: its own guard (ui_layer.hpp) rejects
+//     `w<=0||h<=0` and keeps the PREVIOUS viewport -- confirmed by reading the guard, not
+//     assumed. The one legitimate, non-UB way in: `UiLayerConfig` is NOT validated by the
+//     constructor before `Engine::attach()` -- `UiLayerConfig{.logical_width = 0, ...}`
+//     reaches `Engine::attach()`/`Bootstrap::init()`/`Rml::CreateContext("main", {0, h})`
+//     unchecked. MEASURED (not assumed) via a throwaway probe run before writing this
+//     assertion: `ui.ok() == true` with `logical_width=0` -- RmlUi accepts a
+//     zero-width context at creation time without crashing, so `capture_frame()`'s own guard
+//     is the ONLY thing standing between this and a `glReadPixels(..., 0, h, ...)` call.
+// PT: Parte G (viewport de largura zero, o guard de TAMANHO DEGENERADO -- desdobramento do
+//     team-lead, thread do SIGSEGV do `w21_framegrab_embed`, 2026-07-30) -- exercita de
+//     verdade o próprio guard defensivo `w<=0||h<=0` de Engine::capture_frame, fechando uma
+//     lacuna que o reviewer do lado App sinalizou como intestável sob Xvfb (sem window
+//     manager pra minimizar uma janela real a 0x0, então o próprio ramo w<=0||h<=0 de
+//     App::capture_frame nunca disparou ao vivo). O próprio `set_viewport()` NÃO PODE ser
+//     usado pra injetar isto: o próprio guard dele (ui_layer.hpp) rejeita `w<=0||h<=0` e
+//     mantém o viewport ANTERIOR -- confirmado lendo o guard, não presumido. O único jeito
+//     legítimo, não-UB, de entrar: `UiLayerConfig` NÃO é validado pelo construtor antes de
+//     `Engine::attach()` -- `UiLayerConfig{.logical_width = 0, ...}` alcança
+//     `Engine::attach()`/`Bootstrap::init()`/`Rml::CreateContext("main", {0, h})` sem
+//     checagem. MEDIDO (não presumido) via uma sonda descartável rodada antes de escrever
+//     esta asserção: `ui.ok() == true` com `logical_width=0` -- o RmlUi aceita um contexto
+//     de largura zero na criação sem crashar, então o próprio guard do `capture_frame()` é a
+//     ÚNICA coisa entre isto e uma chamada `glReadPixels(..., 0, h, ...)`.
+bool part_g_zero_viewport() {
+  glintfx::WindowGlfw host;
+  if (!host.create("capture_zero_viewport_host", 100, 100)) {
+    std::puts("FAIL: part G host create");
+    return false;
+  }
+  glintfx::UiLayer ui({.logical_width = 0, .logical_height = 100, .load_gl = true});
+  if (!ui.ok()) {
+    // EN: If a future RmlUi/engine.attach() version starts rejecting a zero-width context,
+    //     this branch documents that -- capture_frame()'s own guard becomes unreachable this
+    //     way, but the pre-existing !ok() guard already covers the resulting CapturedFrame{}.
+    // PT: Se uma versão futura do RmlUi/engine.attach() passar a rejeitar um contexto de
+    //     largura zero, este ramo documenta isso -- o próprio guard do capture_frame() fica
+    //     inalcançável por este caminho, mas o guard !ok() pré-existente já cobre o
+    //     CapturedFrame{} resultante.
+    std::puts(
+        "ui_layer_capture_frame_smoke: part G (zero viewport) PASS -- attach() itself "
+        "rejected width=0, !ok() guard covers it");
+    return true;
+  }
+  ui.update();
+  ui.render();
+  const glintfx::UiLayer::CapturedFrame frame = ui.capture_frame();
+  if (frame.ok) {
+    std::puts("FAIL: part G capture_frame() ok == true with a 0-width viewport");
+    return false;
+  }
+  if (frame.width != 0 || frame.height != 0 || frame.byte_count != 0 || frame.pixels) {
+    std::puts("FAIL: part G CapturedFrame not fully default on the w<=0||h<=0 guard");
+    return false;
+  }
+  std::puts("ui_layer_capture_frame_smoke: part G (zero viewport) PASS");
+  return true;
+}
+
 // EN: NO "moved-from" / "no current GL context" sub-tests here -- DELIBERATELY, after
 //     measuring both, not by omission. See this file's own header comment ("Edge cases
 //     considered and rejected") for the full rationale and the crash this decision is based
@@ -509,6 +579,7 @@ int main() {
   }
 
   if (!part_c_before_load()) pass = false;
+  if (!part_g_zero_viewport()) pass = false;
   if (!part_e_letterbox_region()) pass = false;
   if (!part_f_odd_width()) pass = false;
 

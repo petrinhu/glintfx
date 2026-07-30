@@ -54,6 +54,45 @@
 
 ### Fixed / Corrigido
 
+- **EN:** **`DOC-GLPROC-CLAIM`** (onda W20, adversarial-review finding on `f0d5d88`'s own commit
+  message): that commit claimed, citing `nm`, that "no symbol enters the embed-only `.a`" after
+  adding `glintfx::gl_proc_address()`/`glx_gl_get_proc_address()` (`DOC-GLCOHAB`). **True only
+  for the PUBLIC C++ symbol** (`glintfx::gl_proc_address`, gated on `GLINTFX_MODULE_APP`,
+  genuinely absent from an embed-only build) -- **false for the private C helper it delegates
+  to.** `glx_gl_get_proc_address` lives in `gl_loader.c`, the sole source of the `glloader`
+  INTERFACE library, which has never had a module gate on any function (not even
+  `glx_gl_load()` itself) and compiles unconditionally into every consuming target; `nm
+  libglintfx.a` on an embed-only (`GLINTFX_BACKEND_GLFW=OFF`) archive shows it as a global `T`
+  symbol, re-confirmed for this fix. **Not a contract violation** --
+  [ADR-0013](docs/adr/0013-gl-symbol-boundary.md) promises absence of *collision* with a host's
+  own symbols, not absence of the symbol itself; the `glx_` prefix is exactly that mitigation,
+  and holds here like it does for every other `glx_*` name in the file. Chose to correct the
+  claim's wording (`gl_loader.h`'s own doc-comment on `glx_gl_get_proc_address`) over adding a
+  stricter `#ifdef` gate than ADR-0013 requires, since `gl_loader.c` deliberately has none --
+  introducing one function-only gate there would be a new, inconsistent precedent for no
+  contractual gain. Adjacent, unchanged by this fix: the Win32 branch of
+  `glx_gl_get_proc_address` still has 0% coverage (no Windows CI) -- a pre-existing project risk,
+  not a regression of this slice.
+- **PT:** **`DOC-GLPROC-CLAIM`** (onda W20, achado de review adversarial na própria mensagem do
+  commit `f0d5d88`): aquele commit afirmou, citando `nm`, que "nenhum símbolo entra no `.a`
+  embed-only" ao adicionar `glintfx::gl_proc_address()`/`glx_gl_get_proc_address()`
+  (`DOC-GLCOHAB`). **Verdadeiro só para o símbolo C++ PÚBLICO** (`glintfx::gl_proc_address`,
+  gateado em `GLINTFX_MODULE_APP`, genuinamente ausente de um build embed-only) -- **falso para
+  o helper C privado pro qual ele delega.** `glx_gl_get_proc_address` mora em `gl_loader.c`, a
+  única fonte da biblioteca INTERFACE `glloader`, que nunca teve gate de módulo em função
+  nenhuma (nem o próprio `glx_gl_load()`) e compila incondicionalmente em todo target
+  consumidor; `nm libglintfx.a` num archive embed-only (`GLINTFX_BACKEND_GLFW=OFF`) mostra ele
+  como símbolo global `T`, reconfirmado para este fix. **Não é violação de contrato** -- a
+  [ADR-0013](docs/adr/0013-gl-symbol-boundary.md) promete ausência de *colisão* com os símbolos
+  do próprio host, não ausência do símbolo em si; o prefixo `glx_` É essa mitigação, e vale aqui
+  como vale pra todo outro nome `glx_*` do arquivo. Optei por corrigir o texto da afirmação (o
+  doc-comment do próprio `glx_gl_get_proc_address` em `gl_loader.h`) em vez de adicionar um
+  `#ifdef` mais estrito do que a ADR-0013 exige, já que `gl_loader.c` deliberadamente não tem
+  nenhum -- introduzir um gate só nesta função seria um precedente novo e inconsistente ali, sem
+  ganho contratual. Adjacente, inalterado por este fix: o ramo Win32 de
+  `glx_gl_get_proc_address` continua com 0% de cobertura (sem CI Windows) -- risco
+  pré-existente do projeto, não regressão desta fatia.
+
 - **EN:** **`TST-ICON-BOUNDARY`** (onda W20 -- adversarial boundary test on `App::set_window_icon`/
   `WindowGlfw::set_window_icon` (`WIN-ICON`, shipped `v0.25.0`): **`App::set_window_icon` at its
   documented 2048px cap CRASHED the client process.** This is a crash fix, not a capability

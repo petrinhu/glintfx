@@ -832,6 +832,46 @@ int glx_gl_load(void);
 //     Só passe um nome que você já sabe que deveria existir pro conjunto corrente de
 //     versão/extensão GL -- a mesma ressalva que se aplica a chamar
 //     glXGetProcAddressARB/SDL_GL_GetProcAddress diretamente.
+//
+// EN: ⚠ BUILD-PRESENCE CORRECTION (`DOC-GLPROC-CLAIM`, 2026-07-29 review finding on
+//     `f0d5d88`, which claimed via `nm` that "no symbol enters the embed-only .a" --
+//     true for the PUBLIC C++ symbol below, false for THIS one). This C function is declared
+//     and DEFINED in EVERY build configuration, including embed-only
+//     (`GLINTFX_BACKEND_GLFW=OFF`): `gl_loader.c` is the sole source of the `glloader`
+//     INTERFACE library, compiled unconditionally into every consuming target
+//     (`glintfx/CMakeLists.txt`, the `glloader` target definition -- no `#ifdef` module gate
+//     exists anywhere in `gl_loader.c`, not even around `glx_gl_load()` itself). `nm
+//     libglintfx.a` on an embed-only archive therefore DOES show `glx_gl_get_proc_address` as
+//     a global `T` (function) symbol -- confirmed empirically. This is NOT a contract
+//     violation: [ADR-0013](../../docs/adr/0013-gl-symbol-boundary.md) promises absence of
+//     COLLISION with a host's own symbols ("must not collide"), not absence of the symbol
+//     itself -- the `glx_` prefix IS that mitigation, and it holds here exactly as it does for
+//     every other `glx_*` name this file exports. What IS App-mode-only and genuinely absent
+//     from an embed-only `.a` is the PUBLIC C++ free function this helper backs,
+//     `glintfx::gl_proc_address()` (`glintfx/include/glintfx/gl_proc.hpp`,
+//     `glintfx/src/gl_proc.cpp`) -- that translation unit is gated on `GLINTFX_MODULE_APP`
+//     (`glintfx/CMakeLists.txt:834-870`) and simply never compiles in an embed-only build. Do
+//     not conflate the two when reasoning about what an embed host links.
+// PT: ⚠ CORREÇÃO DE PRESENÇA-NO-BUILD (`DOC-GLPROC-CLAIM`, achado de review de 2026-07-29 no
+//     `f0d5d88`, que afirmou via `nm` que "nenhum símbolo entra no `.a` embed-only" -- verdade
+//     pro símbolo C++ PÚBLICO abaixo, falso pra ESTE aqui). Esta função C é declarada e
+//     DEFINIDA em TODA configuração de build, inclusive embed-only
+//     (`GLINTFX_BACKEND_GLFW=OFF`): `gl_loader.c` é a única fonte da biblioteca INTERFACE
+//     `glloader`, compilada incondicionalmente em todo target consumidor
+//     (`glintfx/CMakeLists.txt`, a definição do target `glloader` -- não existe `#ifdef` de
+//     gate de módulo em lugar nenhum de `gl_loader.c`, nem mesmo em volta do próprio
+//     `glx_gl_load()`). `nm libglintfx.a` num archive embed-only portanto MOSTRA
+//     `glx_gl_get_proc_address` como símbolo global `T` (função) -- confirmado
+//     empiricamente. Isto NÃO é violação de contrato: a
+//     [ADR-0013](../../docs/adr/0013-gl-symbol-boundary.md) promete ausência de COLISÃO com os
+//     símbolos do próprio host ("must not collide"), não ausência do símbolo em si -- o
+//     prefixo `glx_` É essa mitigação, e vale aqui exatamente como vale pra todo outro nome
+//     `glx_*` que este arquivo exporta. O que É só-modo-App e genuinamente ausente de um `.a`
+//     embed-only é a função livre C++ PÚBLICA que este helper sustenta,
+//     `glintfx::gl_proc_address()` (`glintfx/include/glintfx/gl_proc.hpp`,
+//     `glintfx/src/gl_proc.cpp`) -- aquela unidade de tradução é gateada em
+//     `GLINTFX_MODULE_APP` (`glintfx/CMakeLists.txt:834-870`) e simplesmente nunca compila num
+//     build embed-only. Não confunda as duas ao raciocinar sobre o que um host embed linka.
 void* glx_gl_get_proc_address(const char* name);
 
 #ifdef __cplusplus

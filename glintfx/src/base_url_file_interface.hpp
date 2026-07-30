@@ -3,30 +3,106 @@
 //     relative asset paths, enabling assets to be resolved from an absolute root independent
 //     of the process working directory or the document's own location.
 //     Behaviour when base_url is set:
-//       - Path is RELATIVE (does not start with '/') → open base_url + '/' + path.
-//       - Path is ABSOLUTE (starts with '/') → open path as-is (absolute wins).
+//       - Path is RELATIVE (does not start with '/') → resolve base_url + '/' + path and
+//         REFUSE to open it if the resolved path escapes base_url (ASSET-PATH, below).
+//       - Path is ABSOLUTE (starts with '/') → open path as-is (absolute wins). Unchanged by
+//         ASSET-PATH: this is the documented escape hatch for already-resolved RmlUi-internal
+//         paths, not the traversal surface that was reported (see ASSET-PATH note).
 //     Behaviour when base_url is empty (default): identical to RmlUi's built-in
 //     FileInterfaceDefault — just fopen(path).
-//     The fallback path (raw path) is tried when the base_url-prefixed open fails so that
-//     absolute RmlUi-internal paths (already resolved by RmlUi itself) still work.
+//     The raw-path fallback is tried when the base_url-prefixed open fails to find an existing
+//     file (NOT when it escapes the base — see ASSET-PATH note below) so that absolute
+//     RmlUi-internal paths (already resolved by RmlUi itself) still work.
+//
+//     ⚠ ASSET-PATH (2026-07-30, directory-traversal hardening, reciprocity request from a real
+//     consumer that depends on this class's validation): before this, Open() did PURE STRING
+//     CONCATENATION (`base_url_ + '/' + path`) with no traversal check at all -- a `path` of
+//     `../../etc/passwd` (RELATIVE: does not start with '/', so it took the base-prefixed
+//     branch, not the absolute-wins one) escaped base_url_ freely. Fixed via
+//     `std::filesystem::weakly_canonical()` on both base_url_ and the candidate
+//     (base_url_ / path), then a component-wise PREFIX comparison (candidate must have
+//     base_canon as an ancestor, base_canon's own path.begin()..end() component sequence must
+//     be a strict prefix of candidate's) -- resolve_within_base() below. A path that resolves
+//     outside the base is REFUSED OUTRIGHT (nullptr, matching fopen's own failure convention):
+//     deliberately NOT falling through to the raw-path fallback for an escaping path, because
+//     that fallback opens against the process CWD with the SAME unmodified (hostile) relative
+//     string -- falling through would just move the exact same traversal to a different anchor
+//     and defeat the guard for the one input it exists to stop. The fallback still fires, as
+//     before, for a resolved-WITHIN-base path that simply does not exist there (a normal 404,
+//     not an escape attempt).
+//     DECIDED POLICY ON SYMLINKS (the líder's/CTO's own open question, answered here): resolve,
+//     don't refuse outright -- weakly_canonical() follows symlinks for the portion of the path
+//     that exists on disk (documented std::filesystem behaviour: canonical()-equivalent
+//     resolution for the existing prefix, lexical-only normalisation for the non-existing
+//     tail), so a symlink PLANTED INSIDE base_url_ that points outside it IS caught by the same
+//     prefix comparison -- its canonicalised target, not its lexical path, is what gets
+//     compared. ⚠ RESIDUAL RISK, DECLARED NOT ELIMINATED: this is a check-then-open pattern
+//     (TOCTOU/CWE-367) -- a symlink swapped between the weakly_canonical() call and the
+//     fopen_capped() call a few lines later (or a FUSE mount whose resolution target changes
+//     live) is NOT caught by construction; RmlUi's Rml::FileInterface::Open() contract returns
+//     a stdio FILE*, which offers no fd-relative/O_NOFOLLOW primitive to close that gap without
+//     a much larger interface change out of this fatia's scope. Accepted for the CURRENT threat
+//     model this class documents (AUD-L1-PARSE's own top comment: asset identifiers come from
+//     compile-time constants in every consumer today, not live untrusted input) -- re-evaluate
+//     if that changes.
 // PT: BaseUrlFileInterface — Rml::FileInterface que prefixa um base URL configurável a
 //     caminhos de asset relativos, permitindo que assets sejam resolvidos a partir de uma
 //     raiz absoluta independente do diretório de trabalho do processo ou da localização do
 //     documento.
 //     Comportamento quando base_url está definido:
-//       - Path é RELATIVO (não começa com '/') → abre base_url + '/' + path.
-//       - Path é ABSOLUTO (começa com '/') → abre o path como-está (absoluto prevalece).
+//       - Path é RELATIVO (não começa com '/') → resolve base_url + '/' + path e RECUSA abrir
+//         se o path resolvido escapar de base_url (ASSET-PATH, abaixo).
+//       - Path é ABSOLUTO (começa com '/') → abre o path como-está (absoluto prevalece). Não
+//         alterado pelo ASSET-PATH: é a válvula de escape documentada para paths internos do
+//         RmlUi já resolvidos, não a superfície de travessia que foi reportada (ver nota
+//         ASSET-PATH).
 //     Comportamento quando base_url está vazio (padrão): idêntico ao FileInterfaceDefault
 //     embutido do RmlUi — apenas fopen(path).
-//     O fallback (path bruto) é tentado quando o open prefixado com base_url falhar, para que
-//     paths absolutos internos do RmlUi (já resolvidos por ele) ainda funcionem.
+//     O fallback de path bruto é tentado quando o open prefixado com base_url falha por o
+//     arquivo NÃO EXISTIR (NÃO quando ele escapa da base — ver nota ASSET-PATH abaixo), para
+//     que paths absolutos internos do RmlUi (já resolvidos por ele) ainda funcionem.
+//
+//     ⚠ ASSET-PATH (2026-07-30, hardening de travessia de diretório, pedido de reciprocidade de
+//     um consumidor real que depende da validação desta classe): antes disto, Open() fazia
+//     CONCATENAÇÃO PURA DE STRING (`base_url_ + '/' + path`) sem checagem de travessia nenhuma
+//     -- um `path` de `../../etc/passwd` (RELATIVO: não começa com '/', então entrava no ramo
+//     prefixado com base, não no de absoluto-prevalece) escapava de base_url_ livremente.
+//     Consertado via `std::filesystem::weakly_canonical()` em base_url_ e no candidato
+//     (base_url_ / path), depois uma comparação de PREFIXO componente-a-componente (o candidato
+//     tem de ter base_canon como ancestral, a sequência de componentes de base_canon tem de ser
+//     prefixo estrito da do candidato) -- resolve_within_base() abaixo. Um path que resolve pra
+//     fora da base é RECUSADO DIRETO (nullptr, casando com a própria convenção de falha do
+//     fopen): deliberadamente NÃO cai no fallback de path bruto pra um path que escapa, porque
+//     aquele fallback abre contra o CWD do processo com a MESMA string (hostil) sem modificar
+//     -- cair nele só moveria a mesma travessia exata pra outra âncora e derrotaria a guarda
+//     justamente pro input que ela existe pra barrar. O fallback continua disparando, como
+//     antes, pra um path resolvido DENTRO da base que simplesmente não existe lá (um 404
+//     normal, não uma tentativa de escape).
+//     POLÍTICA DECIDIDA SOBRE SYMLINK (a própria pergunta em aberto do líder/CTO, respondida
+//     aqui): resolver, não recusar de cara -- weakly_canonical() segue symlinks pra porção do
+//     path que existe em disco (comportamento documentado do std::filesystem: resolução
+//     equivalente a canonical() pro prefixo existente, normalização só-lexical pro final
+//     não-existente), então um symlink PLANTADO DENTRO de base_url_ que aponta pra fora DELE É
+//     pego pela mesma comparação de prefixo -- o alvo canonicalizado dele, não o path lexical,
+//     é o que é comparado. ⚠ RISCO RESIDUAL, DECLARADO NÃO ELIMINADO: este é um padrão
+//     checa-depois-abre (TOCTOU/CWE-367) -- um symlink trocado entre a chamada de
+//     weakly_canonical() e a chamada de fopen_capped() algumas linhas depois (ou um mount FUSE
+//     cujo alvo de resolução muda ao vivo) NÃO é pego por construção; o contrato de
+//     Rml::FileInterface::Open() do RmlUi retorna um FILE* de stdio, que não oferece primitiva
+//     fd-relativa/O_NOFOLLOW pra fechar essa brecha sem uma mudança de interface bem maior que
+//     o escopo desta fatia. Aceito pro modelo de ameaça ATUAL que esta classe documenta (o
+//     próprio comentário de topo do AUD-L1-PARSE: identificadores de asset vêm de constante de
+//     compilação em todo consumidor hoje, não de input hostil ao vivo) -- reavaliar se isso
+//     mudar.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 #include <RmlUi/Core/FileInterface.h>
 #include <RmlUi/Core/Log.h>
 #include <RmlUi/Core/Types.h>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <system_error>
 
 namespace glintfx {
 
@@ -133,21 +209,37 @@ public:
   // PT: Retorna o base URL atual (string vazia quando não definido).
   const std::string& base_url() const noexcept { return base_url_; }
 
-  // EN: Open a file. When base_url is non-empty and path is relative, the prefixed path
-  //     is tried first; if it fails, the raw path is tried as fallback. Both attempts go
-  //     through fopen_capped() below (AUD-L1-PARSE) so the size ceiling applies uniformly
-  //     regardless of which of the two open attempts succeeds.
-  // PT: Abre um arquivo. Quando base_url não está vazio e o path é relativo, o path
-  //     prefixado é tentado primeiro; se falhar, tenta o path bruto como fallback. As duas
-  //     tentativas passam por fopen_capped() abaixo (AUD-L1-PARSE) pra que o teto de tamanho
-  //     se aplique uniformemente independente de qual das duas tentativas de abertura vinga.
+  // EN: Open a file. When base_url is non-empty and path is relative, the prefixed path is
+  //     resolved and validated to stay within base_url (ASSET-PATH, see this class's own top
+  //     comment) before being tried; a path that ESCAPES the base is refused outright, no
+  //     fallback. A path that resolves within the base but does not exist there falls through
+  //     to the raw-path fallback below (existing behaviour, unchanged). Every successful open
+  //     attempt goes through fopen_capped() below (AUD-L1-PARSE) so the size ceiling applies
+  //     uniformly regardless of which path was actually opened.
+  // PT: Abre um arquivo. Quando base_url não está vazio e o path é relativo, o path prefixado
+  //     é resolvido e validado pra permanecer dentro de base_url (ASSET-PATH, ver o próprio
+  //     comentário de topo desta classe) antes de ser tentado; um path que ESCAPA da base é
+  //     recusado direto, sem fallback. Um path que resolve dentro da base mas não existe lá
+  //     cai no fallback de path bruto abaixo (comportamento existente, inalterado). Toda
+  //     tentativa de abertura bem-sucedida passa por fopen_capped() abaixo (AUD-L1-PARSE) pra
+  //     que o teto de tamanho se aplique uniformemente independente de qual path foi de fato
+  //     aberto.
   Rml::FileHandle Open(const Rml::String& path) override {
     if (!base_url_.empty() && !is_absolute(path)) {
-      std::string full = base_url_;
-      full += '/';
-      full += path;
-      if (FILE* f = fopen_capped(full.c_str()))
+      std::filesystem::path resolved;
+      if (!resolve_within_base(base_url_, path, resolved)) {
+        Rml::Log::Message(Rml::Log::LT_WARNING,
+                          "BaseUrlFileInterface::Open: '%s' resolves outside base '%s' -- refusing "
+                          "(ASSET-PATH directory-traversal guard).",
+                          path.c_str(), base_url_.c_str());
+        return reinterpret_cast<Rml::FileHandle>(static_cast<FILE*>(nullptr));
+      }
+      if (FILE* f = fopen_capped(resolved.string().c_str()))
         return reinterpret_cast<Rml::FileHandle>(f);
+      // EN: Resolved WITHIN the base but not found there -- fall through to the raw-path
+      //     fallback below (pre-existing behaviour: a plain 404, not an escape attempt).
+      // PT: Resolveu DENTRO da base mas não foi encontrado lá -- cai no fallback de path bruto
+      //     abaixo (comportamento pré-existente: um 404 comum, não uma tentativa de escape).
     }
     // EN: Fallback: raw path (default RmlUi behaviour; also handles absolute paths).
     // PT: Fallback: path bruto (comportamento padrão do RmlUi; lida com paths absolutos).
@@ -179,6 +271,60 @@ private:
   //     Este projeto mira Linux x86-64 somente.
   static bool is_absolute(const Rml::String& path) noexcept {
     return !path.empty() && path[0] == '/';
+  }
+
+  // EN: ASSET-PATH — resolves `base / rel` and proves the result stays within `base` before
+  //     letting Open() try to fopen() it. Returns false (out `resolved` left untouched) when:
+  //     the base itself cannot be resolved (should not happen for a base_url_ the host already
+  //     set successfully, but fail-closed rather than assume); OR the candidate path cannot be
+  //     resolved (weakly_canonical() itself does not throw for a nonexistent tail, so this is
+  //     effectively unreachable in practice, but the error_code overload is used anyway so a
+  //     failure here fails closed instead of throwing an exception across a virtual-call
+  //     boundary an RmlUi-embedding host does not expect); OR — the actual traversal check —
+  //     the candidate's component sequence does not have the base's component sequence as a
+  //     strict prefix. Component-wise comparison (std::filesystem::path::begin()/end(), NOT a
+  //     raw string prefix compare) is deliberate: it will not be fooled by a base of
+  //     "/srv/assets" matching a candidate of "/srv/assets-evil/x" the way a naive
+  //     `candidate.rfind(base, 0) == 0` string check would (that string IS a prefix of this
+  //     one, but "assets-evil" is a SIBLING directory, not a descendant of "assets"). See this
+  //     class's own top comment (ASSET-PATH) for the symlink-resolution and TOCTOU discussion.
+  // PT: ASSET-PATH — resolve `base / rel` e prova que o resultado permanece dentro de `base`
+  //     antes de deixar o Open() tentar dar fopen() nele. Retorna false (o `resolved` de saída
+  //     fica intocado) quando: a própria base não pode ser resolvida (não deveria acontecer pra
+  //     um base_url_ que o host já definiu com sucesso, mas falha fechada em vez de presumir);
+  //     OU o path candidato não pode ser resolvido (weakly_canonical() em si não lança pra um
+  //     final não-existente, então isto é efetivamente inalcançável na prática, mas a
+  //     sobrecarga com error_code é usada mesmo assim pra que uma falha aqui feche em vez de
+  //     lançar uma exceção através de uma fronteira de virtual-call que um host embarcando o
+  //     RmlUi não espera); OU — a checagem de travessia de fato — a sequência de componentes do
+  //     candidato não tem a sequência de componentes da base como prefixo estrito. Comparação
+  //     componente-a-componente (std::filesystem::path::begin()/end(), NÃO uma comparação de
+  //     prefixo de string crua) é deliberada: não se deixa enganar por uma base "/srv/assets"
+  //     casando com um candidato "/srv/assets-evil/x" do jeito que uma checagem ingênua
+  //     `candidate.rfind(base, 0) == 0` faria (essa string É prefixo daquela, mas
+  //     "assets-evil" é diretório IRMÃO, não descendente de "assets"). Ver o próprio comentário
+  //     de topo desta classe (ASSET-PATH) pra discussão de resolução de symlink e TOCTOU.
+  static bool resolve_within_base(const std::string& base, const Rml::String& rel,
+                                  std::filesystem::path& resolved) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    const fs::path base_canon = fs::weakly_canonical(fs::path(base), ec);
+    if (ec) return false;
+
+    const fs::path candidate_canon =
+        fs::weakly_canonical(fs::path(base) / fs::path(rel.c_str()), ec);
+    if (ec) return false;
+
+    auto base_it = base_canon.begin();
+    auto cand_it = candidate_canon.begin();
+    for (; base_it != base_canon.end(); ++base_it, ++cand_it) {
+      if (cand_it == candidate_canon.end() || *cand_it != *base_it)
+        return false;
+    }
+
+    resolved = candidate_canon;
+    return true;
   }
 
   // EN: AUD-L1-PARSE — fopen() + size-cap check, shared by BOTH open attempts in Open() above

@@ -2302,6 +2302,61 @@ add_test(NAME base_url_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: asset_path_traversal_sanity (ASSET-PATH, 2026-07-30) -- PURE unit-level contract test for
+#     BaseUrlFileInterface::Open()'s directory-traversal guard (src/base_url_file_interface.hpp,
+#     resolve_within_base()). Constructs the interface directly -- no glintfx::App/UiLayer, no
+#     GL context, so it links RmlUi::Core ONLY (no ${_embed_dep}, no glloader): see the test
+#     file's own header comment for why that is sufficient (FileInterface's vtable/out-of-line
+#     destructor is the only symbol this binary needs from RmlUi).
+#     Sandbox created HERE at configure time (deterministic, no runtime mkdtemp race, stays
+#     inspectable after a failed run -- same convention as base_url_assets/ above):
+#       asset_path_sandbox/base/safe.txt, .../base/sub/ (empty), .../outside/secret.txt
+#       (sibling of base/, must never be reachable through it), plus a BEST-EFFORT symlink
+#       asset_path_sandbox/base/link_to_outside -> ../outside/secret.txt via
+#       file(CREATE_LINK ... SYMBOLIC) -- the test itself checks whether the link actually
+#       exists before asserting on it (SKIP, not FAIL, if this filesystem/CI runner refuses
+#       symlink creation) so a missing capability never turns into a false failure.
+# PT: asset_path_traversal_sanity (ASSET-PATH, 2026-07-30) -- teste de contrato PURO, a nível de
+#     unidade, para a guarda de travessia de diretório de BaseUrlFileInterface::Open()
+#     (src/base_url_file_interface.hpp, resolve_within_base()). Constrói a interface direto --
+#     sem glintfx::App/UiLayer, sem contexto GL, então linka SÓ RmlUi::Core (sem ${_embed_dep},
+#     sem glloader): ver o próprio comentário de cabeçalho do arquivo de teste pro porquê disso
+#     bastar (a vtable/destrutor fora-de-linha do FileInterface é o único símbolo que este
+#     binário precisa do RmlUi).
+#     Sandbox criado AQUI em tempo de configure (determinístico, sem corrida de mkdtemp em
+#     runtime, permanece inspecionável após um run que falhou -- mesma convenção do
+#     base_url_assets/ acima):
+#       asset_path_sandbox/base/safe.txt, .../base/sub/ (vazio), .../outside/secret.txt
+#       (irmão de base/, nunca deve ser alcançável através dela), mais um symlink
+#       MELHOR-ESFORÇO asset_path_sandbox/base/link_to_outside -> ../outside/secret.txt via
+#       file(CREATE_LINK ... SYMBOLIC) -- o próprio teste confere se o link de fato existe antes
+#       de afirmar sobre ele (SKIP, não FAIL, se este filesystem/runner de CI recusar criação de
+#       symlink) para que uma capacidade ausente nunca vire falha falsa.
+# ---------------------------------------------------------------------------
+add_executable(asset_path_traversal_sanity asset_path_traversal_sanity.cpp)
+target_link_libraries(asset_path_traversal_sanity PRIVATE RmlUi::Core)
+
+set(_asset_path_sandbox ${CMAKE_CURRENT_BINARY_DIR}/asset_path_sandbox)
+file(MAKE_DIRECTORY ${_asset_path_sandbox}/base/sub)
+file(MAKE_DIRECTORY ${_asset_path_sandbox}/outside)
+file(WRITE ${_asset_path_sandbox}/base/safe.txt "safe-inside-base\n")
+file(WRITE ${_asset_path_sandbox}/outside/secret.txt "SECRET-OUTSIDE-BASE\n")
+# EN: Best-effort: CREATE_LINK can fail (e.g. no CAP_SYMLINK-equivalent on some CI runners /
+#     filesystems that do not support symlinks); ignore the result, the test's own runtime
+#     is_symlink() check turns an absent link into a declared SKIP, not a false FAIL.
+# PT: Melhor-esforço: CREATE_LINK pode falhar (ex.: sem equivalente a CAP_SYMLINK em alguns
+#     runners de CI / filesystems sem suporte a symlink); ignora o resultado, o próprio cheque
+#     is_symlink() em runtime do teste transforma um link ausente num SKIP declarado, não numa
+#     falha falsa.
+file(CREATE_LINK ../outside/secret.txt ${_asset_path_sandbox}/base/link_to_outside SYMBOLIC)
+
+add_test(NAME asset_path_traversal_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:asset_path_traversal_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: ua_stylesheet_sanity — verifies the embedded UA-stylesheet (v0.2.4 T1):
 #     'display: block' defaults for structural elements (div, p, h1..h6, ul, ol, li,
 #     section, article, header, footer, nav, main), applied by Bootstrap::load() to

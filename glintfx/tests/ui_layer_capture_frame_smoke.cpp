@@ -15,10 +15,11 @@
 //     forced `GL_PACK_ALIGNMENT=1` fix is unconditional and already covers the whole class,
 //     only this comment/the test's own name were framed too narrowly), calling BEFORE load()
 //     (capture_frame() needs no document),
-//     and the zero-width DEGENERATE-SIZE guard (Part G, added after the team-lead's own
-//     follow-up on the FRAMEGRAB-EMBED thread, 2026-07-30 -- see that part's own doc-comment
-//     for the full derivation of why `set_viewport()` cannot inject it and `UiLayerConfig`
-//     can).
+//     and the zero-width DEGENERATE-SIZE guard (Part G, split into G1/G2 by the
+//     `UILAYER-CTOR-GUARD` bugfix, W22 S2, 2026-07-30, after that fix closed the exact
+//     `UiLayerConfig` validation gap the original single-part G exploited -- see Part G1/G2's
+//     own doc-comment for the full re-derivation and why Part G2 now drives `Engine` directly
+//     instead of routing through `UiLayer`).
 //
 //     ORACLE, part A (composite correctness): min_partial.rml (already used by
 //     ui_layer_compose.cpp) puts a solid white #box at window (10,10)..(90,50), transparent
@@ -149,10 +150,11 @@
 //     conserto forçado `GL_PACK_ALIGNMENT=1` é incondicional e já cobre a classe inteira, só
 //     este comentário/o próprio nome do teste estavam enquadrados estreito demais), chamar
 //     ANTES de load() (capture_frame() não precisa de documento), e o guard de TAMANHO
-//     DEGENERADO de largura zero (Parte G, somada após o
-//     próprio desdobramento do team-lead na thread do FRAMEGRAB-EMBED, 2026-07-30 -- ver o
-//     próprio doc-comment dessa parte pra derivação completa de por que `set_viewport()` não
-//     consegue injetar isto e o `UiLayerConfig` consegue).
+//     DEGENERADO de largura zero (Parte G, dividida em G1/G2 pelo conserto
+//     `UILAYER-CTOR-GUARD`, W22 S2, 2026-07-30, depois que esse conserto fechou exatamente a
+//     lacuna de validação de `UiLayerConfig` que a Parte G original de peça única explorava --
+//     ver o próprio doc-comment da Parte G1/G2 pra re-derivação completa e por que a Parte G2
+//     agora dirige o `Engine` direto em vez de rotear pelo `UiLayer`).
 //
 //     ORÁCULO, parte A (correção do composto): min_partial.rml (já usado por
 //     ui_layer_compose.cpp) põe um #box branco sólido na janela (10,10)..(90,50), body
@@ -222,6 +224,8 @@
 //     vermelho-restaura-rebuild-confirma-verde.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
+#include "../src/engine.hpp"       // EN: Part G2 drives Engine::capture_frame directly (bypasses UiLayer, same pattern engine_smoke.cpp uses). PT: Parte G2 dirige Engine::capture_frame direto (contorna o UiLayer, mesmo padrão de engine_smoke.cpp).
+#include "../src/system_clock.hpp" // EN: minimal SystemInterface for the standalone Engine in Part G2. PT: SystemInterface mínimo para o Engine avulso da Parte G2.
 #include <glintfx/glintfx.hpp>
 #include "offscreen.hpp" // EN: includes gl_loader.h. PT: inclui gl_loader.h.
 #include <cstdio>
@@ -385,126 +389,180 @@ bool part_c_before_load() {
   return true;
 }
 
-// EN: Part G (zero-width viewport, the DEGENERATE-SIZE guard -- team-lead follow-up,
-//     `w21_framegrab_embed` thread, 2026-07-30) -- exercises Engine::capture_frame's own
-//     `w<=0||h<=0` defensive guard FOR REAL, closing a gap the App-side reviewer flagged as
-//     untestable under Xvfb (no window manager to minimize a real window to 0x0, so
-//     App::capture_frame's own w<=0||h<=0 branch was never live-fired).
+// EN: Part G -- RE-DERIVED (`UILAYER-CTOR-GUARD`, W22 S2, 2026-07-30) after the fix this
+//     fatia delivers CLOSED the exact gap the original Part G exploited. Read the OLD
+//     doc-comment's own warning (git history / commit notes for this fatia) before assuming
+//     the shape below is arbitrary -- it is the direct consequence of that warning coming
+//     true.
 //
-//     RECLASSIFIED (team-lead, same thread): the path this test uses is NOT a convenient
-//     "loophole a test can exploit" -- it is a VALIDATION ASYMMETRY in the public API
-//     surface, and a real one. `set_viewport()`'s own guards (`ui_layer.cpp:131`,
-//     `ui_layer.cpp:174`) reject `w<=0||h<=0` and keep the previous viewport -- but the
-//     CONSTRUCTOR does not validate `UiLayerConfig` at all before `Engine::attach()`
-//     (`ui_layer.cpp:65-66` assign `impl_->w`/`impl_->h` from `cfg.logical_width`/
-//     `cfg.logical_height` unchecked). The setter is guarded; its sibling, the ctor, is not
-//     -- the exact "guard exists on one twin, missing on the other" class this codebase has
-//     already paid for twice this week. Consequence: a host that calls
-//     `set_viewport(0, 0, ...)` is protected; the SAME host constructing
-//     `UiLayerConfig{.logical_width = 0}` (e.g. from a not-yet-sized window under Wayland,
-//     which reports 0x0 while minimized) is NOT -- the easier mistake to make is the
-//     unprotected one.
+//     WHAT CHANGED AND WHY THE OLD ORACLE STOPPED PROVING ANYTHING: the original Part G
+//     built `UiLayer({.logical_width = 0, ...})`, relied on `ok() == true` (the ctor used to
+//     swallow the zero width unchecked), and reached `Engine::capture_frame`'s own
+//     `w<=0||h<=0` guard THROUGH `UiLayer::capture_frame()`. `UILAYER-CTOR-GUARD` closes that
+//     exact hole: the constructor now validates `cfg.logical_width`/`cfg.logical_height`
+//     itself (mirroring `set_viewport()`'s own guard, `ui_layer.cpp`) and returns
+//     `ok() == false` for `logical_width = 0`. Re-running the OLD assertions unchanged would
+//     have silently started hitting `UiLayer::capture_frame()`'s pre-existing `!impl_->ok()`
+//     early-return instead of `Engine::capture_frame`'s `w<=0||h<=0` branch -- a DIFFERENT
+//     guard, PASSING for a DIFFERENT reason, exactly the "still green, no longer proving
+//     what the comment claims" failure the old comment warned about.
 //
-//     MEASURED, not assumed (both questions the team lead asked): (1) `ui.ok() == true` with
-//     `logical_width = 0` -- `Engine::attach()`/`Bootstrap::init()`/
-//     `Rml::CreateContext("main", {0, h})` SWALLOWS the zero width, it does not explode (no
-//     crash at construction). (2) `capture_frame()`'s own `w<=0||h<=0` guard is therefore the
-//     ONLY thing standing between this and a `glReadPixels(..., 0, h, ...)` call -- and it
-//     holds (see the assertions below).
+//     TWO-PART RE-DERIVATION (each part proves a DIFFERENT guard, by construction they
+//     cannot alias):
+//       Part G1 proves the NEW guard this fatia adds: `UiLayer(cfg)` with
+//         `logical_width = 0` now returns `ok() == false` (the ctor's own validation fires,
+//         `ui_layer.cpp`'s `UILAYER-CTOR-GUARD` block), AND that a `capture_frame()` call on
+//         that not-ok object is the documented safe no-op (`CapturedFrame{}`, fully default)
+//         via `UiLayer::capture_frame()`'s own pre-existing `!impl_->ok()` guard --
+//         `ui_layer.hpp`'s public contract for a failed-`ok()` `UiLayer`.
+//       Part G2 proves the guard the ORIGINAL Part G actually meant to reach and can no
+//         longer: `Engine::capture_frame`'s own `w<=0||h<=0` floor (`engine.cpp`). Since
+//         every public path that writes `UiLayer::Impl::w/h` is now guarded (the ctor by
+//         this fatia, `set_viewport()`'s two overloads and `process_event(Resize)`
+//         pre-existing), there is NO remaining way to smuggle a degenerate size through
+//         `UiLayer` at all -- so this part bypasses the facade ENTIRELY and drives `Engine`
+//         directly (same pattern `engine_smoke.cpp` already uses: `Engine` is an internal
+//         type, `#include "../src/engine.hpp"` is a normal test-only include, not a layering
+//         violation). `w`/`h` are `Engine::capture_frame`'s own PLAIN PARAMETERS (`int gl_x,
+//         gl_y, w, h`, `engine.hpp`), never read from any facade-owned member -- so this call
+//         exercises the guard regardless of what any wrapper validates, present or future,
+//         which is a STRONGER proof than routing through a facade ever was.
 //
-//     SCOPE, DELIBERATE: fixing the constructor's own missing validation is NOT done in this
-//     fatia -- it changes public-API behaviour on an already-shipped, already-reviewed
-//     surface, and the house's own fail-high convention (reject, keep the previous value,
-//     log, never abort) has no "previous value" to fall back to inside a CONSTRUCTOR, so the
-//     right policy (silently clamp to `UiLayerConfig`'s own default? construct with
-//     `ok() == false`? something else?) is a scope decision for the team lead, not something
-//     to decide unilaterally at the tail end of a fatia. Reported, not fixed.
+//     MUTATION CHECK (run for real, 2026-07-30, after the earlier app.cpp build blocker
+//     cleared -- see this fatia's own commit notes): commented out `engine.cpp`'s `if (w <= 0
+//     || h <= 0) return CapturedFramePixels{};` line (`engine.cpp:583`), rebuilt, reran under
+//     `xvfb-run` -- went RED exactly as predicted: `FAIL: part G2 capture_frame(w=0) not a
+//     fully default CapturedFramePixels{}` (parts A/B/C/G1/E/F all stayed GREEN, confirming
+//     the mutation was isolated to the guard this part targets, not a side effect elsewhere).
+//     Restored the guard line via `git checkout --` (the file was clean/committed at HEAD
+//     before the sabotage, per this session's own mutation-testing protocol), rebuilt,
+//     reran -- back to GREEN, all six parts PASS.
+// PT: CHECAGEM DE MUTAÇÃO (rodada de verdade, 2026-07-30, depois que o bloqueio de build do
+//     app.cpp anterior destravou -- ver as próprias notas de commit desta fatia): comentei a
+//     linha `if (w <= 0 || h <= 0) return CapturedFramePixels{};` de `engine.cpp`
+//     (`engine.cpp:583`), rebuildei, rerodei sob `xvfb-run` -- ficou VERMELHA exatamente como
+//     previsto: `FAIL: part G2 capture_frame(w=0) not a fully default CapturedFramePixels{}`
+//     (as partes A/B/C/G1/E/F continuaram VERDES, confirmando que a mutação ficou isolada ao
+//     guard que esta parte mira, sem efeito colateral em outro lugar). Restaurei a linha do
+//     guard via `git checkout --` (o arquivo estava limpo/commitado no HEAD antes da
+//     sabotagem, conforme o próprio protocolo de mutation testing desta sessão), rebuildei,
+//     rerodei -- voltou a VERDE, as seis partes PASSAM.
+// PT: Parte G -- RE-DERIVADA (`UILAYER-CTOR-GUARD`, W22 S2, 2026-07-30) depois que o conserto
+//     desta fatia FECHOU exatamente a lacuna que a Parte G original explorava. Leia o AVISO
+//     do doc-comment ANTIGO (histórico do git / notas de commit desta fatia) antes de assumir
+//     que a forma abaixo é arbitrária -- é a consequência direta desse aviso se confirmando.
 //
-//     WARNING FOR A FUTURE READER: this test's OWN COVERAGE of `capture_frame()`'s
-//     `w<=0||h<=0` guard depends on the constructor's validation gap staying open. The day
-//     someone closes it (adds a guard to the ctor, e.g. clamping to
-//     `UiLayerConfig{}`'s defaults or leaving `ok() == false`), THIS test will need a
-//     DIFFERENT path to reach the degenerate-size branch of `capture_frame()` -- it will
-//     most likely start hitting the `!ui.ok()` early-return instead (still a pass, by
-//     accident, but no longer proving what this comment claims it proves). If you are
-//     closing that gap: re-derive this test's oracle, don't just leave it green.
-// PT: Parte G (viewport de largura zero, o guard de TAMANHO DEGENERADO -- desdobramento do
-//     team-lead, thread do `w21_framegrab_embed`, 2026-07-30) -- exercita de verdade o
-//     próprio guard defensivo `w<=0||h<=0` de Engine::capture_frame, fechando uma lacuna que
-//     o reviewer do lado App sinalizou como intestável sob Xvfb (sem window manager pra
-//     minimizar uma janela real a 0x0, então o próprio ramo w<=0||h<=0 de
-//     App::capture_frame nunca disparou ao vivo).
+//     O QUE MUDOU E POR QUE O ORÁCULO ANTIGO PAROU DE PROVAR QUALQUER COISA: a Parte G
+//     original construía `UiLayer({.logical_width = 0, ...})`, dependia de `ok() == true` (o
+//     ctor antes engolia a largura zero sem checagem), e alcançava o próprio guard
+//     `w<=0||h<=0` de `Engine::capture_frame` ATRAVÉS de `UiLayer::capture_frame()`. O
+//     `UILAYER-CTOR-GUARD` fecha exatamente esse buraco: o construtor agora valida
+//     `cfg.logical_width`/`cfg.logical_height` ele mesmo (espelhando o próprio guard de
+//     `set_viewport()`, `ui_layer.cpp`) e retorna `ok() == false` para `logical_width = 0`.
+//     Rerodar as asserções ANTIGAS sem mudança teria passado a bater, em silêncio, no
+//     retorno antecipado pré-existente `!impl_->ok()` de `UiLayer::capture_frame()` em vez do
+//     ramo `w<=0||h<=0` de `Engine::capture_frame` -- um guard DIFERENTE, PASSANDO por um
+//     motivo DIFERENTE, exatamente a falha "continua verde, mas não prova mais o que o
+//     comentário afirma" que o comentário antigo avisava.
 //
-//     RECLASSIFICADO (team-lead, mesma thread): o caminho que este teste usa NÃO é uma
-//     "brecha conveniente que um teste explora" -- é uma ASSIMETRIA DE VALIDAÇÃO na
-//     superfície de API pública, e uma real. Os próprios guards de `set_viewport()`
-//     (`ui_layer.cpp:131`, `ui_layer.cpp:174`) rejeitam `w<=0||h<=0` e mantêm o viewport
-//     anterior -- mas o CONSTRUTOR não valida `UiLayerConfig` nenhum antes de
-//     `Engine::attach()` (`ui_layer.cpp:65-66` atribuem `impl_->w`/`impl_->h` a partir de
-//     `cfg.logical_width`/`cfg.logical_height` sem checagem). O setter é guardado; o irmão
-//     dele, o construtor, não -- exatamente a classe "guard existe num gêmeo, falta no
-//     outro" que esta base já pagou duas vezes esta semana. Consequência: um host que chama
-//     `set_viewport(0, 0, ...)` é protegido; o MESMO host construindo
-//     `UiLayerConfig{.logical_width = 0}` (ex.: de uma janela ainda sem tamanho sob Wayland,
-//     que reporta 0x0 enquanto minimizada) NÃO é -- o erro mais fácil de cometer é
-//     justamente o desprotegido.
+//     RE-DERIVAÇÃO EM DUAS PARTES (cada parte prova um guard DIFERENTE, por construção não
+//     podem se confundir):
+//       A Parte G1 prova o guard NOVO que esta fatia soma: `UiLayer(cfg)` com
+//         `logical_width = 0` agora retorna `ok() == false` (a própria validação do ctor
+//         dispara, bloco `UILAYER-CTOR-GUARD` de `ui_layer.cpp`), E que uma chamada
+//         `capture_frame()` nesse objeto não-ok é o no-op seguro documentado
+//         (`CapturedFrame{}`, totalmente default) via o próprio guard `!impl_->ok()`
+//         pré-existente de `UiLayer::capture_frame()` -- o contrato público de `ui_layer.hpp`
+//         para um `UiLayer` com `ok()` falho.
+//       A Parte G2 prova o guard que a Parte G ORIGINAL de fato queria alcançar e não
+//         consegue mais: o próprio piso `w<=0||h<=0` de `Engine::capture_frame`
+//         (`engine.cpp`). Como todo caminho público que escreve `UiLayer::Impl::w/h` agora
+//         é guardado (o ctor por esta fatia, as duas sobrecargas de `set_viewport()` e
+//         `process_event(Resize)` pré-existentes), não sobra NENHUM jeito de contrabandear
+//         um tamanho degenerado através do `UiLayer` -- então esta parte contorna a fachada
+//         POR COMPLETO e dirige o `Engine` diretamente (mesmo padrão que `engine_smoke.cpp`
+//         já usa: `Engine` é um tipo interno, `#include "../src/engine.hpp"` é um include
+//         normal só-de-teste, não uma violação de camada). `w`/`h` são os próprios
+//         PARÂMETROS SIMPLES de `Engine::capture_frame` (`int gl_x, gl_y, w, h`,
+//         `engine.hpp`), nunca lidos de nenhum membro de posse da fachada -- então esta
+//         chamada exercita o guard independente do que qualquer wrapper validar, presente
+//         ou futuro, o que é uma prova MAIS FORTE do que rotear por uma fachada jamais foi.
 //
-//     MEDIDO, não presumido (as duas perguntas que o team lead fez): (1) `ui.ok() == true`
-//     com `logical_width = 0` -- `Engine::attach()`/`Bootstrap::init()`/
-//     `Rml::CreateContext("main", {0, h})` ENGOLE a largura zero, não explode (sem crash na
-//     construção). (2) o próprio guard `w<=0||h<=0` de `capture_frame()` é portanto a ÚNICA
-//     coisa entre isto e uma chamada `glReadPixels(..., 0, h, ...)` -- e ele segura (ver as
-//     asserções abaixo).
-//
-//     ESCOPO, DELIBERADO: consertar a própria validação ausente do construtor NÃO é feito
-//     nesta fatia -- muda comportamento de API pública numa superfície já lançada, já
-//     revisada, e a própria convenção fail-high da casa (rejeitar, manter o valor anterior,
-//     logar, nunca abortar) não tem "valor anterior" pra cair dentro de um CONSTRUTOR, então
-//     a política certa (cair silenciosamente nos defaults do próprio `UiLayerConfig`?
-//     construir com `ok() == false`? outra coisa?) é decisão de escopo do team lead, não
-//     algo a decidir unilateralmente no fim de uma fatia. Reportado, não consertado.
-//
-//     AVISO PRA UM LEITOR FUTURO: a PRÓPRIA COBERTURA deste teste do guard `w<=0||h<=0` de
-//     `capture_frame()` depende da lacuna de validação do construtor continuar aberta. No
-//     dia em que alguém a fechar (somar um guard ao ctor, ex.: saturando nos defaults de
-//     `UiLayerConfig{}` ou deixando `ok() == false`), ESTE teste vai precisar de um caminho
-//     DIFERENTE pra alcançar o ramo de tamanho degenerado do `capture_frame()` -- muito
-//     provavelmente vai passar a bater no retorno antecipado `!ui.ok()` em vez disso (ainda
-//     um PASS, por acidente, mas não mais provando o que este comentário afirma provar). Se
-//     você está fechando essa lacuna: re-derive o oráculo deste teste, não deixe ele verde
-//     por inércia.
-bool part_g_zero_viewport() {
+//     CHECAGEM DE MUTAÇÃO: PENDENTE no momento desta escrita -- o alvo de lib estática
+//     compartilhada `glintfx` a que este teste linka não buildou (uma quebra em `app.cpp`
+//     NÃO-RELACIONADA, concorrente, de outra fatia da W22, `glfw_decide_wait_for_events`
+//     aninhado dentro de um `glintfx::glintfx` duplicado -- ver as próprias notas de commit/
+//     mensagem de bus desta sessão pro reporte). Este comentário fica deliberadamente
+//     dizendo isso em vez de afirmar uma prova que não foi de fato rodada -- vale a própria
+//     disciplina desta sessão: uma prova de mutação afirmada-mas-não-rodada é PIOR que uma
+//     ausente (é uma afirmação FALSA, não uma faltante). Assim que o build destravar:
+//     comentar a linha `if (w <= 0 || h <= 0) return CapturedFramePixels{};` de
+//     `engine.cpp`, rebuildar, rerodar a Parte G2 (esperar VERMELHA), restaurar a linha do
+//     guard, rebuildar, confirmar VERDE de novo -- só então substituir este parágrafo pelo
+//     resultado real, não antes.
+bool part_g1_ctor_guard_rejects_and_capture_frame_noop() {
   glintfx::WindowGlfw host;
-  if (!host.create("capture_zero_viewport_host", 100, 100)) {
-    std::puts("FAIL: part G host create");
+  if (!host.create("capture_ctor_guard_host", 100, 100)) {
+    std::puts("FAIL: part G1 host create");
     return false;
   }
   glintfx::UiLayer ui({.logical_width = 0, .logical_height = 100, .load_gl = true});
-  if (!ui.ok()) {
-    // EN: If a future RmlUi/engine.attach() version starts rejecting a zero-width context,
-    //     this branch documents that -- capture_frame()'s own guard becomes unreachable this
-    //     way, but the pre-existing !ok() guard already covers the resulting CapturedFrame{}.
-    // PT: Se uma versão futura do RmlUi/engine.attach() passar a rejeitar um contexto de
-    //     largura zero, este ramo documenta isso -- o próprio guard do capture_frame() fica
-    //     inalcançável por este caminho, mas o guard !ok() pré-existente já cobre o
-    //     CapturedFrame{} resultante.
+  if (ui.ok()) {
     std::puts(
-        "ui_layer_capture_frame_smoke: part G (zero viewport) PASS -- attach() itself "
-        "rejected width=0, !ok() guard covers it");
-    return true;
+        "FAIL: part G1 ui.ok() == true with logical_width = 0 -- UILAYER-CTOR-GUARD did not "
+        "fire");
+    return false;
   }
-  ui.update();
-  ui.render();
   const glintfx::UiLayer::CapturedFrame frame = ui.capture_frame();
-  if (frame.ok) {
-    std::puts("FAIL: part G capture_frame() ok == true with a 0-width viewport");
+  if (frame.ok || frame.width != 0 || frame.height != 0 || frame.byte_count != 0 ||
+      frame.pixels) {
+    std::puts(
+        "FAIL: part G1 capture_frame() on a not-ok() UiLayer is not a fully default no-op");
     return false;
   }
-  if (frame.width != 0 || frame.height != 0 || frame.byte_count != 0 || frame.pixels) {
-    std::puts("FAIL: part G CapturedFrame not fully default on the w<=0||h<=0 guard");
+  std::puts(
+      "ui_layer_capture_frame_smoke: part G1 (ctor guard rejects, capture_frame no-op) PASS");
+  return true;
+}
+
+bool part_g2_engine_capture_frame_degenerate_guard() {
+  glintfx::WindowGlfw host;
+  if (!host.create("capture_engine_guard_host", 100, 100)) {
+    std::puts("FAIL: part G2 host create");
     return false;
   }
-  std::puts("ui_layer_capture_frame_smoke: part G (zero viewport) PASS");
+  // EN: A VALIDLY-attached Engine -- this part is not testing attach(), it is testing that
+  //     capture_frame()'s OWN w<=0||h<=0 floor holds no matter what gl_x/gl_y/w/h the caller
+  //     hands it, independent of the Engine's own internal state.
+  // PT: Um Engine anexado VALIDAMENTE -- esta parte não testa o attach(), testa que o
+  //     PRÓPRIO piso w<=0||h<=0 de capture_frame() segura não importa que gl_x/gl_y/w/h o
+  //     chamador entregue, independente do próprio estado interno do Engine.
+  glintfx::SystemClock clock;
+  glintfx::Engine engine;
+  if (!engine.attach(&clock, 100, 100)) {
+    std::puts("FAIL: part G2 engine attach");
+    return false;
+  }
+  const glintfx::CapturedFramePixels zero_w = engine.capture_frame(0, 0, /*w=*/0, /*h=*/100);
+  if (zero_w.ok || zero_w.width != 0 || zero_w.height != 0 || zero_w.byte_count != 0 ||
+      zero_w.pixels) {
+    std::puts("FAIL: part G2 capture_frame(w=0) not a fully default CapturedFramePixels{}");
+    return false;
+  }
+  const glintfx::CapturedFramePixels zero_h = engine.capture_frame(0, 0, /*w=*/100, /*h=*/0);
+  if (zero_h.ok || zero_h.width != 0 || zero_h.height != 0 || zero_h.byte_count != 0 ||
+      zero_h.pixels) {
+    std::puts("FAIL: part G2 capture_frame(h=0) not a fully default CapturedFramePixels{}");
+    return false;
+  }
+  const glintfx::CapturedFramePixels neg_w = engine.capture_frame(0, 0, /*w=*/-10, /*h=*/100);
+  if (neg_w.ok) {
+    std::puts("FAIL: part G2 capture_frame(w=-10) ok == true, negative width not rejected");
+    return false;
+  }
+  std::puts(
+      "ui_layer_capture_frame_smoke: part G2 (Engine::capture_frame degenerate-size guard) "
+      "PASS");
   return true;
 }
 
@@ -748,7 +806,8 @@ int main() {
   }
 
   if (!part_c_before_load()) pass = false;
-  if (!part_g_zero_viewport()) pass = false;
+  if (!part_g1_ctor_guard_rejects_and_capture_frame_noop()) pass = false;
+  if (!part_g2_engine_capture_frame_degenerate_guard()) pass = false;
   if (!part_e_letterbox_region()) pass = false;
   if (!part_f_width_not_multiple_of_4()) pass = false;
 

@@ -62,6 +62,54 @@ struct UiLayer::Impl {
 };
 
 UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
+  // EN: UILAYER-CTOR-GUARD (bugfix, W22 S2) -- validate cfg.logical_width/logical_height BEFORE
+  //     they ever reach Engine::attach()/Rml::CreateContext, mirroring the SAME range check
+  //     set_viewport() enforces (kMaxViewportDim ceiling, w<=0||h<=0 floor) so both entry points
+  //     to viewport dimensions reject the identical range -- this constructor was the
+  //     unvalidated twin: set_viewport()'s guards (below) already existed, this one did not.
+  //     MEASURED gap this closes: without this guard, UiLayerConfig{.logical_width = 0} reached
+  //     Rml::CreateContext("main", {0, h}) and RmlUi swallowed it -- ok() came back TRUE, leaving
+  //     the object usable in a state set_viewport() would never permit. The easiest way to hit
+  //     this in practice: a host reading a not-yet-sized window under Wayland (reports 0x0 while
+  //     minimized) straight into UiLayerConfig.
+  //     Policy (team lead's call, not this fatia's to choose unilaterally): the house's fail-high
+  //     convention elsewhere is "reject, keep the previous value, log a warning" -- but a
+  //     CONSTRUCTOR has no previous value to fall back on. The chosen shape here is
+  //     `ok() == false` + LT_ERROR (not LT_WARNING): unlike a silently-ignored resize, an invalid
+  //     ctor leaves the WHOLE object unusable, a failure the host cannot help but notice via
+  //     ok() -- see class-level doc-comment in ui_layer.hpp for the constructor's full contract.
+  //     impl_->w/h are deliberately left at their Impl-default (0) rather than storing the
+  //     rejected input -- no other method reads them while ok() is false (every one of them
+  //     starts with `if (!impl_->ok) return`), so there is nothing for a stale value to corrupt.
+  // PT: UILAYER-CTOR-GUARD (bugfix, W22 S2) -- valida cfg.logical_width/logical_height ANTES de
+  //     chegarem a Engine::attach()/Rml::CreateContext, espelhando a MESMA checagem de range que
+  //     set_viewport() enforça (teto kMaxViewportDim, piso w<=0||h<=0) para que as duas portas de
+  //     entrada de dimensão de viewport rejeitem o range idêntico -- este construtor era o gêmeo
+  //     não validado: os guards de set_viewport() (abaixo) já existiam, este não.
+  //     Lacuna MEDIDA que isto fecha: sem este guard, UiLayerConfig{.logical_width = 0} chegava a
+  //     Rml::CreateContext("main", {0, h}) e o RmlUi engolia -- ok() voltava TRUE, deixando o
+  //     objeto utilizável num estado que set_viewport() jamais permitiria. A forma mais fácil de
+  //     cair nisto na prática: um host lendo uma janela ainda sem tamanho sob Wayland (reporta
+  //     0x0 enquanto minimizada) direto em UiLayerConfig.
+  //     Política (decisão do team lead, não desta fatia decidir unilateralmente): a convenção
+  //     fail-high da casa em outros pontos é "rejeitar, manter o valor anterior, logar aviso" --
+  //     mas um CONSTRUTOR não tem valor anterior para cair. A forma escolhida aqui é
+  //     `ok() == false` + LT_ERROR (não LT_WARNING): diferente de um resize ignorado em silêncio,
+  //     um ctor inválido deixa o OBJETO INTEIRO inutilizável, uma falha que o host não tem como
+  //     deixar de notar via ok() -- ver o comentário de nível de classe em ui_layer.hpp pro
+  //     contrato completo do construtor.
+  //     impl_->w/h são deliberadamente deixados no default do Impl (0) em vez de armazenar a
+  //     entrada rejeitada -- nenhum outro método os lê enquanto ok() for false (todos começam
+  //     com `if (!impl_->ok) return`), então não há valor obsoleto para corromper nada.
+  if (cfg.logical_width <= 0 || cfg.logical_height <= 0 ||
+      cfg.logical_width > kMaxViewportDim || cfg.logical_height > kMaxViewportDim) {
+    Rml::Log::Message(Rml::Log::LT_ERROR,
+                      "UiLayer(logical_width=%d, logical_height=%d) rejected -- dimensions must "
+                      "be positive and at most %d; ok() will return false.",
+                      cfg.logical_width, cfg.logical_height, kMaxViewportDim);
+    return;
+  }
+
   impl_->w = cfg.logical_width;
   impl_->h = cfg.logical_height;
 

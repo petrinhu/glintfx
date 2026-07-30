@@ -75,8 +75,23 @@ public:
 
   // EN: Requires a CURRENT GL context owned by the host.
   //     GL function pointers are loaded (idempotent per-process) when cfg.load_gl is true.
+  //     UILAYER-CTOR-GUARD (W22 S2): cfg.logical_width/logical_height are validated BEFORE
+  //     Engine::attach() is ever called -- same range set_viewport() enforces (positive, capped
+  //     at a sane ceiling shared with the letterbox overload). An out-of-range value leaves the
+  //     constructed object with ok() == false (an LT_ERROR is logged) rather than silently
+  //     reaching RmlUi with a degenerate context size -- unlike set_viewport(), a constructor has
+  //     no previous value to fall back on, so "reject and keep going in a half-usable state" is
+  //     not an option here; the whole object is unusable, which ok() surfaces unambiguously.
   // PT: Exige contexto GL CORRENTE do host.
   //     Ponteiros de função GL são carregados (idempotente por processo) quando cfg.load_gl for true.
+  //     UILAYER-CTOR-GUARD (W22 S2): cfg.logical_width/logical_height são validados ANTES de
+  //     Engine::attach() ser sequer chamado -- mesmo range que set_viewport() enforça (positivo,
+  //     limitado a um teto são compartilhado com a sobrecarga de letterbox). Um valor fora do
+  //     range deixa o objeto construído com ok() == false (um LT_ERROR é logado) em vez de
+  //     chegar em silêncio ao RmlUi com um tamanho de contexto degenerado -- diferente de
+  //     set_viewport(), um construtor não tem valor anterior para cair de volta, então
+  //     "rejeitar e seguir num estado meio-utilizável" não é opção aqui; o objeto inteiro fica
+  //     inutilizável, o que ok() expõe sem ambiguidade.
   explicit UiLayer(Config cfg = Config{});
   ~UiLayer();
 

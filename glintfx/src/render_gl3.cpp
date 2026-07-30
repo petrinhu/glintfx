@@ -455,6 +455,75 @@ bool RenderGl3::init() {
     return static_cast<bool>(impl_->renderer);
   }
 
+  // EN: GLPROC-EMBED loader-not-ready guard (2026-07-30, measured by execution -- gdb backtrace
+  //     on `f0cacbb`'s own doc-comment, gl_proc.hpp): before this guard, `Engine::attach()` ->
+  //     `RenderGl3::init()` -> `new Impl` -> `RenderInterface_GL3`'s own constructor (RmlUi)
+  //     compiled its GL3 shaders IMMEDIATELY, calling `glCreateShader` (rewritten by
+  //     gl_loader.h's own `#define glCreateShader glx_glCreateShader` to the `glx_`-prefixed
+  //     pointer `glx_gl_load()` populates) through a still-NULL function pointer whenever
+  //     `glx_gl_load()` had never run anywhere in this process -- the exact `UiLayer{.load_gl =
+  //     false}`-as-first-glintfx-entity scenario `Config::load_gl`'s own doc-comment
+  //     (ui_layer.hpp) warns against. SEGFAULT, not a graceful `ok() == false`.
+  //     SENTINEL CHOICE, PROVED NOT PRESUMED: `glx_glCreateShader` is the EXACT pointer the gdb
+  //     backtrace caught mid-call (frame `#1 Gfx::CreateShader`) -- not a different, merely
+  //     plausible-looking symbol from the ~344-entry table. Verified null in BOTH directions by
+  //     execution, not by reading the header: with `glx_gl_load()` never run in this process, a
+  //     probe printed `gl_proc_address(glCreateShader) = (nil)` AND `glx_glCreateShader` itself
+  //     read null through this exact `if`; after `glx_gl_load()` ran (the normal `App`/
+  //     `UiLayer{.load_gl = true}`/`Draw2d::init()` path), the same probe's `if` never fires and
+  //     every existing test in this suite that renders anything (which all go through this same
+  //     `init()`) still passes -- see this commit's own message for the ctest re-run proving
+  //     both states.
+  //     Placed HERE, at the LOWEST point that can still fail gracefully, on purpose: `Engine::
+  //     attach()` already turns a `false` return from this function into `ok() == false`
+  //     (`if (!impl_->render.init()) return false;`, engine.cpp) WITHOUT touching `impl_->ok`
+  //     (default-initialised `false`) -- so BOTH callers of `Engine::attach()`, `App`'s own
+  //     construction (app.cpp) and `UiLayer`'s own construction (ui_layer.cpp), inherit this
+  //     protection for free, with zero changes needed in either of them. The MESSAGE names the
+  //     fix, not just the problem (same discipline `capture_framebuffer()`'s own loader-not-
+  //     ready guard uses, `frame_capture.hpp`, S8/CAPTURE-FREE, same session) -- a host reading
+  //     this log line does not have to go spelunking through `gl_proc.hpp`'s own REQUIRES note
+  //     to learn what to do next.
+  // PT: Guarda de loader-não-pronto do GLPROC-EMBED (2026-07-30, medido por execução -- backtrace
+  //     de gdb no próprio doc-comment do `f0cacbb`, gl_proc.hpp): antes desta guarda,
+  //     `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` -> o próprio construtor de
+  //     `RenderInterface_GL3` (RmlUi) compilava os shaders GL3 IMEDIATAMENTE, chamando
+  //     `glCreateShader` (reescrito pelo próprio `#define glCreateShader glx_glCreateShader` de
+  //     gl_loader.h pro ponteiro prefixado com `glx_` que o `glx_gl_load()` popula) através de um
+  //     ponteiro de função ainda-NULO sempre que o `glx_gl_load()` nunca tivesse rodado em
+  //     nenhum lugar deste processo -- exatamente o cenário `UiLayer{.load_gl = false}`-como-
+  //     primeira-entidade-glintfx que o próprio doc-comment de `Config::load_gl` (ui_layer.hpp)
+  //     alerta contra. SEGFAULT, não um `ok() == false` gracioso.
+  //     ESCOLHA DE SENTINELA, PROVADA NÃO PRESUMIDA: `glx_glCreateShader` é o ponteiro EXATO que
+  //     o backtrace do gdb pegou no meio da chamada (frame `#1 Gfx::CreateShader`) -- não um
+  //     símbolo diferente, só plausível, da tabela de ~344 entradas. Verificado nulo nas DUAS
+  //     direções por execução, não por leitura do header: com `glx_gl_load()` nunca tendo rodado
+  //     neste processo, uma sonda imprimiu `gl_proc_address(glCreateShader) = (nil)` E o próprio
+  //     `glx_glCreateShader` lia nulo através deste `if` exato; depois do `glx_gl_load()` rodar
+  //     (o caminho normal `App`/`UiLayer{.load_gl = true}`/`Draw2d::init()`), o mesmo `if` da
+  //     sonda nunca dispara e todo teste existente nesta suíte que renderiza algo (todos passam
+  //     por este mesmo `init()`) continua passando -- ver a própria mensagem deste commit pra
+  //     re-rodada de ctest provando os dois estados.
+  //     Colocada AQUI, no ponto MAIS BAIXO que ainda consegue falhar gracioso, de propósito: o
+  //     `Engine::attach()` já converte um retorno `false` desta função em `ok() == false`
+  //     (`if (!impl_->render.init()) return false;`, engine.cpp) SEM tocar `impl_->ok`
+  //     (inicializado por padrão em `false`) -- então OS DOIS chamadores de `Engine::attach()`,
+  //     a própria construção do `App` (app.cpp) e a própria construção do `UiLayer`
+  //     (ui_layer.cpp), herdam esta proteção de graça, com zero mudança em nenhum dos dois. A
+  //     MENSAGEM nomeia o conserto, não só o problema (mesma disciplina que a própria guarda de
+  //     loader-não-pronto de `capture_framebuffer()` usa, `frame_capture.hpp`, S8/CAPTURE-FREE,
+  //     mesma sessão) -- um host que lê esta linha de log não precisa ir espeleologar a própria
+  //     nota REQUIRES de `gl_proc.hpp` pra aprender o que fazer a seguir.
+  if (!glx_glCreateShader) {
+    Rml::Log::Message(Rml::Log::LT_ERROR,
+                      "RenderGl3::init(): the GL function-pointer loader has not been populated in this "
+                      "process (glx_gl_load() has not run) -- refusing to compile shaders through a null "
+                      "function pointer. Fix: construct with UiLayerConfig::load_gl = true (the default), or "
+                      "make sure a glintfx::App, another glintfx::UiLayer, or Draw2d::init() has already run "
+                      "at least once earlier in this same process before using Config::load_gl = false.");
+    return false;
+  }
+
   // EN: With RMLUI_GL3_CUSTOM_LOADER the namespace init is a no-op, but call
   //     it for forward compatibility and to signal intent.
   // PT: Com RMLUI_GL3_CUSTOM_LOADER a init do namespace é no-op, mas chamamos

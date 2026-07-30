@@ -1507,6 +1507,43 @@ add_test(NAME gl_proc_address_embed_sanity
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# ---------------------------------------------------------------------------
+# EN: render_loader_guard_sanity (GLPROC-CRASH, 2026-07-30) -- direct regression test for
+#     RenderGl3::init()'s loader-not-ready guard (src/render_gl3.cpp), a SIGSEGV measured by
+#     execution (gdb) while verifying gl_proc_address()'s own Config::load_gl = false caveat.
+#     Links glintfx AND glfw DIRECTLY (NOT ${_embed_dep}/_glintfx_test_ctx, unlike every sibling
+#     embed test in this file): the WindowGlfw test-context helper's own create()
+#     (src/window_glfw.cpp) calls glx_gl_load() unconditionally, which would populate the very
+#     loader state this test needs to observe as genuinely UNPOPULATED. See the test file's own
+#     header comment for the full 4-check rationale, and why letting the process crash (SIGSEGV,
+#     reported by ctest as a hard failure) IS the intended regression signal for check [2], not
+#     a softer assertion. Registered UNCONDITIONALLY -- runs in BOTH build configs (glfw3 is
+#     find_package()'d at top-level CMakeLists.txt when GLINTFX_BACKEND_GLFW=ON, and by this
+#     file's own _glintfx_test_ctx block above when OFF -- either way, by this point in the
+#     file, the glfw target already exists).
+# PT: render_loader_guard_sanity (GLPROC-CRASH, 2026-07-30) -- teste de regressão direto para a
+#     guarda de loader-não-pronto de RenderGl3::init() (src/render_gl3.cpp), um SIGSEGV medido
+#     por execução (gdb) ao verificar a própria ressalva Config::load_gl = false de
+#     gl_proc_address(). Linka glintfx E glfw DIRETAMENTE (NÃO ${_embed_dep}/_glintfx_test_ctx,
+#     diferente de todo teste embed irmão deste arquivo): o próprio create() do helper de
+#     contexto de teste WindowGlfw (src/window_glfw.cpp) chama glx_gl_load()
+#     incondicionalmente, o que popularia exatamente o estado de loader que este teste precisa
+#     observar como genuinamente NÃO-POPULADO. Ver o próprio comentário de cabeçalho do arquivo
+#     de teste pro racional completo dos 4 cheques, e por que deixar o processo crashar
+#     (SIGSEGV, reportado pelo ctest como falha dura) É o sinal de regressão pretendido pro
+#     cheque [2], não uma asserção mais branda. Registrado INCONDICIONALMENTE -- roda nas DUAS
+#     configs de build (glfw3 é resolvido via find_package() no CMakeLists.txt de nível-topo
+#     quando GLINTFX_BACKEND_GLFW=ON, e pelo próprio bloco _glintfx_test_ctx deste arquivo
+#     quando OFF -- de qualquer forma, neste ponto do arquivo, o alvo glfw já existe).
+# ---------------------------------------------------------------------------
+add_executable(render_loader_guard_sanity render_loader_guard_sanity.cpp)
+target_link_libraries(render_loader_guard_sanity PRIVATE glintfx glfw)
+add_test(NAME render_loader_guard_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:render_loader_guard_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
 #     Links glloader explicitly: offscreen.hpp calls GL functions directly and glloader is
 #     a PRIVATE dep of glintfx (not propagated to callers).

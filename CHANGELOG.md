@@ -100,6 +100,36 @@
 ## [0.25.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.25.0)
 
 ### Added / Adicionado
+- **EN:** **`WIN-ICON`** -- `App::set_window_icon(const void* pixels_rgba8, int w, int h)` sets the
+  standalone window's icon from a caller-owned RGBA8 buffer, closing the gap that made a game lose
+  its window icon when migrating from its own SDL shell to `App` mode. Vocabulary matches
+  `Draw2d::PixelFormat::Rgba8`, but **deliberately WITHOUT premultiply** -- an OS icon is composited
+  by the window manager, not by this library's GL blend, so feeding the same buffer to both APIs
+  yields different results **by design**. ⚠️ The dimension cap shipped as 2048 in this release and
+  was found to be unusable on X11; see the `Fixed` entry in a later release.
+- **EN:** **`DOC-GLCOHAB`** -- `glintfx::gl_proc_address(const char* name)`
+  (`glintfx/gl_proc.hpp`, new public header) resolves ONE GL symbol by name, the `SDL_GL_
+  GetProcAddress` equivalent a host needs to keep drawing raw GL inside `App` mode's frame callback.
+  A thin function by deliberate design decision: the internal loader stays private so the clean-room
+  internalization track (ADR-0009/0013) is not frozen into a public contract. ⚠️ **Measured
+  limitation, documented in three places: an unresolvable name does NOT return nullptr** under
+  Mesa/llvmpipe -- the driver hands back a non-null pointer for a symbol it does not recognize, so
+  null is NOT a usable extension-availability test.
+- **PT:** **`WIN-ICON`** -- `App::set_window_icon(const void* pixels_rgba8, int w, int h)` define o
+  ícone da janela standalone a partir de um buffer RGBA8 do chamador, fechando a lacuna que fazia um
+  jogo perder o ícone ao migrar da própria casca SDL para o modo `App`. O vocabulário casa com
+  `Draw2d::PixelFormat::Rgba8`, mas **deliberadamente SEM premultiply** -- ícone de SO é composto
+  pelo gerenciador de janelas, não pelo blend GL desta biblioteca, então passar o mesmo buffer para
+  as duas APIs dá resultado diferente **por desenho**. ⚠️ O teto de dimensão saiu como 2048 nesta
+  release e mostrou-se inutilizável no X11; ver a entrada `Fixed` de uma release posterior.
+- **PT:** **`DOC-GLCOHAB`** -- `glintfx::gl_proc_address(const char* name)`
+  (`glintfx/gl_proc.hpp`, header público novo) resolve UM símbolo GL por nome, o equivalente ao
+  `SDL_GL_GetProcAddress` de que um host precisa para continuar desenhando GL cru dentro do
+  frame callback do modo `App`. Função fina por decisão deliberada de fronteira: o carregador
+  interno permanece privado para que a trilha de internalização clean-room (ADR-0009/0013) não fique
+  congelada num contrato público. ⚠️ **Limitação MEDIDA, documentada em três lugares: um nome
+  irresolvível NÃO devolve nullptr** sob Mesa/llvmpipe -- o driver devolve ponteiro não-nulo para
+  símbolo que não reconhece, então nulo NÃO serve como teste de disponibilidade de extensão.
 
 - **EN:** **`IMG-DECODE`** (onda W19, consumer-reported by GusWorld -- 6 direct `stbi_load()`
   call sites in a layer of its own that, by its own layering contract, is not supposed to touch

@@ -6,7 +6,7 @@
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)
 [![Platform: Linux x86-64](https://img.shields.io/badge/Platform-Linux%20x86--64-FCC624.svg)](#)
-[![Version: 0.25.0](https://img.shields.io/badge/Version-0.25.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.26.0](https://img.shields.io/badge/Version-0.26.0-blue.svg)](CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](CHANGELOG.md)
 [![API docs](https://img.shields.io/badge/API%20docs-embed--integration-informational.svg)](docs/embed-integration.md)
 [![RmlUi 6.3](https://img.shields.io/badge/RmlUi-6.3-5fd0ff.svg)](https://github.com/mikke89/RmlUi)
@@ -94,7 +94,7 @@ RmlUi 6.3 is fetched at configure time; glintfx's own GL loader (generated from 
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://github.com/petrinhu/glintfx.git
-  GIT_TAG        v0.25.0)
+  GIT_TAG        v0.26.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)
@@ -249,7 +249,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 
 ### Roadmap and vision
 
-> **Current release: v0.25.0**, released 2026-07-29. Full history in [`CHANGELOG.md`](CHANGELOG.md); full per-capability detail (module flag, default, doc, honest limitations) for everything below in [`docs/capabilities.md`](docs/capabilities.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below. The **2D game framework** direction ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)) opened at v0.12.0 (atomized module skeleton + the standalone `App`'s own input); v0.13.0 added the **i18n module** (multi-language: catalogs, plurals, runtime locale switch); v0.14.0 added the **audio module** (`A3-AUDIO`: sound-effect/music playback via vendored miniaudio, deterministic RAII lifecycle) and carved the glintfx-authored fx shaders into their own genuinely OFF-able atom (`FX-CARVE-1`, new `lean-ui` preset); v0.15.0 added the **gamepad module** (`A2-GAMEPAD`, [ADR-0016](docs/adr/0016-gamepad-atom.md): raw evdev, zero new dependency, hotplug, an embedded SDL-compatible mapping database); v0.16.0 added **window modes** (`A4-WINMODES`: `Maximized`/`FullscreenDesktop`/`FullscreenExclusive` on the standalone `App`, `Maximized` respecting the window manager's own panel -- another consumer-driven fix, GusWorld's maximized window used to invade the KDE taskbar); v0.17.0 added **color emoji** (`A4-EMOJI`: COLRv0 vector color glyphs parsed clean-room in the sovereign Layer 0 and baked into the own font engine's RGBA atlas, Twemoji-class fonts); v0.18.0 added **audio loop, fade, and SFX polyphony** (`AUDIO-F2`, consumer-driven GusWorld: gapless loop, fade in/out, `play_oneshot` overlapping copies with a 32-voice cap and voice-stealing, `is_playing`/`voice_count`) plus a **Windows/MSVC portability fix**; v0.19.0 added a **physical input state channel and window lifecycle for `App`** (`HOSTIN-1..5`: `is_key_down`/`is_mouse_button_down`/`get_cursor_pos`, close veto, focus/iconify -- closing GusWorld's exactly-one production blocker for migrating to `App` mode); v0.20.0-v0.23.0 delivered the **Draw2D module** (`GLINTFX_MODULE_DRAW2D`, [ADR-0017](docs/adr/0017-draw2d-module.md)) across four waves -- sprites/batching, camera/per-sprite transforms, untextured primitives/layers/scissor, and UTF-8 text -- closing the arc that lets a consumer retire its own hand-rolled 2D renderer in glintfx's favor; v0.24.0 added **programmatic font-face registration** (`UI-FONTFACE`: `load_font_face` on `UiLayer`/`App`, the first C++ path to `Rml::LoadFontFace`) and **vsync control** (`WM-VSYNC`: `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz`), both consumer-driven by GusWorld.
+> **Current release: v0.26.0**, released 2026-07-29. Full history in [`CHANGELOG.md`](CHANGELOG.md); full per-capability detail (module flag, default, doc, honest limitations) for everything below in [`docs/capabilities.md`](docs/capabilities.md). Battle-tested by a real consumer (GusWorld, an SDL3 game) across the releases below. The **2D game framework** direction ([ADR-0015](docs/adr/0015-framework-2d-atomized-architecture.md)) opened at v0.12.0 (atomized module skeleton + the standalone `App`'s own input); v0.13.0 added the **i18n module** (multi-language: catalogs, plurals, runtime locale switch); v0.14.0 added the **audio module** (`A3-AUDIO`: sound-effect/music playback via vendored miniaudio, deterministic RAII lifecycle) and carved the glintfx-authored fx shaders into their own genuinely OFF-able atom (`FX-CARVE-1`, new `lean-ui` preset); v0.15.0 added the **gamepad module** (`A2-GAMEPAD`, [ADR-0016](docs/adr/0016-gamepad-atom.md): raw evdev, zero new dependency, hotplug, an embedded SDL-compatible mapping database); v0.16.0 added **window modes** (`A4-WINMODES`: `Maximized`/`FullscreenDesktop`/`FullscreenExclusive` on the standalone `App`, `Maximized` respecting the window manager's own panel -- another consumer-driven fix, GusWorld's maximized window used to invade the KDE taskbar); v0.17.0 added **color emoji** (`A4-EMOJI`: COLRv0 vector color glyphs parsed clean-room in the sovereign Layer 0 and baked into the own font engine's RGBA atlas, Twemoji-class fonts); v0.18.0 added **audio loop, fade, and SFX polyphony** (`AUDIO-F2`, consumer-driven GusWorld: gapless loop, fade in/out, `play_oneshot` overlapping copies with a 32-voice cap and voice-stealing, `is_playing`/`voice_count`) plus a **Windows/MSVC portability fix**; v0.19.0 added a **physical input state channel and window lifecycle for `App`** (`HOSTIN-1..5`: `is_key_down`/`is_mouse_button_down`/`get_cursor_pos`, close veto, focus/iconify -- closing GusWorld's exactly-one production blocker for migrating to `App` mode); v0.20.0-v0.23.0 delivered the **Draw2D module** (`GLINTFX_MODULE_DRAW2D`, [ADR-0017](docs/adr/0017-draw2d-module.md)) across four waves -- sprites/batching, camera/per-sprite transforms, untextured primitives/layers/scissor, and UTF-8 text -- closing the arc that lets a consumer retire its own hand-rolled 2D renderer in glintfx's favor; v0.24.0 added **programmatic font-face registration** (`UI-FONTFACE`: `load_font_face` on `UiLayer`/`App`, the first C++ path to `Rml::LoadFontFace`) and **vsync control** (`WM-VSYNC`: `App::set_swap_interval`/`set_vsync`/`get_monitor_refresh_hz`), both consumer-driven by GusWorld.
 
 **Delivered (v0.2.x-v0.24.0):**
 
@@ -373,7 +373,7 @@ RmlUi 6.3 é baixado em tempo de configure; o loader GL próprio do glintfx (ger
 include(FetchContent)
 FetchContent_Declare(glintfx
   GIT_REPOSITORY https://github.com/petrinhu/glintfx.git
-  GIT_TAG        v0.25.0)
+  GIT_TAG        v0.26.0)
 FetchContent_MakeAvailable(glintfx)
 
 add_executable(app main.cpp)

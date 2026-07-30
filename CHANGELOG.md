@@ -10,7 +10,26 @@
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.26.0)
+
 ### Added / Adicionado
+- **EN:** **`KEY-KPENTER`** -- `Key::KpEnter` joins the key vocabulary, closing the one gap in the
+  16-strong `Kp*` family (`Kp0`-`Kp9`, `KpDecimal`, `KpDivide`, `KpMultiply`, `KpSubtract`, `KpAdd`,
+  `KpEqual` were all present). **Append-only: no existing enumerator changed value**, so this is
+  ABI-safe. ⚠️ The physical GLFW backend still folds `GLFW_KEY_KP_ENTER` into `Key::Enter`, a
+  behaviour pinned by a test since v0.4.0 -- reconnecting it would be a silent behaviour change
+  against a decision already made. The new enumerator is therefore available for synthetic events
+  and for a future opt-in; a game that wants the numeric-keypad Enter bound SEPARATELY from the main
+  Enter still cannot express that, and that remains open work.
+- **PT:** **`KEY-KPENTER`** -- `Key::KpEnter` entra no vocabulário de teclas, fechando a única
+  ausência na família `Kp*` de 16 membros (`Kp0`-`Kp9`, `KpDecimal`, `KpDivide`, `KpMultiply`,
+  `KpSubtract`, `KpAdd`, `KpEqual` já estavam lá). **Append-only: nenhum enumerador existente mudou
+  de valor**, então é seguro em ABI. ⚠️ O backend físico do GLFW continua dobrando
+  `GLFW_KEY_KP_ENTER` em `Key::Enter`, comportamento pinado por teste desde a v0.4.0 -- reconectar
+  seria mudança silenciosa de comportamento contra uma decisão já tomada. O enumerador novo fica
+  disponível para eventos sintéticos e para um opt-in futuro; um jogo que queira o Enter do teclado
+  numérico com função SEPARADA do Enter principal ainda não consegue expressar isso, e isso segue
+  em aberto.
 
 - **EN:** **`FW-LOG`** (onda W20, consumer-requested by GusWorld -- 30 `SDL_Log` call sites
   measured in its own production code, 2026-07-29, **zero** of which specify a severity level): a

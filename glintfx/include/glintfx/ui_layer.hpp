@@ -788,7 +788,7 @@ public:
   //     alpha=255, why `std::unique_ptr<unsigned char[]>` not `std::vector`); this comment
   //     covers only what is DIFFERENT for the embed path.
   //
-  //     WHY THIS EXISTS: `App::capture_frame()` shipped `FRAMEGRAB-TEX` (v0.26.0) for
+  //     WHY THIS EXISTS: `App::capture_frame()` shipped `FRAMEGRAB-TEX` in this SAME release for
   //     `glintfx::App` only -- the embed-only build (`GLINTFX_BACKEND_GLFW=OFF`) had ZERO
   //     access to it, and GusWorld (the consumer who asked for the capability) is
   //     embed-only. This is the same "the destravante API never reaches who it should"
@@ -839,7 +839,7 @@ public:
   //     RGBA8 com alpha sintético=255, por que `std::unique_ptr<unsigned char[]>` e não
   //     `std::vector`); este comentário cobre só o que é DIFERENTE pro caminho embed.
   //
-  //     POR QUE ISTO EXISTE: o `App::capture_frame()` lançou o `FRAMEGRAB-TEX` (v0.26.0) só
+  //     POR QUE ISTO EXISTE: o `App::capture_frame()` lançou o `FRAMEGRAB-TEX` nesta MESMA release só
   //     pra `glintfx::App` -- o build embed-only (`GLINTFX_BACKEND_GLFW=OFF`) tinha ZERO
   //     acesso a ele, e o GusWorld (o consumidor que pediu a capacidade) é embed-only. É o
   //     mesmo padrão "a API destravante nunca alcança quem ela deveria destravar" já

@@ -12,8 +12,9 @@
 #include "data_binder.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/Input.h>
-#include <cmath>  // EN: std::isfinite (dp-ratio input hardening / process_event guards). PT: std::isfinite (hardening do dp-ratio / guards do process_event).
-#include <vector> // EN: intermediate RGB scratch buffer (capture_frame, FRAMEGRAB-EMBED). PT: buffer RGB intermediário (capture_frame, FRAMEGRAB-EMBED).
+#include <cmath>     // EN: std::isfinite (dp-ratio input hardening / process_event guards). PT: std::isfinite (hardening do dp-ratio / guards do process_event).
+#include <exception> // EN: std::exception (CAPTURE-NOTHROW, capture_frame's own try/catch). PT: std::exception (CAPTURE-NOTHROW, try/catch do próprio capture_frame).
+#include <vector>    // EN: intermediate RGB scratch buffer (capture_frame, FRAMEGRAB-EMBED). PT: buffer RGB intermediário (capture_frame, FRAMEGRAB-EMBED).
 
 namespace glintfx {
 
@@ -578,63 +579,150 @@ bool Engine::get_bool(const char* key, bool& out) const {
 //     bytes não é ela mesma múltipla de 4 preenche silenciosamente cada linha até o próximo
 //     limite de 4 bytes, o que o passo row_bytes_src abaixo NÃO leva em conta, corrompendo
 //     toda linha após a primeira -- restaurado ao que o host tinha depois, nunca deixado em 1.
-CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) const {
+// EN: CAPTURE-NOTHROW (W22, 2026-07-30) -- this method allocates TWO buffers below (the
+//     intermediate `rgb` scratch, `w*h*3` bytes, and the final `out.pixels`, `w*h*4` bytes,
+//     coexisting simultaneously during the flip/expand loop) with NO guard against
+//     `std::bad_alloc` before this fix, despite `engine.hpp`'s own doc-comment already promising
+//     a clean, default-constructed `CapturedFramePixels{}` on every OTHER documented failure
+//     (`!impl_->ok`, `w<=0||h<=0`) -- the SAME shape of gap the `never a crash` family
+//     (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`) already closed elsewhere in this
+//     codebase, found here by the promise-vs-code MATRIX audit (W22), not by grepping for the
+//     literal phrase (this method's own doc-comment never used those words). `App::capture_frame()`
+//     (`app.cpp`) and `UiLayer::capture_frame()` (`ui_layer.cpp`) both delegate to this ONE shared
+//     method (FRAMEGRAB-EMBED) -- fixing it here closes the gap for BOTH public entry points at
+//     once, same as every other Engine-level fix in this class. The THIRD, independent duplicate
+//     of this exact algorithm, `capture_framebuffer()` (`frame_capture.cpp`, CAPTURE-FREE), is
+//     fixed separately in that file -- see this method's own top comment there for why it is a
+//     deliberate code duplication, not a shared call, and for the ADDITIONAL byte-count cap that
+//     ONLY that instance-free entry point needs (a real window/viewport already bounds `w`/`h`
+//     here; `capture_framebuffer()` has no instance to bound the plausible range of its own
+//     caller-supplied `w`/`h`).
+//     `noexcept` ADDED to this method's own declaration (`engine.hpp`) -- only after auditing
+//     this method's OWN body statement-by-statement, not by convention: every call inside the
+//     `try` below is either a plain C GL entry point (`glGetIntegerv`/`glBindFramebuffer`/
+//     `glReadBuffer`/`glBindBuffer`/`glPixelStorei`/`glReadPixels` -- a C ABI, structurally
+//     incapable of throwing a C++ exception) or one of the two allocations this fix now guards
+//     (`std::vector`'s own ctor, `std::make_unique<unsigned char[]>`) -- nothing else. The two
+//     guard clauses ABOVE the `try` (`!impl_->ok`, `w<=0||h<=0`) are plain member reads/int
+//     comparisons, no call that could throw either. With every statement accounted for, marking
+//     THIS method noexcept is safe by construction, not a guess -- UNLIKE its two PUBLIC callers,
+//     `App::capture_frame()` (`app.cpp`) and `UiLayer::capture_frame()` (`ui_layer.cpp`), which
+//     this fatia does NOT mark noexcept: `UiLayer::capture_frame()`'s own body, re-audited the
+//     same way, turns out to ALSO qualify (see that method's own doc-comment, `ui_layer.hpp`),
+//     but `App::capture_frame()` additionally calls `sync_viewport()`/`render_frame()`/the buffer
+//     swap -- the FULL RmlUi render pipeline, layout included -- which this fatia has NOT audited
+//     statement-by-statement; the team lead's own explicit instruction was "if in doubt, do not
+//     mark noexcept, and say why", so `App::capture_frame()` stays as it was on this specific
+//     point, its own doc-comment (`app.hpp`) stating the reason.
+// PT: CAPTURE-NOTHROW (W22, 2026-07-30) -- este método aloca DOIS buffers abaixo (o scratch
+//     intermediário `rgb`, `w*h*3` bytes, e o `out.pixels` final, `w*h*4` bytes, coexistindo
+//     simultaneamente durante o laço de flip/expansão) SEM guarda nenhuma contra `std::bad_alloc`
+//     antes deste conserto, apesar do próprio doc-comment de `engine.hpp` já prometer um
+//     `CapturedFramePixels{}` limpo, default-construído, em toda OUTRA falha documentada
+//     (`!impl_->ok`, `w<=0||h<=0`) -- a MESMA forma de lacuna que a família `never a crash`
+//     (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`) já fechou em outro lugar deste
+//     código-base, achada aqui pela auditoria de MATRIZ promessa-vs-código (W22), não por grep da
+//     frase literal (o próprio doc-comment deste método nunca usou essas palavras).
+//     `App::capture_frame()` (`app.cpp`) e `UiLayer::capture_frame()` (`ui_layer.cpp`) os dois
+//     delegam pra este ÚNICO método compartilhado (FRAMEGRAB-EMBED) -- consertar aqui fecha a
+//     lacuna pros DOIS pontos de entrada públicos de uma vez, mesmo padrão de todo outro conserto
+//     em nível de Engine desta classe. A TERCEIRA duplicata independente deste exato algoritmo, o
+//     `capture_framebuffer()` (`frame_capture.cpp`, CAPTURE-FREE), é consertada separadamente
+//     naquele arquivo -- ver o próprio comentário de topo deste método lá pro porquê de ser uma
+//     duplicação de código deliberada, não uma chamada compartilhada, e pro teto de contagem de
+//     bytes ADICIONAL que SÓ aquele ponto de entrada sem-instância precisa (uma janela/viewport
+//     real já limita `w`/`h` aqui; o `capture_framebuffer()` não tem instância nenhuma pra limitar
+//     a faixa plausível do próprio `w`/`h` fornecido pelo chamador).
+//     `noexcept` SOMADO à própria declaração deste método (`engine.hpp`) -- só depois de auditar
+//     o PRÓPRIO corpo deste método instrução-por-instrução, não por convenção: toda chamada
+//     dentro do `try` abaixo ou é um entry point C puro do GL (`glGetIntegerv`/
+//     `glBindFramebuffer`/`glReadBuffer`/`glBindBuffer`/`glPixelStorei`/`glReadPixels` -- ABI C,
+//     estruturalmente incapaz de lançar uma exceção C++) ou é uma das duas alocações que este
+//     conserto agora guarda (o próprio construtor do `std::vector`, `std::make_unique<unsigned
+//     char[]>`) -- nada além disso. As duas guardas ACIMA do `try` (`!impl_->ok`,
+//     `w<=0||h<=0`) são leitura de membro/comparação de int puras, nenhuma chamada que pudesse
+//     lançar tampouco. Com toda instrução contabilizada, marcar ESTE método noexcept é seguro por
+//     construção, não um chute -- DIFERENTE dos dois chamadores PÚBLICOS dele, `App::capture_frame()`
+//     (`app.cpp`) e `UiLayer::capture_frame()` (`ui_layer.cpp`), que esta fatia NÃO marca
+//     noexcept: o próprio corpo do `UiLayer::capture_frame()`, reauditado do mesmo jeito, acaba
+//     TAMBÉM se qualificando (ver o próprio doc-comment daquele método, `ui_layer.hpp`), mas o
+//     `App::capture_frame()` adicionalmente chama `sync_viewport()`/`render_frame()`/o swap de
+//     buffer -- o pipeline de render do RmlUi INTEIRO, layout incluso -- que esta fatia NÃO
+//     auditou instrução-por-instrução; a própria instrução explícita do team lead foi "na dúvida,
+//     não marque noexcept, e diga por quê", então o `App::capture_frame()` fica como estava neste
+//     ponto específico, com o próprio doc-comment (`app.hpp`) dizendo o motivo.
+CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) const noexcept {
   if (!impl_->ok) return CapturedFramePixels{};
   if (w <= 0 || h <= 0) return CapturedFramePixels{};
 
-  GLint prev_read_fbo = 0, prev_read_buffer = 0;
-  GLint prev_pack_alignment = 4, prev_pack_row_length = 0, prev_pack_pbo = 0;
-  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
-  glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
-  glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
-  glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
-  glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &prev_pack_pbo);
+  try {
+    GLint prev_read_fbo = 0, prev_read_buffer = 0;
+    GLint prev_pack_alignment = 4, prev_pack_row_length = 0, prev_pack_pbo = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+    glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &prev_pack_pbo);
 
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-  glReadBuffer(GL_BACK);
-  glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-  glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 
-  std::vector<unsigned char> rgb(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
-  glReadPixels(gl_x, gl_y, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
+    std::vector<unsigned char> rgb(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
+    glReadPixels(gl_x, gl_y, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
 
-  glPixelStorei(GL_PACK_ALIGNMENT, prev_pack_alignment);
-  glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
-  glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(prev_pack_pbo));
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
-  glReadBuffer(static_cast<GLenum>(prev_read_buffer));
+    glPixelStorei(GL_PACK_ALIGNMENT, prev_pack_alignment);
+    glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(prev_pack_pbo));
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
+    glReadBuffer(static_cast<GLenum>(prev_read_buffer));
 
-  // EN: Row-flip (glReadPixels origin is bottom-left; CapturedFramePixels row 0 is top -- same
-  //     convention App::CapturedFrame/UiLayer::CapturedFrame document) + RGB -> RGBA8 expansion
-  //     with synthetic alpha=255 -- IDENTICAL to what App::capture_frame's own body used to do
-  //     inline before FRAMEGRAB-EMBED (see this method's own doc-comment, engine.hpp, and
-  //     App::CapturedFrame's doc-comment, app.hpp, for the full "why 255" rationale).
-  // PT: Inversão de linha (a origem do glReadPixels é bottom-left; a linha 0 de
-  //     CapturedFramePixels é o topo -- mesma convenção que App::CapturedFrame/
-  //     UiLayer::CapturedFrame documentam) + expansão RGB -> RGBA8 com alpha sintético=255 --
-  //     IDÊNTICO ao que o próprio corpo de App::capture_frame fazia inline antes do
-  //     FRAMEGRAB-EMBED (ver o próprio doc-comment deste método, engine.hpp, e o doc-comment
-  //     de App::CapturedFrame, app.hpp, pro racional completo do "por que 255").
-  CapturedFramePixels out;
-  out.width = w;
-  out.height = h;
-  out.byte_count = static_cast<size_t>(w) * static_cast<size_t>(h) * 4;
-  out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
-  const size_t row_bytes_src = static_cast<size_t>(w) * 3;
-  for (int dst_row = 0; dst_row < h; ++dst_row) {
-    const int src_row = h - 1 - dst_row;
-    const unsigned char* src = rgb.data() + static_cast<size_t>(src_row) * row_bytes_src;
-    unsigned char* dst = out.pixels.get() + static_cast<size_t>(dst_row) * static_cast<size_t>(w) * 4;
-    for (int x = 0; x < w; ++x) {
-      dst[x * 4 + 0] = src[x * 3 + 0];
-      dst[x * 4 + 1] = src[x * 3 + 1];
-      dst[x * 4 + 2] = src[x * 3 + 2];
-      dst[x * 4 + 3] = 255;
+    // EN: Row-flip (glReadPixels origin is bottom-left; CapturedFramePixels row 0 is top -- same
+    //     convention App::CapturedFrame/UiLayer::CapturedFrame document) + RGB -> RGBA8 expansion
+    //     with synthetic alpha=255 -- IDENTICAL to what App::capture_frame's own body used to do
+    //     inline before FRAMEGRAB-EMBED (see this method's own doc-comment, engine.hpp, and
+    //     App::CapturedFrame's doc-comment, app.hpp, for the full "why 255" rationale).
+    // PT: Inversão de linha (a origem do glReadPixels é bottom-left; a linha 0 de
+    //     CapturedFramePixels é o topo -- mesma convenção que App::CapturedFrame/
+    //     UiLayer::CapturedFrame documentam) + expansão RGB -> RGBA8 com alpha sintético=255 --
+    //     IDÊNTICO ao que o próprio corpo de App::capture_frame fazia inline antes do
+    //     FRAMEGRAB-EMBED (ver o próprio doc-comment deste método, engine.hpp, e o doc-comment
+    //     de App::CapturedFrame, app.hpp, pro racional completo do "por que 255").
+    CapturedFramePixels out;
+    out.width = w;
+    out.height = h;
+    out.byte_count = static_cast<size_t>(w) * static_cast<size_t>(h) * 4;
+    out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
+    const size_t row_bytes_src = static_cast<size_t>(w) * 3;
+    for (int dst_row = 0; dst_row < h; ++dst_row) {
+      const int src_row = h - 1 - dst_row;
+      const unsigned char* src = rgb.data() + static_cast<size_t>(src_row) * row_bytes_src;
+      unsigned char* dst = out.pixels.get() + static_cast<size_t>(dst_row) * static_cast<size_t>(w) * 4;
+      for (int x = 0; x < w; ++x) {
+        dst[x * 4 + 0] = src[x * 3 + 0];
+        dst[x * 4 + 1] = src[x * 3 + 1];
+        dst[x * 4 + 2] = src[x * 3 + 2];
+        dst[x * 4 + 3] = 255;
+      }
     }
+    out.ok = true;
+    return out;
+  } catch (const std::exception&) {
+    // EN: std::bad_alloc (the expected case -- see this method's own top comment) or any other
+    //     std::exception -- degrade to a clean, default-constructed CapturedFramePixels{}
+    //     (ok == false), never a partially-filled result.
+    // PT: std::bad_alloc (o caso esperado -- ver o próprio comentário de topo deste método) ou
+    //     qualquer outro std::exception -- degrada pra um CapturedFramePixels{} limpo,
+    //     default-construído (ok == false), nunca um resultado parcialmente preenchido.
+    return CapturedFramePixels{};
+  } catch (...) {
+    // EN/PT: belt-and-suspenders, same "never a crash" discipline as this codebase's own
+    // load_texture()/load_font()/decode_*()/encode_*() catch(...) blocks -- an exception type
+    // that is not even a std::exception must not escape this boundary either.
+    return CapturedFramePixels{};
   }
-  out.ok = true;
-  return out;
 }
 
 } // namespace glintfx

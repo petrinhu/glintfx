@@ -100,8 +100,10 @@
 //     this function, unlike its two instance-method siblings, has no `App`/`UiLayer`
 //     construction step of its own to lean on for this guarantee (a caller reaching this
 //     function has, by construction, no glintfx instance at all), it adds the ONE guard its
-//     siblings get for free from their own constructor's `ok()` gate: if the specific pointer
-//     this function is about to call through (`glx_glReadPixels`) is still null, it returns
+//     siblings get for free from their own constructor's `ok()` gate: if `glx_glReadPixels` --
+//     positioned as the FIRST GL call this function's own body makes, before every one of the
+//     five `glGetIntegerv` calls the body also touches, so this ONE check guards the WHOLE
+//     body, not narrowly `glReadPixels` alone -- is still null, it returns
 //     `CapturedFramebuffer{}` (`ok == false`) WITHOUT calling ANY GL function -- turning what
 //     would otherwise be this function's own version of that exact SEGFAULT into a clean,
 //     documented failure. This is a genuine, deliberate IMPROVEMENT over the implicit
@@ -243,9 +245,11 @@
 //     diferente das duas irmãs de método de instância, não tem passo de construção próprio de
 //     `App`/`UiLayer` pra se apoiar nessa garantia (um chamador alcançando esta função não tem,
 //     por construção, instância glintfx nenhuma), ela soma a ÚNICA guarda que as irmãs ganham
-//     de graça do próprio gate `ok()` do construtor delas: se o ponteiro específico que esta
-//     função está prestes a chamar através (`glx_glReadPixels`) ainda é nulo, ela devolve
-//     `CapturedFramebuffer{}` (`ok == false`) SEM chamar NENHUMA função GL -- transformando o
+//     de graça do próprio gate `ok()` do construtor delas: se o `glx_glReadPixels` --
+//     posicionado como a PRIMEIRA chamada GL que o próprio corpo desta função faz, antes de
+//     cada uma das cinco chamadas `glGetIntegerv` que o corpo também toca, então esta ÚNICA
+//     checagem guarda o corpo INTEIRO, não estreitamente só o `glReadPixels` -- ainda é nulo,
+//     ela devolve `CapturedFramebuffer{}` (`ok == false`) SEM chamar NENHUMA função GL -- transformando o
 //     que seria a própria versão desta função daquele exato SEGFAULT numa falha limpa,
 //     documentada. Esta é uma MELHORIA genuína, deliberada, sobre a presunção implícita que as
 //     irmãs podem se dar ao luxo de fazer (o próprio gate `Engine::ok()` delas já implica
@@ -333,6 +337,46 @@ struct CapturedFramebuffer {
 //     vez neste processo (ver a própria seção "PRÉ-REQUISITO" deste arquivo acima pra lista
 //     completa do que já dispara isso como efeito colateral, e o que esta função faz quando
 //     não rodou).
-CapturedFramebuffer capture_framebuffer(int gl_x, int gl_y, int w, int h);
+CapturedFramebuffer capture_framebuffer(int gl_x, int gl_y, int w, int h) noexcept;
+
+// EN: CAPTURE-NOTHROW (W22, 2026-07-30) -- appended AT THE END on purpose, same "append, do not
+//     insert" discipline `draw2d.hpp`'s own TEX-NOTHROW/FONT-NOTHROW notes already use (see those
+//     for the precedent): this function is now `noexcept`, and the fail-high contract stated
+//     above ("`ok == false` on ANY failure") is now a checked, compiler-enforced guarantee, not
+//     just a convention -- an out-of-memory condition during either of the two internal
+//     allocations (found by the W22 promise-vs-code MATRIX audit, not a consumer bug report) used
+//     to be able to escape this function as an uncaught `std::bad_alloc`, the SAME shape of gap
+//     the `never a crash` family (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`)
+//     already closed elsewhere in this codebase. THIS function was additionally the WORST of the
+//     three siblings sharing this exact algorithm (`Engine::capture_frame()`, wrapping
+//     `App::capture_frame()`/`UiLayer::capture_frame()`): being instance-free, it had NO real
+//     window/viewport bounding its own caller-supplied `w`/`h` at all -- a direct caller could
+//     request an arbitrarily large capture and reach the allocation step unguarded. A new,
+//     internal 256 MiB byte-count cap (checked BEFORE either allocation, against `w*h*4` -- the
+//     larger of the two buffers this function allocates internally) now rejects that up front,
+//     with the SAME `ok() == false` signal every other rejection above already uses -- see
+//     `frame_capture.cpp`'s own top comment for the full derivation of that value (reused from
+//     this codebase's own `kMaxImageDecodeBytes`, not invented) and the try/catch this guarantee
+//     is implemented with.
+// PT: CAPTURE-NOTHROW (W22, 2026-07-30) -- apensado AO FIM de propósito, mesma disciplina
+//     "acrescenta, não insere" que as próprias notas TEX-NOTHROW/FONT-NOTHROW de `draw2d.hpp` já
+//     usam (ver aquelas pro precedente): esta função agora é `noexcept`, e o contrato fail-high
+//     declarado acima ("`ok == false` em QUALQUER falha") agora é uma garantia checada, imposta
+//     pelo compilador, não só uma convenção -- uma condição de esgotamento de memória durante
+//     qualquer uma das duas alocações internas (achada pela auditoria de MATRIZ promessa-vs-
+//     código da W22, não um relato de bug de consumidor) conseguia escapar desta função como um
+//     `std::bad_alloc` não-capturado, a MESMA forma de lacuna que a família `never a crash`
+//     (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`) já fechou em outro lugar deste
+//     código-base. ESTA função era adicionalmente a PIOR das três irmãs que compartilham este
+//     exato algoritmo (`Engine::capture_frame()`, envolvido por `App::capture_frame()`/
+//     `UiLayer::capture_frame()`): sendo sem-instância, não tinha janela/viewport real nenhuma
+//     limitando o próprio `w`/`h` fornecido pelo chamador -- um chamador direto podia pedir uma
+//     captura arbitrariamente grande e alcançar o passo de alocação sem guarda nenhuma. Um novo
+//     teto interno de 256 MiB de contagem de bytes (checado ANTES de qualquer uma das duas
+//     alocações, contra `w*h*4` -- o maior dos dois buffers que esta função aloca internamente)
+//     agora rejeita isso de saída, com o MESMO sinal `ok() == false` que toda outra rejeição
+//     acima já usa -- ver o próprio comentário de topo de `frame_capture.cpp` pra derivação
+//     completa daquele valor (reusado do próprio `kMaxImageDecodeBytes` deste código-base, não
+//     inventado) e o try/catch com que esta garantia é implementada.
 
 } // namespace glintfx

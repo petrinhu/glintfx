@@ -1634,6 +1634,39 @@ add_test(NAME ui_layer_capture_frame_smoke
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# EN: capture_nothrow_sanity (CAPTURE-NOTHROW, W22, 2026-07-30) -- size-matched operator-new
+#     fault-injection oracle proving Engine::capture_frame()/capture_framebuffer() are noexcept
+#     under a REAL, forced allocation failure, not a hypothetical one -- the FIFTH member of the
+#     `never a crash` family, found by the W22 promise-vs-code MATRIX audit. Same technique
+#     draw2d_texture_nothrow_sanity.cpp/font_nothrow_sanity.cpp already established (NOT
+#     fork()+RLIMIT_AS, same measured reason). Four groups: E1/E2 drive Engine::capture_frame()
+#     white-box (WindowGlfw + a standalone Engine::attach(), same pattern
+#     ui_layer_capture_frame_smoke.cpp's own Part G2 already established), covering
+#     App::capture_frame()/UiLayer::capture_frame() transitively; F1/F2 drive
+#     capture_framebuffer() directly (no Engine needed, instance-free by design). RmlUi::Core
+#     linked for the same reason ui_layer_capture_frame_smoke.cpp's own Part G2 needs it
+#     (system_clock.hpp inherits from Rml::SystemInterface).
+# PT: capture_nothrow_sanity (CAPTURE-NOTHROW, W22, 2026-07-30) -- oráculo de injeção de falha em
+#     operator-new, casado por tamanho, provando que Engine::capture_frame()/
+#     capture_framebuffer() são noexcept sob uma falha de alocação REAL, forçada, não
+#     hipotética -- o QUINTO membro da família `never a crash`, achado pela auditoria de MATRIZ
+#     promessa-vs-código da W22. Mesma técnica que draw2d_texture_nothrow_sanity.cpp/
+#     font_nothrow_sanity.cpp já estabeleceram (NÃO fork()+RLIMIT_AS, mesmo motivo medido).
+#     Quatro grupos: E1/E2 dirigem o Engine::capture_frame() white-box (WindowGlfw + um
+#     Engine::attach() avulso, o mesmo padrão que a própria Parte G2 de
+#     ui_layer_capture_frame_smoke.cpp já estabeleceu), cobrindo App::capture_frame()/
+#     UiLayer::capture_frame() transitivamente; F1/F2 dirigem o capture_framebuffer() direto
+#     (nenhum Engine necessário, sem instância por desenho). RmlUi::Core linkado pelo mesmo
+#     motivo que a própria Parte G2 de ui_layer_capture_frame_smoke.cpp precisa dele
+#     (system_clock.hpp herda de Rml::SystemInterface).
+add_executable(capture_nothrow_sanity capture_nothrow_sanity.cpp)
+target_link_libraries(capture_nothrow_sanity PRIVATE ${_embed_dep} glloader RmlUi::Core)
+add_test(NAME capture_nothrow_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:capture_nothrow_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: ui_layer_capture_frame_state (`FRAMEGRAB-EMBED`) -- GL state captured before and after
 #     UiLayer::capture_frame() must be identical: GL_READ_FRAMEBUFFER binding, GL_READ_BUFFER,
 #     GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, GL_PIXEL_PACK_BUFFER binding -- the 5 pieces of

@@ -199,7 +199,7 @@ public:
   //     FAIL-HIGH: `!ok()`, ou `w <= 0 || h <= 0`, retorna `CapturedFramePixels{}`
   //     (`ok=false`, `width=height=0`, `pixels=nulo`, `byte_count=0`) SEM tocar GL nenhum --
   //     mesmo formato de guard de todo outro método do Engine gateado por `!ok()` acima.
-  CapturedFramePixels capture_frame(int gl_x, int gl_y, int w, int h) const;
+  CapturedFramePixels capture_frame(int gl_x, int gl_y, int w, int h) const noexcept;
 
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().

@@ -1084,6 +1084,16 @@ add_library(glintfx::core ALIAS glintfx_core)
 #     resolve its own #include "glintfx/image.hpp"; the PRIVATE third_party/stb dir already set
 #     below is inherited automatically (image_decode.hpp's own #include "stb_image.h" needs it,
 #     same reason stb_image_impl.cpp needed it before this addition).
+#
+#     IMG-ENCODE (W21, 2026-07-30) -- src/stb_image_write_impl.cpp (the encode-side sibling of
+#     stb_image_impl.cpp, compiling the vendored stb_image_write.h -- PNG/JPG/BMP/TGA/HDR encode)
+#     and src/image_encode.cpp (the public glintfx/image.hpp encode pair,
+#     encode_image_memory()/encode_image_file(), which also #includes the private
+#     src/qoi_encode.hpp clean-room QOI encoder -- header-only, adds no source file of its own)
+#     join this SAME unconditional OBJECT library for the identical reason the IMG-DECODE
+#     addition above already states: this module has no OFF-able gate, and image_encode.cpp is
+#     this module's other consumer of the third_party/stb include dir (stb_image_write.h this
+#     time, not stb_image.h) already set PRIVATE below.
 # PT: IMG-DECODE (2026-07-29) -- src/image.cpp (o par público de decode de glintfx/image.hpp,
 #     decode_image_file()/decode_image_memory()) entra nesta MESMA biblioteca OBJECT
 #     incondicional de propósito: é o outro consumidor do módulo do decoder stb_image
@@ -1096,7 +1106,18 @@ add_library(glintfx::core ALIAS glintfx_core)
 #     third_party/stb já setado abaixo é herdado automaticamente (o próprio #include
 #     "stb_image.h" de image_decode.hpp precisa dele, mesmo motivo que stb_image_impl.cpp
 #     precisava antes desta adição).
-add_library(glintfx_image OBJECT src/stb_image_impl.cpp src/image.cpp)
+#
+#     IMG-ENCODE (W21, 2026-07-30) -- src/stb_image_write_impl.cpp (a irmã do lado encode de
+#     stb_image_impl.cpp, compilando o stb_image_write.h vendorizado -- encode PNG/JPG/BMP/
+#     TGA/HDR) e src/image_encode.cpp (o par público de encode de glintfx/image.hpp,
+#     encode_image_memory()/encode_image_file(), que também inclui o próprio
+#     src/qoi_encode.hpp clean-room de encode QOI -- header-only, não soma arquivo de source
+#     próprio) entram nesta MESMA biblioteca OBJECT incondicional pelo motivo idêntico que a
+#     própria adição IMG-DECODE acima já declara: este módulo não tem gate desligável, e
+#     image_encode.cpp é o outro consumidor deste módulo do dir de include third_party/stb
+#     (stb_image_write.h desta vez, não stb_image.h) já setado PRIVATE abaixo.
+add_library(glintfx_image OBJECT src/stb_image_impl.cpp src/image.cpp
+  src/stb_image_write_impl.cpp src/image_encode.cpp)
 target_include_directories(glintfx_image PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
 target_include_directories(glintfx_image PUBLIC

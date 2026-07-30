@@ -526,6 +526,19 @@ jobs:
       #     caminho relativo puro sem '/' no inicio (ex.: "glintfx/src/foo.cpp"), entao
       #     um filtro que exige um '/' literal antes de "glintfx" nunca casa --
       #     reproduzido e confirmado localmente.
+      # EN: `constParameterCallback:*/image_encode.cpp` (IMG-ENCODE, W21) -- `write_cb()`'s
+      #     `void* data` parameter must stay non-const to match stb_image_write's own
+      #     `stbi_write_func` typedef EXACTLY (`void (*)(void*, void*, int)`); constifying it
+      #     would require a `reinterpret_cast<stbi_write_func*>` at every `_to_func` call site
+      #     just to silence a style note about a signature this file does not own -- see
+      #     `image_encode.cpp`'s own doc-comment right above `write_cb()` for the full rationale.
+      # PT: `constParameterCallback:*/image_encode.cpp` (IMG-ENCODE, W21) -- o parâmetro
+      #     `void* data` de `write_cb()` precisa ficar não-const pra bater EXATAMENTE com o
+      #     próprio typedef `stbi_write_func` do stb_image_write (`void (*)(void*, void*, int)`);
+      #     tornar const forçaria um `reinterpret_cast<stbi_write_func*>` em todo sítio de
+      #     chamada `_to_func` só pra calar uma nota de estilo sobre uma assinatura que este
+      #     arquivo não possui -- ver o próprio comentário de `image_encode.cpp` logo acima de
+      #     `write_cb()` pro racional completo.
       - name: TST-L1-STATIC -- cppcheck
         run: |
           cppcheck --enable=warning,style,performance,portability \
@@ -535,6 +548,7 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress='*:*/third_party/*' \
             --suppress='*:*/_deps/*' \
+            --suppress='constParameterCallback:*/image_encode.cpp' \
             --error-exitcode=1
 
       # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) instead of

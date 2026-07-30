@@ -36,7 +36,19 @@ These files are committed directly into the repository source tree.
   Original author: Sean Barrett (nothings.org).
   File: glintfx/third_party/stb/stb_image.h
   Used for: PNG, JPG, and TGA texture decode in the GL3 render backend
-            (glintfx/src/render_gl3.cpp + glintfx/src/stb_image_impl.cpp).
+            (glintfx/src/render_gl3.cpp + glintfx/src/stb_image_impl.cpp), and the public
+            IMG-DECODE pair (glintfx/include/glintfx/image.hpp + glintfx/src/image.cpp).
+
+- stb_image_write v1.16 — Public domain / MIT (dual-licensed; used here as public domain).
+  No copyright notice required; included here for disclosure.
+  Original author: Sean Barrett (nothings.org).
+  File: glintfx/third_party/stb/stb_image_write.h
+  Used for: PNG/JPG/BMP/TGA/HDR image encode in the public IMG-ENCODE pair
+            (glintfx/include/glintfx/image.hpp + glintfx/src/image_encode.cpp +
+            glintfx/src/stb_image_write_impl.cpp). Five of this module's seven ImageFormat
+            values go through this vendored encoder; PPM is hand-written and QOI is glintfx's
+            own clean-room encoder (glintfx/src/qoi_encode.hpp, see that file's own header for
+            provenance) -- neither has an upstream counterpart here.
 
 - miniaudio v0.11.25 (commit 9634bedb5b5a2ca38c1ee7108a9358a4e233f14d, 2026-03-04) — MIT No
   Attribution (MIT-0) / public domain (dual-licensed; used here as MIT-0).

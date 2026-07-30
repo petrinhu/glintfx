@@ -256,9 +256,20 @@ fi
 
 # -----------------------------------------------------------------------------
 # EN: 1) cppcheck on staged glintfx/src/*.cpp|*.hpp -- same flags as CI's
-#     TST-L1-STATIC (3/3).
+#     TST-L1-STATIC (3/3), INCLUDING its per-file suppressions (kept in sync by hand --
+#     see `constParameterCallback:*/image_encode.cpp` below, IMG-ENCODE/W21: `write_cb()`'s
+#     `void* data` parameter must stay non-const to match stb_image_write's own
+#     `stbi_write_func` typedef exactly; see `image_encode.cpp`'s own doc-comment right
+#     above `write_cb()` for the full rationale, same one `.github/workflows/ci.yml`'s own
+#     TST-L1-STATIC step cites).
 # PT: 1) cppcheck nos glintfx/src/*.cpp|*.hpp staged -- mesmas flags do
-#     TST-L1-STATIC (3/3) do CI.
+#     TST-L1-STATIC (3/3) do CI, INCLUINDO as próprias suppressions por-arquivo dele
+#     (mantidas em sincronia à mão -- ver `constParameterCallback:*/image_encode.cpp`
+#     abaixo, IMG-ENCODE/W21: o parâmetro `void* data` de `write_cb()` precisa ficar
+#     não-const pra bater exatamente com o próprio typedef `stbi_write_func` do
+#     stb_image_write; ver o próprio comentário de `image_encode.cpp` logo acima de
+#     `write_cb()` pro racional completo, o mesmo que o próprio passo TST-L1-STATIC de
+#     `.github/workflows/ci.yml` cita).
 # -----------------------------------------------------------------------------
 CPPCHECK_COMMON_ARGS=(
   --enable=warning,style,performance,portability
@@ -266,6 +277,7 @@ CPPCHECK_COMMON_ARGS=(
   --suppress=missingIncludeSystem
   --suppress='*:*/third_party/*'
   --suppress='*:*/_deps/*'
+  --suppress='constParameterCallback:*/image_encode.cpp'
   --error-exitcode=1
 )
 

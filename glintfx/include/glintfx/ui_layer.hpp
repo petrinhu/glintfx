@@ -912,7 +912,7 @@ public:
     std::size_t byte_count = 0;
   };
 
-  CapturedFrame capture_frame() const;
+  CapturedFrame capture_frame() const noexcept;
 
   // EN: `UILAYER-SINGLETON` (W22 S6, 2026-07-30) -- ADDED AT THE END of the class, same
   //     "append, do not insert" discipline `glintfx/include/glintfx/draw2d.hpp`'s own
@@ -1110,6 +1110,39 @@ public:
   //     `RMLUI_ERROR` que o upstream claramente queria usar pra abortar -- também no-op nos
   //     nossos builds, então o crash que o upstream esperava ser barulhento fica silencioso aqui
   //     também.
+
+  // EN: CAPTURE-NOTHROW (W22, 2026-07-30) -- appended AT THE END, same "append, do not insert"
+  //     discipline this class' own UILAYER-SINGLETON note immediately above already uses (and
+  //     `draw2d.hpp`'s own TEX-NOTHROW/FONT-NOTHROW notes before it): `capture_frame()` above is
+  //     now `noexcept` -- audited instruction-by-instruction, not by convention: `!impl_->ok` is
+  //     a plain bool member read; the delegation to `Engine::capture_frame()` (`engine.cpp`)
+  //     calls a method THAT method's own fix (this same slice) already proved noexcept-safe end
+  //     to end (every allocation-bearing statement in ITS OWN body wrapped in `try`/`catch`);
+  //     every remaining statement here (`CapturedFrame out;` default-construction, four trivial
+  //     bool/int/size_t field copies, `out.pixels = std::move(px.pixels);` a `unique_ptr` move-
+  //     assignment) is a non-throwing operation by the C++ standard's own guarantee for those
+  //     exact operations. Unlike `App::capture_frame()` (`app.hpp`, deliberately left
+  //     un-`noexcept` by this same slice -- see that method's own doc-comment for why: it calls
+  //     `sync_viewport()`/`render_frame()`/the buffer swap, the FULL RmlUi render pipeline, not
+  //     audited here), THIS method's own body has nothing beyond the now-safe delegation and
+  //     plain field copies -- there was no unaudited surface left to leave a doubt about.
+  // PT: CAPTURE-NOTHROW (W22, 2026-07-30) -- apensado AO FIM, mesma disciplina "acrescenta, não
+  //     insere" que a própria nota UILAYER-SINGLETON desta classe logo acima já usa (e as
+  //     próprias notas TEX-NOTHROW/FONT-NOTHROW de `draw2d.hpp` antes dela): o `capture_frame()`
+  //     acima agora é `noexcept` -- auditado instrução-por-instrução, não por convenção:
+  //     `!impl_->ok` é uma leitura pura de membro bool; a delegação pro
+  //     `Engine::capture_frame()` (`engine.cpp`) chama um método cujo PRÓPRIO conserto (esta
+  //     mesma fatia) já provou noexcept-seguro ponta-a-ponta (toda instrução portadora de
+  //     alocação no PRÓPRIO corpo dele envolvida em `try`/`catch`); toda instrução restante aqui
+  //     (`CapturedFrame out;` default-construída, quatro cópias triviais de campo
+  //     bool/int/size_t, `out.pixels = std::move(px.pixels);` uma atribuição-por-move de
+  //     `unique_ptr`) é uma operação que não lança pela própria garantia do padrão C++ para essas
+  //     operações exatas. Diferente do `App::capture_frame()` (`app.hpp`, deliberadamente
+  //     deixado SEM `noexcept` por esta mesma fatia -- ver o próprio doc-comment daquele método
+  //     pro motivo: chama `sync_viewport()`/`render_frame()`/o swap de buffer, o pipeline de
+  //     render do RmlUi INTEIRO, não auditado aqui), o PRÓPRIO corpo DESTE método não tem nada
+  //     além da delegação agora segura e cópias de campo simples -- não sobrou superfície
+  //     não-auditada pra deixar dúvida nenhuma.
 
 private:
   struct Impl;

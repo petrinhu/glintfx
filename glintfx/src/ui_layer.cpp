@@ -589,7 +589,18 @@ void UiLayer::process_event(const UiEvent& ev) {
 //     retângulo que render() -> Engine::render_compose acabou de compor -- pré-calculado uma
 //     vez por set_viewport() (ver o próprio doc-comment dele) e reusado aqui sem mudança,
 //     exatamente como o próprio render() o reusa a cada frame.
-UiLayer::CapturedFrame UiLayer::capture_frame() const {
+//
+// EN: CAPTURE-NOTHROW (W22, 2026-07-30) -- noexcept added, audited instruction-by-instruction
+//     (see this method's own doc-comment, ui_layer.hpp, for the full reasoning): every statement
+//     below is either a plain bool/field read-or-copy, the delegation to the now noexcept-safe
+//     Engine::capture_frame() (engine.cpp, this same slice), or a unique_ptr move-assignment --
+//     none of those can throw.
+// PT: CAPTURE-NOTHROW (W22, 2026-07-30) -- noexcept somado, auditado instrução-por-instrução
+//     (ver o próprio doc-comment deste método, ui_layer.hpp, pro racional completo): toda
+//     instrução abaixo é ou uma leitura/cópia pura de bool/campo, a delegação pro agora
+//     noexcept-seguro Engine::capture_frame() (engine.cpp, esta mesma fatia), ou uma atribuição-
+//     por-move de unique_ptr -- nenhuma delas pode lançar.
+UiLayer::CapturedFrame UiLayer::capture_frame() const noexcept {
   if (!impl_->ok) return CapturedFrame{};
   CapturedFramePixels px =
       impl_->engine.capture_frame(impl_->gl_offset_x, impl_->gl_offset_y, impl_->w, impl_->h);

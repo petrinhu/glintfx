@@ -323,14 +323,16 @@ public:
   //     Fail-high (D5's own discipline, same shape as `create()`'s non-positive-size guard
   //     above), guard order literal, every check BEFORE touching `pixels_rgba8`: `win_ == nullptr`
   //     (`create()` not called or failed) -> `false`; `pixels_rgba8 == nullptr` -> `false`;
-  //     `w <= 0 || h <= 0` -> `false`; `w > kMaxIconDim || h > kMaxIconDim` (2048, generous
-  //     headroom over any real OS/WM icon size while bounding the worst-case copy to 16 MiB and
-  //     keeping `w * h * 4` far below any `int`/`size_t` overflow BEFORE the multiply ever runs,
-  //     window_glfw.cpp's own doc-comment on this method has the full derivation) -> `false` --
-  //     one dedup'd stderr line per rejection, never a crash, never a read past the caller's
-  //     buffer. `nullptr` is REJECTED, not treated as "reset to the default icon" (GLFW's own
-  //     `count == 0` convention for that) -- out of scope for this slice by design, a follow-up
-  //     if a consumer asks for it explicitly.
+  //     `w <= 0 || h <= 0` -> `false`; `w > kMaxIconDim || h > kMaxIconDim` (1024 as of
+  //     TST-ICON-BOUNDARY/W20 -- LOWERED from an original 2048 that was never actually safe to
+  //     use: a 2048x2048 icon's `XChangeProperty` payload overflows the X11 protocol's own
+  //     max-request-size and CRASHES the client with a fatal `BadLength` error under a real X11
+  //     backend, not merely a guideline being generous -- window_glfw.cpp's own doc-comment on
+  //     this method has the full byte-for-byte derivation) -> `false` -- one dedup'd stderr line
+  //     per rejection, never a crash, never a read past the caller's buffer. `nullptr` is
+  //     REJECTED, not treated as "reset to the default icon" (GLFW's own `count == 0` convention
+  //     for that) -- out of scope for this slice by design, a follow-up if a consumer asks for it
+  //     explicitly.
   //
   //     No return-value distinction between "rejected by this guard" and "GLFW/the WM silently
   //     ignored the request" -- `glfwSetWindowIcon` itself returns `void` and some platforms
@@ -363,15 +365,16 @@ public:
   //     `create()` acima), ordem de guarda literal, toda checagem ANTES de tocar
   //     `pixels_rgba8`: `win_ == nullptr` (`create()` não chamado ou falhou) -> `false`;
   //     `pixels_rgba8 == nullptr` -> `false`; `w <= 0 || h <= 0` -> `false`;
-  //     `w > kMaxIconDim || h > kMaxIconDim` (2048, folga generosa sobre qualquer tamanho real
-  //     de ícone de SO/WM enquanto limita a cópia de pior caso a 16 MiB e mantém `w * h * 4`
-  //     bem abaixo de qualquer overflow de `int`/`size_t` ANTES da multiplicação sequer rodar,
-  //     o próprio doc-comment deste método em window_glfw.cpp tem a derivação completa) ->
-  //     `false` -- uma linha de stderr dedup'd por classe de rejeição, nunca um crash, nunca
-  //     uma leitura além do buffer do chamador. `nullptr` é REJEITADO, não tratado como
-  //     "restaurar o ícone default" (a própria convenção `count == 0` do GLFW pra isso) -- fora
-  //     de escopo desta fatia por desenho, um desdobramento se um consumidor pedir
-  //     explicitamente.
+  //     `w > kMaxIconDim || h > kMaxIconDim` (1024 a partir do TST-ICON-BOUNDARY/W20 --
+  //     BAIXADO de um 2048 original que nunca foi seguro de usar de verdade: o payload do
+  //     `XChangeProperty` de um ícone 2048x2048 ultrapassa o próprio max-request-size do
+  //     protocolo X11 e CRASHA o cliente com um erro fatal `BadLength` sob um backend X11 real,
+  //     não é só uma folga generosa demais -- o próprio doc-comment deste método em
+  //     window_glfw.cpp tem a derivação byte-a-byte completa) -> `false` -- uma linha de stderr
+  //     dedup'd por classe de rejeição, nunca um crash, nunca uma leitura além do buffer do
+  //     chamador. `nullptr` é REJEITADO, não tratado como "restaurar o ícone default" (a própria
+  //     convenção `count == 0` do GLFW pra isso) -- fora de escopo desta fatia por desenho, um
+  //     desdobramento se um consumidor pedir explicitamente.
   //
   //     Sem distinção de valor de retorno entre "rejeitado por esta guarda" e "GLFW/o WM
   //     ignorou o pedido silenciosamente" -- o próprio `glfwSetWindowIcon` retorna `void` e

@@ -522,10 +522,36 @@ bool WindowGlfw::is_window_iconified() const {
 }
 
 // EN: WIN-ICON -- see the doc-comment on the declaration (window_glfw.hpp) for the full
-//     contract; this is the derivation behind the `kMaxIconDim` cap cited there. 2048 is
-//     generous headroom over any real OS/WM icon size seen in practice (Windows taskbar/alt-tab
-//     icons top out well under 256px; even a hi-DPI macOS-style app-bundle icon set tops out at
-//     1024) while bounding the worst-case copy below to 2048*2048*4 == 16 MiB, and keeping
+//     contract; this is the derivation behind the `kMaxIconDim` cap cited there.
+//
+//     TST-ICON-BOUNDARY (W20, v0.25.0+) LOWERED this from an original 2048 to **1024** after an
+//     adversarial boundary test (real 2048x2048 buffer, not a tiny buffer with an oversized
+//     declared dimension) proved 2048 was NEVER actually safe: `glfwSetWindowIcon` forwards to
+//     `XChangeProperty` under a real X11 backend, and a 2048x2048 icon's payload OVERFLOWS the
+//     X11 protocol's own max-request-size, killing the client with a fatal `BadLength` error --
+//     not a guideline being generous, an unconditional crash on every X11 desktop with the
+//     commonly-seen ~16 MiB BIG-REQUESTS ceiling. The exact math, verified against a live X
+//     server (`xdpyinfo`'s "maximum request size", 16,777,212 bytes on the Xvfb this suite runs
+//     under -- a representative, not unusually small, value): `XChangeProperty`'s wire payload
+//     for an icon is `(2 + w*h)` CARD32 values (2 header longs -- width, height -- plus one
+//     32-bit ARGB word per pixel) `* 4` bytes, plus a fixed 24-byte request header.
+//       w=h=2048: (2 + 2048*2048)*4 + 24 == 16,777,248 bytes -- exceeds 16,777,212 by 36 bytes,
+//                 deterministically, on every server reporting that ceiling or lower.
+//       w=h=1024: (2 + 1024*1024)*4 + 24 ==  4,194,336 bytes -- ~25% of that ceiling, a 4x
+//                 safety margin, comfortably clear of the collision.
+//     WHY THIS WAS INVISIBLE UNTIL NOW: GLFW auto-detects Wayland first on any host with a live
+//     Wayland session (`WAYLAND_DISPLAY` set) -- and GLFW's Wayland `set_window_icon` path has no
+//     such request-size limit (no `XChangeProperty` involved at all), so running this suite's
+//     binary directly on a Wayland desktop session PASSES and hides the bug entirely. Only
+//     `tests/run_xvfb.cmake`'s own X11-forcing isolation (`unset(WAYLAND_DISPLAY)` + a fake,
+//     socket-less `XDG_RUNTIME_DIR` so `wl_display_connect` cannot fall back to Wayland, see that
+//     file's own doc-comment) exercises the REAL X11 codepath and reproduces the crash --
+//     do NOT trust a green run of this binary invoked directly on a Wayland dev machine as proof
+//     this guard is safe; always verify through the ctest/`run_xvfb.cmake` wrapper.
+//     1024 is ALSO still generous headroom over any real OS/WM icon size seen in practice
+//     (Windows taskbar/alt-tab icons top out well under 256px; even a hi-DPI macOS-style
+//     app-bundle icon set tops out at 1024 -- this cap is now numerically AT that ceiling, not
+//     merely above it) while bounding the worst-case copy to `1024*1024*4 == 4 MiB`, and keeping
 //     `w * h * 4` (computed as `std::size_t` below, AFTER this per-dimension guard has already
 //     run) nowhere near overflowing `int`/`std::size_t` on any platform this library targets --
 //     same "cap each dimension BEFORE multiplying" guard order `Draw2d::create_texture`'s own
@@ -533,19 +559,47 @@ bool WindowGlfw::is_window_iconified() const {
 //     smaller, window-icon-specific ceiling instead of that module's general-purpose 256 MiB one
 //     (this call has no dependency on GLINTFX_MODULE_DRAW2D and does not reuse its constant).
 // PT: WIN-ICON -- ver o doc-comment na declaração (window_glfw.hpp) pro contrato completo; esta
-//     é a derivação por trás do teto `kMaxIconDim` citado lá. 2048 é folga generosa sobre
-//     qualquer tamanho real de ícone de SO/WM visto na prática (ícones de barra de
-//     tarefas/alt-tab do Windows ficam bem abaixo de 256px; até um conjunto de ícone de app
-//     bundle estilo macOS hi-DPI para em 1024) enquanto limita a cópia de pior caso abaixo a
-//     2048*2048*4 == 16 MiB, e mantém `w * h * 4` (computado como `std::size_t` abaixo, DEPOIS
-//     desta guarda por-dimensão já ter rodado) longe de estourar `int`/`std::size_t` em
+//     é a derivação por trás do teto `kMaxIconDim` citado lá.
+//
+//     O TST-ICON-BOUNDARY (W20, v0.25.0+) BAIXOU isto de um 2048 original para **1024** depois
+//     que um teste de fronteira adversarial (buffer real 2048x2048, não um buffer pequeno com
+//     dimensão declarada descomunal) provou que 2048 NUNCA foi seguro de verdade: o
+//     `glfwSetWindowIcon` repassa a `XChangeProperty` sob um backend X11 real, e o payload de um
+//     ícone 2048x2048 ULTRAPASSA o próprio max-request-size do protocolo X11, matando o cliente
+//     com um erro fatal `BadLength` -- não é uma folga generosa demais, é um crash incondicional
+//     em todo desktop X11 com o teto comum de ~16 MiB do BIG-REQUESTS. A matemática exata,
+//     verificada contra um X server real ("maximum request size" do `xdpyinfo`, 16.777.212
+//     bytes no Xvfb sob o qual esta suíte roda -- valor representativo, não incomumente pequeno):
+//     o payload de fio do `XChangeProperty` pra um ícone é `(2 + w*h)` valores CARD32 (2 longs de
+//     cabeçalho -- largura, altura -- mais uma palavra ARGB de 32 bits por pixel) `* 4` bytes,
+//     mais um cabeçalho de requisição fixo de 24 bytes.
+//       w=h=2048: (2 + 2048*2048)*4 + 24 == 16.777.248 bytes -- excede 16.777.212 por 36 bytes,
+//                 deterministicamente, em todo servidor que reporta esse teto ou menor.
+//       w=h=1024: (2 + 1024*1024)*4 + 24 ==  4.194.336 bytes -- ~25% desse teto, margem de
+//                 segurança de 4x, folgadamente longe da colisão.
+//     POR QUE ISSO FICOU INVISÍVEL ATÉ AGORA: o GLFW auto-detecta Wayland primeiro em qualquer
+//     host com sessão Wayland ativa (`WAYLAND_DISPLAY` definido) -- e o caminho `set_window_icon`
+//     do backend Wayland do GLFW não tem esse limite de tamanho de requisição (nenhum
+//     `XChangeProperty` envolvido), então rodar o binário desta suíte direto numa sessão de
+//     desktop Wayland PASSA e esconde o bug por completo. Só o isolamento que força X11 do
+//     próprio `tests/run_xvfb.cmake` (`unset(WAYLAND_DISPLAY)` + um `XDG_RUNTIME_DIR` falso e
+//     sem socket, pra que `wl_display_connect` não consiga cair de volta pro Wayland, ver o
+//     doc-comment daquele arquivo) exercita o caminho X11 REAL e reproduz o crash -- NÃO confie
+//     numa rodada verde deste binário invocado direto numa máquina dev Wayland como prova de que
+//     esta guarda é segura; sempre verifique através do wrapper ctest/`run_xvfb.cmake`.
+//     1024 TAMBÉM continua sendo folga generosa sobre qualquer tamanho real de ícone de SO/WM
+//     visto na prática (ícones de barra de tarefas/alt-tab do Windows ficam bem abaixo de 256px;
+//     até um conjunto de ícone de app bundle estilo macOS hi-DPI para em 1024 -- este teto agora
+//     está numericamente NESSE limite, não meramente acima dele) enquanto limita a cópia de pior
+//     caso a `1024*1024*4 == 4 MiB`, e mantém `w * h * 4` (computado como `std::size_t` abaixo,
+//     DEPOIS desta guarda por-dimensão já ter rodado) longe de estourar `int`/`std::size_t` em
 //     qualquer plataforma que esta biblioteca mira -- mesma ordem de guarda "limita cada
 //     dimensão ANTES de multiplicar" que o próprio check `kMaxImageDecodeBytes` do
 //     `Draw2d::create_texture` usa (glintfx/src/image_decode.hpp), aplicada aqui a um teto menor
 //     e específico de ícone de janela em vez do teto geral de 256 MiB daquele módulo (esta
 //     chamada não tem dependência de GLINTFX_MODULE_DRAW2D e não reusa a constante dele).
 namespace {
-constexpr int kMaxIconDim = 2048;
+constexpr int kMaxIconDim = 1024;
 } // namespace
 
 bool WindowGlfw::set_window_icon(const void* pixels_rgba8, int w, int h) {

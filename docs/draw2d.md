@@ -671,7 +671,7 @@ host calls `set_scissor`, Draw2D can leave `GL_SCISSOR_TEST` ENABLED behind afte
 restoration is the enclosing contract's job, and both enclosing contracts already exist:
 
 - **In `App`**, the frame hook's state is auto-restored before the UI render pass runs (the
-  `set_frame_callback` contract, `glintfx/include/glintfx/app.hpp:506` -- see
+  `set_frame_callback` contract, `glintfx/include/glintfx/app.hpp:511` -- see
   `docs/embed-integration.md` section 21). Draw2D calls made inside the hook are covered by that
   same restore, for free.
 - **In embed mode**, `UiLayer::render()` re-establishes its own full GL state inside
@@ -706,7 +706,7 @@ app.run();
 ```
 
 The frame hook runs after the frame clear and before the UI render pass
-(`glintfx/include/glintfx/app.hpp:506`), so sprites drawn here compose **under** the UI -- there
+(`glintfx/include/glintfx/app.hpp:511`), so sprites drawn here compose **under** the UI -- there
 is no post-UI insertion point in this slice (see "Limits declared" below).
 
 **Embed -- before or after `ui_layer.render()`, host's choice:**
@@ -1709,7 +1709,7 @@ em modo embed.
 restaurar é trabalho do contrato que envolve, e os dois contratos que envolvem já existem:
 
 - **No `App`**, o estado do hook de frame é auto-restaurado antes do passe de render de UI rodar
-  (o contrato do `set_frame_callback`, `glintfx/include/glintfx/app.hpp:506` -- ver
+  (o contrato do `set_frame_callback`, `glintfx/include/glintfx/app.hpp:511` -- ver
   `docs/embed-integration.md` seção 21). Chamadas de Draw2D dentro do hook são cobertas pela
   mesma restauração, de graça.
 - **No modo embed**, `UiLayer::render()` reestabelece o próprio estado GL completo dentro do
@@ -1746,7 +1746,7 @@ app.run();
 ```
 
 O hook de frame roda depois do clear do frame e antes do passe de render de UI
-(`glintfx/include/glintfx/app.hpp:506`), então sprites desenhados aqui compõem **sob** a UI --
+(`glintfx/include/glintfx/app.hpp:511`), então sprites desenhados aqui compõem **sob** a UI --
 não há ponto de inserção pós-UI nesta fatia (ver "Limites declarados" abaixo).
 
 **Embed -- antes ou depois do `ui_layer.render()`, escolha do host:**

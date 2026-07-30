@@ -52,6 +52,51 @@
   sem rotação de arquivo, sem saída estruturada/JSON, sem entrega assíncrona, só UM sink por vez,
   sem filtro por-módulo -- já mais do que a necessidade medida, de propósito.
 
+### Fixed / Corrigido
+
+- **EN:** **`TST-ICON-BOUNDARY`** (onda W20 -- adversarial boundary test on `App::set_window_icon`/
+  `WindowGlfw::set_window_icon` (`WIN-ICON`, shipped `v0.25.0`): **`App::set_window_icon` at its
+  documented 2048px cap CRASHED the client process.** This is a crash fix, not a capability
+  reduction -- the 2048 value being lowered was never safely usable in the first place; nobody
+  who tried it would have succeeded. Root cause: `glfwSetWindowIcon` forwards to X11's
+  `XChangeProperty`, and a 2048x2048 icon's wire payload -- `(2 + w*h)` `CARD32` values (2 header
+  longs plus one 32-bit ARGB word per pixel) `* 4` bytes, plus a 24-byte request header --
+  totals **16,777,248 bytes**, exceeding the X11 protocol's own max-request-size (a commonly-seen
+  ~16 MiB `BIG-REQUESTS` ceiling; measured at exactly 16,777,212 bytes on the CI's own Xvfb, a
+  representative value) by **36 bytes**, deterministically, killing the client with a fatal
+  `BadLength` error. **`kMaxIconDim` is now 1024** (`(2 + 1024*1024)*4 + 24 == 4,194,336 bytes`,
+  ~25% of that ceiling, a 4x safety margin). Found by writing the fronteira boundary test the
+  cap deserved -- a REAL 2048x2048 buffer, not a small buffer with an oversized declared
+  dimension -- which is exactly what exposed the crash the original, weaker `4096x4096`-with-a-
+  16-byte-buffer test could never have reached. Also invisible on a live Wayland desktop session
+  (GLFW's Wayland `set_window_icon` path has no such request-size limit) -- only a real X11
+  backend, the one `tests/run_xvfb.cmake` deliberately forces for this suite, reproduces it; see
+  that file's own doc-comment and `window_glfw.cpp`'s `kMaxIconDim` doc-comment for the full
+  byte-for-byte derivation. Decision to lower the cap (rather than add X11 error-handling
+  machinery) made by the project lead from three options presented.
+- **PT:** **`TST-ICON-BOUNDARY`** (onda W20 -- teste de fronteira adversarial em
+  `App::set_window_icon`/`WindowGlfw::set_window_icon` (`WIN-ICON`, lançado na `v0.25.0`):
+  **`App::set_window_icon` no teto documentado de 2048px CRASHAVA o processo cliente.** É um fix
+  de crash, não uma redução de capacidade -- o valor 2048 que foi baixado nunca foi seguro de
+  usar de verdade; quem tentasse não teria sucesso. Causa raiz: `glfwSetWindowIcon` repassa a
+  `XChangeProperty` do X11, e o payload de fio de um ícone 2048x2048 -- `(2 + w*h)` valores
+  `CARD32` (2 longs de cabeçalho mais uma palavra ARGB de 32 bits por pixel) `* 4` bytes, mais um
+  cabeçalho de requisição de 24 bytes -- totaliza **16.777.248 bytes**, ultrapassando o próprio
+  max-request-size do protocolo X11 (um teto comum de ~16 MiB do `BIG-REQUESTS`; medido em
+  exatamente 16.777.212 bytes no próprio Xvfb do CI, um valor representativo) por **36 bytes**,
+  deterministicamente, matando o cliente com um erro fatal `BadLength`. **O `kMaxIconDim` agora é
+  1024** (`(2 + 1024*1024)*4 + 24 == 4.194.336 bytes`, ~25% desse teto, margem de segurança de
+  4x). Achado ao escrever o teste de fronteira que o teto merecia -- um buffer REAL 2048x2048,
+  não um buffer pequeno com dimensão declarada descomunal -- que é exatamente o que expôs o
+  crash que o teste original, mais fraco, `4096x4096`-com-buffer-de-16-bytes nunca poderia ter
+  alcançado. Também invisível numa sessão de desktop Wayland ao vivo (o caminho
+  `set_window_icon` do backend Wayland do GLFW não tem esse limite de tamanho de requisição) --
+  só um backend X11 real, o que `tests/run_xvfb.cmake` deliberadamente força pra esta suíte,
+  reproduz. Ver o próprio doc-comment daquele arquivo e o doc-comment de `kMaxIconDim` em
+  `window_glfw.cpp` pra derivação byte-a-byte completa. Decisão de baixar o teto (em vez de
+  adicionar maquinaria de tratamento de erro X11) tomada pelo líder do projeto a partir de três
+  opções apresentadas.
+
 ## [0.25.0] - 2026-07-29 · [GitHub](https://github.com/petrinhu/glintfx/releases/tag/v0.25.0)
 
 ### Added / Adicionado

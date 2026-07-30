@@ -68,6 +68,7 @@ Not gated by a `GLINTFX_MODULE_*` flag -- part of the core public surface once y
 | Window modes (`Windowed`/`Maximized`/`FullscreenDesktop`/`FullscreenExclusive`, `App`-only) | `v0.16.0` (`A4-WINMODES`) | [`docs/window-modes.md`](window-modes.md) |
 | Frame hook: hosting your own GL renderer inside `App` (`set_frame_callback`) | `v0.19.0` (`DOC-HOSTIN`) | [`docs/embed-integration.md`](embed-integration.md) §21 |
 | Physical input state + window lifecycle (`is_key_down`/`is_mouse_button_down`/`get_cursor_pos`, close-veto, focus/iconify, `App`-only) | `v0.19.0` (`HOSTIN-1..5`) | [`docs/embed-integration.md`](embed-integration.md) §22 |
+| Window/taskbar icon from an in-memory RGBA8 buffer (`App::set_window_icon`, `App`-only) | `v0.25.0` (`WIN-ICON`); **1024px-per-dimension cap** (`kMaxIconDim`, `glintfx/src/window_glfw.cpp`) -- a same-release crash fix (`TST-ICON-BOUNDARY`, W20) lowered this from an original 2048 that overflowed X11's `XChangeProperty` max-request-size and crashed the client; see `CHANGELOG.md`'s `[Unreleased]` "Fixed" entry for the byte-for-byte derivation | [`glintfx/include/glintfx/app.hpp`](../glintfx/include/glintfx/app.hpp) (no dedicated `docs/*.md` section yet -- same accepted gap class as `i18n`/`log`, see "Confirmed gaps" below) |
 
 ### Confirmed gaps found while building this catalog
 
@@ -141,6 +142,7 @@ Não gateadas por uma flag `GLINTFX_MODULE_*` -- fazem parte da superfície púb
 | Modos de janela (`Windowed`/`Maximized`/`FullscreenDesktop`/`FullscreenExclusive`, só `App`) | `v0.16.0` (`A4-WINMODES`) | [`docs/window-modes.md`](window-modes.md) |
 | Hook de frame: hospedando o próprio renderer GL dentro do `App` (`set_frame_callback`) | `v0.19.0` (`DOC-HOSTIN`) | [`docs/embed-integration.md`](embed-integration.md) §21 |
 | Estado de input físico + ciclo de vida de janela (`is_key_down`/`is_mouse_button_down`/`get_cursor_pos`, veto de close, focus/iconify, só `App`) | `v0.19.0` (`HOSTIN-1..5`) | [`docs/embed-integration.md`](embed-integration.md) §22 |
+| Ícone de janela/barra de tarefas a partir de um buffer RGBA8 em memória (`App::set_window_icon`, só `App`) | `v0.25.0` (`WIN-ICON`); **teto de 1024px por dimensão** (`kMaxIconDim`, `glintfx/src/window_glfw.cpp`) -- um fix de crash na mesma release (`TST-ICON-BOUNDARY`, W20) baixou isto de um 2048 original que ultrapassava o max-request-size do `XChangeProperty` do X11 e crashava o cliente; ver a entrada "Fixed"/"Corrigido" do `[Unreleased]` do `CHANGELOG.md` pra derivação byte-a-byte | [`glintfx/include/glintfx/app.hpp`](../glintfx/include/glintfx/app.hpp) (ainda sem seção dedicada em `docs/*.md` -- mesma classe de lacuna aceita do `i18n`/`log`, ver "Lacunas confirmadas" abaixo) |
 
 ### Lacunas confirmadas achadas ao construir este catálogo
 

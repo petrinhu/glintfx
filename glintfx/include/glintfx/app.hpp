@@ -243,10 +243,12 @@ public:
   //     `pixels_rgba8` is read synchronously and copied before this call returns -- safe to
   //     free/reuse the caller's own buffer immediately after. Fail-high, never a crash: returns
   //     `false` (one dedup'd stderr line, window untouched) when `!ok()`, `pixels_rgba8` is
-  //     null, `w`/`h` is non-positive, or `w`/`h` exceeds the 2048px-per-dimension cap
-  //     (WindowGlfw::set_window_icon's own doc-comment, window_glfw.cpp, has the full
-  //     derivation). `nullptr` is REJECTED, not treated as "reset to the platform default icon"
-  //     (out of scope for this slice by design).
+  //     null, `w`/`h` is non-positive, or `w`/`h` exceeds the 1024px-per-dimension cap (LOWERED
+  //     from an original 2048 by TST-ICON-BOUNDARY/W20, v0.25.0+ -- 2048 was never actually safe:
+  //     its `XChangeProperty` payload overflows X11's own max-request-size and crashes the
+  //     client under a real X11 backend; WindowGlfw::set_window_icon's own doc-comment,
+  //     window_glfw.cpp, has the full byte-for-byte derivation). `nullptr` is REJECTED, not
+  //     treated as "reset to the platform default icon" (out of scope for this slice by design).
   // PT: Define o ícone de janela/barra de tarefas a partir de um buffer de pixel RGBA8 já em
   //     memória, de posse do chamador (WIN-ICON, framework-2D; consumer-driven -- o GusWorld
   //     decodifica o próprio PNG de ícone com stb_image e chama SDL_SetWindowIcon hoje; este é o
@@ -262,10 +264,13 @@ public:
   //     `pixels_rgba8` é lido de forma síncrona e copiado antes desta chamada retornar --
   //     seguro liberar/reusar o buffer do próprio chamador logo em seguida. Fail-high, nunca um
   //     crash: retorna `false` (uma linha de stderr dedup'd, janela intocada) quando `!ok()`,
-  //     `pixels_rgba8` é nulo, `w`/`h` é não-positivo, ou `w`/`h` excede o teto de 2048px por
-  //     dimensão (o próprio doc-comment de WindowGlfw::set_window_icon, window_glfw.cpp, tem a
-  //     derivação completa). `nullptr` é REJEITADO, não tratado como "restaurar o ícone default
-  //     da plataforma" (fora de escopo desta fatia por desenho).
+  //     `pixels_rgba8` é nulo, `w`/`h` é não-positivo, ou `w`/`h` excede o teto de 1024px por
+  //     dimensão (BAIXADO de um 2048 original pelo TST-ICON-BOUNDARY/W20, v0.25.0+ -- 2048 nunca
+  //     foi seguro de verdade: o payload do `XChangeProperty` dele ultrapassa o próprio
+  //     max-request-size do X11 e crasha o cliente sob um backend X11 real; o próprio doc-comment
+  //     de WindowGlfw::set_window_icon, window_glfw.cpp, tem a derivação byte-a-byte completa).
+  //     `nullptr` é REJEITADO, não tratado como "restaurar o ícone default da plataforma" (fora
+  //     de escopo desta fatia por desenho).
   bool set_window_icon(const void* pixels_rgba8, int w, int h);
 
   // EN: Returns false if the window was closed or initialization failed.

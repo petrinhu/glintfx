@@ -477,16 +477,28 @@ App::CapturedFrame App::capture_frame() {
   // EN: `FRAMEGRAB-TEX` -- see the CapturedFrame/capture_frame() doc-comment in app.hpp (right
   //     before `private:`) for the full rationale: form (b) vs (a), pixel format, ownership,
   //     fail-high. This body is deliberately a close structural twin of snapshot() above: same
-  //     render_frame() call, same FBO 0 read point (between EndFrame and the buffer swap), same
-  //     GL_RGB glReadPixels call -- only the destination (an owned CPU buffer instead of a PPM
-  //     file) and the extra RGB -> RGBA8 expansion (synthetic alpha=255) differ.
+  //     render_frame() call, same FBO 0 read point (between EndFrame and the buffer swap).
+  //     `FRAMEGRAB-EMBED` (v0.27.0) ICED the actual glReadPixels/flip/RGBA8-expansion body
+  //     that used to live here into Engine::capture_frame (engine.cpp) -- the SAME readback
+  //     UiLayer::capture_frame (ui_layer.cpp) now shares, so the two facades never drift. This
+  //     method's own job stays exactly what it always was: drive App's OWN render (App owns
+  //     the whole window, offset always (0,0)) and the buffer swap, which UiLayer's read-only
+  //     sibling deliberately does NOT do (see UiLayer::capture_frame's own doc-comment,
+  //     ui_layer.hpp, for why: the HOST calls render()+capture_frame() itself, in that order,
+  //     before its own swap).
   // PT: `FRAMEGRAB-TEX` -- ver o doc-comment de CapturedFrame/capture_frame() em app.hpp (logo
   //     antes de `private:`) pro racional completo: forma (b) vs (a), formato de pixel, posse,
   //     fail-high. Este corpo é de propósito um gêmeo estrutural próximo do snapshot() acima:
   //     mesma chamada render_frame(), mesmo ponto de leitura do FBO 0 (entre o EndFrame e a
-  //     troca de buffer), mesma chamada glReadPixels com GL_RGB -- só o destino (buffer de CPU
-  //     de posse própria em vez de arquivo PPM) e a expansão extra RGB -> RGBA8 (alpha
-  //     sintético=255) diferem.
+  //     troca de buffer). O `FRAMEGRAB-EMBED` (v0.27.0) GELOU o corpo de fato
+  //     glReadPixels/flip/expansão-RGBA8 que vivia aqui para dentro de Engine::capture_frame
+  //     (engine.cpp) -- o MESMO readback que UiLayer::capture_frame (ui_layer.cpp) agora
+  //     compartilha, para que as duas fachadas nunca derivem. O trabalho deste método continua
+  //     exatamente o que sempre foi: conduzir o PRÓPRIO render do App (o App é dono da janela
+  //     inteira, offset sempre (0,0)) e o swap de buffer, que o irmão só-leitura UiLayer::
+  //     capture_frame deliberadamente NÃO faz (ver o próprio doc-comment de
+  //     UiLayer::capture_frame, ui_layer.hpp, pro porquê: o HOST chama render()+capture_frame()
+  //     ele mesmo, nessa ordem, antes do próprio swap dele).
   if (!impl_->ok) return CapturedFrame{};
   int w = 0, h = 0;
   impl_->window.size(w, h);
@@ -499,48 +511,23 @@ App::CapturedFrame App::capture_frame() {
   if (w <= 0 || h <= 0) return CapturedFrame{};
   impl_->sync_viewport(w, h);
   impl_->render_frame(w, h);
-  // EN: FBO 0 now contains the complete composited frame. Read before swap (same rationale as
-  //     snapshot() above: back-buffer content is undefined on many GL implementations AFTER
-  //     glfwSwapBuffers).
-  // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap (mesmo racional do
-  //     snapshot() acima: conteúdo do back-buffer é indefinido em muitas implementações GL
-  //     DEPOIS de glfwSwapBuffers).
-  glBindFramebuffer(0x8D40, 0); // GL_FRAMEBUFFER, 0 = window
-  glReadBuffer(0x0402);         // GL_BACK
-  glPixelStorei(0x0D05, 1);     // GL_PACK_ALIGNMENT = 1
-  std::vector<unsigned char> rgb((size_t)w * h * 3);
-  glReadPixels(0, 0, w, h, 0x1907, 0x1401, rgb.data()); // GL_RGB, GL_UNSIGNED_BYTE
-  glPixelStorei(0x0D05, 4);                             // restore GL_PACK_ALIGNMENT = 4
+  // EN: FBO 0 now contains the complete composited frame. Engine::capture_frame reads it
+  //     BEFORE the swap below (same rationale as snapshot() above: back-buffer content is
+  //     undefined on many GL implementations AFTER glfwSwapBuffers) -- App always reads the
+  //     origin-anchored full window, (0, 0).
+  // PT: FBO 0 agora contém o frame composto completo. Engine::capture_frame o lê ANTES do
+  //     swap abaixo (mesmo racional do snapshot() acima: conteúdo do back-buffer é indefinido
+  //     em muitas implementações GL DEPOIS de glfwSwapBuffers) -- o App sempre lê a janela
+  //     inteira ancorada na origem, (0, 0).
+  CapturedFramePixels px = impl_->engine.capture_frame(0, 0, w, h);
   impl_->window.swap();
 
   CapturedFrame out;
-  out.width = w;
-  out.height = h;
-  out.byte_count = (size_t)w * h * 4;
-  out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
-  // EN: glReadPixels origin is bottom-left; CapturedFrame's row 0 is top (matches
-  //     decode_image_file()/decode_image_memory(), image.hpp -- see the CapturedFrame
-  //     doc-comment in app.hpp). Flip rows while expanding RGB -> RGBA8 with a synthetic
-  //     alpha=255 (see that same doc-comment for why 255, not a real alpha-channel read, is the
-  //     honest value here).
-  // PT: A origem do glReadPixels é bottom-left; a linha 0 do CapturedFrame é o topo (bate com
-  //     decode_image_file()/decode_image_memory(), image.hpp -- ver o doc-comment de
-  //     CapturedFrame em app.hpp). Inverte linhas enquanto expande RGB -> RGBA8 com alpha
-  //     sintético=255 (ver o mesmo doc-comment pro porquê de 255, não uma leitura real de canal
-  //     alpha, ser o valor honesto aqui).
-  const size_t row_bytes_src = (size_t)w * 3;
-  for (int dst_row = 0; dst_row < h; ++dst_row) {
-    const int src_row = h - 1 - dst_row;
-    const unsigned char* src = rgb.data() + (size_t)src_row * row_bytes_src;
-    unsigned char* dst = out.pixels.get() + (size_t)dst_row * (size_t)w * 4;
-    for (int x = 0; x < w; ++x) {
-      dst[x * 4 + 0] = src[x * 3 + 0];
-      dst[x * 4 + 1] = src[x * 3 + 1];
-      dst[x * 4 + 2] = src[x * 3 + 2];
-      dst[x * 4 + 3] = 255;
-    }
-  }
-  out.ok = true;
+  out.ok = px.ok;
+  out.width = px.width;
+  out.height = px.height;
+  out.byte_count = px.byte_count;
+  out.pixels = std::move(px.pixels);
   return out;
 }
 

@@ -13,6 +13,7 @@
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/Input.h>
 #include <cmath>  // EN: std::isfinite (dp-ratio input hardening / process_event guards). PT: std::isfinite (hardening do dp-ratio / guards do process_event).
+#include <vector> // EN: intermediate RGB scratch buffer (capture_frame, FRAMEGRAB-EMBED). PT: buffer RGB intermediário (capture_frame, FRAMEGRAB-EMBED).
 
 namespace glintfx {
 
@@ -532,6 +533,100 @@ bool Engine::get_string(const char* key, std::string& out) const {
 bool Engine::get_bool(const char* key, bool& out) const {
   if (!impl_->ok) return false;
   return impl_->data_binder.get_bool(key, out);
+}
+
+// EN: `FRAMEGRAB-EMBED` -- see this method's own doc-comment (engine.hpp) for the full
+//     contract. Pure readback: renders nothing, only reads whatever FBO 0 already holds.
+//     GL STATE HYGIENE (this is what keeps the compose-only promise for UiLayer's own
+//     caller): unlike render_compose above, this method does NOT use GlStateGuard (that
+//     class only covers the render-pass state -- viewport/blend/program/VAO/etc -- none of
+//     which a plain glReadPixels touches). It saves and restores, by hand, the exact 5 pieces
+//     of GL state a pixel readback CAN perturb: GL_READ_FRAMEBUFFER binding, GL_READ_BUFFER,
+//     GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, and the GL_PIXEL_PACK_BUFFER binding (a bound
+//     PBO would silently redirect glReadPixels's 4th argument from a pointer to a buffer
+//     OFFSET -- unbinding it for the read, then restoring the host's own binding afterward,
+//     is what makes this call safe to use even when a host renders through a pixel-pack PBO
+//     of its own). GL_PACK_ALIGNMENT is forced to 1 (tightly-packed rows) for the read
+//     itself -- this is the fix for the "odd width corrupts rows" class of bug the default
+//     alignment of 4 causes (a default-4-byte-aligned read of an odd-width*3-byte-per-pixel
+//     RGB row silently pads each row to the next 4-byte boundary, which the row_bytes_src
+//     stride below does NOT account for, corrupting every row after the first) -- restored to
+//     whatever the host had afterward, never left at 1.
+// PT: `FRAMEGRAB-EMBED` -- ver o próprio doc-comment deste método (engine.hpp) pro contrato
+//     completo. Readback puro: não renderiza nada, só lê o que o FBO 0 já guarda.
+//     HIGIENE DE ESTADO GL (é isto que sustenta a promessa compose-only pro próprio chamador
+//     do UiLayer): diferente do render_compose acima, este método NÃO usa GlStateGuard
+//     (aquela classe só cobre o estado do passe de render -- viewport/blend/programa/VAO/etc
+//     -- nada disso um glReadPixels puro toca). Salva e restaura, à mão, as exatas 5 peças de
+//     estado GL que um readback de pixel PODE perturbar: binding de GL_READ_FRAMEBUFFER,
+//     GL_READ_BUFFER, GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, e o binding de
+//     GL_PIXEL_PACK_BUFFER (um PBO vinculado redirecionaria silenciosamente o 4º argumento do
+//     glReadPixels de um ponteiro pra um OFFSET de buffer -- desvinculá-lo pra leitura, depois
+//     restaurar o binding próprio do host depois, é o que torna esta chamada segura de usar
+//     mesmo quando um host renderiza através de um PBO de pixel-pack próprio).
+//     GL_PACK_ALIGNMENT é forçado a 1 (linhas compactadas sem padding) pra própria leitura --
+//     este é o conserto pra classe de bug "largura ímpar corrompe linhas" que o alinhamento
+//     default de 4 causa (uma leitura com alinhamento default-4-bytes de uma linha RGB de
+//     largura ímpar*3-bytes-por-pixel preenche silenciosamente cada linha até o próximo limite
+//     de 4 bytes, o que o passo row_bytes_src abaixo NÃO leva em conta, corrompendo toda linha
+//     após a primeira) -- restaurado ao que o host tinha depois, nunca deixado em 1.
+CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) const {
+  if (!impl_->ok) return CapturedFramePixels{};
+  if (w <= 0 || h <= 0) return CapturedFramePixels{};
+
+  GLint prev_read_fbo = 0, prev_read_buffer = 0;
+  GLint prev_pack_alignment = 4, prev_pack_row_length = 0, prev_pack_pbo = 0;
+  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+  glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+  glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
+  glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
+  glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &prev_pack_pbo);
+
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+  glReadBuffer(GL_BACK);
+  glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+
+  std::vector<unsigned char> rgb(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
+  glReadPixels(gl_x, gl_y, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
+
+  glPixelStorei(GL_PACK_ALIGNMENT, prev_pack_alignment);
+  glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+  glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(prev_pack_pbo));
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
+  glReadBuffer(static_cast<GLenum>(prev_read_buffer));
+
+  // EN: Row-flip (glReadPixels origin is bottom-left; CapturedFramePixels row 0 is top -- same
+  //     convention App::CapturedFrame/UiLayer::CapturedFrame document) + RGB -> RGBA8 expansion
+  //     with synthetic alpha=255 -- IDENTICAL to what App::capture_frame's own body used to do
+  //     inline before FRAMEGRAB-EMBED (see this method's own doc-comment, engine.hpp, and
+  //     App::CapturedFrame's doc-comment, app.hpp, for the full "why 255" rationale).
+  // PT: Inversão de linha (a origem do glReadPixels é bottom-left; a linha 0 de
+  //     CapturedFramePixels é o topo -- mesma convenção que App::CapturedFrame/
+  //     UiLayer::CapturedFrame documentam) + expansão RGB -> RGBA8 com alpha sintético=255 --
+  //     IDÊNTICO ao que o próprio corpo de App::capture_frame fazia inline antes do
+  //     FRAMEGRAB-EMBED (ver o próprio doc-comment deste método, engine.hpp, e o doc-comment
+  //     de App::CapturedFrame, app.hpp, pro racional completo do "por que 255").
+  CapturedFramePixels out;
+  out.width = w;
+  out.height = h;
+  out.byte_count = static_cast<size_t>(w) * static_cast<size_t>(h) * 4;
+  out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
+  const size_t row_bytes_src = static_cast<size_t>(w) * 3;
+  for (int dst_row = 0; dst_row < h; ++dst_row) {
+    const int src_row = h - 1 - dst_row;
+    const unsigned char* src = rgb.data() + static_cast<size_t>(src_row) * row_bytes_src;
+    unsigned char* dst = out.pixels.get() + static_cast<size_t>(dst_row) * static_cast<size_t>(w) * 4;
+    for (int x = 0; x < w; ++x) {
+      dst[x * 4 + 0] = src[x * 3 + 0];
+      dst[x * 4 + 1] = src[x * 3 + 1];
+      dst[x * 4 + 2] = src[x * 3 + 2];
+      dst[x * 4 + 3] = 255;
+    }
+  }
+  out.ok = true;
+  return out;
 }
 
 } // namespace glintfx

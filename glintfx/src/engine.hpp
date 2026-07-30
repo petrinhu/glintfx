@@ -16,6 +16,7 @@
 // PT: Só forward-declaration — nenhum tipo RmlUi/GL visível aos chamadores.
 namespace Rml { class Context; class SystemInterface; }
 #include <cstddef>
+#include <memory> // EN: std::unique_ptr<unsigned char[]> (CapturedFramePixels, FRAMEGRAB-EMBED). PT: std::unique_ptr<unsigned char[]> (CapturedFramePixels, FRAMEGRAB-EMBED).
 #include <functional>
 #include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/click_info.hpp>
@@ -24,6 +25,22 @@ namespace Rml { class Context; class SystemInterface; }
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 
 namespace glintfx {
+
+// EN: Forward-declared here (defined at the bottom of this file, after Engine) so
+//     Engine::capture_frame's declaration below can name it as a return type -- a function
+//     DECLARATION only needs a complete type at the point of definition/call, not here. Kept
+//     out-of-line (not inline in the class) to avoid perturbing this header's own
+//     `file:line` doc citations (docs/embed-integration.md cites `engine.hpp:91-126`/`:4`) --
+//     see this file's own doc-comment on the full CapturedFramePixels definition, below, for
+//     the shape/contract this stands in for.
+// PT: Forward-declarada aqui (definida no fim deste arquivo, após Engine) para que a
+//     declaração de Engine::capture_frame abaixo possa nomeá-la como tipo de retorno -- uma
+//     DECLARAÇÃO de função só precisa de um tipo completo no ponto de definição/chamada, não
+//     aqui. Mantida fora-de-linha (não inline na classe) para não perturbar as próprias
+//     citações `file:line` deste header (docs/embed-integration.md cita
+//     `engine.hpp:91-126`/`:4`) -- ver o próprio doc-comment da definição completa de
+//     CapturedFramePixels, no fim deste arquivo, para a forma/contrato que ela representa.
+struct CapturedFramePixels;
 
 class Engine {
 public:
@@ -132,6 +149,57 @@ public:
   //     (origem inferior-esquerda) -- JÁ CONVERTIDO pelo chamador (UiLayer). O Engine
   //     permanece agnóstico ao espaço do offset: nunca interpreta esses valores, só repassa.
   void render_compose(int offset_x, int offset_y, int w, int h);
+
+  // EN: `FRAMEGRAB-EMBED` -- read back a `w`x`h` RGBA8 region of FBO 0 into an owned CPU
+  //     buffer, row 0 = top. The SHARED readback the DRY twin of `App::capture_frame`
+  //     (`app.cpp`) and `UiLayer::capture_frame` (`ui_layer.cpp`) both wrap: this method owns
+  //     the `glReadPixels` call, the GL_PACK_* / GL_READ_FRAMEBUFFER save-restore, and the
+  //     bottom-up -> top-down flip + RGB -> RGBA8 (alpha=255) expansion; the two facades own
+  //     only the region they pass in and the public struct they copy the result into (see
+  //     `App::CapturedFrame`, `app.hpp`, for the FULL pixel-format/ownership/fail-high
+  //     contract this implements -- `UiLayer::CapturedFrame`, `ui_layer.hpp`, mirrors it
+  //     verbatim).
+  //
+  //     DOES NOT RENDER A FRAME. Callers are responsible for ensuring FBO 0 already holds the
+  //     desired composited content (after `render_standalone`/`render_compose`, BEFORE any
+  //     buffer swap -- back-buffer content is undefined post-swap on Mesa/llvmpipe, the same
+  //     reasoning `App::snapshot()`'s own doc-comment states). `(gl_x, gl_y)` are OpenGL-native
+  //     (bottom-left-origin) offsets -- the SAME convention as `render_compose`'s own
+  //     `(offset_x, offset_y)` above; `App` always passes `(0, 0)` (owns the whole window),
+  //     `UiLayer` passes its own pre-computed letterbox `gl_offset_x/y` (see
+  //     `UiLayer::set_viewport`'s doc-comment, `ui_layer.hpp`) -- this method stays
+  //     offset-space agnostic, exactly like `render_compose` above, and never interprets `w`/
+  //     `h` as anything but the exact rectangle to read.
+  //
+  //     FAIL-HIGH: `!ok()`, or `w <= 0 || h <= 0`, returns `CapturedFramePixels{}`
+  //     (`ok=false`, `width=height=0`, `pixels=null`, `byte_count=0`) WITHOUT touching GL at
+  //     all -- same guard shape as every other `!ok()`-gated Engine method above.
+  // PT: `FRAMEGRAB-EMBED` -- lê de volta uma região `w`x`h` RGBA8 do FBO 0 num buffer de CPU
+  //     de posse própria, linha 0 = topo. O readback COMPARTILHADO que o gêmeo DRY de
+  //     `App::capture_frame` (`app.cpp`) e `UiLayer::capture_frame` (`ui_layer.cpp`) os dois
+  //     encapsulam: este método é dono da chamada `glReadPixels`, do save-restore de
+  //     GL_PACK_*/GL_READ_FRAMEBUFFER, e da inversão bottom-up -> top-down + expansão
+  //     RGB -> RGBA8 (alpha=255); as duas fachadas são donas só da região que passam e da
+  //     struct pública para a qual copiam o resultado (ver `App::CapturedFrame`, `app.hpp`,
+  //     pro contrato COMPLETO de formato de pixel/posse/fail-high que isto implementa --
+  //     `UiLayer::CapturedFrame`, `ui_layer.hpp`, o espelha tal-e-qual).
+  //
+  //     NÃO RENDERIZA FRAME NENHUM. Chamadores são responsáveis por garantir que o FBO 0 já
+  //     guarda o conteúdo composto desejado (após `render_standalone`/`render_compose`, ANTES
+  //     de qualquer swap de buffer -- o conteúdo do back-buffer é indefinido pós-swap no
+  //     Mesa/llvmpipe, mesma racional que o próprio doc-comment de `App::snapshot()`
+  //     declara). `(gl_x, gl_y)` são offsets NATIVOS do OpenGL (origem inferior-esquerda) --
+  //     a MESMA convenção do próprio `(offset_x, offset_y)` de `render_compose` acima; o `App`
+  //     sempre passa `(0, 0)` (é dono da janela inteira), o `UiLayer` passa o próprio
+  //     `gl_offset_x/y` de letterbox pré-calculado (ver o doc-comment de
+  //     `UiLayer::set_viewport`, `ui_layer.hpp`) -- este método permanece agnóstico ao espaço
+  //     do offset, exatamente como o `render_compose` acima, e nunca interpreta `w`/`h` como
+  //     outra coisa que não o retângulo exato a ler.
+  //
+  //     FAIL-HIGH: `!ok()`, ou `w <= 0 || h <= 0`, retorna `CapturedFramePixels{}`
+  //     (`ok=false`, `width=height=0`, `pixels=nulo`, `byte_count=0`) SEM tocar GL nenhum --
+  //     mesmo formato de guard de todo outro método do Engine gateado por `!ok()` acima.
+  CapturedFramePixels capture_frame(int gl_x, int gl_y, int w, int h) const;
 
   // EN: Returns the active Rml::Context, or nullptr if not ok().
   // PT: Retorna o Rml::Context ativo, ou nullptr se não ok().
@@ -436,6 +504,31 @@ public:
 private:
   struct Impl;
   Impl* impl_;
+};
+
+// EN: `FRAMEGRAB-EMBED` -- result of Engine::capture_frame() above. Defined here (after
+//     Engine, not forward of it) so this out-of-line definition never has to move again --
+//     see the forward-declaration's own doc-comment (top of this file) for why the split
+//     exists. Shape/semantics identical to `App::CapturedFrame`/`UiLayer::CapturedFrame`
+//     (which copy-construct their own public type FROM one of these) -- see either header's
+//     own doc-comment for the full, load-bearing contract (pixel format, ownership,
+//     fail-high); this internal struct's fields exist ONLY to carry that same data across the
+//     Engine boundary, not to add a second, independent contract to keep in sync.
+// PT: `FRAMEGRAB-EMBED` -- resultado do Engine::capture_frame() acima. Definida aqui (após
+//     Engine, não antes dela) para que esta definição fora-de-linha nunca precise se mover de
+//     novo -- ver o próprio doc-comment da forward-declaration (topo deste arquivo) pro
+//     motivo da divisão. Forma/semântica idêntica a `App::CapturedFrame`/
+//     `UiLayer::CapturedFrame` (que copy-constroem o próprio tipo público A PARTIR de uma
+//     destas) -- ver o doc-comment de qualquer um dos dois headers pro contrato completo,
+//     que carrega peso (formato de pixel, posse, fail-high); os campos desta struct interna
+//     existem SÓ pra carregar esse mesmo dado através da fronteira do Engine, não para somar
+//     um segundo contrato independente a manter sincronizado.
+struct CapturedFramePixels {
+  bool ok = false;
+  int width = 0;
+  int height = 0;
+  std::unique_ptr<unsigned char[]> pixels;
+  std::size_t byte_count = 0;
 };
 
 } // namespace glintfx

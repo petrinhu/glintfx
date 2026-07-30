@@ -780,6 +780,125 @@ public:
   bool get_string(const char* key, std::string& out) const;
   bool get_bool  (const char* key, bool& out) const;
 
+  // -------------------------------------------------------------------------
+  // EN: `FRAMEGRAB-EMBED` (v0.27.0) -- the embed-mode sibling of `App::CapturedFrame`/
+  //     `App::capture_frame()` (`app.hpp`, right before its own `private:`). Same struct
+  //     shape, same pixel-format/ownership/fail-high contract -- see `App::CapturedFrame`'s
+  //     own doc-comment for the FULL rationale (form (b) vs (a), why RGBA8 with a synthetic
+  //     alpha=255, why `std::unique_ptr<unsigned char[]>` not `std::vector`); this comment
+  //     covers only what is DIFFERENT for the embed path.
+  //
+  //     WHY THIS EXISTS: `App::capture_frame()` shipped `FRAMEGRAB-TEX` (v0.26.0) for
+  //     `glintfx::App` only -- the embed-only build (`GLINTFX_BACKEND_GLFW=OFF`) had ZERO
+  //     access to it, and GusWorld (the consumer who asked for the capability) is
+  //     embed-only. This is the same "the destravante API never reaches who it should"
+  //     pattern already catalogued as `GLPROC-EMBED` (W22) -- `capture_frame()` reaching
+  //     `UiLayer` closes it for this capability.
+  //
+  //     WHAT IT CAPTURES (the declared ceiling -- read this before assuming "the whole
+  //     window"): the CURRENT viewport region set by `set_viewport()` above -- i.e. exactly
+  //     the rectangle `render()` just composited into, in FBO 0. In the common case
+  //     (`set_viewport(w, h)`, the 2-arg legacy overload) that IS the whole window. In
+  //     LETTERBOX mode (`set_viewport(x, y, w, h, target_h)`), it is only the sub-region --
+  //     whatever the host drew OUTSIDE that sub-region (its own letterbox bars/border) is
+  //     NOT captured; a host that wants the full render target reads it itself, the same way
+  //     it composited it. This mirrors `render()`'s own "the viewport origin within FBO 0 is
+  //     configurable" contract above -- `capture_frame()` reads exactly what `render()` just
+  //     wrote, nothing more.
+  //
+  //     TIMING -- THE ONE RULE THAT MATTERS: call this AFTER `render()` and BEFORE the host's
+  //     OWN buffer swap. Unlike `App::capture_frame()` (which drives its own render_frame()
+  //     call AND its own swap, since `App` owns the whole frame), `UiLayer::capture_frame()`
+  //     does NOT render a frame and does NOT swap -- it is a PURE READ of whatever FBO 0
+  //     already holds at the moment it is called, mirroring the same "host owns clear and
+  //     swap" discipline `render()`'s own doc-comment states (section 5, docs/
+  //     embed-integration.md). Calling it before render() reads whatever the host drew BEFORE
+  //     the UI composited (a legitimate thing to want, just not "the composited frame");
+  //     calling it after the host's swap reads UNDEFINED back-buffer content on many GL
+  //     implementations (Mesa/llvmpipe included -- the SAME reasoning `App::snapshot()`'s own
+  //     doc-comment already states for the standalone path).
+  //
+  //     GL STATE: automatically saved and restored, same "the host sees the context
+  //     unchanged on return" promise `render()` makes above -- see
+  //     `Engine::capture_frame`'s own doc-comment (`engine.hpp`) for exactly which 5 pieces of
+  //     GL_PACK_*/GL_READ_FRAMEBUFFER state this call touches and restores (NOT the same list
+  //     `render()`'s own `GlStateGuard` covers -- a plain pixel readback touches different GL
+  //     state than a render pass).
+  //
+  //     Requires NO loaded document -- capture_frame() reads FBO 0 regardless of whether
+  //     `load()` was ever called (it captures whatever the host itself drew, with or without
+  //     glintfx UI content composited on top). Returns `CapturedFrame{}` (`ok=false`) without
+  //     touching GL when not `ok()`, or the current viewport is degenerate (`w<=0||h<=0` --
+  //     not reachable through `set_viewport()`'s own guard in normal use, but defended here
+  //     the same way `App::capture_frame()` defends against it).
+  //
+  // PT: `FRAMEGRAB-EMBED` (v0.27.0) -- o irmão em modo embed do `App::CapturedFrame`/
+  //     `App::capture_frame()` (`app.hpp`, logo antes do próprio `private:`). Mesma forma de
+  //     struct, mesmo contrato de formato-de-pixel/posse/fail-high -- ver o próprio
+  //     doc-comment de `App::CapturedFrame` pro racional COMPLETO (forma (b) vs (a), por que
+  //     RGBA8 com alpha sintético=255, por que `std::unique_ptr<unsigned char[]>` e não
+  //     `std::vector`); este comentário cobre só o que é DIFERENTE pro caminho embed.
+  //
+  //     POR QUE ISTO EXISTE: o `App::capture_frame()` lançou o `FRAMEGRAB-TEX` (v0.26.0) só
+  //     pra `glintfx::App` -- o build embed-only (`GLINTFX_BACKEND_GLFW=OFF`) tinha ZERO
+  //     acesso a ele, e o GusWorld (o consumidor que pediu a capacidade) é embed-only. É o
+  //     mesmo padrão "a API destravante nunca alcança quem ela deveria destravar" já
+  //     catalogado como `GLPROC-EMBED` (W22) -- o `capture_frame()` alcançar o `UiLayer`
+  //     fecha isto para esta capacidade.
+  //
+  //     O QUE CAPTURA (o teto declarado -- leia isto antes de assumir "a janela inteira"): a
+  //     região de viewport CORRENTE definida por `set_viewport()` acima -- ou seja,
+  //     exatamente o retângulo que `render()` acabou de compor no FBO 0. No caso comum
+  //     (`set_viewport(w, h)`, a sobrecarga legada de 2 args) isso É a janela inteira. Em modo
+  //     LETTERBOX (`set_viewport(x, y, w, h, target_h)`), é só a sub-região -- o que quer que
+  //     o host tenha desenhado FORA dessa sub-região (as próprias barras/borda de letterbox
+  //     dele) NÃO é capturado; um host que quer o render target inteiro lê ele mesmo, do
+  //     mesmo jeito que compôs. Isto espelha o próprio contrato "a origem do viewport dentro
+  //     do FBO 0 é configurável" do `render()` acima -- `capture_frame()` lê exatamente o que
+  //     `render()` acabou de escrever, nada mais.
+  //
+  //     TIMING -- A ÚNICA REGRA QUE IMPORTA: chame isto DEPOIS de `render()` e ANTES do
+  //     próprio swap de buffer do host. Diferente do `App::capture_frame()` (que conduz a
+  //     própria chamada render_frame() E o próprio swap, já que o `App` é dono do frame
+  //     inteiro), o `UiLayer::capture_frame()` NÃO renderiza frame nenhum e NÃO faz swap -- é
+  //     uma LEITURA PURA do que o FBO 0 já guarda no momento em que é chamado, espelhando a
+  //     mesma disciplina "host é dono do clear e do swap" que o próprio doc-comment de
+  //     `render()` declara (seção 5, docs/embed-integration.md). Chamá-lo antes do render()
+  //     lê o que o host desenhou ANTES da UI compor (uma coisa legítima de se querer, só não
+  //     "o frame composto"); chamá-lo depois do swap do host lê conteúdo de back-buffer
+  //     INDEFINIDO em muitas implementações GL (Mesa/llvmpipe inclusive -- o MESMO racional
+  //     que o próprio doc-comment de `App::snapshot()` já declara pro caminho standalone).
+  //
+  //     ESTADO GL: salvo e restaurado automaticamente, a mesma promessa "o host vê o contexto
+  //     inalterado ao retornar" que o `render()` faz acima -- ver o próprio doc-comment de
+  //     `Engine::capture_frame` (`engine.hpp`) pra exatamente quais 5 peças de estado
+  //     GL_PACK_*/GL_READ_FRAMEBUFFER esta chamada toca e restaura (NÃO a mesma lista que o
+  //     próprio `GlStateGuard` do `render()` cobre -- um readback de pixel puro toca estado GL
+  //     diferente de um passe de render).
+  //
+  //     Não exige documento carregado nenhum -- capture_frame() lê o FBO 0
+  //     independentemente de `load()` ter sido chamado alguma vez (captura o que quer que o
+  //     próprio host tenha desenhado, com ou sem conteúdo de UI da glintfx composto por cima).
+  //     Retorna `CapturedFrame{}` (`ok=false`) sem tocar GL quando não `ok()`, ou o viewport
+  //     corrente é degenerado (`w<=0||h<=0` -- não alcançável através do próprio guard de
+  //     `set_viewport()` em uso normal, mas defendido aqui do mesmo jeito que
+  //     `App::capture_frame()` se defende contra isso).
+  // -------------------------------------------------------------------------
+
+  // EN: Result of capture_frame() below. Same shape/semantics as App::CapturedFrame -- see
+  //     the section-header comment immediately above for the full contract.
+  // PT: Resultado do capture_frame() abaixo. Mesma forma/semântica de App::CapturedFrame --
+  //     ver o comentário de cabeçalho de seção imediatamente acima pro contrato completo.
+  struct CapturedFrame {
+    bool ok = false;
+    int width = 0;
+    int height = 0;
+    std::unique_ptr<unsigned char[]> pixels;
+    std::size_t byte_count = 0;
+  };
+
+  CapturedFrame capture_frame() const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

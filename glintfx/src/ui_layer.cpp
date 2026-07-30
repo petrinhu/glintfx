@@ -522,4 +522,37 @@ void UiLayer::process_event(const UiEvent& ev) {
   impl_->engine.process_event(ev, impl_->x, impl_->y);
 }
 
+// EN: `FRAMEGRAB-EMBED` -- see this method's own doc-comment (ui_layer.hpp, right before
+//     `private:`) for the full contract. Pure delegation to the SAME Engine::capture_frame
+//     readback App::capture_frame (app.cpp) uses -- this method does NOT render (the host's
+//     own render() call, made before this one, is what put the desired content into FBO 0)
+//     and does NOT swap (the host owns that too). The only UiLayer-specific work here is
+//     picking the CORRECT region to read: the current viewport's own GL-native offset/size
+//     (impl_->gl_offset_x/y/w/h), the SAME rectangle render() -> Engine::render_compose just
+//     composited into -- pre-computed once by set_viewport() (see its own doc-comment) and
+//     reused here unchanged, exactly like render() itself reuses it every frame.
+// PT: `FRAMEGRAB-EMBED` -- ver o próprio doc-comment deste método (ui_layer.hpp, logo antes
+//     de `private:`) pro contrato completo. Delegação pura pro MESMO readback
+//     Engine::capture_frame que App::capture_frame (app.cpp) usa -- este método NÃO
+//     renderiza (a própria chamada render() do host, feita antes desta, é o que pôs o
+//     conteúdo desejado no FBO 0) e NÃO faz swap (o host também é dono disso). O único
+//     trabalho específico do UiLayer aqui é escolher a região CORRETA a ler: o próprio
+//     offset/tamanho nativo-GL do viewport corrente (impl_->gl_offset_x/y/w/h), o MESMO
+//     retângulo que render() -> Engine::render_compose acabou de compor -- pré-calculado uma
+//     vez por set_viewport() (ver o próprio doc-comment dele) e reusado aqui sem mudança,
+//     exatamente como o próprio render() o reusa a cada frame.
+UiLayer::CapturedFrame UiLayer::capture_frame() const {
+  if (!impl_->ok) return CapturedFrame{};
+  CapturedFramePixels px =
+      impl_->engine.capture_frame(impl_->gl_offset_x, impl_->gl_offset_y, impl_->w, impl_->h);
+
+  CapturedFrame out;
+  out.ok = px.ok;
+  out.width = px.width;
+  out.height = px.height;
+  out.byte_count = px.byte_count;
+  out.pixels = std::move(px.pixels);
+  return out;
+}
+
 } // namespace glintfx

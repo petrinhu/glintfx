@@ -19,6 +19,10 @@
 //     linking a second loader library. See gl_proc.hpp's own top comment for the full
 //     GLPROC-EMBED writeup (the old gate's premise -- "an embed host already owns its own
 //     loader" -- was right, its conclusion -- "so there is nothing to resolve" -- was backwards).
+//     frame_capture.hpp (CAPTURE-FREE, W22 S8, 2026-07-30) is included UNCONDITIONALLY too, the
+//     SAME independence class as gl_proc.hpp right above it: glintfx::capture_framebuffer()
+//     needs only a GL context already current, no App/UiLayer instance -- see that header's own
+//     top comment for the full design rationale.
 // PT: Header público guarda-chuva — inclua este em vez dos headers individuais.
 //     version.hpp sempre incluído (L1.9-VERSEMBED: glintfx::version() deve estar disponível
 //     independente do backend); log.hpp também sempre incluído (FW-LOG, W20 -- mesma classe de
@@ -44,11 +48,17 @@
 //     comentário de topo de gl_proc.hpp pro relato completo do GLPROC-EMBED (a premissa da
 //     guarda antiga -- "um host embed já é dono do próprio loader" -- estava certa, a conclusão
 //     -- "então não há nada pra resolver" -- estava invertida).
+//     frame_capture.hpp (CAPTURE-FREE, W22 S8, 2026-07-30) também é incluído
+//     INCONDICIONALMENTE, a MESMA classe de independência do gl_proc.hpp logo acima:
+//     glintfx::capture_framebuffer() só precisa de um contexto GL já corrente, sem instância
+//     App/UiLayer nenhuma -- ver o próprio comentário de topo daquele header pro racional
+//     completo de desenho.
 #pragma once
 #include <glintfx/config.hpp>
 #include <glintfx/version.hpp>
 #include <glintfx/log.hpp>
 #include <glintfx/gl_proc.hpp>
+#include <glintfx/frame_capture.hpp>
 #if GLINTFX_BACKEND_GLFW
 #include <glintfx/app.hpp>
 #endif

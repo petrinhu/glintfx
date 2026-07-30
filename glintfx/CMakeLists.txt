@@ -852,6 +852,13 @@ set(_glintfx_sources
   src/engine.cpp
   src/ui_layer.cpp
   src/gl_proc.cpp
+  # EN/PT: src/frame_capture.cpp (CAPTURE-FREE, W22 S8) -- glintfx::capture_framebuffer(), see
+  #   glintfx/include/glintfx/frame_capture.hpp. Same unconditional entry, same reason, as
+  #   src/gl_proc.cpp right above. Kept DELIBERATELY TERSE here (unlike this list's other
+  #   comments) because docs/embed-integration.md pins exact `glintfx/CMakeLists.txt:N`
+  #   citations against lines BELOW this point (e.g. RMLUI_GL3_CUSTOM_LOADER) -- every line
+  #   added here shifts them; see this same commit's fix to those two citations.
+  src/frame_capture.cpp
   ${_rml_backends}/RmlUi_Renderer_GL3.cpp)
 
 if(GLINTFX_MODULE_APP)

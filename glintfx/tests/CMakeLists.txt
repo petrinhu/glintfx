@@ -1204,6 +1204,37 @@ target_link_libraries(image_encode_hardening_sanity PRIVATE glintfx)
 add_test(NAME image_encode_hardening_sanity COMMAND image_encode_hardening_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_png_only_sanity (DEC-FORMAT-SURFACE, W22, 2026-07-30) -- PURE unit test for the
+#     PUBLIC glintfx::decode_png_file() (glintfx/image.hpp), the PNG-ONLY sibling of
+#     decode_image_file() added by this slice. No RmlUi, no GL, no window (same "nothing
+#     display-related to isolate here" reasoning as image_sanity/image_decode_sanity above).
+#     Registered UNCONDITIONALLY -- runs in BOTH build configurations. Reuses the SAME
+#     image_decode_rgba_2x2.png fixture configured near image_decode_sanity above (no second
+#     configure_file() call -- all test executables in this directory share
+#     CMAKE_CURRENT_BINARY_DIR as their default ctest WORKING_DIRECTORY). See the test file's
+#     own header for the full oracle: the consumer-measured 82-byte fake-TGA-header coador
+#     reproduced byte-for-byte (sha256-verified against the consumer's own deterministic
+#     gen_corpus.py), decode_png_file() closing it, and the signature-gate boundary attacked
+#     with minimal non-image byte sequences.
+# PT: image_png_only_sanity (DEC-FORMAT-SURFACE, W22, 2026-07-30) -- teste unit PURO pro
+#     glintfx::decode_png_file() PÚBLICO (glintfx/image.hpp), a irmã SÓ-PNG do
+#     decode_image_file() somada por esta fatia. Sem RmlUi, sem GL, sem janela (mesmo racional
+#     "nada relacionado a display pra isolar aqui" de image_sanity/image_decode_sanity acima).
+#     Registrado INCONDICIONALMENTE -- roda nas DUAS configurações de build. Reusa a MESMA
+#     fixture image_decode_rgba_2x2.png configurada perto de image_decode_sanity acima (nenhuma
+#     segunda chamada configure_file() -- todos os executáveis de teste deste diretório
+#     compartilham CMAKE_CURRENT_BINARY_DIR como o próprio WORKING_DIRECTORY padrão do ctest).
+#     Ver o próprio cabeçalho do arquivo de teste pro oráculo completo: o coador de header-TGA-
+#     falso de 82 bytes medido pelo consumidor reproduzido byte-a-byte (verificado por sha256
+#     contra o próprio gen_corpus.py determinístico do consumidor), o decode_png_file()
+#     fechando ele, e a fronteira da guarda de assinatura atacada com sequências mínimas de
+#     bytes não-imagem.
+# ---------------------------------------------------------------------------
+add_executable(image_png_only_sanity image_png_only_sanity.cpp)
+target_link_libraries(image_png_only_sanity PRIVATE glintfx)
+add_test(NAME image_png_only_sanity COMMAND image_png_only_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
 #     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
 #     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered
@@ -1590,7 +1621,13 @@ add_test(NAME gl_state_guard
 #     o FBO 0 diretamente. min_partial.rml já copiado incondicionalmente acima (bloco
 #     ui_layer_compose).
 add_executable(ui_layer_capture_frame_smoke ui_layer_capture_frame_smoke.cpp)
-target_link_libraries(ui_layer_capture_frame_smoke PRIVATE ${_embed_dep} glloader)
+# EN: RmlUi::Core linked explicitly (UILAYER-CTOR-GUARD, W22 S2) -- Part G2 drives Engine
+#     directly (system_clock.hpp inherits from Rml::SystemInterface, needs the RmlUi include
+#     path), same reason engine_smoke links it below.
+# PT: RmlUi::Core linkado explicitamente (UILAYER-CTOR-GUARD, W22 S2) -- a Parte G2 dirige o
+#     Engine direto (system_clock.hpp herda de Rml::SystemInterface, precisa do include path
+#     do RmlUi), mesmo motivo do engine_smoke linkar abaixo.
+target_link_libraries(ui_layer_capture_frame_smoke PRIVATE ${_embed_dep} glloader RmlUi::Core)
 add_test(NAME ui_layer_capture_frame_smoke
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:ui_layer_capture_frame_smoke>
@@ -2940,6 +2977,37 @@ if(GLINTFX_MODULE_DRAW2D)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+  # EN: font_nothrow_sanity (FONT-NOTHROW, W22, 2026-07-30) -- size-matched, occurrence-counted
+  #     operator-new fault-injection oracle proving Draw2d::load_font() is noexcept under a REAL,
+  #     forced allocation failure, not a hypothetical one -- the FOURTH and LAST member of the
+  #     `never a crash` family, same technique draw2d_texture_nothrow_sanity.cpp already
+  #     established for load_texture()/create_texture() immediately above (NOT fork()+RLIMIT_AS,
+  #     same measured reason). See this test's own top comment for the occurrence-count wrinkle
+  #     this file adds (load_font()'s own two allocation-bearing calls happen to request the SAME
+  #     byte count, unlike load_texture()'s own two independent, differently-sized ones). Reuses the
+  #     already-copied assets/OpenSans-Regular.ttf fixture (available in BOTH GLFW=ON/OFF configs,
+  #     see the file(COPY)/configure_file() blocks earlier in this file) -- no hand-rolled SFNT
+  #     needed, unlike image_decode_hardening_sanity.cpp's own Group B.
+  # PT: font_nothrow_sanity (FONT-NOTHROW, W22, 2026-07-30) -- oráculo de injeção de falha em
+  #     operator-new, casado por tamanho e com contagem de ocorrência, provando que
+  #     Draw2d::load_font() é noexcept sob uma falha de alocação REAL, forçada, não hipotética -- o
+  #     QUARTO e ÚLTIMO membro da família `never a crash`, mesma técnica que
+  #     draw2d_texture_nothrow_sanity.cpp já estabeleceu pro load_texture()/create_texture() logo
+  #     acima (NÃO fork()+RLIMIT_AS, mesmo motivo medido). Ver o próprio comentário de topo deste
+  #     teste pra ruga de contagem-de-ocorrência que este arquivo soma (as duas próprias chamadas
+  #     portadoras-de-alocação do load_font() por acaso pedem a MESMA contagem de bytes, diferente
+  #     das duas do load_texture(), independentes e de tamanho diferente). Reusa o fixture
+  #     assets/OpenSans-Regular.ttf já copiado (disponível nas DUAS configurações GLFW=ON/OFF, ver
+  #     os blocos file(COPY)/configure_file() mais cedo neste arquivo) -- nenhuma SFNT feita à mão
+  #     necessária, diferente do próprio Grupo B de image_decode_hardening_sanity.cpp.
+  add_executable(font_nothrow_sanity font_nothrow_sanity.cpp)
+  target_link_libraries(font_nothrow_sanity PRIVATE ${_embed_dep} glloader)
+  add_test(NAME font_nothrow_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:font_nothrow_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
   # EN: draw2d_pixels_flush_render_sanity (D2D-TEXPIXELS / D2D-FLUSH, onda W19) -- pixel-readback
   #     proof for Draw2d::create_texture()/Draw2d::flush(): create_texture(Rgba8) renders
   #     identically to the same colour loaded via load_texture() and premultiplies straight alpha
@@ -3763,6 +3831,82 @@ if(GLINTFX_MODULE_GAMEPAD)
   target_link_libraries(gamepad_api_hardening PRIVATE glintfx)
   add_test(NAME gamepad_api_hardening COMMAND gamepad_api_hardening)
 endif()
+
+# ---------------------------------------------------------------------------
+# EN: capture_framebuffer_* (CAPTURE-FREE, W22 S8, 2026-07-30) -- glintfx::capture_framebuffer()
+#     (glintfx/include/glintfx/frame_capture.hpp), the instance-free GL readback sibling of
+#     App::capture_frame()/UiLayer::capture_frame() -- see that header's own top comment for
+#     the full design rationale. Appended HERE, after every other test-registration block in
+#     this file (INCLUDING the GLINTFX_MODULE_GAMEPAD one right above, whose own `endif()` this
+#     block sits right after), so as not to disturb any block above; registered BEFORE the
+#     GLINTFX_SANITIZE / GLINTFX_COVERAGE / -Wall-Wextra DIRECTORY-property loops further below
+#     (which collect BUILDSYSTEM_TARGETS/DIRECTORY PROPERTY TESTS as of the point they run) so
+#     these three new targets are covered by all three, exactly like every test above them.
+#
+#     Three executables:
+#       capture_framebuffer_loader_guard -- PURE unit test, no GL/display at all (mirrors
+#         image_png_only_sanity's own registration shape: links `glintfx` directly, no
+#         ${_embed_dep}, no run_xvfb.cmake wrapper). Proves the ONE guard this free function
+#         has that its instance-method siblings do not need (see the test file's own header
+#         comment for why THIS test, uniquely among this library's own GL-loader tests, can
+#         actually isolate the pre-glx_gl_load() state gl_proc_address_embed_sanity.cpp's own
+#         header comment states it cannot).
+#       capture_framebuffer_smoke -- coordinate-contract proof (GL-native origin, top-down
+#         flip), arbitrary sub-region proof, width-not-multiple-of-4 PACK_ALIGNMENT regression,
+#         fail-high guards. Real GL context (${_embed_dep} glloader), run_xvfb.cmake wrapper,
+#         same as every other GL-context test in this file.
+#       capture_framebuffer_state -- the 5-GL-state-slot save/restore proof, same sentinel
+#         technique as ui_layer_capture_frame_state.cpp, but with NO UiLayer/RmlUi attach step
+#         (offscreen.hpp for gtest_off::make_fbo, same as that file).
+# PT: capture_framebuffer_* (CAPTURE-FREE, W22 S8, 2026-07-30) -- glintfx::capture_framebuffer()
+#     (glintfx/include/glintfx/frame_capture.hpp), a irmã de readback GL sem instância de
+#     App::capture_frame()/UiLayer::capture_frame() -- ver o próprio comentário de topo daquele
+#     header pro racional completo de desenho. Anexado AQUI, depois de todo outro bloco de
+#     registro de teste deste arquivo (INCLUSIVE o de GLINTFX_MODULE_GAMEPAD logo acima, cujo
+#     próprio `endif()` este bloco fica logo depois), pra não perturbar bloco nenhum acima;
+#     registrado ANTES dos loops de propriedade de DIRECTORY GLINTFX_SANITIZE /
+#     GLINTFX_COVERAGE / -Wall-Wextra mais abaixo (que coletam BUILDSYSTEM_TARGETS/DIRECTORY
+#     PROPERTY TESTS no ponto em que rodam) pra que estes três alvos novos sejam cobertos pelos
+#     três, exatamente como todo teste acima deles.
+#
+#     Três executáveis:
+#       capture_framebuffer_loader_guard -- teste unit PURO, sem GL/display nenhum (espelha a
+#         própria forma de registro de image_png_only_sanity: linka `glintfx` diretamente, sem
+#         ${_embed_dep}, sem wrapper run_xvfb.cmake). Prova a ÚNICA guarda que esta função livre
+#         tem e que as irmãs de método de instância dela não precisam (ver o próprio comentário
+#         de cabeçalho do arquivo de teste pro motivo deste teste, unicamente entre os próprios
+#         testes de GL-loader desta biblioteca, conseguir de fato isolar o estado
+#         pré-glx_gl_load() que o próprio comentário de cabeçalho de
+#         gl_proc_address_embed_sanity.cpp declara não conseguir).
+#       capture_framebuffer_smoke -- prova de contrato de coordenadas (origem nativa-GL,
+#         inversão top-down), prova de sub-região arbitrária, regressão de PACK_ALIGNMENT com
+#         largura não múltipla de 4, guardas fail-high. Contexto GL real (${_embed_dep}
+#         glloader), wrapper run_xvfb.cmake, igual a todo outro teste de contexto GL deste
+#         arquivo.
+#       capture_framebuffer_state -- a prova de salvar/restaurar dos 5 slots de estado GL,
+#         mesma técnica de sentinela de ui_layer_capture_frame_state.cpp, mas SEM passo de
+#         attach de UiLayer/RmlUi nenhum (offscreen.hpp pro gtest_off::make_fbo, igual àquele
+#         arquivo).
+# ---------------------------------------------------------------------------
+add_executable(capture_framebuffer_loader_guard capture_framebuffer_loader_guard.cpp)
+target_link_libraries(capture_framebuffer_loader_guard PRIVATE glintfx)
+add_test(NAME capture_framebuffer_loader_guard COMMAND capture_framebuffer_loader_guard)
+
+add_executable(capture_framebuffer_smoke capture_framebuffer_smoke.cpp)
+target_link_libraries(capture_framebuffer_smoke PRIVATE ${_embed_dep} glloader)
+add_test(NAME capture_framebuffer_smoke
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:capture_framebuffer_smoke>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+add_executable(capture_framebuffer_state capture_framebuffer_state.cpp)
+target_link_libraries(capture_framebuffer_state PRIVATE ${_embed_dep} glloader)
+add_test(NAME capture_framebuffer_state
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:capture_framebuffer_state>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime

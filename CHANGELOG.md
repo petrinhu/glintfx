@@ -51,6 +51,48 @@
   sequer rodar). **Teto deliberado e permanente** (ver a linha de Log do `docs/capabilities.md`):
   sem rotação de arquivo, sem saída estruturada/JSON, sem entrega assíncrona, só UM sink por vez,
   sem filtro por-módulo -- já mais do que a necessidade medida, de propósito.
+- **EN:** **`FW-CLOCK`** (onda W20, consumer-requested by GusWorld -- 17 `SDL_GetTicksNS` call
+  sites measured in its own production code, 2026-07-29): a new public header,
+  `<glintfx/clock.hpp>`, gives this library its first monotonic-clock API,
+  `glintfx::monotonic_now_ns()` -- a stateless, thread-safe, always-available thin wrapper over
+  `std::chrono::steady_clock`, returning nanoseconds since an unspecified, process-fixed epoch as
+  a plain `uint64_t`. NOT frame `dt` (`App::set_frame_callback`'s hook already delivers that) --
+  for a fixed-step accumulator, duration measurement, or animation timing, including before any
+  `App`/`UiLayer` exists. ⚠️ **Honest verdict, stated in the header itself:** the consumer that
+  requested this also argued, correctly, that `std::chrono::steady_clock` (standard library, not
+  a third-party dependency) already provides the exact monotonicity guarantee requested, and at
+  their own most-important call site the clock is already an injected dependency one line away
+  from either source. Shipped anyway per the project lead's standing decision (no negatives to
+  the consumer; migrate the dependency count to nothing-but-the-standard-library). The genuine,
+  narrower value this wrapper adds: a fixed-nanosecond contract regardless of
+  `steady_clock::period` on a given platform, a zero-diff migration shape matching
+  `SDL_GetTicksNS()`'s exact signature, an integer ABI shape (no `std::chrono` template type
+  crosses this library's public boundary, same precedent as `version()`/`gl_proc_address()`),
+  and the monotonicity property now tested and versioned as this library's OWN contract
+  (`tests/clock_sanity.cpp`, a 200000-sample tight-loop back-to-back non-regression check --
+  attacking the zero-elapsed-time boundary, not a sparse sample).
+- **PT:** **`FW-CLOCK`** (onda W20, pedido do consumidor GusWorld -- 17 sítios de chamada
+  `SDL_GetTicksNS` medidos na própria produção dele, 2026-07-29): um novo header público,
+  `<glintfx/clock.hpp>`, dá a esta biblioteca a primeira API de relógio monotônico,
+  `glintfx::monotonic_now_ns()` -- um wrapper fino, sem estado, thread-safe, sempre disponível
+  sobre `std::chrono::steady_clock`, retornando nanossegundos desde uma época não especificada e
+  fixa pelo processo, como um `uint64_t` simples. NÃO é o `dt` de quadro (o hook de
+  `App::set_frame_callback` já entrega isso) -- para um acumulador de passo fixo, medição de
+  duração, ou temporização de animação, inclusive antes de qualquer `App`/`UiLayer` existir.
+  ⚠️ **Veredito honesto, dito no próprio header:** o consumidor que pediu isto também argumentou,
+  corretamente, que `std::chrono::steady_clock` (biblioteca padrão, não dependência de terceiro)
+  já provê exatamente a garantia de monotonicidade pedida, e no próprio lugar mais importante o
+  relógio já é uma dependência injetada a uma linha de qualquer uma das duas fontes. Entregue
+  mesmo assim por decisão vigente do líder do projeto (sem negativas ao consumidor; migrar a
+  contagem de dependências pra nada-além-da-biblioteca-padrão). O valor real e mais estreito que
+  este wrapper adiciona: um contrato fixo de nanossegundos independente do
+  `steady_clock::period` numa dada plataforma, uma forma de migração sem diff casando com a
+  assinatura exata do `SDL_GetTicksNS()`, uma forma de ABI inteira (nenhum tipo template
+  `std::chrono` cruza a fronteira pública desta biblioteca, mesmo precedente do
+  `version()`/`gl_proc_address()`), e a propriedade de monotonicidade agora testada e versionada
+  como contrato PRÓPRIO desta biblioteca (`tests/clock_sanity.cpp`, uma checagem de
+  não-regressão em laço apertado de 200000 amostras consecutivas -- atacando a fronteira de
+  tempo-zero-decorrido, não uma amostra esparsa).
 
 ### Fixed / Corrigido
 

@@ -982,6 +982,29 @@ target_link_libraries(log_sanity PRIVATE glintfx)
 add_test(NAME log_sanity COMMAND log_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: clock_sanity (FW-CLOCK, W20) -- PURE unit test for glintfx/include/glintfx/clock.hpp: no
+#     window, no GL context, no RmlUi/GLFW dependency AT ALL (glintfx::monotonic_now_ns() is a
+#     stateless free function, verified entirely by calling it in-process and inspecting the
+#     returned values). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning
+#     as log_sanity/log_dedup_sanity right above -- runs in BOTH build configurations. See the
+#     test file's own header for the full oracle (call before any App/UiLayer construction,
+#     200000-sample tight-loop back-to-back non-regression -- the boundary itself, not a sparse
+#     sample -- and a busy-wait delta proving the nanosecond unit is real).
+# PT: clock_sanity (FW-CLOCK, W20) -- teste unit PURO para glintfx/include/glintfx/clock.hpp: sem
+#     janela, sem contexto GL, sem dependência de RmlUi/GLFW NENHUMA (glintfx::monotonic_now_ns()
+#     é uma função livre sem estado, verificada inteiramente chamando-a em processo e inspecionando
+#     os valores retornados). Registrado INCONDICIONALMENTE, mesma racional "nada relacionado a
+#     display pra isolar aqui" do log_sanity/log_dedup_sanity logo acima -- roda em AMBAS as
+#     configurações de build. Ver o cabeçalho do próprio arquivo de teste pro oráculo completo
+#     (chamada antes de qualquer construção de App/UiLayer, não-regressão em laço apertado de
+#     200000 amostras consecutivas -- a própria fronteira, não uma amostra esparsa -- e um delta
+#     de espera ocupada provando que a unidade de nanossegundo é real).
+# ---------------------------------------------------------------------------
+add_executable(clock_sanity clock_sanity.cpp)
+target_link_libraries(clock_sanity PRIVATE glintfx)
+add_test(NAME clock_sanity COMMAND clock_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: image_decode_sanity (D2D-1A, Onda 3 -- docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
 #     decision D3) -- PURE unit test for src/image_decode.hpp: no window, no GL context, no
 #     RmlUi/GLFW dependency AT ALL (decode_premultiplied_rgba is a plain "bytes in, pixels out"

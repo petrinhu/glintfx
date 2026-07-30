@@ -1030,7 +1030,15 @@ endif()
 #     log_warn()/log_error() precisam ser alcançáveis de um build embed-only exatamente como o
 #     glintfx::version() já é, e o próprio override de LogMessage do system_clock.cpp agora chama
 #     PARA DENTRO do log.cpp -- ver o comentário de cabeçalho do system_clock.hpp).
-add_library(glintfx_core OBJECT src/system_clock.cpp src/version.cpp src/log.cpp)
+# EN: src/clock.cpp (FW-CLOCK, W20) joins the same group for the identical reason: core, ZERO
+#     dependency at all (not even RmlUi::Core, unlike system_clock.cpp -- a plain
+#     std::chrono::steady_clock wrapper, see clock.hpp/clock.cpp), no GLINTFX_MODULE_* flag,
+#     must be reachable from an embed-only build exactly like version()/log() already are.
+# PT: src/clock.cpp (FW-CLOCK, W20) se junta ao mesmo grupo pelo motivo idêntico: é core, ZERO
+#     dependência alguma (nem RmlUi::Core, diferente do system_clock.cpp -- um wrapper simples de
+#     std::chrono::steady_clock, ver clock.hpp/clock.cpp), sem flag GLINTFX_MODULE_*, precisa ser
+#     alcançável de um build embed-only exatamente como version()/log() já são.
+add_library(glintfx_core OBJECT src/system_clock.cpp src/version.cpp src/log.cpp src/clock.cpp)
 target_include_directories(glintfx_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)

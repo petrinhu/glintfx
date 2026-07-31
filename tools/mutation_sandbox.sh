@@ -103,19 +103,25 @@
 #      against the TARGET (never against where this script happens to live) by
 #      find_git_toplevel()'s OWN filesystem walk (never `git rev-parse`'s
 #      environment-sensitive discovery, which a poisoned GIT_DIR/GIT_WORK_TREE/
-#      GIT_CEILING_DIRECTORIES can fail open on). Fails CLOSED: only a positive proof
-#      of reaching `/` without ever finding `.git` allows the target. See
-#      find_git_toplevel()'s and validate_sandbox_path()'s header comments for the two
-#      2026-07-31 incidents (axis, then fail-open) this design defends against.
+#      GIT_CEILING_DIRECTORIES can fail open on). Fails CLOSED on BOTH of the
+#      function's non-"found" outcomes: a positive proof of reaching `/` without ever
+#      finding `.git` allows the target; an unsearchable ancestor (inconclusive, three-
+#      way return contract, see find_git_toplevel()'s header) refuses too, with its own
+#      message. See find_git_toplevel()'s and validate_sandbox_path()'s header comments
+#      for the three 2026-07-31 incidents (axis, then GIT_DIR fail-open, then
+#      chmod-ancestor fail-open) this design defends against.
 #      O diretório do sandbox (resolvido) fica dentro de QUALQUER working tree do git
 #      -- checado contra o ALVO (nunca contra onde este script mora) pela PRÓPRIA
 #      subida de filesystem de find_git_toplevel() (nunca a descoberta sensível a
 #      ambiente do `git rev-parse`, que um GIT_DIR/GIT_WORK_TREE/
-#      GIT_CEILING_DIRECTORIES envenenado consegue fazer falhar aberta). Falha
-#      FECHADA: só uma prova positiva de chegar em `/` sem nunca achar `.git` libera o
-#      alvo. Ver os comentários de cabeçalho de find_git_toplevel() e
-#      validate_sandbox_path() pros dois incidentes de 2026-07-31 (eixo, depois
-#      fail-open) contra os quais este desenho se defende.
+#      GIT_CEILING_DIRECTORIES envenenado consegue fazer falhar aberta). Falha FECHADA
+#      nos DOIS resultados "não achou" da função: uma prova positiva de chegar em `/`
+#      sem nunca achar `.git` libera o alvo; um ancestral não-varrível (inconclusivo,
+#      contrato de retorno de três vias, ver o cabeçalho de find_git_toplevel())
+#      também recusa, com mensagem própria. Ver os comentários de cabeçalho de
+#      find_git_toplevel() e validate_sandbox_path() pros três incidentes de
+#      2026-07-31 (eixo, depois fail-open do GIT_DIR, depois fail-open do ancestral
+#      não-varrível) contra os quais este desenho se defende.
 #   2. The (resolved) sandbox directory is under /tmp -- /tmp is tmpfs (RAM) on this
 #      machine; a heavy build there can exhaust memory and feed an OOM, not just fail to
 #      link. Use /var/tmp (disk).
@@ -151,9 +157,15 @@ info() {
 
 # EN: find_git_toplevel -- walks up from <start-dir> looking for a `.git` entry
 #     (directory OR file -- a FILE covers worktrees/submodules, whose `.git` is a
-#     `gitdir: <path>` pointer) at each ancestor up to `/`. Prints the directory that
-#     holds it and returns 0; prints nothing and returns 1 if the walk reaches `/`
-#     without finding one.
+#     `gitdir: <path>` pointer) at each ancestor up to `/`. THREE-WAY return contract
+#     (callers must handle all three, not just 0-vs-nonzero):
+#       0 -- found. Prints the directory holding `.git`.
+#       1 -- POSITIVELY not a repo: the walk reached `/` and every ancestor along the
+#            way was actually searchable. Prints nothing.
+#       2 -- INCONCLUSIVE: an ancestor exists but is not searchable (missing the 'x'
+#            permission bit), so the walk cannot see whether `.git` is inside it.
+#            Prints that ancestor's path (not a toplevel -- callers must not treat it
+#            as one).
 #
 #     BUILDDIR-MUTACAO fix (2nd round, found by adversarial review, 2026-07-31): this
 #     deliberately does NOT call `git rev-parse --show-toplevel`/`git -C <dir> ...` for
@@ -166,16 +178,36 @@ info() {
 #     command exit non-zero even INSIDE a real working tree, and "git failed" was
 #     silently read as "not a repo, proceed" with no warning. Reimplementing the walk
 #     by hand sidesteps the entire class: no git environment variable can influence a
-#     plain `[[ -e "${dir}/.git" ]]` filesystem check. The walk also FAILS CLOSED by
-#     construction -- there is no path through this function that returns "not a repo"
-#     except genuinely reaching `/` without ever finding `.git`; that is a POSITIVE
-#     proof of absence, not an absence of proof, which is the property refusal 1 needs
-#     (see validate_sandbox_path()'s own header for how the caller enforces this).
+#     plain `[[ -e "${dir}/.git" ]]` filesystem check.
+#
+#     3rd round (found by adversarial review, 2026-07-31, the SAME day): the two-way
+#     version of this function (0 found / 1 not found) was ITSELF fail-open on one
+#     input -- an ancestor directory that exists but is `chmod`ed without the search
+#     ('x') bit. `[[ -e "${dir}/.git" ]]` on such an ancestor silently returns false
+#     (permission denied to even stat inside it), which the old code read as "no .git
+#     here, keep walking up" -- exactly the same shape of bug as the GIT_DIR case
+#     above (a failure-to-observe being read as a positive absence). The header
+#     comment even claimed "there is no path through this function that returns 'not
+#     a repo' except genuinely reaching /", which was FALSE for this input -- the
+#     reviewer measured `cmd_run` as accidentally fail-closed anyway, via an UNRELATED
+#     later check (`[[ -d "${resolved}" ]]`) that happened to also fail on the
+#     unreadable target -- an accident that would silently stop protecting the day
+#     someone reorders that later check. Fixed for real by testing searchability
+#     BEFORE trusting `-e`, and returning a THIRD state (2) for "cannot tell" instead
+#     of reusing 1 ("definitely clear"). Refusal 1 in validate_sandbox_path() now
+#     refuses on 2 exactly like it refuses on 0 -- "inconclusive" and "found" are both
+#     "do not proceed", only the message differs.
 # PT: find_git_toplevel -- sobe de <dir-inicial> procurando uma entrada `.git`
 #     (diretório OU arquivo -- um ARQUIVO cobre worktree/submódulo, cujo `.git` é um
-#     ponteiro `gitdir: <path>`) em cada ancestral até `/`. Imprime o diretório que a
-#     contém e retorna 0; não imprime nada e retorna 1 se a subida chegar em `/` sem
-#     achar nenhuma.
+#     ponteiro `gitdir: <path>`) em cada ancestral até `/`. Contrato de retorno de TRÊS
+#     vias (quem chama tem que tratar as três, não só 0-versus-diferente-de-zero):
+#       0 -- achou. Imprime o diretório que contém o `.git`.
+#       1 -- POSITIVAMENTE não é repo: a subida chegou em `/` e todo ancestral no
+#            caminho era de fato varrível. Não imprime nada.
+#       2 -- INCONCLUSIVO: um ancestral existe mas não é varrível (falta o bit 'x' de
+#            permissão), então a subida não consegue ver se `.git` está dentro dele.
+#            Imprime o caminho desse ancestral (não é um toplevel -- quem chama não
+#            pode tratar como se fosse).
 #
 #     Conserto do BUILDDIR-MUTACAO (2ª rodada, achado por review adversarial,
 #     2026-07-31): isto deliberadamente NÃO chama `git rev-parse --show-toplevel`/
@@ -190,14 +222,34 @@ info() {
 #     falhou" era lido em silêncio como "não é repo, segue" sem aviso nenhum.
 #     Reimplementar a subida à mão contorna a classe inteira: nenhuma variável de
 #     ambiente do git consegue influenciar um `[[ -e "${dir}/.git" ]]` puro de
-#     filesystem. A subida também FALHA FECHADA por construção -- não existe caminho
-#     nesta função que retorne "não é repo" exceto chegar de fato em `/` sem nunca
-#     achar `.git`; isso é uma PROVA POSITIVA de ausência, não ausência de prova, que é
-#     a propriedade que a recusa 1 precisa (ver o próprio cabeçalho de
-#     validate_sandbox_path() pra como o chamador aplica isto).
+#     filesystem.
+#
+#     3ª rodada (achado por review adversarial, 2026-07-31, o MESMO dia): a versão de
+#     duas vias desta função (0 achou / 1 não achou) era ELA MESMA fail-open num
+#     input -- um diretório ancestral que existe mas está `chmod`ado sem o bit de
+#     busca ('x'). `[[ -e "${dir}/.git" ]]` nesse ancestral retorna falso em silêncio
+#     (permissão negada até pra statear lá dentro), e o código antigo lia isso como
+#     "nenhum .git aqui, segue subindo" -- exatamente a mesma forma de bug do caso
+#     GIT_DIR acima (uma falha de OBSERVAÇÃO sendo lida como ausência POSITIVA). O
+#     próprio comentário de cabeçalho afirmava "não existe caminho nesta função que
+#     retorne 'não é repo' exceto chegar de fato em /", o que era FALSO pra esse
+#     input -- o revisor mediu que o `cmd_run` ficava fail-closed por acidente mesmo
+#     assim, via uma checagem posterior SEM RELAÇÃO (`[[ -d "${resolved}" ]]`) que por
+#     coincidência também falhava no alvo ilegível -- um acidente que pararia de
+#     proteger em silêncio no dia em que alguém reordenasse essa checagem posterior.
+#     Consertado de verdade testando a varribilidade ANTES de confiar no `-e`, e
+#     retornando um TERCEIRO estado (2) pra "não dá pra saber" em vez de reusar o 1
+#     ("definitivamente livre"). A recusa 1 em validate_sandbox_path() agora recusa no
+#     2 exatamente como recusa no 0 -- "inconclusivo" e "achado" são os dois "não
+#     segue", só a mensagem muda.
 find_git_toplevel() {
   local dir="$1"
   while :; do
+    if [[ -d "${dir}" && ! -x "${dir}" ]]; then
+      printf '%s\n' "${dir}"
+      return 2
+    fi
+
     if [[ -e "${dir}/.git" ]]; then
       printf '%s\n' "${dir}"
       return 0
@@ -206,14 +258,11 @@ find_git_toplevel() {
     local parent
     parent="$(dirname -- "${dir}")"
     # EN: dirname stopped progressing (should only happen at "/", already handled
-    #     above, but guards against any platform quirk) -- treat as inconclusive,
-    #     which for THIS function means "no .git found", so the CALLER (which fails
-    #     closed on refusal 1, see validate_sandbox_path) is what actually protects.
+    #     above, but guards against any platform quirk) -- positively not a repo, no
+    #     ancestor left to check.
     # PT: dirname parou de progredir (só deveria acontecer em "/", já tratado acima,
-    #     mas protege contra qualquer peculiaridade de plataforma) -- trata como
-    #     inconclusivo, que pra ESTA função significa "nenhum .git achado", então o
-    #     CHAMADOR (que falha fechado na recusa 1, ver validate_sandbox_path) é quem
-    #     de fato protege.
+    #     mas protege contra qualquer peculiaridade de plataforma) -- positivamente
+    #     não é repo, não sobrou ancestral pra checar.
     [[ "${parent}" == "${dir}" ]] && return 1
     dir="${parent}"
   done
@@ -260,6 +309,13 @@ find_git_toplevel() {
 #     falhar aberta. Trocado por find_git_toplevel() (ver o cabeçalho dela), que
 #     caminha o filesystem à mão sem NUNCA consultar variável de ambiente do git, e só
 #     libera quando prova positivamente que chegou em `/` sem achar `.git` nenhum.
+#
+#     3ª rodada (achado por review adversarial, 2026-07-31, o MESMO dia): a versão de
+#     duas vias de find_git_toplevel() (0 achou / 1 não achou) era ela mesma fail-open
+#     num ancestral `chmod`ado sem o bit de busca ('x') -- ver o cabeçalho dela pro
+#     detalhe. Corrigida com um TERCEIRO retorno (2 = inconclusivo), e esta função
+#     agora trata os dois casos "não segue" (0 e 2) de forma explícita, com mensagens
+#     diferentes.
 validate_sandbox_path() {
   local candidate="$1"
   local resolved
@@ -274,10 +330,20 @@ validate_sandbox_path() {
     probe="$(dirname -- "${probe}")"
   done
 
-  local found_git_at
-  if found_git_at="$(find_git_toplevel "${probe}")"; then
-    die "refusing: '${resolved}' is inside a git working tree ('.git' found walking up from '${probe}', at '${found_git_at}') -- a mutation sandbox must live outside any repo it might contaminate, or it recreates the exact shared-build-dir contamination BUILDDIR-MUTACAO exists to kill."
-  fi
+  local found_git_at git_walk_rc=0
+  found_git_at="$(find_git_toplevel "${probe}")" || git_walk_rc=$?
+  case "${git_walk_rc}" in
+    0)
+      die "refusing: '${resolved}' is inside a git working tree ('.git' found walking up from '${probe}', at '${found_git_at}') -- a mutation sandbox must live outside any repo it might contaminate, or it recreates the exact shared-build-dir contamination BUILDDIR-MUTACAO exists to kill."
+      ;;
+    2)
+      die "refusing: cannot determine whether '${resolved}' is inside a git working tree -- ancestor '${found_git_at}' exists but is not searchable (missing 'x' permission), so a '.git' inside it would be invisible to this check. Refusing as inconclusive rather than risking a false negative."
+      ;;
+    1) : ;;
+    *)
+      die "internal: find_git_toplevel returned unexpected status ${git_walk_rc} for '${probe}'"
+      ;;
+  esac
 
   case "${resolved}" in
     /tmp|/tmp/*)
@@ -379,10 +445,20 @@ cmd_create() {
   #     casa. Derivar do CWD resolve isso: rode a cópia da WORKING TREE deste script
   #     (ou qualquer cópia) de dentro do repo de onde quer arquivar, independente de
   #     onde o arquivo do script está.
-  local source_repo_root
-  if ! source_repo_root="$(find_git_toplevel "$(pwd -P)")"; then
-    die "create: current directory ($(pwd -P)) is not inside a git working tree -- 'create' archives from a repo found by walking up from the CWD, not from where this script file happens to live. Run it from inside the repo you want to archive from."
-  fi
+  local source_repo_root cwd_git_rc=0
+  source_repo_root="$(find_git_toplevel "$(pwd -P)")" || cwd_git_rc=$?
+  case "${cwd_git_rc}" in
+    0) : ;;
+    2)
+      die "refusing: cannot determine whether the current directory ($(pwd -P)) is inside a git working tree -- ancestor '${source_repo_root}' exists but is not searchable (missing 'x' permission), so a '.git' inside it would be invisible to this check. Refusing as inconclusive rather than risking a false negative."
+      ;;
+    1)
+      die "create: current directory ($(pwd -P)) is not inside a git working tree -- 'create' archives from a repo found by walking up from the CWD, not from where this script file happens to live. Run it from inside the repo you want to archive from."
+      ;;
+    *)
+      die "internal: find_git_toplevel returned unexpected status ${cwd_git_rc} for '$(pwd -P)'"
+      ;;
+  esac
 
   # EN: mandatory refusal 3 -- <sha> must resolve to a commit ALREADY in the source
   #     repo. Mutating uncommitted work is already forbidden by house rule; this

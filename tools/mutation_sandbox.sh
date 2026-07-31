@@ -99,8 +99,14 @@
 #
 # Mandatory refusals (all three subcommands run the same path/sha checks) / Recusas
 # obrigatórias (os três subcomandos passam pelas mesmas checagens de path/sha):
-#   1. The (resolved) sandbox directory is inside this repository.
-#      O diretório do sandbox (resolvido) fica dentro deste repositório.
+#   1. The (resolved) sandbox directory is inside ANY git working tree (checked against
+#      the TARGET via `git -C <target> rev-parse --show-toplevel`, not against where
+#      this script happens to live -- see validate_sandbox_path()'s header comment for
+#      the 2026-07-31 incident this axis-fix defends against).
+#      O diretório do sandbox (resolvido) fica dentro de QUALQUER working tree do git
+#      (checado contra o ALVO via `git -C <alvo> rev-parse --show-toplevel`, não contra
+#      onde este script mora -- ver o comentário de cabeçalho de validate_sandbox_path()
+#      pro incidente de 2026-07-31 contra o qual este conserto de eixo se defende).
 #   2. The (resolved) sandbox directory is under /tmp -- /tmp is tmpfs (RAM) on this
 #      machine; a heavy build there can exhaust memory and feed an OOM, not just fail to
 #      link. Use /var/tmp (disk).
@@ -140,20 +146,55 @@ info() {
 # EN: validate_sandbox_path -- shared by create/run/destroy. Resolves the candidate
 #     (lexically, via `realpath -m`, so it works even before the directory exists) and
 #     applies mandatory refusals 1+2. Prints the resolved absolute path on success.
+#
+#     BUILDDIR-MUTACAO fix (found by adversarial review, 2026-07-31): refusal 1 used to
+#     compare the resolved target against ${REPO_ROOT}, which this script derives from
+#     ITS OWN location (`dirname "${BASH_SOURCE[0]}"`). That is the wrong axis -- it
+#     answers "is the target under where I happen to live?" instead of "does the target
+#     belong to ANY git working tree?". Copy this very script outside the repo (exactly
+#     what a reviewer verifying the committed blob does, per house protocol) and
+#     ${REPO_ROOT} silently becomes wherever the COPY sits, so the guard stops matching
+#     the real repo -- `run <repo-root>` from that copy walked straight into rebuilding
+#     the shared build dir, the exact contamination this tool exists to kill. Fixed by
+#     asking git about the TARGET instead: `git -C <target-or-nearest-existing-ancestor>
+#     rev-parse --show-toplevel`. This is also strictly wider than the old check -- it
+#     refuses a target inside ANY git repo on the machine, not just this one.
 # PT: validate_sandbox_path -- compartilhada por create/run/destroy. Resolve o candidato
 #     (lexicamente, via `realpath -m`, funciona mesmo antes do diretório existir) e
 #     aplica as recusas obrigatórias 1+2. Imprime o caminho absoluto resolvido no
 #     sucesso.
+#
+#     Conserto do BUILDDIR-MUTACAO (achado por review adversarial, 2026-07-31): a
+#     recusa 1 comparava o alvo resolvido contra ${REPO_ROOT}, que este script deriva
+#     da PRÓPRIA localização (`dirname "${BASH_SOURCE[0]}"`). Esse é o eixo errado --
+#     responde "o alvo está debaixo de onde eu moro?" em vez de "o alvo pertence a
+#     QUALQUER working tree do git?". Copie este próprio script pra fora do repo
+#     (exatamente o que um revisor verificando o blob commitado faz, pelo protocolo da
+#     casa) e ${REPO_ROOT} silenciosamente vira onde a CÓPIA está, então a guarda para
+#     de casar com o repo real -- `run <raiz-do-repo>` a partir daquela cópia foi direto
+#     rebuildar o build dir compartilhado, a contaminação exata que esta ferramenta
+#     existe pra matar. Corrigido perguntando ao git sobre o ALVO em vez disso:
+#     `git -C <alvo-ou-ancestral-existente-mais-próximo> rev-parse --show-toplevel`.
+#     Isto também é estritamente mais amplo que a checagem antiga -- recusa um alvo
+#     dentro de QUALQUER repo git da máquina, não só este.
 validate_sandbox_path() {
   local candidate="$1"
   local resolved
   resolved="$(realpath -m -- "${candidate}")"
 
-  case "${resolved}" in
-    "${REPO_ROOT}"|"${REPO_ROOT}"/*)
-      die "refusing: '${resolved}' resolves INSIDE the repository (${REPO_ROOT}) -- a mutation sandbox must live outside the tree it mutates, or it recreates the exact shared-build-dir contamination BUILDDIR-MUTACAO exists to kill."
-      ;;
-  esac
+  # EN: walk up to the nearest EXISTING ancestor -- 'create' validates a path that does
+  #     not exist yet, and `git -C <dir>` requires <dir> to exist.
+  # PT: sobe até o ancestral EXISTENTE mais próximo -- 'create' valida um caminho que
+  #     ainda não existe, e `git -C <dir>` exige que <dir> exista.
+  local probe="${resolved}"
+  while [[ ! -d "${probe}" && "${probe}" != "/" ]]; do
+    probe="$(dirname -- "${probe}")"
+  done
+
+  local toplevel
+  if toplevel="$(git -C "${probe}" rev-parse --show-toplevel 2>/dev/null)"; then
+    die "refusing: '${resolved}' is inside a git working tree (${toplevel}) -- a mutation sandbox must live outside any repo it might contaminate, or it recreates the exact shared-build-dir contamination BUILDDIR-MUTACAO exists to kill."
+  fi
 
   case "${resolved}" in
     /tmp|/tmp/*)

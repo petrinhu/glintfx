@@ -51,6 +51,27 @@
 #     catch mutation of a file OUTSIDE glintfx/ that the build still somehow depends on
 #     (there should be none; glintfx/ is self-contained).
 #
+#     TRANSIENT-MUTATION ADDENDUM (found by adversarial review, 2026-07-31, MEASURED not
+#     deduced -- reproduced against this script's own drill clone: hash before == hash
+#     after, byte for byte, across a mutate/rebuild/restore/rebuild cycle applied fully
+#     inside the guarded window). The tree snapshot above is a pure function of tree
+#     STATE, so a mutation that is applied AND reverted inside the window is invisible to
+#     it -- and reverting between cycles is exactly mutation-testing protocol (the W22
+#     incident was 7 such cycles). A guarded suite that starts and ends with the source
+#     restored sees a constant tree at both snapshot points and declares the run valid,
+#     while the shared build dir's binaries were swapped out from under it mid-run -- the
+#     guard failing permissive in precisely the scenario that motivated it.
+#     Fixed by fingerprinting the ACTUAL TEST EXECUTABLES (not the whole build dir, which
+#     would pick up ctest's own Testing/ writes and turn the guard noisy): right after
+#     `cmake --build`, enumerate every executable ctest is about to invoke (via `ctest
+#     --show-only=json-v1`, unwrapping the `-DEXE=<path>` indirection that
+#     glintfx/tests/run_xvfb.cmake's per-test Xvfb wrapper introduces -- most tests run
+#     through `cmake -DEXE=... -P run_xvfb.cmake`, not the binary directly, so
+#     `command[0]` alone is `/usr/bin/cmake` for those and useless), then hash
+#     (path, size, mtime) of each. A concurrent rebuild -- even one that lands
+#     byte-identical machine code -- writes a FRESH file, so mtime moves even when
+#     content does not: this catches exactly what the tree snapshot cannot.
+#
 # PT: Wrapper de `ctest` que detecta contaminação (BUILDDIR-MUTACAO, W23). Nasceu de um
 #     fato medido em 2026-07-30: dois agentes compartilharam esta working tree durante a
 #     W22. Um fazia mutation testing e sabotou um arquivo RASTREADO sob glintfx/ (removeu
@@ -104,6 +125,28 @@
 #     de arquivo FORA de glintfx/ do qual o build de alguma forma ainda dependa (não
 #     deveria haver nenhum; glintfx/ é autocontido).
 #
+#     ADENDO MUTAÇÃO TRANSITÓRIA (achado por review adversarial, 2026-07-31, MEDIDO não
+#     deduzido -- reproduzido contra o próprio clone de drill deste script: hash antes ==
+#     hash depois, byte a byte, num ciclo mutar/rebuildar/restaurar/rebuildar inteiro
+#     dentro da janela guardada). O snapshot de árvore acima é função pura do ESTADO da
+#     árvore, então uma mutação aplicada E revertida dentro da janela é invisível a ele --
+#     e reverter entre ciclos é exatamente o protocolo de mutation testing (o incidente da
+#     W22 foram 7 ciclos assim). Uma suíte guardada que começa e termina com o fonte
+#     restaurado vê árvore constante nos dois pontos de snapshot e declara a rodada
+#     válida, enquanto os binários do build dir compartilhado foram trocados por baixo no
+#     meio -- o guard errando pro lado permissivo justamente no cenário que o motivou.
+#     Corrigido tirando a impressão digital dos EXECUTÁVEIS DE TESTE de fato (não do
+#     build dir inteiro, que pegaria as escritas do próprio ctest em Testing/ e viraria
+#     ruído): logo após o `cmake --build`, enumera todo executável que o ctest está pra
+#     invocar (via `ctest --show-only=json-v1`, desfazendo a indireção `-DEXE=<caminho>`
+#     que o wrapper de Xvfb por-teste do glintfx/tests/run_xvfb.cmake introduz -- a
+#     maioria dos testes roda via `cmake -DEXE=... -P run_xvfb.cmake`, não o binário
+#     direto, então `command[0]` sozinho é `/usr/bin/cmake` pra esses e não serve), e
+#     hasheia (caminho, tamanho, mtime) de cada um. Um rebuild concorrente -- mesmo um que
+#     produza código de máquina byte-idêntico -- escreve um arquivo NOVO, então o mtime se
+#     move mesmo quando o conteúdo não muda: isso pega exatamente o que o snapshot de
+#     árvore não pega.
+#
 # Usage / Uso:
 #   tools/ctest_guarded.sh <build-dir> [ctest-args...]
 #   tools/ctest_guarded.sh --help
@@ -113,18 +156,23 @@
 #     tools/ctest_guarded.sh glintfx/build-preci -R render_sanity
 #
 # Exit status:
-#   0   -- clean run: tracked tree unchanged, ctest passed.
-#   1   -- CONTAMINATED run (BUILDDIR-MUTACAO): the tracked tree under glintfx/ (minus
-#          build*/) moved between the pre-build snapshot and the post-ctest snapshot.
-#          The canonical message below is printed verbatim on stderr; re-run once the
-#          tree is quiet again. This exit code takes priority over ctest's own exit code
-#          -- a contaminated run is invalid REGARDLESS of whether ctest itself reported
-#          pass or fail.
-#   N>0 -- ctest's own exit code, propagated as-is, when the tree was NOT contaminated
-#          (a genuine red suite).
-#   2   -- usage error (missing/invalid <build-dir>, not a configured CMake build dir).
+#   0   -- clean run: tracked tree AND test-executable fingerprints unchanged, ctest
+#          passed.
+#   1   -- CONTAMINATED run (BUILDDIR-MUTACAO): either the tracked tree under glintfx/
+#          (minus build*/) moved between the pre-build and post-ctest tree snapshots, OR
+#          one of the test executables' (path, size, mtime) changed between the
+#          post-build and post-ctest artifact fingerprints (a concurrent rebuild, even a
+#          transient one that restores identical source). The matching canonical message
+#          is printed verbatim on stderr (both print if both triggered); re-run once the
+#          tree/build dir are quiet. This exit code takes priority over ctest's own exit
+#          code -- a contaminated run is invalid REGARDLESS of whether ctest itself
+#          reported pass or fail.
+#   N>0 -- ctest's own exit code, propagated as-is, when NEITHER contamination check
+#          fired (a genuine red suite).
+#   2   -- usage error (missing/invalid <build-dir>, not a configured CMake build dir, or
+#          a required tool -- jq -- is missing).
 #
-# Requires: git, cmake, ctest, xvfb-run. Assumes <build-dir> was already configured
+# Requires: git, cmake, ctest, xvfb-run, jq. Assumes <build-dir> was already configured
 #           (has a CMakeCache.txt) -- this script builds+tests, it does not configure.
 set -euo pipefail
 
@@ -146,6 +194,11 @@ if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
   exit 2
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: 'jq' not found in PATH -- required for the test-executable fingerprint (see the TRANSIENT-MUTATION ADDENDUM header comment). This is a house-canonical tool (TOOLING.md); install it rather than skipping the check -- a guard that silently degrades gives false confidence." >&2
+  exit 2
+fi
+
 section() {
   echo ""
   echo "== ctest_guarded: $1 =="
@@ -164,10 +217,70 @@ snapshot() {
   } | sha256sum | awk '{print $1}'
 }
 
+# EN: list_test_executables -- the exact set of files ctest is about to invoke for
+#     "${BUILD_DIR}", one absolute path per line, deduplicated. See the
+#     TRANSIENT-MUTATION ADDENDUM header comment for why command[0] alone is not enough
+#     (most tests here are wrapped by glintfx/tests/run_xvfb.cmake, so command[0] is
+#     `/usr/bin/cmake` and the real binary is the value of a `-DEXE=<path>` argument).
+# PT: list_test_executables -- o conjunto exato de arquivos que o ctest está pra invocar
+#     em "${BUILD_DIR}", um caminho absoluto por linha, deduplicado. Ver o comentário de
+#     cabeçalho ADENDO MUTAÇÃO TRANSITÓRIA pro porquê de command[0] sozinho não bastar
+#     (a maioria dos testes aqui é embrulhada por glintfx/tests/run_xvfb.cmake, então
+#     command[0] é `/usr/bin/cmake` e o binário real é o valor de um argumento
+#     `-DEXE=<caminho>`).
+list_test_executables() {
+  local build_dir="$1"
+  # EN: NB the `(.[0] // "")` (not `.[0] // empty`): on an empty array `.[0]` is `null`,
+  #     and `null // empty` makes jq's `as $exe_arg` binding produce ZERO outputs for that
+  #     input -- silently DROPPING the whole test entry, not binding an empty string. This
+  #     was measured live: it silently dropped every test WITHOUT a `-DEXE=` wrapper (the
+  #     common case), including audio_hostile_sanity in the very drill that was supposed
+  #     to prove this function works, before the fix below.
+  # PT: NB o `(.[0] // "")` (não `.[0] // empty`): num array vazio `.[0]` é `null`, e
+  #     `null // empty` faz o binding `as $exe_arg` do jq produzir ZERO saídas pra aquele
+  #     input -- DESCARTANDO silenciosamente a entrada de teste inteira, não vinculando
+  #     string vazia. Isto foi medido ao vivo: descartava silenciosamente todo teste SEM
+  #     wrapper `-DEXE=` (o caso comum), inclusive audio_hostile_sanity no próprio drill
+  #     que deveria provar que esta função funciona, antes do conserto abaixo.
+  ctest --show-only=json-v1 --test-dir "${build_dir}" | jq -r '
+    .tests[] |
+    ( .command | map(select(startswith("-DEXE="))) | (.[0] // "") ) as $exe_arg |
+    if $exe_arg != "" then
+      ($exe_arg | sub("^-DEXE="; ""))
+    else
+      .command[0]
+    end
+  ' | sort -u
+}
+
+# EN: fingerprint_executables -- reads paths from stdin (one per line, as produced by
+#     list_test_executables) and hashes (path, size, mtime) of each. A path that does not
+#     exist is fingerprinted as literally "MISSING" instead of being skipped, so a binary
+#     that got deleted out from under the run also counts as a mismatch.
+# PT: fingerprint_executables -- lê caminhos da stdin (um por linha, como
+#     list_test_executables produz) e hasheia (caminho, tamanho, mtime) de cada um. Um
+#     caminho que não existe é registrado literalmente como "MISSING" em vez de pulado,
+#     então um binário apagado por baixo da rodada também conta como divergência.
+fingerprint_executables() {
+  local f
+  while IFS= read -r f; do
+    [[ -z "${f}" ]] && continue
+    if [[ -f "${f}" ]]; then
+      stat --format '%n %s %Y' -- "${f}"
+    else
+      printf '%s MISSING\n' "${f}"
+    fi
+  done | sha256sum | awk '{print $1}'
+}
+
 before_hash="$(snapshot)"
 
 section "cmake --build ${BUILD_DIR}"
 cmake --build "${BUILD_DIR}" -j"$(nproc)"
+
+section "fingerprint test executables (TRANSIENT-MUTATION ADDENDUM)"
+test_exe_list="$(list_test_executables "${BUILD_DIR}")"
+artifact_before="$(printf '%s\n' "${test_exe_list}" | fingerprint_executables)"
 
 # EN: QA-XVFBISO isolation, copied VERBATIM from tools/preci.sh's run_layer1_config() --
 #     see that function's own header comment for the full rationale (2026-07-23 incident:
@@ -184,11 +297,24 @@ env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="${fake_xdg_runtime}" \
   xvfb-run -a ctest --test-dir "${BUILD_DIR}" --output-on-failure "${CTEST_ARGS[@]}" || ctest_rc=$?
 rm -rf "${fake_xdg_runtime}"
 
+artifact_after="$(printf '%s\n' "${test_exe_list}" | fingerprint_executables)"
 after_hash="$(snapshot)"
+
+contaminated=0
 
 if [[ "${before_hash}" != "${after_hash}" ]]; then
   echo "" >&2
   echo "RODADA INVALIDA (BUILDDIR-MUTACAO): a arvore rastreada mudou durante a suite -- TODOS os resultados desta rodada estao invalidados, INCLUSIVE OS VERDES. Confira coredumpctl e re-rode." >&2
+  contaminated=1
+fi
+
+if [[ "${artifact_before}" != "${artifact_after}" ]]; then
+  echo "" >&2
+  echo "RODADA INVALIDA (BUILDDIR-MUTACAO): os binarios de teste no build dir mudaram durante a suite (provavel rebuild concorrente, inclusive transitorio com fonte restaurado ao final) -- TODOS os resultados desta rodada estao invalidados, INCLUSIVE OS VERDES. Confira coredumpctl e re-rode." >&2
+  contaminated=1
+fi
+
+if [[ "${contaminated}" -eq 1 ]]; then
   exit 1
 fi
 
@@ -197,4 +323,4 @@ if [[ "${ctest_rc}" -ne 0 ]]; then
 fi
 
 echo ""
-echo "== ctest_guarded: OK (tracked tree unchanged under glintfx/ during build+test) =="
+echo "== ctest_guarded: OK (tracked tree AND test-executable fingerprints unchanged during build+test) =="

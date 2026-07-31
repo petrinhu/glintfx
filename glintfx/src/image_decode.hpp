@@ -377,7 +377,30 @@ inline DecodedImage decode_straight_rgba(const unsigned char* data, std::size_t 
   // PT: Cópia straight -- sem passo de premultiply, a ÚNICA diferença do próprio loop final de
   //     decode_premultiplied_rgba() acima.
   const std::size_t pixel_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
-  out.rgba.assign(px.get(), px.get() + pixel_count * 4u);
+  // EN: Hoisted to a typed local (same pattern as `p` in decode_premultiplied_rgba() above,
+  //     line ~179) instead of calling `px.get()` twice inline -- besides the usual DRY
+  //     motivation, cppcheck 2.13.0 (the version this repo's CI installs on ubuntu-latest,
+  //     TST-L1-STATIC) misinfers the return type of `px.get()` chained straight into pointer
+  //     arithmetic as `void*` (CI-LINT-RED, `arithOperationsOnVoidPointer`) even though `px` is
+  //     `unique_ptr<unsigned char, decltype(&stbi_image_free)>` and its `pointer` type is
+  //     `unsigned char*` by the standard (the deleter is a plain function pointer, not a class
+  //     with a nested `pointer` typedef -- cppcheck's own type model does not fully resolve
+  //     this). No UB either way (`unsigned char*` arithmetic is always well-defined); assigning
+  //     to a named `unsigned char*` local first is the same code either way and resolves the
+  //     tool's false positive without a suppression comment.
+  // PT: Extraído pra uma local tipada (mesmo padrão de `p` em decode_premultiplied_rgba() acima,
+  //     linha ~179) em vez de chamar `px.get()` duas vezes inline -- além da motivação DRY
+  //     usual, o cppcheck 2.13.0 (a versão que o CI deste repo instala no ubuntu-latest,
+  //     TST-L1-STATIC) infere errado o tipo de retorno de `px.get()` encadeado direto em
+  //     aritmética de ponteiro como `void*` (CI-LINT-RED, `arithOperationsOnVoidPointer`), mesmo
+  //     `px` sendo `unique_ptr<unsigned char, decltype(&stbi_image_free)>` cujo tipo `pointer` é
+  //     `unsigned char*` pela norma (o deleter é um ponteiro de função simples, não uma classe
+  //     com typedef `pointer` aninhado -- o modelo de tipos do cppcheck não resolve isso por
+  //     completo). Sem UB de nenhum jeito (aritmética de `unsigned char*` é sempre bem definida);
+  //     atribuir a uma local `unsigned char*` nomeada primeiro é o mesmo código de qualquer
+  //     forma e resolve o falso positivo da ferramenta sem comentário de supressão.
+  unsigned char* const raw = px.get();
+  out.rgba.assign(raw, raw + pixel_count * 4u);
 
   out.ok = true;
   out.width = w;

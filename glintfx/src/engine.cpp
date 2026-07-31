@@ -696,10 +696,30 @@ CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) cons
     out.byte_count = static_cast<size_t>(w) * static_cast<size_t>(h) * 4;
     out.pixels = std::make_unique<unsigned char[]>(out.byte_count);
     const size_t row_bytes_src = static_cast<size_t>(w) * 3;
+    // EN: Hoisted out of the loop (same pattern applied to the byte-for-byte-identical loop in
+    //     frame_capture.cpp, CI-LINT-RED): besides avoiding a repeated `.get()` call per row,
+    //     cppcheck 2.13.0 (CI's ubuntu-latest version, TST-L1-STATIC) can misinfer a `.get()`
+    //     call chained straight into pointer arithmetic as `void*` (arithOperationsOnVoidPointer)
+    //     even though `out.pixels` is `unique_ptr<unsigned char[]>` and `.get()` is
+    //     unambiguously `unsigned char*` by the standard. This exact spot was not flagged in the
+    //     CI run that found the sibling case in frame_capture.cpp, but the identical pattern
+    //     here is equally exposed to the same tool limitation -- fixed proactively rather than
+    //     waiting for a future CI run to go red on it (auditoria-dominó).
+    // PT: Extraído do laço (mesmo padrão aplicado ao laço byte-a-byte idêntico em
+    //     frame_capture.cpp, CI-LINT-RED): além de evitar uma chamada `.get()` repetida por
+    //     linha, o cppcheck 2.13.0 (versão do ubuntu-latest do CI, TST-L1-STATIC) pode inferir
+    //     errado uma chamada `.get()` encadeada direto em aritmética de ponteiro como `void*`
+    //     (arithOperationsOnVoidPointer), mesmo `out.pixels` sendo `unique_ptr<unsigned char[]>`
+    //     e `.get()` sendo inequivocamente `unsigned char*` pela norma. Este ponto exato não foi
+    //     sinalizado na rodada de CI que achou o caso irmão em frame_capture.cpp, mas o padrão
+    //     idêntico aqui está igualmente exposto à mesma limitação da ferramenta -- corrigido
+    //     proativamente em vez de esperar uma rodada futura de CI ficar vermelha por causa dele
+    //     (auditoria-dominó).
+    unsigned char* const pixels_base = out.pixels.get();
     for (int dst_row = 0; dst_row < h; ++dst_row) {
       const int src_row = h - 1 - dst_row;
       const unsigned char* src = rgb.data() + static_cast<size_t>(src_row) * row_bytes_src;
-      unsigned char* dst = out.pixels.get() + static_cast<size_t>(dst_row) * static_cast<size_t>(w) * 4;
+      unsigned char* dst = pixels_base + static_cast<size_t>(dst_row) * static_cast<size_t>(w) * 4;
       for (int x = 0; x < w; ++x) {
         dst[x * 4 + 0] = src[x * 3 + 0];
         dst[x * 4 + 1] = src[x * 3 + 1];

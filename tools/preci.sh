@@ -177,7 +177,6 @@ run_layer1_config() {
     -DGLINTFX_BACKEND_GLFW="${backend_glfw}" \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++
-  cmake --build "${build_dir}" -j"$(nproc)"
 
   # EN: QA-XVFBISO -- isolate WAYLAND_DISPLAY/XDG_RUNTIME_DIR AT THE POINT THIS SCRIPT
   #     LAUNCHES `xvfb-run -a ctest`, instead of trusting whatever the calling shell
@@ -201,6 +200,18 @@ run_layer1_config() {
   #     the case run daily. The explicit form below has no such gap: it is correct on
   #     both the pass and the fail path, and cannot regress if `set -e` semantics differ
   #     across bash versions run by the líder's shell vs. this repo's CI containers.
+  #
+  #     BUILDDIR-MUTACAO (W23) update: the `cmake --build` + isolated-ctest invocation
+  #     that used to live directly below this comment now lives in
+  #     tools/ctest_guarded.sh, which copies this exact isolation recipe VERBATIM (see
+  #     that script's own header) and additionally snapshots the tracked tree under
+  #     glintfx/ (excluding build*/) before and after the run, failing loud
+  #     (RODADA INVALIDA / BUILDDIR-MUTACAO) if it moved mid-run -- something a bare
+  #     inline `cmake --build && xvfb-run ctest` here could not detect (W22 fact: two
+  #     agents sharing this tree, one sabotaging a tracked file mid-mutation-test, the
+  #     other's full ctest run reporting a false green). This comment stays in place for
+  #     historical continuity -- read it, then read ctest_guarded.sh's header for the
+  #     rest.
   # PT: QA-XVFBISO -- isola WAYLAND_DISPLAY/XDG_RUNTIME_DIR NO PONTO em que este script
   #     lança o `xvfb-run -a ctest`, em vez de confiar no que o shell chamador já tivesse
   #     feito unset/export. Foi exatamente essa confiança que falhou em 2026-07-23: esta
@@ -224,15 +235,22 @@ run_layer1_config() {
   #     explícita abaixo não tem essa lacuna: está correta tanto no caminho de sucesso
   #     quanto no de falha, e não regride se a semântica do `set -e` variar entre a versão
   #     do bash no shell do líder e a dos containers de CI deste repo.
-  local fake_xdg_runtime
-  fake_xdg_runtime="$(mktemp -d "${TMPDIR:-/tmp}/glintfx-preci-xvfb-runtime.XXXXXX")"
-
-  local xvfb_rc=0
-  env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="${fake_xdg_runtime}" \
-    xvfb-run -a ctest --test-dir "${build_dir}" --output-on-failure || xvfb_rc=$?
-  rm -rf "${fake_xdg_runtime}"
-  if [[ "${xvfb_rc}" -ne 0 ]]; then
-    return "${xvfb_rc}"
+  #
+  #     Atualização BUILDDIR-MUTACAO (W23): o `cmake --build` + a invocação isolada de
+  #     ctest que antes vinham logo abaixo deste comentário agora moram em
+  #     tools/ctest_guarded.sh, que copia esta mesma receita de isolamento VERBATIM (ver
+  #     o cabeçalho daquele script) e adicionalmente tira snapshot da árvore rastreada
+  #     sob glintfx/ (excluindo build*/) antes e depois da rodada, falhando alto
+  #     (RODADA INVALIDA / BUILDDIR-MUTACAO) se ela mudou no meio -- algo que um
+  #     `cmake --build && xvfb-run ctest` cru aqui não conseguiria detectar (fato da
+  #     W22: dois agentes compartilhando esta árvore, um sabotando um arquivo rastreado
+  #     no meio de um mutation test, e a suíte completa do outro reportando um verde
+  #     falso). Este comentário fica no lugar por continuidade histórica -- leia-o, e
+  #     depois leia o cabeçalho do ctest_guarded.sh pro resto.
+  local guard_rc=0
+  "${SCRIPT_DIR}/ctest_guarded.sh" "${build_dir}" || guard_rc=$?
+  if [[ "${guard_rc}" -ne 0 ]]; then
+    return "${guard_rc}"
   fi
 
   ran_anything=1

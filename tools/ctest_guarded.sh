@@ -155,18 +155,33 @@
 #     tools/ctest_guarded.sh glintfx/build-preci
 #     tools/ctest_guarded.sh glintfx/build-preci -R render_sanity
 #
+#   SCOPE OF THE ARTIFACT FINGERPRINT, HONESTLY STATED: [ctest-args...] (any -R/-E/-L
+#   selection you pass) is forwarded to the `--show-only=json-v1` call that builds the
+#   fingerprinted executable list, so the fingerprint always covers EXACTLY the binaries
+#   THIS invocation is about to exercise -- not the whole build dir's test set. Run
+#   `tools/ctest_guarded.sh glintfx/build-preci -R render_sanity` and only the ~5
+#   executables matching `render_sanity` are fingerprinted; a concurrent rebuild of an
+#   unrelated test binary would NOT be caught by that narrower invocation (it is outside
+#   what was tested, so it is honestly outside what is guarded). Escopo do fingerprint,
+#   declarado com honestidade: os args de seleção do ctest (-R/-E/-L) são repassados pra
+#   chamada `--show-only=json-v1`, então o fingerprint cobre SEMPRE exatamente os
+#   binários que ESTA invocação vai exercitar -- não o conjunto de teste inteiro do
+#   build dir. Rebuild concorrente de um binário não relacionado a uma rodada filtrada
+#   não é pego por ela (está fora do que foi testado, então honestamente está fora do
+#   que é guardado).
+#
 # Exit status:
-#   0   -- clean run: tracked tree AND test-executable fingerprints unchanged, ctest
+#   0   -- clean run: tracked tree AND fingerprinted test-executable set unchanged, ctest
 #          passed.
 #   1   -- CONTAMINATED run (BUILDDIR-MUTACAO): either the tracked tree under glintfx/
 #          (minus build*/) moved between the pre-build and post-ctest tree snapshots, OR
-#          one of the test executables' (path, size, mtime) changed between the
-#          post-build and post-ctest artifact fingerprints (a concurrent rebuild, even a
-#          transient one that restores identical source). The matching canonical message
-#          is printed verbatim on stderr (both print if both triggered); re-run once the
-#          tree/build dir are quiet. This exit code takes priority over ctest's own exit
-#          code -- a contaminated run is invalid REGARDLESS of whether ctest itself
-#          reported pass or fail.
+#          one of the fingerprinted test executables' (path, size, mtime) changed between
+#          the post-build and post-ctest artifact fingerprints (a concurrent rebuild, even
+#          a transient one that restores identical source). The matching canonical
+#          message is printed verbatim on stderr (both print if both triggered); re-run
+#          once the tree/build dir are quiet. This exit code takes priority over ctest's
+#          own exit code -- a contaminated run is invalid REGARDLESS of whether ctest
+#          itself reported pass or fail.
 #   N>0 -- ctest's own exit code, propagated as-is, when NEITHER contamination check
 #          fired (a genuine red suite).
 #   2   -- usage error (missing/invalid <build-dir>, not a configured CMake build dir, or
@@ -218,18 +233,33 @@ snapshot() {
 }
 
 # EN: list_test_executables -- the exact set of files ctest is about to invoke for
-#     "${BUILD_DIR}", one absolute path per line, deduplicated. See the
-#     TRANSIENT-MUTATION ADDENDUM header comment for why command[0] alone is not enough
-#     (most tests here are wrapped by glintfx/tests/run_xvfb.cmake, so command[0] is
-#     `/usr/bin/cmake` and the real binary is the value of a `-DEXE=<path>` argument).
+#     "${BUILD_DIR}" GIVEN THE SAME SELECTION ARGS as the real run (CTEST_ARGS, e.g. -R/
+#     -E/-L), one absolute path per line, deduplicated. `--show-only=json-v1` honors those
+#     filters exactly like a normal run does (verified: `-R render_sanity` on the real
+#     build-preci narrows 125 tests to 5), so passing CTEST_ARGS here is required --
+#     without it this function fingerprints the WHOLE suite while the actual invocation
+#     below only exercises a filtered subset, and the guard would be fingerprinting a
+#     different set than it tests (found by team-lead review, 2026-07-31).
+#     See the TRANSIENT-MUTATION ADDENDUM header comment for why command[0] alone is not
+#     enough (most tests here are wrapped by glintfx/tests/run_xvfb.cmake, so command[0]
+#     is `/usr/bin/cmake` and the real binary is the value of a `-DEXE=<path>` argument).
 # PT: list_test_executables -- o conjunto exato de arquivos que o ctest está pra invocar
-#     em "${BUILD_DIR}", um caminho absoluto por linha, deduplicado. Ver o comentário de
-#     cabeçalho ADENDO MUTAÇÃO TRANSITÓRIA pro porquê de command[0] sozinho não bastar
-#     (a maioria dos testes aqui é embrulhada por glintfx/tests/run_xvfb.cmake, então
-#     command[0] é `/usr/bin/cmake` e o binário real é o valor de um argumento
-#     `-DEXE=<caminho>`).
+#     em "${BUILD_DIR}" DADOS OS MESMOS ARGS DE SELEÇÃO da rodada real (CTEST_ARGS, ex.
+#     -R/-E/-L), um caminho absoluto por linha, deduplicado. `--show-only=json-v1`
+#     respeita esses filtros igual a uma rodada normal (verificado: `-R render_sanity` no
+#     build-preci real estreita 125 testes pra 5), então passar CTEST_ARGS aqui é
+#     obrigatório -- sem isso esta função fingerprinta a SUÍTE INTEIRA enquanto a
+#     invocação real abaixo só exercita um subconjunto filtrado, e o guard estaria
+#     fingerprintando um conjunto diferente do que testa (achado por review do
+#     team-lead, 2026-07-31).
+#     Ver o comentário de cabeçalho ADENDO MUTAÇÃO TRANSITÓRIA pro porquê de command[0]
+#     sozinho não bastar (a maioria dos testes aqui é embrulhada por
+#     glintfx/tests/run_xvfb.cmake, então command[0] é `/usr/bin/cmake` e o binário real
+#     é o valor de um argumento `-DEXE=<caminho>`).
 list_test_executables() {
   local build_dir="$1"
+  shift
+  local -a select_args=("$@")
   # EN: NB the `(.[0] // "")` (not `.[0] // empty`): on an empty array `.[0]` is `null`,
   #     and `null // empty` makes jq's `as $exe_arg` binding produce ZERO outputs for that
   #     input -- silently DROPPING the whole test entry, not binding an empty string. This
@@ -242,7 +272,7 @@ list_test_executables() {
   #     string vazia. Isto foi medido ao vivo: descartava silenciosamente todo teste SEM
   #     wrapper `-DEXE=` (o caso comum), inclusive audio_hostile_sanity no próprio drill
   #     que deveria provar que esta função funciona, antes do conserto abaixo.
-  ctest --show-only=json-v1 --test-dir "${build_dir}" | jq -r '
+  ctest --show-only=json-v1 --test-dir "${build_dir}" "${select_args[@]}" | jq -r '
     .tests[] |
     ( .command | map(select(startswith("-DEXE="))) | (.[0] // "") ) as $exe_arg |
     if $exe_arg != "" then
@@ -279,7 +309,7 @@ section "cmake --build ${BUILD_DIR}"
 cmake --build "${BUILD_DIR}" -j"$(nproc)"
 
 section "fingerprint test executables (TRANSIENT-MUTATION ADDENDUM)"
-test_exe_list="$(list_test_executables "${BUILD_DIR}")"
+test_exe_list="$(list_test_executables "${BUILD_DIR}" "${CTEST_ARGS[@]}")"
 artifact_before="$(printf '%s\n' "${test_exe_list}" | fingerprint_executables)"
 
 # EN: QA-XVFBISO isolation, copied VERBATIM from tools/preci.sh's run_layer1_config() --

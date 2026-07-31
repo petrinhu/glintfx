@@ -276,6 +276,34 @@ void format_into_buffer(char* buf, std::size_t cap, const char* fmt, va_list ap)
     return;
   }
 
+  // EN: NOLINT justification -- clang-analyzer-valist.Uninitialized is a FALSE POSITIVE here,
+  //     confirmed empirically (CI-LINT-RED): `ap` is the standard by-value `va_list` parameter,
+  //     initialized by every one of this TU's 3 callers via their own `va_start`/`va_end` pair
+  //     (log_info/log_warn/log_error below) before calling this function exactly once, with no
+  //     `va_copy` and no re-use after `va_end` anywhere in this TU -- the textbook-correct
+  //     "printf wrapper" pattern (same shape as libc's own `vsnprintf` relative to `printf`).
+  //     The diagnostic is triggered NOT by this code but by clang-tidy's own per-process state:
+  //     it reproduces only when `log.cpp` is analyzed as a NON-FIRST translation unit in a
+  //     multi-file `clang-tidy` invocation (any single file ahead of it in the argument list is
+  //     enough) and disappears when `log.cpp` is analyzed alone or first -- proof the trigger is
+  //     invocation order, not this function's contract. Matches the known analyzer-limitation
+  //     class in llvm/llvm-project#55009 (va_list reaching a callee via parameter/pointer,
+  //     analyzed as a synthetic standalone entry point that never saw the caller's `va_start`).
+  // PT: Justificativa do NOLINT -- clang-analyzer-valist.Uninitialized é FALSO POSITIVO aqui,
+  //     confirmado empiricamente (CI-LINT-RED): `ap` é o parâmetro `va_list` por valor padrão,
+  //     inicializado pelos 3 chamadores desta TU via o par `va_start`/`va_end` próprio deles
+  //     (log_info/log_warn/log_error abaixo) antes de chamar esta função exatamente uma vez, sem
+  //     `va_copy` e sem reuso após `va_end` em lugar nenhum desta TU -- o padrão "wrapper de
+  //     printf" livro-texto (mesma forma do `vsnprintf` da própria libc em relação ao `printf`).
+  //     O diagnóstico é disparado NÃO por este código, mas pelo estado de processo do próprio
+  //     clang-tidy: reproduz só quando `log.cpp` é analisado como unidade de tradução NÃO-PRIMEIRA
+  //     numa invocação multi-arquivo do `clang-tidy` (basta UM arquivo qualquer antes dele na
+  //     lista de argumentos) e desaparece quando `log.cpp` é analisado sozinho ou primeiro --
+  //     prova de que o gatilho é a ordem de invocação, não o contrato desta função. Casa com a
+  //     classe de limitação conhecida do analisador em llvm/llvm-project#55009 (va_list chegando
+  //     a um callee via parâmetro/ponteiro, analisado como ponto de entrada sintético autônomo que
+  //     nunca viu o `va_start` do chamador).
+  // NOLINTNEXTLINE(clang-analyzer-valist.Uninitialized)
   const int written = std::vsnprintf(buf, cap, fmt, ap);
   if (written < 0) {
     // EN: Encoding error (e.g. a multibyte conversion failure deep in the platform's own

@@ -67,6 +67,11 @@ This policy applies going forward. Past tags are historical and are not rewritte
 
 The project is **MPL-2.0** and currently has a single author, which keeps relicensing clean. External contributions may require a contributor agreement (CLA) or relicensing consent before they can be merged. If you plan a substantial contribution, open an issue first so this can be sorted out. Do not copy code from third-party libraries; any reimplementation of their behaviour must be clean-room (from understanding, not from their source).
 
+**As of the license rotation to Apache-2.0** ([ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md); see that ADR for the full context, this note documents the policy it establishes once the rotation lands, without repeating the reasoning here):
+
+- **Inbound = outbound, no CLA.** Apache-2.0 §5 ("Submission of Contributions") already states that, unless you say otherwise in writing, anything you submit for inclusion is licensed to the project under the very same Apache-2.0 terms, automatically, with no separate signature. This is precisely the CLA-shaped gap the single-author window (ADR-0007, carried forward by ADR-0019) existed to close: once the project is Apache-2.0, external contributions no longer need a CLA or a one-off relicensing consent to be merged. The "open an issue first" advice above still stands for coordination, not for licensing paperwork.
+- **§4(b) ("modified files must carry prominent notice"): the project's position is that the git commit history is that notice.** Apache-2.0 does not mandate an in-file changelog comment; a commit's diff, author, date, and message already state, prominently and permanently, per file, that a change was made and by whom. We rely on that record rather than asking contributors to hand-annotate every touched file.
+
 ### Reporting issues
 
 Open an issue on [GitHub](https://github.com/petrinhu/glintfx). For security-sensitive reports, follow [`SECURITY.md`](SECURITY.md) instead.
@@ -134,6 +139,11 @@ Esta política vale daqui pra frente. Tags passadas são históricas e não são
 ### Licença das contribuições
 
 O projeto é **MPL-2.0** e tem atualmente um único autor, o que mantém o relicenciamento limpo. Contribuições externas podem exigir um acordo de contribuidor (CLA) ou consentimento de relicenciamento antes de serem mergeadas. Se planeja uma contribuição substancial, abra uma issue primeiro para resolver isso. Não copie código de bibliotecas de terceiros; qualquer reimplementação do comportamento delas deve ser clean-room (a partir do entendimento, não do código-fonte delas).
+
+**A partir da rotação de licença para Apache-2.0** ([ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md); ver esse ADR para o contexto completo, esta nota registra a política que ele estabelece assim que a rotação acontecer, sem repetir a fundamentação aqui):
+
+- **Inbound = outbound, sem CLA.** O §5 da Apache-2.0 ("Submission of Contributions") já diz que, a menos que você declare o contrário por escrito, qualquer coisa que você envie para inclusão é licenciada ao projeto sob os MESMOS termos Apache-2.0, automaticamente, sem assinatura separada. É exatamente a lacuna em forma de CLA que a janela de autor único (ADR-0007, herdada pelo ADR-0019) existia para fechar: a partir do momento em que o projeto é Apache-2.0, contribuições externas não precisam mais de CLA nem de consentimento avulso de relicenciamento para serem mergeadas. O conselho de "abra uma issue primeiro", acima, continua valendo para coordenação, não para burocracia de licença.
+- **§4(b) ("arquivos modificados devem carregar aviso proeminente"): a posição do projeto é que o histórico de commits do git É esse aviso.** A Apache-2.0 não exige um comentário de changelog dentro do arquivo; o diff, autor, data e mensagem de um commit já declaram, de forma proeminente, permanente e por-arquivo, que uma mudança aconteceu e quem a fez. Contamos com esse registro em vez de pedir que contribuidores anotem à mão cada arquivo tocado.
 
 ### Reportar problemas
 

@@ -1,150 +1,74 @@
 NOTICE — glintfx
 Copyright (c) 2026 Petrus Silva Costa
-Licensed under the Mozilla Public License 2.0 (MPL-2.0). See LICENSE.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. See LICENSE for the full text.
 
 ────────────────────────────────────────────────────────────────────────
-Linked / fetched third-party libraries (NOT included in this repository)
+Attributions required by the license terms of the dependency itself
 ────────────────────────────────────────────────────────────────────────
 
-These libraries are downloaded at build time (via FetchContent) or
-provided by the system. They are NOT part of this repository's source
-tree (the clones under examples/ are gitignored and exist only for
-study / reverse-engineering).
+- RmlUi — MIT License. Copyright (c) 2008-2014 CodePoint Ltd, Shift
+  Technology Ltd, and contributors. Fetched at build time (FetchContent);
+  not part of this repository's source tree.
 
-- RmlUi — MIT License.
-  Copyright (c) 2008-2014 CodePoint Ltd, Shift Technology Ltd, and contributors.
+- FreeType — FreeType License (FTL). Portions of this software are
+  copyright (c) The FreeType Project (www.freetype.org). All rights
+  reserved. A system dependency (find_package(Freetype REQUIRED)),
+  always linked — RmlUi's default font engine requires it unconditionally,
+  independently of glintfx's own optional font engine selector
+  (GLINTFX_OWN_FONT_ENGINE).
 
-- FreeType — used under the FreeType License (FTL).
-  Portions of this software are copyright (c) The FreeType Project
-  (www.freetype.org). All rights reserved.
+- GLFW — https://www.glfw.org — zlib/libpng License. Copyright (c)
+  2002-2006 Marcus Geelnard, (c) 2006-2019 Camilla Löwy. Linked only
+  when built with GLINTFX_BACKEND_GLFW=ON (the default).
 
-- OpenGL (libGL / Mesa) — MIT/SGI-style licenses; copyright their respective
-  authors.
+- SDL_GameControllerDB (Linux subset, vendored as DATA, not code) —
+  zlib License. Copyright (C) 1997-2025 Sam Lantinga
+  <slouken@libsdl.org>. glintfx/third_party/gamecontrollerdb/.
 
-- GLFW — https://www.glfw.org — zlib/libpng License.
-  Copyright (c) 2002-2006 Marcus Geelnard, (c) 2006-2019 Camilla Löwy.
-  Linked only when built with GLINTFX_BACKEND_GLFW=ON (the default).
+- glcorearb.h / khrplatform.h — MIT License. Copyright 2008-2026 The
+  Khronos Group Inc. glintfx/third_party/khronos/GL/glcorearb.h,
+  glintfx/third_party/khronos/KHR/khrplatform.h.
+
+- Open Sans — Apache License 2.0. Copyright The Open Sans Project
+  Authors (https://github.com/googlefonts/opensans).
+  glintfx/demos/showcase/assets/OpenSans-Regular.ttf.
 
 ────────────────────────────────────────────────────────────────────────
-Bundled (vendored) third-party source files (included in this repository)
+Other bundled material, disclosed for transparency (license terms do
+not themselves require attribution)
 ────────────────────────────────────────────────────────────────────────
 
-These files are committed directly into the repository source tree.
+- stb_image / stb_image_write — public domain / MIT dual-licensed,
+  used here as public domain. Original author: Sean Barrett
+  (nothings.org).
 
-- stb_image v2.30 — Public domain / MIT (dual-licensed; used here as public domain).
-  No copyright notice required; included here for disclosure.
-  Original author: Sean Barrett (nothings.org).
-  File: glintfx/third_party/stb/stb_image.h
-  Used for: PNG, JPG, and TGA texture decode in the GL3 render backend
-            (glintfx/src/render_gl3.cpp + glintfx/src/stb_image_impl.cpp), and the public
-            IMG-DECODE pair (glintfx/include/glintfx/image.hpp + glintfx/src/image.cpp).
-
-- stb_image_write v1.16 — Public domain / MIT (dual-licensed; used here as public domain).
-  No copyright notice required; included here for disclosure.
-  Original author: Sean Barrett (nothings.org).
-  File: glintfx/third_party/stb/stb_image_write.h
-  Used for: PNG/JPG/BMP/TGA/HDR image encode in the public IMG-ENCODE pair
-            (glintfx/include/glintfx/image.hpp + glintfx/src/image_encode.cpp +
-            glintfx/src/stb_image_write_impl.cpp). Five of this module's seven ImageFormat
-            values go through this vendored encoder; PPM is hand-written and QOI is glintfx's
-            own clean-room encoder (glintfx/src/qoi_encode.hpp, see that file's own header for
-            provenance) -- neither has an upstream counterpart here.
-
-- miniaudio v0.11.25 (commit 9634bedb5b5a2ca38c1ee7108a9358a4e233f14d, 2026-03-04) — MIT No
-  Attribution (MIT-0) / public domain (dual-licensed; used here as MIT-0).
-  Original author: David Reid (mackron@gmail.com, https://miniaud.io).
-  File: glintfx/third_party/miniaudio/miniaudio.h
-  Used for: audio decode/playback (WAV/FLAC/MP3) in the GLINTFX_MODULE_AUDIO atom
-            (glintfx/src/audio.cpp + glintfx/src/miniaudio_impl.c).
-  NOTE: carries one disclosed, reviewed one-line patch fixing a genuine upstream
-        heap-use-after-free (ma_resource_manager_data_buffer_node_acquire, epilogue
-        dereferenced a just-freed node on the synchronous-decode-failure path) — found via
-        this module's own ASan test pass. Full writeup:
-        glintfx/third_party/miniaudio/README.md. Same disclosure discipline as the RmlUi
-        patch below (glintfx/patches/README.md).
-
-- SDL_GameControllerDB (Linux subset, vendored as DATA, not code) — zlib License.
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>.
-  Source: https://github.com/mdqinc/SDL_GameControllerDB (formerly gabomdq/SDL_GameControllerDB)
-  Pinned commit: 8d9fefd7b810f2541f78cc7a8ccbd185bc84c7a5 (2026-07-15).
-  File: glintfx/third_party/gamecontrollerdb/gamecontrollerdb_linux.txt (filtered to
-        platform:Linux entries only, 728 of the upstream's 2244 platform-tagged lines) +
-        gamecontrollerdb_linux.inc (generated from the .txt by tools/gen_gamepad_db.py).
-  Used for: gamepad button/axis mapping resolution in the GLINTFX_MODULE_GAMEPAD atom
-            (glintfx/src/gamepad_mapping.cpp). Consumed purely as TEXT DATA by glintfx's own
-            clean-room parser -- no SDL header or source file is read, compiled, or linked
-            anywhere in this repository. See glintfx/third_party/gamecontrollerdb/README.md
-            for full provenance, license text, and the re-sync recipe.
-
-- glcorearb.h — MIT License.
-  Copyright 2013-2026 The Khronos Group Inc.
-  SPDX-License-Identifier: MIT
-  File: glintfx/third_party/khronos/GL/glcorearb.h
-
-- khrplatform.h — MIT License.
-  Copyright (c) 2008-2018 The Khronos Group Inc.
-  File: glintfx/third_party/khronos/KHR/khrplatform.h
+- miniaudio — MIT No Attribution (MIT-0) / public domain dual-licensed,
+  used here as MIT-0. Original author: David Reid (mackron@gmail.com).
 
 - gl.xml (OpenGL / OpenGL-ES XML API Registry) — Apache License 2.0.
-  Copyright 2013-2026 The Khronos Group Inc.
-  SPDX-License-Identifier: Apache-2.0
-  Source: https://github.com/KhronosGroup/OpenGL-Registry
-  File: glintfx/third_party/khronos/gl.xml
-  Used for: input data to tools/gen_glloader.py (L1.14-GLLOADER), which generates
-            glintfx/src/gl_loader.h / gl_loader.c — glintfx's own MPL-2.0
-            GL 3.3 core-profile function-pointer loader, replacing the previously
-            vendored gl3w third-party loader. gl_loader.{h,c} are glintfx's own
-            source (MPL-2.0), not third-party code; they are listed here only to
-            disclose the Apache-2.0 registry data they are mechanically derived
-            from.
-
-────────────────────────────────────────────────────────────────────────
-Bundled assets
-────────────────────────────────────────────────────────────────────────
-
-- Open Sans — Apache License 2.0. Copyright The Open Sans Project Authors
-  (https://github.com/googlefonts/opensans).
-  File: glintfx/demos/showcase/assets/OpenSans-Regular.ttf
+  Copyright 2013-2026 The Khronos Group Inc. Consumed only as input
+  data to a code generator (tools/gen_glloader.py); not linked or
+  distributed as code. glintfx's own generated loader (gl_loader.h/.c)
+  carries this project's own SPDX header, not the registry's.
 
 - Pixel Operator Mono — Creative Commons Zero (CC0 1.0, public domain).
-  By Jayvee Enaguas (HarvettFox96), https://notabug.org/HarvettFox96/ttf-pixeloperator.
-  File: glintfx/demos/showcase/assets/PixelOperatorMono.ttf
-  Used as a Latin-only test fixture (font-fallback coverage tests).
+  By Jayvee Enaguas (HarvettFox96).
+
+- OpenGL (libGL / Mesa) — system library, MIT/SGI-style licenses;
+  copyright their respective authors. Not distributed by this project.
 
 ────────────────────────────────────────────────────────────────────────
 
-Full license texts of these dependencies are available in their respective
-upstream repositories. Any future in-project reimplementation of their
-functionality is done clean-room (from understanding, without copying source).
-
-────────────────────────────────────────────────────────────────────────
-Acknowledgment / Agradecimento
-────────────────────────────────────────────────────────────────────────
-
-EN: glintfx is built on top of RmlUi (https://github.com/mikke89/RmlUi,
-MIT License) -- the HTML/CSS-style UI engine and layout core this library
-wraps and drives from `.rcss`. Our thanks to mikke89 and the RmlUi
-contributors for a mature, well-documented project to build on. Where we
-find and fix a genuine bug in RmlUi itself, we track the fix as an
-explicit, reviewed source patch (see `glintfx/patches/README.md`) and aim
-to report/submit it back upstream -- e.g. `rmlui-2cd28864-teardown-ub.patch`,
-which fixes two undefined-behavior findings in RmlUi's own document/element
-teardown order (see `docs/embed-integration.md` section 18 for the
-consumer-facing writeup, and `glintfx/patches/README.md` for the technical
-detail). Any such patch is meant to be temporary: retired from this
-repository once the equivalent fix lands upstream.
-
-PT: o glintfx é construído sobre o RmlUi (https://github.com/mikke89/RmlUi,
-licença MIT) -- o motor de UI estilo HTML/CSS e o núcleo de layout que esta
-biblioteca embrulha e comanda a partir de `.rcss`. Nosso agradecimento ao
-mikke89 e aos contribuidores do RmlUi por um projeto maduro e bem
-documentado sobre o qual construir. Quando encontramos e corrigimos um bug
-genuíno no próprio RmlUi, rastreamos a correção como um patch de fonte
-explícito e revisado (ver `glintfx/patches/README.md`) e buscamos
-reportá-lo/submetê-lo de volta ao upstream -- ex.: o
-`rmlui-2cd28864-teardown-ub.patch`, que corrige dois achados de undefined
-behavior na própria ordem de teardown de documento/elemento do RmlUi (ver
-`docs/embed-integration.md` seção 18 para o relato voltado ao consumidor, e
-`glintfx/patches/README.md` para o detalhe técnico). Todo patch assim é
-pensado para ser temporário: aposentado deste repositório assim que a
-correção equivalente chegar no upstream.
+Full provenance, per-dependency detail, patch disclosure, and license
+text pointers for everything listed above: docs/third_party_notices.md.

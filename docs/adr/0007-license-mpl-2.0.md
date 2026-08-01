@@ -4,6 +4,7 @@
 - **Deciders:** petrus (líder), claudio-clo (orientação técnica, não vinculante)
 - **Tags:** legal, scope, one-way-door
 - **Supersedes:** the AGPL-3.0 choice recorded in commit `77a3826`.
+- **⚠️ Superseded by:** [ADR-0019](0019-license-rotation-apache-2.0.md) (2026-07-31): the project rotated from MPL-2.0 to Apache-2.0. This record stays historical, unedited; tags published under MPL-2.0 keep that license forever.
 
 ## Context / Contexto
 

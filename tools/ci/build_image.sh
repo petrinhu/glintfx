@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Builds/refreshes localhost/glintfx-ci:f42, the local image used to reproduce
 #     glintfx's heavy checks (ASan/LSan/UBSan, own-font-engine build) on a Fedora 42
 #     base BY HAND. There is no CI runner on this machine any more -- the self-hosted

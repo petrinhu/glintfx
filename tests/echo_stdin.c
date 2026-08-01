@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The B7 gate program. Proves sys_read end to end: a minimal `cat` -- reads from stdin
 //     (fd 0) into a local 256-byte buffer via sys_read, and echoes exactly the `n` bytes read
 //     back to stdout (fd 1) via sys_write (B6), looping until EOF (sys_read returns 0). No

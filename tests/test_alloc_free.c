@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-ALLOC (W15) gate program -- TDD RED first: written against the DOCUMENTED contract
 //     of the free-list rewrite (include/alloc.h, src/alloc.c's file header) BEFORE any of it
 //     existed in src/alloc.c -- these are exactly the cases the bootstrap bump allocator (a

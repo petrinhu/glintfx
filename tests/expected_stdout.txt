@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: AUD-C0-3 (AUDIT_FIND.md) -- stdout golden-file manifest, sibling of expected_exit.txt.
 #     Lines "<program-name> <golden-file-path-relative-to-repo-root>"; a program NOT listed here
 #     is only checked for exit code (the original, unchanged contract). A program listed here

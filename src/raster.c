@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-RAST (FT-F2) -- implementation. See include/core/raster.h's file header for the full
 //     clean-room rationale, API contract, and fixed-point/float precision split; this file's own
 //     comments focus on the LOCAL "how" (the two algorithms: quadratic flattening, analytic

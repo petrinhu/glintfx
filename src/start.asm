@@ -1,4 +1,4 @@
-; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: Apache-2.0
 ; EN: Our own process entry point (ADR-0003, ADR-0005) -- there is no crt0/crt1 from any
 ;     libc. The kernel jumps here directly after execve(); NOTHING has run before this. Per
 ;     the System V AMD64 ABI (Linux specifics), at process entry:

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-HINT (L1.20-FONTFLIP / FT-F4) SANITIZER GATE -- AUD-SEC-Delta addition (2026-07-19):
 //     `src/hint.c` was the ONLY component of the SFNT/raster/hint trio with NO hosted-companion
 //     sanitizer target (AUD-C0-PLAN.md's "Hotspot #2" -- the newest translation unit, tested by

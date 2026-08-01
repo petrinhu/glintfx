@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E1 gate program -- TDD RED first: written against include/alloc.h BEFORE src/alloc.c
 //     had a real body, so the link step failed (undefined reference to malloc/free/realloc)
 //     until E1 was implemented. See task report for the captured red-phase error. Covers the

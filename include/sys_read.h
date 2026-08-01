@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The third NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
 //     functions layered on top of syscall1/3/6"). Mirrors POSIX read(): reads up to `count`
 //     bytes from file descriptor `fd` into `buf`. Returns the raw kernel value in `rax`: on

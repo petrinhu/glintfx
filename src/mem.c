@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D1 -- see include/mem.h for the contract. Byte-at-a-time implementations, deliberately
 //     simple (no word-at-a-time/SIMD tricks -- correctness and auditability first; throughput
 //     optimization is out of scope for this increment and would be premature without a

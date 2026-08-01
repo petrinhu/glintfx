@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: AUD-C0-3 gate program (AUDIT_FIND.md): the only automated test that exercises
 //     `mini_printf`'s REAL stdout path -- `mini_flush`/`mini_flush_sink` (src/printf.c:265-293)
 //     -- end to end. Before this program, `tests/test_printf.c` covered only `mini_vsnprintf`

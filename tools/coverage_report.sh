@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Local-first code coverage report for glintfx (L1.18-COVCI, TST-L1-COV).
 #     Self-hosted per the líder's 2026-07-04 decision -- llvm-cov (Clang source-based
 #     coverage), NOT Codecov or any third-party uploader; zero data leaves this machine

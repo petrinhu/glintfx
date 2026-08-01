@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E1/SOV-ALLOC -- see include/alloc.h for the full public contract. This file is the
 //     internal strategy ADR-0004 always anticipated evolving to: a real free-list allocator
 //     with boundary-tag coalescing over `mmap`-backed arenas. `free` genuinely returns memory

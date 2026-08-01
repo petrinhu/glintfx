@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The first NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
 //     functions layered on top of syscall1/3/6"). Mirrors POSIX _exit(): terminates the
 //     calling process/thread immediately, never returns. No error contract (ADR-0002)

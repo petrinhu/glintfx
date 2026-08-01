@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-SFNT (FT-F1, AUD-TRANS-2's 2nd piece) -- a clean-room SFNT/TrueType font PARSER, built
 //     entirely from the PUBLIC OpenType/TrueType format specification (Microsoft OpenType spec /
 //     Apple TrueType Reference Manual -- both freely published descriptions of a binary file

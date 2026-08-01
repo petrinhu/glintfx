@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The fourth NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
 //     functions layered on top of syscall1/3/6"). Mirrors POSIX `mmap()`'s argument shape, but
 //     is the RAW kernel wrapper, not the libc one -- this is the one genuinely dangerous

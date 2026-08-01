@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E2 gate program -- TDD RED first: written against include/printf.h BEFORE src/printf.c has
 //     a real body, so the link step fails (undefined reference to `mini_vsnprintf`) until E2 is
 //     implemented. Tests ONLY `mini_vsnprintf` (the buffer-formatting core), NOT `mini_printf`

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D3 -- our own freestanding <limits.h>-equivalent, minimal (only what D3 needs: `int`/
 //     `unsigned` extremes for x86-64 Linux LP64, where `int` is 4 bytes regardless of the LP64
 //     data model). No libc `<limits.h>` exists to pull this from.

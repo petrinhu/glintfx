@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2 -- see include/str.h for the contract. Byte-at-a-time implementations, same philosophy
 //     as D1 (mem.c): correctness and auditability first, no word-at-a-time/SIMD tricks. Every
 //     length/search loop walks `const char*`/`char*` (the C-string contract), comparisons

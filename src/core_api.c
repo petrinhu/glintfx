@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-LIBCORE (ADR-0009, FT-F0) -- the `glx_*` front door declared in include/core/core.h.
 //     Every function here is a THIN wrapper (no new logic beyond the ADR-0009 gate-3 boundary
 //     check in `glx_free`) around this project's own, already-existing, already-tested

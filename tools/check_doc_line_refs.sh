@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Doc `file:line` citation gate (DOC-HOSTIN follow-up). Kills the CLASS of bug found
 #     by the qa-engineer review of DOC-HOSTIN (2026-07-22): a doc-comment citation like
 #     `` `is_key_down(Key k)` (`app.hpp:325`) `` silently rots the moment the cited header

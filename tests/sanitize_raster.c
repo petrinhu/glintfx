@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-RAST (FT-F2) SANITIZER GATE -- hosted-companion ASan/UBSan defense-in-depth, the exact
 //     shape tests/sanitize_sfnt.c already established (see that file's own header for the full
 //     rationale, and TESTES.md's TST-SFNT-SAN entry, which named this reuse in advance: "SOV-RAST

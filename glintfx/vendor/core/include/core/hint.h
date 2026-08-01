@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-HINT (L1.20-FONTFLIP / FT-F4, sub-phase 1.1) -- a clean-room, INTEGER-ONLY VERTICAL
 //     (Y-axis) GRID-FITTER for TrueType/SFNT outlines. Given a point stream in FONT UNITS (the
 //     exact `glx_sfnt_point` shape SOV-SFNT produces), a device scale (the same rational

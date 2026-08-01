@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Encapsulation gate for glintfx public headers (TST-L1-STATIC, sub-check).
 #     Fails if any third-party type/header (RmlUi, GLFW, gl3w, raw GL/, stb, SDL) leaks
 #     into the public API surface (glintfx/include/glintfx/*.hpp). Consumers must be

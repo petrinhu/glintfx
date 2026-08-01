@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-RAST (FT-F2, AUD-TRANS-2's 3rd piece) -- a clean-room, un-hinted quadratic-outline
 //     ANALYTIC ANTI-ALIASED RASTERIZER, consuming `glx_sfnt_point`/contour-end streams (SOV-SFNT,
 //     `include/core/sfnt.h`) and producing an 8-bit alpha-coverage bitmap. Built entirely from

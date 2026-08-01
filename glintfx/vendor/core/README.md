@@ -39,8 +39,8 @@ vendor/core/include/core/hint.h   <- ../../../include/core/hint.h
 ## Provenance and licensing
 
 This is **not** third-party code. `sfnt.c`/`raster.c`/`hint.c` and their headers are Layer 0's
-own clean-room implementation (MPL-2.0, same license as glintfx itself — see each file's
-`SPDX-License-Identifier: MPL-2.0` header and their own file-header comments for the
+own clean-room implementation (Apache-2.0, same license as glintfx itself — see each file's
+`SPDX-License-Identifier: Apache-2.0` header and their own file-header comments for the
 clean-room rationale). Because this is our own code, no entry is added to `NOTICE` (that file
 tracks third-party dependencies only).
 
@@ -105,8 +105,8 @@ vendor/core/include/core/hint.h   <- ../../../include/core/hint.h
 ## Procedência e licenciamento
 
 Isto **não** é código de terceiro. `sfnt.c`/`raster.c`/`hint.c` e seus headers são
-implementação clean-room própria da Camada 0 (MPL-2.0, mesma licença do glintfx — ver o
-cabeçalho `SPDX-License-Identifier: MPL-2.0` de cada arquivo e os próprios comentários de
+implementação clean-room própria da Camada 0 (Apache-2.0, mesma licença do glintfx — ver o
+cabeçalho `SPDX-License-Identifier: Apache-2.0` de cada arquivo e os próprios comentários de
 cabeçalho-de-arquivo para a racional clean-room). Por ser código nosso, nenhuma entrada é
 adicionada ao `NOTICE` (aquele arquivo rastreia só dependências de terceiro).
 

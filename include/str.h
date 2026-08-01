@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2 -- the sovereign runtime's own C-string primitives (no libc, no `<string.h>`). Seven
 //     functions with EXACT C-standard `<string.h>` semantics (`strlen`/`strcmp`/`strncmp`/
 //     `strcpy`/`strncpy`/`strcat`/`strchr`) but a from-scratch implementation living in

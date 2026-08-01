@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Generic arity-based raw syscall wrappers (ADR-0001). One NASM leaf function per arg
 //     count -- AUD-C0-2 originally pruned syscall0/2/4/5 as dead code (no real call-site at the
 //     time), and ADR-0001 already said re-adding an arity is cheap if a future syscall needs

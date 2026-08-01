@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: sys_write -- see include/sys_write.h for the contract. Implemented as a 1-line wrapper
 //     over syscall3(SYS_write, fd, buf, count) (B3/ADR-0001): all the register-shuffling logic
 //     lives once, in syscall.asm -- this file adds only the name, the constant, and the two

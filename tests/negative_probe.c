@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: AUD-C0-5.3 (AUDIT_FIND.md) gate program: the NEGATIVE-path counterpart to
 //     tests/selftest.c. selftest.c's own file header explains why this proof could not live
 //     there: a program whose job is to sys_exit(1) cannot also be a member of the all-green

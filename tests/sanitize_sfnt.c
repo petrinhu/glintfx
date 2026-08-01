@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-SFNT (FT-F1) SANITIZER GATE -- review-adversarial DEFENSE-IN-DEPTH addition (SOV-SFNT
 //     review): the CRITICAL float->int16 UB in `apply_component_transform` (src/sfnt.c,
 //     composite glyph transform) was invisible to `make test`'s freestanding harness (`tests/

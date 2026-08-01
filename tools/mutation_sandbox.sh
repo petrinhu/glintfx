@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: BUILDDIR-MUTACAO (W23) -- mechanizes the "sabotage a COPY outside the tree, never
 #     the tracked file" protocol that fatia APP-MINIMIZED already used by hand in W22 and
 #     that was the only slice of that wave to leave zero ghost coredumps. Two agents

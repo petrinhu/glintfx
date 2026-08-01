@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Our own freestanding <stddef.h>/<stdint.h>-equivalent -- no libc header exists to pull
 //     this from. `bool`/`true`/`false` are DELIBERATELY NOT defined here: under `-std=c23`
 //     (this project's floor) they are language KEYWORDS -- C23 promoted them from

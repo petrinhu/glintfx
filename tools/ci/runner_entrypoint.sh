@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: PID 1 of the glintfx heavy runner container (tools/ci/Containerfile.runner).
 #     Registers ONE ephemeral GitHub Actions runner and hands over to run.sh; the
 #     process exits as soon as that single job finishes, and the host-side supervisor

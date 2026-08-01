@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-RAST (FT-F2) -- functional/oracle test suite (C1 harness, freestanding). See
 //     include/core/raster.h and src/raster.c for the full contract/algorithm; this file is the
 //     ANALYTIC ORACLE this ticket's brief mandates ("golden pixel-exato é flaky, PROIBIDO como

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E2 -- the sovereign runtime's own minimal `printf` (no libc, no `<stdio.h>`). Named
 //     `printf.h` (not `stdio.h`): same "replace what it provides, not the header name"
 //     convention as D3's `conv.h`. Supports exactly `%d %u %x %s %c %f %%` -- no width/precision/

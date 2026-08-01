@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Host-side wrapper that starts ONE ephemeral, containerized GitHub Actions runner
 #     for glintfx's heavy checks. It mints a fresh registration token with the `gh` CLI
 #     (already authenticated on this machine, token in the login keyring) and feeds it to

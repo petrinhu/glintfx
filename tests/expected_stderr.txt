@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: AUD-C0-5.3 (AUDIT_FIND.md) -- stderr golden-file manifest, sibling of
 #     tests/expected_stdout.txt (same lookup shape: "<program-name> <golden-file-path-relative-
 #     to-repo-root>"; comment lines starting with '#' and blank lines are ignored). A program NOT

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Supervisor for the containerized GitHub Actions runner that hosts glintfx's heavy
 #     checks (.github/workflows/heavy.yml). Deliberately a `systemd --user` unit and NOT
 #     a system unit in /etc/systemd/system: the previous self-hosted runner on this

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: sys_mmap -- see include/sys_mmap.h for the contract. Implemented as a 1-line wrapper
 //     over syscall6(SYS_mmap, ...) (B3/ADR-0001): all the register-shuffling logic lives once,
 //     in syscall.asm -- this file adds only the name, the constant, and the casts the raw

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: SOV-LIBCORE (ADR-0009, FT-F0) gate 4: verifies `build/libcore.a`'s EXPORTED (global,
 #     defined) symbol surface is EXACTLY what the physical internalization boundary promises --
 #     a POSITIVE WHITELIST, fail-secure by construction: every defined global symbol in the

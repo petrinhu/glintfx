@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2 gate program -- TDD RED first: written against include/str.h BEFORE src/str.c has a
 //     real body, so the link step fails (undefined reference to strlen/strcmp/strncmp/strcpy/
 //     strncpy/strcat/strchr) until D2 is implemented. See task report for the captured red-phase

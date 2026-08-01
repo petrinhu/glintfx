@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Verifies every code file (.c, .h, .asm, .inc, .sh, Makefile) under src/, include/,
 #     tests/, tools/, and the top-level Makefile carries the SPDX header on one of its first
 #     5 lines. Scoped to Layer 0 (loucura_c_asm) only -- does NOT walk glintfx/ (Layer 1 has
@@ -56,7 +56,7 @@ if [ -z "$files" ]; then
 fi
 
 for f in $files; do
-  if ! head -n 5 "$f" | grep -q 'SPDX-License-Identifier: MPL-2.0'; then
+  if ! head -n 5 "$f" | grep -q 'SPDX-License-Identifier: Apache-2.0'; then
     echo "MISSING SPDX: $f"
     missing=1
   fi

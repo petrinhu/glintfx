@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-SFNT (FT-F1) -- implementation. See include/core/sfnt.h's file header for the full
 //     clean-room rationale, scope, and hardening posture; this file's own comments focus on the
 //     LOCAL "how", not re-derived "why" that already lives there.

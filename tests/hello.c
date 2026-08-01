@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The B6 gate program. Proves sys_write end to end: writes the literal "hello, world\n"
 //     (13 bytes) to stdout (fd 1) via the raw `write` syscall, then exits 0 explicitly via
 //     sys_exit -- no libc, no `printf`, no `strlen` (D2, not built yet). The byte count is

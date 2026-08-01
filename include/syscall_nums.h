@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: x86-64 Linux syscall numbers used by this increment. Grows incrementally with each
 //     new wave (see TODO.md) -- intentionally NOT a full syscall table today (YAGNI): only
 //     what B5's sys_exit, B6's sys_write, B7's sys_read, E1's sys_mmap, and SOV-ALLOC's

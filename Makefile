@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Freestanding build system for the sovereign C+ASM runtime (Layer 0, "loucura_c_asm").
 #     Zero libc: every flag below explicitly drops the toolchain's own runtime assumptions.
 #     See CLAUDE.md "Como buildar (sem libc)" for why each flag exists. Wildcard-based:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Petrus Silva Costa
 #
 # EN: BISECT-CMAKE follow-up (TODO.md) -- catches a `glintfx/tests/CMakeLists.txt` that

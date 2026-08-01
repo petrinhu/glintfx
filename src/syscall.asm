@@ -1,4 +1,4 @@
-; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: Apache-2.0
 ; EN: Implements syscall1/2/3/6 (ADR-0001). syscall0/4/5 remain pruned dead code (AUD-C0-2, no
 ;     real call-site); syscall2 is BACK (SOV-ALLOC, W15) -- `sys_munmap` (`munmap(addr, len)`,
 ;     2 raw args) is a genuine new caller, exactly the "cheap to re-add" case ADR-0001

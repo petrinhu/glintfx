@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: C1 -- the sovereign runtime's own test harness (no libc, no `assert.h`). A single-header
 //     minimalist assert-macro: on failure, writes a human-readable "FAIL: <file>:<line>: <expr>"
 //     message to stderr (fd 2) via sys_write (B6) and aborts immediately via sys_exit(1) (B5) --

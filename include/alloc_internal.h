@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-LIBCORE (ADR-0009, FT-F0) -- Layer-0-INTERNAL companion to include/alloc.h. NOT part
 //     of ADR-0004's frozen `malloc`/`free`/`realloc` contract (that header's signature has not
 //     changed and does not change here either) -- this is a SEPARATE, additive helper consumed

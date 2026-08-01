@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Cheap pre-commit gate for glintfx (GATE-PRECOMMIT, TODO.md). Shift-left companion
 #     to TST-L1-PRECI (tools/preci.sh, hooked at pre-push): where preci.sh is the wide
 #     "before it becomes visible on a remote" net (full build+ctest, ~2min warm),

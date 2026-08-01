@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-SFNT (FT-F1) gate program -- TDD RED-then-GREEN suite for src/sfnt.c against a REAL
 //     TrueType font (Open Sans, the same file glintfx's showcase demo already ships, duplicated
 //     at tests/fixtures/opensans_regular.ttf -- see the Makefile's `$(OBJ)/opensans_ttf.o` rule

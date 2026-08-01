@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D3 -- see include/conv.h for the contract. Digit-at-a-time implementations, same
 //     philosophy as D1 (mem.c)/D2 (str.c): correctness and auditability first, no
 //     table-driven/SIMD tricks. (SOV-FCONV, appended later: `ftoa`/`atof`, double<->string --

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-HINT (L1.20-FONTFLIP / FT-F4, sub-phase 1.1) -- implementation. See include/core/hint.h's
 //     file header for the full clean-room rationale, scope (Y-axis zone grid-fitting ONLY), and the
 //     public contract; this file's comments focus on the LOCAL "how".

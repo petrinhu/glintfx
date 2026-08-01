@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: TST-STATIC sub-a (TODO.md, W11 / AUDIT_FIND.md AUD-C0-*): grep-diffs the two hand-kept
 #     mirrors of syscall number constants -- include/syscall_nums.h (C `#define NAME VALUE`)
 #     and include/syscall_nums.inc (NASM `%define NAME VALUE`) -- and FAILS if a constant

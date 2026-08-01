@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-LIBCORE (ADR-0009, FT-F0) -- the PUBLIC consumption surface of `build/libcore.a`, the
 //     physical boundary the internalization ADR calls for: a static archive whose EXPORTED
 //     symbols carry the `glx_` namespace prefix, safe to `#include`/link from ordinary HOSTED

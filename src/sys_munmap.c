@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: sys_munmap -- see include/sys_munmap.h for the contract. Implemented as a 1-line wrapper
 //     over syscall2(SYS_munmap, ...) (ADR-0001, syscall2 re-added by this same feature): all
 //     the register-shuffling logic lives once, in syscall.asm -- this file adds only the name,

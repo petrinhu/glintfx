@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E1 -- the sovereign runtime's own dynamic allocator (no libc `malloc`). Final,
 //     POSIX-shaped API fixed by ADR-0004 (one-way-door): `malloc`/`free`/`realloc`. THIS
 //     SIGNATURE HAS NOT CHANGED since ADR-0004 -- that is the whole point of fixing it early.

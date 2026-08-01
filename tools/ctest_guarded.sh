@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Contamination-detecting ctest wrapper (BUILDDIR-MUTACAO, W23). Born from a fact
 #     measured on 2026-07-30: two agents shared this working tree during W22. One did
 #     mutation testing and sabotaged a TRACKED file under glintfx/ (removed a real

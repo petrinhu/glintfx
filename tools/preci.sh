@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Local pre-CI gate (TST-L1-PRECI, TESTES.md). Mirrors the fast day-to-day slice of
 #     CI BEFORE code becomes visible on a remote (líder's decision 2026-07-10: hooked at
 #     pre-push, not pre-commit -- the glintfx suite takes ~2min warm, which would break

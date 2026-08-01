@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Builds localhost/glintfx-runner:f42 -- the containerized GitHub Actions
 #     self-hosted runner that hosts glintfx's heavy checks (`sanitize` and `fonteng` in
 #     .github/workflows/heavy.yml). It is localhost/glintfx-ci:f42 plus the pinned

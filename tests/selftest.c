@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The C1 gate program. Proves the test harness (include/test.h) end to end: a battery of
 //     TEST_ASSERT/TEST_ASSERT_EQ calls that all PASS (integer equality, arithmetic, boolean
 //     logic, pointer comparison), then a bare sys_exit(0) to close out -- deliberately NOT

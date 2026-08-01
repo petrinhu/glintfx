@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: `mmap(2)` flag constants for x86-64 Linux, used by E1's allocator (the only caller
 //     today). Own header, NOT folded into syscall_nums.h: syscall_nums.h holds syscall
 //     NUMBERS (the `rax` value); these are syscall ARGUMENT bits (`rdx`/`r10` values) --

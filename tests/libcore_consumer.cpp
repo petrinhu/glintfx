@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-LIBCORE (ADR-0009, FT-F0) -- the FIRST program in this repository that actually
 //     exercises `build/libcore.a` as a hosted C++ consumer would (a future glintfx build is the
 //     real target; this is the minimal proof). Built by `make libcore-test` (see the Makefile's

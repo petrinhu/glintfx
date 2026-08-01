@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The B5 gate program. Proves the FULL pipeline end to end: clang(freestanding) +
 //     nasm(elf64) + ld(nostdlib) -> ELF64 static no-PIE -> kernel exec -> _start (B4) ->
 //     main() -> sys_exit(42) (B5) -> raw `exit` syscall -> process terminates with code 42.

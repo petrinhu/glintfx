@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-ALLOC (W15) -- the fifth NAMED syscall wrapper (ADR-0001), `sys_mmap`'s natural pair.
 //     Mirrors POSIX `munmap()`: unmaps `len` bytes starting at `addr` (both MUST come from a
 //     prior successful `sys_mmap()` call in this process -- there is no libc to validate the

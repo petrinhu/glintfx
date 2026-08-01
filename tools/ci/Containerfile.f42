@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Local reproduction image for glintfx's heavy checks (ASan/LSan/UBSan and the
 #     own-font-engine build) on a Fedora 42 base. Build and use it BY HAND, with plain
 #     docker -- there is no CI runner on this machine any more (the self-hosted

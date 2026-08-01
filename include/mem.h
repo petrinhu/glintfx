@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D1 -- the sovereign runtime's own memory primitives (no libc, no `<string.h>`). Four
 //     functions with EXACT C-standard `<string.h>` semantics (`memcpy`/`memset`/`memmove`/
 //     `memcmp`) but a from-scratch implementation living in src/mem.c -- this is Layer 0

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: E2 -- see include/printf.h for the public contract and the design rationale
 //     (`<stdarg.h>` boundary, testability split, buffer/flush design). This file holds the
 //     shared formatting CORE (`mini_format_core`, static/internal) plus two thin "sink"

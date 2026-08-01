@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: The GitHub Actions self-hosted runner for glintfx's heavy checks, as a container
 #     image. Built ON TOP of localhost/glintfx-ci:f42 (tools/ci/Containerfile.f42), so
 #     every build dependency is already baked in and the workflow needs NO `container:`

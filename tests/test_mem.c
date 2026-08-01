@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D1 gate program -- TDD RED first: written against include/mem.h BEFORE src/mem.c has a
 //     real body, so the link step fails (undefined reference to memcpy/memset/memmove/memcmp)
 //     until D1 is implemented. See task report for the captured red-phase error. Covers the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: QW-IABS32 (INBOX drain, Onda 1, PROG-1) -- hosted-companion PROBE for `iabs32`, the one
 //     `static` (internal-linkage) helper in src/raster.c this ticket's brief singles out for a
 //     defensive INT32_MIN guard. Unlike glx_raster_scratch_floats/glx_rasterize_outline (the two

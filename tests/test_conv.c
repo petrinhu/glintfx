@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D3 gate program -- TDD RED first: written against include/conv.h BEFORE src/conv.c has a
 //     real body, so the link step fails (undefined reference to utoa/itoa/atoi/atou) until D3
 //     is implemented. Covers the spec cases from the task brief: utoa (0, small value, UINT_MAX

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D3 -- the sovereign runtime's own int<->string conversions (no libc, no `<stdlib.h>`).
 //     Four functions: `utoa`/`itoa` (integer -> string) and `atoi`/`atou` (string -> integer).
 //     This is the piece that unlocks printing numbers at all -- E2 (mini-printf, TODO.md, W10)

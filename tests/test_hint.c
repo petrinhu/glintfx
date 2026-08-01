@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: SOV-HINT (L1.20-FONTFLIP / FT-F4, sub-phase 1.1) -- functional/oracle test suite (C1 harness,
 //     freestanding). See include/core/hint.h and src/hint.c for the full contract/algorithm. Every
 //     expected value below is derived BY HAND from the closed-form scale/snap arithmetic (documented

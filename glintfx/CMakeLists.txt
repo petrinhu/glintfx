@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.16)
-project(glintfx LANGUAGES C CXX VERSION 0.28.0)
+project(glintfx LANGUAGES C CXX VERSION 0.29.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)   # piso C++17; alvo 23

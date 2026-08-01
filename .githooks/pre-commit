@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: git pre-commit hook (GATE-PRECOMMIT). Runs tools/precommit.sh on the STAGED files
 #     before any `git commit` becomes real -- the shift-left companion to .githooks/
 #     pre-push (TST-L1-PRECI): where pre-push gates "before it becomes visible on a

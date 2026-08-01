@@ -36,7 +36,7 @@
 # Copyright (c) 2026 Petrus Silva Costa
 set -eu
 
-SCAN_DIRS="src include tests tools"
+SCAN_DIRS="src include tests tools .githooks"
 
 for d in $SCAN_DIRS; do
   if [ ! -d "$d" ]; then
@@ -49,6 +49,17 @@ missing=0
 files=$(find $SCAN_DIRS -type f \
         \( -name '*.c' -o -name '*.h' -o -name '*.asm' -o -name '*.inc' -o -name '*.sh' \))
 [ -f Makefile ] && files="$files Makefile"
+
+# Git hook scripts carry no file extension by convention (pre-commit, pre-push, ...) -- the
+# extension-based find above matches nothing under .githooks/, which is exactly how the two
+# hooks there kept a stale license header through the APACHE-HEADERS rotation while this gate
+# kept reporting OK (an auditor's whole-repo `git grep` caught it, not this script). Every
+# tracked file directly under .githooks/ is a hook script and must carry the header regardless
+# of name.
+if [ -d .githooks ]; then
+  hook_files=$(find .githooks -maxdepth 1 -type f)
+  files="$files $hook_files"
+fi
 
 if [ -z "$files" ]; then
   echo "check_spdx: FAILED (0 files found -- refusing to pass vacuously, see file header)" >&2

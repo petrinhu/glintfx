@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # consumer-example — drop-in proof: consumes glintfx via FetchContent,
 # no direct references to GL / GLFW / RmlUi.
 # Prova de drop-in: consome glintfx via FetchContent,

@@ -13,7 +13,7 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 ## glintfx -- o produto ativo (Camada 1)
 
-`glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença MPL-2.0, que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
+`glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença Apache-2.0 (tags até `v0.28.0` seguem MPL-2.0 para sempre -- [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)), que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
 
 - **Lançada:** v0.1.0 → **v0.9.1** (2026-07-10). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**
@@ -57,7 +57,7 @@ ctest --test-dir glintfx/build --output-on-failure
 
 ### Arquitetura
 
-Fachada fina sobre módulos internos (M0 Bootstrap RmlUi, M1 Platform GLFW+FreeType, M2 Render GL3, M3 Facade `App`) mais `Engine`/`UiLayer`/`DataBinder` para o embed mode. Nenhum tipo de terceiro (GL/GLFW/RmlUi) cruza a fronteira pública (`glintfx/include/glintfx/`). Detalhe: [`README.md`](README.md#architecture), [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md) (as duas camadas), [ADR-0007](docs/adr/0007-license-mpl-2.0.md) (licença), [ADR-0008](docs/adr/0008-embed-guest-mode.md) (embed mode), spec de design em `docs/superpowers/specs/`.
+Fachada fina sobre módulos internos (M0 Bootstrap RmlUi, M1 Platform GLFW+FreeType, M2 Render GL3, M3 Facade `App`) mais `Engine`/`UiLayer`/`DataBinder` para o embed mode. Nenhum tipo de terceiro (GL/GLFW/RmlUi) cruza a fronteira pública (`glintfx/include/glintfx/`). Detalhe: [`README.md`](README.md#architecture), [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md) (as duas camadas), [ADR-0007](docs/adr/0007-license-mpl-2.0.md) (licença original, histórica) e [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md) (rotação pra Apache-2.0), [ADR-0008](docs/adr/0008-embed-guest-mode.md) (embed mode), spec de design em `docs/superpowers/specs/`.
 
 ### Gotchas críticos do renderer
 
@@ -75,7 +75,7 @@ Leia antes de mexer em `render_gl3.cpp`/`ui_layer.cpp`: **premultiplied alpha + 
 
 Consequência prática: a única ponte com o mundo é a **interface de syscalls do kernel Linux**. Toda I/O, alocação de memória e tempo passam por `syscall` direto. É o **alvo de internalização** de longo prazo da Camada 1 (glintfx): com o tempo, peças do glintfx (RmlUi, gl3w, FreeType, GLFW) podem ser reimplementadas clean-room sobre este núcleo, onde valer a pena.
 
-- **Estudo/RE:** upstreams clonados em `examples/` (gitignored): `examples/RmlUi` (MIT), `examples/gl3w` (domínio público). Não copiar código -- reimplementar clean-room (base é MPL-2.0).
+- **Estudo/RE:** upstreams clonados em `examples/` (gitignored): `examples/RmlUi` (MIT), `examples/gl3w` (domínio público). Não copiar código -- reimplementar clean-room (base é Apache-2.0).
 
 ### Stack e alvo (decidido, não negociável sem o líder)
 
@@ -150,7 +150,7 @@ Outras:
 
 - Commits em **Conventional Commits**; mensagem em pt-br. Citar o ID do item do `TODO.md` (ex.: `L1-API`, `A1`) no corpo do commit ao fechar/avançar um item, e tocar o `Status` no mesmo commit.
 - Assembly sempre em sintaxe **Intel** (consistência com NASM e com `objdump -M intel`).
-- SPDX header em todo arquivo de código (`SPDX-License-Identifier: MPL-2.0`); não em `.md`.
+- SPDX header em todo arquivo de código (`SPDX-License-Identifier: Apache-2.0`); não em `.md`.
 
 ## Regras de trabalho (deste projeto)
 
@@ -163,7 +163,7 @@ Outras:
 
 ## Licença
 
-**MPL-2.0** (Mozilla Public License 2.0). Texto em `LICENSE`; atribuições das deps linkadas em `NOTICE`. © 2026 Petrus Silva Costa. SPDX: `MPL-2.0`. Copyleft **fraco por-arquivo** (modificações nos NOSSOS arquivos voltam abertas; apps de terceiros -- inclusive proprietários -- podem linkar a lib livremente) + grant de patente. Aplicada ao projeto inteiro; **relicenciada de AGPL-3.0 em 2026-06-28** (cliente da Camada 1 é adoção externa -- ver ADR-0007). Ao reimplementar/RE de libs externas, **não copiar código** -- reimplementar clean-room (a partir do entendimento).
+**Apache-2.0** (Apache License, Version 2.0). Texto em `LICENSE`; atribuições das deps linkadas em `NOTICE`. © 2026 Petrus Silva Costa. SPDX: `Apache-2.0`. Licença **permissiva** com grant expresso de patente; apps de terceiros -- inclusive proprietários -- podem linkar a lib livremente, **sem** a obrigação de copyleft por-arquivo que a MPL-2.0 tinha. Aplicada ao projeto inteiro a partir da `v0.29.0`; **as tags até a `v0.28.0` seguem MPL-2.0 para sempre** para quem as obteve. Histórico de licenciamento: AGPL-3.0 → MPL-2.0 em 2026-06-28 ([ADR-0007](docs/adr/0007-license-mpl-2.0.md)) → Apache-2.0 em 2026-07-31 ([ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)), sempre visando adoção externa. Ao reimplementar/RE de libs externas, **não copiar código** -- reimplementar clean-room (a partir do entendimento).
 
 ## Pendências
 

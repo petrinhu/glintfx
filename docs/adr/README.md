@@ -12,7 +12,7 @@
 | [0004](0004-allocator-strategy.md) | Allocator strategy / Estratégia do alocador | Accepted |
 | [0005](0005-elf-layout.md) | ELF layout & link model / Layout ELF e modelo de link | Accepted |
 | [0006](0006-layered-hybrid-architecture.md) | Layered hybrid architecture / Arquitetura híbrida em camadas | Accepted |
-| [0007](0007-license-mpl-2.0.md) | License: MPL-2.0 (relicensed from AGPL) / Licença: MPL-2.0 | Accepted |
+| [0007](0007-license-mpl-2.0.md) | License: MPL-2.0 (relicensed from AGPL) / Licença: MPL-2.0 | Superseded by [0019](0019-license-rotation-apache-2.0.md) |
 | [0008](0008-embed-guest-mode.md) | Embed / guest mode / Modo embutido (guest) | Accepted |
 | [0009](0009-internalization-boundary.md) | Internalization boundary (phased static link) / Fronteira de internalização (link estático faseado) | Accepted |
 | [0010](0010-image-tint-luminance-key.md) | image-tint() luminance-key shader / Shader luminance-key do image-tint() | Accepted |
@@ -24,3 +24,4 @@
 | [0016](0016-gamepad-atom.md) | Gamepad ships as its own atom, `input` stays reserved / Gamepad entregue como átomo próprio, `input` segue reservado | Accepted |
 | [0017](0017-draw2d-module.md) | Draw2D ships as its own atom, own GL pipeline, order-of-call composition / Draw2D entregue como átomo próprio, pipeline GL próprio, composição por ordem de chamada | Accepted |
 | [0018](0018-draw2d-text.md) | `draw_text` in the Draw2D atom: sovereign-C-core glyph source, top-left anchor, word-wrap/alignment in scope / `draw_text` no átomo Draw2D: fonte de glifo no núcleo C soberano, âncora topo-esquerdo, word-wrap/alinhamento no escopo | Accepted |
+| [0019](0019-license-rotation-apache-2.0.md) | License rotation: MPL-2.0 to Apache-2.0 / Rotação de licença: MPL-2.0 para Apache-2.0 | Accepted |

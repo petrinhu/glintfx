@@ -1,6 +1,6 @@
 # glintfx
 
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-00599C.svg)](#)
 [![Language: C](https://img.shields.io/badge/Language-C-A8B9CC.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
 [![Language: Assembly](https://img.shields.io/badge/Language-Assembly-654FF0.svg)](CLAUDE.md#camada-0----n%C3%BAcleo-soberano-c--asm-puro)
@@ -303,7 +303,7 @@ Treat glintfx as the product; Layer 0 is a separate long-term track, implementat
 
 ### License
 
-**MPL-2.0** (Mozilla Public License 2.0): weak per-file copyleft plus a patent grant; you can link `glintfx` into proprietary or permissively-licensed apps freely. See [`LICENSE`](LICENSE) and the third-party attributions in [`NOTICE`](NOTICE). Rationale: [ADR-0007](docs/adr/0007-license-mpl-2.0.md).
+**Apache-2.0** (Apache License, Version 2.0): permissive license with an express patent grant; you can link `glintfx` into proprietary or any other licensed app freely, with no per-file copyleft obligation. See [`LICENSE`](LICENSE) and the third-party attributions in [`NOTICE`](NOTICE). Rationale: [ADR-0007](docs/adr/0007-license-mpl-2.0.md) (original MPL-2.0 choice, historical) and [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md) (the rotation). **Tags up to `v0.28.0` stay MPL-2.0 forever** for whoever obtained those releases; Apache-2.0 applies from `v0.29.0` onward.
 
 © 2026 Petrus Silva Costa.
 
@@ -585,6 +585,6 @@ Trate o glintfx como o produto; a Camada 0 é uma trilha de longo prazo separada
 
 ### Licença
 
-**MPL-2.0** (Mozilla Public License 2.0): copyleft fraco por-arquivo mais grant de patente; você pode linkar o `glintfx` em apps proprietários ou de licença permissiva livremente. Ver [`LICENSE`](LICENSE) e as atribuições de terceiros em [`NOTICE`](NOTICE). Racional: [ADR-0007](docs/adr/0007-license-mpl-2.0.md).
+**Apache-2.0** (Apache License, Version 2.0): licença permissiva com grant expresso de patente; você pode linkar o `glintfx` em apps proprietários ou de qualquer outra licença livremente, sem obrigação de copyleft por-arquivo. Ver [`LICENSE`](LICENSE) e as atribuições de terceiros em [`NOTICE`](NOTICE). Racional: [ADR-0007](docs/adr/0007-license-mpl-2.0.md) (escolha original MPL-2.0, histórica) e [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md) (a rotação). **As tags até a `v0.28.0` seguem MPL-2.0 para sempre** para quem obteve aquelas releases; a Apache-2.0 vale a partir da `v0.29.0`.
 
 © 2026 Petrus Silva Costa.

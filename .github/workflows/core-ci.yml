@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: CI pipeline for the Layer 0 sovereign runtime (C+ASM, zero libc, freestanding --
 #     "loucura_c_asm" itself, root of the repo: src/, include/, tests/, tools/,
 #     Makefile). Separate from and independent of glintfx's ci.yml/nightly.yml (Layer

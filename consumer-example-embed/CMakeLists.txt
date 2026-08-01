@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # consumer-example-embed — drop-in proof: consumes glintfx's EMBED contract
 # (GLINTFX_BACKEND_GLFW=OFF) from outside the source tree. Only <glintfx/ui_layer.hpp> is
 # referenced by main.cpp -- no direct references to GL / RmlUi (GLFW IS referenced directly,

@@ -92,7 +92,7 @@ Two practices survive the move and both still matter:
 
 ### Conventions
 
-- **SPDX header in every code file.** First line: `SPDX-License-Identifier: MPL-2.0` (comment style per language: `//` for C/C++, `;` for NASM, `#` for CMake/Makefile/shell). Do **not** put SPDX in `.md` docs.
+- **SPDX header in every code file.** First line: `SPDX-License-Identifier: Apache-2.0` (comment style per language: `//` for C/C++, `;` for NASM, `#` for CMake/Makefile/shell). Do **not** put SPDX in `.md` docs.
 - **Identifiers in English only** (functions, variables, macros, NASM labels, structs). No pt-br in symbol names.
 - **Docs are bilingual, en first then pt**, in the **same file** (this applies to `docs/`, README, ADRs, and doc-comments / file and function headers). CLAUDE.md, AGENTS.md operational notes, and chat stay in pt-br.
 - **Public headers expose no third-party types.** Nothing from GL, GLFW, or RmlUi may appear in `glintfx/include/glintfx/`. The facade uses pImpl (`struct Impl;` + `std::unique_ptr`). This is the "golden boundary" that keeps future internalization possible.
@@ -127,7 +127,7 @@ docs/embed-integration.md  host integration contract for UiLayer (frame lifecycl
                           dp_ratio, base URL, data model, textures) -- authoritative reference
 docs/superpowers/        design specs + plans for glintfx v1 and v2
 TODO.md                  pendings + planning for both layers and v2 (+ INBOX)
-NOTICE, LICENSE          MPL-2.0 + third-party attributions
+NOTICE, LICENSE          Apache-2.0 + third-party attributions
 ```
 
 ### The public API surface (do not invent)

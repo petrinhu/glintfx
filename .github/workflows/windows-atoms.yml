@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Pragmatic Windows CI for glintfx -- A3-AUDIO/FX-CARVE-1 CI integration (S3). Validates
 #     ONLY the pure atoms that have zero GL/window/RmlUi/Freetype dependency: i18n (module
 #     "i18n") and audio (module "audio", vendored miniaudio), plus a compile-only smoke of the

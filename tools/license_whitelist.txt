@@ -1,0 +1,23 @@
+# Whitelist de mencoes a MPL-2.0/Mozilla que sobrevivem de proposito na fatia W24-F3
+# (APACHE-TEXTOS, rotacao MPL-2.0 -> Apache-2.0). Uma linha por ocorrencia, formato
+# caminho:linha:motivo-curto. A auditoria final do W24 subtrai esta lista do sweep
+# `git grep -inE '\bmpl-?2?\b|mozilla'` sobre os arquivos desta fatia; o que sobrar e' defeito.
+# Escrita a mao, olhando cada ocorrencia -- nao gerada pelo mesmo grep que audita.
+AUDITORIAS.md:27:criterio do AUD-L1-LICENSE checa ausencia de residuo MPL-2.0 pos-rotacao (2026-07-31) e explica por que as tags <= v0.28.0 nao contam como residuo -- mencao intencional, e' o proprio objeto verificado
+AUDIT_FIND.md:402:achado de auditoria datado e commitado (Caetano/CTO, 2026-07-07, main@7e8eff8) -- registro historico, licenca era MPL-2.0 de fato naquela data, nao reescrever
+AUDIT_FIND.md:465:mesmo relatorio historico de 2026-07-07 (AUD-TRANS-4/pre-condicao transversal) -- estado correto na epoca, nao reescrever
+CHANGELOG.md:15:entrada nova em Unreleased anunciando a propria rotacao MPL-2.0 -> Apache-2.0 (lado EN) -- precisa nomear as duas licencas para ser legivel
+CHANGELOG.md:16:mesma entrada, lado PT
+CHANGELOG.md:902:"Twemoji Mozilla" e nome proprio de fonte real (Twemoji + fork mantido pela Mozilla) -- falso positivo do grep de "mozilla", nao e' mencao de licenca (lado EN)
+CHANGELOG.md:903:mesmo falso positivo de nome de fonte, lado PT
+CHANGELOG.md:1675:entrada historica da v0.2.x (relicenciamento AGPL-3.0 -> MPL-2.0, 2026-06-28) -- release ja publicada sob aquele texto, nao reescrever (lado EN)
+CHANGELOG.md:1676:mesma entrada historica, lado PT
+CLAUDE.md:16:declara que as tags ate v0.28.0 seguem MPL-2.0 para sempre e linka o ADR-0019 -- mencao intencional do corte de versao
+CLAUDE.md:60:link para o arquivo ADR-0007 (`0007-license-mpl-2.0.md`) -- nome de arquivo de ADR e imutavel, nao renomeado nesta fatia
+CLAUDE.md:166:secao "Licenca": historico AGPL -> MPL-2.0 (2026-06-28) -> Apache-2.0 (2026-07-31) e a regra das tags <= v0.28.0 -- mencao intencional
+README.md:222:link para o arquivo ADR-0007 (`0007-license-mpl-2.0.md`) na lista de decisoes de arquitetura -- nome de arquivo imutavel (lado EN)
+README.md:306:secao "License" (EN): cita ADR-0007 por nome de arquivo + a regra das tags <= v0.28.0 seguindo MPL-2.0 para sempre -- mencao intencional
+README.md:504:link para o arquivo ADR-0007 (`0007-license-mpl-2.0.md`) na lista de decisoes de arquitetura, lado PT -- nome de arquivo imutavel
+README.md:588:secao "Licenca" (PT): mesma regra de corte de tags <= v0.28.0 em MPL-2.0 para sempre -- mencao intencional
+docs/adr/README.md:15:linha de indice do ADR-0007 -- titulo historico preservado (arquivo imutavel), status atualizado para "Superseded by 0019"
+docs/adr/README.md:27:linha de indice do ADR-0019 -- o proprio titulo do ADR e "License rotation: MPL-2.0 to Apache-2.0", mencao intencional

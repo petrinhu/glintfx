@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Nightly memory-safety gate for glintfx (TST-L1-MEM, TODO.md LW-TST). Rebuilds
 #     the library and the whole test suite with -DGLINTFX_SANITIZE=ON
 #     (AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer, see

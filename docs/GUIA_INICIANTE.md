@@ -88,7 +88,7 @@ loucura_c_asm/            <- the repo root (this file's folder's parent)
 ├── README.md               the project's front page (bilingual, both floors)
 ├── CHANGELOG.md            a dated history of every released glintfx version
 ├── TODO.md                 the project's live task-tracking table ("what's being worked on")
-└── LICENSE / NOTICE        the legal terms (MPL-2.0) and third-party credits
+└── LICENSE / NOTICE        the legal terms (Apache-2.0) and third-party credits
 ```
 
 ### 4. First contact: building and running glintfx (Floor 1)
@@ -335,7 +335,7 @@ loucura_c_asm/            <- a raiz do repo (o pai da pasta deste arquivo)
 ├── README.md               a página de rosto do projeto (bilíngue, as duas camadas)
 ├── CHANGELOG.md            um histórico datado de toda versão lançada do glintfx
 ├── TODO.md                 a tabela viva de rastreio de tarefas do projeto ("o que está sendo feito")
-└── LICENSE / NOTICE        os termos legais (MPL-2.0) e créditos de terceiros
+└── LICENSE / NOTICE        os termos legais (Apache-2.0) e créditos de terceiros
 ```
 
 ### 4. Primeiro contato: buildando e rodando o glintfx (Andar 1)

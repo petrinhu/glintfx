@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Heavy CI gates for glintfx, on the self-hosted containerized runner of this
 #     machine. Ported from the Forgejo recipe that ran on the retired `claudio` runner
 #     (preserved at ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml); the project

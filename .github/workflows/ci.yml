@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: CI pipeline for glintfx -- builds the library and runs both test suites under
 #     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix, PLUS a parallel
 #     `lint-and-scan` job with 3 CI-now, sempre-verde gates (TESTES.md "Camada 1",

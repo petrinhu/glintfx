@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // consumer-example — drop-in proof: only glintfx public API used.
 // Prova de drop-in: apenas a API pública da glintfx é usada.
 // Copyright (c) 2026 Petrus Silva Costa

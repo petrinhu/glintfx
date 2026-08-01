@@ -41,7 +41,7 @@ Before submitting, build the `consumer-example/` too, to confirm the drop-in pat
 
 ### Coding standards
 
-- **SPDX header on every code file:** first line `SPDX-License-Identifier: MPL-2.0`, in the comment style for the language (`//` C/C++, `;` NASM, `#` CMake). Do not add SPDX to `.md` files.
+- **SPDX header on every code file:** first line `SPDX-License-Identifier: Apache-2.0`, in the comment style for the language (`//` C/C++, `;` NASM, `#` CMake). Do not add SPDX to `.md` files.
 - **Identifiers in English only.** No pt-br in symbol names.
 - **Docs are bilingual (en then pt) in the same file.**
 - **Public headers must not expose third-party types.** Nothing from GL, GLFW, or RmlUi may appear in `glintfx/include/glintfx/`; use pImpl.
@@ -65,7 +65,7 @@ This policy applies going forward. Past tags are historical and are not rewritte
 
 ### Licensing of contributions
 
-The project is **MPL-2.0** and currently has a single author, which keeps relicensing clean. External contributions may require a contributor agreement (CLA) or relicensing consent before they can be merged. If you plan a substantial contribution, open an issue first so this can be sorted out. Do not copy code from third-party libraries; any reimplementation of their behaviour must be clean-room (from understanding, not from their source).
+The project is **Apache-2.0** (tags up to `v0.28.0` stay MPL-2.0 forever for whoever obtained those releases -- see [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)). If you plan a substantial contribution, open an issue first so this can be sorted out. Do not copy code from third-party libraries; any reimplementation of their behaviour must be clean-room (from understanding, not from their source).
 
 **As of the license rotation to Apache-2.0** ([ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md); see that ADR for the full context, this note documents the policy it establishes once the rotation lands, without repeating the reasoning here):
 
@@ -114,7 +114,7 @@ Antes de enviar, builde também o `consumer-example/` para confirmar que o camin
 
 ### Padrões de código
 
-- **Header SPDX em todo arquivo de código:** primeira linha `SPDX-License-Identifier: MPL-2.0`, no estilo de comentário da linguagem (`//` C/C++, `;` NASM, `#` CMake). Não adicione SPDX em arquivos `.md`.
+- **Header SPDX em todo arquivo de código:** primeira linha `SPDX-License-Identifier: Apache-2.0`, no estilo de comentário da linguagem (`//` C/C++, `;` NASM, `#` CMake). Não adicione SPDX em arquivos `.md`.
 - **Identificadores apenas em inglês.** Nada de pt-br em nome de símbolo.
 - **Docs são bilíngues (en depois pt) no mesmo arquivo.**
 - **Headers públicos não podem expor tipos de terceiros.** Nada de GL, GLFW ou RmlUi pode aparecer em `glintfx/include/glintfx/`; use pImpl.
@@ -138,7 +138,7 @@ Esta política vale daqui pra frente. Tags passadas são históricas e não são
 
 ### Licença das contribuições
 
-O projeto é **MPL-2.0** e tem atualmente um único autor, o que mantém o relicenciamento limpo. Contribuições externas podem exigir um acordo de contribuidor (CLA) ou consentimento de relicenciamento antes de serem mergeadas. Se planeja uma contribuição substancial, abra uma issue primeiro para resolver isso. Não copie código de bibliotecas de terceiros; qualquer reimplementação do comportamento delas deve ser clean-room (a partir do entendimento, não do código-fonte delas).
+O projeto é **Apache-2.0** (as tags até a `v0.28.0` seguem MPL-2.0 para sempre, para quem obteve aquelas releases -- ver [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)). Se planeja uma contribuição substancial, abra uma issue primeiro para resolver isso. Não copie código de bibliotecas de terceiros; qualquer reimplementação do comportamento delas deve ser clean-room (a partir do entendimento, não do código-fonte delas).
 
 **A partir da rotação de licença para Apache-2.0** ([ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md); ver esse ADR para o contexto completo, esta nota registra a política que ele estabelece assim que a rotação acontecer, sem repetir a fundamentação aqui):
 

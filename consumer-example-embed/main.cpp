@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: consumer-example-embed — drop-in proof for the EMBED contract (TST-L1-CONTRACT): an
 //     external host consumes glintfx built with GLINTFX_BACKEND_GLFW=OFF and includes ONLY
 //     <glintfx/ui_layer.hpp>. If any GL/GLFW/RmlUi type leaked through glintfx's public

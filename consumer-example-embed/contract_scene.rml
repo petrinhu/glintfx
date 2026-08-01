@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: contract_scene — minimal embed-contract scene (TST-L1-CONTRACT). A single flat-fill
          body, no text/font dependency (safe under Mesa llvmpipe / Xvfb, same reasoning as
          glintfx/tests/embed_scene.rml). Styling lives in contract_scene.rcss.

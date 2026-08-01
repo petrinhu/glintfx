@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: contract_scene styles (TST-L1-CONTRACT). A single vivid solid fill covering the whole
        viewport -- #ff3366 (R=255, G=51, B=102), mean_channel = (255+51+102)/3 = 136 -- well
        above the 50 threshold main.cpp checks, comfortably clear of any llvmpipe/Xvfb rounding

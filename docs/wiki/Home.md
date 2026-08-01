@@ -1,6 +1,6 @@
 # Home
 
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-orange.svg)](https://github.com/petrinhu/glintfx/blob/main/LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/petrinhu/glintfx/blob/main/LICENSE)
 [![Version: 0.24.0](https://img.shields.io/badge/Version-0.24.0-blue.svg)](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md)
 [![API: pre-1.0](https://img.shields.io/badge/API-pre--1.0%20(may%20change)-yellow.svg)](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md)
 [![Standard: C++17 / C++23](https://img.shields.io/badge/Standard-C%2B%2B17%20to%20C%2B%2B23-00599C.svg)](#)

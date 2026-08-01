@@ -8,6 +8,10 @@ AUDIT_FIND.md:402:achado de auditoria datado e commitado (Caetano/CTO, 2026-07-0
 AUDIT_FIND.md:465:mesmo relatorio historico de 2026-07-07 (AUD-TRANS-4/pre-condicao transversal) -- estado correto na epoca, nao reescrever
 CONTRIBUTING.md:68:declara que as tags ate v0.28.0 seguem MPL-2.0 para sempre e linka o ADR-0019 -- mesma mencao intencional do corte de versao (lado EN)
 CONTRIBUTING.md:141:mesma mencao intencional do corte de versao, lado PT
+docs/wiki/FAQ.md:27:resposta "qual licenca" da wiki -- mesma mencao intencional do corte de tag (lado EN)
+docs/wiki/FAQ.md:61:mesma mencao intencional do corte de tag, lado PT
+docs/wiki/Layer-1-glintfx.md:5:pagina da wiki sobre o glintfx -- mesma mencao intencional do corte de tag (lado EN)
+docs/wiki/Layer-1-glintfx.md:56:mesma mencao intencional do corte de tag, lado PT
 CHANGELOG.md:15:entrada nova em Unreleased anunciando a propria rotacao MPL-2.0 -> Apache-2.0 (lado EN) -- precisa nomear as duas licencas para ser legivel
 CHANGELOG.md:16:mesma entrada, lado PT
 CHANGELOG.md:902:"Twemoji Mozilla" e nome proprio de fonte real (Twemoji + fork mantido pela Mozilla) -- falso positivo do grep de "mozilla", nao e' mencao de licenca (lado EN)

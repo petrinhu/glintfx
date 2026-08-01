@@ -87,7 +87,7 @@ reading SDL's own parser source.
 **zlib License** (see `LICENSE` in this directory, fetched from the same pinned commit,
 byte-identical to a same-day fetch of upstream's `LICENSE` at the repository root). Permits use,
 modification, and redistribution, including as vendored, filtered data inside a differently
-(MPL-2.0) licensed project, with attribution (this README + the repository's `NOTICE`) and
+(Apache-2.0) licensed project, with attribution (this README + the repository's `NOTICE`) and
 without misrepresenting the filtered subset as glintfx's own original mapping data. Listed in
 the repository's `NOTICE`.
 
@@ -197,7 +197,7 @@ entendimento do formato, não lendo o parser do próprio SDL.
 **Licença zlib** (ver `LICENSE` neste diretório, baixado do mesmo commit pinado, byte-idêntico
 a um fetch no mesmo dia do `LICENSE` do upstream na raiz do repositório). Permite uso,
 modificação e redistribuição, inclusive como dado vendorizado e filtrado dentro de um projeto
-licenciado diferente (MPL-2.0), com atribuição (este README + o `NOTICE` do repositório) e sem
+licenciado diferente (Apache-2.0), com atribuição (este README + o `NOTICE` do repositório) e sem
 apresentar o subconjunto filtrado como dado de mapeamento original do glintfx. Listado no
 `NOTICE` do repositório.
 

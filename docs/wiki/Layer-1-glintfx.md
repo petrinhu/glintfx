@@ -2,7 +2,7 @@
 
 ## English
 
-**glintfx** is a drop-in C++ library for Linux x86-64 (MPL-2.0 license) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.24.0**, full history in [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
+**glintfx** is a drop-in C++ library for Linux x86-64 (Apache-2.0 license; tags up to `v0.28.0` stay MPL-2.0 forever) that fuses [RmlUi](https://github.com/mikke89/RmlUi) (an HTML/CSS-style UI engine) with a GL3 effects renderer (glow, gradient, backdrop-blur, drop-shadow, mask, image-tint, screen-space ripple), all declared in `.rcss` (a CSS-like stylesheet), no imperative effect API to learn. This is the project's **active, released product**: current version **v0.24.0**, full history in [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
 
 Two ways to consume it:
 
@@ -53,7 +53,7 @@ glintfx is built on [RmlUi](https://github.com/mikke89/RmlUi) (MIT License), the
 
 ## Português
 
-O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença MPL-2.0) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.24.0**, histórico completo em [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
+O **glintfx** é uma biblioteca C++ drop-in para Linux x86-64 (licença Apache-2.0; as tags até a `v0.28.0` seguem MPL-2.0 para sempre) que funde o [RmlUi](https://github.com/mikke89/RmlUi) (um motor de UI estilo HTML/CSS) com um renderer de efeitos GL3 (glow, degradê, backdrop-blur, drop-shadow, mask, image-tint, onda screen-space), tudo declarado em `.rcss` (uma folha de estilo tipo CSS), sem API imperativa de efeito pra aprender. Este é o **produto ativo e lançado** do projeto: versão atual **v0.24.0**, histórico completo em [`CHANGELOG.md`](https://github.com/petrinhu/glintfx/blob/main/CHANGELOG.md).
 
 Dois jeitos de consumir:
 

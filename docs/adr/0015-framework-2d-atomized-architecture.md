@@ -87,7 +87,7 @@ Contra essa meta o líder impôs UMA restrição arquitetural dura, confirmada e
 **EN:**
 
 **Positive:**
-- The atomization itself is a declared product differentiator: raylib is deliberately monolithic, SDL3 links as one lib, Qt's core always comes along; the honest precedent (SFML's separate libs) lacks the declarative UI and the effects. "True opt-in modules + HTML/CSS UI + data-driven effects + MPL-2.0 static-link-friendly" exists in none of the four.
+- The atomization itself is a declared product differentiator: raylib is deliberately monolithic, SDL3 links as one lib, Qt's core always comes along; the honest precedent (SFML's separate libs) lacks the declarative UI and the effects. "True opt-in modules + HTML/CSS UI + data-driven effects + Apache-2.0 static-link-friendly" exists in none of the four.
 - Compositions with standalone value become products for free: embed-only (today's GusWorld), audio-only (an SDL game that only wants the mixer), gamepad-only (a raw X11 host that wants hotplug without SDL), full framework (the endgame GusWorld).
 - Zero regression risk to the embed product: `UiLayer` is a preset of this architecture, and the embed (GLFW=OFF) suite is its permanent guard.
 - Per-module audit matches the house discipline instead of fighting it; audit scope per release shrinks to the touched atoms.
@@ -106,7 +106,7 @@ Contra essa meta o líder impôs UMA restrição arquitetural dura, confirmada e
 **PT:**
 
 **Positivas:**
-- A atomização em si é diferencial de produto declarado: raylib é deliberadamente monolítica, SDL3 linka como uma lib só, o núcleo do Qt sempre vem junto; o precedente honesto (libs separadas da SFML) não tem a UI declarativa nem os efeitos. "Módulos opt-in de verdade + UI HTML/CSS + efeitos data-driven + MPL-2.0 amigável a link estático" não existe em nenhum dos quatro.
+- A atomização em si é diferencial de produto declarado: raylib é deliberadamente monolítica, SDL3 linka como uma lib só, o núcleo do Qt sempre vem junto; o precedente honesto (libs separadas da SFML) não tem a UI declarativa nem os efeitos. "Módulos opt-in de verdade + UI HTML/CSS + efeitos data-driven + Apache-2.0 amigável a link estático" não existe em nenhum dos quatro.
 - Composições com valor próprio viram produto de graça: embed-only (o GusWorld de hoje), audio-only (um jogo SDL que só quer o mixer), gamepad-only (host X11 cru que quer hotplug sem SDL), framework completo (o GusWorld do endgame).
 - Zero risco de regressão pro produto embed: o `UiLayer` é um preset desta arquitetura, e a suíte embed (GLFW=OFF) é o guarda permanente dela.
 - Auditoria por módulo casa com a disciplina da casa em vez de brigar com ela; o escopo de auditoria por release encolhe pros átomos tocados.

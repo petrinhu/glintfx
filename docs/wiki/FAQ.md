@@ -24,7 +24,7 @@ Yes. Since `v0.10.0`, glintfx's own clean-room font engine is the default (`Font
 No. It is implementation-complete but has not passed its final audit, and it is a learning/craftsmanship track with no promised stability or support. glintfx (Layer 1) is the supported, released piece.
 
 **What license is this under?**
-MPL-2.0 (Mozilla Public License 2.0) for the whole repository. See [`LICENSE`](https://github.com/petrinhu/glintfx/blob/main/LICENSE) and third-party credits in [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE).
+Apache-2.0 (Apache License, Version 2.0) for the whole repository, from `v0.29.0` onward. Every tag up to and including `v0.28.0` stays MPL-2.0 forever for whoever obtained those releases -- see [ADR-0019](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0019-license-rotation-apache-2.0.md). See [`LICENSE`](https://github.com/petrinhu/glintfx/blob/main/LICENSE) and third-party credits in [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE).
 
 **I found a mistake in the docs or the wiki. What do I do?**
 Open an issue on [GitHub](https://github.com/petrinhu/glintfx/issues) describing what you read and what actually happened.
@@ -58,7 +58,7 @@ Sim. Desde a `v0.10.0`, o motor de fonte próprio clean-room da glintfx é o def
 Não. Está com a implementação completa mas ainda não passou pela auditoria final, e é uma trilha de aprendizado/artesania sem estabilidade ou suporte prometidos. O glintfx (Camada 1) é a peça suportada e lançada.
 
 **Qual licença isto usa?**
-MPL-2.0 (Mozilla Public License 2.0) pro repositório inteiro. Ver [`LICENSE`](https://github.com/petrinhu/glintfx/blob/main/LICENSE) e créditos de terceiros em [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE).
+Apache-2.0 (Apache License, Version 2.0) pro repositório inteiro, a partir da `v0.29.0`. Toda tag até a `v0.28.0` inclusive segue MPL-2.0 para sempre, para quem obteve aquelas releases -- ver [ADR-0019](https://github.com/petrinhu/glintfx/blob/main/docs/adr/0019-license-rotation-apache-2.0.md). Ver [`LICENSE`](https://github.com/petrinhu/glintfx/blob/main/LICENSE) e créditos de terceiros em [`NOTICE`](https://github.com/petrinhu/glintfx/blob/main/NOTICE).
 
 **Achei um erro na documentação ou na wiki. O que eu faço?**
 Abra uma issue no [GitHub](https://github.com/petrinhu/glintfx/issues) descrevendo o que você leu e o que de fato aconteceu.

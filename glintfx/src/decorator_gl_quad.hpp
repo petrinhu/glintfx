@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Internal header (src/-only, NOT under glintfx/include/glintfx/ -- the include-based
 //     encapsulation gate (tools/check_encapsulation.sh) does not cover this file) -- unifies the
 //     box-corner quad geometry + raw GL VAO/VBO/EBO scaffold shared BYTE-IDENTICALLY by the two

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FW-CLOCK implementation. See glintfx/include/glintfx/clock.hpp for the full contract
 //     (epoch, resolution, threading, the honest value-proposition verdict). A one-line
 //     delegation to std::chrono::steady_clock, converted to nanoseconds -- this is the ENTIRE

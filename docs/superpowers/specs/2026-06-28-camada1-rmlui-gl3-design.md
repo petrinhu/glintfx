@@ -25,7 +25,7 @@ Não-objetivos da v1: Windows/macOS; SDL/X11; internalização clean-room; API i
 | Efeitos | Todos (glow, degradê, blur, mask, backdrop-filter) — **data-driven via CSS**, vêm do `RenderInterface_GL3` real |
 | Fonte | **Plugável** (`FontEngineInterface`); FreeType como impl. padrão |
 | Build | CMake (`add_subdirectory` RmlUi+gl3w); Makefile da Camada 0 invocado via `add_custom_target` |
-| Licença | **MPL-2.0** (projeto inteiro, ADR-0007) |
+| Licença | **Apache-2.0** (projeto inteiro; decisão original MPL-2.0 no ADR-0007, rotacionada pelo ADR-0019) |
 | Abordagem | Fachada fina + costuras (interfaces com 1 impl, prontas p/ troca) |
 
 ## 3. Arquitetura (4 módulos)
@@ -116,7 +116,7 @@ Nome da lib: **glintfx** (namespace `glintfx::`, header `<glintfx/glintfx.hpp>`,
 
 ## 11. Licença e atribuição
 
-Projeto inteiro sob **MPL-2.0** (ADR-0007). Header SPDX `SPDX-License-Identifier: MPL-2.0` em todo arquivo (`STD-SPDX`). Atribuições das deps linkadas (FreeType FTL, RmlUi MIT, libGL MIT/SGI; gl3w domínio público) no `NOTICE`. Relicenciar antes de aceitar contribuição externa (autor único hoje).
+Projeto inteiro sob **Apache-2.0** (rotacionado de MPL-2.0 pelo ADR-0019; decisão original ADR-0007). Header SPDX `SPDX-License-Identifier: Apache-2.0` em todo arquivo (`STD-SPDX`). Atribuições das deps linkadas (FreeType FTL, RmlUi MIT, libGL MIT/SGI; gl3w domínio público) no `NOTICE`.
 
 ## 12. Definition of Done da v1
 
@@ -126,7 +126,7 @@ Projeto inteiro sob **MPL-2.0** (ADR-0007). Header SPDX `SPDX-License-Identifier
 4. Loop trata fechar janela, resize (`set_viewport`) e input de mouse.
 5. Fachada C++23 RAII num header; nada de GL/GLFW/RmlUi vaza na API pública.
 6. Smoke + golden-image passam.
-7. SPDX MPL-2.0 em todos os arquivos novos; `NOTICE` presente.
+7. SPDX Apache-2.0 em todos os arquivos novos; `NOTICE` presente.
 8. **Prova de drop-in:** um projeto consumidor adiciona a lib via `FetchContent`/`add_subdirectory` e renderiza um documento com glow **sem escrever nenhum código de GL/janela/loader** — só a API da fachada + RML/CSS. (Valida o north-star de integração.)
 
 ## 13. Riscos
@@ -136,4 +136,4 @@ Projeto inteiro sob **MPL-2.0** (ADR-0007). Header SPDX `SPDX-License-Identifier
 - **R3** Backend sample-grade — mitigado reescrevendo M1/M3 (não copiar cego o ciclo do contexto GL).
 - **R4** ABI C++ na fronteira (se virar lib binária distribuível) — fora do escopo solo/MVP; registrar.
 - **R5** Acoplamento à versão do RmlUi — mitigado por `add_subdirectory` com versão pinada.
-- **R6 [legal]** Formalizar MPL-2.0/contribuições pode pedir advogado humano antes de abrir PRs externos.
+- **R6 [legal]** Formalizar Apache-2.0/contribuições pode pedir advogado humano antes de abrir PRs externos.

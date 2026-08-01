@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: transform2d_sanity (D2D-2A) -- headless unit test for the PURE projection/transform math
 //     in src/transform2d.hpp (plan docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md,
 //     decisions D12/D14/D16/D17/D18/D19/D20). No GL, no Xvfb, no window -- runs in BOTH build

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: fontface_scene.rml -- fixture for tests/fontface_load_sanity.cpp (UI-FONTFACE). Deliberately
       has NO `@font-face` block: every family this scene ever renders with is registered

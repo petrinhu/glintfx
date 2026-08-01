@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: i18n-1 (framework-2D, ADR-0015 module "i18n") -- translation catalog, key lookup with
 //     fallback, and CLDR-lite plural selection. This is the WHOLE public surface of the module:
 //     no third-party type (RmlUi/GLFW/GL/stb/SDL) appears here, and the class depends on the

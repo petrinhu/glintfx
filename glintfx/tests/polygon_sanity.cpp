@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: polygon_sanity -- proves the "polygon(<sides>, <color>[, <rotation>])" decorator (v0.2.6,
 //     decorator_polygon.{hpp,cpp}) renders a REGULAR N-GON (not a filled rectangle), that
 //     changing `sides` changes the SHAPE, that a (negative) `rotation` is applied, AND that the

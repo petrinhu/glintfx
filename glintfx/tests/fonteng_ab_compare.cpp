@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_ab_compare -- L1.20-FONTFLIP (FT-F4) A/B safety net.
 //
 //     THE SAFETY NET FOR "THE FLIP". L1.20-FONTFLIP will eventually make glintfx's own

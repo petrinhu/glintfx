@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: app_draw2d_smoke (D2D-1B, GLFW=ON leg) -- proves `glintfx::Draw2d` works from inside
 //     `App::set_frame_callback` (D6: standalone composition recipe -- draw calls go inside the
 //     frame hook, so the scene composes UNDER the UI, the pre-existing v0.19.0 contract,

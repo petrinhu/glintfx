@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Custom RmlUi decorator -- "ripple([<max-radius>])" -- a SCREEN-SPACE distortion effect:
 //     the element's own paint box is filled by sampling the glintfx-captured FBO-0 backdrop
 //     (RenderGl3::begin_frame_compose -> Gl3RenderInterface::EnsureBackdropCaptured,

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: A4-EMOJI (COLRv0 colour emoji) pixel-proof document -- driven by
       tests/fonteng_colr_sanity.cpp. Loads the S1-owned synthetic fixture

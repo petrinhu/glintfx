@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Embed-path (glintfx::UiLayer) end-to-end proof for the data-model API
 //     (AUD-TEC-7, 2026-07-08 audit finding). Closes a real coverage gap: the four
 //     pre-existing data-model tests (data_model_smoke/scalar/list/rebind_uaf) all use

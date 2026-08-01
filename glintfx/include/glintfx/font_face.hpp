@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Public descriptor for programmatic font-face registration (UI-FONTFACE, v0.24.0 --
 //     consumes the "glintfx never exposes Rml::LoadFontFace" gap: the 3 core overloads existed
 //     in the vendored RmlUi since day one and glintfx's own font engine implements all 3

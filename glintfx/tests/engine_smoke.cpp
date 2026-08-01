@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test — initialise Engine (RmlUi+GL3) via SystemClock (no GLFW interface),
 //     load a minimal document, verify ok(). Replaces bootstrap_smoke which tested Bootstrap
 //     directly with a WindowGlfw argument (removed from Bootstrap::init in T1).

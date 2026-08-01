@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Thin RAII wrapper around RmlUi's RenderInterface_GL3.
 //     No RmlUi or GL types leak into the public interface.
 // PT: Wrapper RAII fino em volta do RenderInterface_GL3 do RmlUi.

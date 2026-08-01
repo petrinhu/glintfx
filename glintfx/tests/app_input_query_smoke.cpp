@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App-level smoke test for the HOSTIN-1..4 physical input surface (Onda 2, v0.19.0 --
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, section 4.2). Runs under Xvfb
 //     (GLFW backend, real window/GL context, no real keyboard/mouse events -- that leg is

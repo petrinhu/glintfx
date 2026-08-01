@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.16)
 project(glintfx LANGUAGES C CXX VERSION 0.28.0)
 
@@ -1773,4 +1773,17 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/glintfxConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glintfx)
+
+  # EN: LICENSE + NOTICE -- required for redistribution under Apache-2.0 (§4). The installed
+  #     tree is a "distributed" artifact just like a source tarball; §4(a) requires recipients
+  #     get a copy of the License, and §4(d) requires NOTICE (when present) to propagate. Both
+  #     files live at the repo root (glintfx/ is a subdirectory of loucura_c_asm), one level up.
+  # PT: LICENSE + NOTICE -- exigidos para redistribuição sob Apache-2.0 (§4). A árvore instalada
+  #     é um artefato "distribuído" como um tarball de fonte; o §4(a) exige cópia da License ao
+  #     destinatário, e o §4(d) exige que o NOTICE (quando presente) se propague. Os dois vivem
+  #     na raiz do repositório (glintfx/ é subdiretório do loucura_c_asm), um nível acima.
+  install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../NOTICE
+    DESTINATION ${CMAKE_INSTALL_DOCDIR})
 endif()

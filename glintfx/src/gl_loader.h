@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Petrus Silva Costa
 //
 // EN: GENERATED FILE -- do not hand-edit. Produced by tools/gen_glloader.py from the

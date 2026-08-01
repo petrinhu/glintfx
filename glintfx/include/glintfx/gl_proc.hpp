@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DOC-GLCOHAB (framework-2D, GL cohabitation contract) -- a single, thin free function: the
 //     SDL_GL_GetProcAddress-equivalent a host cohabiting glintfx's GL context needs to bring its
 //     own GL renderer without linking SDL, GLFW, or any other loader library itself.

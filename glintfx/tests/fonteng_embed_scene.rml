@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.19-FONTENG (FT-F3) embed-mode visual oracle document -- review IMPORTANT #1's UiLayer
       analogue of fonteng_scene.rml. Same 3-line text mix (ascender/descender-heavy ASCII,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: base_url sanity test — verifies set_asset_base_url() on UiLayer.
 //
 //     The test proves two things:

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_pixels_flush_render_sanity (D2D-TEXPIXELS / D2D-FLUSH) -- pixel-readback proof of
 //     `Draw2d::create_texture`/`Draw2d::flush` under Xvfb/llvmpipe, STATISTICAL/tolerant (never
 //     pixel-exact -- the house's own `golden_test` precedent, AGENTS.md's "golden_test is flaky

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: app_font_face_scene.rml -- fixture for tests/app_font_face_sanity.cpp (UI-FONTFACE,
       App-path forward-coverage gate). Same shape as tests/fontface_scene.rml (the UiLayer-path

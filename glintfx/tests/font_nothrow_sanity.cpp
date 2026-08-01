@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: font_nothrow_sanity (FONT-NOTHROW, W22, 2026-07-30) -- the FOURTH and LAST member of the
 //     `never a crash` family (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`, `image_decode_hardening_
 //     sanity.cpp`/`image_encode_hardening_sanity.cpp`/`draw2d_texture_nothrow_sanity.cpp`): proves

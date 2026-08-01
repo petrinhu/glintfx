@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Petrus Silva Costa
 #
 # EN: Generator for A4-EMOJI's committed `COLR` v0 + `CPAL` v0 test fixture
@@ -32,7 +32,7 @@
 #     tests/test_sfnt.c's own `kSyntheticFontColr`). `cmap`: `U+E000` (Private Use Area, never a
 #     real assigned codepoint -- deliberately avoids colliding with any real emoji block) maps to
 #     `emoji_two_layer`, `U+E001` to `emoji_fg_sentinel`, so a pixel-proof test can resolve either
-#     glyph by ordinary codepoint lookup instead of a hardcoded gid. License: ours (MPL-2.0,
+#     glyph by ordinary codepoint lookup instead of a hardcoded gid. License: ours (Apache-2.0,
 #     synthetic, no vendored/third-party glyph data).
 #
 #     Deterministic: `fontTools.fontBuilder.FontBuilder` with no timestamp/version fields left to
@@ -72,7 +72,7 @@
 #     `U+E000` (Área de Uso Privado, nunca um codepoint real atribuído -- deliberadamente evita
 #     colidir com bloco de emoji real nenhum) mapeia pro `emoji_two_layer`, `U+E001` pro
 #     `emoji_fg_sentinel`, pra um teste de prova-de-pixel conseguir resolver qualquer um dos dois
-#     glyphs por lookup de codepoint comum em vez de um gid cravado. Licença: nossa (MPL-2.0,
+#     glyphs por lookup de codepoint comum em vez de um gid cravado. Licença: nossa (Apache-2.0,
 #     sintética, nenhum dado de glyph vendorizado/de-terceiro).
 #
 #     Determinístico: `fontTools.fontBuilder.FontBuilder` sem campo de timestamp/versão deixado ao

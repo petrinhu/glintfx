@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of GUID construction, SDL-compatible layout derivation, the
 //     gamecontrollerdb.txt parser, and the default kernel-spec mapping. See gamepad_mapping.hpp's
 //     own header comment for the "why" of each piece; comments here focus on the "how".

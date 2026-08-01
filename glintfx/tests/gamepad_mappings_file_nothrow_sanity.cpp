@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: gamepad_mappings_file_nothrow_sanity (GAMEPAD-NOTHROW, W22, 2026-07-30) -- the SIXTH member
 //     of the `never a crash` family (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`/
 //     `CAPTURE-NOTHROW`, `image_decode_hardening_sanity.cpp`/`image_encode_hardening_sanity.cpp`/

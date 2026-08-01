@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Verify that UiLayer::render() leaves every captured GL state variable unchanged.
 //     Sets a non-default GL state (viewport, scissor, blend func+equation, VAO, program,
 //     color mask, FBO), snapshots it, calls render(), then asserts each post-render value

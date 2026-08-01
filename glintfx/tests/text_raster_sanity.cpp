@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: text_raster_sanity (D2D-TEXT, T1a, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-
 //     draw2d-text.md, TX2 (a), TX17's hand-computed-value gate, raster half) -- PURE unit test
 //     for src/text_raster.hpp: no window, no GL context, no RmlUi/GLFW dependency whatsoever

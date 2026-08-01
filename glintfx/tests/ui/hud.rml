@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: HUD data-model test document. Binds to the "hud" data model.
          Uses {{name}} (string) and {{hp}} (number) variables.
          Dark background ensures pixel statistics can detect rendered content.

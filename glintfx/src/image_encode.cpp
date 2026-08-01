@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: IMG-ENCODE (W21, 2026-07-30) -- implementation of the public `glintfx/image.hpp` encode
 //     pair (`encode_image_memory()`/`encode_image_file()`), the symmetric counterpart to
 //     `image.cpp`'s decode pair. See `glintfx/image.hpp`'s own top comment (right above the

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: glintfx visual showcase — demo target consuming only the public glintfx facade.
 # PT: Showcase visual do glintfx — alvo demo que consome apenas a fachada pública.
 add_executable(glintfx_showcase main.cpp)

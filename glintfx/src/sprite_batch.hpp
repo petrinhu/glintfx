@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-1B -- the PURE batching policy behind `glintfx::Draw2d` (plan
 //     docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md, decisions D4/D5/D8/D10). ZERO GL
 //     dependency in this header -- same discipline as `log_dedup.hpp`/`input_state.hpp`: this

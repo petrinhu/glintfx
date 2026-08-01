@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Public font-engine selector (L1.20-FONTFLIP Phase 2). A plain, engine-agnostic enum --
 //     no Rml:: or FreeType type appears here, or anywhere else in glintfx's public headers
 //     (the encapsulation invariant every header under glintfx/include/glintfx/ upholds).

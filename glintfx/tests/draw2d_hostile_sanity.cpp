@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_hostile_sanity (D2D-1B) -- the fail-high surface of `glintfx::Draw2d` (D7/D10/D11).
 //     Every case below must degrade gracefully (a false/invalid/no-op result) and MUST NOT
 //     crash -- ASan-clean is the actual gate (see AGENTS.md's CI policy: this suite runs under

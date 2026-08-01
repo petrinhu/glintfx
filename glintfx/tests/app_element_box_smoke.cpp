@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App parity smoke for get_element_box() -- proves the surface is wired on App.
 // PT: Smoke de paridade do App pra get_element_box() -- prova que a superfície está conectada.
 // Copyright (c) 2026 Petrus Silva Costa

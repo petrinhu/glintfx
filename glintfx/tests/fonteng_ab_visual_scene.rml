@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.20-FONTFLIP (FT-F4) VISUAL sharpness comparison document -- driven by
       tests/fonteng_ab_visual.cpp, which loads this SAME document twice in one process (once with

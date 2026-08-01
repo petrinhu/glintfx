@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: LOGTHR-1 (Onda 2, framework-2D, docs/superpowers/plans/2026-07-22-onda2-input-host.md,
 //     decision D8) -- pure, headless-testable dedup/throttle policy for repeated RmlUi log
 //     messages. ZERO RmlUi/GLFW dependency in this header (testable in isolation, same

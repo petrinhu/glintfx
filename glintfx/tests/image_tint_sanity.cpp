@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: image_tint_sanity -- proves the "image-tint(<url>)" luminance-key tint decorator
 //     (GLINTFX-TINT-1/2, decorator_image_tint.{hpp,cpp} + the "glintfx-tint" shader injection in
 //     render_gl3.cpp, consumer-driven by GusWorld: one neutral base texture, N domain colours at

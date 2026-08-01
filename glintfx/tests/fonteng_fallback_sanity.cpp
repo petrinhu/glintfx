@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_fallback_sanity -- L1.20-FONTFLIP (FT-F4) INDEPENDENT ADVERSARIAL GATE for the
 //     per-glyph font fallback (FontEngineOwn::fallback_faces_/BakeGlyph()/RasterizeGlyph()'s `src`
 //     parameter, src/font_engine_own.cpp/.hpp, commit 957505b). Written by the QA reviewer -- NOT

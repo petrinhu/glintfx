@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DEC-FORMAT-SURFACE (W22, 2026-07-30) -- consumer-driven, security-flavoured: pure unit
 //     test for `glintfx::decode_png_file()` (`glintfx/image.hpp`), the PNG-ONLY sibling of
 //     `decode_image_file()` added by this slice. No RmlUi, no GL, no window -- same "no

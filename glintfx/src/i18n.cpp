@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: I18n implementation -- catalog parser, locale-aware lookup with fallback, CLDR-lite
 //     plural category selection. See glintfx/i18n.hpp for the catalog format, escapes, plural
 //     convention, and resolution order (the module's whole public contract).

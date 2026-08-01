@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-2A -- the PURE projection/transform math behind Draw2D's camera and per-sprite
 //     transforms (plan docs/superpowers/plans/2026-07-23-onda4-draw2d-camera.md, decisions
 //     D12/D14/D16/D17/D18/D20; ADR-0017's Addendum records the leader's Q1=(c)/Q2=(2a) decision

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the base_url sanity scene (bu_scene.rml).
        Same visual as embed_scene.rcss: dark body + vivid gradient + glow card.
        No @font-face / no text → zero font file dependency → safe under llvmpipe/Xvfb.

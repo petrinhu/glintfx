@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Petrus Silva Costa
 #
 # EN: Generator for glintfx's own OpenGL 3.3 core-profile function-pointer loader
@@ -245,7 +245,7 @@ def verify_typedefs_exist(commands: list[str], glcorearb_h_path: Path) -> None:
         sys.exit(1)
 
 
-HEADER_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
+HEADER_PREAMBLE = """// SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Petrus Silva Costa
 //
 // EN: GENERATED FILE -- do not hand-edit. Produced by tools/gen_glloader.py from the
@@ -430,7 +430,7 @@ void* glx_gl_get_proc_address(const char* name);
 #endif // GLINTFX_GL_LOADER_H
 """
 
-SOURCE_PREAMBLE = """// SPDX-License-Identifier: MPL-2.0
+SOURCE_PREAMBLE = """// SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Petrus Silva Costa
 //
 // EN: GENERATED FILE -- do not hand-edit. See gl_loader.h / tools/gen_glloader.py.

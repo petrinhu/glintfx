@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for image_tint_sanity (GLINTFX-TINT-1/2 -- "image-tint(<url>)" luminance-key
        decorator). All texture boxes use image_tint_fixture.png (300x100, 3 zones of 100px each,
        created for this test -- see the test .cpp for the exact RGB values and why they were

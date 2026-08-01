@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: IMG-DECODE -- decode an encoded image (PNG/JPG/TGA, whatever `Draw2d::load_texture()`
 //     itself accepts) into CPU-side pixels, WITHOUT creating any GPU resource. This is the
 //     sibling `Draw2d::create_texture()` (D2D-TEXPIXELS, `draw2d.hpp`) was always missing one

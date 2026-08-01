@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_perf_budget (PERF-D2D3, D30) -- declared performance numbers for glintfx's Draw2D
 //     atom, a DIFFERENT concern from the adversarial `qa-engineer`'s correctness suite (this
 //     file's job is measurement, not fail-high/hostile-input coverage -- see

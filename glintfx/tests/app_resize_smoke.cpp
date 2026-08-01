@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App resize regression smoke (AUD-PUB-1, v0.5.0). Proves App::render() re-flows the
 //     RmlUi layout when the GLFW window's framebuffer size changes between frames. Also
 //     proves the AUD-PUB-1-TWIN fix (Step 3 below): App::snapshot() re-flows the layout too,

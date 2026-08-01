@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: app_input_hardening_smoke -- App-path parity smoke for the v0.3.0 input-hardening audit
 //     fixes (GLFW backend only; the pixel-level proof is input_hardening_sanity via the UiLayer/
 //     Engine path, which App shares). Proves that on the standalone App facade too:

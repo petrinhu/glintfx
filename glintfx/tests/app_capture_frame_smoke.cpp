@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: `FRAMEGRAB-TEX` -- verifies App::capture_frame(): the composited-frame-to-memory sibling
 //     of App::snapshot() (app.hpp, right before `private:`). The load-bearing question this
 //     test answers is NOT "does it return true" -- a stale/garbage/wrong-surface read can

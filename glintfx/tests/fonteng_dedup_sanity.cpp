@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_dedup_sanity -- L1.20-FONTFLIP (FT-F4) pre-flip FIX regression net for the
 //     RegisterFace() face-registration LEAK confirmed by adversarial review (2026-07-13/14) and
 //     fixed the same session in src/font_engine_own.cpp/.hpp.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure GLFW-raw-value -> glintfx::UiEvent translation functions (A1, framework-2D,
 //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.2). Every function
 //     here takes only ints/doubles/GLFW #define constants and returns a filled-in piece of a

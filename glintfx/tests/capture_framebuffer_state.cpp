@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: capture_framebuffer_state (CAPTURE-FREE, W22 S8, 2026-07-30) -- verifies that
 //     glintfx::capture_framebuffer() (glintfx/include/glintfx/frame_capture.hpp) leaves every
 //     GL state variable it touches unchanged on return. Same discipline, same 5 sentinelled

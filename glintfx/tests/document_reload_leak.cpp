@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Regression test for the bug reported by GusWorld (2026-07-04, real consumer, SDL3 game):
 //     Bootstrap::load() stacked documents into the same Rml::Context without ever closing the
 //     PREVIOUS one -- (1) a silent memory leak, one live document per reload; (2) a "ghost

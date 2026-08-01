@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for the well-formed mapping path (A2-GAMEPAD, framework-2D) -- no GL, no
 //     window, no RmlUi, no Xvfb, no real device. Exercises, in the order the A2-GAMEPAD plan's
 //     section 5.1 test 3 lists them: (1) `build_guid()` against a known real `input_id` (Xbox 360

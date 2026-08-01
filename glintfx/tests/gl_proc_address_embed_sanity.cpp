@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: gl_proc_address_embed_sanity (GLPROC-EMBED, 2026-07-30) -- EMBED-PATH contract test for
 //     `glintfx::gl_proc_address(const char*)` (glintfx/include/glintfx/gl_proc.hpp), the sibling
 //     of `gl_proc_address_sanity.cpp` (App-mode) proving the function works the same way when

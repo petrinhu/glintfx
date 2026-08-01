@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Custom RmlUi decorator -- "polygon(<sides>, <fill>[, <rotation>])", where <fill> is either a
 //     solid <color> OR a "radial-gradient(...)" / "linear-gradient(...)" function. Fills the
 //     element's paint area with a regular N-gon (triangle-fan around the box centre, radius = half

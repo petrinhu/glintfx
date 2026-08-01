@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-TEXT (Onda 6, T1b -- docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md, ADR-0018)
 //     -- the LAYOUT seam of Draw2D's text machinery (TX2 (b)). PURE positioning math: ZERO GL,
 //     ZERO raster, ZERO SFNT -- it never rasterizes a pixel, never opens a face, never calls a

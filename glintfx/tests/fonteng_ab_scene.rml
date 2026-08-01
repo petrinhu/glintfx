@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.20-FONTFLIP (FT-F4) A/B comparison document -- driven by tests/fonteng_ab_compare.cpp,
       which loads this SAME document twice in one process (once with glintfx's own SOV-SFNT/

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for src/image_decode.hpp (D2D-1A, the image-decode carve --
 //     docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md, decision D3). No RmlUi, no GL, no
 //     window -- decode_premultiplied_rgba() is a plain "bytes in, pixels out" function, called

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.19-FONTENG (FT-F3) minimal visual oracle document -- static text (no data-model,
       unlike scalar.rml/log.rml) so the test isolates the font engine's own pipeline

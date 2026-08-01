@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::Gamepads' device-layer scan (A2-GAMEPAD, framework-2D, Agent B)
 //     -- no GL, no window, no RmlUi, no Xvfb, no real `/dev/input` device (see
 //     GamepadsConfig::dev_dir's own doc-comment): every case below points `dev_dir` at a

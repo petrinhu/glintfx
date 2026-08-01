@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of PolygonDecorator / PolygonDecoratorInstancer -- see decorator_polygon.hpp
 //     for the design rationale and the upstream reference (DecoratorGradient.{h,cpp}).
 //

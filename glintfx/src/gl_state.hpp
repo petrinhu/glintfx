@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: RAII snapshot/restore of the GL state the RmlUi GL3 backend touches, so the host's
 //     renderer (e.g. Render2dGl3 in GusWorld) sees the context unchanged after UiLayer::render().
 //     Captured: viewport, scissor box+enable, blend func+equation+enable, cull/depth/stencil

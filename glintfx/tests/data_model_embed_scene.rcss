@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the data_model_embed_sanity scene (AUD-TEC-7). Every id/class here is a
        geometry-only oracle read back through UiLayer::get_element_box() -- no font, no text,
        no pixel readback needed (unlike the App-path data_model_scalar/data_model_list tests,

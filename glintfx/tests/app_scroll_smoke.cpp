@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App parity smoke for the five scroll methods (GLINTFX-SCROLL-1, v0.4.0):
 //     scroll_element_into_view()/get_element_scroll_top()/set_element_scroll_top()/
 //     get_element_scroll_height()/get_element_client_height() -- proves the surface is wired

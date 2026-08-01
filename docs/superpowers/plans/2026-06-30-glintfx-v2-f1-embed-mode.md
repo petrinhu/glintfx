@@ -16,7 +16,7 @@
 
 - **Plataforma:** Linux x86-64 apenas.
 - **Padrão C++:** alvo `cxx_std_23`; **piso C++17** (a API pública compila em C++17→23).
-- **Licença:** `SPDX-License-Identifier: MPL-2.0` no topo de **todo** arquivo novo (`.hpp`/`.cpp` com `//`, `CMakeLists.txt` com `#`). © 2026 Petrus Silva Costa.
+- **Licença:** `SPDX-License-Identifier: Apache-2.0` no topo de **todo** arquivo novo (`.hpp`/`.cpp` com `//`, `CMakeLists.txt` com `#`). © 2026 Petrus Silva Costa.
 - **Idioma:** identificadores **en-intl**; comentários/doc-comments **bilíngues** (en, depois pt).
 - **Encapsulamento (gate por grep):** **nenhum** tipo de RmlUi/GLFW/GL/gl3w/SDL pode aparecer em `include/glintfx/*.hpp`. `UiLayer`/`UiEvent`/`Key` usam só tipos neutros próprios (pImpl). Verificável: `! grep -rE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/`.
 - **Invariante de não-regressão:** a `App` standalone (v1) **continua idêntica** — os 5 testes atuais (`window_smoke`, `render_smoke`, `bootstrap_smoke`, `app_smoke`, `render_sanity`) seguem **verdes** sem mudar de expectativa.
@@ -77,7 +77,7 @@ Mapeamento com o spec v2: F1 = §4 (embed mode). `glintfx::ui` (§9) e component
 
 `glintfx/src/system_clock.hpp`:
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Minimal RmlUi SystemInterface for embed mode — provides only the clock.
 //     No GLFW/SDL dependency (the host owns window/input).
 // PT: SystemInterface mínimo do RmlUi para embed — provê só o relógio.
@@ -127,7 +127,7 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
 
 `engine.hpp` (forward-decls só; sem tipos concretos de terceiros):
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 namespace Rml { class Context; class SystemInterface; }
 namespace glintfx {
@@ -159,7 +159,7 @@ private:
 
 `bootstrap_smoke.cpp` chamava `Bootstrap::init(win, render, w, h)`. Reescrever como `engine_smoke.cpp` (mantendo a cobertura: init RmlUi + contexto + load):
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 #include "../src/window_glfw.hpp"
 #include "../src/engine.hpp"
 #include "../src/system_clock.hpp"
@@ -204,7 +204,7 @@ git add glintfx/ docs/ && git commit -m "refactor(glintfx): extrai Engine reusá
 
 - [x] **Step 1: Header público `ui_layer.hpp` (sem tipos de terceiros)**
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Embed/guest facade — attaches the UI+effects engine to a GL context the HOST owns.
 //     Does not create a window; render() is compose-only (no clear, no swap).
 // PT: Fachada embed/guest — anexa o motor de UI+efeitos a um contexto GL do HOST.
@@ -238,7 +238,7 @@ private:
 
 `tests/ui_layer_attach.cpp`:
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The HOST owns the GL context (hidden GLFW window here stands in for SDL3 in GusWorld).
 // PT: O HOST é dono do contexto GL (janela GLFW oculta aqui faz o papel do SDL3 no GusWorld).
 #include "../src/window_glfw.hpp"
@@ -263,7 +263,7 @@ Expected: erro de link (`UiLayer::...` indefinido).
 
 - [x] **Step 4: Implementar `ui_layer.cpp` (attach/load/viewport)**
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 #include <GL/gl3w.h>            // EN: gl3w first. PT: gl3w primeiro.
 #include <glintfx/ui_layer.hpp>
 #include "engine.hpp"
@@ -336,7 +336,7 @@ void RenderGl3::end_frame_compose() {
 
 `gl_state.hpp`:
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: RAII snapshot/restore of the GL state the RmlUi GL3 backend touches, so the host's
 //     renderer (e.g. Render2dGl3 in GusWorld) sees the context unchanged after UiLayer::render().
 // PT: Snapshot/restore RAII do estado GL que o backend GL3 do RmlUi mexe, para o renderer do
@@ -405,7 +405,7 @@ void Engine::render_compose(int w, int h) {
 
 Helper de teste: cria janela GLFW oculta (contexto) + FBO offscreen com textura RGBA, bind, clear a uma cor-âncora; readback do FBO para RGB. Esboço:
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include <GL/gl3w.h>
 #include <vector>
@@ -458,7 +458,7 @@ git add glintfx/ && git commit -m "feat(glintfx): render compose-only + GlStateG
 
 - [x] **Step 1: `ui_event.hpp` (tipos neutros)**
 ```cpp
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Neutral, host-agnostic input event. The host (GLFW, SDL3, …) fills this; glintfx
 //     translates it to RmlUi. Gamepad nav: map buttons to Key::Up/Down/Left/Right/Enter/Escape.
 // PT: Evento de entrada neutro, agnóstico de host. O host (GLFW, SDL3, …) preenche; o glintfx
@@ -573,7 +573,7 @@ Expected: passam — `window_smoke`, `render_smoke`, `engine_smoke`, `app_smoke`
 
 - [x] **Step 3: Gates finais (encapsulamento + SPDX)**
 Run: `! grep -rqE 'Rml|GLFW|GL_|gl3w|SDL' glintfx/include/glintfx/ && echo "headers públicos limpos"`
-Run: `for f in $(git ls-files 'glintfx/**/*.hpp' 'glintfx/**/*.cpp' | grep -vE '_deps|build/'); do head -1 "$f" | grep -q 'SPDX-License-Identifier: MPL-2.0' || echo "SEM SPDX: $f"; done` (esperado: sem saída)
+Run: `for f in $(git ls-files 'glintfx/**/*.hpp' 'glintfx/**/*.cpp' | grep -vE '_deps|build/'); do head -1 "$f" | grep -q 'SPDX-License-Identifier: Apache-2.0' || echo "SEM SPDX: $f"; done` (esperado: sem saída)
 > **RESULTADO 2026-06-30:** PASS (encapsulamento) + PASS (SPDX — 32 arquivos verificados, nenhum sem header).
 
 - [x] **Step 4: Prova de drop-in do embed (opcional, recomendado)**

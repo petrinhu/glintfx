@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: asset_decode_hostile_sanity (AUD-L1-PARSE / TST-L1-DECODE) -- corpus test for malformed/
 //     hostile asset files across BOTH the image path (Gl3RenderInterface::LoadTexture,
 //     render_gl3.cpp) and the font path (FontEngineOwn::LoadFontFace / RmlUi's own default

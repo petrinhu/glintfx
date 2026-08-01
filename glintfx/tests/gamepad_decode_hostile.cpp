@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for GamepadDecoder's hostile-input robustness (A2-GAMEPAD, framework-2D) --
 //     no GL, no window, no RmlUi, no Xvfb. Same discipline as audio_hostile_sanity.cpp/
 //     i18n_catalog_sanity.cpp's malformed-input coverage (auditoria-dominó: the same robustness

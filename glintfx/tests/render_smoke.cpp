@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test — construct RenderGl3 under a live GL context, run one frame.
 // PT: Teste de fumaça — constrói RenderGl3 sob contexto GL ativo, executa um frame.
 #include "../src/window_glfw.hpp"

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: Scene for echo_sanity (L1.21-ECHO). Proves the "sprite-echo" RCSS pattern
          (consumer-driven by GusWorld: a translucent, blue-tinted "ghost" copy of a sprite,
          faded in/out by the host via the existing DOM API) is achievable with ZERO new glintfx

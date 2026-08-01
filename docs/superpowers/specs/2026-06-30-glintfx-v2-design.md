@@ -3,7 +3,7 @@
 - **Data:** 2026-06-30
 - **Status:** Draft (aguarda revisão do líder)
 - **Origem:** brainstorm v2 (Capitolino/CPO — lente de produto; ux-ui-designer — lente de design), sobre o veredito de integração GusWorld e o [ADR-0008](../../adr/0008-embed-guest-mode.md)
-- **Referências:** [spec v1](2026-06-28-camada1-rmlui-gl3-design.md), [ADR-0006](../../adr/0006-layered-hybrid-architecture.md) (camadas), [ADR-0007](../../adr/0007-license-mpl-2.0.md) (licença MPL-2.0), [ADR-0008](../../adr/0008-embed-guest-mode.md) (embed/guest mode), `TODO.md` (trilha Camada 1)
+- **Referências:** [spec v1](2026-06-28-camada1-rmlui-gl3-design.md), [ADR-0006](../../adr/0006-layered-hybrid-architecture.md) (camadas), [ADR-0007](../../adr/0007-license-mpl-2.0.md) (licença, rotacionada de MPL-2.0 para Apache-2.0 pelo ADR-0019), [ADR-0008](../../adr/0008-embed-guest-mode.md) (embed/guest mode), `TODO.md` (trilha Camada 1)
 
 > Idioma: spec é documento de trabalho interno (pt-br). A API reference pública (item `DOC-WIKI`, via technical-writer) será bilíngue en→pt, como na v1.
 
@@ -50,7 +50,7 @@ Projeto de porte pequeno: as métricas são **checagens binárias / proxies veri
 | Efeitos | **Modificadores ortogonais** (`.glow/.glass/.gradient/.masked`) → **N+M regras, não N×M** |
 | a11y | Limite honesto: RmlUi **não tem screen reader/ARIA**. a11y = foco + teclado/gamepad + contraste AA + high-contrast + reduced-motion + cor nunca sozinha |
 | Escopo | **Anti-OE forte:** só entra componente com **caso de uso real** (telas do GusWorld). 1ª onda enxuta |
-| Licença | **MPL-2.0** (projeto inteiro, ADR-0007); SPDX em todo arquivo |
+| Licença | **Apache-2.0** (projeto inteiro; decisão original MPL-2.0 no ADR-0007, rotacionada pelo ADR-0019); SPDX em todo arquivo |
 
 ## 3. Arquitetura — dois modos de consumo
 

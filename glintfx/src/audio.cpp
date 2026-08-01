@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Audio implementation (A3-AUDIO) -- the pimpl `Impl` is where every miniaudio (`ma_*`) type
 //     actually lives; nothing miniaudio-shaped crosses glintfx/audio.hpp. See that header's
 //     comment for the full lifecycle/RAII/real-time-safety/hardening contract this file

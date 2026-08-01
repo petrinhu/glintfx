@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: asset_path_traversal_sanity (ASSET-PATH, 2026-07-30) -- contract test for
 //     glintfx::BaseUrlFileInterface::Open()'s directory-traversal guard
 //     (src/base_url_file_interface.hpp, resolve_within_base()). PURE unit test: constructs the

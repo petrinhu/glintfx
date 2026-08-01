@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Engine — reusable RmlUi+GL3 core decoupled from any window/input backend.
 //     Owns a RenderGl3 + Bootstrap pair. Two frame paths:
 //       render_standalone — clear + UI + alpha-fix on FBO0 (used by App).

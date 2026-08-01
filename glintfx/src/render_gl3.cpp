@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of RenderGl3 — wraps RmlUi's RenderInterface_GL3.
 //     gl_loader.h must be included before any other GL header.
 // PT: Implementação de RenderGl3 — encapsula o RenderInterface_GL3 do RmlUi.

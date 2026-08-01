@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Structural render sanity test — renders the CI showcase (showcase_test.rml), captures a
 //     frame via App::snapshot, and verifies coarse pixel statistics: not black, has dark
 //     background, has colourful/bright content.

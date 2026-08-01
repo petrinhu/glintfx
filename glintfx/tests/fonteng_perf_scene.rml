@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: fonteng_perf_scene.rml -- L1.20-PERFBENCH HUD document, driven by fonteng_perf_bench.cpp.
       Consumer-driven by the GusWorld: the cockpit HUD is dense, small-body (9-11dp) text that

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.20-FONTFLIP (FT-F4) sub-phase 2.1 extended-charset document -- driven by
       tests/fonteng_extended_sanity.cpp. Exercises codepoints the OWN font engine's bake set was

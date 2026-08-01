@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for MappingDb::parse_text()'s hostile-input robustness (A2-GAMEPAD,
 //     framework-2D) -- no GL, no window, no RmlUi, no Xvfb. Same discipline as
 //     i18n_catalog_sanity.cpp/audio_hostile_sanity.cpp/gamepad_decode_hostile.cpp (auditoria-

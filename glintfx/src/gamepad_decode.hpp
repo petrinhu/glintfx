@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A2-GAMEPAD (framework-2D, ADR-0015/ADR-0016 module "gamepad") -- the PURE decode core:
 //     `GamepadDecoder` reassembles a byte stream (as `read()` on an evdev `/dev/input/eventN`
 //     node hands it back, in whatever chunk sizes the kernel/consumer happens to deliver) into

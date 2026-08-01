@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_own_sanity -- L1.19-FONTENG (FT-F3) minimal visual oracle.
 //
 //     Renders tests/fonteng_scene.rml (3 static text lines: ascender/descender-heavy ASCII,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: focus_sanity -- verifies Engine::set_focus()/clear_focus() (L1.17-FOCUS, consumes the
 //     GAP-4 seed from docs/embed-integration.md section 5), the exact code
 //     glintfx::UiLayer::set_focus/clear_focus and glintfx::App::set_focus/clear_focus both

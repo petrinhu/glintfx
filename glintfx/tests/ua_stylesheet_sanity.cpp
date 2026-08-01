@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Scans the framebuffer for pure-red and pure-blue pixels and records their row
 //     range. If the two divs are inline (today's bug, no UA-stylesheet), they share the
 //     same line box -- their row ranges OVERLAP. If they are block (fixed by T1), they

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // glintfx — drop-in UI engine + GL3 effects facade.
 // Fachada drop-in: motor de UI + efeitos GL3.
 // Copyright (c) 2026 Petrus Silva Costa

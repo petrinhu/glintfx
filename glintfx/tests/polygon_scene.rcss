@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for polygon_sanity (v0.2.6 + review-fix input-hardening matrix).
        Row 1 (three 200x200 squares) proves geometry: default hexagon (vertex-up), octagon
        (sides=8), and a -30deg-rotated hexagon (proves rotation is applied AND that a negative

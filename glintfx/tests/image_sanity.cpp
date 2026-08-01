@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx/image.hpp (IMG-DECODE, the public decode_image_file()/
 //     decode_image_memory() pair). No RmlUi, no GL, no window, no `Draw2d`/`App`/`UiLayer`
 //     instance -- both functions under test are free functions callable headless, same "no

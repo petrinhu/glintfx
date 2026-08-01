@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: HOSTIN-1 (Onda 2, framework-2D, docs/superpowers/plans/2026-07-22-onda2-input-host.md,
 //     decision D2) -- pure, headless-testable physical input state table. Zero GLFW, zero I/O,
 //     zero side effect: WindowGlfw owns exactly one instance and feeds it from its own GLFW

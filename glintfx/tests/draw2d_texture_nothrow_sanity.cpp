@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_texture_nothrow_sanity (TEX-NOTHROW, W21, 2026-07-30) -- consumer-driven
 //     auditoria-dominó follow-up to `image_decode_hardening_sanity.cpp`'s own DEC-NOTHROW/DEC-MOVE
 //     (`src/image.cpp`): that fix covered the PUBLIC `decode_image_file()`/`decode_image_memory()`

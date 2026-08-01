@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx/image.hpp's IMG-ENCODE pair (encode_image_memory()/
 //     encode_image_file()), the sibling of image_sanity.cpp (which tests the DECODE pair) and of
 //     image_decode_sanity.cpp (which tests the private decode seam). No RmlUi, no GL, no window,

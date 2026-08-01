@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-3B -- the PURE buffered-command queue behind Draw2D's opt-in layer/draw-order mode
 //     (plan docs/superpowers/plans/2026-07-23-onda5-draw2d-primitives.md, decision D27; the D28
 //     scissor-grouping rule this file's own `drain_grouped()` implements). ZERO GL dependency,

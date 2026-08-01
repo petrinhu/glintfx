@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::I18n's CLDR-lite plural category selection (i18n-1,
 //     framework-2D) -- no GL, no window, no RmlUi, no Xvfb (see tests/CMakeLists.txt). Asserts
 //     by COUNT, not just presence, mirroring the "fórmula de conversão sem teste de delta" bug

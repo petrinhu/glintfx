@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: IMG-ENCODE -- a clean-room QOI (Quite OK Image, qoiformat.org) encoder, written from the
 //     PUBLIC SPECIFICATION alone (the QOI format is deliberately a few-hundred-line format
 //     designed to be re-derived from its own spec document, not reverse-engineered from a

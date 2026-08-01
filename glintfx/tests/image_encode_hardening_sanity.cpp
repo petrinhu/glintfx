@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: ENC-NOTHROW, W21 2026-07-30 -- gêmeo do DEC-NOTHROW (`image.cpp`/
 //     `image_decode_hardening_sanity.cpp`) para o par PÚBLICO de encode
 //     (`encode_image_memory()`/`encode_image_file()`, `glintfx/image.hpp`): o header promete

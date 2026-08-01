@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: app_vsync_sanity -- contract test for `WM-VSYNC` (window-modes finish wave,
 //     consumer-driven, líder-approved scope 2026-07-23): `App::set_swap_interval(int)`/
 //     `App::set_vsync(bool)` (sugar over the former) and `App::get_monitor_refresh_hz()`.

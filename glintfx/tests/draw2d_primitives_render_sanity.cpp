@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_primitives_render_sanity (D2D-3B, onda 5 -- docs/superpowers/plans/2026-07-23-
 //     onda5-draw2d-primitives.md, decisions D23-D30, section 5 item 3) -- pixel-readback proof
 //     for the untextured primitives, layers, and scissor this wave adds, under Xvfb/llvmpipe,

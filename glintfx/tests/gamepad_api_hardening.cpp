@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::Gamepads' fail-high API hardening (A2-GAMEPAD, framework-2D,
 //     Agent B) -- no GL, no window, no RmlUi, no Xvfb, no real gamepad device. Exercises the
 //     WHOLE public surface (gamepad.hpp) before init(), after shutdown(), and with hostile

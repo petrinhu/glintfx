@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: CONTRA-PROVA document for tests/fonteng_fallback_sanity.cpp's non-tofu claims -- a SEPARATE
       process/document from fonteng_fallback_scene.rml (fallback_faces_ is a flat, PROCESS-lifetime

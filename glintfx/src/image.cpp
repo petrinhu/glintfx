@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: IMG-DECODE -- implementation of the public `glintfx/image.hpp` decode pair. Thin: both
 //     functions delegate immediately to the private `image_decode.hpp` seam
 //     (`decode_straight_rgba()`, IMG-DECODE's own straight-alpha sibling of that header's

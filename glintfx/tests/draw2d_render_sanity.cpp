@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_render_sanity (D2D-1B) -- pixel-readback proof of `glintfx::Draw2d` under Xvfb/
 //     llvmpipe, STATISTICAL/tolerant (never pixel-exact -- the house's own golden_test precedent,
 //     see AGENTS.md's "golden_test is flaky on llvmpipe" gotcha). Embed fixture: a hidden

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Single translation unit that compiles stb_image (PNG/JPG/TGA decode).
 //     Only these three formats are compiled in; everything else is stripped.
 //     The header is included once here with STB_IMAGE_IMPLEMENTATION defined;

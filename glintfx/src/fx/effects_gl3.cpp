@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FX-CARVE-1 -- fx module implementation: the "glintfx-tint" (ADR-0010) and "glintfx-ripple"
 //     (ADR-0012, L1.22-WAVE/L1.22-CAPTURE) GLSL programs, their CompileShader/RenderShader/
 //     ReleaseShader dispatch, and the backdrop-capture machinery, all previously fused inside

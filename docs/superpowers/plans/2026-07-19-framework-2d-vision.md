@@ -151,8 +151,8 @@ enforcement natural de (1)/(2).
   [forum Qt indie](https://forum.qt.io/topic/41639/how-does-qt-work-with-a-indie-developer),
   [análise de licenciamento](https://extenly.com/2024/02/07/qt-licensing-gpl-vs-lgpl-vs-commercial-choosing-the-right-fit-for-you/)).
   Além disso Qt é um framework de APLICAÇÃO: event loop próprio, dezenas de MB, módulos
-  GPL-only -- desproporcional para um jogo 2D. O glintfx MPL-2.0 (copyleft fraco por-arquivo,
-  link estático livre, apps proprietários OK) é objetivamente mais simples de adotar.
+  GPL-only -- desproporcional para um jogo 2D. O glintfx Apache-2.0 (permissiva, link estático
+  livre, apps proprietários OK) é objetivamente mais simples de adotar.
 - **Emoji é dor recente e real**: o próprio Qt só entregou emoji colorido decente em 2025
   ([Emoji in Qt 6.9](https://www.qt.io/blog/emoji-in-qt-6.9)); SDL_ttf não suporta; projetos
   como EasyRPG têm issues abertas pedindo
@@ -192,7 +192,7 @@ compila e linka como UMA lib -- desligar áudio não tira o áudio do binário; 
 cada módulo é pesado e o núcleo (QtCore/QtGui) vem sempre junto. O precedente honesto é a
 SFML (libs `sfml-window`/`sfml-audio`/`sfml-graphics` separadas) -- só que a SFML não tem a
 UI declarativa nem os efeitos. A combinação **módulos opt-in de verdade (flag OFF = nem
-compila, nem linka) + UI HTML/CSS + efeitos data-driven + MPL-2.0 com link estático livre**
+compila, nem linka) + UI HTML/CSS + efeitos data-driven + Apache-2.0 com link estático livre**
 não existe em nenhum dos quatro. E o glintfx já provou o padrão em produção: o build
 embed-only sem GLFW é exatamente isso desde a v0.2.1.
 

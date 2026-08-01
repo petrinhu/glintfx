@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FW-CLOCK (framework-2D, W20, pedido C do consumidor GusWorld 2026-07-29) -- a single,
 //     thin, always-available free function: a monotonic nanosecond clock, the
 //     `SDL_GetTicksNS()` equivalent a host migrating its own window-owning shell onto this

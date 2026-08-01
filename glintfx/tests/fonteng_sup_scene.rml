@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.20-FONTFLIP superscript-workaround validation document -- driven by
       tests/fonteng_sup_sanity.cpp. Renders "a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>" through

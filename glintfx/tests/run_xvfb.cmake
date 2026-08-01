@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 #
 # EN: unset WAYLAND_DISPLAY AND isolate XDG_RUNTIME_DIR before launching under
 #     Xvfb (X11-only) -- defense-in-depth hermeticity measure (TST-L1-MEM),

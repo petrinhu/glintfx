@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: form_events_sanity -- verifies the 5 L1.15-FORMEV callbacks (design doc
 //     docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md, Shape B + hover, per the
 //     líder's decision): Engine::set_change_callback/set_submit_callback/set_focus_callback/

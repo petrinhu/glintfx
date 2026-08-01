@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_lazy_sanity -- L1.20-FONTFLIP (FT-F4) sub-phase 2B ADVERSARIAL GATE for the lazy
 //     on-demand bake (FontEngineOwn::EnsureGlyphs()/BakeGlyph()/GrowAtlas()/RasterizeGlyph(),
 //     src/font_engine_own.cpp). Written by the INDEPENDENT QA reviewer -- NOT the implementer of

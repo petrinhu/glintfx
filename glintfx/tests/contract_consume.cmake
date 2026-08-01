@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: contract_consume driver (TST-L1-CONTRACT) -- proves glintfx's on-disk INSTALL +
 #     find_package(glintfx) + link + run contract end-to-end, without re-building RmlUi
 #     (anti-OOM: RmlUi is already built once, in the ENCLOSING ctest run's own build tree

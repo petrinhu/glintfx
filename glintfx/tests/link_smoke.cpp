@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: glintfx_link_smoke -- the executable QW-MSVCLINK/PROG-1 adds specifically to close a CI
 //     gap: glintfx/CMakeLists.txt's `windows msvc build` job (.github/workflows/ci.yml) only
 //     ever built the `glintfx` STATIC target directly (`cmake --build ... --target glintfx`).

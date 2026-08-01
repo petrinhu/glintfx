@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for polygon_gradient_sanity (v0.3.1 -- "polygon(<sides>, radial-gradient(...) /
        linear-gradient(...))"). All row-1 boxes are 200x200 and square, so the inscribed-circle
        radius (half the SHORTER box dimension, per decorator_polygon.cpp) is 100 in every case;

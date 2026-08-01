@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App runtime window-mode TRANSITIONS smoke (A4-WINMODES, v0.16.0). One App instance
 //     (N3 -- construction happens ONCE, unlike app_window_mode_smoke.cpp's per-mode-process
 //     idiom), cycling App::set_window_mode() through every mode the D1 runtime-switch decision

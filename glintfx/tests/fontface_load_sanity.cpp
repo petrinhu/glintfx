@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fontface_load_sanity -- TDD gate for UI-FONTFACE (v0.24.0):
 //     `glintfx::UiLayer::load_font_face(const FontFaceDesc&)` (and, by shared implementation,
 //     `glintfx::App::load_font_face` -- both forward to the SAME `Engine::load_font_face` ->

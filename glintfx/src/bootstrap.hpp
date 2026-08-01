@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Bootstrap — wire SystemInterface + RenderInterface into RmlUi, create Context.
 //     No RmlUi or GL types leak through this header (pImpl pattern).
 //     The caller is the OWNER of the SystemInterface lifetime (Bootstrap does not delete it).

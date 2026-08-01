@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Embedded User-Agent stylesheet -- 'display: block' defaults for structural elements, plus
 //     minimal usable-out-of-the-box scrollbar defaults (v0.6.0). Applied as a low-specificity
 //     base to every document by Bootstrap::load(); see that file for the merge mechanism

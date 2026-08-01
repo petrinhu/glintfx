@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: clang-tidy config for TST-L1-STATIC (see TESTES.md "Camada 1"). Two tiers:
 #     1) clang-analyzer-* (real bug/UB detection) -- HARD gate, WarningsAsErrors below.
 #     2) modernize-*/cppcoreguidelines-* (style/best-practice) -- reported, NOT gated.

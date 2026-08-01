@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Golden-image test — render the showcase, capture a PPM, compare against a stored reference.
 //     First run: generates the reference and exits 0 (with a diagnostic).
 //     Subsequent runs: compare via MSE and fail if the score exceeds the tolerance.

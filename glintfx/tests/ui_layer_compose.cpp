@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Verify compose-only render preserves the host's framebuffer contents.
 //
 //     Architecture note: the RmlUi GL3 backend's EndFrame() always blends the UI result

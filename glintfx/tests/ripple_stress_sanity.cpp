@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: ripple_stress_sanity -- INDEPENDENT adversarial gate for commit 43cdcfa ("fix(glintfx):
 //     ripple cold-start -- captura on-demand dentro de RenderShader, não gate por contador").
 //     Written by the reviewer (NOT the qa who wrote ripple_sanity.cpp, NOT the implementer of

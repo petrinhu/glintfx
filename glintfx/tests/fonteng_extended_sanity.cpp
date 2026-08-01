@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_extended_sanity -- L1.20-FONTFLIP (FT-F4) sub-phase 2.1 regression net for the
 //     WIDENED bake set of glintfx's own SOV-SFNT/SOV-RAST font engine.
 //

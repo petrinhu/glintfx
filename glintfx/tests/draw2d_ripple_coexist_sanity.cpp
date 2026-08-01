@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_ripple_coexist_sanity (D2D-1B follow-up, review adversarial brief 8.4 item 3) --
 //     the risk the WAVE'S PLAN itself named and no test of the wave covered:
 //     `EnsureBackdropCaptured` (render_gl3.cpp, L1.22-CAPTURE) reads FBO 0 mid-`Context::Render()`

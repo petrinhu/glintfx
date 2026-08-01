@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-1B -- the Draw2D module's public surface (docs/superpowers/plans/2026-07-23-onda3-
 //     draw2d-d2d1.md section 4, LITERAL contract; ADR-0017 records the architectural decision
 //     this implements -- own GL 3.3 pipeline, own atom `GLINTFX_MODULE_DRAW2D`, order-by-call-

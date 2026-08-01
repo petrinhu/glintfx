@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: GLFW window + GL3.3 core context. PT: janela GLFW + contexto GL3.3 core.
 #pragma once
 #include <functional>

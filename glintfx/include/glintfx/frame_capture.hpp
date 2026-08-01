@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: CAPTURE-FREE (W22, S8, 2026-07-30) -- a THIRD facade for the SAME shared GL framebuffer
 //     readback `App::capture_frame()` (`app.hpp`) and `UiLayer::capture_frame()`
 //     (`ui_layer.hpp`) already wrap, this one requiring NO glintfx INSTANCE of any kind (no

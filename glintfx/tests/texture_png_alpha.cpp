@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Texture PNG/alpha test — texture_png_alpha (T4, v0.2.3).
 //
 //     Verifies three properties of the PNG LoadTexture override + premultiply:

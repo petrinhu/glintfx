@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::Audio's hostile-input robustness (A3-AUDIO, framework-2D) --
 //     no GL, no window, no RmlUi, no Xvfb (see the "why outside GLFW/Xvfb" comment in
 //     tests/CMakeLists.txt). Uses AudioConfig::null_backend=true (headless). Same discipline as

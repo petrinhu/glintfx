@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Neutral, host-agnostic input event. The host fills this struct and calls
 //     UiLayer::process_event(); glintfx translates it to the UI engine internally.
 //     No third-party types appear here — the public API is fully decoupled from any

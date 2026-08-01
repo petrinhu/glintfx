@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: glintfx showcase — visual demo exercising filters, gradients, box-shadow,
 //     backdrop-filter, and mask via the public glintfx::App facade only.
 // PT: Showcase do glintfx — demo visual exercitando filtros, degradês, box-shadow,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-TEXT (Onda 6, T1a -- docs/superpowers/plans/2026-07-24-onda6-draw2d-text.md, ADR-0018)
 //     -- the RASTER seam of Draw2D's text machinery (TX2 (a)). Pure CPU: ZERO GL, ZERO RmlUi
 //     anywhere in this header or its .cpp -- same "bytes in, data out" discipline as

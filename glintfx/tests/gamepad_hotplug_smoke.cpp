@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::Gamepads' inotify-based hotplug path (A2-GAMEPAD, framework-2D,
 //     Agent B, D2/D3 of the plan) -- no GL, no window, no RmlUi, no Xvfb, no real gamepad device.
 //     `dev_dir` points at a temporary directory this test creates/deletes `eventN`-named files

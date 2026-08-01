@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Verifies the GLINTFX-SCROLL-1 feature (v0.4.0, consumer-driven by GusWorld: a 30-item
 //     overflow-y:auto menu list could not scroll in embed mode) end-to-end through UiLayer's
 //     PUBLIC API only (glintfx::UiLayer::process_event/get_element_scroll_top/

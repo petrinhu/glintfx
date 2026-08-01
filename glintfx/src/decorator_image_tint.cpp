@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of ImageTintDecorator / ImageTintDecoratorInstancer -- see
 //     decorator_image_tint.hpp for the design rationale and ADR-0010 for the full derivation.
 //

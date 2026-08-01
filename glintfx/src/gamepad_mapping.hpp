@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A2-GAMEPAD (framework-2D, ADR-0015/ADR-0016 module "gamepad") -- SDL-GUID construction,
 //     SDL-compatible joystick-index derivation, the `gamecontrollerdb.txt` text parser
 //     (hostile-safe), and the default kernel-spec mapping for a pad the DB does not cover (D5 of

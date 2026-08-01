@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Verifies UiLayer::get_element_box(): (A) found element returns the exact RCSS-authored
 //     border-box geometry (left:20 top:15 60x40 -- absolute positioning, no margin/border/
 //     padding in this scene, so border-box == the raw left/top/width/height); (B) unknown id

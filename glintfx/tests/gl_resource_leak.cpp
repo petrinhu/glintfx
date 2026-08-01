@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: TST-L1-GLLEAK / GLLEAK-2 -- endurance-lite proof that glintfx does not leak GL driver
 //     HANDLES (texture/FBO/renderbuffer/buffer/VAO/program/shader) under repeated document
 //     reload. document_reload_leak.cpp already proves heap/document-count hygiene via

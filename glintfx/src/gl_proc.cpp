@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DOC-GLCOHAB -- one-line delegation from the public glintfx::gl_proc_address() (declared
 //     in glintfx/include/glintfx/gl_proc.hpp, see that header for the full contract and design
 //     rationale) to the private glx_gl_get_proc_address() C helper (gl_loader.h/.c). Kept in its

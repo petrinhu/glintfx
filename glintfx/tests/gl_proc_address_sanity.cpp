@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: gl_proc_address_sanity -- contract test for `DOC-GLCOHAB`'s (b) answer,
 //     `glintfx::gl_proc_address(const char*)` (glintfx/include/glintfx/gl_proc.hpp).
 //

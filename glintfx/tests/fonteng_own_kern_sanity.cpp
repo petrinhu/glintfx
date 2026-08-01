@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_own_kern_sanity -- L1.19-FONTENG/L1.20-FONTFLIP kerning-APPLICATION oracle.
 //
 //     Proves glintfx's own font engine (FontEngineOwn::IterateGlyphs(), font_engine_own.cpp)

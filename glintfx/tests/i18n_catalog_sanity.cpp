@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::I18n's catalog parser (i18n-1, framework-2D) -- no GL, no
 //     window, no RmlUi, no Xvfb (see the "why outside GLFW/Xvfb" comment in
 //     tests/CMakeLists.txt). Exercises: a well-formed multi-locale/multi-line catalog load;

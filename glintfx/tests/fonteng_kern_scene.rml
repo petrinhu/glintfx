@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.19-FONTENG/L1.20-FONTFLIP kerning oracle document -- see fonteng_own_kern_sanity.cpp's
       own file header for the full width-comparison rationale. Every element is

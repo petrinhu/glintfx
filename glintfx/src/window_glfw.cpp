@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: GLFW window implementation — guards glfwTerminate with glfw_inited_ flag and
 //     null-checks win_ in every method that dereferences it. Since A1 (framework-2D), also
 //     owns the 5 GLFW input callbacks that feed glintfx::App's physical input route -- see

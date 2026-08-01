@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::Audio's TIME-BASED loop/fade proofs (AUDIO-F2, framework-2D)
 //     -- no GL, no window, no RmlUi, no Xvfb (see the "why outside GLFW/Xvfb" comment in
 //     tests/CMakeLists.txt). Uses AudioConfig::null_backend=true (headless). Same

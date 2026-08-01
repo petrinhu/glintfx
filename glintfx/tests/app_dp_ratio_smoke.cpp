@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App dp_ratio / set_asset_base_url smoke test.
 //
 //     Covers the two new App API paths added in v0.2.2 that the embed-mode tests

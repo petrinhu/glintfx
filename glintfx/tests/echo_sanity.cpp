@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: echo_sanity -- proves the "sprite-echo" pattern (L1.21-ECHO, consumer-driven by GusWorld: a
 //     translucent, blue-tinted "ghost" copy of a sprite, faded in/out by the host) is achievable
 //     TODAY with ZERO new glintfx C++ feature -- only RCSS (the "image-tint(<url>)" decorator,

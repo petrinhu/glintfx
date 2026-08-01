@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Umbrella public header — include this one instead of individual headers.
 //     version.hpp is always included (L1.9-VERSEMBED: glintfx::version() must be available
 //     regardless of backend); log.hpp is always included too (FW-LOG, W20 -- same independence

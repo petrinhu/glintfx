@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: capture_framebuffer_loader_guard (CAPTURE-FREE, W22 S8, 2026-07-30) -- proves the ONE
 //     guard glintfx::capture_framebuffer() (glintfx/include/glintfx/frame_capture.hpp) has
 //     that its two instance-method siblings (App::capture_frame()/UiLayer::capture_frame())

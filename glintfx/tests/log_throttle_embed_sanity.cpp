@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Integration test for LOGTHR-1 (Onda 2, framework-2D --
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, decision D8, section 4.2). Loads
 //     log_throttle_scene.rml (a document with NO font-family anywhere, its label text bound to

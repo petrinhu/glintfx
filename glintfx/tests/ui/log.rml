@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: Log data-model test document (T3, v0.2.3).
       Binds to the "hud" data model; iterates the "log" string-list variable

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: domrw_sanity -- verifies Engine::set_text/add_class/remove_class/set_property (DOM
 //     write by id) and Engine::get_number/get_string/get_bool (data-model read-back)
 //     (L1.16-DOMRW, consumes AUD-PUB-6(d)+(e) -- imperative setters + write-only-to-two-way

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Embed/guest facade -- attaches the UI+effects engine to a GL context the HOST owns.
 //     Does not create a window; render() is compose-only (no clear, no swap).
 // PT: Fachada embed/guest -- anexa o motor de UI+efeitos a um contexto GL do HOST.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test for the data-model API (T1, v0.2.3).
 //     Exercises: create_data_model -> bind_string/bind_number -> load -> update + render.
 //     Validates:

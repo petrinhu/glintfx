@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Dedicated scene for app_process_event_smoke.cpp (A1, framework-2D) -- deliberately NOT
        click_scene.rcss/.rml (shared by click_callback_sanity/app_click_callback_smoke): this
        test's second leg needs App::set_focus("btn_a") + a synthetic Key::Enter to emulate a

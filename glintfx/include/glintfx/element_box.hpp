@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Plain result struct for get_element_box() -- window-space physical-pixel geometry of a
 //     document element (F2, v0.2.5). Coordinate space: window/render-target physical pixels,
 //     top-left origin, y-down -- the SAME space as UiEvent's mouse coordinates (see

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Live-scalar propagation test — data_model_scalar (T2, v0.2.3).
 //
 //     Proof: set_string() / set_number() followed by update() reflects the new value in

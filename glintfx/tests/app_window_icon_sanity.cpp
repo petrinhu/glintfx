@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: app_window_icon_sanity -- contract test for `WIN-ICON` (framework-2D, consumer-driven --
 //     GusWorld decodes its own PNG icon with stb_image and calls SDL_SetWindowIcon today;
 //     App::set_window_icon closes the gap that would otherwise lose the window icon on cutover

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A3-AUDIO (framework-2D, ADR-0015 module "audio") -- sound-effect and music playback via
 //     the vendored miniaudio library. This is the WHOLE public surface of the module: no
 //     miniaudio type (ma_engine/ma_sound/ma_context/...) appears here (pimpl, see `Impl` in

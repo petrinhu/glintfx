@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: IMG-ENCODE -- single translation unit that compiles stb_image_write (PNG/JPG/BMP/TGA/HDR
 //     encode), the encode-side sibling of `stb_image_impl.cpp`'s decode-side TU. The header is
 //     included once here with `STB_IMAGE_WRITE_IMPLEMENTATION` defined; every other translation

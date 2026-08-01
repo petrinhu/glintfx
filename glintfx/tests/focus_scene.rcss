@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the set_focus()/clear_focus() sanity scene (focus_scene.rml, L1.17-FOCUS).
        #focusable is left at the RmlUi-REGISTERED DEFAULT `focus: auto;` -- no override needed.
        #unfocusable explicitly overrides `focus: none;` -- the real, RmlUi-correct way to author

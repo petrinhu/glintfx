@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_perf_bench -- L1.20-PERFBENCH (FT-F4 perf gate): the PERFORMANCE sibling of
 //     fonteng_ab_compare.cpp/fonteng_ab_visual.cpp. Those two answer "does the own engine
 //     RENDER the same thing as FreeType, and does it LOOK as sharp?"; this one answers "does the

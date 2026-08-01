@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glintfx::I18n's RESOLUTION ORDER (i18n.hpp doc-comment, steps 1-5) --
 //     no GL, no window, no RmlUi, no Xvfb (see tests/CMakeLists.txt for why this file lives
 //     outside the GLINTFX_BACKEND_GLFW/Xvfb block). Each step of the chain gets its own,

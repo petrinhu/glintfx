@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: LOGTHR-1 (Onda 2) fixture -- deliberately carries NO font-family anywhere (no <style>,
      no <link> to an .rcss, and the UA stylesheet embedded in Bootstrap::load() only sets
      `display: block` defaults, never font-family -- see CLAUDE.md's "UA-stylesheet embutida"

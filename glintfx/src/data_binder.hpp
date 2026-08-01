@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DataBinder — owns stable cells and a DataModelConstructor/Handle for a single
 //     RmlUi data model. Internal to glintfx; never exposed in public headers.
 //     Lifecycle: create() -> bind_*() -> (load happens externally) -> set_*().

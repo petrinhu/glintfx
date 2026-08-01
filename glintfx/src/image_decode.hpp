@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-1A -- the image-decode carve (docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
 //     decision D3). Extracts the "bytes in, pixels out" core that used to live fused inside
 //     Gl3RenderInterface::LoadTexture (render_gl3.cpp): the 256 MiB AUD-L1-PARSE size cap on the

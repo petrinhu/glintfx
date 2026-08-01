@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for ripple_sanity (L1.22-WAVE/L1.22-CAPTURE gate). #overlay is a single
        fullscreen (0,0,900,800) div -- MUST cover the exact region CaptureBackdrop
        captures (the full window, see render_gl3.cpp's kGlintfxRippleFragmentShaderSrc

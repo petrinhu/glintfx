@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for echo_sanity (L1.21-ECHO). All three boxes reuse circle_rgba.png (the SAME 64x64
        warm-red-circle-on-transparent fixture already vendored for texture_png_alpha.cpp, centre
        texel RGB=(220,80,80) fully opaque -- see that test's header comment). Boxes are sized

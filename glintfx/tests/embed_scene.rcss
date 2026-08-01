@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Embed sanity styles. Designed to produce three measurable statistics on a 900x600 frame:
          mean_brightness > 5   : body background (#0d1020, near-black) is NOT all-zero
          dark_count  >= 10%    : body background visible in the lower half (R+G+B=61 < 120)

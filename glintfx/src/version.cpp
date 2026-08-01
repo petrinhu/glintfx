@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: version() implementation — always compiled regardless of GLINTFX_BACKEND_GLFW so
 //     embed-only builds (Engine + UiLayer only, no App) still expose glintfx::version().
 //     Moved out of app.cpp (L1.9-VERSEMBED): app.cpp is only compiled when the GLFW

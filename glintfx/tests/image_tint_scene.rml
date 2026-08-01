@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: Scene for image_tint_sanity (GLINTFX-TINT-1/2). See image_tint_scene.rcss for box
          geometry/decorator declarations and the full rationale of each proof.
          data-model="tint_demo" scopes the ONE live variable this scene needs: "tint_color"

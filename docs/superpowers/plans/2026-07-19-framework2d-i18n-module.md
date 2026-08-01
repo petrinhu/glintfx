@@ -85,7 +85,7 @@ Na régua do projeto ("as funções do SDL/Qt e mais"): nem SDL nem raylib têm 
 
 ### 3.2 Bidi (reordenação visual de texto misto LTR/RTL, UAX#9) -- também perigoso, mas menor que shaping
 
-Mesmo sem shaping contextual, textos MISTOS (frase em árabe com um número ou uma palavra em inglês no meio) precisam do algoritmo de bidi (UAX#9) pra decidir a ORDEM VISUAL dos runs. Isso é mais tratável que shaping completo (o algoritmo é bem especificado, ~mil linhas de referência, tipo fribidi), mas ainda é trabalho de MESES, não de uma fatia, e sem ele, qualquer UI mista mostra a ordem errada (número indo pro lado errado da frase, por exemplo). Vendorizar `fribidi` (leve, C puro, licença LGPL -- checar compatibilidade de licença com MPL-2.0 antes) é a rota mais barata SE o líder decidir que RTL de verdade é prioridade; ainda assim entra depois de catálogo+plural+formatação (seção 5), nunca antes.
+Mesmo sem shaping contextual, textos MISTOS (frase em árabe com um número ou uma palavra em inglês no meio) precisam do algoritmo de bidi (UAX#9) pra decidir a ORDEM VISUAL dos runs. Isso é mais tratável que shaping completo (o algoritmo é bem especificado, ~mil linhas de referência, tipo fribidi), mas ainda é trabalho de MESES, não de uma fatia, e sem ele, qualquer UI mista mostra a ordem errada (número indo pro lado errado da frase, por exemplo). Vendorizar `fribidi` (leve, C puro, licença LGPL -- checar compatibilidade de licença com Apache-2.0 antes) é a rota mais barata SE o líder decidir que RTL de verdade é prioridade; ainda assim entra depois de catálogo+plural+formatação (seção 5), nunca antes.
 
 ### 3.3 CLDR completo (todos os locales, todos os calendários, todas as moedas) -- poço sem fundo declarado
 

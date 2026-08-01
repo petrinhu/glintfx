@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the L1.15-FORMEV sanity scene (form_events_scene.rml). #myform is left
        position:static (default) so it does NOT become the positioning context for its
        children -- #chk/#submit-btn's `position: absolute` coordinates resolve against the

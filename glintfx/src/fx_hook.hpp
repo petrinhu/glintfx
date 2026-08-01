@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FX-CARVE-1 -- seam header between the ui module (render_gl3.cpp) and the optional fx
 //     module (src/fx/effects_gl3.cpp). Declares the abstract FxHook interface -- the full
 //     surface of glintfx-AUTHORED shader effects (tint + ripple, see ADR-0010/ADR-0012) that

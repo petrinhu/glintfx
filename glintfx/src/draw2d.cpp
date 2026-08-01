@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-1B -- the GL 3.3 core execution of what `sprite_batch.hpp`'s pure batcher decides
 //     (plan docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md, decisions D2/D7/D9). Zero
 //     RmlUi dependency (grep-checked: no `RmlUi/` include anywhere in this file) -- Draw2D shares

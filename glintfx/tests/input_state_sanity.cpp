@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for src/input_state.hpp (HOSTIN-1, Onda 2, framework-2D --
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, sections D2/D3/4). No window, no
 //     GL context, no glfwInit() anywhere in this file -- InputState is a plain struct with no

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: TDD sanity for L1.14-GLLOADER -- glintfx's own GL 3.3 core-profile function-pointer
 //     loader (glintfx/src/gl_loader.h/.c), replacing the previously vendored gl3w.
 //     Proves the loader's public contract in isolation, against a real offscreen GL

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: input_hardening_sanity -- proves the three input-surface hardening fixes from the v0.3.0
 //     security audit reject invalid input fail-high, WITHOUT breaking valid use. Runs in BOTH
 //     build configs (embed-mode, links ${_embed_dep}). Reuses dp_ratio_scene.rml/.rcss (a single

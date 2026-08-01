@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: capture_framebuffer_smoke (CAPTURE-FREE, W22 S8, 2026-07-30) -- verifies
 //     glintfx::capture_framebuffer() (glintfx/include/glintfx/frame_capture.hpp), the
 //     instance-free sibling of App::capture_frame()/UiLayer::capture_frame(). Unlike either

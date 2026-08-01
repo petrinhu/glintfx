@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: D2D-3A -- the PURE geometry behind Draw2D's untextured primitives (plan
 //     docs/superpowers/plans/2026-07-23-onda5-draw2d-primitives.md, decisions D25/D26/D28; ADR-
 //     0017's Addendum's Q1=(c) camera model is what "ACTIVE space" below refers to). ZERO GL

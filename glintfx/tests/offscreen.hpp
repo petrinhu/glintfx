@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Minimal offscreen FBO helpers for GL tests: create a plain RGBA8 FBO backed by a
 //     texture, and read its contents back as tightly-packed RGB bytes.
 //     The caller is responsible for having a current GL context (e.g. via WindowGlfw::create)

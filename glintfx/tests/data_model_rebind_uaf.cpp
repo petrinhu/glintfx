@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Regression test for the duplicate-key use-after-free in DataBinder::bind_*
 //     (found by audit, 2026-07-04). Root cause (pre-fix): each bind_* did
 //     `impl_->nums[key] = std::make_unique<double>(initial);` — the unique_ptr

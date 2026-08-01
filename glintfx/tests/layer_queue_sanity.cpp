@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: layer_queue_sanity (D2D-3B) -- headless unit test for the PURE buffered-command queue in
 //     src/layer_queue.hpp (D27 stable sort, D28 scissor grouping, the 262144 memory cap). No GL,
 //     no Xvfb, no window -- runs in BOTH build configs, same class of test as

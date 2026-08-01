@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Custom RmlUi decorator -- "image-tint(<url>)" -- draws a texture like the native "image()"
 //     decorator, but three standalone (non-decorator-argument) RCSS properties --
 //     "image-tint-color"/"image-tint-mode"/"image-tint-threshold" -- select a LUMINANCE-KEY tint:

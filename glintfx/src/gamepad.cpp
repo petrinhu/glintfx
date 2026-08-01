@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Device layer of A2-GAMEPAD (Agent B, framework-2D, wave 2) -- the ONLY translation unit in
 //     this module that ever touches a real file descriptor: directory scan of
 //     `GamepadsConfig::dev_dir`, `open()`/`ioctl()`/`read()`/inotify, slot bookkeeping. Everything

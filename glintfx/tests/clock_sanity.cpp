@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Unit test for glintfx/include/glintfx/clock.hpp (FW-CLOCK, W20). No window, no GL context,
 //     no RmlUi/GLFW dependency AT ALL -- glintfx::monotonic_now_ns() is a plain, freestanding,
 //     stateless function. Same "no display to isolate here" reasoning as log_sanity.cpp.

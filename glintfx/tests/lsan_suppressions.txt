@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 #
 # EN: LeakSanitizer suppression file for the TST-L1-MEM nightly gate
 #     (GLINTFX_SANITIZE=ON). Consumed via LSAN_OPTIONS=suppressions=<this file>,

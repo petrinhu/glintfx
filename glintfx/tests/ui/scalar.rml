@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: Scalar data-model test document (T2, v0.2.3).
       Binds to the "hud" data model; exposes two scalar variables:

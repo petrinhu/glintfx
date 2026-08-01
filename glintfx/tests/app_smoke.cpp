@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test — open App, load a minimal document, run 1 frame headless.
 //     Also checks glintfx::version() against GLINTFX_VERSION (config.hpp, generated
 //     from the CMake project(VERSION) at configure time — single source of truth,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A1 (framework-2D) -- verifies App::set_frame_callback(): the game's per-frame draw hook.
 //     (1) Smoke: N frames of poll/update/render -- the counter reaches exactly N, every
 //     dt_seconds is >= 0 and sane (< 10s -- generous ceiling, this whole test runs in well

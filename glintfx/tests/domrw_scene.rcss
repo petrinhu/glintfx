@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the DOM read/write sanity scene (domrw_scene.rml, L1.16-DOMRW). Purely
        structural (no positioning needed -- domrw_sanity.cpp never queries geometry): #class-target
        starts with the "base" class (authored in the .rml, not here) so remove_class has a

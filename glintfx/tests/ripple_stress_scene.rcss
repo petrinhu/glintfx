@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0 */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* EN: Scene for ripple_stress_sanity (independent gate, review of commit 43cdcfa -- L1.22-CAPTURE
        cold-start fix). #ripple_el is a fullscreen (0,0,900,800) div, FIRST in document order (so
        it paints FIRST -- Context::Render() walks/paints siblings in document order). It carries

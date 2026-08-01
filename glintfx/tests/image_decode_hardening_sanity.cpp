@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DEC-MOVE (A-4) + DEC-NOTHROW (A-1), W21 2026-07-30 -- consumer-driven (GusWorld reported,
 //     blocked): the PUBLIC decode pair (`decode_image_file()`/`decode_image_memory()`,
 //     `glintfx/image.hpp`) had a `const`-defeated `std::move()` (a silent extra copy of the pixel

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_camera_render_sanity (D2D-2B) -- pixel-readback proof of `Draw2d::set_camera`/
 //     `reset_camera`/the `SpriteTransform` overload under Xvfb/llvmpipe, STATISTICAL/tolerant
 //     (never pixel-exact, same house discipline as draw2d_render_sanity.cpp -- see this repo's

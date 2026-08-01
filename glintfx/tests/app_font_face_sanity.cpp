@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: app_font_face_sanity -- App-PATH FORWARD-COVERAGE gate for UI-FONTFACE (v0.24.0, review
 //     follow-up). `tests/fontface_load_sanity.cpp` exercises `UiLayer::load_font_face` end-to-
 //     end six ways, but NEVER touches `App::load_font_face` -- `App::load_font_face` and

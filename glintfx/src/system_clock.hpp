@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Minimal RmlUi SystemInterface for embed mode — provides the clock and (LOGTHR-1, Onda 2,
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, decision D8) a dedup/throttle
 //     LogMessage override. No GLFW/SDL dependency (the host owns window/input). LogMessage below

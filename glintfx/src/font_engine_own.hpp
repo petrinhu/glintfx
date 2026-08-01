@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FontEngineOwn (L1.19-FONTENG, FT-F3) — the "hosted shell" half of ADR-0009's mandatory
 //     "hosted shell + C meat" pattern: an ordinary, hosted C++ implementation of RmlUi's
 //     Rml::FontEngineInterface, whose only job is glue -- resolving/caching font faces, packing

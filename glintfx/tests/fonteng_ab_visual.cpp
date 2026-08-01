@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_ab_visual -- L1.20-FONTFLIP (FT-F4) VISUAL sharpness harness (DIAGNOSTIC, not a
 //     gate). Its numeric sibling fonteng_ab_compare.cpp mechanically flags GROSS A/B divergence;
 //     THIS tool instead produces IMAGES so a human (the líder) can make the PERCEPTUAL call the

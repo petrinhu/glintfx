@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: PPM pixel-capture helper for golden-image tests.
 //     Must be included AFTER gl_loader.h is initialised (App ctor does this via glx_gl_load).
 // PT: Helper de captura PPM para testes de golden-image.

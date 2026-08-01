@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test for UiLayer embed attach:
 //     The HOST owns the GL context (hidden GLFW window here stands in for SDL3 in GusWorld).
 //     Verifies: attach succeeds, load() does not crash, set_viewport() does not crash.

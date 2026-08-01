@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: CMake package config for find_package(glintfx).
 #     Generated from cmake/glintfxConfig.cmake.in — do not edit the installed copy.
 #

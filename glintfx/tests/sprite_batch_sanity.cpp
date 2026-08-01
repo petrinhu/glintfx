@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: sprite_batch_sanity (D2D-1B) -- headless unit test for the PURE batching policy in
 //     src/sprite_batch.hpp (plan docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md,
 //     decisions D4/D5/D8/D10). No GL, no Xvfb, no window -- runs in BOTH build configs, same

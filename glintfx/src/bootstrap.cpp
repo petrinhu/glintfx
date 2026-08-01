@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Bootstrap implementation — wires caller-supplied SystemInterface + RenderInterface
 //     into RmlUi. The caller is the OWNER of the SystemInterface lifetime.
 // PT: Implementação do Bootstrap — conecta SystemInterface (fornecida pelo chamador) +

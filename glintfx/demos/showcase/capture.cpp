@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Dev/QA tool — render the showcase once and snapshot it to a PPM, for real-GPU
 //     validation/comparison (Intel vs NVIDIA). Uses ONLY the public glintfx facade.
 //     Usage: glintfx_capture [rml_path] [out_ppm]

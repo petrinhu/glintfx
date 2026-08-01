@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Scene for the GLINTFX-SCROLL-1 sanity test (v0.4.0) -- an overflow-y:auto container
        (#scroller, 120x100 border-box, no margin/border/padding) taller in content than in
        viewport: 30 items x 30px = 900px content vs. 100px client height, giving a

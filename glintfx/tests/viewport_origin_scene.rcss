@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the set_viewport(x,y,w,h,target_h) sanity scene (viewport_origin_scene.rml).
        #target is positioned absolutely with no margin/border/padding, so its border-box
        geometry is exactly (left, top, width, height) as authored, in the sub-viewport's own

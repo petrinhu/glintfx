@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_sup_sanity -- L1.20-FONTFLIP (FT-F4) validation of the superscript-via-RCSS
 //     workaround the líder asked this session to validate FOR the GusWorld dev's "a²+b²=c²"
 //     problem: instead of needing the real superscript-2 glyph U+00B2 (which "Primary" --

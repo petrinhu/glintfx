@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 BasedOnStyle: Google
 # EN: ColumnLimit 0 disables column wrapping on purpose. This codebase uses long
 #     hand-formatted bilingual EN/PT trailing comments everywhere; any finite limit

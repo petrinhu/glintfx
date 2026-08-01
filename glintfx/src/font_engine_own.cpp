@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FontEngineOwn implementation. See font_engine_own.hpp for the full clean-room/scope
 //     writeup -- this file only adds the per-function derivations not already covered there.
 // PT: Implementação do FontEngineOwn. Ver font_engine_own.hpp pro relato completo de

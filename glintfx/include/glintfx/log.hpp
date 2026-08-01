@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FW-LOG (framework-2D, W20, pedido D do consumidor GusWorld 2026-07-29) -- the ONLY public
 //     surface this library offers for its own diagnostic output. Until this header existed,
 //     glintfx wrote every warning straight to `stderr` with zero API: 95 `log_warn()` call sites

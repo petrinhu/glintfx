@@ -67,7 +67,7 @@ Nenhum ADR novo necessário -- este plano só **implementa** ADR-0001 (estilo de
 - **Identificadores em en-intl** (funções, variáveis, macros, labels NASM). **Comentários/docs bilíngues** no MESMO arquivo, **EN primeiro, depois PT**. Sem em-dash (usar `--` ou reformular).
 - **SPDX header na PRIMEIRA linha de todo arquivo de código** (`.c`, `.h`, `.asm`, `.inc`, `Makefile`, `.sh`) -- comentário no estilo da linguagem (`//` C, `;` NASM, `#` Makefile/shell):
   ```
-  SPDX-License-Identifier: MPL-2.0
+  SPDX-License-Identifier: Apache-2.0
   ```
   seguido do bloco `EN:`/`PT:` de propósito do arquivo, seguido de `Copyright (c) 2026 Petrus Silva Costa`. Padrão idêntico ao já usado no glintfx (`glintfx/include/glintfx/element_box.hpp` como referência de formatação). **NÃO** editar `CLAUDE.md`/`TODO.md` como parte deste plano (fora de escopo desta rodada de planejamento) -- o snippet abaixo é a fonte de verdade até o líder decidir espelhá-lo.
 - **Assembly sempre sintaxe Intel** (NASM), consistente com `objdump -M intel`.
@@ -113,7 +113,7 @@ Makefile                          [NOVO]  build/test/clean/run, wildcard-based (
 `tools/check_spdx.sh`:
 ```sh
 #!/usr/bin/env sh
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Verifies every code file (.c, .h, .asm, .inc, .sh, Makefile) under src/, include/,
 #     tests/, tools/, and the top-level Makefile carries the SPDX header on one of its first
 #     5 lines. Scoped to Layer 0 (loucura_c_asm) only -- does NOT walk glintfx/ (Layer 1 has
@@ -140,7 +140,7 @@ if [ -z "$files" ]; then
 fi
 
 for f in $files; do
-  if ! head -n 5 "$f" | grep -q 'SPDX-License-Identifier: MPL-2.0'; then
+  if ! head -n 5 "$f" | grep -q 'SPDX-License-Identifier: Apache-2.0'; then
     echo "MISSING SPDX: $f"
     missing=1
   fi
@@ -183,7 +183,7 @@ typedef unsigned long uintptr_t;
 
 `include/types.h`:
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Our own freestanding <stddef.h>/<stdint.h>-equivalent -- no libc header exists to pull
 //     this from. `bool`/`true`/`false` are DELIBERATELY NOT defined here: under `-std=c23`
 //     (this project's floor) they are language KEYWORDS -- C23 promoted them from
@@ -246,7 +246,7 @@ B1: 🔍 Pendente verificação"
 
 `include/syscall_nums.h`:
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: x86-64 Linux syscall numbers used by this increment. Grows incrementally with each
 //     new wave (see TODO.md) -- intentionally NOT a full syscall table today (YAGNI): only
 //     what B5's sys_exit needs. B6 (sys_write) appends SYS_write here, and so on. Mirrored in
@@ -266,7 +266,7 @@ B1: 🔍 Pendente verificação"
 
 `include/syscall_nums.inc`:
 ```nasm
-; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: Apache-2.0
 ; EN: NASM mirror of include/syscall_nums.h -- see that file for the full rationale.
 ; PT: Espelho NASM de include/syscall_nums.h -- ver aquele arquivo para o racional completo.
 ; Copyright (c) 2026 Petrus Silva Costa
@@ -304,7 +304,7 @@ B2: 🔍 Pendente verificação"
 
 `Makefile`:
 ```makefile
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Freestanding build system for the sovereign C+ASM runtime (Layer 0, "loucura_c_asm").
 #     Zero libc: every flag below explicitly drops the toolchain's own runtime assumptions.
 #     See CLAUDE.md "Como buildar (sem libc)" for why each flag exists. Wildcard-based:
@@ -437,7 +437,7 @@ long syscall6(long nr, long a1, long a2, long a3, long a4, long a5, long a6);
 - [ ] **Step 1: `include/syscall.h`**
 
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Generic arity-based raw syscall wrappers (ADR-0001). One NASM leaf function per arg
 //     count (0..6), each moving the System V C-ABI argument registers into the raw `syscall`
 //     instruction's own convention (rax=nr, rdi/rsi/rdx/r10/r8/r9=args) and returning the
@@ -463,7 +463,7 @@ long syscall6(long nr, long a1, long a2, long a3, long a4, long a5, long a6);
 - [ ] **Step 2: `src/syscall.asm`**
 
 ```nasm
-; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: Apache-2.0
 ; EN: Implements syscall0..6 (ADR-0001). Each function receives its args per the System V
 ;     AMD64 C-ABI (1st..6th integer/pointer arg in rdi,rsi,rdx,rcx,r8,r9; a 7th spills to the
 ;     stack at [rsp+8]) and reshuffles them into the raw `syscall` instruction's own
@@ -589,7 +589,7 @@ B3: 🔍 Pendente verificação"
 - [ ] **Step 1: Escrever `src/start.asm`**
 
 ```nasm
-; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: Apache-2.0
 ; EN: Our own process entry point (ADR-0003, ADR-0005) -- there is no crt0/crt1 from any
 ;     libc. The kernel jumps here directly after execve(); NOTHING has run before this. Per
 ;     the System V AMD64 ABI (Linux specifics), at process entry:
@@ -701,7 +701,7 @@ void sys_exit(int code);   // never returns
 
 `include/sys_exit.h`:
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The first NAMED syscall wrapper (ADR-0001 -- "named, typed C helpers are thin
 //     functions layered on top of syscall0..6"). Mirrors POSIX _exit(): terminates the
 //     calling process/thread immediately, never returns. No error contract (ADR-0002)
@@ -719,7 +719,7 @@ void sys_exit(int code);
 
 `src/sys_exit.c`:
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: sys_exit -- see include/sys_exit.h for the contract. Implemented as a 1-line wrapper
 //     over syscall1(SYS_exit, code) (B3/ADR-0001): all the register-shuffling logic lives
 //     once, in syscall.asm -- this file adds only the name and the constant.
@@ -742,7 +742,7 @@ void sys_exit(int code) {
 
 `tests/exit42.c`:
 ```c
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: The B5 gate program. Proves the FULL pipeline end to end: clang(freestanding) +
 //     nasm(elf64) + ld(nostdlib) -> ELF64 static no-PIE -> kernel exec -> _start (B4) ->
 //     main() -> sys_exit(42) (B5) -> raw `exit` syscall -> process terminates with code 42.

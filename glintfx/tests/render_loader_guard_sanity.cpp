@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: render_loader_guard_sanity (GLPROC-CRASH, 2026-07-30) -- contract/regression test for
 //     `RenderGl3::init()`'s loader-not-ready guard (src/render_gl3.cpp, right before
 //     `RmlGL3::Initialize`/`new Impl`). This is the DIRECT regression test for a SIGSEGV

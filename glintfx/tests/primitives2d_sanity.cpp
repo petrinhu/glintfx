@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: primitives2d_sanity (D2D-3A) -- headless unit test for the PURE geometry in
 //     src/primitives2d.hpp (line-quad corners D25, rect-outline decomposition D26, scissor GL
 //     mapping D28) AND the pure D29 bbox helper in src/image_decode.hpp. No GL, no Xvfb, no

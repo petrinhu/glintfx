@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Library version accessor — always available regardless of GLINTFX_BACKEND_GLFW.
 //     Kept in its own header (not app.hpp) so embed-only consumers (GLINTFX_BACKEND_GLFW=OFF,
 //     e.g. GusWorld) that never include app.hpp still have access to glintfx::version().

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: dp_ratio sanity test — verifies that UiLayerConfig::dp_ratio and set_dp_ratio() work.
 //
 //     Scene: black background + one white 100dp×100dp box (dp_ratio_scene.rml/.rcss).

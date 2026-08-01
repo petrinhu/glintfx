@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: Apache-2.0
 # EN: Standalone CMake project -- pragmatic Windows CI harness for glintfx's PURE atoms only
 #     (A3-AUDIO/FX-CARVE-1 CI integration, S3). Compiles and tests ONLY what has zero GL/window/
 #     RmlUi/Freetype dependency: i18n (glintfx::I18n, ADR-0015 module "i18n") and audio

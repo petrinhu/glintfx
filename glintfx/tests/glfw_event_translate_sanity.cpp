@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for glfw_event_translate.hpp (A1, framework-2D) -- exercises the GLFW->
 //     UiEvent translation functions directly, WITHOUT creating a window/GL context (no
 //     glfwInit() call anywhere in this file; only #define constants from <GLFW/glfw3.h> are

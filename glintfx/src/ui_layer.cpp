@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: UiLayer implementation — embed/guest facade that attaches the RmlUi+GL3 engine to
 //     a GL context owned by the host. Owns a SystemClock (no GLFW) and an Engine.
 // PT: Implementação do UiLayer — fachada embed/guest que anexa o motor RmlUi+GL3 a um

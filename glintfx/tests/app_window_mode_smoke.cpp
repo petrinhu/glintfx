@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App window-mode creation smoke (A4-WINMODES, v0.16.0). Proves each WindowMode is
 //     accepted at App construction time without a crash, the resulting viewport is sane, and
 //     the LIVE App::window_mode() query matches what was requested -- with ONE documented

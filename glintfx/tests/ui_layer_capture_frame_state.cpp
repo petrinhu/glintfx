@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: `FRAMEGRAB-EMBED` -- verifies that UiLayer::capture_frame() leaves every GL state
 //     variable it touches unchanged on return. Same discipline as gl_state_guard.cpp (which
 //     covers render()'s own GlStateGuard) but scoped to the DIFFERENT 5 pieces of state a

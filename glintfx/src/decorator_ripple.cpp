@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of RippleDecorator / RippleDecoratorInstancer -- see decorator_ripple.hpp
 //     for the full design rationale (mirrors decorator_image_tint.cpp/ADR-0010's precedent
 //     almost line-for-line). This file only differs from decorator_image_tint.cpp in:

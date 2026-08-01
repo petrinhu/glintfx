@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A1 (framework-2D) -- verifies App::process_event(const UiEvent&), the synthetic/replay
 //     channel that shares the exact Engine::process_event route the GLFW physical-input
 //     callbacks now feed (window_glfw.cpp) and UiLayer::process_event has always used.

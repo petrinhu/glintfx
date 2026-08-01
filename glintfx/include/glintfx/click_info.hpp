@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Plain result struct delivered to set_click_info_callback() -- a richer companion to the
 //     id-only set_click_callback() (AUD-PUB-4, v0.5.0). Reports which element was clicked, which
 //     mouse button, where, and whether it was part of a double-click -- everything the id-only

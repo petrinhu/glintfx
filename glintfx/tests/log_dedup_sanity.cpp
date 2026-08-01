@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for src/log_dedup.hpp (LOGTHR-1, Onda 2, framework-2D --
 //     docs/superpowers/plans/2026-07-22-onda2-input-host.md, decision D8). No RmlUi, no GLFW,
 //     no window, no I/O of any kind -- LogDedup::should_print is a plain in-memory decision.

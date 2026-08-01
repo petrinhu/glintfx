@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: CAPTURE-FREE (W22, S8, 2026-07-30) -- implementation of glintfx::capture_framebuffer()
 //     (glintfx/include/glintfx/frame_capture.hpp, see that header's own top comment for the
 //     full design rationale: why a free function, why the struct is a deliberate third

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: BaseUrlFileInterface — Rml::FileInterface that prepends a configurable base URL to
 //     relative asset paths, enabling assets to be resolved from an absolute root independent
 //     of the process working directory or the document's own location.

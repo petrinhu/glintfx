@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Integration proof for the F3 coordinate contract -- exercises F1 (click) + F2
 //     (get_element_box) + F3 (set_viewport with origin) together, because they share ONE
 //     window-space coordinate system by design (see Architecture in the v0.2.5 plan).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_colr_sanity -- A4-EMOJI (COLRv0 colour emoji) pixel-proof gate for
 //     FontEngineOwn::RasterizeColorGlyph()/GlyphInfo::is_color/GenerateString()'s white-vertex
 //     branch (src/font_engine_own.{cpp,hpp}). Executes the real GL/RmlUi pipeline under Xvfb --

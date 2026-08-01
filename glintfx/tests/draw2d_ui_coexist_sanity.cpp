@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: draw2d_ui_coexist_sanity (D2D-1B) -- the test that guards this wave's CENTRAL RISK (plan
 //     docs/superpowers/plans/2026-07-23-onda3-draw2d-d2d1.md section 0/D9): Draw2D's own GL path
 //     COHABITS the exact GL context the RmlUi GL3 backend renders into. D9 (the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Verifies UiLayer::set_click_callback(): (A) direct id on the clicked element; (B) click
 //     on a child WITHOUT an id bubbles up to report the nearest ancestor id ("panel"); (C) click
 //     on a subtree with NO id anywhere reports "" (never a crash, never silently dropped);

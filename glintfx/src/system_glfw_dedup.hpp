@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: LOGTHR-1 (Onda 2, docs/superpowers/plans/2026-07-22-onda2-input-host.md, decision D8) --
 //     thin subclass of RmlUi's upstream SystemInterface_GLFW (RmlUi_Platform_GLFW.h, pinned,
 //     not patched) that adds ONLY a dedup/throttle LogMessage override. Every other method

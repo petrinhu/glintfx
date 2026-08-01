@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: ripple_sanity -- ADVERSARIAL GATE for the "ripple([<max-radius>])" screen-space backdrop
 //     refraction decorator (L1.22-WAVE, decorator_ripple.{hpp,cpp} + the "glintfx-ripple" shader
 //     injection in render_gl3.cpp) and its FBO-0 backdrop capture (L1.22-CAPTURE,

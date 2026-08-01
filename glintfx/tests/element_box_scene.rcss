@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the get_element_box() sanity scene (element_box_scene.rml). #probe is
        positioned absolutely with no margin/border/padding, so its border-box geometry is
        exactly (left, top, width, height) as authored -- a deterministic oracle for

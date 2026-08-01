@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: `FRAMEGRAB-EMBED` -- verifies UiLayer::capture_frame(): the embed-mode sibling of
 //     App::capture_frame() (app_capture_frame_smoke.cpp), reading the SAME shared
 //     Engine::capture_frame readback (engine.cpp) both facades wrap. This file exercises the

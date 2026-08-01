@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: text_layout_sanity (D2D-TEXT, T1b, Onda 6 -- docs/superpowers/plans/2026-07-24-onda6-draw2d-
 //     text.md, TX2 (b), TX15 word-wrap, TX16 align/justify, TX17's hand-computed-value gate,
 //     layout half) -- PURE unit test for src/text_layout.hpp: no window, no GL context, no

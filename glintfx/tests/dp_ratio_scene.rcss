@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Styles for the dp_ratio sanity scene.
        body: black background fills the full viewport (no text, no font).
        #box: solid white, 100dp×100dp — scales with dp_ratio.

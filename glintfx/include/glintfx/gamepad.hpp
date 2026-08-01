@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A2-GAMEPAD (framework-2D, ADR-0015/ADR-0016 module "gamepad") -- the WHOLE public surface
 //     of the module: pimpl, RAII, same contract shape as `Audio` (glintfx/audio.hpp) -- depends
 //     on `core` ONLY (no GL, no window, no RmlUi type crossing this header), testable without

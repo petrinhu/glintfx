@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
+/* SPDX-License-Identifier: Apache-2.0
    EN: Deliberately NO 'display: block' rule here -- this scene exists specifically to
        prove the UA-stylesheet works; it must rely SOLELY on glintfx's embedded default.
    PT: Deliberadamente SEM regra 'display: block' aqui -- esta cena existe para provar

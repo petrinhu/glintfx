@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_fallback_contraprova_sanity -- CONTRA-PROVA half of the L1.20-FONTFLIP (FT-F4)
 //     per-glyph fallback gate (see fonteng_fallback_sanity.cpp's own file header, criterion
 //     [1-contra], for the full rationale). Loads tests/fonteng_fallback_contraprova_scene.rml --

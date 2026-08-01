@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App parity smoke for set_click_callback() -- proves the surface is wired on App (F1
 //     behaviour itself is fully covered by click_callback_sanity via UiLayer, same Engine path).
 // PT: Smoke de paridade do App pra set_click_callback() -- prova que a superfície está

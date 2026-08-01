@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Implementation of the pure evdev decode core. See gamepad_decode.hpp's own header comment
 //     for the wire format, state model, and the stick-vs-trigger normalization decision; comments
 //     here focus on the "how" of each function, not the "why" (already spelled out there).

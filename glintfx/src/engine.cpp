@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Engine implementation — owns RenderGl3 + Bootstrap; provides standalone + compose frame paths.
 // PT: Implementação do Engine — possui RenderGl3 + Bootstrap; provê caminhos standalone e compose.
 // Copyright (c) 2026 Petrus Silva Costa

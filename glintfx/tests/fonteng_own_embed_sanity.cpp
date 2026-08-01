@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_own_embed_sanity -- L1.19-FONTENG (FT-F3) embed-mode (UiLayer) visual oracle.
 //
 //     [Review IMPORTANT #1, 2026-07-10] fonteng_own_sanity.cpp only ever ran inside

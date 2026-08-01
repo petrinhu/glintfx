@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Petrus Silva Costa
 // EN: Embed-mode render sanity gate — the F1 analogue of render_sanity for the UiLayer path.
 //

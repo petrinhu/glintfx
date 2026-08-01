@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for GamepadDecoder's well-formed decode path (A2-GAMEPAD, framework-2D) --
 //     no GL, no window, no RmlUi, no Xvfb (this decoder is fed synthetic byte buffers only, see
 //     gamepad_decode.hpp's own header comment). Exercises: a button press/release, autorepeat

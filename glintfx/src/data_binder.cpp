@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: DataBinder implementation — wraps RmlUi DataModelConstructor + DataModelHandle,
 //     owns stable cell storage keyed by variable name.
 //     The Impl contains the actual RmlUi types; data_binder.hpp exposes only a pImpl

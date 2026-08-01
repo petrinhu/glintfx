@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: App facade implementation — RAII wrapper over WindowGlfw + SystemInterface_GLFW + Engine.
 //     Engine owns RenderGl3 + Bootstrap. SystemInterface_GLFW lives here because it requires a
 //     GLFWwindow* at construction time (available only after WindowGlfw::create()). LOGTHR-1

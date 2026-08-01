@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Live-list propagation test — data_model_list (T3, v0.2.3).
 //
 //     Proves that bind_list() + set_list() wires a std::vector<Rml::String> to a

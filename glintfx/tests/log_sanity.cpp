@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Unit test for glintfx/include/glintfx/log.hpp (FW-LOG, W20). No window, no GL context, no
 //     RmlUi/GLFW dependency AT ALL -- glintfx::log()/log_info()/log_warn()/log_error() are plain,
 //     freestanding functions over a single process-wide sink. Verification is done entirely

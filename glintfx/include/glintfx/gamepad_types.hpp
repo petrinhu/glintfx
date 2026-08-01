@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: A2-GAMEPAD (framework-2D, ADR-0015/ADR-0016 module "gamepad") -- the normalized button/axis
 //     vocabulary the `Gamepads` public API (glintfx/gamepad.hpp, Agent B) exposes on top of the
 //     raw evdev surface. This header is deliberately the SMALLEST possible: two plain enums, zero

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: capture_nothrow_sanity (CAPTURE-NOTHROW, W22, 2026-07-30) -- the FIFTH member of the
 //     `never a crash` family (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`,
 //     `image_decode_hardening_sanity.cpp`/`image_encode_hardening_sanity.cpp`/

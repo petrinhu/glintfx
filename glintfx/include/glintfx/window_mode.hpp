@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Public window-mode selector for glintfx::App (A4-WINMODES, framework-2D). A plain,
 //     engine-agnostic enum -- no GLFW type appears here, or anywhere else in glintfx's public
 //     headers (the encapsulation invariant every header under glintfx/include/glintfx/

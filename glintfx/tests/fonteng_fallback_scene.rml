@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: L1.20-FONTFLIP (FT-F4) INDEPENDENT ADVERSARIAL GATE document for the per-glyph font fallback
       (FontEngineOwn::fallback_faces_/BakeGlyph(), commit 957505b) -- driven by

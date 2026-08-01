@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: FW-LOG implementation. See glintfx/include/glintfx/log.hpp for the full public contract
 //     (THREADING/REENTRANCY/HARDENING). This file has ZERO RmlUi/GLFW/GL dependency -- same
 //     independence class as src/log_dedup.hpp (which THIS file does not need either: dedup

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: polygon_gradient_sanity -- proves the "polygon(<sides>, radial-gradient(...) /
 //     linear-gradient(...))" fill extension (v0.3.1, decorator_polygon.{hpp,cpp}, consumer-driven
 //     by GusWorld's brass hexagon corner nodes: "muito plano", needed centre-clear ->

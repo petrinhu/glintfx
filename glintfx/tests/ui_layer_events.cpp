@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: Smoke test for UiLayer event injection (T4 — embed mode).
 //     The HOST owns the GL context (hidden GLFW window standing in for SDL3 in GusWorld).
 //     Verifies: injecting a representative sequence of UiEvents (MouseMove, MouseButton,

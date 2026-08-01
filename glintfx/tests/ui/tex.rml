@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- EN: Texture alpha test document — renders a 64x64 RGBA PNG circle on a dark background.
          Used by the texture_png_alpha test to verify:
            (a) PNG is decoded (not white fallback),

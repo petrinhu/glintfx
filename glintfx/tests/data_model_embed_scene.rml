@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!--
   EN: Data-model embed-path oracle document (AUD-TEC-7). Binds to the "hud" data model
       created by data_model_embed_sanity.cpp via UiLayer::create_data_model/bind_*, exposing:

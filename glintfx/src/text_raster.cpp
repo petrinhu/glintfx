@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: text_raster.hpp's implementation. See that header's own file comment for the full
 //     clean-room/scope writeup -- this file only adds the per-function derivations not already
 //     covered there. The bake math (kPad border, scale_num/scale_den, origin_x/y_26_6, the

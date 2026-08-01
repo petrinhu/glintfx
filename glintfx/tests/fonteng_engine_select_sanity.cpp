@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // EN: fonteng_engine_select_sanity -- L1.20-FONTFLIP Phase 2/3 (FT-F4) gate: proves the PUBLIC
 //     `UiLayerConfig::font_engine` field (glintfx/include/glintfx/font_engine.hpp) actually
 //     selects and drives the engine, end-to-end -- through the field a real consumer sets, NOT

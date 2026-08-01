@@ -1,25 +1,25 @@
 caminho,balde,veredito
 .bigtech-porte,E-no-header-by-design,
 .gitattributes,E-no-header-by-design,
-.githooks/pre-commit,F-unrotated-defect,"SPDX header still MPL-2.0, tools/check_spdx.sh does not scan .githooks/"
-.githooks/pre-push,F-unrotated-defect,"SPDX header still MPL-2.0, tools/check_spdx.sh does not scan .githooks/"
+.githooks/pre-commit,A-rotated,
+.githooks/pre-push,A-rotated,
 .github/workflows/ci.yml,A-rotated,
 .github/workflows/core-ci.yml,A-rotated,
 .github/workflows/heavy.yml,A-rotated,
 .github/workflows/nightly.yml,A-rotated,
 .github/workflows/windows-atoms.yml,A-rotated,
-.gitignore,F-unrotated-defect,comment line 40 still says 'nosso repo (MPL-2.0)'
+.gitignore,E-no-header-by-design,
 .gitleaksignore,E-no-header-by-design,
 AGENTS.md,E-no-header-by-design,".md, no license mention"
-AUDITORIAS.md,D-prose-ok,covered by tools/license_whitelist.txt
-AUDIT_FIND.md,D-prose-ok,covered by tools/license_whitelist.txt
-CHANGELOG.md,D-prose-ok,covered by tools/license_whitelist.txt
-CLAUDE.md,D-prose-ok,covered by tools/license_whitelist.txt
-CONTRIBUTING.md,D-prose-ok,covered by tools/license_whitelist.txt
+AUDITORIAS.md,D-prose-ok,tools/license_whitelist.txt
+AUDIT_FIND.md,D-prose-ok,tools/license_whitelist.txt
+CHANGELOG.md,D-prose-ok,tools/license_whitelist.txt
+CLAUDE.md,D-prose-ok,tools/license_whitelist.txt
+CONTRIBUTING.md,D-prose-ok,tools/license_whitelist.txt
 LICENSE,E-no-header-by-design,
 Makefile,A-rotated,
 NOTICE,E-no-header-by-design,
-README.md,D-prose-ok,covered by tools/license_whitelist.txt
+README.md,D-prose-ok,tools/license_whitelist.txt
 SECURITY.md,E-no-header-by-design,".md, no license mention"
 TESTES.md,E-no-header-by-design,".md, no license mention"
 TODO.md,C-historical,
@@ -29,7 +29,7 @@ consumer-example-embed/contract_scene.rml,A-rotated,
 consumer-example-embed/main.cpp,A-rotated,
 consumer-example/CMakeLists.txt,A-rotated,
 consumer-example/main.cpp,A-rotated,
-consumer-example/showcase.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+consumer-example/showcase.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 docs/.gitkeep,E-no-header-by-design,
 docs/GUIA_INICIANTE.md,E-no-header-by-design,".md, no license mention"
 docs/RELEASE_CHECKLIST.md,E-no-header-by-design,".md, no license mention"
@@ -38,7 +38,7 @@ docs/adr/0002-error-contract.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0003-internal-abi.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0004-allocator-strategy.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0005-elf-layout.md,E-no-header-by-design,".md, no license mention"
-docs/adr/0006-layered-hybrid-architecture.md,F-unrotated-defect,"Consequences section still says 'our MPL-2.0 base', explicitly in APACHE-TEXTOS scope, untouched by any of the 4 commits"
+docs/adr/0006-layered-hybrid-architecture.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0007-license-mpl-2.0.md,C-historical,
 docs/adr/0008-embed-guest-mode.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0009-internalization-boundary.md,E-no-header-by-design,".md, no license mention"
@@ -46,12 +46,12 @@ docs/adr/0010-image-tint-luminance-key.md,E-no-header-by-design,".md, no license
 docs/adr/0011-soft-font-flip.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0012-backdrop-capture.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0013-gl-symbol-boundary.md,E-no-header-by-design,".md, no license mention"
-docs/adr/0015-framework-2d-atomized-architecture.md,F-unrotated-defect,"still says 'MPL-2.0 static-link-friendly' (EN+PT), explicitly in APACHE-TEXTOS scope, untouched"
+docs/adr/0015-framework-2d-atomized-architecture.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0016-gamepad-atom.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0017-draw2d-module.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0018-draw2d-text.md,E-no-header-by-design,".md, no license mention"
 docs/adr/0019-license-rotation-apache-2.0.md,C-historical,
-docs/adr/README.md,D-prose-ok,covered by tools/license_whitelist.txt
+docs/adr/README.md,D-prose-ok,tools/license_whitelist.txt
 docs/audio.md,E-no-header-by-design,".md, no license mention"
 docs/auditoria/AUD-ABI.md,E-no-header-by-design,".md, no license mention"
 docs/auditoria/AUD-C0-PLAN.md,C-historical,
@@ -63,9 +63,10 @@ docs/auditoria/AUD-L1-QUALITY.md,E-no-header-by-design,".md, no license mention"
 docs/auditoria/AUD-L1-SUPPLY.md,C-historical,
 docs/auditoria/AUD-SEC.md,E-no-header-by-design,".md, no license mention"
 docs/auditoria/README.md,E-no-header-by-design,".md, no license mention"
-docs/capabilities.md,D-prose-ok,Twemoji Mozilla font-name false positive
+docs/auditoria/W24-F4-manifesto-licenca.csv,D-prose-ok,"o proprio manifesto de auditoria; documenta mencoes MPL por desenho, self-referencial como tools/license_whitelist.txt"
+docs/capabilities.md,D-prose-ok,Twemoji Mozilla false positive
 docs/draw2d.md,E-no-header-by-design,".md, no license mention"
-docs/effects.md,D-prose-ok,Twemoji Mozilla font-name false positive
+docs/effects.md,D-prose-ok,Twemoji Mozilla false positive
 docs/embed-integration.md,E-no-header-by-design,".md, no license mention"
 docs/gamepad.md,E-no-header-by-design,".md, no license mention"
 docs/getting-started.md,E-no-header-by-design,".md, no license mention"
@@ -86,11 +87,11 @@ docs/superpowers/specs/2026-06-30-glintfx-v2-design.md,C-historical,
 docs/superpowers/specs/2026-07-09-glintfx-form-events-design.md,E-no-header-by-design,".md, no license mention"
 docs/third_party_notices.md,C-historical,
 docs/troubleshooting.md,E-no-header-by-design,".md, no license mention"
-docs/wiki/FAQ.md,F-unrotated-defect,still declares 'MPL-2.0 (Mozilla Public License 2.0) for the whole repository' unqualified (EN+PT)
+docs/wiki/FAQ.md,D-prose-ok,tools/license_whitelist.txt
 docs/wiki/Getting-Started.md,E-no-header-by-design,".md, no license mention"
-docs/wiki/Home.md,F-unrotated-defect,License badge hardcoded to MPL-2.0 (shields.io)
+docs/wiki/Home.md,E-no-header-by-design,".md, no license mention"
 docs/wiki/Layer-0-Core.md,E-no-header-by-design,".md, no license mention"
-docs/wiki/Layer-1-glintfx.md,F-unrotated-defect,still says '(MPL-2.0 license)' (EN+PT)
+docs/wiki/Layer-1-glintfx.md,D-prose-ok,tools/license_whitelist.txt
 docs/wiki/README.md,E-no-header-by-design,".md, no license mention"
 docs/window-modes.md,E-no-header-by-design,".md, no license mention"
 glintfx/.clang-format,A-rotated,
@@ -100,19 +101,19 @@ glintfx/CMakePresets.json,E-no-header-by-design,
 glintfx/cmake/glintfxConfig.cmake.in,A-rotated,
 glintfx/coverage-badge.json,E-no-header-by-design,
 glintfx/demos/showcase/CMakeLists.txt,A-rotated,
-glintfx/demos/showcase/assets/LICENSE-font.txt,B-third-party,vendored single-file/asset outside third_party/ path
-glintfx/demos/showcase/assets/OpenSans-Regular.ttf,B-third-party,vendored single-file/asset outside third_party/ path
-glintfx/demos/showcase/assets/PixelOperatorMono.ttf,B-third-party,vendored single-file/asset outside third_party/ path
+glintfx/demos/showcase/assets/LICENSE-font.txt,B-third-party,vendored fora do path third_party/
+glintfx/demos/showcase/assets/OpenSans-Regular.ttf,B-third-party,vendored fora do path third_party/
+glintfx/demos/showcase/assets/PixelOperatorMono.ttf,B-third-party,vendored fora do path third_party/
 glintfx/demos/showcase/capture.cpp,A-rotated,
 glintfx/demos/showcase/golden/showcase_reference.ppm,E-no-header-by-design,
 glintfx/demos/showcase/main.cpp,A-rotated,
-glintfx/demos/showcase/showcase.rcss,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
-glintfx/demos/showcase/showcase.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
-glintfx/demos/showcase/showcase_test.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/demos/showcase/showcase.rcss,E-no-header-by-design,"pre-existing, never carried SPDX"
+glintfx/demos/showcase/showcase.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
+glintfx/demos/showcase/showcase_test.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/docs/superpowers/plans/2026-07-20-framework2d-A3-audio-e-carving-uifx.md,E-no-header-by-design,".md, no license mention"
 glintfx/docs/superpowers/plans/2026-07-21-framework2d-A2-gamepad.md,E-no-header-by-design,".md, no license mention"
 glintfx/docs/superpowers/plans/2026-07-21-framework2d-window-modes.md,E-no-header-by-design,".md, no license mention"
-glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md,D-prose-ok,Twemoji Mozilla font-name false positive
+glintfx/docs/superpowers/plans/2026-07-22-framework2d-A4-emoji-colr.md,D-prose-ok,Twemoji Mozilla false positive
 glintfx/docs/superpowers/plans/2026-07-22-framework2d-audio-F2.md,E-no-header-by-design,".md, no license mention"
 glintfx/docs/superpowers/plans/2026-07-22-onda2-input-host.md,E-no-header-by-design,".md, no license mention"
 glintfx/docs/superpowers/plans/2026-07-22-programa-completo.md,E-no-header-by-design,".md, no license mention"
@@ -184,7 +185,7 @@ glintfx/src/input_state.hpp,A-rotated,
 glintfx/src/layer_queue.hpp,A-rotated,
 glintfx/src/log.cpp,A-rotated,
 glintfx/src/log_dedup.hpp,A-rotated,
-glintfx/src/miniaudio_impl.c,B-third-party,vendored single-file/asset outside third_party/ path
+glintfx/src/miniaudio_impl.c,B-third-party,vendored fora do path third_party/
 glintfx/src/primitives2d.hpp,A-rotated,
 glintfx/src/qoi_encode.hpp,A-rotated,
 glintfx/src/render_gl3.cpp,A-rotated,
@@ -216,7 +217,7 @@ glintfx/tests/app_frame_callback_smoke.cpp,A-rotated,
 glintfx/tests/app_input_hardening_smoke.cpp,A-rotated,
 glintfx/tests/app_input_query_smoke.cpp,A-rotated,
 glintfx/tests/app_process_event_scene.rcss,A-rotated,
-glintfx/tests/app_process_event_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/app_process_event_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/app_process_event_smoke.cpp,A-rotated,
 glintfx/tests/app_resize_smoke.cpp,A-rotated,
 glintfx/tests/app_scroll_smoke.cpp,A-rotated,
@@ -234,7 +235,7 @@ glintfx/tests/audio_playback_sanity.cpp,A-rotated,
 glintfx/tests/audio_polyphony_sanity.cpp,A-rotated,
 glintfx/tests/base_url_sanity.cpp,A-rotated,
 glintfx/tests/bu_scene.rcss,A-rotated,
-glintfx/tests/bu_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/bu_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/capture.hpp,A-rotated,
 glintfx/tests/capture_framebuffer_loader_guard.cpp,A-rotated,
 glintfx/tests/capture_framebuffer_smoke.cpp,A-rotated,
@@ -242,7 +243,7 @@ glintfx/tests/capture_framebuffer_state.cpp,A-rotated,
 glintfx/tests/capture_nothrow_sanity.cpp,A-rotated,
 glintfx/tests/click_callback_sanity.cpp,A-rotated,
 glintfx/tests/click_scene.rcss,A-rotated,
-glintfx/tests/click_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/click_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/clock_sanity.cpp,A-rotated,
 glintfx/tests/contract_consume.cmake,A-rotated,
 glintfx/tests/data_model_embed_sanity.cpp,A-rotated,
@@ -255,10 +256,10 @@ glintfx/tests/data_model_smoke.cpp,A-rotated,
 glintfx/tests/document_reload_leak.cpp,A-rotated,
 glintfx/tests/domrw_sanity.cpp,A-rotated,
 glintfx/tests/domrw_scene.rcss,A-rotated,
-glintfx/tests/domrw_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/domrw_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/dp_ratio_sanity.cpp,A-rotated,
 glintfx/tests/dp_ratio_scene.rcss,A-rotated,
-glintfx/tests/dp_ratio_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/dp_ratio_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/draw2d_camera_render_sanity.cpp,A-rotated,
 glintfx/tests/draw2d_hostile_sanity.cpp,A-rotated,
 glintfx/tests/draw2d_perf_budget.cpp,A-rotated,
@@ -273,13 +274,13 @@ glintfx/tests/echo_scene.rcss,A-rotated,
 glintfx/tests/echo_scene.rml,A-rotated,
 glintfx/tests/element_box_sanity.cpp,A-rotated,
 glintfx/tests/element_box_scene.rcss,A-rotated,
-glintfx/tests/element_box_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/element_box_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/embed_scene.rcss,A-rotated,
 glintfx/tests/embed_scene.rml,A-rotated,
 glintfx/tests/engine_smoke.cpp,A-rotated,
 glintfx/tests/focus_sanity.cpp,A-rotated,
 glintfx/tests/focus_scene.rcss,A-rotated,
-glintfx/tests/focus_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/focus_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/font_nothrow_sanity.cpp,A-rotated,
 glintfx/tests/fonteng_ab_compare.cpp,A-rotated,
 glintfx/tests/fonteng_ab_scene.rml,A-rotated,
@@ -311,7 +312,7 @@ glintfx/tests/fontface_load_sanity.cpp,A-rotated,
 glintfx/tests/fontface_scene.rml,A-rotated,
 glintfx/tests/form_events_sanity.cpp,A-rotated,
 glintfx/tests/form_events_scene.rcss,A-rotated,
-glintfx/tests/form_events_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/form_events_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/gamepad_api_hardening.cpp,A-rotated,
 glintfx/tests/gamepad_decode_hostile.cpp,A-rotated,
 glintfx/tests/gamepad_decode_sanity.cpp,A-rotated,
@@ -352,15 +353,15 @@ glintfx/tests/log_sanity.cpp,A-rotated,
 glintfx/tests/log_throttle_embed_sanity.cpp,A-rotated,
 glintfx/tests/log_throttle_scene.rml,A-rotated,
 glintfx/tests/lsan_suppressions.txt,A-rotated,
-glintfx/tests/min.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/min.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/min_partial.rml,A-rotated,
 glintfx/tests/offscreen.hpp,A-rotated,
 glintfx/tests/polygon_gradient_sanity.cpp,A-rotated,
 glintfx/tests/polygon_gradient_scene.rcss,A-rotated,
-glintfx/tests/polygon_gradient_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/polygon_gradient_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/polygon_sanity.cpp,A-rotated,
 glintfx/tests/polygon_scene.rcss,A-rotated,
-glintfx/tests/polygon_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/polygon_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/primitives2d_sanity.cpp,A-rotated,
 glintfx/tests/render_loader_guard_sanity.cpp,A-rotated,
 glintfx/tests/render_sanity.cpp,A-rotated,
@@ -369,14 +370,14 @@ glintfx/tests/resize_scene.rcss,A-rotated,
 glintfx/tests/resize_scene.rml,A-rotated,
 glintfx/tests/ripple_sanity.cpp,A-rotated,
 glintfx/tests/ripple_scene.rcss,A-rotated,
-glintfx/tests/ripple_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/ripple_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/ripple_stress_sanity.cpp,A-rotated,
 glintfx/tests/ripple_stress_scene.rcss,A-rotated,
-glintfx/tests/ripple_stress_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/ripple_stress_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/run_xvfb.cmake,A-rotated,
 glintfx/tests/scroll_sanity.cpp,A-rotated,
 glintfx/tests/scroll_scene.rcss,A-rotated,
-glintfx/tests/scroll_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/scroll_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/sprite_batch_sanity.cpp,A-rotated,
 glintfx/tests/text_layout_sanity.cpp,A-rotated,
 glintfx/tests/text_raster_sanity.cpp,A-rotated,
@@ -384,7 +385,7 @@ glintfx/tests/texture_png_alpha.cpp,A-rotated,
 glintfx/tests/transform2d_sanity.cpp,A-rotated,
 glintfx/tests/ua_stylesheet_sanity.cpp,A-rotated,
 glintfx/tests/ua_stylesheet_scene.rcss,A-rotated,
-glintfx/tests/ua_stylesheet_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/ua_stylesheet_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/ubsan_suppressions.txt,A-rotated,
 glintfx/tests/ui/circle_rgba.png,E-no-header-by-design,
 glintfx/tests/ui/hud.rml,A-rotated,
@@ -399,11 +400,11 @@ glintfx/tests/ui_layer_events.cpp,A-rotated,
 glintfx/tests/ui_layer_sanity.cpp,A-rotated,
 glintfx/tests/viewport_origin_sanity.cpp,A-rotated,
 glintfx/tests/viewport_origin_scene.rcss,A-rotated,
-glintfx/tests/viewport_origin_scene.rml,E-no-header-by-design,pre-existing: never carried an SPDX header (not part of the 26 .rml / 21 .rcss that were rotated)
+glintfx/tests/viewport_origin_scene.rml,E-no-header-by-design,"pre-existing, never carried SPDX"
 glintfx/tests/win-atoms/CMakeLists.txt,A-rotated,
 glintfx/tests/window_smoke.cpp,A-rotated,
 glintfx/third_party/gamecontrollerdb/LICENSE,B-third-party,
-glintfx/third_party/gamecontrollerdb/README.md,B-third-party,"stale '(MPL-2.0)' describing OUTER project license in prose (line ~90/198) -- content note, path stays B"
+glintfx/third_party/gamecontrollerdb/README.md,B-third-party,
 glintfx/third_party/gamecontrollerdb/gamecontrollerdb_linux.inc,B-third-party,
 glintfx/third_party/gamecontrollerdb/gamecontrollerdb_linux.txt,B-third-party,
 glintfx/third_party/khronos/GL/glcorearb.h,B-third-party,
@@ -467,7 +468,7 @@ tests/exit42.c,A-rotated,
 tests/expected_exit.txt,E-no-header-by-design,
 tests/expected_stderr.txt,A-rotated,
 tests/expected_stdout.txt,A-rotated,
-tests/fixtures/opensans_regular.ttf,B-third-party,vendored single-file/asset outside third_party/ path
+tests/fixtures/opensans_regular.ttf,B-third-party,vendored fora do path third_party/
 tests/golden/negative_probe.expected,E-no-header-by-design,
 tests/golden/printf_e2e.expected,E-no-header-by-design,
 tests/hello.c,A-rotated,

@@ -80,7 +80,7 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   //     ok() -- see class-level doc-comment in ui_layer.hpp for the constructor's full contract.
   //     impl_->w/h are deliberately left at their Impl-default (0) rather than storing the
   //     rejected input -- no other method reads them while ok() is false (every one of them
-  //     starts with `if (!impl_->ok) return`), so there is nothing for a stale value to corrupt.
+  //     starts with `if (!ready()) return`), so there is nothing for a stale value to corrupt.
   // PT: UILAYER-CTOR-GUARD (bugfix, W22 S2) -- valida cfg.logical_width/logical_height ANTES de
   //     chegarem a Engine::attach()/Rml::CreateContext, espelhando a MESMA checagem de range que
   //     set_viewport() enforça (teto kMaxViewportDim, piso w<=0||h<=0) para que as duas portas de
@@ -100,7 +100,7 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   //     contrato completo do construtor.
   //     impl_->w/h são deliberadamente deixados no default do Impl (0) em vez de armazenar a
   //     entrada rejeitada -- nenhum outro método os lê enquanto ok() for false (todos começam
-  //     com `if (!impl_->ok) return`), então não há valor obsoleto para corromper nada.
+  //     com `if (!ready()) return`), então não há valor obsoleto para corromper nada.
   if (cfg.logical_width <= 0 || cfg.logical_height <= 0 ||
       cfg.logical_width > kMaxViewportDim || cfg.logical_height > kMaxViewportDim) {
     Rml::Log::Message(Rml::Log::LT_ERROR,
@@ -144,14 +144,27 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
     if (glx_gl_load() != 0) return;
   }
 
-  impl_->ok = impl_->engine.attach(&impl_->clock, impl_->w, impl_->h, cfg.font_engine);
+  // EN: AUD-UILAYER-MOVEDFROM (W26) -- local reference `impl`, used for the `ok` writes below.
+  //     impl_ is guaranteed non-null here (just constructed above), so there is nothing to
+  //     null-check in this constructor -- using the reference here keeps the null-safe
+  //     dereference pattern this file used to spell out at every entry point reserved for
+  //     exactly ONE place: ready()'s own definition, further down (right before UiLayer::ok(),
+  //     which now just forwards to it).
+  // PT: AUD-UILAYER-MOVEDFROM (W26) -- referência local `impl`, usada para as escritas de `ok`
+  //     abaixo. impl_ é garantidamente não-nulo aqui (acabou de ser construído acima), então
+  //     não há nada para checar contra nulo neste construtor -- usar a referência aqui mantém
+  //     o padrão de derreferência null-safe que este arquivo costumava soletrar em todo ponto
+  //     de entrada reservado para exatamente UM lugar: a própria definição de ready(), mais
+  //     adiante (logo antes de UiLayer::ok(), que agora só repassa para ele).
+  Impl& impl = *impl_;
+  impl.ok = impl.engine.attach(&impl.clock, impl.w, impl.h, cfg.font_engine);
   // EN: Apply the initial dp_ratio to the newly created context.
   //     SetDensityIndependentPixelRatio is idempotent when value equals the context default
   //     (1.0f), so always calling it here is safe and makes the intent explicit.
   // PT: Aplica o dp_ratio inicial ao contexto recém-criado.
   //     SetDensityIndependentPixelRatio é idempotente quando o valor iguala o padrão do
   //     contexto (1.0f), então chamá-lo sempre aqui é seguro e deixa a intenção explícita.
-  if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
+  if (impl.ok) impl.engine.set_dp_ratio(cfg.dp_ratio);
 }
 
 UiLayer::~UiLayer() = default;
@@ -159,17 +172,21 @@ UiLayer::~UiLayer() = default;
 UiLayer::UiLayer(UiLayer&&) noexcept = default;
 UiLayer& UiLayer::operator=(UiLayer&&) noexcept = default;
 
-bool UiLayer::ok() const noexcept {
+bool UiLayer::ready() const noexcept {
   return impl_ && impl_->ok;
 }
 
+bool UiLayer::ok() const noexcept {
+  return ready();
+}
+
 bool UiLayer::load(const char* rml_path) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.load(rml_path);
 }
 
 void UiLayer::set_viewport(int w, int h) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Input-hardening (audit, v0.3.0). w/h are viewport dimensions fed to
   //     Rml::Context::SetDimensions; a zero/negative dimension degenerates the layout engine.
   //     Skip silently and keep the previous viewport -- this replicates the exact guard that
@@ -211,7 +228,7 @@ void UiLayer::set_viewport(int w, int h) {
 }
 
 void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Same w/h guard as the 2-arg overload above (input-hardening audit, v0.3.0). Only w/h are
   //     checked here -- x/y (letterbox origin) can legitimately be any value including negative
   //     offsets. target_h (total window height) must stay positive, see AUD-TEC-4 below. Keeps
@@ -260,17 +277,17 @@ void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
 }
 
 void UiLayer::set_dp_ratio(float ratio) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_dp_ratio(ratio);
 }
 
 void UiLayer::set_asset_base_url(const char* url) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_asset_base_url(url);
 }
 
 void UiLayer::update() {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.update();
 }
 
@@ -279,7 +296,7 @@ void UiLayer::render() {
   //     without clearing and without swapping buffers. GL state is saved/restored internally.
   // PT: Delega a Engine::render_compose — compõe a UI sobre o FBO corrente do host
   //     sem limpar e sem trocar buffers. Estado GL é salvo/restaurado internamente.
-  if (impl_->ok)
+  if (ready())
     impl_->engine.render_compose(impl_->gl_offset_x, impl_->gl_offset_y, impl_->w, impl_->h);
 }
 
@@ -289,57 +306,57 @@ void UiLayer::render() {
 // ---------------------------------------------------------------------------
 
 bool UiLayer::create_data_model(const char* name) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.create_data_model(name);
 }
 
 bool UiLayer::bind_number(const char* key, double initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_number(key, initial);
 }
 
 bool UiLayer::bind_string(const char* key, const char* initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_string(key, initial);
 }
 
 bool UiLayer::bind_bool(const char* key, bool initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_bool(key, initial);
 }
 
 bool UiLayer::bind_list(const char* key) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_list(key);
 }
 
 void UiLayer::set_number(const char* key, double value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_number(key, value);
 }
 
 void UiLayer::set_string(const char* key, const char* value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_string(key, value);
 }
 
 void UiLayer::set_bool(const char* key, bool value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_bool(key, value);
 }
 
 void UiLayer::set_list(const char* key, const char* const* items, std::size_t count) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_list(key, items, count);
 }
 
 void UiLayer::set_click_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_click_callback(std::move(cb));
 }
 
 void UiLayer::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: AUD-PUB-4 (v0.5.0): unlike set_click_callback (id-only, no coordinate translation
   //     needed), the ClickInfo the Engine/Bootstrap hand back carries x/y in CONTENT-LOCAL
   //     space (offset-free -- see Engine::set_click_info_callback's doc-comment). Wrap the
@@ -373,7 +390,7 @@ void UiLayer::set_click_info_callback(std::function<void(const ClickInfo&)> cb) 
 }
 
 void UiLayer::set_scroll_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Straight passthrough (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- unlike
   //     set_click_info_callback, there is no coordinate payload here to translate by the
   //     sub-viewport offset (impl_->x/y): the callback carries only an id string.
@@ -392,33 +409,33 @@ void UiLayer::set_scroll_callback(std::function<void(const char*)> cb) {
 //     de offset do set_scroll_callback acima). Ver os doc-comments em ui_layer.hpp/
 //     bootstrap.hpp para o contrato completo.
 void UiLayer::set_change_callback(std::function<void(const char*, const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_change_callback(std::move(cb));
 }
 
 void UiLayer::set_submit_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_submit_callback(std::move(cb));
 }
 
 void UiLayer::set_focus_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_focus_callback(std::move(cb));
 }
 
 void UiLayer::set_blur_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_blur_callback(std::move(cb));
 }
 
 void UiLayer::set_hover_callback(std::function<void(const char*, bool)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_hover_callback(std::move(cb));
 }
 
 ElementBox UiLayer::get_element_box(const char* id) const {
   ElementBox box;
-  if (!impl_->ok) return box;
+  if (!ready()) return box;
   float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
   if (!impl_->engine.get_element_box(id, x, y, w, h)) return box;
   box.found = true;
@@ -436,32 +453,32 @@ ElementBox UiLayer::get_element_box(const char* id) const {
 }
 
 bool UiLayer::scroll_element_into_view(const char* id, bool align_with_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.scroll_element_into_view(id, align_with_top);
 }
 
 bool UiLayer::get_element_scroll_top(const char* id, float& out_scroll_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_scroll_top(id, out_scroll_top);
 }
 
 bool UiLayer::get_element_scroll_height(const char* id, float& out_scroll_height) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_scroll_height(id, out_scroll_height);
 }
 
 bool UiLayer::get_element_client_height(const char* id, float& out_client_height) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_client_height(id, out_client_height);
 }
 
 bool UiLayer::set_element_scroll_top(const char* id, float scroll_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_element_scroll_top(id, scroll_top);
 }
 
 bool UiLayer::set_focus(const char* id) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   // EN: Straight passthrough (L1.17-FOCUS) -- no coordinate translation applicable, same
   //     reasoning as the scroll trio above (id-only, no x/y in either direction).
   // PT: Repasse direto (L1.17-FOCUS) -- sem tradução de coordenada aplicável, mesma
@@ -470,7 +487,7 @@ bool UiLayer::set_focus(const char* id) const {
 }
 
 bool UiLayer::clear_focus() const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.clear_focus();
 }
 
@@ -484,27 +501,27 @@ bool UiLayer::clear_focus() const {
 // ---------------------------------------------------------------------------
 
 bool UiLayer::set_text(const char* id, const char* text) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_text(id, text);
 }
 
 bool UiLayer::add_class(const char* id, const char* cls) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.add_class(id, cls);
 }
 
 bool UiLayer::remove_class(const char* id, const char* cls) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.remove_class(id, cls);
 }
 
 bool UiLayer::set_property(const char* id, const char* prop, const char* value) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_property(id, prop, value);
 }
 
 bool UiLayer::load_font_face(const FontFaceDesc& desc) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   // EN: Straight passthrough (UI-FONTFACE) -- no coordinate translation applicable (font
   //     registration carries no geometry), no document-loaded requirement either (unlike the
   //     id-keyed DOM methods above -- see this method's own doc-comment in ui_layer.hpp).
@@ -516,17 +533,17 @@ bool UiLayer::load_font_face(const FontFaceDesc& desc) {
 }
 
 bool UiLayer::get_number(const char* key, double& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_number(key, out);
 }
 
 bool UiLayer::get_string(const char* key, std::string& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_string(key, out);
 }
 
 bool UiLayer::get_bool(const char* key, bool& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_bool(key, out);
 }
 
@@ -537,7 +554,7 @@ void UiLayer::process_event(const UiEvent& ev) {
   // PT: Guard: descarta eventos quando a camada não está pronta ou contexto sumiu. Mesmo
   //     formato do guard do próprio Engine::process_event abaixo -- mantido aqui também para
   //     que o branch de Resize (que nunca chega ao Engine) continue guardado.
-  if (!impl_->ok) return;
+  if (!ready()) return;
 
   // EN: Resize is the ONE case that stays here (A1, framework-2D refactor,
   //     docs/superpowers/plans/2026-07-19-framework2d-A1-input.md section 2.1): it mutates
@@ -621,7 +638,7 @@ void UiLayer::process_event(const UiEvent& ev) {
 //     noexcept-seguro Engine::capture_frame() (engine.cpp, esta mesma fatia), ou uma atribuição-
 //     por-move de unique_ptr -- nenhuma delas pode lançar.
 UiLayer::CapturedFrame UiLayer::capture_frame() const noexcept {
-  if (!impl_->ok) return CapturedFrame{};
+  if (!ready()) return CapturedFrame{};
   CapturedFramePixels px =
       impl_->engine.capture_frame(impl_->gl_offset_x, impl_->gl_offset_y, impl_->w, impl_->h);
 

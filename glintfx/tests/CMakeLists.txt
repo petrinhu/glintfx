@@ -1742,6 +1742,41 @@ add_test(NAME ui_layer_capture_frame_state
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# ---------------------------------------------------------------------------
+# EN: ui_layer_movedfrom_sanity (AUD-UILAYER-MOVEDFROM, W26) -- ENUMERATES every public UiLayer
+#     method (43, see the file's own header comment for the hand-verified count) and calls each
+#     one on a MOVED-FROM UiLayer, asserting fail-high (never a crash), PLUS a GL-state snapshot
+#     around update()/render() proving those two issue ZERO GL calls on the moved-from path (not
+#     just "no crash" -- this class is the EMBED facade, and a stray GL call would corrupt a
+#     host's own graphics state behind its back). Pre-fix RED is a segfault (the `impl_->ok`
+#     guard pattern throughout ui_layer.cpp dereferences `impl_` before checking it for null,
+#     and a moved-from UiLayer has `impl_ == nullptr` -- UiLayer::UiLayer(UiLayer&&) is
+#     `= default`, so the move just transfers the unique_ptr, leaving the source's impl_ null).
+#     Links glloader explicitly (like gl_state_guard.cpp above): the test snapshots GL state and
+#     creates a dummy VAO/FBO directly. WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml"
+#     resolves (same convention as every other UiLayer test in this file).
+# PT: ui_layer_movedfrom_sanity (AUD-UILAYER-MOVEDFROM, W26) -- ENUMERA todo método público de
+#     UiLayer (43, ver o próprio comentário de cabeçalho do arquivo pra contagem verificada à
+#     mão) e chama cada um num UiLayer MOVIDO-DE, verificando fail-high (nunca um crash), MAIS
+#     um snapshot de estado GL ao redor de update()/render() provando que os dois emitem ZERO
+#     chamadas GL no caminho movido-de (não só "não crasha" -- esta classe é a fachada EMBED, e
+#     uma chamada GL perdida corromperia o estado gráfico de um host por trás dele). O VERMELHO
+#     pré-fix é um segfault (o padrão de guarda `impl_->ok` por todo ui_layer.cpp derreferencia
+#     `impl_` antes de checar se é nulo, e um UiLayer movido-de tem `impl_ == nullptr` --
+#     UiLayer::UiLayer(UiLayer&&) é `= default`, então o move só transfere o unique_ptr, deixando
+#     o impl_ da origem nulo). Linka glloader explicitamente (como o gl_state_guard.cpp acima): o
+#     teste tira snapshot de estado GL e cria um VAO/FBO dummy diretamente. WORKING_DIRECTORY =
+#     CMAKE_BINARY_DIR para que "tests/min.rml" resolva (mesma convenção de todo outro teste de
+#     UiLayer deste arquivo).
+# ---------------------------------------------------------------------------
+add_executable(ui_layer_movedfrom_sanity ui_layer_movedfrom_sanity.cpp)
+target_link_libraries(ui_layer_movedfrom_sanity PRIVATE ${_embed_dep} glloader)
+add_test(NAME ui_layer_movedfrom_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_movedfrom_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: gl_loader_sanity (L1.14-GLLOADER) — glx_gl_load() returns 0 and a representative
 #     sample of core function pointers (glGetString, glCreateShader, glBindFramebuffer)
 #     is resolved and callable against a real offscreen GL context. Links glloader

@@ -146,18 +146,52 @@ struct UiLayerConfig {
   bool assume_gl_loaded = false;
 };
 
-// EN: MOVED-FROM STATE (L1.10-APIDOC): after `UiLayer b = std::move(a);` (or
-//     `b = std::move(a);`), `a` is left in a moved-from state. Calling ANY method on `a`
-//     other than ok() or the destructor is undefined behaviour -- same convention as
-//     std::unique_ptr. ok() on a moved-from UiLayer returns false (impl_ is null), which is
-//     the only state query that is safe to make; destruction of a moved-from UiLayer is
-//     always safe (no-op, impl_ is null).
-// PT: ESTADO MOVIDO-DE (L1.10-APIDOC): após `UiLayer b = std::move(a);` (ou
-//     `b = std::move(a);`), `a` fica em estado movido-de. Chamar QUALQUER método em `a`
-//     além de ok() ou o destrutor é comportamento indefinido -- mesma convenção do
-//     std::unique_ptr. ok() num UiLayer movido-de retorna false (impl_ é nulo), sendo a
-//     única consulta de estado segura; destruir um UiLayer movido-de é sempre seguro
-//     (no-op, impl_ é nulo).
+// EN: MOVED-FROM STATE (L1.10-APIDOC; contract HARDENED by AUD-UILAYER-MOVEDFROM, W26 -- see
+//     this class's private ready() helper, ui_layer.cpp): after `UiLayer b = std::move(a);`
+//     (or `b = std::move(a);`), `a` is left in a moved-from state (impl_ == nullptr). Calling
+//     ANY method on `a` afterwards is now FAIL-HIGH, never a crash: every public method checks
+//     impl_ for null before dereferencing it (not just ok(), which was already null-safe) and
+//     returns EXACTLY the same value it already returns for a constructed-but-!ok() UiLayer
+//     (false/0/empty-struct/no-op -- see each method's own doc-comment for its specific
+//     value). This used to be documented as undefined behaviour (the std::unique_ptr
+//     convention) -- it no longer is: a host that moves a UiLayer by mistake gets a
+//     well-defined no-op/false/0, never a segfault (AUD-UILAYER-MOVEDFROM found 42 `impl_->ok`
+//     sites across ui_layer.cpp that dereferenced impl_ before checking it for null, the exact
+//     twin of the bug AUD-APP-MOVEDFROM (W25) fixed in App -- same precedent as
+//     load(nullptr) in v0.3.0). render()/update() on a moved-from UiLayer are the ONE pair of
+//     methods where "no-op" carries an EXTRA promise beyond App's own contract: this class is
+//     the EMBED facade, and the GL context render()/update() would otherwise touch belongs to
+//     the HOST, not to glintfx -- a moved-from no-op that still issued GL calls (even
+//     harmless ones) would be a library corrupting a host's own graphics state behind its
+//     back. The fix guarantees ZERO GL calls on that path: the ready() check short-circuits
+//     BEFORE Engine::update()/Engine::render_compose() (and the GlStateGuard construction
+//     inside the latter) are ever reached -- verified empirically, not just by code
+//     inspection, by ui_layer_movedfrom_sanity.cpp's GL-state snapshot around both calls.
+//     ok() itself is unaffected: it already returned false on a moved-from UiLayer before this
+//     change.
+// PT: ESTADO MOVIDO-DE (L1.10-APIDOC; contrato ENDURECIDO pelo AUD-UILAYER-MOVEDFROM, W26 --
+//     ver o helper privado ready() desta classe, ui_layer.cpp): após `UiLayer b =
+//     std::move(a);` (ou `b = std::move(a);`), `a` fica em estado movido-de (impl_ ==
+//     nullptr). Chamar QUALQUER método em `a` depois disso agora é FAIL-HIGH, nunca um crash:
+//     todo método público checa impl_ contra nulo antes de derreferenciá-lo (não só o ok(),
+//     que já era null-safe) e retorna EXATAMENTE o mesmo valor que já retorna para um UiLayer
+//     construído-mas-!ok() (false/0/struct-vazia/no-op -- ver o doc-comment de cada método pro
+//     valor específico). Isto era documentado como comportamento indefinido (a convenção do
+//     std::unique_ptr) -- não é mais: um host que move um UiLayer por engano recebe um
+//     no-op/false/0 bem-definido, nunca um segfault (o AUD-UILAYER-MOVEDFROM achou 42 sítios
+//     `impl_->ok` por todo ui_layer.cpp que derreferenciavam impl_ antes de checá-lo contra
+//     nulo, o gêmeo exato do bug que o AUD-APP-MOVEDFROM (W25) consertou no App -- mesmo
+//     precedente do load(nullptr) na v0.3.0). render()/update() num UiLayer movido-de são o
+//     ÚNICO par de métodos onde "no-op" carrega uma promessa EXTRA além do contrato do próprio
+//     App: esta classe é a fachada EMBED, e o contexto GL que render()/update() tocariam
+//     pertence ao HOST, não à glintfx -- um no-op movido-de que ainda emitisse chamadas GL
+//     (mesmo inofensivas) seria a biblioteca corrompendo o estado gráfico de um host por trás
+//     dele. O fix garante ZERO chamadas GL nesse caminho: o cheque ready() intercepta ANTES de
+//     Engine::update()/Engine::render_compose() (e a construção do GlStateGuard dentro deste
+//     último) serem sequer alcançados -- verificado empiricamente, não só por inspeção de
+//     código, pelo snapshot de estado GL ao redor das duas chamadas em
+//     ui_layer_movedfrom_sanity.cpp. O próprio ok() é inafetado: já retornava false num
+//     UiLayer movido-de antes desta mudança.
 class UiLayer {
 public:
   // EN: Inner alias so callers can write UiLayer::Config{...} -- matches the spec interface.
@@ -1205,8 +1239,10 @@ public:
   // EN: CAPTURE-NOTHROW (W22, 2026-07-30) -- appended AT THE END, same "append, do not insert"
   //     discipline this class' own UILAYER-SINGLETON note immediately above already uses (and
   //     `draw2d.hpp`'s own TEX-NOTHROW/FONT-NOTHROW notes before it): `capture_frame()` above is
-  //     now `noexcept` -- audited instruction-by-instruction, not by convention: `!impl_->ok` is
-  //     a plain bool member read; the delegation to `Engine::capture_frame()` (`engine.cpp`)
+  //     now `noexcept` -- audited instruction-by-instruction, not by convention: `!ready()`
+  //     (AUD-UILAYER-MOVEDFROM, W26) is a call to the class's own `noexcept` null-safe helper
+  //     (a `unique_ptr`-null check plus a plain bool member read, neither of which can throw);
+  //     the delegation to `Engine::capture_frame()` (`engine.cpp`)
   //     calls a method THAT method's own fix (this same slice) already proved noexcept-safe end
   //     to end (every allocation-bearing statement in ITS OWN body wrapped in `try`/`catch`);
   //     every remaining statement here (`CapturedFrame out;` default-construction, four trivial
@@ -1221,7 +1257,9 @@ public:
   //     insere" que a própria nota UILAYER-SINGLETON desta classe logo acima já usa (e as
   //     próprias notas TEX-NOTHROW/FONT-NOTHROW de `draw2d.hpp` antes dela): o `capture_frame()`
   //     acima agora é `noexcept` -- auditado instrução-por-instrução, não por convenção:
-  //     `!impl_->ok` é uma leitura pura de membro bool; a delegação pro
+  //     `!ready()` (AUD-UILAYER-MOVEDFROM, W26) é uma chamada ao próprio helper `noexcept`
+  //     null-safe da classe (um cheque de nulo do `unique_ptr` mais uma leitura pura de membro
+  //     bool, nenhum dos dois pode lançar); a delegação pro
   //     `Engine::capture_frame()` (`engine.cpp`) chama um método cujo PRÓPRIO conserto (esta
   //     mesma fatia) já provou noexcept-seguro ponta-a-ponta (toda instrução portadora de
   //     alocação no PRÓPRIO corpo dele envolvida em `try`/`catch`); toda instrução restante aqui
@@ -1236,6 +1274,23 @@ public:
   //     não-auditada pra deixar dúvida nenhuma.
 
 private:
+  // EN: AUD-UILAYER-MOVEDFROM (W26) -- the ONE null-safe check every public method's entry
+  //     guard now uses instead of the old `!impl_->ok` (which dereferenced impl_ before
+  //     checking it). Defined out-of-line in ui_layer.cpp (not inline here): Impl is an
+  //     incomplete type at this point in the header (pimpl idiom), so `impl_->ok` cannot be
+  //     evaluated until ui_layer.cpp, where Impl's definition is visible. noexcept: only ever
+  //     reads two already-computed values, no I/O, no allocation, cannot throw. Same helper,
+  //     same shape, same reason as App::ready() (app.hpp) -- AUD-APP-MOVEDFROM's twin fix.
+  // PT: AUD-UILAYER-MOVEDFROM (W26) -- o ÚNICO cheque null-safe que todo guard de entrada de
+  //     método público agora usa em vez do antigo `!impl_->ok` (que derreferenciava impl_
+  //     antes de checá-lo). Definido fora-de-linha em ui_layer.cpp (não inline aqui): Impl é
+  //     um tipo incompleto neste ponto do header (idioma pimpl), então `impl_->ok` não pode
+  //     ser avaliado até ui_layer.cpp, onde a definição de Impl é visível. noexcept: só lê
+  //     dois valores já computados, sem I/O, sem alocação, não pode lançar. Mesmo helper,
+  //     mesma forma, mesmo motivo do App::ready() (app.hpp) -- gêmeo do fix do
+  //     AUD-APP-MOVEDFROM.
+  bool ready() const noexcept;
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

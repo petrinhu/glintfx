@@ -123,6 +123,13 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   //     of a UiLayerConfig uses only assume_gl_loaded or the fields' own defaults) -- the
   //     pragma below silences this file warning about a deprecation this file itself is the
   //     one keeping alive on purpose, for the one version load_gl stays functional.
+  //     GLLOADER-HOST (2026-08-04): when the load path IS active and the host supplied
+  //     `cfg.gl_proc_resolver`, that resolver -- not glintfx's own glX/EGL/dlsym chain --
+  //     populates the table (glx_gl_load_with(), gl_loader.h/.c; see UiLayerConfig's own
+  //     doc-comment for the full three-way rule). When the load path is being SKIPPED
+  //     (assume_gl_loaded, or the deprecated load_gl=false) but a resolver was ALSO supplied,
+  //     that is a contradiction from the caller -- the skip claim wins, the resolver is never
+  //     called, and a warning names why.
   // PT: Carrega ponteiros de função GL contra o contexto CORRENTE do host.
   //     glx_gl_load() é idempotente dentro de um processo — uma chamada repetida apenas
   //     re-resolve e sobrescreve os mesmos ~344 ponteiros (barato, sem alocação retida).
@@ -133,15 +140,37 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   //     de UiLayerConfig usa só assume_gl_loaded ou os próprios defaults dos campos) -- o pragma
   //     abaixo silencia este arquivo avisando de uma depreciação que este mesmo arquivo é quem
   //     mantém viva de propósito, pela uma versão em que load_gl segue funcional.
+  //     GLLOADER-HOST (2026-08-04): quando o caminho de load ESTÁ ativo e o host forneceu
+  //     `cfg.gl_proc_resolver`, é esse resolvedor -- não a própria cadeia glX/EGL/dlsym da
+  //     glintfx -- que popula a tabela (glx_gl_load_with(), gl_loader.h/.c; ver o próprio
+  //     doc-comment de UiLayerConfig pra regra completa de três vias). Quando o caminho de load
+  //     está sendo PULADO (assume_gl_loaded, ou o load_gl=false deprecated) mas um resolvedor
+  //     TAMBÉM foi fornecido, isso é uma contradição do chamador -- a alegação de pular vence,
+  //     o resolvedor nunca é chamado, e um aviso nomeia o motivo.
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-  if (cfg.load_gl && !cfg.assume_gl_loaded) {
+  const bool glloader_host_load_path_active = cfg.load_gl && !cfg.assume_gl_loaded;
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
-    if (glx_gl_load() != 0) return;
+  if (glloader_host_load_path_active) {
+    if (cfg.gl_proc_resolver) {
+      if (glx_gl_load_with(cfg.gl_proc_resolver) != 0) {
+        Rml::Log::Message(Rml::Log::LT_ERROR,
+                          "UiLayer(...): gl_proc_resolver failed to resolve one or more core GL "
+                          "symbols (origin: host resolver); ok() will return false.");
+        return;
+      }
+    } else {
+      if (glx_gl_load() != 0) return;
+    }
+  } else if (cfg.gl_proc_resolver) {
+    Rml::Log::Message(Rml::Log::LT_WARNING,
+                      "UiLayer(...): gl_proc_resolver was set but the loader is being skipped "
+                      "(assume_gl_loaded=true, or the deprecated load_gl=false) -- the resolver "
+                      "is ignored; the caller's already-loaded claim takes precedence.");
   }
 
   // EN: AUD-UILAYER-MOVEDFROM (W26) -- local reference `impl`, used for the `ok` writes below.

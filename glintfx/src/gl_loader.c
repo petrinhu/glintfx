@@ -42,6 +42,13 @@
 #include "gl_loader.h"
 
 #include <stddef.h>
+#include <stdio.h> // EN: `GLLOADER-HOST` -- fprintf(stderr, ...) diagnostic on a failed host-resolver
+                   //     load; see glx_gl_load_with()'s own comment below for why this file talks
+                   //     to stderr directly instead of glintfx's C++ logging funnel.
+                   // PT: `GLLOADER-HOST` -- diagnóstico fprintf(stderr, ...) num load de
+                   //     resolvedor-do-host falho; ver o próprio comentário de glx_gl_load_with()
+                   //     abaixo pro motivo deste arquivo falar direto com stderr em vez do funil
+                   //     de logging C++ da glintfx.
 
 #ifdef _WIN32
 #include <windows.h>
@@ -746,6 +753,40 @@ static const glintfx_gl_sym_t glintfx_gl_symbol_table[] = {
   { "glViewport", (void**)&glx_glViewport },
   { "glWaitSync", (void**)&glx_glWaitSync },
 };
+
+// EN: `GLLOADER-HOST` (2026-08-04) -- see the declaration's doc-comment (gl_loader.h) for the
+//     full contract. Platform-independent: unlike glx_gl_load() below, this entry point never
+//     touches glX/EGL/wgl/dlopen itself -- it delegates every lookup straight to the
+//     HOST-supplied `resolver`, so there is nothing here that differs between the `_WIN32` and
+//     POSIX branches further down; it lives OUTSIDE both, sharing the ONE symbol table already
+//     defined above this point (the identical `{name, slot}` pairs both `glx_gl_load()`
+//     implementations loop over).
+// PT: `GLLOADER-HOST` (2026-08-04) -- ver o doc-comment da declaração (gl_loader.h) pro
+//     contrato completo. Independente de plataforma: diferente do glx_gl_load() abaixo, este
+//     ponto de entrada nunca toca glX/EGL/wgl/dlopen por conta própria -- delega toda busca
+//     direto ao `resolver` FORNECIDO PELO HOST, então não há nada aqui que difira entre os
+//     ramos `_WIN32` e POSIX mais adiante; vive FORA dos dois, compartilhando a ÚNICA tabela
+//     de símbolos já definida acima deste ponto (os mesmos pares `{name, slot}` que as DUAS
+//     implementações de `glx_gl_load()` percorrem).
+int glx_gl_load_with(void* (*resolver)(const char* name)) {
+  int missing = 0;
+  const char* first_missing = NULL;
+  for (size_t i = 0; i < sizeof(glintfx_gl_symbol_table) / sizeof(glintfx_gl_symbol_table[0]); ++i) {
+    void* resolved = resolver(glintfx_gl_symbol_table[i].name);
+    *glintfx_gl_symbol_table[i].slot = resolved;
+    if (!resolved) {
+      if (!first_missing) first_missing = glintfx_gl_symbol_table[i].name;
+      ++missing;
+    }
+  }
+  if (missing) {
+    fprintf(stderr,
+            "glintfx: glx_gl_load_with(): host resolver failed to resolve %d GL core symbol(s), "
+            "e.g. '%s' (origin: host resolver)\n",
+            missing, first_missing ? first_missing : "?");
+  }
+  return missing ? 1 : 0;
+}
 
 // EN: Function-pointer-typed cast of a void* from dlsym/GetProcAddress via a union
 //     (not a direct reinterpret/C-style cast) -- POSIX explicitly sanctions this

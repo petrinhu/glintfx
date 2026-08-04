@@ -17,6 +17,25 @@
 
 namespace glintfx {
 
+// EN: `GLLOADER-HOST` (2026-08-04) -- a HOST-supplied GL function-pointer resolver. Matches
+//     `SDL_GL_GetProcAddress`/glad/GLEW's own resolver signature EXACTLY, on purpose: this is
+//     the population of hosts the field exists for (any engine that already owns a GL loader),
+//     so wrapping one of those in an adapter should never be necessary. No `void* user`
+//     parameter: a resolver that needs state (e.g. a cached library handle) carries it as a
+//     host-side `static`, the same way `SDL_GL_GetProcAddress` itself has none. See
+//     `UiLayerConfig::gl_proc_resolver`'s own doc-comment below for the full contract
+//     (exclusivity, the `assume_gl_loaded` interaction, what this does NOT cover).
+// PT: `GLLOADER-HOST` (2026-08-04) -- um resolvedor de ponteiro de função GL FORNECIDO PELO
+//     HOST. Casa com a própria assinatura de resolvedor de `SDL_GL_GetProcAddress`/glad/GLEW
+//     DE PROPÓSITO: esta é a população de hosts pra quem o campo existe (qualquer motor que já
+//     possui um loader GL próprio), então embrulhar um deles num adaptador nunca deveria ser
+//     necessário. Sem parâmetro `void* user`: um resolvedor que precisa de estado (ex.: um
+//     handle de biblioteca cacheado) carrega isso como um `static` do lado do host, do mesmo
+//     jeito que o próprio `SDL_GL_GetProcAddress` não tem nenhum. Ver o próprio doc-comment de
+//     `UiLayerConfig::gl_proc_resolver` abaixo pro contrato completo (exclusividade, a
+//     interação com `assume_gl_loaded`, o que isto NÃO cobre).
+using GlProcResolver = void* (*)(const char* name);
+
 // EN: Configuration for UiLayer -- specifies logical viewport dimensions and GL loader policy.
 //     Declared at namespace scope so it is a complete type when used as a default argument
 //     in the UiLayer constructor (inner-class default-args hit a C++ language restriction).
@@ -144,6 +163,120 @@ struct UiLayerConfig {
   //     lugar") um nome que diz o que ela significa, em vez de um nome com forma de verbo
   //     ("carregar: sim/não") que lia como um botão de performance que nunca foi.
   bool assume_gl_loaded = false;
+
+  // EN: `GLLOADER-HOST` (2026-08-04) -- placed LAST, after `assume_gl_loaded`, for the EXACT
+  //     same positional-init reason spelled out in the comment right above `assume_gl_loaded`:
+  //     this struct is initialised POSITIONALLY by at least one consumer, and a field inserted
+  //     anywhere but the end shifts every argument after it. Appending here keeps that
+  //     consumer's existing `Config{960, 540, ...}` calls meaning what they already meant.
+  //     WHAT THIS IS: a HOST-supplied resolver (`GlProcResolver`, declared above this struct)
+  //     that glintfx uses to populate its OWN `glx_`-prefixed GL 3.3 core function-pointer table
+  //     (`glintfx/src/gl_loader.h`), instead of glintfx's own glX/EGL/dlsym chain
+  //     (`glx_gl_load()`). WHY IT EXISTS: `load_gl`/`assume_gl_loaded` above only ever let a
+  //     caller SKIP glintfx's own loader, trusting that SOME other route already populated the
+  //     table -- but glintfx never gave that other route a way to run. A host whose GL context
+  //     comes from a loader glintfx's own three internal paths do not cover (SDL's
+  //     `SDL_GL_GetProcAddress`, ANGLE, a host's own EGL wrapper, an engine embedding
+  //     glad/GLEW) had NO way to make `assume_gl_loaded = true` actually TRUE -- setting it
+  //     anyway just left the table empty and every GL call after crashed on a null function
+  //     pointer (`GLPROC-CRASH`, `SEED-LOADGL-NOME`'s own doc-comment above carries the full
+  //     measurement). This field is that route.
+  //     EFFECTIVE RULE (three-way combination with the two fields above): let `load_path_active
+  //     = load_gl && !assume_gl_loaded` (the SAME condition `SEED-LOADGL-NOME` already defines).
+  //       - `load_path_active == true` AND `gl_proc_resolver != nullptr`: the table is populated
+  //         EXCLUSIVELY by calling `gl_proc_resolver(name)` once per GL 3.3 core symbol -- NO
+  //         fallback to glintfx's own glX/EGL/dlsym chain on a null result. Falling back would
+  //         silently mix function pointers from two potentially different GL contexts into the
+  //         same table whenever the host's resolver legitimately returns null for a symbol its
+  //         context does not support -- masking exactly the kind of context mismatch this field
+  //         exists to make loud instead. A missing CORE symbol here fails the same way
+  //         `glx_gl_load()` itself fails: the constructor returns early, `ok() == false`, an
+  //         `Rml::Log::Message(LT_ERROR, ...)` names the failure and its origin ("host
+  //         resolver") -- never a crash.
+  //       - `load_path_active == true` AND `gl_proc_resolver == nullptr`: UNCHANGED behaviour,
+  //         byte for byte -- glintfx's own `glx_gl_load()` runs exactly as it always has.
+  //       - `load_path_active == false` (i.e. `assume_gl_loaded == true`, or the deprecated
+  //         `load_gl == false`) AND `gl_proc_resolver != nullptr`: a CONTRADICTION -- the caller
+  //         is simultaneously claiming "the table is already populated, skip loading" and
+  //         "here is a resolver to populate it". The `assume_gl_loaded`/`load_gl` claim wins:
+  //         the resolver is never called (not even once), an `Rml::Log::Message(LT_WARNING,
+  //         ...)` names the contradiction, and construction proceeds exactly as the skip path
+  //         already did before this field existed. Fail-high and informative, never a crash --
+  //         resolving the ambiguity by GUESSING which claim the caller meant would be worse
+  //         than refusing to guess.
+  //       - `load_path_active == false` AND `gl_proc_resolver == nullptr`: UNCHANGED, the
+  //         pre-existing skip path.
+  //     WHAT THIS DOES NOT COVER (deliberately out of scope for `GLLOADER-HOST`):
+  //       - `glintfx::App` -- it owns its own GLFW window and already resolves its GL context
+  //         through the correct, already-working path (`window_glfw.cpp`); there is no host
+  //         resolver to inject because `App` IS the loader owner in that mode.
+  //       - The "no instance yet" case (a host wanting the table populated before constructing
+  //         ANY glintfx entity) -- that is `CAPTURE-FREE-LOADER`'s problem (W27, TODO.md), a
+  //         DIFFERENT fronteira: there, glintfx populates its OWN table with its OWN
+  //         glX/EGL/dlsym chain, lazily, with no instance in sight. This field is strictly about
+  //         a HOST supplying the RESOLVER while constructing an instance -- the two are related
+  //         but solve different halves of the loader-state problem; `CAPTURE-FREE-LOADER` does
+  //         not subsume this field, and this field does not subsume it.
+  // PT: `GLLOADER-HOST` (2026-08-04) -- posto por ÚLTIMO, depois de `assume_gl_loaded`, pelo
+  //     EXATO mesmo motivo de init posicional soletrado no comentário logo acima de
+  //     `assume_gl_loaded`: esta struct é inicializada POSICIONALMENTE por pelo menos um
+  //     consumidor, e um campo inserido em qualquer lugar que não o fim desloca todo argumento
+  //     depois dele. Acrescentar aqui mantém as chamadas `Config{960, 540, ...}` existentes
+  //     daquele consumidor significando o que já significavam.
+  //     O QUE ISTO É: um resolvedor FORNECIDO PELO HOST (`GlProcResolver`, declarado acima
+  //     desta struct) que a glintfx usa pra popular a PRÓPRIA tabela de ponteiros de função GL
+  //     3.3 core prefixada com `glx_` (`glintfx/src/gl_loader.h`), em vez da própria cadeia
+  //     glX/EGL/dlsym da glintfx (`glx_gl_load()`). POR QUE ISTO EXISTE: `load_gl`/
+  //     `assume_gl_loaded` acima só deixavam um chamador PULAR o próprio loader da glintfx,
+  //     confiando que ALGUMA outra via já tinha populado a tabela -- mas a glintfx nunca dava a
+  //     essa outra via um jeito de rodar. Um host cujo contexto GL vem de um loader que os três
+  //     caminhos internos da glintfx não cobrem (`SDL_GL_GetProcAddress` do SDL, ANGLE, um
+  //     wrapper EGL próprio do host, um motor que embarca glad/GLEW) NÃO tinha como fazer
+  //     `assume_gl_loaded = true` ser de fato VERDADE -- definir mesmo assim só deixava a
+  //     tabela vazia e toda chamada GL depois crashava num ponteiro de função nulo
+  //     (`GLPROC-CRASH`, o próprio doc-comment do `SEED-LOADGL-NOME` acima carrega a medição
+  //     completa). Este campo é essa via.
+  //     REGRA EFETIVA (combinação de três vias com os dois campos acima): seja
+  //     `load_path_active = load_gl && !assume_gl_loaded` (a MESMA condição que o
+  //     `SEED-LOADGL-NOME` já define).
+  //       - `load_path_active == true` E `gl_proc_resolver != nullptr`: a tabela é populada
+  //         EXCLUSIVAMENTE chamando `gl_proc_resolver(name)` uma vez por símbolo core GL 3.3 --
+  //         SEM fallback pra própria cadeia glX/EGL/dlsym da glintfx num resultado nulo. Cair
+  //         de volta misturaria em silêncio ponteiros de função de dois contextos GL
+  //         potencialmente diferentes na mesma tabela sempre que o resolvedor do host
+  //         legitimamente devolvesse nulo pra um símbolo que o contexto dele não suporta --
+  //         mascarando exatamente a classe de descompasso de contexto que este campo existe
+  //         pra tornar ruidosa em vez disso. Um símbolo CORE ausente aqui falha do mesmo jeito
+  //         que o próprio `glx_gl_load()` falha: o construtor retorna cedo, `ok() == false`, um
+  //         `Rml::Log::Message(LT_ERROR, ...)` nomeia a falha e sua origem ("host resolver") --
+  //         nunca um crash.
+  //       - `load_path_active == true` E `gl_proc_resolver == nullptr`: comportamento
+  //         INALTERADO, byte a byte -- o próprio `glx_gl_load()` da glintfx roda exatamente como
+  //         sempre rodou.
+  //       - `load_path_active == false` (ou seja, `assume_gl_loaded == true`, ou o `load_gl ==
+  //         false` deprecated) E `gl_proc_resolver != nullptr`: uma CONTRADIÇÃO -- o chamador
+  //         está simultaneamente alegando "a tabela já está populada, pule o load" e "aqui está
+  //         um resolvedor pra populá-la". A alegação de `assume_gl_loaded`/`load_gl` vence: o
+  //         resolvedor nunca é chamado (nem uma vez), um `Rml::Log::Message(LT_WARNING, ...)`
+  //         nomeia a contradição, e a construção prossegue exatamente como o caminho de pular
+  //         já fazia antes deste campo existir. Fail-high e informativo, nunca um crash --
+  //         resolver a ambiguidade ADIVINHANDO qual alegação o chamador quis dizer seria pior
+  //         que se recusar a adivinhar.
+  //       - `load_path_active == false` E `gl_proc_resolver == nullptr`: INALTERADO, o caminho
+  //         de pular pré-existente.
+  //     O QUE ISTO NÃO COBRE (deliberadamente fora de escopo do `GLLOADER-HOST`):
+  //       - `glintfx::App` -- ele possui a própria janela GLFW e já resolve o próprio contexto
+  //         GL pelo caminho certo, já funcional (`window_glfw.cpp`); não há resolvedor de host
+  //         pra injetar porque o `App` É o dono do loader nesse modo.
+  //       - O caso "ainda sem instância" (um host que quer a tabela populada antes de construir
+  //         QUALQUER entidade glintfx) -- isso é problema do `CAPTURE-FREE-LOADER` (W27,
+  //         TODO.md), uma fronteira DIFERENTE: lá, a glintfx popula a PRÓPRIA tabela com a
+  //         PRÓPRIA cadeia glX/EGL/dlsym, preguiçosamente, sem instância nenhuma à vista. Este
+  //         campo é estritamente sobre um HOST fornecer o RESOLVEDOR ao construir uma instância
+  //         -- os dois são relacionados mas resolvem metades diferentes do problema de estado
+  //         do loader; o `CAPTURE-FREE-LOADER` não subsume este campo, e este campo não o
+  //         subsume.
+  GlProcResolver gl_proc_resolver = nullptr;
 };
 
 // EN: MOVED-FROM STATE (L1.10-APIDOC; contract HARDENED by AUD-UILAYER-MOVEDFROM, W26 -- see

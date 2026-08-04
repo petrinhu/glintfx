@@ -1629,6 +1629,27 @@ add_test(NAME render_loader_guard_sanity
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# ---------------------------------------------------------------------------
+# EN: ui_layer_gl_proc_resolver_sanity (`GLLOADER-HOST`, 2026-08-04) -- host-supplied GL
+#     function-pointer resolver (`UiLayerConfig::gl_proc_resolver`). Links glintfx AND glfw
+#     DIRECTLY (same reasoning as render_loader_guard_sanity right above): a raw GLFW context
+#     avoids WindowGlfw::create()'s own unconditional glx_gl_load() call, which would
+#     pre-populate the very table this test needs to observe as coming from ITS OWN resolver.
+# PT: ui_layer_gl_proc_resolver_sanity (`GLLOADER-HOST`, 2026-08-04) -- resolvedor de ponteiro
+#     de função GL fornecido pelo host (`UiLayerConfig::gl_proc_resolver`). Linka glintfx E
+#     glfw DIRETAMENTE (mesmo racional do render_loader_guard_sanity logo acima): um contexto
+#     GLFW cru evita a própria chamada incondicional de glx_gl_load() do WindowGlfw::create(),
+#     que pré-popularia exatamente a tabela que este teste precisa observar como vinda do
+#     PRÓPRIO resolvedor.
+# ---------------------------------------------------------------------------
+add_executable(ui_layer_gl_proc_resolver_sanity ui_layer_gl_proc_resolver_sanity.cpp)
+target_link_libraries(ui_layer_gl_proc_resolver_sanity PRIVATE glintfx glfw)
+add_test(NAME ui_layer_gl_proc_resolver_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:ui_layer_gl_proc_resolver_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: ui_layer_compose — compose-only render preserves the host's FBO anchor colour.
 #     Links glloader explicitly: offscreen.hpp calls GL functions directly and glloader is
 #     a PRIVATE dep of glintfx (not propagated to callers).

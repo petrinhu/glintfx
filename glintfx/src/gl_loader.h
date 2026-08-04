@@ -780,6 +780,65 @@ extern PFNGLWAITSYNCPROC glx_glWaitSync;
 //     Retorna 0 em sucesso, 1 se um ou mais símbolos core falharem ao resolver.
 int glx_gl_load(void);
 
+// EN: `GLLOADER-HOST` (2026-08-04) -- resolve every GL 3.3 core function pointer declared
+//     above by delegating EACH symbol lookup to a HOST-supplied resolver, instead of this
+//     loader's own glX/EGL/dlsym chain (`glx_gl_load()` above). For a host whose GL context
+//     comes from a loader glintfx's own three internal paths do not cover -- SDL
+//     (`SDL_GL_GetProcAddress`), ANGLE, a host's own EGL wrapper, an engine that already
+//     embeds glad/GLEW -- this is the entry point that lets the host's OWN resolver populate
+//     glintfx's `glx_`-prefixed table (see `UiLayerConfig::gl_proc_resolver`,
+//     `glintfx/include/glintfx/ui_layer.hpp`, for the public C++ contract this backs; this C
+//     entry point is the mechanism, that header is the source of truth for policy).
+//     EXCLUSIVE, no fallback: every symbol is resolved by calling `resolver(name)` ONCE, and
+//     ONLY that result is stored -- never falling through to glX/EGL/dlsym on a NULL result.
+//     Falling back would mean silently mixing two different GL contexts' function pointers
+//     into the same table whenever a host's resolver legitimately returns NULL for a symbol
+//     its context does not support -- exactly the kind of masked-context bug this entry point
+//     exists to avoid, not reproduce.
+//     `resolver` MUST NOT be NULL (the caller -- `ui_layer.cpp`'s constructor -- only reaches
+//     this function when `Config::gl_proc_resolver` is non-null; this function does not
+//     itself re-check, matching `glx_gl_load()`'s own no-redundant-guard style for an
+//     already-validated internal call path).
+//     Returns 0 on success, 1 if one or more core symbols could not be resolved -- SAME
+//     polarity and SAME missing-symbol-count contract as `glx_gl_load()` above; on failure,
+//     writes ONE diagnostic line to stderr naming the FIRST unresolved symbol and the total
+//     count, tagged with the "host resolver" origin (this loader has no C++ logging funnel to
+//     route through -- see `gl_loader.c`'s own header comment -- so this is the same
+//     stdio-direct posture some of `glx_gl_load()`'s own callers already use, e.g.
+//     `draw2d.cpp`'s `glx_gl_load() != 0` branch). Platform-independent -- unlike
+//     `glx_gl_load()`, this entry point never touches glX/EGL/wgl/dlopen itself, so there is a
+//     SINGLE implementation shared by every platform (see `gl_loader.c`).
+// PT: `GLLOADER-HOST` (2026-08-04) -- resolve todo ponteiro de função GL 3.3 core declarado
+//     acima delegando CADA busca de símbolo a um resolvedor FORNECIDO PELO HOST, em vez da
+//     própria cadeia glX/EGL/dlsym deste loader (`glx_gl_load()` acima). Para um host cujo
+//     contexto GL vem de um loader que os três caminhos internos da glintfx não cobrem -- SDL
+//     (`SDL_GL_GetProcAddress`), ANGLE, um wrapper EGL próprio do host, um motor que já
+//     embarca glad/GLEW -- este é o ponto de entrada que deixa o PRÓPRIO resolvedor do host
+//     popular a tabela prefixada com `glx_` da glintfx (ver `UiLayerConfig::gl_proc_resolver`,
+//     `glintfx/include/glintfx/ui_layer.hpp`, pro contrato público C++ que isto sustenta; este
+//     ponto de entrada C é o mecanismo, aquele header é a fonte de verdade da política).
+//     EXCLUSIVO, sem fallback: cada símbolo é resolvido chamando `resolver(name)` UMA vez, e
+//     SÓ esse resultado é guardado -- nunca cai para glX/EGL/dlsym num resultado NULO. Cair
+//     de volta significaria misturar em silêncio ponteiros de função de DOIS contextos GL
+//     diferentes na mesma tabela sempre que o resolvedor de um host legitimamente devolvesse
+//     NULL pra um símbolo que o contexto dele não suporta -- exatamente a classe de bug de
+//     contexto mascarado que este ponto de entrada existe pra evitar, não reproduzir.
+//     `resolver` NÃO PODE ser NULL (o chamador -- o construtor de `ui_layer.cpp` -- só
+//     alcança esta função quando `Config::gl_proc_resolver` é não-nulo; esta função não
+//     recheca por conta própria, no mesmo estilo sem-guarda-redundante de `glx_gl_load()` pra
+//     um caminho de chamada interno já validado).
+//     Retorna 0 em sucesso, 1 se um ou mais símbolos core não puderam ser resolvidos -- MESMA
+//     polaridade e MESMO contrato de contagem de símbolos ausentes que `glx_gl_load()` acima;
+//     em falha, escreve UMA linha de diagnóstico em stderr nomeando o PRIMEIRO símbolo não
+//     resolvido e a contagem total, marcada com a origem "host resolver" (este loader não tem
+//     funil de log C++ pra rotear -- ver o próprio comentário de cabeçalho de `gl_loader.c` --
+//     então esta é a mesma postura stdio-direto que alguns chamadores do próprio
+//     `glx_gl_load()` já usam, ex.: o ramo `glx_gl_load() != 0` de `draw2d.cpp`).
+//     Independente de plataforma -- diferente do `glx_gl_load()`, este ponto de entrada nunca
+//     toca glX/EGL/wgl/dlopen por conta própria, então há UMA ÚNICA implementação
+//     compartilhada por toda plataforma (ver `gl_loader.c`).
+int glx_gl_load_with(void* (*resolver)(const char* name));
+
 // EN: DOC-GLCOHAB (framework-2D) -- resolve exactly ONE GL/GLX/EGL/WGL function pointer by
 //     name, for a HOST that cohabits glintfx::App's GL context (set_frame_callback,
 //     app.hpp) and needs an SDL_GL_GetProcAddress-equivalent without linking SDL, GLFW, or

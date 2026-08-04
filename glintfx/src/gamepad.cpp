@@ -225,6 +225,13 @@ std::array<unsigned char, 24> make_synthetic_event(std::uint16_t type, std::uint
 //     `gamepad_mappings_file_nothrow_sanity.cpp` prova que o teto é load-bearing num tamanho
 //     realista -- um arquivo de ~1,5 MiB de conteúdo de mapeamento real, válido, é rejeitado --
 //     não meramente folga decorativa sobre o arquivo vendorizado.
+// EN: TETO-DEDUP (W26) -- src/byte_ceiling.hpp is the shared 256 MiB DEFAULT policy this value
+//     deliberately diverges from (calibrated, not coincidental -- see this comment's own top
+//     half, TETO-CALIBRE, and byte_ceiling.hpp's own "divergence is allowed" paragraph).
+// PT: TETO-DEDUP (W26) -- src/byte_ceiling.hpp é a política DEFAULT compartilhada de 256 MiB da
+//     qual este valor diverge de propósito (calibrado, não coincidente -- ver a própria metade de
+//     cima deste comentário, TETO-CALIBRE, e o próprio parágrafo "divergência é permitida" de
+//     byte_ceiling.hpp).
 constexpr std::size_t kMaxMappingsFileBytes = 1u * 1024u * 1024u; // 1 MiB.
 
 // EN: Reads the whole file into memory, binary-safe (embedded NUL bytes survive the read, though

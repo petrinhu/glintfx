@@ -31,6 +31,7 @@
 //     de tamanho de arquivo pré-leitura do LoadTexture, que permanece aqui). Traz as declarações
 //     de stb_image.h transitivamente (implementação ainda compilada uma vez em
 //     stb_image_impl.cpp) -- nenhum include direto de stb_image.h mais necessário neste arquivo.
+#include "byte_ceiling.hpp"
 #include "image_decode.hpp"
 
 // EN: FX-CARVE-1 — the seam header to the optional fx module (src/fx/effects_gl3.cpp). Declares
@@ -191,7 +192,22 @@ public:
   //     orçamento de memória de um host típico. Este teto é checado ANTES da alocação do
   //     `std::vector` (não depois), então a própria alocação já sai limitada — essa é a guarda de
   //     fato; o arquivo nunca chega a ser lido pra memória se falhar esta checagem.
-  static constexpr size_t kMaxAssetFileBytes = 256u * 1024u * 1024u;  // 256 MiB.
+  //     EN: TETO-DEDUP (W26) -- VALUE now initialised from the shared policy constant
+  //         (byte_ceiling.hpp) instead of a locally re-typed 256 MiB literal.
+  //         The CHECK stays exactly where it was, its own independent guard (see this class's
+  //         own belt-and-suspenders comments below, on this ceiling's relationship with
+  //         BaseUrlFileInterface::kMaxFileBytes and image_decode.hpp's kMaxImageDecodeBytes --
+  //         unchanged by this dedup). `static_assert` proves the two never silently drift apart.
+  //     PT: TETO-DEDUP (W26) -- VALOR agora inicializado a partir da constante de política
+  //         compartilhada (byte_ceiling.hpp) em vez de um literal de 256 MiB re-tipado
+  //         localmente. A CHECAGEM permanece exatamente onde estava, a própria guarda
+  //         independente (ver os próprios comentários cinto-e-suspensório desta classe abaixo,
+  //         sobre a relação deste teto com BaseUrlFileInterface::kMaxFileBytes e
+  //         kMaxImageDecodeBytes de image_decode.hpp -- inalterados por este dedup). O
+  //         `static_assert` prova que os dois nunca divergem em silêncio.
+  static constexpr size_t kMaxAssetFileBytes = glintfx::kMaxUntrustedFileBytes; // 256 MiB.
+  static_assert(kMaxAssetFileBytes == glintfx::kMaxUntrustedFileBytes,
+                "kMaxAssetFileBytes must track glintfx::kMaxUntrustedFileBytes (TETO-DEDUP)");
 
   Rml::TextureHandle LoadTexture(Rml::Vector2i& dims,
                                  const Rml::String& source) override

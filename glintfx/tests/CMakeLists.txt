@@ -2553,6 +2553,40 @@ add_test(NAME asset_path_traversal_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: byte_ceiling_dedup_sanity (TETO-DEDUP, W26, 2026-08-04) -- compile-time-only proof that
+#     src/byte_ceiling.hpp's `kMaxUntrustedFileBytes` is the SHARED value the externally-visible
+#     size-cap sites (image_decode.hpp's `kMaxImageDecodeBytes`,
+#     BaseUrlFileInterface::kMaxFileBytes) actually reference, not independently-typed literals
+#     that coincide today. See the test file's own top comment for the full rationale, including
+#     why the other two sites (frame_capture.cpp/render_gl3.cpp, both TU-private by design) are
+#     proven via their own in-place `static_assert` instead of from here. No RmlUi document, no GL
+#     context, no window needed for `image_decode.hpp`'s declarations (this test only compares
+#     constants, never calls `decode_premultiplied_rgba`) -- but `base_url_file_interface.hpp`
+#     still needs `Rml::FileInterface`'s own vtable/out-of-line destructor to link, same reason
+#     asset_path_traversal_sanity above links RmlUi::Core ONLY (no ${_embed_dep}, no glloader).
+#     Registered UNCONDITIONALLY (same "no display to isolate here" reasoning as
+#     asset_path_traversal_sanity/log_dedup_sanity) -- runs in BOTH build configurations.
+# PT: byte_ceiling_dedup_sanity (TETO-DEDUP, W26, 2026-08-04) -- prova só-em-tempo-de-compilação de
+#     que `kMaxUntrustedFileBytes` de src/byte_ceiling.hpp é o valor COMPARTILHADO que os pontos de
+#     teto de tamanho visíveis externamente (`kMaxImageDecodeBytes` de image_decode.hpp,
+#     BaseUrlFileInterface::kMaxFileBytes) de fato referenciam, não literais tipados
+#     independentemente que hoje coincidem. Ver o próprio comentário de topo do arquivo de teste pro
+#     racional completo, incluindo por que os outros dois pontos (frame_capture.cpp/render_gl3.cpp,
+#     ambos privados-à-TU de propósito) são provados pelo próprio `static_assert` no lugar em vez de
+#     daqui. Sem documento RmlUi, sem contexto GL, sem janela necessários pras declarações de
+#     `image_decode.hpp` (este teste só compara constantes, nunca chama
+#     `decode_premultiplied_rgba`) -- mas `base_url_file_interface.hpp` ainda precisa da própria
+#     vtable/destrutor fora-de-linha de `Rml::FileInterface` pra linkar, mesmo motivo do
+#     asset_path_traversal_sanity acima linkar SÓ RmlUi::Core (sem ${_embed_dep}, sem glloader).
+#     Registrado INCONDICIONALMENTE (mesma racional "nada relacionado a display pra isolar aqui" de
+#     asset_path_traversal_sanity/log_dedup_sanity) -- roda nas DUAS configurações de build.
+# ---------------------------------------------------------------------------
+add_executable(byte_ceiling_dedup_sanity byte_ceiling_dedup_sanity.cpp)
+target_include_directories(byte_ceiling_dedup_sanity PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+target_link_libraries(byte_ceiling_dedup_sanity PRIVATE RmlUi::Core)
+add_test(NAME byte_ceiling_dedup_sanity COMMAND byte_ceiling_dedup_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: ua_stylesheet_sanity — verifies the embedded UA-stylesheet (v0.2.4 T1):
 #     'display: block' defaults for structural elements (div, p, h1..h6, ul, ol, li,
 #     section, article, header, footer, nav, main), applied by Bootstrap::load() to

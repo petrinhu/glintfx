@@ -96,9 +96,12 @@
 //     mudar.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
+#include "byte_ceiling.hpp"
+
 #include <RmlUi/Core/FileInterface.h>
 #include <RmlUi/Core/Log.h>
 #include <RmlUi/Core/Types.h>
+#include <climits>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -191,7 +194,49 @@ public:
   //     allocation-size-too-big do ASan -- esse caso não tem NENHUMA outra guarda o
   //     protegendo -- enquanto os casos de imagem guardados por render_gl3.cpp permanecem
   //     verdes; ver o próprio comentário do topo daquele arquivo de teste pro relato completo).
-  static constexpr long kMaxFileBytes = 256L * 1024L * 1024L;  // 256 MiB.
+  // EN: TETO-DEDUP (W26) -- VALUE now sourced from the shared policy constant
+  //     (byte_ceiling.hpp's `glintfx::kMaxUntrustedFileBytes`, an unsigned `std::size_t`)
+  //     instead of a locally re-typed, `long`-typed 256 MiB literal. The CHECK stays exactly
+  //     where it was (fopen_capped() below), still this class's own independent guard (see this
+  //     member's own top comment above for the belt-and-suspenders relationship with
+  //     render_gl3.cpp's `kMaxAssetFileBytes`, unchanged by this dedup).
+  //     THE TRAP THIS CAST AVOIDS: `fopen_capped()` compares this constant against `ftell()`'s
+  //     own `long` (SIGNED) return, AFTER a `size < 0` guard has already run. Converting HERE, at
+  //     declaration time, once -- rather than comparing the shared `std::size_t` (UNSIGNED)
+  //     constant directly against that `long size` at the comparison site -- keeps that
+  //     downstream comparison signed-vs-signed. A signed/unsigned comparison right there would be
+  //     exactly the silent-bug class this project hunts: if the `size < 0` guard a few lines
+  //     below fopen_capped() were ever reordered or removed, comparing an unsigned constant
+  //     against a negative `long` would sign-extend it into a huge unsigned value and let it
+  //     silently PASS the cap check instead of failing it. The `static_assert` below proves the
+  //     shared 256 MiB value fits in `long` on any platform this project targets (the C++
+  //     standard guarantees `LONG_MAX >= 2^31 - 1 = 2147483647`; 256 MiB = 268435456 fits
+  //     comfortably even at that 32-bit floor), so the cast below never truncates.
+  // PT: TETO-DEDUP (W26) -- VALOR agora vindo da constante de política compartilhada
+  //     (`glintfx::kMaxUntrustedFileBytes` de byte_ceiling.hpp, um `std::size_t` UNSIGNED) em vez
+  //     de um literal de 256 MiB tipado `long` re-tipado localmente. A CHECAGEM permanece
+  //     exatamente onde estava (fopen_capped() abaixo), ainda a própria guarda independente desta
+  //     classe (ver o próprio comentário de topo deste membro acima pra relação
+  //     cinto-e-suspensório com o `kMaxAssetFileBytes` de render_gl3.cpp, inalterada por este
+  //     dedup).
+  //     A ARMADILHA QUE ESTE CAST EVITA: fopen_capped() compara esta constante contra o próprio
+  //     retorno `long` (SIGNED) do ftell(), DEPOIS que uma guarda `size < 0` já rodou. Converter
+  //     AQUI, no ponto de declaração, uma única vez -- em vez de comparar a constante `std::size_t`
+  //     (UNSIGNED) compartilhada direto contra aquele `long size` no ponto de comparação -- mantém
+  //     essa comparação a jusante signed-vs-signed. Uma comparação signed/unsigned bem ali seria
+  //     exatamente a classe de bug silencioso que este projeto caça: se a guarda `size < 0` algumas
+  //     linhas abaixo de fopen_capped() fosse um dia reordenada ou removida, comparar uma constante
+  //     unsigned contra um `long` negativo faria sign-extend dele pra um valor unsigned enorme e o
+  //     deixaria passar SILENCIOSAMENTE pela checagem de teto em vez de falhar nela. O
+  //     `static_assert` abaixo prova que o valor compartilhado de 256 MiB cabe em `long` em
+  //     qualquer plataforma que este projeto mira (o padrão C++ garante `LONG_MAX >= 2^31 - 1 =
+  //     2147483647`; 256 MiB = 268435456 cabe confortavelmente mesmo nesse piso de 32 bits), então
+  //     o cast abaixo nunca trunca.
+  static_assert(glintfx::kMaxUntrustedFileBytes <= static_cast<std::size_t>(LONG_MAX),
+                "kMaxUntrustedFileBytes must fit in `long` for BaseUrlFileInterface's "
+                "ftell()-based size check (TETO-DEDUP)");
+  static constexpr long kMaxFileBytes =
+      static_cast<long>(glintfx::kMaxUntrustedFileBytes); // 256 MiB.
 
   // EN: Set the base URL prepended to relative paths in Open().
   //     Pass nullptr or "" to clear (reverts to default fopen behaviour).

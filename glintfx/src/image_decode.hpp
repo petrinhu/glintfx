@@ -81,6 +81,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
+#include "byte_ceiling.hpp"
 #include "stb_image.h"
 
 #include <climits>
@@ -90,23 +91,41 @@
 
 namespace glintfx {
 
-// EN: AUD-L1-PARSE cap, re-derived here (not shared via a common header with render_gl3.cpp's own
-//     private `kMaxAssetFileBytes`) -- see this file's top comment for why the two are
-//     independent guards on purpose, and image_decode_sanity.cpp for the drift-detection test
-//     that re-derives the same literal for the same reason asset_decode_hostile_sanity.cpp does.
-//     `static_assert` below documents (and enforces at compile time) the invariant the original
-//     LoadTexture's own "guard 2/2" comment relied on: this cap must stay under INT_MAX, because
-//     `static_cast<int>(len)` is handed to stbi_load_from_memory's `int` length parameter.
-// PT: Teto do AUD-L1-PARSE, re-derivado aqui (não compartilhado via header comum com o
-//     `kMaxAssetFileBytes` privado do próprio render_gl3.cpp) -- ver o comentário do topo deste
-//     arquivo pro porquê das duas guardas serem independentes de propósito, e
-//     image_decode_sanity.cpp pro teste de detecção de desalinhamento que re-deriva o mesmo
-//     literal pelo mesmo motivo de asset_decode_hostile_sanity.cpp. O `static_assert` abaixo
-//     documenta (e força em tempo de compilação) o invariante de que o próprio comentário "guarda
-//     2/2" do LoadTexture original dependia: este teto precisa ficar abaixo de INT_MAX, porque
-//     `static_cast<int>(len)` é entregue ao parâmetro `int` de comprimento do
-//     stbi_load_from_memory.
-inline constexpr std::size_t kMaxImageDecodeBytes = 256u * 1024u * 1024u; // 256 MiB.
+// EN: AUD-L1-PARSE cap. TETO-DEDUP (W26) moved the VALUE into the shared byte_ceiling.hpp policy
+//     constant (glintfx::kMaxUntrustedFileBytes) instead of retyping the 256 MiB literal
+//     independently of render_gl3.cpp's own private `kMaxAssetFileBytes` -- what stays
+//     independent is the CHECK, not the number: this is still its own guard, enforced right here,
+//     unreachable from render_gl3.cpp's own call site today (guard 1/2 there already caps `len`
+//     first) but the FIRST line of defense for any OTHER caller (Draw2D's own load_texture) that
+//     skips straight to this helper -- see this file's own top comment for the full "guard 1/2 +
+//     guard 2/2" belt-and-suspenders rationale, which this dedup does not change. The
+//     drift-detection tests (image_decode_sanity.cpp / asset_decode_hostile_sanity.cpp) still
+//     re-derive their OWN hardcoded literal independently of this header, by design, unchanged by
+//     TETO-DEDUP: their job is catching drift between the TEST's expectation and the SOURCE's
+//     actual enforced value, which this header's own existence does not make redundant. The
+//     `static_assert`s below document (and enforce at compile time) two invariants: this local
+//     constant tracks the shared policy constant, and the tracked value stays under INT_MAX,
+//     because `static_cast<int>(len)` is handed to stbi_load_from_memory's `int` length parameter.
+// PT: Teto do AUD-L1-PARSE. O TETO-DEDUP (W26) moveu o VALOR pra constante de política
+//     compartilhada de byte_ceiling.hpp (glintfx::kMaxUntrustedFileBytes) em vez de re-tipar o
+//     literal de 256 MiB independentemente do `kMaxAssetFileBytes` privado do próprio
+//     render_gl3.cpp -- o que segue independente é a CHECAGEM, não o número: esta continua sendo a
+//     própria guarda, aplicada bem aqui, inalcançável a partir do próprio ponto de chamada de
+//     render_gl3.cpp hoje (a guarda 1/2 de lá já limita `len` antes), mas a PRIMEIRA linha de
+//     defesa pra qualquer OUTRO chamador (o `load_texture` próprio do Draw2D) que vai direto a este
+//     helper -- ver o próprio comentário de topo deste arquivo pro racional completo
+//     cinto-e-suspensório "guarda 1/2 + guarda 2/2", que este dedup não muda. Os testes de
+//     detecção de desalinhamento (image_decode_sanity.cpp / asset_decode_hostile_sanity.cpp)
+//     continuam re-derivando o PRÓPRIO literal hardcoded independentemente deste header, de
+//     propósito, inalterados pelo TETO-DEDUP: o trabalho deles é pegar deriva entre a expectativa
+//     do TESTE e o valor de fato aplicado na FONTE, o que a própria existência deste header não
+//     torna redundante. Os `static_assert`s abaixo documentam (e forçam em tempo de compilação)
+//     dois invariantes: esta constante local acompanha a constante de política compartilhada, e o
+//     valor acompanhado permanece abaixo de INT_MAX, porque `static_cast<int>(len)` é entregue ao
+//     parâmetro `int` de comprimento do stbi_load_from_memory.
+inline constexpr std::size_t kMaxImageDecodeBytes = glintfx::kMaxUntrustedFileBytes; // 256 MiB.
+static_assert(kMaxImageDecodeBytes == glintfx::kMaxUntrustedFileBytes,
+              "kMaxImageDecodeBytes must track glintfx::kMaxUntrustedFileBytes (TETO-DEDUP)");
 static_assert(kMaxImageDecodeBytes <= static_cast<std::size_t>(INT_MAX),
               "kMaxImageDecodeBytes must fit in the int length stbi_load_from_memory takes");
 

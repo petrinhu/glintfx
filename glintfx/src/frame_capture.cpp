@@ -176,6 +176,7 @@
 //     um método "externo" separado que fique de fora do noexcept do jeito que o
 //     `App::capture_frame()` fica pro `Engine::capture_frame()`.
 #include <glintfx/frame_capture.hpp>
+#include "byte_ceiling.hpp"
 #include "gl_loader.h"
 
 #include <cstddef>
@@ -186,12 +187,29 @@ namespace glintfx {
 
 namespace {
 
-// EN: See this file's own top comment (CAPTURE-NOTHROW) for the full derivation -- reused VALUE
-//     of `kMaxImageDecodeBytes` (`image_decode.hpp`), declared locally (not shared) on purpose.
-// PT: Ver o próprio comentário de topo deste arquivo (CAPTURE-NOTHROW) pra derivação completa --
-//     VALOR reusado de `kMaxImageDecodeBytes` (`image_decode.hpp`), declarado localmente (não
-//     compartilhado) de propósito.
-constexpr std::size_t kMaxCaptureBytes = 256u * 1024u * 1024u; // 256 MiB.
+// EN: TETO-DEDUP (W26) -- was a locally re-typed 256 MiB literal (see this file's own top
+//     comment, CAPTURE-NOTHROW, for the full derivation of why 256 MiB is the right ceiling
+//     HERE). Now initialised from the shared policy constant (byte_ceiling.hpp) instead of
+//     re-typing the literal -- this keeps the domain-named local constant (readability at THIS
+//     call site) and keeps the checkpoint itself independent of the other three (this guard fires
+//     BEFORE either allocation below, on its own, regardless of what any other call site does; see
+//     byte_ceiling.hpp's own "what dedup does and does not change" paragraph), but ties the VALUE
+//     to the one place it is now declared, so a future policy change is one edit, not a four-way
+//     grep. The `static_assert` proves the two never silently drift apart.
+// PT: TETO-DEDUP (W26) -- era um literal de 256 MiB re-tipado localmente (ver o próprio
+//     comentário de topo deste arquivo, CAPTURE-NOTHROW, pra derivação completa de por que
+//     256 MiB é o teto certo AQUI). Agora inicializado a partir da constante de política
+//     compartilhada (byte_ceiling.hpp) em vez de re-tipar o literal -- isto mantém a constante
+//     local com nome de domínio (legibilidade neste ponto de chamada) e mantém o checkpoint em si
+//     independente dos outros três (esta guarda dispara ANTES de qualquer uma das duas alocações
+//     abaixo, por conta própria, independente do que qualquer outro ponto de chamada faça; ver o
+//     próprio parágrafo "o que o dedup muda e o que não muda" de byte_ceiling.hpp), mas amarra o
+//     VALOR ao único lugar onde ele agora é declarado, então uma mudança futura de política é uma
+//     edição, não um grep em quatro lugares. O `static_assert` prova que os dois nunca divergem em
+//     silêncio.
+constexpr std::size_t kMaxCaptureBytes = glintfx::kMaxUntrustedFileBytes; // 256 MiB (byte_ceiling.hpp).
+static_assert(kMaxCaptureBytes == glintfx::kMaxUntrustedFileBytes,
+              "kMaxCaptureBytes must track glintfx::kMaxUntrustedFileBytes (TETO-DEDUP)");
 
 } // namespace
 

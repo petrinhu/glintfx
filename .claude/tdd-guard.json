@@ -1,0 +1,35 @@
+{
+  "_comment_1": "TDD guard do glintfx (Camada 1). Ativa os hooks ~/.claude/hooks/tdd_guard.py (PreToolUse) e tdd_runner.py (PostToolUse). Ver ~/.claude/hooks/README-tdd.md.",
+  "_comment_2": "NAO usa o preset cpp-ctest cru: os globs dele (**/*.cpp, **/*.hpp) pegariam glintfx/third_party/, vendor/ e examples/ (upstreams clonados para RE), e o test_command dele (ctest cru na raiz) nao acha o build E abriria ~25-30 janelas REAIS na sessao viva do lider -- o incidente de 2026-07-23 que travou o touchpad dele.",
+  "_comment_3": "ESCOPO HONESTO: este guard cobre SO a Camada 1 (glintfx). A Camada 0 (src/, include/ na raiz; C+ASM, make test) NAO esta coberta -- o formato aceita um unico comando de suite e nao roteia por caminho, entao fingir cobertura seria pior que declarar a lacuna.",
+
+  "enabled": true,
+  "strict": true,
+
+  "_comment_4": "fast_command e o que o runner realmente executa (o README: se fast_command existe, test_command nao e usado). Build incremental ANTES do ctest -- sem rebuild, testa-se binario velho, que e a armadilha ja canonizada de restaurar fonte sem rebuildar. Isolamento de sessao: XDG_RUNTIME_DIR proprio 0700 + WAYLAND_DISPLAY desarmado + XDG_SESSION_TYPE=x11 + xvfb-run. Dir fixo (nao mktemp) para nao acumular lixo em /var/tmp a cada edicao. MEDIDO 2026-08-03: 19,3 s com build no-op, dos quais 15,5 s sao os 5 testes.",
+  "fast_command": "cmake --build glintfx/build -j4 >/dev/null && mkdir -p /var/tmp/glintfx-tdd-xdg && chmod 700 /var/tmp/glintfx-tdd-xdg && env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/var/tmp/glintfx-tdd-xdg XDG_SESSION_TYPE=x11 TMPDIR=/var/tmp xvfb-run -a ctest --test-dir glintfx/build --output-on-failure -R render_sanity",
+
+  "_comment_5": "test_command = a rodada completa e guardada da casa (tools/ctest_guarded.sh detecta contaminacao da arvore durante a suite e isola a sessao por conta propria). Fica aqui como forma canonica: se fast_command for removido, o fallback ja e o comando certo. MEDIDO: 64,3 s com build no-op e filtro -R render_sanity; a suite inteira (125 testes) leva ~5 min.",
+  "test_command": "cmake --build glintfx/build -j4 >/dev/null && tools/ctest_guarded.sh glintfx/build",
+
+  "_comment_6": "producao = so o codigo-fonte proprio da Camada 1. Semantica dos globs (verificada em tdd_common.py::_glob_to_regex): 'a/b/**' vira ^a/b/.*$.",
+  "production_globs": [
+    "glintfx/src/**",
+    "glintfx/include/**"
+  ],
+
+  "test_globs": [
+    "glintfx/tests/**"
+  ],
+
+  "_comment_7": "Defensivo: production_globs ja e estreito o bastante para nao alcancar estes caminhos, mas declara-los deixa a intencao explicita e protege se os globs de producao forem alargados no futuro.",
+  "exclude_globs": [
+    "glintfx/build*/**",
+    "glintfx/third_party/**",
+    "vendor/**",
+    "examples/**"
+  ],
+
+  "_comment_8": "240 s: o fast_command medido leva 19 s com build no-op, mas editar um header muito incluido dispara recompilacao larga. Timeout curto demais gravaria ran=false e o guard cairia em fail-open -- isto e, viraria decorativo e AINDA custaria a espera. Valvulas de escape: TDD_GUARD=off (desliga na sessao) e TDD_PHASE=refactor (permite editar producao com a suite verde).",
+  "timeout_sec": 240
+}

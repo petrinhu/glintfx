@@ -299,6 +299,29 @@ typedef struct {
     ssize_t total; // sum of sys_write's successful (positive) returns so far
 } mini_flush_ctx_t;
 
+// EN: C0-PRINTF-SW (TODO.md, W26) -- naming the invariant explicitly, pinned by the
+//     tests/printf_closed_fd_probe.c gate program: `ctx->used = 0` below runs UNCONDITIONALLY,
+//     whether `sys_write` succeeded, short-wrote, or failed outright (`written <= 0`). This is
+//     the SAME conscious YAGNI decision as the "no retry" one documented in this file's own
+//     header (ADR-0002's raw-`-errno`, caller-decides contract) -- resetting the scratch on
+//     error too is what keeps `mini_flush_sink`'s caller-side `while (n > 0)` loop from ever
+//     seeing `room == 0` forever (which would spin, since `to_copy` would then stay 0 and `n`
+//     would never reach 0), NOT a guarantee that the bytes that failed to write are recoverable
+//     -- they are simply dropped, same as any other short write/error under this contract.
+//     Hardening (buffering the unwritten remainder, retrying, surfacing the error to
+//     `mini_printf`'s caller) remains explicitly OUT of scope -- see the TODO.md entry.
+// PT: C0-PRINTF-SW (TODO.md, W26) -- nomeando o invariante explicitamente, fixado pelo
+//     programa-gate tests/printf_closed_fd_probe.c: o `ctx->used = 0` abaixo roda
+//     INCONDICIONALMENTE, tenha o `sys_write` tido sucesso, escrito parcialmente, ou falhado de
+//     vez (`written <= 0`). E' a MESMA decisao consciente YAGNI do "sem retry" ja documentada no
+//     cabecalho proprio deste arquivo (contrato `-errno` cru, quem-chama-decide, do ADR-0002)
+//     -- resetar o scratch em erro tambem e' o que impede o laco `while (n > 0)` do lado
+//     chamador do `mini_flush_sink` de algum dia ver `room == 0` pra sempre (o que giraria, ja
+//     que `to_copy` ficaria 0 e `n` nunca chegaria a 0), NAO uma garantia de que os bytes que
+//     falharam ao escrever sao recuperaveis -- eles sao simplesmente descartados, igual a
+//     qualquer outro short write/erro sob este contrato. Endurecer (bufferizar o restante nao
+//     escrito, retentar, expor o erro a quem chama o `mini_printf`) continua explicitamente FORA
+//     de escopo -- ver a entrada do TODO.md.
 static void mini_flush(mini_flush_ctx_t* ctx) {
     if (ctx->used == 0) {
         return;

@@ -40,6 +40,8 @@
 #endif
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/StreamMemory.h>
+#include <atomic>  // EN: g_bootstrap_claimed (UILAYER-SINGLETON-GUARD, W26) below.
+                   // PT: g_bootstrap_claimed (UILAYER-SINGLETON-GUARD, W26) abaixo.
 #include <cmath>   // EN: std::isfinite (set_element_scroll_top input hardening).
                    // PT: std::isfinite (hardening de entrada de set_element_scroll_top).
 #include <cstring>
@@ -47,6 +49,92 @@
                    // PT: std::string -- armazenamento do alvo pendente de down direito/meio abaixo.
 
 namespace glintfx {
+
+namespace {
+
+// EN: UILAYER-SINGLETON-GUARD (W26) -- process-wide claim making the hazard documented in
+//     UILAYER-SINGLETON (docs/embed-integration.md sec. 29) fail LOUD instead of corrupting
+//     state in silence. A single `std::atomic<bool>`, claimed with compare_exchange BEFORE
+//     Bootstrap::init() touches a single `Rml::` global (`Rml::SetSystemInterface` is the very
+//     next statement on success) -- so a REFUSED second init() never mutates the first,
+//     still-alive instance's globals at all, not even transiently. Namespace-scope with a
+//     literal initialiser is CONSTANT-initialised (no static-initialisation-order fiasco to
+//     worry about here: this is not a dynamic initialiser, it is set up before any other code
+//     in this TU could possibly read it).
+//     Policy (CTO's call for this fatia): `ok() == false` + a named `Rml::Log::LT_ERROR` line,
+//     NOT an exception or abort -- matches the fail-high idiom the rest of this API already
+//     practices everywhere (every other guard in this file returns false/no-ops rather than
+//     throwing).
+//     Deliberately a free-function-scope (TU-local) flag, NOT a `Bootstrap::` static member:
+//     the hazard it guards (`Rml::Initialise`/`Shutdown`/`CreateContext("main", ...)`) is
+//     RmlUi's OWN process-wide global state, not per-`Bootstrap`-instance state, so the claim
+//     must be exactly as global as the thing it protects. This is also why the SAME claim
+//     rejects a second `App`, and the `App`+`UiLayer` mix, not just a second `UiLayer`: `App`
+//     and `UiLayer` each own their own `Engine`, which owns its own `Bootstrap` BY VALUE (no
+//     shared `Bootstrap`, no refcount anywhere in this library -- confirmed in
+//     UILAYER-SINGLETON's own audit trail), and ALL of them route through this exact same
+//     TU-local atomic because there is only ever one of it in the whole process image. This is
+//     a NEW guarantee versus the W22 doc's framing (which only ever names `UiLayer` pairs) --
+//     it was always implied by "the hazard is `Rml::`'s own globals", now it is also enforced.
+// PT: UILAYER-SINGLETON-GUARD (W26) -- claim de escopo-processo que faz o perigo documentado em
+//     UILAYER-SINGLETON (docs/embed-integration.md seç. 29) falhar ALTO em vez de corromper
+//     estado em silêncio. Um único `std::atomic<bool>`, reivindicado com compare_exchange ANTES
+//     do Bootstrap::init() tocar em qualquer global `Rml::` (`Rml::SetSystemInterface` é a
+//     próxima instrução em caso de sucesso) -- então um 2º init() RECUSADO nunca muta os
+//     globais da primeira instância ainda viva, nem transitoriamente. Escopo de namespace com
+//     inicializador literal é inicializado de forma CONSTANTE (sem fiasco de ordem de
+//     inicialização estática pra se preocupar aqui: não é um inicializador dinâmico, já está
+//     pronto antes de qualquer outro código desta TU poder lê-lo).
+//     Política (decisão do CTO pra esta fatia): `ok() == false` + uma linha `Rml::Log::
+//     LT_ERROR` nomeada, NÃO uma exceção ou abort -- casa com o idioma fail-high que o resto
+//     desta API já pratica em todo lugar (todo outro guard deste arquivo retorna false/no-opa
+//     em vez de lançar).
+//     Deliberadamente uma flag de escopo-de-função-livre (local-de-TU), NÃO um membro estático
+//     de `Bootstrap::`: o perigo que ela guarda (`Rml::Initialise`/`Shutdown`/
+//     `CreateContext("main", ...)`) é estado global de PROCESSO do próprio RmlUi, não estado
+//     por-instância-de-`Bootstrap`, então o claim precisa ser exatamente tão global quanto a
+//     coisa que protege. É também por isso que o MESMO claim recusa um segundo `App`, e a
+//     mistura `App`+`UiLayer`, não só um segundo `UiLayer`: `App` e `UiLayer` cada um possui o
+//     próprio `Engine`, que possui o próprio `Bootstrap` POR VALOR (nenhum `Bootstrap`
+//     compartilhado, nenhum refcount em lugar nenhum desta biblioteca -- confirmado na própria
+//     cadeia de auditoria do UILAYER-SINGLETON), e TODOS eles passam pelo mesmo átomo
+//     local-de-TU exato porque só existe um dele na imagem de processo inteira. É uma garantia
+//     NOVA em relação ao enquadramento do doc da W22 (que só nomeia pares de `UiLayer`) -- já
+//     estava implícita em "o perigo é os globais do próprio `Rml::`", agora também é aplicada.
+std::atomic<bool> g_bootstrap_claimed{false};
+
+} // namespace
+
+// EN: UILAYER-SINGLETON-GUARD test-only hook storage (W26) -- see the long doc-comment on this
+//     function's declaration in bootstrap.hpp for the full contract. Same function-local-static
+//     pattern as font_engine_own.cpp's own_font_engine_ab_bypass() (default `false` on first
+//     use, no static-initialisation-order dependency, a reference returned so a test can flip
+//     it). Exists because `Rml::CreateContext("main", ...)` failing is otherwise UNREACHABLE
+//     through this library's own guarded init() path: the only 2 real ways it can return
+//     nullptr (no render interface installed; a same-named context already present in the
+//     CURRENT core_data) either cannot happen after Bootstrap::init()'s own preceding steps, or
+//     are exactly the cross-instance race this fatia's claim now makes impossible BY
+//     CONSTRUCTION -- so the ONLY way left to drive this failure branch under test is to force
+//     it directly. Always compiled (unlike own_font_engine_ab_bypass(), which lives inside a
+//     `#if GLINTFX_OWN_FONT_ENGINE` guard) -- this hook has no such build-time dependency.
+// PT: Armazenamento do hook só-de-teste do UILAYER-SINGLETON-GUARD (W26) -- ver o doc-comment
+//     longo na declaração desta função em bootstrap.hpp pro contrato completo. Mesmo padrão de
+//     static local de função do own_font_engine_ab_bypass() de font_engine_own.cpp (default
+//     `false` no primeiro uso, sem dependência de ordem de inicialização estática, uma
+//     referência retornada para um teste poder virá-lo). Existe porque o
+//     `Rml::CreateContext("main", ...)` falhar é, de outro modo, INALCANÇÁVEL pelo próprio
+//     caminho guardado de init() desta biblioteca: os únicos 2 jeitos reais dele retornar nulo
+//     (nenhuma render interface instalada; um contexto de mesmo nome já presente no core_data
+//     CORRENTE) ou não podem acontecer depois dos próprios passos anteriores do
+//     Bootstrap::init(), ou são exatamente a corrida entre-instâncias que o claim desta fatia
+//     agora torna impossível POR CONSTRUÇÃO -- então o ÚNICO jeito que sobra de dirigir este
+//     ramo de falha sob teste é forçá-lo diretamente. Sempre compilado (diferente do
+//     own_font_engine_ab_bypass(), que vive dentro de um guard `#if GLINTFX_OWN_FONT_ENGINE`) --
+//     este hook não tem essa dependência de tempo de build.
+bool& bootstrap_force_create_context_failure_for_test() {
+  static bool force_fail = false;
+  return force_fail;
+}
 
 // EN: Pending-down record for right/middle-click synthesis (AUD-PUB-4 gap closure, v0.5.0).
 //     Declared at NAMESPACE scope, deliberately NOT nested inside Bootstrap::Impl -- Impl
@@ -931,6 +1019,32 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
                       FontEngine font_engine) {
   if (impl_) return false; // EN: guard: already initialised. PT: guard: já inicializado.
 
+  // EN: UILAYER-SINGLETON-GUARD (W26) -- claim the process-wide slot BEFORE touching ANY
+  //     `Rml::` global below (`Rml::SetSystemInterface` is the very next statement on success).
+  //     On failure this is a REFUSAL, not a partial init: nothing about the still-alive
+  //     instance is touched, `impl_` stays null, and `Rml::Log::LT_ERROR` names the cause via
+  //     WHATEVER `SystemInterface` is currently live (the FIRST instance's, since we never got
+  //     to install our own) -- see the doc-comment on `g_bootstrap_claimed` above for the full
+  //     contract and why this is process-wide rather than a `Bootstrap::` member.
+  // PT: UILAYER-SINGLETON-GUARD (W26) -- reivindica o slot de escopo-processo ANTES de tocar em
+  //     QUALQUER global `Rml::` abaixo (`Rml::SetSystemInterface` é a próxima instrução em caso
+  //     de sucesso). Em falha isto é uma RECUSA, não um init parcial: nada da instância ainda
+  //     viva é tocado, `impl_` continua nulo, e `Rml::Log::LT_ERROR` nomeia a causa via
+  //     QUALQUER `SystemInterface` que estiver vivo no momento (o da PRIMEIRA instância, já que
+  //     nunca chegamos a instalar o nosso) -- ver o doc-comment de `g_bootstrap_claimed` acima
+  //     pro contrato completo e o motivo de ser de escopo-processo em vez de membro de
+  //     `Bootstrap::`.
+  bool expected = false;
+  if (!g_bootstrap_claimed.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+    Rml::Log::Message(Rml::Log::LT_ERROR,
+                      "Bootstrap::init() refused: another UiLayer/App is already alive in this process. "
+                      "Rml::Initialise()/Rml::Shutdown()/Rml::CreateContext(\"main\", ...) are RmlUi's own "
+                      "process-wide globals -- a second live instance would silently corrupt them (see "
+                      "UILAYER-SINGLETON, docs/embed-integration.md sec. 29). Destroy the existing "
+                      "UiLayer/App before constructing a new one.");
+    return false;
+  }
+
   impl_ = new Impl();
   Rml::SetSystemInterface(system);
   Rml::SetRenderInterface(render.iface());
@@ -1053,6 +1167,19 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
     Rml::SetFileInterface(nullptr);
     delete impl_;
     impl_ = nullptr;
+    // EN: UILAYER-SINGLETON-GUARD release, failure path 1/2 (W26) -- Rml::Initialise() itself
+    //     failed, so this instance never became "alive" in the sense the claim protects
+    //     against, but we DID take the claim above (before this call) and MUST give it back
+    //     here: skipping this release would permanently strand the process -- no Bootstrap
+    //     could EVER init() again (the exact "stuck forever" failure mode this fatia's brief
+    //     calls out by name).
+    // PT: Liberação do UILAYER-SINGLETON-GUARD, caminho de falha 1/2 (W26) -- o próprio
+    //     Rml::Initialise() falhou, então esta instância nunca chegou a ficar "viva" no sentido
+    //     que o claim protege, mas NÓS reivindicamos o claim acima (antes desta chamada) e
+    //     PRECISAMOS devolvê-lo aqui: pular esta liberação encalharia o processo pra sempre --
+    //     nenhum Bootstrap poderia JAMAIS dar init() de novo (exatamente o modo de falha
+    //     "travado pra sempre" que o brief desta fatia nomeia).
+    g_bootstrap_claimed.store(false, std::memory_order_release);
     return false;
   }
   impl_->initialised = true;
@@ -1136,12 +1263,45 @@ bool Bootstrap::init(Rml::SystemInterface* system, RenderGl3& render, int w, int
     //     (fail open -- uma sheet embutida malformada nunca deve bloquear o carregamento).
   }
 
-  impl_->ctx = Rml::CreateContext("main", Rml::Vector2i(w, h));
+  // EN: UILAYER-SINGLETON-GUARD test-only hook (W26) -- see its own doc-comment in
+  //     bootstrap.hpp for why the real CreateContext-fails-by-name-collision scenario is
+  //     unreachable through this guarded path, and why a forced hook is the only way left to
+  //     drive the release logic below under test. `false` in every non-test build (permanently,
+  //     the function is never touched outside tests/) -- this line is then equivalent to the
+  //     unconditional `Rml::CreateContext(...)` call it replaces.
+  // PT: Hook só-de-teste do UILAYER-SINGLETON-GUARD (W26) -- ver o próprio doc-comment em
+  //     bootstrap.hpp pro motivo do cenário real de CreateContext-falha-por-colisão-de-nome
+  //     ser inalcançável por este caminho guardado, e o motivo de um hook forçado ser o único
+  //     jeito que sobra de dirigir a lógica de liberação abaixo sob teste. `false` em todo build
+  //     não-de-teste (permanentemente, a função nunca é tocada fora de tests/) -- esta linha
+  //     então equivale à chamada incondicional `Rml::CreateContext(...)` que ela substitui.
+  impl_->ctx = bootstrap_force_create_context_failure_for_test()
+                   ? nullptr
+                   : Rml::CreateContext("main", Rml::Vector2i(w, h));
   if (!impl_->ctx) {
     Rml::Shutdown();
     impl_->initialised = false;
     delete impl_;
     impl_ = nullptr;
+    // EN: UILAYER-SINGLETON-GUARD release, failure path 2/2 (W26) -- CreateContext failed
+    //     after a successful Rml::Initialise(); this Rml::Shutdown() call is now SAFE to be
+    //     global/unconditional the way it always was here -- by construction, THIS instance
+    //     was the ONLY one that could have been alive (the claim above made that exclusive), so
+    //     there is no OTHER live instance left for it to "turn a local failure into a
+    //     process-wide one" against (the exact bug docs/embed-integration.md sec. 29 names in
+    //     its teardown-asymmetry paragraph). Releasing the claim here is what lets a FUTURE
+    //     Bootstrap actually succeed -- forgetting it is the "process locked out of ever
+    //     getting a UI again" failure mode.
+    // PT: Liberação do UILAYER-SINGLETON-GUARD, caminho de falha 2/2 (W26) -- CreateContext
+    //     falhou depois de um Rml::Initialise() bem-sucedido; esta chamada Rml::Shutdown()
+    //     agora é SEGURA sendo global/incondicional como sempre foi aqui -- por construção,
+    //     ESTA instância era a ÚNICA que poderia estar viva (o claim acima tornou isso
+    //     exclusivo), então não sobra NENHUMA outra instância viva contra a qual "transformar
+    //     uma falha local numa falha de processo inteiro" (o bug exato que
+    //     docs/embed-integration.md seç. 29 nomeia no parágrafo da assimetria de teardown).
+    //     Liberar o claim aqui é o que permite que um Bootstrap FUTURO consiga ter sucesso --
+    //     esquecer isto é o modo de falha "processo travado sem nunca mais conseguir UI".
+    g_bootstrap_claimed.store(false, std::memory_order_release);
     return false;
   }
   return true;
@@ -1660,6 +1820,20 @@ void Bootstrap::shutdown() {
   // PT: NÃO deletamos o SystemInterface aqui — o chamador é dono.
   delete impl_;
   impl_ = nullptr;
+  // EN: UILAYER-SINGLETON-GUARD release, destructor path (W26) -- `impl_` being non-null on
+  //     entry to this function is EXACTLY the invariant that means WE hold the claim (init()
+  //     only ever sets impl_ non-null right after a successful CAS above, and both of init()'s
+  //     own failure branches null it back out immediately after releasing that SAME claim --
+  //     see their comments) -- so this store is unconditionally correct here, no extra
+  //     bookkeeping needed to know whether "this instance" made the claim.
+  // PT: Liberação do UILAYER-SINGLETON-GUARD, caminho do destrutor (W26) -- `impl_` ser
+  //     não-nulo na entrada desta função é EXATAMENTE o invariante que significa que NÓS
+  //     seguramos o claim (init() só torna impl_ não-nulo logo após um CAS bem-sucedido acima,
+  //     e as duas próprias ramificações de falha do init() o zeram de volta imediatamente após
+  //     liberar esse MESMO claim -- ver os comentários delas) -- então este store é
+  //     incondicionalmente correto aqui, sem bookkeeping extra necessário pra saber se "esta
+  //     instância" fez o claim.
+  g_bootstrap_claimed.store(false, std::memory_order_release);
 }
 
 } // namespace glintfx

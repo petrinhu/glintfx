@@ -1045,4 +1045,39 @@ private:
   Impl* impl_ = nullptr;
 };
 
+// EN: UILAYER-SINGLETON-GUARD test-only hook (W26). Returns a reference to a src-internal,
+//     process-global `bool` (default `false`) that, when set `true` by a test BEFORE calling
+//     Bootstrap::init(), makes init() treat `Rml::CreateContext("main", ...)` as having failed
+//     -- WITHOUT actually calling it -- immediately after a real, successful `Rml::Initialise()`.
+//     Exists so tests/uilayer_singleton_guard_sanity.cpp can drive the "CreateContext failure
+//     releases the process-wide singleton claim" path (see g_bootstrap_claimed's doc-comment in
+//     bootstrap.cpp): under the guard THIS fatia adds, the real name-collision failure mode
+//     documented in UILAYER-SINGLETON is no longer reachable (a second live instance able to
+//     race a `CreateContext("main", ...)` call can no longer exist -- the claim rejects it
+//     before it gets anywhere near `Rml::Initialise()`), so this is the only way left to prove
+//     the release logic on that branch actually runs. Same function-local-static pattern, same
+//     "flip before construct" usage, as the pre-existing `own_font_engine_ab_bypass()`
+//     (font_engine_own.hpp) -- but this one is NOT gated by `#if GLINTFX_OWN_FONT_ENGINE`: it
+//     has no build-time dependency, so it always exists. A normal (non-test) build never
+//     touches this function, so the flag stays permanently `false` and this hook is a pure
+//     no-op in production.
+// PT: Hook só-de-teste do UILAYER-SINGLETON-GUARD (W26). Retorna uma referência a um `bool`
+//     src-interno, global-de-processo (default `false`) que, quando setado `true` por um teste
+//     ANTES de chamar Bootstrap::init(), faz o init() tratar `Rml::CreateContext("main", ...)`
+//     como se tivesse falhado -- SEM de fato chamá-lo -- logo após um `Rml::Initialise()` real,
+//     bem-sucedido. Existe para que tests/uilayer_singleton_guard_sanity.cpp possa dirigir o
+//     caminho "falha de CreateContext libera o claim de singleton de escopo-processo" (ver o
+//     doc-comment de g_bootstrap_claimed em bootstrap.cpp): sob o guard que ESTA fatia
+//     acrescenta, o modo de falha real de colisão-de-nome documentado no UILAYER-SINGLETON não
+//     é mais alcançável (uma segunda instância viva capaz de correr contra uma chamada
+//     `CreateContext("main", ...)` não pode mais existir -- o claim a recusa antes dela chegar
+//     perto do `Rml::Initialise()`), então este é o único jeito que sobra de provar que a
+//     lógica de liberação naquele ramo de fato roda. Mesmo padrão de static local de função,
+//     mesmo uso "vira antes de construir", do `own_font_engine_ab_bypass()` pré-existente
+//     (font_engine_own.hpp) -- mas este NÃO é guardado por `#if GLINTFX_OWN_FONT_ENGINE`: não
+//     tem dependência de tempo de build, então sempre existe. Um build normal (não-de-teste)
+//     nunca toca esta função, então a flag fica permanentemente `false` e este hook é um no-op
+//     puro em produção.
+bool& bootstrap_force_create_context_failure_for_test();
+
 } // namespace glintfx

@@ -1798,6 +1798,33 @@ add_test(NAME ui_layer_movedfrom_sanity
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# ---------------------------------------------------------------------------
+# EN: uilayer_singleton_guard_sanity (UILAYER-SINGLETON-GUARD, W26) -- drives the process-wide
+#     claim added to Bootstrap::init()/shutdown() this fatia (see the file's own header comment
+#     for the 4 parts). Links RmlUi::Core (Part 3 drives glintfx::Bootstrap + SystemClock +
+#     RenderGl3 white-box, same reason capture_nothrow_sanity.cpp's E1/E2 groups need it:
+#     system_clock.hpp inherits from Rml::SystemInterface) and glloader (Part 3's RenderGl3::
+#     init() needs the GL loader table populated, same as every other white-box Engine-level
+#     test in this file). WORKING_DIRECTORY = CMAKE_BINARY_DIR so "tests/min.rml" resolves (Part
+#     1's functional-survival check).
+# PT: uilayer_singleton_guard_sanity (UILAYER-SINGLETON-GUARD, W26) -- dirige o claim de escopo-
+#     processo acrescentado ao Bootstrap::init()/shutdown() nesta fatia (ver o próprio comentário
+#     de cabeçalho do arquivo pras 4 partes). Linka RmlUi::Core (a Parte 3 dirige glintfx::
+#     Bootstrap + SystemClock + RenderGl3 white-box, mesmo motivo que os grupos E1/E2 de
+#     capture_nothrow_sanity.cpp precisam dele: system_clock.hpp herda de Rml::SystemInterface) e
+#     glloader (o RenderGl3::init() da Parte 3 precisa da tabela do loader GL populada, igual a
+#     todo outro teste white-box de nível Engine deste arquivo). WORKING_DIRECTORY =
+#     CMAKE_BINARY_DIR para que "tests/min.rml" resolva (a checagem de sobrevivência funcional da
+#     Parte 1).
+# ---------------------------------------------------------------------------
+add_executable(uilayer_singleton_guard_sanity uilayer_singleton_guard_sanity.cpp)
+target_link_libraries(uilayer_singleton_guard_sanity PRIVATE ${_embed_dep} glloader RmlUi::Core)
+add_test(NAME uilayer_singleton_guard_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:uilayer_singleton_guard_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # EN: gl_loader_sanity (L1.14-GLLOADER) — glx_gl_load() returns 0 and a representative
 #     sample of core function pointers (glGetString, glCreateShader, glBindFramebuffer)
 #     is resolved and callable against a real offscreen GL context. Links glloader

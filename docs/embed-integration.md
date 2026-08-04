@@ -1585,7 +1585,39 @@ O mesmo padrão se aplica ao `UiLayer` (assinaturas `add_class`/`remove_class` i
 
 **Why this warning has to live HERE, in the library, and not only in a consumer's own code.** The known consumer documents this non-coexistence in ELEVEN independent files across their own repo, in SIX different phrasings for the same fact -- nobody writes the same thing six different ways in eleven places by taste. Whoever paid the price of this defect does not trust that ONE note is enough, because the diagnosis itself taught them the information was not where they went looking for it first. Three sites would be an observation; eleven is a PATTERN, and the pattern describes the defect's own nature: a symptom displaced in time and pointing in the wrong direction produces scattered defensive documentation, because the person no longer knows where the next victim will look. This warning exists here so the next integrator does not have to write their own twelfth file.
 
-**PT:** ⚠️ Construir um SEGUNDO `UiLayer` (ou `App`) enquanto um PRIMEIRO ainda está vivo, no MESMO processo, **não é suportado e corrompe estado global -- em silêncio**, não apenas "não testado". Esta seção declara esse fato e a forma exata da falha; um guard de verdade contra isso ainda não foi construído (ver "Escopo" abaixo). Cadeia de verificação completa contra o source pinado do RmlUi, e o mesmo comentário de nível de classe declarando o mesmo, vivem em `ui_layer.hpp` (fim da classe, bloco `UILAYER-SINGLETON`).
+**✅ UPDATE (W26): the guard exists now (`UILAYER-SINGLETON-GUARD`).** Everything the "Scope" paragraph above called "not built yet" is built. `Bootstrap::init()` claims a process-wide `std::atomic<bool>` (compare-exchange, `std::memory_order_acq_rel`) as the very FIRST thing it does -- before touching a single `Rml::` global (`Rml::SetSystemInterface` is the next statement on success). A second `init()` while a first instance is alive is refused OUTRIGHT: it returns `false` (so `UiLayer::ok()`/`App::ok()` come back `false`, the SAME fail-high shape this whole API already uses everywhere else), logs an `Rml::Log::LT_ERROR` line naming the cause, and never calls `Rml::SetSystemInterface`/`Rml::SetRenderInterface`/`Rml::Initialise` at all -- the first, still-alive instance's globals are not touched, not even transiently. Because the claim is process-wide, not per-`Bootstrap`, this covers the SAME hazard for a second `App`, and for the `App`+`UiLayer` mix -- both route through the identical `Rml::Initialise()`/`Rml::Shutdown()`/`Rml::CreateContext("main", ...)` globals this guard protects; this is a NEW guarantee, not merely the `UiLayer`-only framing the rest of this section uses. Consequence for the teardown-asymmetry paragraph above: it can no longer happen. Since only ONE instance can ever hold the claim at a time, the `CreateContext`-failure path's `Rml::Shutdown()` call now only ever tears down the CALLER's own (never-fully-alive) state -- there is no other live instance left for it to "turn a local failure into a process-wide one" against.
+
+**The pattern this makes mandatory on the caller side, with a real example.** GusWorld's own sweep for this item found a case that was already doing the right thing without knowing it was protection: a screen's `enter()` calls `reset()` on its `UiLayer` holder in the `!ok()` branch, releasing it immediately and degrading visibly instead of holding onto a half-built instance. That is now the REQUIRED shape for any caller that might construct a `UiLayer`/`App` while another could still be alive:
+
+```cpp
+void SomeScreen::enter() {
+  layer_ = glintfx::UiLayer(cfg); // e.g. layer_ is a std::optional<UiLayer>/similar holder
+  if (!layer_->ok()) {
+    // A second UiLayer/App while one is already alive is refused, on purpose
+    // (UILAYER-SINGLETON-GUARD) -- release right away and degrade visibly.
+    layer_.reset();
+    return;
+  }
+  ...
+}
+```
+
+**PT: ✅ ATUALIZAÇÃO (W26): o guard existe agora (`UILAYER-SINGLETON-GUARD`).** Tudo que o parágrafo "Escopo" acima chamava de "ainda não construído" está construído. `Bootstrap::init()` reivindica um `std::atomic<bool>` de escopo-processo (compare-exchange, `std::memory_order_acq_rel`) como a PRIMEIRA coisa que faz -- antes de tocar em um único global `Rml::` (`Rml::SetSystemInterface` é a próxima instrução em caso de sucesso). Um segundo `init()` enquanto um primeiro está vivo é recusado DE CARA: retorna `false` (então `UiLayer::ok()`/`App::ok()` voltam `false`, a MESMA forma fail-high que esta API inteira já usa em todo lugar), loga uma linha `Rml::Log::LT_ERROR` nomeando a causa, e nunca chama `Rml::SetSystemInterface`/`Rml::SetRenderInterface`/`Rml::Initialise` -- os globais da primeira instância, ainda viva, não são tocados, nem transitoriamente. Como o claim é de escopo-processo, não por-`Bootstrap`, isto cobre o MESMO perigo para um segundo `App`, e para a mistura `App`+`UiLayer` -- os dois passam pelos mesmos globais `Rml::Initialise()`/`Rml::Shutdown()`/`Rml::CreateContext("main", ...)` que este guard protege; é uma garantia NOVA, não só o enquadramento só-`UiLayer` do resto desta seção. Consequência pro parágrafo da assimetria de teardown acima: não pode mais acontecer. Como só UMA instância pode segurar o claim por vez, a chamada `Rml::Shutdown()` do caminho de falha de `CreateContext` agora só desfaz o próprio estado (nunca plenamente vivo) do CHAMADOR -- não sobra nenhuma outra instância viva contra a qual "transformar uma falha local numa falha de processo inteiro".
+
+**O padrão que isto torna obrigatório do lado do chamador, com um exemplo real.** A própria varredura do GusWorld para este item achou um caso que já fazia a coisa certa sem saber que era proteção: o `enter()` de uma tela chama `reset()` no holder do próprio `UiLayer`, no ramo `!ok()`, liberando na hora e degradando visivelmente em vez de segurar uma instância meio-construída. Esta é agora a forma OBRIGATÓRIA para qualquer chamador que possa construir um `UiLayer`/`App` enquanto outro ainda possa estar vivo:
+
+```cpp
+void SomeScreen::enter() {
+  layer_ = glintfx::UiLayer(cfg); // ex.: layer_ é um std::optional<UiLayer>/holder similar
+  if (!layer_->ok()) {
+    // Um segundo UiLayer/App enquanto um já está vivo é recusado, de propósito
+    // (UILAYER-SINGLETON-GUARD) -- libera na hora e degrada visivelmente.
+    layer_.reset();
+    return;
+  }
+  ...
+}
+``` ⚠️ Construir um SEGUNDO `UiLayer` (ou `App`) enquanto um PRIMEIRO ainda está vivo, no MESMO processo, **não é suportado e corrompe estado global -- em silêncio**, não apenas "não testado". Esta seção declara esse fato e a forma exata da falha; um guard de verdade contra isso ainda não foi construído (ver "Escopo" abaixo). Cadeia de verificação completa contra o source pinado do RmlUi, e o mesmo comentário de nível de classe declarando o mesmo, vivem em `ui_layer.hpp` (fim da classe, bloco `UILAYER-SINGLETON`).
 
 **Por que nada pega isto.** Todo `RMLUI_ASSERTMSG` no RmlUi vendorizado é NO-OP nos nossos builds (`RMLUI_DEBUG` nunca é definido -- confirmado nos arquivos CMake do RmlUi, no próprio deste projeto, e no `flags.make` de fato compilado; `CMAKE_BUILD_TYPE` está vazio no cache). Onde o RmlUi upstream acreditava ter uma checagem defensiva contra um uso indevido como este, esta biblioteca não tem nenhuma: o código roda direto por cima de estado global já inicializado em vez de afirmar. **A lição generaliza além deste item só: em qualquer lugar em que esta base de código conta com um `RMLUI_ASSERT*` pra pegar uso inválido, ela conta com nada.** Vale uma varredura própria algum dia; não tentada aqui.
 

@@ -163,10 +163,23 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   int real_w = 0, real_h = 0;
   impl_->window.size(real_w, real_h);
   if (real_w <= 0 || real_h <= 0) { real_w = cfg.width; real_h = cfg.height; }
-  impl_->ok = impl_->engine.attach(impl_->system.get(), real_w, real_h, cfg.font_engine);
+  // EN: AUD-APP-MOVEDFROM (W25) -- local reference `impl`, used for the `ok` writes below.
+  //     impl_ is guaranteed non-null here (just constructed above), so there is nothing to
+  //     null-check in this constructor -- using the reference here keeps the null-safe
+  //     dereference pattern this file used to spell out at every entry point reserved for
+  //     exactly ONE place: ready()'s own definition, further down (right before App::ok(),
+  //     which now just forwards to it).
+  // PT: AUD-APP-MOVEDFROM (W25) -- referência local `impl`, usada para as escritas de `ok`
+  //     abaixo. impl_ é garantidamente não-nulo aqui (acabou de ser construído acima),
+  //     então não há nada para checar contra nulo neste construtor -- usar a referência
+  //     aqui mantém o padrão de derreferência null-safe que este arquivo costumava soletrar
+  //     em todo ponto de entrada reservado para exatamente UM lugar: a própria definição de
+  //     ready(), mais adiante (logo antes de App::ok(), que agora só repassa para ele).
+  Impl& impl = *impl_;
+  impl.ok = impl.engine.attach(impl.system.get(), real_w, real_h, cfg.font_engine);
   // EN: Apply initial dp_ratio; idempotent for the default 1.0f.
   // PT: Aplica dp_ratio inicial; idempotente para o padrão 1.0f.
-  if (impl_->ok) impl_->engine.set_dp_ratio(cfg.dp_ratio);
+  if (impl.ok) impl.engine.set_dp_ratio(cfg.dp_ratio);
   // EN: A1 (framework-2D) -- arm the physical input route: install the sink WindowGlfw's 5
   //     GLFW callbacks (already registered inside window.create() above, before engine even
   //     existed) feed into. Only after this call does poll_events() -> glfwPollEvents()
@@ -185,7 +198,7 @@ App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {
   //     objeto Impl nunca muda através de um move (só o ponteiro guardado pelo unique_ptr se
   //     move junto), então esta lambda permanece válida pela vida inteira do Impl,
   //     independente de quantas vezes o App dono for movido.
-  if (impl_->ok) {
+  if (impl.ok) {
     Impl* impl_raw = impl_.get();
     impl_->window.set_event_sink([impl_raw](const UiEvent& ev) {
       if (!impl_raw->ok) return;
@@ -215,7 +228,7 @@ App::App(App&&) noexcept = default;
 App& App::operator=(App&&) noexcept = default;
 
 bool App::load(const char* rml_path) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.load(rml_path);
 }
 
@@ -225,107 +238,115 @@ bool App::load(const char* rml_path) {
 // ---------------------------------------------------------------------------
 
 bool App::create_data_model(const char* name) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.create_data_model(name);
 }
 
 bool App::bind_number(const char* key, double initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_number(key, initial);
 }
 
 bool App::bind_string(const char* key, const char* initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_string(key, initial);
 }
 
 bool App::bind_bool(const char* key, bool initial) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_bool(key, initial);
 }
 
 bool App::bind_list(const char* key) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.bind_list(key);
 }
 
 void App::set_number(const char* key, double value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_number(key, value);
 }
 
 void App::set_string(const char* key, const char* value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_string(key, value);
 }
 
 void App::set_bool(const char* key, bool value) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_bool(key, value);
 }
 
 void App::set_list(const char* key, const char* const* items, std::size_t count) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_list(key, items, count);
 }
 
 void App::set_dp_ratio(float ratio) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_dp_ratio(ratio);
 }
 
 void App::set_asset_base_url(const char* url) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_asset_base_url(url);
 }
 
-// EN: A4-WINMODES -- thin forwards to WindowGlfw with the App-wide !ok() guard (same pattern
+// EN: A4-WINMODES -- thin forwards to WindowGlfw with the App-wide !ready() guard (same pattern
 //     as every other method in this file). WindowGlfw::set_mode()/mode() carry the real logic
 //     (D4/D7/D8) -- see window_glfw.cpp/.hpp.
-// PT: A4-WINMODES -- repasses finos a WindowGlfw com a guarda !ok() de todo o App (mesmo padrão
+// PT: A4-WINMODES -- repasses finos a WindowGlfw com a guarda !ready() de todo o App (mesmo padrão
 //     de todo outro método deste arquivo). WindowGlfw::set_mode()/mode() carregam a lógica de
 //     fato (D4/D7/D8) -- ver window_glfw.cpp/.hpp.
 bool App::set_window_mode(WindowMode mode) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.set_mode(mode);
 }
 
 WindowMode App::window_mode() const {
-  if (!impl_->ok) return WindowMode::Windowed;
+  if (!ready()) return WindowMode::Windowed;
   return impl_->window.mode();
 }
 
 void App::get_window_size(int& w, int& h) const {
-  if (!impl_->ok) { w = 0; h = 0; return; }
+  if (!ready()) {
+    w = 0;
+    h = 0;
+    return;
+  }
   impl_->window.size(w, h);
 }
 
 // EN: WIN-ICON -- thin forward to WindowGlfw::set_window_icon (window_glfw.hpp/.cpp), same
-//     `!impl_->ok` guard every other App method in this family uses.
+//     `!ready()` guard every other App method in this family uses.
 // PT: WIN-ICON -- repasse fino pro WindowGlfw::set_window_icon (window_glfw.hpp/.cpp), mesma
-//     guarda `!impl_->ok` que todo outro método do App nesta família usa.
+//     guarda `!ready()` que todo outro método do App nesta família usa.
 bool App::set_window_icon(const void* pixels_rgba8, int w, int h) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.set_window_icon(pixels_rgba8, w, h);
 }
 
-bool App::ok() const noexcept {
+bool App::ready() const noexcept {
   return impl_ && impl_->ok;
 }
 
+bool App::ok() const noexcept {
+  return ready();
+}
+
 bool App::running() const {
-  return impl_->ok && !impl_->window.should_close();
+  return ready() && !impl_->window.should_close();
 }
 
 void App::poll_events() {
   // EN: Guard: consistent with load()/running() — no-op if subsystem init failed.
   // PT: Guard: consistente com load()/running() — no-op se a inicialização falhou.
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.poll();
 }
 
 void App::update() {
-  if (impl_->ok) impl_->engine.update();
+  if (ready()) impl_->engine.update();
 }
 
 // EN: AUD-PUB-1 fix, extracted as a shared helper (AUD-PUB-1-TWIN, v0.5.0) -- App::render()
@@ -401,7 +422,7 @@ void App::Impl::render_frame(int w, int h) {
 void App::render() {
   // EN: Guard: no-op if subsystem init failed (consistent with load()/running()).
   // PT: Guard: no-op se a inicialização falhou (consistente com load()/render()).
-  if (!impl_->ok) return;
+  if (!ready()) return;
   int w = 0, h = 0;
   impl_->window.size(w, h);
   impl_->sync_viewport(w, h);
@@ -425,7 +446,7 @@ bool App::snapshot(const char* ppm_path) {
   //     salva como PPM, depois troca. Em muitas implementações GL (incluindo Mesa/llvmpipe sob
   //     Xvfb) o conteúdo do back-buffer é indefinido APÓS glfwSwapBuffers, então a captura
   //     deve acontecer aqui, entre EndFrame e a troca de buffer.
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   int w = 0, h = 0;
   impl_->window.size(w, h);
   // EN: AUD-PUB-1-TWIN fix (v0.5.0, found by adversarial review of the AUD-PUB-1 render() fix)
@@ -499,7 +520,7 @@ App::CapturedFrame App::capture_frame() {
   //     capture_frame deliberadamente NÃO faz (ver o próprio doc-comment de
   //     UiLayer::capture_frame, ui_layer.hpp, pro porquê: o HOST chama render()+capture_frame()
   //     ele mesmo, nessa ordem, antes do próprio swap dele).
-  if (!impl_->ok) return CapturedFrame{};
+  if (!ready()) return CapturedFrame{};
   int w = 0, h = 0;
   impl_->window.size(w, h);
   // EN: Defensive fail-high (not reachable through normal App construction, but the same
@@ -532,7 +553,7 @@ App::CapturedFrame App::capture_frame() {
 }
 
 void App::process_event(const UiEvent& ev) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Resize documented no-op (see app.hpp doc-comment) -- App owns the window and is
   //     already the size authority via render()/snapshot()'s sync_viewport().
   // PT: Resize é no-op documentado (ver doc-comment em app.hpp) -- o App é dono da janela e já
@@ -541,24 +562,24 @@ void App::process_event(const UiEvent& ev) {
   impl_->engine.process_event(ev, 0, 0);
 }
 
-// EN: HOSTIN-1/2 (Onda 2, v0.19.0) -- thin forwards to WindowGlfw with the App-wide !ok() guard
+// EN: HOSTIN-1/2 (Onda 2, v0.19.0) -- thin forwards to WindowGlfw with the App-wide !ready() guard
 //     (same pattern as every other method in this file). WindowGlfw carries the real state
 //     table + callback plumbing (D2, window_glfw.cpp/.hpp).
 // PT: HOSTIN-1/2 (Onda 2, v0.19.0) -- repasses finos a WindowGlfw com a guarda !ok() de todo o
 //     App (mesmo padrão de todo outro método deste arquivo). WindowGlfw carrega a tabela de
 //     estado + plomberia de callback de fato (D2, window_glfw.cpp/.hpp).
 bool App::is_key_down(Key k) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.is_key_down(k);
 }
 
 bool App::is_mouse_button_down(int button) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.is_mouse_button_down(button);
 }
 
 void App::get_cursor_pos(float& x, float& y) const {
-  if (!impl_->ok) {
+  if (!ready()) {
     x = 0.f;
     y = 0.f;
     return;
@@ -567,54 +588,54 @@ void App::get_cursor_pos(float& x, float& y) const {
 }
 
 void App::set_key_callback(std::function<void(Key, KeyAction, int)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.set_key_callback(std::move(cb));
 }
 
 // EN: HOSTIN-3/4/5 (Onda 2, v0.19.0) -- same thin-forward pattern as above.
 // PT: HOSTIN-3/4/5 (Onda 2, v0.19.0) -- mesmo padrão de repasse fino de acima.
 void App::request_close() {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.request_close();
 }
 
 void App::set_close_request_callback(std::function<bool()> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.set_close_request_callback(std::move(cb));
 }
 
 void App::set_window_focus_callback(std::function<void(bool)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.set_window_focus_callback(std::move(cb));
 }
 
 void App::set_window_iconify_callback(std::function<void(bool)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->window.set_window_iconify_callback(std::move(cb));
 }
 
 bool App::is_window_focused() const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.is_window_focused();
 }
 
 bool App::is_window_iconified() const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.is_window_iconified();
 }
 
 void App::set_frame_callback(std::function<void(float)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->frame_cb = std::move(cb);
 }
 
 void App::set_click_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_click_callback(std::move(cb));
 }
 
 void App::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Straight passthrough (AUD-PUB-4, v0.5.0) -- no coordinate translation needed: App owns
   //     the whole window, so the sub-viewport offset UiLayer::set_click_info_callback adds is
   //     always (0,0) here (same reasoning as App::get_element_box's lack of offset addition).
@@ -626,7 +647,7 @@ void App::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
 }
 
 void App::set_scroll_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   // EN: Straight passthrough (GLINTFX-SCROLL-1 follow-up, v0.6.0) -- id-only, no coordinate
   //     translation applicable (there is none for scroll, unlike ClickInfo's x/y).
   // PT: Repasse direto (desdobramento do GLINTFX-SCROLL-1, v0.6.0) -- só-id, sem tradução de
@@ -641,33 +662,33 @@ void App::set_scroll_callback(std::function<void(const char*)> cb) {
 //     inteira; nenhum dos cinco payloads carrega geometria -- ver os doc-comments em app.hpp/
 //     bootstrap.hpp para o contrato completo).
 void App::set_change_callback(std::function<void(const char*, const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_change_callback(std::move(cb));
 }
 
 void App::set_submit_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_submit_callback(std::move(cb));
 }
 
 void App::set_focus_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_focus_callback(std::move(cb));
 }
 
 void App::set_blur_callback(std::function<void(const char*)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_blur_callback(std::move(cb));
 }
 
 void App::set_hover_callback(std::function<void(const char*, bool)> cb) {
-  if (!impl_->ok) return;
+  if (!ready()) return;
   impl_->engine.set_hover_callback(std::move(cb));
 }
 
 ElementBox App::get_element_box(const char* id) const {
   ElementBox box;
-  if (!impl_->ok) return box;
+  if (!ready()) return box;
   float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
   if (impl_->engine.get_element_box(id, x, y, w, h)) {
     box.found = true; box.x = x; box.y = y; box.w = w; box.h = h;
@@ -676,37 +697,37 @@ ElementBox App::get_element_box(const char* id) const {
 }
 
 bool App::scroll_element_into_view(const char* id, bool align_with_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.scroll_element_into_view(id, align_with_top);
 }
 
 bool App::get_element_scroll_top(const char* id, float& out_scroll_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_scroll_top(id, out_scroll_top);
 }
 
 bool App::get_element_scroll_height(const char* id, float& out_scroll_height) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_scroll_height(id, out_scroll_height);
 }
 
 bool App::get_element_client_height(const char* id, float& out_client_height) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_element_client_height(id, out_client_height);
 }
 
 bool App::set_element_scroll_top(const char* id, float scroll_top) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_element_scroll_top(id, scroll_top);
 }
 
 bool App::set_focus(const char* id) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_focus(id);
 }
 
 bool App::clear_focus() const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.clear_focus();
 }
 
@@ -716,53 +737,53 @@ bool App::clear_focus() const {
 // ---------------------------------------------------------------------------
 
 bool App::set_text(const char* id, const char* text) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_text(id, text);
 }
 
 bool App::add_class(const char* id, const char* cls) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.add_class(id, cls);
 }
 
 bool App::remove_class(const char* id, const char* cls) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.remove_class(id, cls);
 }
 
 bool App::set_property(const char* id, const char* prop, const char* value) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.set_property(id, prop, value);
 }
 
 bool App::load_font_face(const FontFaceDesc& desc) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.load_font_face(desc);
 }
 
 bool App::get_number(const char* key, double& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_number(key, out);
 }
 
 bool App::get_string(const char* key, std::string& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_string(key, out);
 }
 
 bool App::get_bool(const char* key, bool& out) const {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->engine.get_bool(key, out);
 }
 
-// EN: WM-VSYNC -- thin forwards to WindowGlfw with the App-wide !ok() guard (same pattern as
+// EN: WM-VSYNC -- thin forwards to WindowGlfw with the App-wide !ready() guard (same pattern as
 //     every other method in this file). WindowGlfw::set_swap_interval/get_monitor_refresh_hz
 //     carry the real logic (window_glfw.cpp/.hpp).
-// PT: WM-VSYNC -- repasses finos a WindowGlfw com a guarda !ok() de todo o App (mesmo padrão de
+// PT: WM-VSYNC -- repasses finos a WindowGlfw com a guarda !ready() de todo o App (mesmo padrão de
 //     todo outro método deste arquivo). WindowGlfw::set_swap_interval/get_monitor_refresh_hz
 //     carregam a lógica de fato (window_glfw.cpp/.hpp).
 bool App::set_swap_interval(int interval) {
-  if (!impl_->ok) return false;
+  if (!ready()) return false;
   return impl_->window.set_swap_interval(interval);
 }
 
@@ -771,7 +792,7 @@ bool App::set_vsync(bool enabled) {
 }
 
 int App::get_monitor_refresh_hz() const {
-  if (!impl_->ok) return 0;
+  if (!ready()) return 0;
   return impl_->window.get_monitor_refresh_hz();
 }
 

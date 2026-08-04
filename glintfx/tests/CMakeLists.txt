@@ -658,6 +658,34 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_movedfrom_sanity (AUD-APP-MOVEDFROM, W25) -- ENUMERATES every public App method (63,
+  #     see the file's own header comment for the hand-verified count) and calls each one on a
+  #     MOVED-FROM App, asserting fail-high (never a crash). Pre-fix RED is a segfault (ctest
+  #     reports a crashed process, not a clean assertion failure) -- the `impl_->ok` guard
+  #     pattern throughout app.cpp dereferences `impl_` before checking it for null, and a
+  #     moved-from App has `impl_ == nullptr` (App::App(App&&) is `= default`, so the move just
+  #     transfers the unique_ptr, leaving the source's impl_ null). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR so "tests/min.rml" resolves (same convention as every other App test in
+  #     this file).
+  # PT: app_movedfrom_sanity (AUD-APP-MOVEDFROM, W25) -- ENUMERA todo método público de App (63,
+  #     ver o próprio comentário de cabeçalho do arquivo pra contagem verificada à mão) e chama
+  #     cada um num App MOVIDO-DE, verificando fail-high (nunca um crash). O VERMELHO pré-fix é
+  #     um segfault (o ctest reporta um processo que crashou, não uma falha de asserção limpa)
+  #     -- o padrão de guarda `impl_->ok` por todo app.cpp derreferencia `impl_` antes de checar
+  #     se é nulo, e um App movido-de tem `impl_ == nullptr` (App::App(App&&) é `= default`,
+  #     então o move só transfere o unique_ptr, deixando o impl_ da origem nulo).
+  #     WORKING_DIRECTORY = CMAKE_BINARY_DIR para que "tests/min.rml" resolva (mesma convenção
+  #     de todo outro teste de App deste arquivo).
+  # ---------------------------------------------------------------------------
+  add_executable(app_movedfrom_sanity app_movedfrom_sanity.cpp)
+  target_link_libraries(app_movedfrom_sanity PRIVATE glintfx)
+  add_test(NAME app_movedfrom_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_movedfrom_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
   # EN: gl_proc_address_sanity (DOC-GLCOHAB (b)) -- contract test for
   #     glintfx::gl_proc_address(const char*) (glintfx/include/glintfx/gl_proc.hpp). App-mode
   #     only (same GLINTFX_BACKEND_GLFW gate as gl_proc.hpp itself), so it lives in this

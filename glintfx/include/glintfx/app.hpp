@@ -79,12 +79,20 @@ struct AppConfig {
 //     Only ONE App instance per process is supported. Creating a second instance while
 //     the first is alive, or after it has been destroyed, results in undefined behaviour.
 //
-//     MOVED-FROM STATE (L1.10-APIDOC): after `App b = std::move(a);` (or `b = std::move(a);`),
-//     `a` is left in a moved-from state. Calling ANY method on `a` other than ok() or the
-//     destructor is undefined behaviour — same convention as std::unique_ptr. ok() on a
-//     moved-from App returns false (impl_ is null), which is the only state query that is
-//     safe to make; destruction of a moved-from App is always safe (no-op, impl_ is null).
-//
+//     MOVED-FROM STATE (L1.10-APIDOC; contract HARDENED by AUD-APP-MOVEDFROM, W25 -- see this
+//     class's private ready() helper, app.cpp): after `App b = std::move(a);` (or
+//     `b = std::move(a);`), `a` is left in a moved-from state (impl_ == nullptr). Calling ANY
+//     method on `a` afterwards is now FAIL-HIGH, never a crash: every public method checks
+//     impl_ for null before dereferencing it (not just ok(), which was already null-safe) and
+//     returns EXACTLY the same value it already returns for a constructed-but-!ok() App (false/
+//     0/empty-struct/no-op — see each method's own doc-comment for its specific value). This
+//     used to be documented as undefined behaviour (the std::unique_ptr convention) — it no
+//     longer is: a consumer that moves an App by mistake gets a well-defined no-op/false/0,
+//     never a segfault (AUD-APP-MOVEDFROM found 66 `impl_->ok` sites across app.cpp that
+//     dereferenced impl_ before checking it for null; a distributed framework's régua for this
+//     class of caller mistake is fail-high, not UB — same precedent as load(nullptr) in
+//     v0.3.0). ok() itself is unaffected: it already returned false on a moved-from App before
+//     this change.
 // PT: Fachada RAII da aplicação. Possui janela, renderer e bootstrap de UI.
 //     Move-only. Nenhum tipo de engine ou gráficos de terceiros aparece neste header.
 //
@@ -92,11 +100,20 @@ struct AppConfig {
 //     Apenas UMA instância de App por processo é suportada. Criar uma segunda instância
 //     enquanto a primeira está viva, ou após ser destruída, resulta em comportamento indefinido.
 //
-//     ESTADO MOVIDO-DE (L1.10-APIDOC): após `App b = std::move(a);` (ou `b = std::move(a);`),
-//     `a` fica em estado movido-de. Chamar QUALQUER método em `a` além de ok() ou o destrutor
-//     é comportamento indefinido — mesma convenção do std::unique_ptr. ok() num App movido-de
-//     retorna false (impl_ é nulo), sendo a única consulta de estado segura; destruir um App
-//     movido-de é sempre seguro (no-op, impl_ é nulo).
+//     ESTADO MOVIDO-DE (L1.10-APIDOC; contrato ENDURECIDO pelo AUD-APP-MOVEDFROM, W25 -- ver o
+//     helper privado ready() desta classe, app.cpp): após `App b = std::move(a);` (ou
+//     `b = std::move(a);`), `a` fica em estado movido-de (impl_ == nullptr). Chamar QUALQUER
+//     método em `a` depois disso agora é FAIL-HIGH, nunca um crash: todo método público checa
+//     impl_ contra nulo antes de derreferenciá-lo (não só o ok(), que já era null-safe) e
+//     retorna EXATAMENTE o mesmo valor que já retorna para um App construído-mas-!ok() (false/
+//     0/struct-vazia/no-op — ver o doc-comment de cada método pro valor específico). Isto era
+//     documentado como comportamento indefinido (a convenção do std::unique_ptr) — não é mais:
+//     um consumidor que move um App por engano recebe um no-op/false/0 bem-definido, nunca um
+//     segfault (o AUD-APP-MOVEDFROM achou 66 sítios `impl_->ok` por todo app.cpp que
+//     derreferenciavam impl_ antes de checá-lo contra nulo; a régua de um framework distribuído
+//     pra esta classe de engano do chamador é fail-high, não UB — mesmo precedente do
+//     load(nullptr) na v0.3.0). O próprio ok() é inafetado: já retornava false num App
+//     movido-de antes desta mudança.
 class App {
 public:
   // EN: Constructs the App: opens a window and initialises the GL context and UI engine.
@@ -1220,6 +1237,20 @@ public:
   //     glintfx/src/glfw_event_translate.hpp pro seam de decisão pura e a racional completa.
 
 private:
+  // EN: AUD-APP-MOVEDFROM (W25) -- the ONE null-safe check every public method's entry guard
+  //     now uses instead of the old `!impl_->ok` (which dereferenced impl_ before checking it).
+  //     Defined out-of-line in app.cpp (not inline here): Impl is an incomplete type at this
+  //     point in the header (pimpl idiom), so `impl_->ok` cannot be evaluated until app.cpp,
+  //     where Impl's definition is visible. noexcept: only ever reads two already-computed
+  //     values, no I/O, no allocation, cannot throw.
+  // PT: AUD-APP-MOVEDFROM (W25) -- o ÚNICO cheque null-safe que todo guard de entrada de método
+  //     público agora usa em vez do antigo `!impl_->ok` (que derreferenciava impl_ antes de
+  //     checá-lo). Definido fora-de-linha em app.cpp (não inline aqui): Impl é um tipo
+  //     incompleto neste ponto do header (idioma pimpl), então `impl_->ok` não pode ser avaliado
+  //     até app.cpp, onde a definição de Impl é visível. noexcept: só lê dois valores já
+  //     computados, sem I/O, sem alocação, não pode lançar.
+  bool ready() const noexcept;
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

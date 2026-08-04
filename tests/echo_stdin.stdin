@@ -1,0 +1,11 @@
+EN: loucura_c_asm Layer 0 is a freestanding runtime -- zero libc, zero stdio, zero malloc from
+any library other than our own. Every byte of I/O crosses the raw Linux x86-64 syscall ABI:
+read=0, write=1, exit=60, mmap=9. This fixture is long enough to force echo_stdin's 256-byte
+stack buffer to loop across more than one sys_read/sys_write pair, proving the EOF-terminated
+loop end to end with real content instead of an immediate /dev/null EOF.
+PT: A Camada 0 do loucura_c_asm e' uma runtime freestanding -- zero libc, zero stdio, zero
+malloc de qualquer biblioteca alem da nossa propria. Todo byte de I/O atravessa a ABI de
+syscall crua do Linux x86-64: read=0, write=1, exit=60, mmap=9. Esta fixture e' longa o
+bastante pra forcar o buffer de 256 bytes na stack do echo_stdin a dar mais de uma volta de
+sys_read/sys_write, provando o loop terminado-por-EOF ponta a ponta com conteudo de verdade
+em vez de um EOF imediato de /dev/null.

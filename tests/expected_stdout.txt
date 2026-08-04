@@ -12,3 +12,4 @@
 #     contra o golden nomeado -- ver o alvo `test` no Makefile. Linhas de comentario (iniciando
 #     com '#') e linhas em branco sao ignoradas.
 printf_e2e tests/golden/printf_e2e.expected
+echo_stdin tests/golden/echo_stdin.expected

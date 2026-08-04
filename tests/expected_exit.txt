@@ -1,4 +1,5 @@
 exit42 42
+echo_stdin 0
 hello 0
 negative_probe 1
 printf_e2e 0

@@ -210,22 +210,63 @@ $(BIN)/test_raster: $(OBJ)/test_raster.o $(RUNTIME_OBJS) $(OBJ)/opensans_ttf.o |
 
 # EN: Runs every program and checks its exit code against the manifest tests/expected_exit.txt
 #     (lines "<name> <expected-code>"; missing entry defaults to 0). Temporary harness for this
-#     increment -- superseded by the C1 test runner (TODO.md, W6) once it exists. Stdin is
-#     explicitly redirected from /dev/null (B7): none of the programs in this manifest need
-#     real input today, but leaving stdin attached to whatever invoked `make` (a human's
-#     terminal, in particular) would make a future stdin-reading gate program (e.g. B7's
-#     echo_stdin) block indefinitely waiting for input instead of seeing an immediate EOF.
-#     Explicit > implicit: this makes "no input" a documented guarantee, not an accident of
-#     how `make test` happened to be invoked.
+#     increment -- superseded by the C1 test runner (TODO.md, W6) once it exists. Stdin defaults
+#     to /dev/null (B7): none of the programs in this manifest need real input BY DEFAULT, and
+#     leaving stdin attached to whatever invoked `make` (a human's terminal, in particular) would
+#     make a stdin-reading gate program (e.g. B7's echo_stdin) block indefinitely waiting for
+#     input instead of seeing an immediate EOF. Explicit > implicit: this makes "no input" a
+#     documented guarantee, not an accident of how `make test` happened to be invoked.
+# EN: C0-STDIN-FIXTURE (TODO.md, W25, review-B7 follow-up) -- the /dev/null default above was a
+#     BLANKET one: every program, no exceptions, which is exactly the trade-off B7's own comment
+#     flagged as a future footgun ("a test that needs real stdin content gets blocked"). This
+#     widens it into a PER-TEST, OPT-IN override, applied identically to both branches of the loop
+#     below (the golden-diff branch and the plain-exit-code branch -- a fixture must work whether
+#     or not the program also has a registered stdout/stderr golden, so both `$$prog < ...`
+#     invocations resolve the SAME `$$stdin_file` variable, computed once before the branch):
+#     if `tests/<name>.stdin` exists, stdin is redirected FROM that file; otherwise the original
+#     `/dev/null` behaviour is unchanged, byte for byte, for every test that does not opt in. The
+#     lookup is by convention (file existence), not a fourth manifest -- there is nothing to
+#     misconfigure (no name to keep in sync, no golden-lookup awk to get wrong) and the fixture's
+#     own presence IS the registration. First (and, as of this slice, only) consumer:
+#     tests/echo_stdin.stdin, paired in the SAME commit with tests/golden/echo_stdin.expected
+#     (registered in expected_stdout.txt below) -- exercising the B7 sys_read/sys_write loop with
+#     real, >256-byte content for the first time (see echo_stdin.c's own header: its on-stack
+#     buffer is exactly 256 bytes, so this fixture is sized to force more than one read/write pair
+#     before EOF, not just a single short read). The valgrind-driven `test-mem` target below is
+#     deliberately NOT extended with this same per-test lookup: its two programs (test_alloc,
+#     test_mem) are explicit, hand-picked, stdin-agnostic gate suites that read nothing from fd 0
+#     -- adding fixture plumbing there would be unused generality with nothing to exercise it.
 # PT: Roda todo programa e checa o exit code contra o manifesto tests/expected_exit.txt
 #     (linhas "<nome> <codigo-esperado>"; entrada ausente assume 0). Harness temporario deste
-#     incremento -- substituido pelo runner de teste C1 (TODO.md, W6) quando existir. O stdin
-#     e' explicitamente redirecionado de /dev/null (B7): nenhum programa deste manifesto
-#     precisa de entrada real hoje, mas deixar o stdin herdado de quem chamou `make` (o
-#     terminal de um humano, em particular) faria um futuro programa-gate que le stdin (ex.:
-#     o echo_stdin da B7) travar indefinidamente esperando entrada em vez de ver um EOF
-#     imediato. Explicito > implicito: isso torna "sem entrada" uma garantia documentada, nao
-#     um acidente de como o `make test` foi chamado.
+#     incremento -- substituido pelo runner de teste C1 (TODO.md, W6) quando existir. O stdin usa
+#     /dev/null por padrao (B7): nenhum programa deste manifesto precisa de entrada real POR
+#     PADRAO, e deixar o stdin herdado de quem chamou `make` (o terminal de um humano, em
+#     particular) faria um programa-gate que le stdin (ex.: o echo_stdin da B7) travar
+#     indefinidamente esperando entrada em vez de ver um EOF imediato. Explicito > implicito: isso
+#     torna "sem entrada" uma garantia documentada, nao um acidente de como o `make test` foi
+#     chamado.
+# PT: C0-STDIN-FIXTURE (TODO.md, W25, seguimento do achado da review B7) -- o default /dev/null
+#     acima era GERAL: todo programa, sem excecao, exatamente o trade-off que o proprio
+#     comentario da B7 sinalizava como footgun futuro ("um teste que precisa de conteudo real de
+#     stdin fica bloqueado"). Isto amplia pra um override POR-TESTE, OPT-IN, aplicado
+#     identicamente nos DOIS ramos do laco abaixo (o ramo de diff-golden e o ramo de so-exit-code
+#     -- uma fixture precisa funcionar exista ou nao golden de stdout/stderr registrado pro
+#     mesmo programa, entao as DUAS invocacoes `$$prog < ...` resolvem a MESMA variavel
+#     `$$stdin_file`, computada uma unica vez antes do ramo): se `tests/<nome>.stdin` existe, o
+#     stdin e' redirecionado DAQUELE arquivo; senao, o comportamento original de `/dev/null`
+#     continua inalterado, byte a byte, pra todo teste que nao opta por entrar. A busca e' por
+#     convencao (existencia de arquivo), nao um quarto manifesto -- nao ha nada pra desconfigurar
+#     (nenhum nome pra manter sincronizado, nenhum awk de busca-de-golden pra errar) e a propria
+#     presenca da fixture JA E' o registro. Primeiro (e, nesta fatia, unico) consumidor:
+#     tests/echo_stdin.stdin, pareado no MESMO commit com tests/golden/echo_stdin.expected
+#     (registrado no expected_stdout.txt abaixo) -- exercitando o laco sys_read/sys_write da B7
+#     com conteudo real, >256 bytes, pela primeira vez (ver o cabecalho proprio do echo_stdin.c:
+#     o buffer dele na stack tem exatamente 256 bytes, entao esta fixture e' dimensionada pra
+#     forcar mais de um par read/write antes do EOF, nao so uma leitura curta unica). O alvo
+#     `test-mem` movido a valgrind abaixo deliberadamente NAO e' estendido com esta mesma busca
+#     por-teste: os dois programas dele (test_alloc, test_mem) sao suites-gate explicitas,
+#     escolhidas a dedo, indiferentes a stdin -- nao leem nada do fd 0 -- entao acrescentar a
+#     mecanica de fixture ali seria generalidade sem uso, sem nada pra exercita-la.
 # EN: AUD-C0-3 (AUDIT_FIND.md) extension: some gate programs (today: printf_e2e, see its file
 #     header) exercise the real stdout I/O path -- not just the exit code -- and need their
 #     output verified byte-exact against a golden file, not just eyeballed with `od -c`. A second
@@ -276,9 +317,10 @@ test: build
 		[ -n "$$expected" ] || expected=0; \
 		golden_out=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stdout.txt 2>/dev/null); \
 		golden_err=$$(awk -v n="$$name" '!/^#/ && NF>0 && $$1==n{print $$2}' tests/expected_stderr.txt 2>/dev/null); \
+		stdin_file=tests/$$name.stdin; [ -f "$$stdin_file" ] || stdin_file=/dev/null; \
 		if [ -n "$$golden_out" ] || [ -n "$$golden_err" ]; then \
 			outtmp=$$(mktemp); errtmp=$$(mktemp); \
-			$$prog < /dev/null > "$$outtmp" 2> "$$errtmp"; actual=$$?; \
+			$$prog < "$$stdin_file" > "$$outtmp" 2> "$$errtmp"; actual=$$?; \
 			ok=1; detail=""; \
 			[ "$$actual" = "$$expected" ] || ok=0; \
 			if [ -n "$$golden_out" ]; then \
@@ -295,7 +337,7 @@ test: build
 			fi; \
 			rm -f "$$outtmp" "$$errtmp"; \
 		else \
-			$$prog < /dev/null; actual=$$?; \
+			$$prog < "$$stdin_file"; actual=$$?; \
 			if [ "$$actual" = "$$expected" ]; then \
 				echo "PASS: $$name (exit=$$actual)"; \
 			else \

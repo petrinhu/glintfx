@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-// EN: gamepad_mappings_file_nothrow_sanity (GAMEPAD-NOTHROW, W22, 2026-07-30) -- the SIXTH member
-//     of the `never a crash` family (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`/
-//     `CAPTURE-NOTHROW`, `image_decode_hardening_sanity.cpp`/`image_encode_hardening_sanity.cpp`/
+// EN: gamepad_mappings_file_nothrow_sanity (GAMEPAD-NOTHROW, W22, 2026-07-30; recalibrated by
+//     TETO-CALIBRE, W25, 2026-08-04) -- the SIXTH member of the `never a crash` family
+//     (`DEC-NOTHROW`/`ENC-NOTHROW`/`TEX-NOTHROW`/`FONT-NOTHROW`/`CAPTURE-NOTHROW`,
+//     `image_decode_hardening_sanity.cpp`/`image_encode_hardening_sanity.cpp`/
 //     `draw2d_texture_nothrow_sanity.cpp`/`font_nothrow_sanity.cpp`/`capture_nothrow_sanity.cpp`):
 //     proves `glintfx::Gamepads::load_mappings_file()` (`gamepad.cpp`) degrades to a clean `0`,
 //     never a crash, against the ORIGINAL, MEASURED repro -- `load_mappings_file("/dev/zero")`
 //     escaping `std::bad_alloc` all the way to `std::terminate()`/`abort()` -- and the sibling
 //     scenario the fix's own guard is equally responsible for: a legitimately huge, but FINITE,
-//     file well past `kMaxMappingsFileBytes` (`gamepad.cpp`'s own 256 MiB cap).
+//     file well past `kMaxMappingsFileBytes` (`gamepad.cpp`'s own 1 MiB cap, right-sized by
+//     TETO-CALIBRE from the original 256 MiB -- see Group C below for the calibration itself,
+//     which this crash-freedom family does not, on its own, prove).
 //
 //     WHY THIS FILE EXISTS SEPARATELY FROM `gamepad_mapping_hostile.cpp`: that file attacks
 //     `MappingDb::parse_text()` DIRECTLY, in memory -- a buffer the TEST ITSELF already owns and
@@ -25,9 +28,10 @@
 //     MiB` to keep the REPRODUCING PROCESS' own memory footprint bounded during that
 //     investigation -- `ulimit` was an ACCELERATOR for observing the crash quickly on a machine
 //     with plenty of free RAM, never the CAUSE, and this fix does not need it either: the NEW
-//     incremental, block-by-block cap (`kMaxMappingsFileBytes` = 256 MiB, checked WHILE reading,
-//     not after) rejects the read on its own, in well under a second (reading 256 MiB+ from
-//     `/dev/zero` is fast I/O, no allocation pressure involved), regardless of how much RAM the
+//     incremental, block-by-block cap (`kMaxMappingsFileBytes` = 1 MiB since TETO-CALIBRE, W25,
+//     down from the original 256 MiB, checked WHILE reading, not after) rejects the read on its
+//     own, in well under a second (reading 1 MiB+ from `/dev/zero` is fast I/O, no allocation
+//     pressure involved), regardless of how much RAM the
 //     test machine actually has. This file therefore runs `/dev/zero` with NO `ulimit` at all --
 //     doing so would test the SAME thing the fix already guarantees unconditionally, and would
 //     wrongly suggest a memory ceiling is load-bearing for correctness here (it is not).
@@ -57,7 +61,9 @@
 //     `load_mappings_file("/dev/zero")` escapando `std::bad_alloc` até
 //     `std::terminate()`/`abort()` -- e o cenário irmão pelo qual a PRÓPRIA guarda do conserto é
 //     igualmente responsável: um arquivo legitimamente enorme, mas FINITO, bem além do
-//     `kMaxMappingsFileBytes` (o próprio teto de 256 MiB de `gamepad.cpp`).
+//     `kMaxMappingsFileBytes` (o próprio teto de 1 MiB de `gamepad.cpp`, recalibrado pelo
+//     TETO-CALIBRE a partir dos 256 MiB originais -- ver o Grupo C abaixo pela própria
+//     calibração, que esta família de ausência-de-crash não prova sozinha).
 //
 //     POR QUE ESTE ARQUIVO EXISTE SEPARADO DE `gamepad_mapping_hostile.cpp`: aquele ataca o
 //     `MappingDb::parse_text()` DIRETO, em memória -- um buffer que o PRÓPRIO TESTE já possui e
@@ -75,9 +81,10 @@
 //     512 MiB` só pra manter a PRÓPRIA pegada de memória do PROCESSO REPRODUZINDO limitada
 //     durante aquela investigação -- o `ulimit` foi um ACELERADOR pra observar o crash
 //     rapidamente numa máquina com bastante RAM livre, nunca a CAUSA, e este conserto também não
-//     precisa dele: o NOVO teto incremental, bloco-a-bloco (`kMaxMappingsFileBytes` = 256 MiB,
-//     checado DURANTE a leitura, não depois) rejeita a leitura sozinho, em bem menos de um
-//     segundo (ler 256 MiB+ de `/dev/zero` é I/O rápido, sem pressão de alocação envolvida),
+//     precisa dele: o NOVO teto incremental, bloco-a-bloco (`kMaxMappingsFileBytes` = 1 MiB desde
+//     o TETO-CALIBRE, W25, reduzido dos 256 MiB originais, checado DURANTE a leitura, não depois)
+//     rejeita a leitura sozinho, em bem menos de um segundo (ler 1 MiB+ de `/dev/zero` é I/O
+//     rápido, sem pressão de alocação envolvida),
 //     independente de quanta RAM a máquina de teste de fato tem. Este arquivo portanto roda
 //     `/dev/zero` SEM `ulimit` nenhum -- fazer isso testaria a MESMA coisa que o conserto já
 //     garante incondicionalmente, e sugeriria erradamente que um teto de memória é
@@ -218,12 +225,14 @@ int main() {
   // ===========================================================================================
   {
     const char* kPath = "gamepad_nothrow_huge_sparse.bin";
-    // EN: 256 MiB (kMaxMappingsFileBytes, gamepad.cpp) + 4096 bytes -- comfortably past the cap,
-    //     small margin so the intent ("just over the cap") stays legible at the call site.
-    // PT: 256 MiB (kMaxMappingsFileBytes, gamepad.cpp) + 4096 bytes -- confortavelmente além do
-    //     teto, margem pequena pra que a intenção ("só um pouco além do teto") continue legível
-    //     no próprio sítio de chamada.
-    constexpr std::uintmax_t kHugeSize = (256ull * 1024ull * 1024ull) + 4096ull;
+    // EN: 1 MiB (kMaxMappingsFileBytes, gamepad.cpp, right-sized by TETO-CALIBRE from the
+    //     original 256 MiB) + 4096 bytes -- comfortably past the cap, small margin so the intent
+    //     ("just over the cap") stays legible at the call site.
+    // PT: 1 MiB (kMaxMappingsFileBytes, gamepad.cpp, recalibrado pelo TETO-CALIBRE a partir dos
+    //     256 MiB originais) + 4096 bytes -- confortavelmente além do teto, margem pequena pra
+    //     que a intenção ("só um pouco além do teto") continue legível no próprio sítio de
+    //     chamada.
+    constexpr std::uintmax_t kHugeSize = (1ull * 1024ull * 1024ull) + 4096ull;
 
     std::error_code ec;
     {
@@ -242,6 +251,84 @@ int main() {
             "Group B setup: sparse file's own apparent size matches the requested huge size");
 
       run_oracle("Group B (sparse regular file, finite but past the cap)", kPath);
+    }
+
+    std::filesystem::remove(kPath, ec); // EN: best-effort cleanup. PT: limpeza best-effort.
+  }
+
+  // =============================================================================================
+  // EN: Group C (TETO-CALIBRE, W25, 2026-08-04) -- a DIFFERENT concern from Group A/B above: not
+  //     "does the cap prevent a crash" (proven already), but "is the cap actually load-bearing at
+  //     a REALISTIC size, or so loose it never engages against anything a real caller would ever
+  //     see". Builds ~1.5 MiB of REAL, VALID gamecontrollerdb.txt content (one genuine line from
+  //     the vendored `gamecontrollerdb_linux.txt`, repeated) -- a size that sits BETWEEN the
+  //     right-sized 1 MiB cap and the original, oversized 256 MiB one. Runs IN-PROCESS, no fork:
+  //     this is a return-value assertion (rejection == 0 entries added), not a crash-freedom
+  //     probe, so the crash-isolation machinery Group A/B need does not apply here. Before
+  //     TETO-CALIBRE (cap = 256 MiB) this file is well under the cap and gets ACCEPTED --
+  //     `check(added == 0, ...)` below FAILS, red, exactly as it should: a 256 MiB cap is not
+  //     load-bearing against a 1.5 MiB file. After TETO-CALIBRE (cap = 1 MiB) the same file is
+  //     REJECTED -- green.
+  // PT: Grupo C (TETO-CALIBRE, W25, 2026-08-04) -- uma preocupação DIFERENTE da dos Grupos A/B
+  //     acima: não "o teto evita um crash" (já provado), e sim "o teto é de fato load-bearing num
+  //     tamanho REALISTA, ou é tão folgado que nunca engata contra nada que um chamador real algum
+  //     dia veria". Constrói ~1,5 MiB de conteúdo REAL, VÁLIDO, em formato gamecontrollerdb.txt
+  //     (uma linha genuína do `gamecontrollerdb_linux.txt` vendorizado, repetida) -- um tamanho
+  //     que fica ENTRE o teto certo de 1 MiB e o original, superdimensionado, de 256 MiB. Roda
+  //     EM-PROCESSO, sem fork: isto é uma asserção de valor de retorno (rejeição == 0 entradas
+  //     adicionadas), não uma prova de ausência-de-crash, então a maquinaria de isolamento de
+  //     crash que Grupo A/B precisam não se aplica aqui. Antes do TETO-CALIBRE (teto = 256 MiB)
+  //     este arquivo fica bem abaixo do teto e é ACEITO -- o `check(added == 0, ...)` abaixo
+  //     FALHA, vermelho, exatamente como deveria: um teto de 256 MiB não é load-bearing contra um
+  //     arquivo de 1,5 MiB. Depois do TETO-CALIBRE (teto = 1 MiB) o mesmo arquivo é REJEITADO --
+  //     verde.
+  // =============================================================================================
+  {
+    const char* kPath = "gamepad_nothrow_calibre_probe.bin";
+    // EN: One genuine line, verbatim, from third_party/gamecontrollerdb/gamecontrollerdb_linux.txt
+    //     -- a REAL entry, not synthetic garbage, so a rejection here can only be attributed to
+    //     the size cap, never to a parse failure.
+    // PT: Uma linha genuína, verbatim, de third_party/gamecontrollerdb/gamecontrollerdb_linux.txt
+    //     -- uma entrada REAL, não lixo sintético, pra que uma rejeição aqui só possa ser
+    //     atribuída ao teto de tamanho, nunca a uma falha de parse.
+    constexpr char kValidLine[] =
+        "03000000c82d00001930000011010000,8BitDo 64,a:b0,b:b1,back:b10,dpdown:h0.4,dpleft:h0.8,"
+        "dpright:h0.2,dpup:h0.1,guide:b12,leftshoulder:b6,leftstick:b13,lefttrigger:b8,leftx:a0,"
+        "lefty:a1,rightshoulder:b7,righttrigger:b9,rightx:a2,righty:a3,start:b11,platform:Linux,\n";
+    constexpr std::size_t kLineLen = sizeof(kValidLine) - 1; // EN: excludes the NUL. PT: exclui o NUL.
+    // EN: 1.5 MiB -- between the new 1 MiB cap (must reject) and the old 256 MiB one (would have
+    //     accepted), a fixed and legible middle point rather than "cap + epsilon".
+    // PT: 1,5 MiB -- entre o novo teto de 1 MiB (tem de rejeitar) e o antigo de 256 MiB (teria
+    //     aceito), um ponto médio fixo e legível em vez de "teto + epsilon".
+    constexpr std::size_t kTargetSize = (3ull * 1024ull * 1024ull) / 2ull;
+    const std::size_t repeats = kTargetSize / kLineLen + 1;
+
+    {
+      std::ofstream out(kPath, std::ios::binary | std::ios::trunc);
+      for (std::size_t i = 0; i < repeats; ++i) {
+        out.write(kValidLine, static_cast<std::streamsize>(kLineLen));
+      }
+    }
+
+    std::error_code ec;
+    const std::uintmax_t actual_size = std::filesystem::file_size(kPath, ec);
+    check(!ec && actual_size > kTargetSize,
+          "Group C setup: probe file's own on-disk size is at least the ~1.5 MiB target");
+
+    glintfx::Gamepads pads;
+    glintfx::GamepadsConfig cfg;
+    cfg.dev_dir = "/nonexistent-gamepad-nothrow-probe-dir";
+    cfg.hotplug = false;
+    const bool init_ok = pads.init(cfg);
+    check(init_ok, "Group C setup: Gamepads::init() succeeded");
+
+    if (init_ok) {
+      const int added = pads.load_mappings_file(kPath);
+      check(added == 0,
+            "Group C (TETO-CALIBRE): a ~1.5 MiB file of REAL, valid mapping content -- "
+            "comfortably over the right-sized 1 MiB cap -- is REJECTED (0 entries added), "
+            "proving the cap is load-bearing at a realistic size, not merely decorative "
+            "headroom over the vendored 197 KiB gamecontrollerdb_linux.txt");
     }
 
     std::filesystem::remove(kPath, ec); // EN: best-effort cleanup. PT: limpeza best-effort.

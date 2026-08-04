@@ -157,13 +157,23 @@ std::array<unsigned char, 24> make_synthetic_event(std::uint16_t type, std::uint
 //     `seek`/`tell` would NOT have caught this: `/dev/zero` and other character devices are not
 //     seekable in the way a regular file is (no reliable `st_size`), so the only guard that
 //     actually bounds an EOF-less stream is one applied WHILE reading, not before or after.
-//     `kMaxMappingsFileBytes` reuses the SAME 256 MiB VALUE `BaseUrlFileInterface::kMaxFileBytes`
-//     (AUD-L1-PARSE, `base_url_file_interface.hpp`) already established as this codebase's own
-//     generic per-asset-file ceiling -- declared locally here (not shared/`#include`d), same
-//     "reuse the VALUE, not the symbol" discipline `CAPTURE-NOTHROW`'s own `kMaxCaptureBytes`
-//     already used for `kMaxImageDecodeBytes`. The community `gamecontrollerdb.txt` this format
-//     mirrors is on the order of a few hundred KiB to a few MiB in the wild -- 256 MiB is
-//     generous headroom over any plausible legitimate file, not a tight fit.
+//     `kMaxMappingsFileBytes` is right-sized (TETO-CALIBRE, W25, 2026-08-04) to the REAL artifact
+//     this format exists to serve, not reused from an unrelated precedent: the vendored
+//     `gamecontrollerdb_linux.txt` (`third_party/gamecontrollerdb/`) this codebase actually ships
+//     is 196 KiB (200,882 bytes) on disk. 1 MiB gives ~5.2x headroom over that real file --
+//     generous enough that no legitimate mappings file plausibly hits the cap, tight enough to
+//     reject 256x SOONER than the previous 256 MiB value did. That is not a cosmetic difference:
+//     the old cap only rejected AFTER reading up to 256 MiB into a `std::string`, and on a
+//     memory-constrained target that read-before-reject window IS the exact failure class this
+//     cap exists to close (see this comment's own top half) -- a looser cap defeats its own
+//     purpose by the same mechanism the cap was built to prevent, just at a larger scale.
+//     `text_raster.hpp`'s own `kMaxTextCallBytes = 1 MiB` (TX6, `text_raster.hpp`) lands on the
+//     same order of magnitude independently, for a different per-call ceiling -- cited here as
+//     CONFIRMATION that 1 MiB is a sane order of magnitude for this codebase's per-asset ceilings
+//     in general, not as the origin of this specific value. `gamepad_mappings_file_nothrow_sanity.cpp`'s
+//     own Group C (TETO-CALIBRE) proves the cap is load-bearing at a realistic size -- a ~1.5 MiB
+//     file of real, valid mapping content is rejected -- not merely decorative headroom over the
+//     vendored file.
 // PT: GAMEPAD-NOTHROW (W22, 2026-07-30) -- teto de contagem de bytes, checado
 //     INCREMENTALMENTE (bloco a bloco), não via um único slurp `ss << f.rdbuf()` (a forma
 //     pré-conserto). MEDIDO, não teórico: `read_whole_file("/dev/zero")` sob o slurp `rdbuf()`
@@ -179,15 +189,26 @@ std::array<unsigned char, 24> make_synthetic_event(std::uint16_t type, std::uint
 //     via `seek`/`tell` NÃO teria pego isto: `/dev/zero` e outros devices de caractere não são
 //     seekable do jeito que um arquivo comum é (sem `st_size` confiável), então a única guarda
 //     que de fato limita um stream sem EOF é uma aplicada DURANTE a leitura, não antes nem
-//     depois. `kMaxMappingsFileBytes` reusa o MESMO VALOR de 256 MiB que
-//     `BaseUrlFileInterface::kMaxFileBytes` (AUD-L1-PARSE, `base_url_file_interface.hpp`) já
-//     estabeleceu como o próprio teto genérico por-arquivo-de-asset deste código-base --
-//     declarado localmente aqui (não compartilhado/`#include`do), mesma disciplina "reusa o
-//     VALOR, não o símbolo" que o próprio `kMaxCaptureBytes` do `CAPTURE-NOTHROW` já usou pro
-//     `kMaxImageDecodeBytes`. O `gamecontrollerdb.txt` da comunidade que este formato espelha
-//     fica na ordem de algumas centenas de KiB a poucos MiB no mundo real -- 256 MiB é folga
-//     generosa sobre qualquer arquivo legítimo plausível, não um ajuste apertado.
-constexpr std::size_t kMaxMappingsFileBytes = 256u * 1024u * 1024u; // 256 MiB.
+//     depois. `kMaxMappingsFileBytes` é dimensionado corretamente (TETO-CALIBRE, W25,
+//     2026-08-04) pro artefato REAL que este formato existe pra servir, não reusado de um
+//     precedente sem relação: o `gamecontrollerdb_linux.txt` vendorizado
+//     (`third_party/gamecontrollerdb/`) que este código-base de fato distribui tem 196 KiB
+//     (200.882 bytes) em disco. 1 MiB dá ~5,2x de folga sobre esse arquivo real -- generoso o
+//     bastante pra que nenhum arquivo de mapeamentos legítimo plausivelmente bata no teto, e
+//     apertado o bastante pra rejeitar 256x MAIS CEDO do que o valor anterior de 256 MiB
+//     rejeitava. Isso não é uma diferença cosmética: o teto antigo só rejeitava DEPOIS de ler
+//     até 256 MiB pra dentro de uma `std::string`, e num alvo com pouca memória essa janela de
+//     ler-antes-de-rejeitar É a exata classe de falha pela qual este teto existe (ver a metade
+//     de cima deste comentário) -- um teto mais frouxo derrota o próprio propósito pelo mesmo
+//     mecanismo que o teto foi construído pra prevenir, só que numa escala maior. O próprio
+//     `kMaxTextCallBytes = 1 MiB` (TX6, `text_raster.hpp`) chega à mesma ordem de grandeza de
+//     forma independente, pra um teto por-chamada diferente -- citado aqui como CONFIRMAÇÃO de
+//     que 1 MiB é uma ordem de grandeza sensata pros tetos por-asset deste código-base em geral,
+//     não como a origem deste valor específico. O próprio Grupo C (TETO-CALIBRE) de
+//     `gamepad_mappings_file_nothrow_sanity.cpp` prova que o teto é load-bearing num tamanho
+//     realista -- um arquivo de ~1,5 MiB de conteúdo de mapeamento real, válido, é rejeitado --
+//     não meramente folga decorativa sobre o arquivo vendorizado.
+constexpr std::size_t kMaxMappingsFileBytes = 1u * 1024u * 1024u; // 1 MiB.
 
 // EN: Reads the whole file into memory, binary-safe (embedded NUL bytes survive the read, though
 //     MappingDb::parse_text()'s own std::string(text) construction from the returned c_str()

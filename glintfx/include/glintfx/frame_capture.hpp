@@ -88,30 +88,35 @@
 //     the `glx_`-prefixed function-pointer TABLE `glx_gl_load()` populates
 //     (`src/gl_loader.h`/`.c`) -- a zero-initialised static until that call runs at least once
 //     in this process, as a side effect of ANY of: `App`'s own construction, `UiLayer`'s own
-//     construction with the default `Config::load_gl = true`, `Draw2d::init()`, or a host's
-//     own equivalent GL-context-creation step if it happens to route through this library's
-//     `WindowGlfw` test/demo helper. UNLIKE `gl_proc_address()` (which resolves its OWN
-//     single symbol through a DIFFERENT, bootstrap-safe OS resolver --
-//     `glXGetProcAddressARB`/`wglGetProcAddress` -- that works even BEFORE `glx_gl_load()` has
-//     ever run), this function's own GL calls have NO such bootstrap path: calling any of them
-//     through a still-null function pointer is undefined behaviour (a SEGFAULT in practice --
-//     the SAME crash class `gl_proc_address()`'s own doc-comment measured for a `UiLayer{
-//     .load_gl = false}` host, `Engine::attach()` -> `RenderGl3::init()`, via `gdb`). BECAUSE
-//     this function, unlike its two instance-method siblings, has no `App`/`UiLayer`
-//     construction step of its own to lean on for this guarantee (a caller reaching this
-//     function has, by construction, no glintfx instance at all), it adds the ONE guard its
-//     siblings get for free from their own constructor's `ok()` gate: if `glx_glReadPixels` --
-//     positioned as the FIRST GL call this function's own body makes, before every one of the
-//     five `glGetIntegerv` calls the body also touches, so this ONE check guards the WHOLE
-//     body, not narrowly `glReadPixels` alone -- is still null, it returns
-//     `CapturedFramebuffer{}` (`ok == false`) WITHOUT calling ANY GL function -- turning what
-//     would otherwise be this function's own version of that exact SEGFAULT into a clean,
-//     documented failure. This is a genuine, deliberate IMPROVEMENT over the implicit
-//     assumption its siblings can afford to make (their own `Engine::ok()` gate already
-//     implies `attach()`, which already implies `glx_gl_load()`, ran) -- not a claim that the
-//     underlying precondition itself has changed: `glx_gl_load()` still needs to have run,
-//     from SOME entry point, before a REAL (non-empty) capture can ever succeed; this function
-//     merely fails cleanly instead of crashing when it has not.
+//     construction with the default `Config::load_gl = true`, `Draw2d::init()`, a host's own
+//     equivalent GL-context-creation step if it happens to route through this library's
+//     `WindowGlfw` test/demo helper -- OR (`CAPTURE-FREE-LOADER`, W27, 2026-08-04) THIS
+//     FUNCTION ITSELF, the FIRST time it is called, as described below.
+//     UNLIKE `gl_proc_address()` (which resolves its OWN single symbol through a DIFFERENT,
+//     bootstrap-safe OS resolver -- `glXGetProcAddressARB`/`wglGetProcAddress` -- that works
+//     even BEFORE `glx_gl_load()` has ever run), this function's own GL calls have NO such
+//     bootstrap path of their own: calling any of them through a still-null function pointer
+//     is undefined behaviour (a SEGFAULT in practice -- the SAME crash class
+//     `gl_proc_address()`'s own doc-comment measured for a `UiLayer{ .load_gl = false}` host,
+//     `Engine::attach()` -> `RenderGl3::init()`, via `gdb`). BECAUSE this function, unlike its
+//     two instance-method siblings, has no `App`/`UiLayer` construction step of its own to
+//     lean on for this guarantee (a caller reaching this function has, by construction, no
+//     glintfx instance at all), it CLOSES THE GAP ITSELF (`CAPTURE-FREE-LOADER`, W27,
+//     2026-08-04) instead of only checking for it: if `glx_glReadPixels` -- positioned as the
+//     FIRST GL call this function's own body makes, before every one of the five
+//     `glGetIntegerv` calls the body also touches, so this ONE check guards the WHOLE body,
+//     not narrowly `glReadPixels` alone -- is still null, it calls `glx_gl_load()` itself,
+//     ONCE, and re-checks the SAME pointer; only if it is STILL null after that attempt does
+//     it return `CapturedFramebuffer{}` (`ok == false`) WITHOUT calling ANY GL function. This
+//     is safe precisely because `glx_gl_load()` needs nothing THIS function's own contract
+//     does not already require (a GL context current on the calling thread) and is documented
+//     idempotent (`src/gl_loader.h`) -- see `frame_capture.cpp`'s own updated guard comment
+//     for the full derivation, including the ONE residual gap this does NOT close: a host
+//     whose GL context needs a resolver `glx_gl_load()`'s own glX/EGL/dlsym chain cannot find
+//     (SDL/ANGLE/a private EGL wrapper) still gets `ok == false` here -- the SAME documented
+//     failure this function already had before this fix, not a regression; that host must
+//     populate the table itself first via a `UiLayer`'s own `Config::gl_proc_resolver`
+//     (`glx_gl_load_with()`, `GLLOADER-HOST`).
 //
 //     FAIL-HIGH (same shape as `Engine::capture_frame()`'s own contract, `engine.hpp`):
 //     `w <= 0 || h <= 0`, OR the loader-not-ready guard above, returns `CapturedFramebuffer{}`
@@ -232,31 +237,38 @@
 //     `glx_` que o `glx_gl_load()` popula (`src/gl_loader.h`/`.c`) -- um estático
 //     zero-inicializado até aquela chamada rodar ao menos uma vez neste processo, como efeito
 //     colateral de QUALQUER um de: a própria construção do `App`, a própria construção do
-//     `UiLayer` com o `Config::load_gl = true` padrão, o `Draw2d::init()`, ou o próprio passo
+//     `UiLayer` com o `Config::load_gl = true` padrão, o `Draw2d::init()`, o próprio passo
 //     equivalente de criação de contexto GL de um host se por acaso passar pelo helper de
-//     teste/demo `WindowGlfw` desta biblioteca. DIFERENTE do `gl_proc_address()` (que resolve
-//     o PRÓPRIO símbolo único através de um resolvedor de SO DIFERENTE, seguro-pra-bootstrap
-//     -- `glXGetProcAddressARB`/`wglGetProcAddress` -- que funciona mesmo ANTES do
-//     `glx_gl_load()` ter rodado alguma vez), as próprias chamadas GL desta função NÃO têm tal
-//     caminho de bootstrap: chamar qualquer uma delas através de um ponteiro de função ainda-
-//     nulo é comportamento indefinido (um SEGFAULT na prática -- a MESMA classe de crash que o
-//     próprio doc-comment de `gl_proc_address()` mediu pra um host `UiLayer{.load_gl =
-//     false}`, `Engine::attach()` -> `RenderGl3::init()`, via `gdb`). PORQUE esta função,
-//     diferente das duas irmãs de método de instância, não tem passo de construção próprio de
+//     teste/demo `WindowGlfw` desta biblioteca -- OU (`CAPTURE-FREE-LOADER`, W27, 2026-08-04)
+//     ESTA PRÓPRIA FUNÇÃO, na PRIMEIRA vez que é chamada, como descrito abaixo.
+//     DIFERENTE do `gl_proc_address()` (que resolve o PRÓPRIO símbolo único através de um
+//     resolvedor de SO DIFERENTE, seguro-pra-bootstrap -- `glXGetProcAddressARB`/
+//     `wglGetProcAddress` -- que funciona mesmo ANTES do `glx_gl_load()` ter rodado alguma
+//     vez), as próprias chamadas GL desta função NÃO têm caminho de bootstrap próprio nenhum:
+//     chamar qualquer uma delas através de um ponteiro de função ainda-nulo é comportamento
+//     indefinido (um SEGFAULT na prática -- a MESMA classe de crash que o próprio doc-comment
+//     de `gl_proc_address()` mediu pra um host `UiLayer{.load_gl = false}`,
+//     `Engine::attach()` -> `RenderGl3::init()`, via `gdb`). PORQUE esta função, diferente das
+//     duas irmãs de método de instância, não tem passo de construção próprio de
 //     `App`/`UiLayer` pra se apoiar nessa garantia (um chamador alcançando esta função não tem,
-//     por construção, instância glintfx nenhuma), ela soma a ÚNICA guarda que as irmãs ganham
-//     de graça do próprio gate `ok()` do construtor delas: se o `glx_glReadPixels` --
-//     posicionado como a PRIMEIRA chamada GL que o próprio corpo desta função faz, antes de
+//     por construção, instância glintfx nenhuma), ela FECHA A LACUNA ELA MESMA
+//     (`CAPTURE-FREE-LOADER`, W27, 2026-08-04) em vez de só checá-la: se o `glx_glReadPixels`
+//     -- posicionado como a PRIMEIRA chamada GL que o próprio corpo desta função faz, antes de
 //     cada uma das cinco chamadas `glGetIntegerv` que o corpo também toca, então esta ÚNICA
 //     checagem guarda o corpo INTEIRO, não estreitamente só o `glReadPixels` -- ainda é nulo,
-//     ela devolve `CapturedFramebuffer{}` (`ok == false`) SEM chamar NENHUMA função GL -- transformando o
-//     que seria a própria versão desta função daquele exato SEGFAULT numa falha limpa,
-//     documentada. Esta é uma MELHORIA genuína, deliberada, sobre a presunção implícita que as
-//     irmãs podem se dar ao luxo de fazer (o próprio gate `Engine::ok()` delas já implica
-//     `attach()`, que já implica `glx_gl_load()`, ter rodado) -- não uma alegação de que a
-//     própria precondição subjacente mudou: o `glx_gl_load()` ainda precisa ter rodado, de
-//     ALGUM ponto de entrada, antes de uma captura REAL (não-vazia) algum dia ter sucesso;
-//     esta função só falha limpo em vez de crashar quando não rodou.
+//     ela chama o próprio `glx_gl_load()`, UMA VEZ, e rechecka o MESMO ponteiro; só se ainda
+//     estiver nulo depois dessa tentativa é que devolve `CapturedFramebuffer{}` (`ok ==
+//     false`) SEM chamar NENHUMA função GL. Isto é seguro precisamente porque o
+//     `glx_gl_load()` não precisa de nada que o próprio contrato desta função já não exija
+//     (um contexto GL corrente na thread chamadora) e é documentado idempotente
+//     (`src/gl_loader.h`) -- ver o próprio comentário de guarda atualizado de
+//     `frame_capture.cpp` pra derivação completa, inclusive a ÚNICA lacuna residual que isto
+//     NÃO fecha: um host cujo contexto GL precisa de um resolvedor que a própria cadeia
+//     glX/EGL/dlsym do `glx_gl_load()` não acha (SDL/ANGLE/um wrapper EGL próprio) ainda
+//     recebe `ok == false` aqui -- a MESMA falha já documentada que esta função já tinha antes
+//     deste conserto, não uma regressão; aquele host precisa popular a tabela ele mesmo
+//     primeiro, via o próprio `Config::gl_proc_resolver` de um `UiLayer`
+//     (`glx_gl_load_with()`, `GLLOADER-HOST`).
 //
 //     FAIL-HIGH (mesma forma do próprio contrato de `Engine::capture_frame()`, `engine.hpp`):
 //     `w <= 0 || h <= 0`, OU a guarda de loader-não-pronto acima, devolve

@@ -4172,6 +4172,48 @@ add_test(NAME capture_framebuffer_state
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: capture_framebuffer_cold_boot_sanity (CAPTURE-FREE-LOADER, W27, 2026-08-04) -- proves
+#     capture_framebuffer()'s own lazy-init of the GL loader table (frame_capture.cpp's own
+#     updated loader-not-ready guard): a caller with NO glintfx instance of any kind, in a
+#     process where glx_gl_load() has never run, gets a REAL non-empty capture back instead
+#     of the CapturedFramebuffer{} the guard used to hand back unconditionally. Links
+#     `glintfx glfw glloader` DIRECTLY, NOT ${_embed_dep} (same reasoning as
+#     render_loader_guard_sanity/ui_layer_gl_proc_resolver_sanity right above/below this
+#     block): WindowGlfw::create() (${_embed_dep}'s own context helper) calls glx_gl_load()
+#     itself, which would populate the very state this test needs to observe as
+#     UNPOPULATED; `glloader` is added (unlike those two siblings) because this test's own
+#     phase [2] calls raw GL functions (glClear/glBindFramebuffer) through gl_loader.h's own
+#     macros, which those two do not need. Registered UNCONDITIONALLY -- runs in BOTH build
+#     configs (the `glfw` imported target already exists in either by this point in the
+#     file -- see the test file's own header comment). See that file's own top comment for
+#     the full cold-process rationale and the negative-proof record.
+# PT: capture_framebuffer_cold_boot_sanity (CAPTURE-FREE-LOADER, W27, 2026-08-04) -- prova o
+#     próprio lazy-init da tabela do loader GL de capture_framebuffer() (a própria guarda de
+#     loader-não-pronto atualizada de frame_capture.cpp): um chamador SEM instância glintfx
+#     de tipo nenhum, num processo onde o glx_gl_load() nunca rodou, recebe de volta uma
+#     captura REAL não-vazia em vez do CapturedFramebuffer{} que a guarda devolvia
+#     incondicionalmente antes. Linka `glintfx glfw glloader` DIRETAMENTE, NÃO
+#     ${_embed_dep} (mesmo racional de render_loader_guard_sanity/
+#     ui_layer_gl_proc_resolver_sanity logo acima/abaixo deste bloco): o próprio
+#     WindowGlfw::create() (o helper de contexto do ${_embed_dep}) chama o próprio
+#     glx_gl_load(), o que popularia exatamente o estado que este teste precisa observar
+#     como NÃO-POPULADO; o `glloader` é somado (diferente dos dois irmãos) porque a própria
+#     fase [2] deste teste chama funções GL cruas (glClear/glBindFramebuffer) pelas próprias
+#     macros de gl_loader.h, que aqueles dois não precisam. Registrado INCONDICIONALMENTE --
+#     roda nas DUAS configs de build (o alvo importado `glfw` já existe em qualquer uma neste
+#     ponto do arquivo -- ver o próprio comentário de cabeçalho do arquivo de teste). Ver o
+#     próprio comentário de topo daquele arquivo pro racional completo de processo frio e o
+#     registro da prova negativa.
+# ---------------------------------------------------------------------------
+add_executable(capture_framebuffer_cold_boot_sanity capture_framebuffer_cold_boot_sanity.cpp)
+target_link_libraries(capture_framebuffer_cold_boot_sanity PRIVATE glintfx glfw glloader)
+add_test(NAME capture_framebuffer_cold_boot_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:capture_framebuffer_cold_boot_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: GLINTFX_SANITIZE (TST-L1-MEM, nightly gate) — inject sanitizer runtime
 #     options into every test registered so far in this directory. Applied here
 #     (bottom of the file, after all add_test() calls above, GLFW=ON and OFF

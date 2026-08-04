@@ -227,22 +227,140 @@ CapturedFramebuffer capture_framebuffer(int gl_x, int gl_y, int w, int h) noexce
   const std::size_t byte_count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4u;
   if (byte_count > kMaxCaptureBytes) return CapturedFramebuffer{};
 
-  // EN: LOADER-NOT-READY GUARD (see frame_capture.hpp's own "PRE-REQUISITE" section for the
-  //     full derivation): glx_glReadPixels is a zero-initialised static function pointer until
-  //     glx_gl_load() populates it at least once in this process. Calling through it while
-  //     still null is undefined behaviour (a SEGFAULT in practice). This is the ONE guard
-  //     Engine::capture_frame() does not need (its own `!impl_->ok` gate already implies
-  //     attach() -> glx_gl_load() ran) but this instance-free entry point does, since it has
-  //     no constructor of its own to lean on for that guarantee.
-  // PT: GUARDA DE LOADER-NÃO-PRONTO (ver a própria seção "PRÉ-REQUISITO" de frame_capture.hpp
-  //     pra derivação completa): glx_glReadPixels é um ponteiro de função estático
-  //     zero-inicializado até o glx_gl_load() populá-lo ao menos uma vez neste processo.
-  //     Chamar através dele ainda nulo é comportamento indefinido (um SEGFAULT na prática).
-  //     Esta é a ÚNICA guarda que Engine::capture_frame() não precisa (o próprio gate
-  //     `!impl_->ok` dele já implica que attach() -> glx_gl_load() rodou) mas este ponto de
-  //     entrada sem instância precisa, já que não tem construtor próprio pra se apoiar nessa
-  //     garantia.
-  if (glx_glReadPixels == nullptr) return CapturedFramebuffer{};
+  // EN: LOADER-NOT-READY GUARD, now LAZY-INIT (CAPTURE-FREE-LOADER, W27, 2026-08-04 -- see
+  //     this file's own top comment for the full design rationale): glx_glReadPixels is a
+  //     zero-initialised static function pointer until glx_gl_load() populates it at least
+  //     once in this process; calling through it while still null is undefined behaviour (a
+  //     SEGFAULT in practice). Before this fix the guard only CHECKED that precondition and
+  //     gave up -- exactly the "API that promises to unlock does not reach who it should
+  //     unlock" pattern this codebase already names (GLPROC-EMBED, FRAMEGRAB-EMBED): a caller
+  //     with NO glintfx instance, the ENTIRE reason this free function exists, could never
+  //     populate the table through this function alone, no matter how many times it called
+  //     it. The guard now ATTEMPTS the population itself, once, before giving up.
+  //     WHY THIS IS SAFE, NOT A NEW HIDDEN PRECONDITION: this function's own contract
+  //     (frame_capture.hpp's "PRE-REQUISITE" section) already REQUIRES a GL context current
+  //     on the calling thread -- the exact same thing glx_gl_load() itself needs ("resolves
+  //     against the host's current GL context", src/gl_loader.h). Calling it here only
+  //     exercises a capability the existing precondition already made possible.
+  //     WHY THE RE-CHECK IS BY POINTER, NOT BY glx_gl_load()'s OWN RETURN CODE: a non-zero
+  //     return means "one or more CORE symbols failed to resolve", which could in principle
+  //     be a symbol this function never touches while glReadPixels itself still resolved --
+  //     gating on the exact dependency this call is about to use is the narrower, correct
+  //     check.
+  //     WHY THE UNGATED CALL IS CHEAP: glx_gl_load() is documented idempotent ("safe to call
+  //     more than once per process... cheap, no allocation kept around", src/gl_loader.h) --
+  //     the `if` above still means this only runs when the table is still empty, so the
+  //     common case (an App/UiLayer/Draw2d/host resolver already ran) pays nothing extra.
+  //     RESIDUAL LIMITATION, DECLARED NOT SOLVED (CTO decision, 2026-08-04): this call goes
+  //     through glx_gl_load()'s OWN glX/EGL/dlsym chain only -- the SAME three paths
+  //     GLLOADER-HOST's own diagnosis already found do not cover every host (SDL/ANGLE/a
+  //     private EGL wrapper, whichever loader that host's own GL context came from). This
+  //     free function takes no resolver parameter, so a host whose context needs a resolver
+  //     glx_gl_load() itself cannot find still gets a clean CapturedFramebuffer{} here -- the
+  //     identical documented failure this function already had before this fix, not a
+  //     regression. That host must populate the table itself first, via a UiLayer's own
+  //     Config::gl_proc_resolver (glx_gl_load_with(), GLLOADER-HOST) -- a free "init with
+  //     resolver" entry point is deliberately OUT of this fix's scope, and becomes real scope
+  //     only if a consumer actually needs it, not invented here as a speculative gesture.
+  // PT: GUARDA DE LOADER-NÃO-PRONTO, agora LAZY-INIT (CAPTURE-FREE-LOADER, W27, 2026-08-04 --
+  //     ver o próprio comentário de topo deste arquivo pro racional completo de desenho):
+  //     glx_glReadPixels é um ponteiro de função estático zero-inicializado até o
+  //     glx_gl_load() populá-lo ao menos uma vez neste processo; chamar através dele ainda
+  //     nulo é comportamento indefinido (um SEGFAULT na prática). Antes deste conserto a
+  //     guarda só CHECAVA essa precondição e desistia -- exatamente o padrão "a API que
+  //     promete destravar não alcança quem ela deveria destravar" que este código-base já
+  //     nomeia (GLPROC-EMBED, FRAMEGRAB-EMBED): um chamador SEM instância glintfx nenhuma, o
+  //     motivo INTEIRO pelo qual esta função livre existe, nunca conseguia popular a tabela
+  //     por esta função sozinha, não importa quantas vezes a chamasse. A guarda agora TENTA
+  //     a própria população, uma vez, antes de desistir.
+  //     POR QUE ISTO É SEGURO, NÃO UMA PRECONDIÇÃO NOVA ESCONDIDA: o próprio contrato desta
+  //     função (a seção "PRÉ-REQUISITO" de frame_capture.hpp) já EXIGE um contexto GL
+  //     corrente na thread chamadora -- exatamente o mesmo que o próprio glx_gl_load()
+  //     precisa ("resolve contra o contexto GL corrente do host", src/gl_loader.h). Chamá-lo
+  //     aqui só exercita uma capacidade que a precondição já existente já tornava possível.
+  //     POR QUE A RECHECAGEM É POR PONTEIRO, NÃO PELO PRÓPRIO CÓDIGO DE RETORNO DO
+  //     glx_gl_load(): um retorno não-zero significa "um ou mais símbolos CORE falharam ao
+  //     resolver", o que em princípio poderia ser um símbolo que esta função nunca toca
+  //     enquanto o próprio glReadPixels ainda resolveu -- travar na dependência exata que
+  //     esta chamada está prestes a usar é a checagem mais estreita e correta.
+  //     POR QUE A CHAMADA SEM GUARDA EXTRA É BARATA: o glx_gl_load() é documentado
+  //     idempotente ("seguro chamar mais de uma vez por processo... barato, sem alocação
+  //     retida", src/gl_loader.h) -- o `if` acima ainda garante que isto só roda quando a
+  //     tabela ainda está vazia, então o caso comum (um App/UiLayer/Draw2d/resolvedor do host
+  //     já rodou) não paga nada extra.
+  //     LIMITAÇÃO RESIDUAL, DECLARADA NÃO RESOLVIDA (decisão do CTO, 2026-08-04): esta
+  //     chamada passa só pela PRÓPRIA cadeia glX/EGL/dlsym do glx_gl_load() -- os MESMOS três
+  //     caminhos que o próprio diagnóstico do GLLOADER-HOST já achou que não cobrem todo host
+  //     (SDL/ANGLE/um wrapper EGL próprio, seja qual for o loader de onde o contexto GL
+  //     daquele host veio). Esta função livre não aceita parâmetro de resolvedor, então um
+  //     host cujo contexto precisa de um resolvedor que o próprio glx_gl_load() não acha
+  //     ainda recebe um CapturedFramebuffer{} limpo aqui -- a MESMA falha já documentada que
+  //     esta função já tinha antes deste conserto, não uma regressão. Aquele host precisa
+  //     popular a tabela ele mesmo primeiro, via o próprio Config::gl_proc_resolver de um
+  //     UiLayer (glx_gl_load_with(), GLLOADER-HOST) -- um ponto de entrada livre de "init com
+  //     resolvedor" fica deliberadamente FORA do escopo deste conserto, e vira escopo real só
+  //     se um consumidor de fato precisar, não inventado aqui como gesto especulativo.
+  if (glx_glReadPixels == nullptr) {
+    glx_gl_load();
+    if (glx_glReadPixels == nullptr) return CapturedFramebuffer{};
+  }
+
+  // EN: CONTEXT-LIVENESS CHECK, added by the SAME fix above (CAPTURE-FREE-LOADER, W27,
+  //     2026-08-04) after the lazy glx_gl_load() call REGRESSED capture_framebuffer_loader_
+  //     guard.cpp: symbol resolution succeeding is NOT proof a GL context is current on this
+  //     thread. Measured, not assumed: on Linux, glXGetProcAddress() resolves function
+  //     pointers as a pure client-side dispatch-table lookup that needs NEITHER a display
+  //     connection NOR a bound context (part of the GLX ABI, not this library's own choice) --
+  //     so glx_gl_load() can, and on this codebase's own CI/dev Mesa build DOES, successfully
+  //     populate glx_glReadPixels even in a process that never created any GL context at all.
+  //     Calling through such a pointer with nothing bound does not crash on Mesa either: its
+  //     dispatch installs a silent no-op table when no context is current, so every GL call
+  //     below would quietly do nothing -- `rgb`/`out.pixels` would stay at their
+  //     value-initialised zero, and this function would return `ok == true` with a plausible-
+  //     looking but MEANINGLESS all-black capture. That is a WORSE failure mode than the
+  //     clean `ok == false` this function's own FAIL-HIGH contract already promises elsewhere
+  //     (silent wrong data, not a documented refusal) -- the same "never a crash" family this
+  //     codebase already holds itself to draws the line at silent garbage too, not just
+  //     crashes. `glGetString(GL_VERSION)` is the conventional, widely-used GL-only probe for
+  //     "is a context genuinely current" (the same idiom GLEW's own `glewInit()` and similar
+  //     loaders rely on): with no context bound it resolves through the SAME no-op dispatch
+  //     table and returns `nullptr`; with a real context current it always returns a non-null
+  //     version string. Placed AFTER the loader guard above (needs `glx_glGetString` itself
+  //     resolved first) and BEFORE the `try` block's own GL calls, so it protects the SAME
+  //     whole body the loader guard already covers -- including the pre-existing case where
+  //     some OTHER caller populated the table earlier from a context that has since gone away
+  //     on this thread, a gap this function's own PRE-REQUISITE contract already implied but
+  //     never actually checked before this fix.
+  // PT: CHECAGEM DE CONTEXTO-VIVO, somada pelo MESMO conserto acima (CAPTURE-FREE-LOADER,
+  //     W27, 2026-08-04) depois que a chamada lazy ao glx_gl_load() REGREDIU o
+  //     capture_framebuffer_loader_guard.cpp: resolução de símbolo com sucesso NÃO é prova de
+  //     que um contexto GL está corrente nesta thread. Medido, não presumido: no Linux, o
+  //     glXGetProcAddress() resolve ponteiros de função como uma busca pura de tabela de
+  //     dispatch do lado cliente que não precisa NEM de conexão de display NEM de contexto
+  //     vinculado (parte da ABI do GLX, não escolha desta biblioteca) -- então o
+  //     glx_gl_load() pode, e no próprio build Mesa de CI/dev deste código-base DE FATO,
+  //     popular com sucesso o glx_glReadPixels mesmo num processo que nunca criou contexto GL
+  //     nenhum. Chamar através de um ponteiro desses sem nada vinculado também não crasha no
+  //     Mesa: o dispatch dele instala uma tabela no-op silenciosa quando nenhum contexto está
+  //     corrente, então toda chamada GL abaixo simplesmente não faria nada -- `rgb`/
+  //     `out.pixels` ficariam no próprio zero de inicialização por valor, e esta função
+  //     devolveria `ok == true` com uma captura toda-preta plausível-mas-SEM-SENTIDO. Isto é
+  //     um modo de falha PIOR que o `ok == false` limpo que o próprio contrato FAIL-HIGH desta
+  //     função já promete em outro lugar (dado errado silencioso, não uma recusa
+  //     documentada) -- a mesma família "nunca um crash" que este código-base já se cobra
+  //     também traça a linha em dado-lixo silencioso, não só crashes. O
+  //     `glGetString(GL_VERSION)` é a sonda convencional, amplamente usada, só-GL pra "um
+  //     contexto está genuinamente corrente" (o mesmo idioma que o próprio `glewInit()` do
+  //     GLEW e loaders parecidos usam): sem contexto vinculado ele resolve pela MESMA tabela
+  //     de dispatch no-op e devolve `nullptr`; com um contexto real corrente sempre devolve
+  //     uma string de versão não-nula. Colocado DEPOIS da guarda do loader acima (precisa do
+  //     próprio `glx_glGetString` já resolvido) e ANTES das próprias chamadas GL do bloco
+  //     `try`, então protege o MESMO corpo inteiro que a guarda do loader já cobre --
+  //     inclusive o caso pré-existente em que algum OUTRO chamador populou a tabela antes, a
+  //     partir de um contexto que já deixou de existir nesta thread, uma lacuna que o próprio
+  //     contrato PRÉ-REQUISITO desta função já implicava mas nunca de fato checava antes
+  //     deste conserto.
+  if (glGetString(GL_VERSION) == nullptr) return CapturedFramebuffer{};
 
   try {
     GLint prev_read_fbo = 0, prev_read_buffer = 0;

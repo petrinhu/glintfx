@@ -573,6 +573,13 @@ bool App::is_key_down(Key k) const {
   return impl_->window.is_key_down(k);
 }
 
+// EN: SEED-SCANCODE (W27) -- same thin-forward pattern as is_key_down() above.
+// PT: SEED-SCANCODE (W27) -- mesmo padrão de repasse fino do is_key_down() acima.
+bool App::is_scancode_down(int scancode) const {
+  if (!ready()) return false;
+  return impl_->window.is_scancode_down(scancode);
+}
+
 bool App::is_mouse_button_down(int button) const {
   if (!ready()) return false;
   return impl_->window.is_mouse_button_down(button);

@@ -237,6 +237,16 @@ public:
   bool is_mouse_button_down(int button) const { return input_state_.is_mouse_button_down(button); }
   void get_cursor_pos(float& x, float& y) const { input_state_.get_cursor_pos(x, y); }
 
+  // EN: SEED-SCANCODE (W27) -- raw-scancode PARALLEL channel, fed from the SAME handle_key() tap
+  //     as is_key_down() above, but BEFORE the Key-enum translation can early-return: this is
+  //     what reaches a physical key GLFW itself cannot name (GLFW_KEY_UNKNOWN -- ABNT2's extra
+  //     '/', scancode 97). See input_state.hpp for the exact [0, 511] guard.
+  // PT: SEED-SCANCODE (W27) -- canal PARALELO de scancode cru, alimentado pelo MESMO tap de
+  //     handle_key() acima, mas ANTES da tradução por enum Key poder retornar cedo: é isto que
+  //     alcança uma tecla física que o próprio GLFW não consegue nomear (GLFW_KEY_UNKNOWN -- o
+  //     '/' extra do ABNT2, scancode 97). Ver input_state.hpp pro guard exato [0, 511].
+  bool is_scancode_down(int scancode) const { return input_state_.is_scancode_down(scancode); }
+
   // EN: HOSTIN-2 (Onda 2) -- edge-detected key callback, registerable/replaceable at any point;
   //     null/empty is a safe no-op (same convention as set_event_sink above). Fires from inside
   //     handle_key(), which runs synchronously from glfwPollEvents() (i.e. inside App::

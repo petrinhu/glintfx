@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 // EN: App-level smoke test for the HOSTIN-1..4 physical input surface (Onda 2, v0.19.0 --
-//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, section 4.2). Runs under Xvfb
-//     (GLFW backend, real window/GL context, no real keyboard/mouse events -- that leg is
-//     manual, section 4.3 of the plan). Covers:
+//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, section 4.2), extended by
+//     SEED-SCANCODE (W27, the raw-scancode PARALLEL channel). Runs under Xvfb (GLFW backend,
+//     real window/GL context, no real keyboard/mouse events -- that leg is manual, section 4.3
+//     of the plan). Covers:
 //
-//       1. A fresh App answers is_key_down/is_mouse_button_down/get_cursor_pos as
-//          false/false/(0,0) -- nothing has ever touched the physical state table.
-//       2. Out-of-range Key/button queries stay false (fail-high), same as a fresh App.
+//       1. A fresh App answers is_key_down/is_mouse_button_down/is_scancode_down/
+//          get_cursor_pos as false/false/false/(0,0) -- nothing has ever touched the physical
+//          state table.
+//       2. Out-of-range Key/button/scancode queries stay false (fail-high), same as a fresh
+//          App.
 //       3. Callbacks (set_key_callback, set_close_request_callback, set_window_focus_callback,
 //          set_window_iconify_callback) are registerable both BEFORE and AFTER load(), and a
 //          null/empty callback is a safe no-op (clearing a previously-set one).
 //       4. process_event() (the SYNTHETIC channel) does NOT write into the physical state table
 //          (D5) -- a synthetic Key/MouseButton event must leave is_key_down/
-//          is_mouse_button_down exactly as they were.
+//          is_mouse_button_down/is_scancode_down exactly as they were (UiEvent has no scancode
+//          field, so this is a regression guard, not a live vector).
 //       5. request_close() makes running() false immediately, and run() (poll+update+render in
 //          a loop) returns without hanging -- this is the bounded, no-timeout-race proof AUD-
 //          TEC-7 asked for (run() itself was previously untestable; request_close() finally
@@ -27,21 +31,24 @@
 //     -- Xvfb has no window manager to generate a real close request through, so a from-scratch
 //     XSendEvent harness would be testing X11 client-message plumbing, not glintfx's own logic.
 // PT: Teste de fumaça em nível de App para a superfície de input físico HOSTIN-1..4 (Onda 2,
-//     v0.19.0 -- docs/superpowers/plans/2026-07-22-onda2-input-host.md, seção 4.2). Roda sob
-//     Xvfb (backend GLFW, janela/contexto GL reais, sem eventos reais de teclado/mouse -- essa
-//     perna é manual, seção 4.3 do plano). Cobre:
+//     v0.19.0 -- docs/superpowers/plans/2026-07-22-onda2-input-host.md, seção 4.2), estendido
+//     pela SEED-SCANCODE (W27, o canal PARALELO de scancode cru). Roda sob Xvfb (backend GLFW,
+//     janela/contexto GL reais, sem eventos reais de teclado/mouse -- essa perna é manual, seção
+//     4.3 do plano). Cobre:
 //
-//       1. Um App recém-criado responde is_key_down/is_mouse_button_down/get_cursor_pos como
-//          false/false/(0,0) -- nada nunca tocou a tabela de estado físico.
-//       2. Consultas de Key/botão fora de faixa continuam false (fail-high), igual a um App
-//          recém-criado.
+//       1. Um App recém-criado responde is_key_down/is_mouse_button_down/is_scancode_down/
+//          get_cursor_pos como false/false/false/(0,0) -- nada nunca tocou a tabela de estado
+//          físico.
+//       2. Consultas de Key/botão/scancode fora de faixa continuam false (fail-high), igual a
+//          um App recém-criado.
 //       3. Callbacks (set_key_callback, set_close_request_callback,
 //          set_window_focus_callback, set_window_iconify_callback) são registráveis tanto
 //          ANTES quanto DEPOIS do load(), e um callback nulo/vazio é um no-op seguro (limpando
 //          um previamente setado).
 //       4. process_event() (o canal SINTÉTICO) NÃO escreve na tabela de estado físico (D5) --
-//          um evento sintético Key/MouseButton precisa deixar is_key_down/is_mouse_button_down
-//          exatamente como estavam.
+//          um evento sintético Key/MouseButton precisa deixar is_key_down/is_mouse_button_down/
+//          is_scancode_down exatamente como estavam (UiEvent não tem campo scancode, então isto
+//          é um guard de regressão, não um vetor vivo).
 //       5. request_close() faz running() virar false imediatamente, e run() (poll+update+render
 //          em laço) retorna sem travar -- esta é a prova limitada, sem corrida de timeout, que
 //          o AUD-TEC-7 pedia (o próprio run() era antes intestável; request_close() finalmente
@@ -98,6 +105,20 @@ int main() {
       app.is_mouse_button_down(std::numeric_limits<int>::max())) {
     std::puts("app_input_query_smoke FAIL: out-of-range mouse button must be false (fail-high)");
     return 4;
+  }
+  // EN: SEED-SCANCODE (W27) -- fresh App: scancode 97 (the ABNT2 '/' this seed exists for), a
+  //     plain in-range one, and hostile out-of-range values all answer false.
+  // PT: SEED-SCANCODE (W27) -- App recém-criado: scancode 97 (o '/' do ABNT2 pra que esta
+  //     semente existe), um valor comum dentro de faixa, e valores hostis fora de faixa
+  //     respondem false, todos.
+  if (app.is_scancode_down(97) || app.is_scancode_down(0)) {
+    std::puts("app_input_query_smoke FAIL: fresh App reports a scancode down");
+    return 11;
+  }
+  if (app.is_scancode_down(512) || app.is_scancode_down(-1) ||
+      app.is_scancode_down(std::numeric_limits<int>::max())) {
+    std::puts("app_input_query_smoke FAIL: out-of-range scancode must be false (fail-high)");
+    return 12;
   }
   {
     float x = -1.f, y = -1.f;
@@ -162,6 +183,21 @@ int main() {
     if (app.is_mouse_button_down(0)) {
       std::puts("app_input_query_smoke FAIL: synthetic MouseButton event leaked into physical state (D5 violated)");
       return 9;
+    }
+
+    // EN: SEED-SCANCODE (W27) -- D5 extends to the raw-scancode channel too: UiEvent has no
+    //     scancode field at all (by design, out of this seed's scope -- CLAUDE.md brief), so
+    //     there is no vector for process_event() to write here; this is a regression guard
+    //     against a future change accidentally wiring one in, proven against the SAME two
+    //     synthetic events already dispatched above.
+    // PT: SEED-SCANCODE (W27) -- o D5 se estende também ao canal de scancode cru: UiEvent não
+    //     tem campo scancode nenhum (por desenho, fora do escopo desta semente -- brief do
+    //     CLAUDE.md), então não há vetor pro process_event() escrever aqui; isto é um guard de
+    //     regressão contra uma mudança futura conectar um sem querer, provado contra os MESMOS
+    //     dois eventos sintéticos já despachados acima.
+    if (app.is_scancode_down(97) || app.is_scancode_down(0)) {
+      std::puts("app_input_query_smoke FAIL: synthetic event leaked into physical scancode state (D5 violated)");
+      return 13;
     }
   }
 

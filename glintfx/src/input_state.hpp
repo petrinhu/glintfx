@@ -107,9 +107,47 @@ public:
     out_y = cursor_y_;
   }
 
+  // EN: SEED-SCANCODE (W27) -- raw-scancode PARALLEL channel, alongside the `Key`-enum channel
+  //     above. Exists for keys the enum cannot name at all: GLFW hands `key == GLFW_KEY_UNKNOWN`
+  //     for a physical key with no GLFW token (confirmed in GLFW's own glfwSetKeyCallback
+  //     doc-comment, glfw3.h: "Such keys have `key` set to `GLFW_KEY_UNKNOWN`... The scancode of
+  //     a key is specific to that platform"), but the CALLBACK still hands over a real, usable
+  //     `scancode` regardless -- the concrete case is ABNT2's extra `/` key, scancode 97, which
+  //     has no `GLFW_KEY_*` at all. Fixed ceiling `[0, kScancodeCount)`: X11/evdev scancodes seen
+  //     in practice sit in [8, 255]; 512 leaves headroom without growing unbounded. Out-of-range
+  //     is fail-high (ignored on write, `false` on read), same discipline as every other table in
+  //     this class -- see `set_key_down`'s own comment above.
+  // PT: SEED-SCANCODE (W27) -- canal PARALELO de scancode cru, ao lado do canal por enum `Key`
+  //     acima. Existe para teclas que o enum não consegue nomear de jeito nenhum: o GLFW entrega
+  //     `key == GLFW_KEY_UNKNOWN` pra uma tecla física sem token GLFW (confirmado no próprio
+  //     doc-comment de glfwSetKeyCallback, glfw3.h: "Such keys have `key` set to
+  //     `GLFW_KEY_UNKNOWN`... The scancode of a key is specific to that platform"), mas o
+  //     CALLBACK entrega um `scancode` real e utilizável do mesmo jeito -- o caso concreto é a
+  //     tecla `/` extra do ABNT2, scancode 97, que não tem `GLFW_KEY_*` nenhum. Teto fixo
+  //     `[0, kScancodeCount)`: scancodes X11/evdev vistos na prática ficam em [8, 255]; 512
+  //     deixa folga sem crescer sem limite. Fora de faixa é fail-high (ignorado na escrita,
+  //     `false` na leitura), mesma disciplina de toda outra tabela desta classe -- ver o próprio
+  //     comentário de `set_key_down` acima.
+  static constexpr int kScancodeCount = 512;
+
+  // EN: `scancode` outside [0, kScancodeCount) is silently ignored.
+  // PT: `scancode` fora de [0, kScancodeCount) é ignorado silenciosamente.
+  void set_scancode_down(int scancode, bool down) noexcept {
+    if (scancode < 0 || scancode >= kScancodeCount) return;
+    scancodes_[scancode] = down;
+  }
+
+  // EN: false for `scancode` outside [0, kScancodeCount) -- fail-high.
+  // PT: false para `scancode` fora de [0, kScancodeCount) -- fail-high.
+  bool is_scancode_down(int scancode) const noexcept {
+    if (scancode < 0 || scancode >= kScancodeCount) return false;
+    return scancodes_[scancode];
+  }
+
 private:
   bool keys_[kKeyCount] = {};
   bool mouse_buttons_[kMouseButtonCount] = {};
+  bool scancodes_[kScancodeCount] = {};
   float cursor_x_ = 0.f;
   float cursor_y_ = 0.f;
 };

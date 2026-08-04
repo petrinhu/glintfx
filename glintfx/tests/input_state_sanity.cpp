@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 // EN: Pure unit test for src/input_state.hpp (HOSTIN-1, Onda 2, framework-2D --
-//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, sections D2/D3/4). No window, no
-//     GL context, no glfwInit() anywhere in this file -- InputState is a plain struct with no
-//     GLFW dependency at all. Exercises press/release/edge-vs-level semantics, the [0,7] mouse
-//     button range (D3, honest GLFW ceiling), cursor position round-trip, and hostile inputs
-//     (out-of-range Key cast, negative/huge button index) -- all must degrade to false/(0,0),
-//     never UB (fail-high, same discipline as gamepad.hpp/audio.hpp).
+//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, sections D2/D3/4; SEED-SCANCODE,
+//     W27, the raw-scancode PARALLEL channel). No window, no GL context, no glfwInit() anywhere
+//     in this file -- InputState is a plain struct with no GLFW dependency at all. Exercises
+//     press/release/edge-vs-level semantics, the [0,7] mouse button range (D3, honest GLFW
+//     ceiling), the [0,511] scancode range (SEED-SCANCODE), cursor position round-trip, and
+//     hostile inputs (out-of-range Key cast, negative/huge button/scancode index) -- all must
+//     degrade to false/(0,0), never UB (fail-high, same discipline as gamepad.hpp/audio.hpp).
 // PT: Teste unit puro para src/input_state.hpp (HOSTIN-1, Onda 2, framework-2D --
-//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, seções D2/D3/D4). Sem janela, sem
-//     contexto GL, sem glfwInit() nenhum neste arquivo -- InputState é uma struct simples sem
-//     dependência de GLFW alguma. Exercita semântica de press/release/nível-vs-borda, a faixa
-//     [0,7] de botão de mouse (D3, teto honesto do GLFW), round-trip de posição de cursor, e
-//     inputs hostis (cast de Key fora de faixa, índice de botão negativo/enorme) -- todos
-//     precisam degradar para false/(0,0), nunca UB (fail-high, mesma disciplina de
-//     gamepad.hpp/audio.hpp).
+//     docs/superpowers/plans/2026-07-22-onda2-input-host.md, seções D2/D3/D4; SEED-SCANCODE,
+//     W27, o canal PARALELO de scancode cru). Sem janela, sem contexto GL, sem glfwInit() nenhum
+//     neste arquivo -- InputState é uma struct simples sem dependência de GLFW alguma. Exercita
+//     semântica de press/release/nível-vs-borda, a faixa [0,7] de botão de mouse (D3, teto
+//     honesto do GLFW), a faixa [0,511] de scancode (SEED-SCANCODE), round-trip de posição de
+//     cursor, e inputs hostis (cast de Key fora de faixa, índice de botão/scancode
+//     negativo/enorme) -- todos precisam degradar para false/(0,0), nunca UB (fail-high, mesma
+//     disciplina de gamepad.hpp/audio.hpp).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/input_state.hpp"
 #include <cstdio>
@@ -161,6 +163,48 @@ int main() {
     st.set_cursor_pos(-10.f, -20.f);
     st.get_cursor_pos(x, y);
     check(std::fabs(x - (-10.f)) < 0.001f && std::fabs(y - (-20.f)) < 0.001f, "cursor round-trips negative coordinates");
+  }
+
+  // ---------------------------------------------------------------------------
+  // EN: SEED-SCANCODE (W27) -- raw-scancode PARALLEL channel. Round-trip on scancode 97, the
+  //     concrete gap this seed exists for (ABNT2's extra `/` key, GLFW_KEY_UNKNOWN, no `Key`
+  //     enumerator can ever name it -- see docs/embed-integration.md section 22). Boundary
+  //     [0, kScancodeCount) both ends, and hostile out-of-range (negative, one-past-ceiling,
+  //     INT_MAX) must degrade to false/no-op, never touch the array out of bounds.
+  // PT: SEED-SCANCODE (W27) -- canal PARALELO de scancode cru. Round-trip no scancode 97, a
+  //     lacuna concreta pra qual esta semente existe (a tecla `/` extra do ABNT2,
+  //     GLFW_KEY_UNKNOWN, nenhum enumerador de `Key` consegue nomeá-la -- ver
+  //     docs/embed-integration.md seção 22). Fronteira [0, kScancodeCount) nas duas pontas, e
+  //     fora-de-faixa hostil (negativo, um-além-do-teto, INT_MAX) precisa degradar pra
+  //     false/no-op, nunca tocar o array fora de faixa.
+  // ---------------------------------------------------------------------------
+  {
+    InputState st;
+    check(!st.is_scancode_down(97), "fresh InputState: scancode 97 (ABNT2 '/') starts up");
+
+    st.set_scancode_down(97, true);
+    check(st.is_scancode_down(97), "scancode 97 (ABNT2 '/'): press -> down");
+    check(!st.is_scancode_down(98), "scancode 97 held does not leak into 98 (independent slots)");
+    st.set_scancode_down(97, false);
+    check(!st.is_scancode_down(97), "scancode 97: release -> up");
+
+    // EN: boundary -- 0 and kScancodeCount-1 (511) are both IN range.
+    // PT: fronteira -- 0 e kScancodeCount-1 (511) estão AMBOS dentro da faixa.
+    st.set_scancode_down(0, true);
+    check(st.is_scancode_down(0), "scancode 0 (lower boundary, in range): press -> down");
+    st.set_scancode_down(InputState::kScancodeCount - 1, true);
+    check(st.is_scancode_down(InputState::kScancodeCount - 1), "scancode kScancodeCount-1 (511, upper boundary, in range): press -> down");
+
+    // EN: hostile -- one past the ceiling, negative, and INT_MAX must all be ignored on write
+    //     and answer false on read, no crash (ASan would catch a real OOB here).
+    // PT: hostil -- um além do teto, negativo, e INT_MAX precisam ser ignorados na escrita e
+    //     responder false na leitura, sem crash (o ASan pegaria um OOB real aqui).
+    st.set_scancode_down(InputState::kScancodeCount, true); // EN: one past ceiling (512). PT: um além do teto (512).
+    st.set_scancode_down(-1, true);
+    st.set_scancode_down(std::numeric_limits<int>::max(), true);
+    check(!st.is_scancode_down(InputState::kScancodeCount), "hostile scancode kScancodeCount (one past ceiling) -> false, no crash");
+    check(!st.is_scancode_down(-1), "hostile scancode -1 -> false, no crash");
+    check(!st.is_scancode_down(std::numeric_limits<int>::max()), "hostile scancode INT_MAX -> false, no crash");
   }
 
   if (g_failures > 0) {

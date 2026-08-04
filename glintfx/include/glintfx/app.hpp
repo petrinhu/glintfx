@@ -405,6 +405,33 @@ public:
   //     doc-comment de Key::Count (ui_event.hpp) pras consequências no layout ABNT2.
   bool is_key_down(Key k) const;
 
+  // EN: SEED-SCANCODE (W27) -- raw-scancode PARALLEL channel, alongside is_key_down() above.
+  //     Exists for a physical key the `Key` enum cannot name at all: GLFW hands `key ==
+  //     GLFW_KEY_UNKNOWN` for such a key, but its own key callback still delivers a real,
+  //     usable `scancode` regardless (confirmed against GLFW's own glfwSetKeyCallback
+  //     doc-comment, glfw3.h) -- the concrete case is the ABNT2 layout's extra `/` key (right of
+  //     the right Shift), scancode 97, documented as a known gap in section 22 of
+  //     docs/embed-integration.md before this method existed. `scancode` in [0, 511] -- a fixed
+  //     ceiling with headroom over the [8, 255] range X11/evdev scancodes are seen in practice
+  //     (InputState::kScancodeCount, input_state.hpp); out-of-range (including negative)
+  //     returns `false`, fail-high, same discipline as is_mouse_button_down() above. Physical
+  //     only: `App::process_event()` (the SYNTHETIC channel) never writes here either (D5) --
+  //     `UiEvent` has no scancode field at all, by design.
+  // PT: SEED-SCANCODE (W27) -- canal PARALELO de scancode cru, ao lado do is_key_down() acima.
+  //     Existe pra uma tecla física que o enum `Key` não consegue nomear de jeito nenhum: o
+  //     GLFW entrega `key == GLFW_KEY_UNKNOWN` pra essa tecla, mas o próprio callback de tecla
+  //     entrega um `scancode` real e utilizável do mesmo jeito (confirmado contra o próprio
+  //     doc-comment de glfwSetKeyCallback, glfw3.h) -- o caso concreto é a tecla `/` extra do
+  //     layout ABNT2 (à direita do Shift direito), scancode 97, documentada como lacuna
+  //     conhecida na seção 22 de docs/embed-integration.md antes deste método existir.
+  //     `scancode` em [0, 511] -- um teto fixo com folga sobre a faixa [8, 255] em que
+  //     scancodes X11/evdev são vistos na prática (InputState::kScancodeCount,
+  //     input_state.hpp); fora de faixa (inclusive negativo) retorna `false`, fail-high, mesma
+  //     disciplina do is_mouse_button_down() acima. Só físico: o App::process_event() (o canal
+  //     SINTÉTICO) também nunca escreve aqui (D5) -- UiEvent não tem campo scancode nenhum, por
+  //     desenho.
+  bool is_scancode_down(int scancode) const;
+
   // EN: `button` in [0, 7] -- GLFW's OWN honest ceiling (GLFW_MOUSE_BUTTON_LAST == 7), NOT
   //     restricted to the UI route's 3-button (left/right/middle) contract (D3, leader
   //     requirement, memory feedback_input_multibutton_teclados). A mouse with more than 8

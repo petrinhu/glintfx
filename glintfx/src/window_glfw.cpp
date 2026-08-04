@@ -692,8 +692,29 @@ void WindowGlfw::on_window_iconify(GLFWwindow* w, int iconified) {
 //     glfw_translate_mouse_button/glfw_encode_utf8.
 // ---------------------------------------------------------------------------
 
-void WindowGlfw::handle_key(int key, int /*scancode*/, int action, int mods) {
+void WindowGlfw::handle_key(int key, int scancode, int action, int mods) {
   active_mods_ = glfw_translate_mods(mods);
+
+  // EN: SEED-SCANCODE (W27) -- raw-scancode tap, BEFORE the Key-enum translation below can
+  //     early-return. This is the whole point: GLFW hands `key == GLFW_KEY_UNKNOWN` for a
+  //     physical key it cannot name at all (the concrete case is ABNT2's extra '/', scancode
+  //     97), which makes glfw_translate_key() fail below -- but the callback's own `scancode`
+  //     parameter is still valid and delivered regardless (GLFW's own glfwSetKeyCallback
+  //     doc-comment, glfw3.h: "Such keys have `key` set to `GLFW_KEY_UNKNOWN`..."). Same
+  //     GLFW_REPEAT discipline as the Key-enum table below (level state, not edge -- nothing to
+  //     change on an already-down key).
+  // PT: SEED-SCANCODE (W27) -- tap de scancode cru, ANTES da tradução por enum Key abaixo poder
+  //     retornar cedo. É esse o ponto inteiro: o GLFW entrega `key == GLFW_KEY_UNKNOWN` pra uma
+  //     tecla física que não consegue nomear de jeito nenhum (o caso concreto é o '/' extra do
+  //     ABNT2, scancode 97), o que faz glfw_translate_key() falhar abaixo -- mas o próprio
+  //     parâmetro `scancode` do callback continua válido e é entregue do mesmo jeito (o próprio
+  //     doc-comment de glfwSetKeyCallback, glfw3.h: "Such keys have `key` set to
+  //     `GLFW_KEY_UNKNOWN`..."). Mesma disciplina de GLFW_REPEAT da tabela por enum Key abaixo
+  //     (estado de nível, não de borda -- nada a mudar numa tecla já segurada).
+  if (action != GLFW_REPEAT) {
+    input_state_.set_scancode_down(scancode, action == GLFW_PRESS);
+  }
+
   Key k;
   if (!glfw_translate_key(key, k)) return;
 

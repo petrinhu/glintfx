@@ -30,6 +30,38 @@
 #     "how much drift do we actually have" audit without WARN noise, or for a caller that
 #     wants the pre-W25 hard gate back.
 #
+#     WORD-BOUNDARY FALLBACK, NOT SUBSTRING (post-review fix, CRITICAL finding, 2026-08-04):
+#     the "found elsewhere" search above matches `name` as a whole identifier (a
+#     non-identifier character, or start/end-of-line, required on both sides), not as a raw
+#     substring. The first cut of DOCREFS-RIGIDEZ used a plain substring search here, which
+#     meant a symbol RENAMED to a longer name that happens to CONTAIN the old one (
+#     `is_key_down` renamed to `is_key_down_v2`) was reported as benign drift (WARN, exit 0)
+#     instead of rot (FAIL) -- the doc kept citing a name that no longer exists anywhere as an
+#     actual identifier, and the default non-blocking mode said nothing. Fixed by requiring a
+#     word boundary in the fallback's `grep`. KNOWN REMAINING GAP, NOT SOLVED (do not expect
+#     it to be): this is still plain-text matching, so it cannot tell "declared/used as code"
+#     from "merely named inside a comment" -- a symbol that survives ONLY inside a comment
+#     announcing its own removal (`// REMOVED: legacy_helper() was deleted...`) still reads as
+#     a legitimate word-boundary hit and still gets WARN'd as drift, suggesting the citation be
+#     "corrected" to point at its own burial notice. Telling "declared" from "mentioned" needs
+#     an actual parser (grep for the declaration syntax of the target language), which is a
+#     different, heavier tool than this one; out of scope for this fatia, and probably for any
+#     text-heuristic-based one.
+#
+#     THE DIRECT (cited-line-exact) MATCH IS STILL PLAIN SUBSTRING, DELIBERATELY LEFT ALONE:
+#     only the whole-file FALLBACK above got the word-boundary fix. Hardening the direct match
+#     the same way was measured (not guessed) against this repo's real docs/ and found to flip
+#     4 real citations (`init` cited at `draw2d.hpp:457`, a line that only contains the
+#     substring inside the unrelated word "initialized") from a substring-PASS into a
+#     word-boundary WARN in default mode -- default-mode exit code is unaffected (WARN doesn't
+#     fail), but `--strict` would newly FAIL those 4, breaking `--strict`'s own contract of
+#     reproducing the pre-W25 exact-line gate's exit code on this repo's current docs.
+#     Widening scope mid-fatia to also fix the direct match is exactly what this house's own
+#     "escopo que cresce no meio" discipline forbids -- left as a seed for a follow-up item
+#     instead (the 4 citations above are themselves latent evidence the direct match has the
+#     same class of false-positive risk; a future fatia can decide whether the fix is
+#     word-boundary here too, or something else).
+#
 #     SCOPE, DELIBERATELY NARROW (read this before adding a citation format and wondering
 #     why it is not caught). Only two citation SHAPES are parsed, because they are the only
 #     ones a plain-text heuristic can extract a symbol from without guessing at prose:
@@ -120,6 +152,40 @@
 #     FAIL independente de o símbolo ainda existir em outro lugar do arquivo) -- útil pra
 #     uma auditoria pontual de "quanto drift a gente realmente tem" sem ruído de WARN, ou
 #     pra quem quer de volta o gate duro pré-W25.
+#
+#     FALLBACK COM FRONTEIRA DE PALAVRA, NÃO SUBSTRING (conserto pós-review, achado CRÍTICO,
+#     2026-08-04): a busca "achou em outro lugar" acima casa `name` como identificador
+#     inteiro (exige caractere não-identificador, ou início/fim de linha, dos dois lados), não
+#     como substring crua. A primeira fatia do DOCREFS-RIGIDEZ usava busca de substring pura
+#     aqui, o que fazia um símbolo RENOMEADO pra um nome maior que meramente CONTÉM o antigo
+#     (`is_key_down` renomeado pra `is_key_down_v2`) ser reportado como drift benigno (WARN,
+#     exit 0) em vez de apodrecimento (FAIL) -- o doc continuava citando um nome que não existe
+#     mais como identificador real em lugar nenhum, e o modo padrão não-bloqueante não dizia
+#     nada. Consertado exigindo fronteira de palavra no `grep` do fallback. LACUNA CONHECIDA E
+#     RESTANTE, NÃO RESOLVIDA (não espere que esteja): isto ainda é casamento de texto puro,
+#     então não distingue "declarado/usado como código" de "meramente citado dentro de um
+#     comentário" -- um símbolo que sobrevive SÓ dentro de um comentário anunciando a própria
+#     remoção (`// REMOVED: legacy_helper() was deleted...`) ainda lê como um hit válido de
+#     fronteira de palavra e ainda ganha WARN como drift, sugerindo "corrigir" a citação pra
+#     apontar pro próprio aviso de enterro. Distinguir "declarado" de "mencionado" precisa de
+#     um parser de verdade (grep pra sintaxe de declaração da linguagem alvo), uma ferramenta
+#     diferente e mais pesada que esta; fora de escopo nesta fatia, e provavelmente de
+#     qualquer uma baseada em heurística de texto.
+#
+#     O MATCH DIRETO (linha citada exata) CONTINUA SUBSTRING PURA, DEIXADO ASSIM DE PROPÓSITO:
+#     só o FALLBACK de arquivo inteiro acima ganhou o conserto de fronteira de palavra.
+#     Apertar o match direto do mesmo jeito foi MEDIDO (não chutado) contra os docs/ reais
+#     deste repo, e o resultado foi 4 citações reais (`init` citado em `draw2d.hpp:457`, uma
+#     linha que só contém a substring dentro da palavra não-relacionada "initialized") virando
+#     de um PASS por substring pra um WARN por fronteira de palavra no modo padrão -- o código
+#     de saída do modo padrão não muda (WARN não falha), mas `--strict` passaria a FALHAR
+#     essas 4, quebrando o próprio contrato do `--strict` de reproduzir o código de saída do
+#     gate exato-por-linha pré-W25 nos docs atuais deste repo. Aumentar o escopo no meio da
+#     fatia pra também consertar o match direto é exatamente o que a disciplina desta casa de
+#     "escopo que cresce no meio" proíbe -- deixado como semente pra um item de acompanhamento
+#     (as 4 citações acima são elas mesmas evidência latente de que o match direto tem o mesmo
+#     tipo de risco de falso-positivo; uma fatia futura pode decidir se o conserto lá também é
+#     fronteira de palavra, ou outra coisa).
 #
 #     ESCOPO, DELIBERADAMENTE ESTREITO (leia isto antes de adicionar um formato de citação e
 #     se perguntar por que não foi pego). Só duas FORMAS de citação são parseadas, porque são
@@ -361,14 +427,39 @@ verify_one() {
 
   # EN: TOLERANT (default) -- the cited line moved or is gone. Search the WHOLE file
   #     before giving up: found elsewhere is drift (WARN), found nowhere is rot (FAIL).
+  #     WORD-BOUNDARY, not substring (DOCREFS-RIGIDEZ fix, CRITICAL finding from adversarial
+  #     review of the first cut, 2026-08-04): the miss-fallback used a plain `grep -F`
+  #     substring search, so a symbol RENAMED to a longer name that merely CONTAINS the old
+  #     one (`is_key_down` -> `is_key_down_v2`) was reported as benign drift instead of rot --
+  #     the doc keeps citing a name that no longer exists, and the default (non-blocking)
+  #     mode still exits 0. `extract_name` above only ever returns `[A-Za-z0-9_]*` (every
+  #     other separator -- `::`, `.`, space, `(`, `<`, `~` -- is stripped before this point),
+  #     so the name is always safe to drop into an ERE unescaped: no regex metacharacter can
+  #     survive extraction. The boundary requires a non-identifier character (or
+  #     start/end-of-line) on both sides, matching the same "NAME as a whole identifier"
+  #     intent the header comment already documents for the substring match -- it is not a
+  #     new policy, it is the existing one enforced correctly.
   # PT: TOLERANTE (padrão) -- a linha citada se moveu ou sumiu. Procura o arquivo INTEIRO
   #     antes de desistir: achou em outro lugar é drift (WARN), não achou em lugar nenhum é
-  #     apodrecimento (FAIL).
+  #     apodrecimento (FAIL). FRONTEIRA DE PALAVRA, não substring (conserto DOCREFS-RIGIDEZ,
+  #     achado CRÍTICO do review adversarial da primeira fatia, 2026-08-04): o fallback de
+  #     miss usava busca de substring pura (`grep -F`), então um símbolo RENOMEADO pra um
+  #     nome maior que meramente CONTÉM o antigo (`is_key_down` -> `is_key_down_v2`) era
+  #     reportado como drift benigno em vez de apodrecimento -- o doc continua citando um
+  #     nome que não existe mais, e o modo padrão (não-bloqueante) segue saindo 0.
+  #     `extract_name` acima só devolve `[A-Za-z0-9_]*` (todo outro separador -- `::`, `.`,
+  #     espaço, `(`, `<`, `~` -- é removido antes deste ponto), então o nome é sempre seguro
+  #     pra entrar numa ERE sem escape: nenhum metacaractere de regex sobrevive à extração. A
+  #     fronteira exige um caractere não-identificador (ou início/fim de linha) dos dois
+  #     lados, casando a mesma intenção de "NOME como identificador inteiro" que o comentário
+  #     de cabeçalho já documenta pro match de substring -- não é política nova, é a política
+  #     existente aplicada corretamente.
   local -a match_lines=()
   local ln
+  local boundary_re="(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|\$)"
   while IFS=: read -r ln _; do
     [[ -n "${ln}" ]] && match_lines+=("${ln}")
-  done < <(grep -nF -- "${name}" "${resolved}" || true)
+  done < <(grep -nE -- "${boundary_re}" "${resolved}" || true)
 
   if [[ "${#match_lines[@]}" -eq 0 ]]; then
     echo "FAIL  ${doc_file}:${doc_line}"

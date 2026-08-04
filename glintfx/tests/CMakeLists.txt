@@ -1289,6 +1289,128 @@ target_link_libraries(image_png_only_sanity PRIVATE glintfx)
 add_test(NAME image_png_only_sanity COMMAND image_png_only_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: image_decode_probe_corpus_sanity (`DEC-PROBE-CORPUS`, W27, TODO.md) -- runs the ADOPTED,
+#     verbatim `tests/tools/gen_corpus.py` (see that file's own provenance header) exactly
+#     ONCE, at BUILD time, into `${CMAKE_CURRENT_BINARY_DIR}/probe_corpus/` (build tree only --
+#     NEVER committed; only the generator itself is tracked). The two fixtures this slice's
+#     test reads (`png_pal_12000.png`, `fake_tga_garbage.png`) are declared as the custom
+#     command's own OUTPUTs so an edit to the generator script re-triggers generation, and the
+#     test target depends on that OUTPUT via `add_dependencies()` -- ordinary CMake build-graph
+#     serialization, so there is exactly ONE execution of the script per configure/build cycle,
+#     never one per `ctest` process (see the test file's own top comment for why this matters:
+#     it is what lets the test itself perform ZERO writes and sidestep this wave's own
+#     `.ppm`-fixed-name-in-CWD race class entirely, rather than mitigate it with a PID-suffixed
+#     path).
+#
+#     GATED on a configure-time Python3+Pillow capability check -- NOT because the two
+#     fixtures this test reads need Pillow themselves (they are built by gen_corpus.py's own
+#     hand-rolled `raw_png()`/PNG-chunk helpers, stdlib only), but because the adopted script
+#     is run UNMODIFIED, start to finish, and `from PIL import Image` at its own module scope
+#     (plus several `Image.new()` calls that sit, in file order, BEFORE both fixtures this
+#     slice needs) makes the whole script fail before either fixture is ever written if Pillow
+#     is not importable. Mirrors this file's own `GLINTFX_GOLDEN_TEST`/`GLINTFX_BACKEND_GLFW`
+#     warning pattern at the very top of this file: when the capability check fails, this
+#     target is simply NOT registered, with a `message(WARNING ...)` naming exactly why -- an
+#     honest absence in the configure log, never a silently-skipped test that claims to have
+#     run. Verified locally (Python 3.14.6 / Pillow 12.3.0): `gen_corpus.py <dir1>` and
+#     `... <dir2>`, run back to back, produced 31/31 byte-identical regular files (`md5sum`),
+#     confirming the generator is deterministic before this gate was wired in.
+#
+#     Consequence for CI: none of this repo's current CI images (`ci.yml`'s `ubuntu-latest`,
+#     `heavy.yml`'s self-hosted container, `nightly.yml`) install Pillow today, so this target
+#     will most likely NOT be registered there until a DevOps-owned CI change adds it (`pip
+#     install pillow` or the distro `python3-pillow`/`python3-pil` package) -- deliberately left
+#     to whoever owns those workflow files, not touched by this slice (`DEC-PROBE-CORPUS`'s own
+#     brief scopes this agent to `tests/tools/`, this test, and this CMakeLists.txt only).
+#     Registered UNCONDITIONALLY across the GLFW=ON/OFF split otherwise (no RmlUi/GL/window
+#     dependency whatsoever, same "nothing display-related to isolate here" reasoning as
+#     image_decode_hardening_sanity/image_png_only_sanity right above) -- so this whole block
+#     sits OUTSIDE both the `if(GLINTFX_BACKEND_GLFW)` block above and any embed-only block
+#     below, exactly where those two siblings sit.
+# PT: image_decode_probe_corpus_sanity (`DEC-PROBE-CORPUS`, W27, TODO.md) -- roda o
+#     `tests/tools/gen_corpus.py` ADOTADO, verbatim (ver o próprio cabeçalho de proveniência
+#     daquele arquivo) exatamente UMA vez, em BUILD time, em
+#     `${CMAKE_CURRENT_BINARY_DIR}/probe_corpus/` (só árvore de build -- NUNCA commitado; só o
+#     próprio gerador é rastreado). As duas fixtures que o teste desta fatia lê
+#     (`png_pal_12000.png`, `fake_tga_garbage.png`) são declaradas como os próprios OUTPUTs do
+#     custom command pra que uma edição no script gerador redispare a geração, e o alvo de
+#     teste depende daquele OUTPUT via `add_dependencies()` -- serialização comum do grafo de
+#     build do CMake, então existe exatamente UMA execução do script por ciclo de
+#     configure/build, nunca uma por processo de `ctest` (ver o próprio comentário de topo do
+#     arquivo de teste pro porquê disto importar: é o que permite ao próprio teste fazer ZERO
+#     escritas e CONTORNAR por completo a classe de corrida de nome-fixo-de-`.ppm`-no-CWD desta
+#     onda, em vez de mitigá-la com um caminho sufixado por PID).
+#
+#     BLOQUEADO por uma checagem de capacidade Python3+Pillow em tempo de configure -- NÃO
+#     porque as duas fixtures que este teste lê precisem de Pillow elas mesmas (são construídas
+#     pelos próprios helpers de `raw_png()`/PNG-chunk feitos à mão do gen_corpus.py, só
+#     stdlib), mas porque o script adotado roda NÃO-MODIFICADO, do início ao fim, e o `from PIL
+#     import Image` no próprio escopo de módulo dele (mais várias chamadas `Image.new()` que
+#     ficam, na ordem do arquivo, ANTES das duas fixtures que esta fatia precisa) faz o script
+#     inteiro falhar antes de qualquer uma das duas fixtures ser escrita se o Pillow não for
+#     importável. Espelha o próprio padrão de aviso `GLINTFX_GOLDEN_TEST`/
+#     `GLINTFX_BACKEND_GLFW` bem no topo deste arquivo: quando a checagem de capacidade falha,
+#     este alvo simplesmente NÃO é registrado, com um `message(WARNING ...)` nomeando
+#     exatamente o porquê -- uma ausência honesta no log de configure, nunca um teste
+#     silenciosamente pulado que alega ter rodado. Verificado localmente (Python 3.14.6 /
+#     Pillow 12.3.0): `gen_corpus.py <dir1>` e `... <dir2>`, rodados em sequência, produziram
+#     31/31 arquivos regulares byte-idênticos (`md5sum`), confirmando que o gerador é
+#     determinístico antes desta guarda ser conectada.
+#
+#     Consequência pro CI: nenhuma das imagens de CI atuais deste repo (`ubuntu-latest` do
+#     `ci.yml`, o container self-hosted do `heavy.yml`, `nightly.yml`) instala Pillow hoje,
+#     então este alvo provavelmente NÃO será registrado lá até uma mudança de CI de posse do
+#     DevOps somar isso (`pip install pillow` ou o pacote de distro
+#     `python3-pillow`/`python3-pil`) -- deliberadamente deixado pra quem for dono desses
+#     arquivos de workflow, não tocado por esta fatia (o próprio brief do `DEC-PROBE-CORPUS`
+#     restringe este agente a `tests/tools/`, este teste, e só este CMakeLists.txt). Registrado
+#     INCONDICIONALMENTE através do split GLFW=ON/OFF fora disso (nenhuma dependência de
+#     RmlUi/GL/janela, mesmo racional "nada relacionado a display pra isolar aqui" de
+#     image_decode_hardening_sanity/image_png_only_sanity logo acima) -- então este bloco
+#     inteiro fica FORA tanto do bloco `if(GLINTFX_BACKEND_GLFW)` acima quanto de qualquer
+#     bloco só-embed abaixo, exatamente onde estes dois irmãos ficam.
+# ---------------------------------------------------------------------------
+find_package(Python3 COMPONENTS Interpreter QUIET)
+set(_glintfx_probe_corpus_ok FALSE)
+if(Python3_Interpreter_FOUND)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import PIL"
+    RESULT_VARIABLE _glintfx_probe_pil_rc
+    OUTPUT_QUIET ERROR_QUIET)
+  if(_glintfx_probe_pil_rc EQUAL 0)
+    set(_glintfx_probe_corpus_ok TRUE)
+  endif()
+endif()
+
+if(_glintfx_probe_corpus_ok)
+  set(_glintfx_probe_corpus_dir ${CMAKE_CURRENT_BINARY_DIR}/probe_corpus)
+  set(_glintfx_probe_corpus_outputs
+    ${_glintfx_probe_corpus_dir}/png_pal_12000.png
+    ${_glintfx_probe_corpus_dir}/fake_tga_garbage.png)
+  add_custom_command(
+    OUTPUT ${_glintfx_probe_corpus_outputs}
+    COMMAND "${Python3_EXECUTABLE}" ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_corpus.py ${_glintfx_probe_corpus_dir}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_corpus.py
+    COMMENT "glintfx: generating DEC-PROBE-CORPUS fixtures (tests/tools/gen_corpus.py, build-tree only, never committed)"
+    VERBATIM)
+  add_custom_target(glintfx_probe_corpus DEPENDS ${_glintfx_probe_corpus_outputs})
+
+  add_executable(image_decode_probe_corpus_sanity image_decode_probe_corpus_sanity.cpp)
+  target_link_libraries(image_decode_probe_corpus_sanity PRIVATE glintfx)
+  target_compile_definitions(image_decode_probe_corpus_sanity PRIVATE
+    GLINTFX_PROBE_CORPUS_DIR="${_glintfx_probe_corpus_dir}")
+  add_dependencies(image_decode_probe_corpus_sanity glintfx_probe_corpus)
+  add_test(NAME image_decode_probe_corpus_sanity COMMAND image_decode_probe_corpus_sanity)
+else()
+  message(WARNING
+    "glintfx: image_decode_probe_corpus_sanity (DEC-PROBE-CORPUS) NOT registered -- "
+    "tests/tools/gen_corpus.py needs a Python3 interpreter with Pillow (PIL) importable, and "
+    "neither was found/importable during this configure. Install Python3 + Pillow "
+    "('pip install pillow' or the distro python3-pillow/python3-pil package) and re-run "
+    "cmake to enable this test.")
+endif()
+
+# ---------------------------------------------------------------------------
 # EN: sprite_batch_sanity (D2D-1B) -- PURE unit test for src/sprite_batch.hpp: no window, no GL
 #     context, no RmlUi/GLFW dependency whatsoever (same "nothing display-related to isolate
 #     here" reasoning as image_decode_sanity/input_state_sanity/log_dedup_sanity above). Registered
@@ -4446,13 +4568,31 @@ endif()
 #     defined above + any future one, so a new test never silently escapes the gate.
 #     No -Werror (mirrors the glintfx lib target, commit 45209e5). Third-party/fetched
 #     TUs are not defined here, so they are untouched.
+#     EXCLUDES the "UTILITY" target type (DEC-PROBE-CORPUS, W27) -- target_compile_options()
+#     errors out ("called with non-compilable target type") on a plain add_custom_target()
+#     (glintfx_probe_corpus, added right above this file's own image_decode_probe_corpus_
+#     sanity block: it drives tests/tools/gen_corpus.py at build time and has no compiler
+#     invocation of its own to receive flags). Every OTHER target type this directory defines
+#     (EXECUTABLE, STATIC_LIBRARY, and glloader's own INTERFACE_LIBRARY) legally accepts
+#     target_compile_options() and keeps getting it, unchanged from before this exclusion.
 # PT: -Wall -Wextra em todo alvo autoral de teste/demo-helper deste diretório
 #     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) pega todos os alvos
 #     acima + qualquer futuro, então um teste novo nunca escapa do gate em silêncio.
 #     Sem -Werror (espelha o alvo glintfx, 45209e5). TUs de terceiros/fetchados não
 #     são definidos aqui, então ficam intocados.
+#     EXCLUI o tipo de alvo "UTILITY" (DEC-PROBE-CORPUS, W27) -- target_compile_options()
+#     falha ("called with non-compilable target type") num add_custom_target() puro
+#     (glintfx_probe_corpus, somado logo acima do próprio bloco image_decode_probe_corpus_
+#     sanity deste arquivo: ele dispara o tests/tools/gen_corpus.py em build time e não tem
+#     invocação de compilador própria pra receber flag nenhuma). Todo OUTRO tipo de alvo que
+#     este diretório define (EXECUTABLE, STATIC_LIBRARY, e a própria INTERFACE_LIBRARY do
+#     glloader) continua aceitando target_compile_options() legalmente e continua recebendo,
+#     sem mudança em relação a antes desta exclusão.
 get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
              PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _glintfx_test_targets)
-  target_compile_options(${_t} PRIVATE -Wall -Wextra)
+  get_target_property(_glintfx_wall_target_type ${_t} TYPE)
+  if(NOT _glintfx_wall_target_type STREQUAL "UTILITY")
+    target_compile_options(${_t} PRIVATE -Wall -Wextra)
+  endif()
 endforeach()

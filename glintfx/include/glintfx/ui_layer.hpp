@@ -27,6 +27,70 @@ struct UiLayerConfig {
   int logical_width = 1280;
   int logical_height = 720;
 
+  // EN: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renamed to `assume_gl_loaded` above.
+  //     ⚠️ INVERTED POLARITY, the ONE fact a migrator cannot get wrong: `load_gl = false` <=>
+  //     `assume_gl_loaded = true`. Setting `assume_gl_loaded = false` where `load_gl = false` used
+  //     to be is NOT a no-op migration -- it flips the loader back ON where it used to be skipped.
+  //     Kept functional (see the combined read in `ui_layer.cpp`) for ONE version for source
+  //     compatibility; scheduled removal not before v0.31. Prefer `assume_gl_loaded` in new code.
+  // PT: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renomeado para `assume_gl_loaded` acima.
+  //     ⚠️ POLARIDADE INVERTIDA, o ÚNICO fato que um migrador não pode errar: `load_gl = false`
+  //     <=> `assume_gl_loaded = true`. Definir `assume_gl_loaded = false` onde antes era
+  //     `load_gl = false` NÃO é uma migração no-op -- religa o loader onde antes era pulado.
+  //     Mantido funcional (ver a leitura combinada em `ui_layer.cpp`) por UMA versão, por
+  //     compatibilidade de fonte; remoção agendada não antes da v0.31. Prefira `assume_gl_loaded`
+  //     em código novo.
+  [[deprecated(
+      "renamed: use assume_gl_loaded (NOTE: inverted meaning -- "
+      "load_gl=false <=> assume_gl_loaded=true)")]]
+  bool load_gl = true;
+
+  // EN: Initial density-independent pixel ratio (dp_ratio).
+  //     1 dp = dp_ratio physical pixels. Set > 1.0 when the host renders at a higher
+  //     physical resolution than the logical RCSS canvas (e.g. dp_ratio=2.0 means 1dp=2px).
+  //     Can be updated at runtime via set_dp_ratio(). Default 1.0 = no scaling.
+  // PT: Density-independent pixel ratio inicial (dp_ratio).
+  //     1 dp = dp_ratio pixels físicos. Defina > 1.0 quando o host renderiza numa resolução
+  //     física maior que o canvas lógico RCSS (ex.: dp_ratio=2.0 significa 1dp=2px).
+  //     Pode ser atualizado em runtime via set_dp_ratio(). Padrão 1.0 = sem escala.
+  float dp_ratio = 1.0f;
+  // EN: Which font engine to install (L1.20-FONTFLIP Phase 2). Fixed at construction --
+  //     UiLayer reads this exactly once, during the ctor's Bootstrap::init() call, before
+  //     Rml::Initialise(); there is no runtime setter (see FontEngine's own doc-comment for the
+  //     full contract, including the GLINTFX_OWN_FONT_ENGINE=OFF fallback-to-FreeType path).
+  //     Default: FontEngine::Own -- the "soft flip" (L1.20-FONTFLIP Phase 1) makes glintfx's own
+  //     clean-room font engine the default; set to FontEngine::FreeType for a one-line,
+  //     no-rebuild rollback to RmlUi's built-in engine. Parity with AppConfig::font_engine (same
+  //     field name/semantics).
+  // PT: Qual motor de fonte instalar (L1.20-FONTFLIP Fase 2). Fixado na construção -- o UiLayer
+  //     lê isto exatamente uma vez, durante a chamada a Bootstrap::init() do ctor, antes do
+  //     Rml::Initialise(); não há setter de runtime (ver o doc-comment do próprio FontEngine
+  //     para o contrato completo, incluindo o caminho de fallback-para-FreeType quando
+  //     GLINTFX_OWN_FONT_ENGINE=OFF). Default: FontEngine::Own -- o "flip suave"
+  //     (L1.20-FONTFLIP Fase 1) torna o motor de fonte próprio clean-room do glintfx o padrão;
+  //     defina FontEngine::FreeType para um rollback de uma linha, sem rebuild, ao motor
+  //     embutido do RmlUi. Paridade com AppConfig::font_engine (mesmo nome de campo/semântica).
+  FontEngine font_engine = FontEngine::Own;
+
+  // EN: ORDER MATTERS -- this field is LAST on purpose (2026-08-04). It was first placed right
+  //     before `load_gl`, and the consumer caught the consequence: they initialise this struct
+  //     POSITIONALLY (`Config{960, 540, true, dp_ratio}`, aggregate init with `/*load_gl=*/` as
+  //     a mere comment), not with designated initialisers. A new field inserted mid-struct
+  //     shifts every positional argument after it. Appending at the END keeps every existing
+  //     positional initialisation associating the same value with the same field. When `load_gl`
+  //     is finally removed (not before v0.31), do NOT let another field take its slot: leaving
+  //     the hole turns any surviving positional init into an argument-count ERROR instead of a
+  //     silent meaning swap. A loud error beats a wrong value.
+  // PT: A ORDEM IMPORTA -- este campo é o ÚLTIMO de propósito (2026-08-04). Ele tinha sido posto
+  //     logo antes do `load_gl`, e o consumidor pegou a consequência: eles inicializam esta
+  //     struct POSICIONALMENTE (`Config{960, 540, true, dp_ratio}`, agregado, com o
+  //     `/*load_gl=*/` sendo só um comentário), não com designated-init. Campo novo inserido no
+  //     meio desloca todo argumento posicional depois dele. Acrescentar no FIM mantém toda
+  //     inicialização posicional existente associando o mesmo valor ao mesmo campo. Quando o
+  //     `load_gl` for removido (não antes da v0.31), NÃO deixe outro campo ocupar a vaga dele:
+  //     deixar o buraco transforma qualquer posicional sobrevivente em ERRO de contagem de
+  //     argumentos em vez de troca silenciosa de significado. Erro alto vence valor errado.
+
   // EN: `SEED-LOADGL-NOME` (2026-08-04) -- canonical replacement for the deprecated `load_gl`
   //     below. When `true`, the constructor SKIPS glintfx's own `glx_gl_load()` call, trusting
   //     the caller's claim that some entity (a previous glintfx instance, or the host's own
@@ -80,51 +144,6 @@ struct UiLayerConfig {
   //     lugar") um nome que diz o que ela significa, em vez de um nome com forma de verbo
   //     ("carregar: sim/não") que lia como um botão de performance que nunca foi.
   bool assume_gl_loaded = false;
-
-  // EN: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renamed to `assume_gl_loaded` above.
-  //     ⚠️ INVERTED POLARITY, the ONE fact a migrator cannot get wrong: `load_gl = false` <=>
-  //     `assume_gl_loaded = true`. Setting `assume_gl_loaded = false` where `load_gl = false` used
-  //     to be is NOT a no-op migration -- it flips the loader back ON where it used to be skipped.
-  //     Kept functional (see the combined read in `ui_layer.cpp`) for ONE version for source
-  //     compatibility; scheduled removal not before v0.31. Prefer `assume_gl_loaded` in new code.
-  // PT: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renomeado para `assume_gl_loaded` acima.
-  //     ⚠️ POLARIDADE INVERTIDA, o ÚNICO fato que um migrador não pode errar: `load_gl = false`
-  //     <=> `assume_gl_loaded = true`. Definir `assume_gl_loaded = false` onde antes era
-  //     `load_gl = false` NÃO é uma migração no-op -- religa o loader onde antes era pulado.
-  //     Mantido funcional (ver a leitura combinada em `ui_layer.cpp`) por UMA versão, por
-  //     compatibilidade de fonte; remoção agendada não antes da v0.31. Prefira `assume_gl_loaded`
-  //     em código novo.
-  [[deprecated(
-      "renamed: use assume_gl_loaded (NOTE: inverted meaning -- "
-      "load_gl=false <=> assume_gl_loaded=true)")]]
-  bool load_gl = true;
-
-  // EN: Initial density-independent pixel ratio (dp_ratio).
-  //     1 dp = dp_ratio physical pixels. Set > 1.0 when the host renders at a higher
-  //     physical resolution than the logical RCSS canvas (e.g. dp_ratio=2.0 means 1dp=2px).
-  //     Can be updated at runtime via set_dp_ratio(). Default 1.0 = no scaling.
-  // PT: Density-independent pixel ratio inicial (dp_ratio).
-  //     1 dp = dp_ratio pixels físicos. Defina > 1.0 quando o host renderiza numa resolução
-  //     física maior que o canvas lógico RCSS (ex.: dp_ratio=2.0 significa 1dp=2px).
-  //     Pode ser atualizado em runtime via set_dp_ratio(). Padrão 1.0 = sem escala.
-  float dp_ratio = 1.0f;
-  // EN: Which font engine to install (L1.20-FONTFLIP Phase 2). Fixed at construction --
-  //     UiLayer reads this exactly once, during the ctor's Bootstrap::init() call, before
-  //     Rml::Initialise(); there is no runtime setter (see FontEngine's own doc-comment for the
-  //     full contract, including the GLINTFX_OWN_FONT_ENGINE=OFF fallback-to-FreeType path).
-  //     Default: FontEngine::Own -- the "soft flip" (L1.20-FONTFLIP Phase 1) makes glintfx's own
-  //     clean-room font engine the default; set to FontEngine::FreeType for a one-line,
-  //     no-rebuild rollback to RmlUi's built-in engine. Parity with AppConfig::font_engine (same
-  //     field name/semantics).
-  // PT: Qual motor de fonte instalar (L1.20-FONTFLIP Fase 2). Fixado na construção -- o UiLayer
-  //     lê isto exatamente uma vez, durante a chamada a Bootstrap::init() do ctor, antes do
-  //     Rml::Initialise(); não há setter de runtime (ver o doc-comment do próprio FontEngine
-  //     para o contrato completo, incluindo o caminho de fallback-para-FreeType quando
-  //     GLINTFX_OWN_FONT_ENGINE=OFF). Default: FontEngine::Own -- o "flip suave"
-  //     (L1.20-FONTFLIP Fase 1) torna o motor de fonte próprio clean-room do glintfx o padrão;
-  //     defina FontEngine::FreeType para um rollback de uma linha, sem rebuild, ao motor
-  //     embutido do RmlUi. Paridade com AppConfig::font_engine (mesmo nome de campo/semântica).
-  FontEngine font_engine = FontEngine::Own;
 };
 
 // EN: MOVED-FROM STATE (L1.10-APIDOC): after `UiLayer b = std::move(a);` (or

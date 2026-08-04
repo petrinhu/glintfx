@@ -658,6 +658,32 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: log_winglfw_sink_sanity (LOG-WINGLFW, W25) -- regression gate proving the 9
+  #     `std::fprintf(stderr, ...)` sites in window_glfw.cpp now route through
+  #     glintfx::log_warn()/glintfx::set_log_sink() (see this file's own header comment for the
+  #     "why this ONE site" headless-honesty rationale -- the WindowGlfw::set_window_icon()
+  #     pre-create guard is the only one of the 9 reachable without a real GLFW window/Xvfb). A
+  #     PLAIN add_test, no run_xvfb.cmake wrapper -- no window, no GL context, no display needed
+  #     (same shape as log_sanity.cpp above), but it DOES need WindowGlfw itself (window_glfw.hpp/
+  #     .cpp only compile into glintfx_window when GLINTFX_BACKEND_GLFW=ON), hence it lives inside
+  #     this if(GLINTFX_BACKEND_GLFW) block rather than alongside log_sanity's backend-agnostic
+  #     registration.
+  # PT: log_winglfw_sink_sanity (LOG-WINGLFW, W25) -- gate de regressão provando que os 9 sítios
+  #     `std::fprintf(stderr, ...)` do window_glfw.cpp agora roteiam por
+  #     glintfx::log_warn()/glintfx::set_log_sink() (ver o próprio comentário de cabeçalho deste
+  #     arquivo pro racional de honestidade headless "por que ESTE sítio" -- a guarda pré-create
+  #     de WindowGlfw::set_window_icon() é a única dos 9 alcançável sem uma janela GLFW
+  #     real/Xvfb). Um add_test PLANO, sem o wrapper run_xvfb.cmake -- sem janela, sem contexto
+  #     GL, sem display necessário (mesma forma do log_sanity.cpp acima), mas PRECISA do próprio
+  #     WindowGlfw (window_glfw.hpp/.cpp só compilam pro glintfx_window quando
+  #     GLINTFX_BACKEND_GLFW=ON), daí viver dentro deste bloco if(GLINTFX_BACKEND_GLFW) em vez de
+  #     junto do registro backend-agnóstico do log_sanity.
+  # ---------------------------------------------------------------------------
+  add_executable(log_winglfw_sink_sanity log_winglfw_sink_sanity.cpp)
+  target_link_libraries(log_winglfw_sink_sanity PRIVATE glintfx)
+  add_test(NAME log_winglfw_sink_sanity COMMAND log_winglfw_sink_sanity)
+
+  # ---------------------------------------------------------------------------
   # EN: app_movedfrom_sanity (AUD-APP-MOVEDFROM, W25) -- ENUMERATES every public App method (63,
   #     see the file's own header comment for the hand-verified count) and calls each one on a
   #     MOVED-FROM App, asserting fail-high (never a crash). Pre-fix RED is a segfault (ctest

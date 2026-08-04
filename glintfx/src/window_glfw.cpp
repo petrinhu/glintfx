@@ -12,7 +12,7 @@
 #include "gl_loader.h"
 #include "glfw_event_translate.hpp"
 #include <GLFW/glfw3.h>
-#include <cstdio>  // EN: A4-WINMODES -- stderr fallback note (D5). PT: A4-WINMODES -- aviso de fallback em stderr (D5).
+#include <glintfx/log.hpp> // EN: LOG-WINGLFW -- routes this file's diagnostics through glintfx::log_warn() instead of raw stderr, same funnel as draw2d.cpp/system_clock.hpp/system_glfw_dedup.hpp (FW-LOG). PT: LOG-WINGLFW -- roteia os diagnósticos deste arquivo por glintfx::log_warn() em vez de stderr cru, mesmo funil de draw2d.cpp/system_clock.hpp/system_glfw_dedup.hpp (FW-LOG).
 #include <cstring> // EN: WIN-ICON -- std::memcpy into the owned icon buffer. PT: WIN-ICON -- std::memcpy pro buffer próprio do ícone.
 #include <vector>  // EN: WIN-ICON -- owned copy of the caller's pixel buffer. PT: WIN-ICON -- cópia própria do buffer de pixel do chamador.
 namespace glintfx {
@@ -74,9 +74,10 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
   //     um width/height não-positivo de um caller hostil ou com bug abortar o processo host
   //     inteiro.
   if (w <= 0 || h <= 0) {
-    std::fprintf(stderr,
-      "glintfx: WindowGlfw::create: non-positive size %dx%d requested, "
-      "falling back to 1280x720\n", w, h);
+    log_warn(
+        "glintfx: WindowGlfw::create: non-positive size %dx%d requested, "
+        "falling back to 1280x720",
+        w, h);
     w = 1280;
     h = 720;
   }
@@ -126,9 +127,9 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
     case WindowMode::FullscreenExclusive: {
       monitor = glfwGetPrimaryMonitor();
       if (!monitor) {
-        std::fprintf(stderr,
-          "glintfx: WindowGlfw::create: no primary monitor available, "
-          "falling back to windowed mode\n");
+        log_warn(
+            "glintfx: WindowGlfw::create: no primary monitor available, "
+            "falling back to windowed mode");
         break;  // EN: monitor stays null -> bare windowed create below, effective_mode stays Windowed.
                 // PT: monitor fica nulo -> create windowed nu abaixo, effective_mode fica Windowed.
       }
@@ -142,9 +143,9 @@ bool WindowGlfw::create(const char* title, int w, int h, WindowMode req_mode) {
         //     crash de desreferência nula.
         const GLFWvidmode* vm = glfwGetVideoMode(monitor);
         if (!vm) {
-          std::fprintf(stderr,
-            "glintfx: WindowGlfw::create: primary monitor reports no video mode, "
-            "falling back to windowed mode\n");
+          log_warn(
+              "glintfx: WindowGlfw::create: primary monitor reports no video mode, "
+              "falling back to windowed mode");
           monitor = nullptr;
           break;  // EN: effective_mode stays Windowed. PT: effective_mode fica Windowed.
         }
@@ -367,8 +368,8 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
     case WindowMode::FullscreenExclusive: {
       GLFWmonitor* monitor = glfwGetPrimaryMonitor();
       if (!monitor) {
-        std::fprintf(stderr,
-          "glintfx: WindowGlfw::set_mode: no primary monitor available, request ignored\n");
+        log_warn(
+            "glintfx: WindowGlfw::set_mode: no primary monitor available, request ignored");
         return false;  // EN: D5 -- window left untouched, dispatched_mode_ unchanged. PT: D5 -- janela intocada, dispatched_mode_ inalterado.
       }
       if (req_mode == WindowMode::FullscreenDesktop) {
@@ -376,9 +377,9 @@ bool WindowGlfw::set_mode(WindowMode req_mode) {
         // PT: Reforço D5, gêmeo da própria guarda de vm nulo do create() acima -- ver comentário lá.
         const GLFWvidmode* vm = glfwGetVideoMode(monitor);
         if (!vm) {
-          std::fprintf(stderr,
-            "glintfx: WindowGlfw::set_mode: primary monitor reports no video mode, "
-            "request ignored\n");
+          log_warn(
+              "glintfx: WindowGlfw::set_mode: primary monitor reports no video mode, "
+              "request ignored");
           return false;  // EN: dispatched_mode_ unchanged. PT: dispatched_mode_ inalterado.
         }
         glfwSetWindowMonitor(win_, monitor, 0, 0, vm->width, vm->height, vm->refreshRate);
@@ -604,24 +605,22 @@ constexpr int kMaxIconDim = 1024;
 
 bool WindowGlfw::set_window_icon(const void* pixels_rgba8, int w, int h) {
   if (!win_) {
-    std::fprintf(stderr,
-                 "glintfx: WindowGlfw::set_window_icon: called before a successful create(), ignored\n");
+    log_warn(
+        "glintfx: WindowGlfw::set_window_icon: called before a successful create(), ignored");
     return false;
   }
   if (!pixels_rgba8) {
-    std::fprintf(stderr,
-                 "glintfx: WindowGlfw::set_window_icon: null pixels, ignored\n");
+    log_warn("glintfx: WindowGlfw::set_window_icon: null pixels, ignored");
     return false;
   }
   if (w <= 0 || h <= 0) {
-    std::fprintf(stderr,
-                 "glintfx: WindowGlfw::set_window_icon: non-positive size %dx%d, ignored\n", w, h);
+    log_warn("glintfx: WindowGlfw::set_window_icon: non-positive size %dx%d, ignored", w, h);
     return false;
   }
   if (w > kMaxIconDim || h > kMaxIconDim) {
-    std::fprintf(stderr,
-                 "glintfx: WindowGlfw::set_window_icon: size %dx%d exceeds the %dx%d cap, ignored\n",
-                 w, h, kMaxIconDim, kMaxIconDim);
+    log_warn(
+        "glintfx: WindowGlfw::set_window_icon: size %dx%d exceeds the %dx%d cap, ignored",
+        w, h, kMaxIconDim, kMaxIconDim);
     return false;
   }
 

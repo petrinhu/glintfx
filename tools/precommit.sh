@@ -476,8 +476,46 @@ run_format_gate() {
 
   section "clang-format-diff -- staged lines (${#targets[@]} file(s))"
 
+  # EN: -M (rename detection) + widen the pathspec to also carry each target's
+  #     pre-rename path (if any). Without both: a pure `git mv` (100% identical
+  #     content, only the NEW path present in `targets`, per the --name-only contract
+  #     `staged_files` documents above) is invisible to git's pairing logic -- pairing a
+  #     rename needs BOTH sides present in the compared path set -- so it shows up as a
+  #     brand-new file, i.e. every line "added". clang-format-diff then dutifully checks
+  #     PRE-EXISTING formatting drift across the file's ENTIRE body instead of the
+  #     (zero) lines this commit actually touches, false-failing a content-identical
+  #     move. Found live 2026-08-04 (RMLX-0 F1, a 17-file glintfx/src -> glintfx/src/rml
+  #     pure move) -- proven with `git diff --cached -M -- glintfx/src`, which pairs
+  #     every one of the 17 at `similarity index 100%` and an EMPTY diff body once both
+  #     paths are in scope.
+  # PT: -M (detecção de rename) + amplia o pathspec para também carregar o caminho
+  #     pré-rename de cada target (se houver). Sem os dois: um `git mv` puro (conteúdo
+  #     100% idêntico, só o caminho NOVO presente em `targets`, pelo próprio contrato
+  #     --name-only que `staged_files` documenta acima) fica invisível pro pareamento do
+  #     git -- parear um rename exige os DOIS lados presentes no conjunto de caminhos
+  #     comparado -- então aparece como arquivo novo, ou seja toda linha "adicionada". O
+  #     clang-format-diff então cobra compliance de drift PRÉ-EXISTENTE do corpo INTEIRO
+  #     do arquivo em vez das linhas (zero) que este commit de fato toca, reprovando por
+  #     falso-positivo um move de conteúdo idêntico. Achado ao vivo em 2026-08-04
+  #     (RMLX-0 F1, um move puro de 17 arquivos glintfx/src -> glintfx/src/rml) --
+  #     provado com `git diff --cached -M -- glintfx/src`, que pareia os 17 em
+  #     `similarity index 100%` e corpo de diff VAZIO uma vez que os dois caminhos
+  #     entram no escopo.
+  local -a rename_pathspec=("${targets[@]}")
+  local status_line old_path new_path t
+  while IFS=$'\t' read -r status_line old_path new_path; do
+    [[ "${status_line}" == R* ]] || continue
+    [[ -n "${new_path}" ]] || continue
+    for t in "${targets[@]}"; do
+      if [[ "${t}" == "${new_path}" ]]; then
+        rename_pathspec+=("${old_path}")
+        break
+      fi
+    done
+  done < <(git diff --cached -M --name-status -- .)
+
   local diff_out
-  diff_out="$(git diff --cached -U0 -- "${targets[@]}" | clang-format-diff -p1 -style=file || true)"
+  diff_out="$(git diff --cached -M -U0 -- "${rename_pathspec[@]}" | clang-format-diff -p1 -style=file || true)"
   if [[ -n "${diff_out}" ]]; then
     echo "${diff_out}"
     echo "error: clang-format-diff flagged formatting drift in staged lines of: ${targets[*]}" >&2

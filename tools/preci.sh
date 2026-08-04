@@ -68,25 +68,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-MODE="fast"
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --full)
-      MODE="full"
-      shift
-      ;;
-    -h|--help)
-      grep -E '^# ' "${BASH_SOURCE[0]}" | sed -E 's/^# ?//'
-      exit 0
-      ;;
-    *)
-      echo "error: unknown argument '$1' (see --help)" >&2
-      exit 2
-      ;;
-  esac
-done
-
 # -----------------------------------------------------------------------------
 # EN: helpers -- section banner + timer, shared by both modes.
 # PT: helpers -- cabeçalho de seção + cronômetro, compartilhados pelos dois modos.
@@ -95,8 +76,6 @@ section() {
   echo ""
   echo "== preci: $1 =="
 }
-
-ran_anything=0
 
 # -----------------------------------------------------------------------------
 # EN: 1) Layer detection (fast mode only). Compares against origin/main (commits
@@ -127,15 +106,69 @@ detect_touched_files() {
   } | sort -u
 }
 
-layer0_touched=0
-layer1_touched=0
+# -----------------------------------------------------------------------------
+# EN: 1.5) SEED-GATE-NAO-GUARDA-SI-MESMO -- pure classification, extracted out of the
+#     dispatch flow into its own function so it can be exercised in isolation, with
+#     zero git and zero build, by tools/tests/preci_detect_test.sh (the seed's
+#     self-test). Takes the touched-file list as POSITIONAL ARGS (not stdin/a pipe --
+#     a pipe's last stage runs in a subshell by default in bash, which would silently
+#     drop the layer0_touched/layer1_touched assignments the moment this function was
+#     pulled out of the inline for-loop it used to be; positional args keep everything
+#     in the caller's shell, same as the original loop). Sets the GLOBAL
+#     layer0_touched/layer1_touched (unqualified assignment, same convention as the
+#     rest of this script -- no `local`, callers read them straight after the call).
+#
+#     The allowlist branch below is the fix for SEED-GATE-NAO-GUARDA-SI-MESMO
+#     (2026-07-31, TODO.md): before it existed, `tools/*` matched NONE of the case
+#     arms, so editing tools/preci.sh itself (or ctest_guarded.sh, mutation_sandbox.sh,
+#     check_encapsulation.sh -- the scripts that ARE this gate, or that this gate calls
+#     into) made preci.sh print "nothing to gate, passing fast" and exit 0 without
+#     running a single test. Measured live: the five tools/ commits of BUILDDIR-MUTACAO
+#     (W23) sailed through pre-push with the suite never running once. These four
+#     scripts force BOTH layers (the gate serves both, and Layer 0 is cheap) --
+#     deliberately NOT all of tools/, which is mostly build-irrelevant (doc checkers,
+#     CI-remote scripts, generators) and would make every tools/ touch pay the full
+#     ~5min suite for no reason.
+# PT: 1.5) SEED-GATE-NAO-GUARDA-SI-MESMO -- classificação pura, extraída do fluxo de
+#     despacho pra sua própria função, pra poder ser exercida isolada, com zero git e
+#     zero build, pelo tools/tests/preci_detect_test.sh (o self-test da semente). Recebe
+#     a lista de arquivos tocados como ARGUMENTOS POSICIONAIS (não stdin/pipe -- o
+#     último estágio de um pipe roda em subshell por padrão no bash, o que apagaria
+#     silenciosamente as atribuições de layer0_touched/layer1_touched no instante em
+#     que esta função fosse extraída do for-loop inline que ela era antes; argumentos
+#     posicionais mantêm tudo no shell do chamador, igual o loop original). Seta os
+#     GLOBAIS layer0_touched/layer1_touched (atribuição sem qualificador, mesma
+#     convenção do resto deste script -- sem `local`, os chamadores leem eles direto
+#     depois da chamada).
+#
+#     O braço de allowlist abaixo é o conserto do SEED-GATE-NAO-GUARDA-SI-MESMO
+#     (2026-07-31, TODO.md): antes dele existir, `tools/*` não casava com NENHUM braço
+#     do case, então editar o próprio tools/preci.sh (ou ctest_guarded.sh,
+#     mutation_sandbox.sh, check_encapsulation.sh -- os scripts que SÃO este gate, ou
+#     que este gate chama) fazia o preci.sh imprimir "nothing to gate, passing fast" e
+#     sair 0 sem rodar um teste sequer. Medido ao vivo: os cinco commits de tools/ da
+#     BUILDDIR-MUTACAO (W23) passaram pelo pre-push sem a suíte rodar uma vez. Estes
+#     quatro scripts forçam AS DUAS camadas (o gate serve as duas, e a Camada 0 é
+#     barata) -- deliberadamente NÃO todo o tools/, que na maior parte é irrelevante
+#     pra build (checadores de doc, scripts de CI remoto, geradores) e faria todo toque
+#     em tools/ pagar a suíte inteira de ~5min à toa.
+# -----------------------------------------------------------------------------
+classify_touched_files() {
+  layer0_touched=0
+  layer1_touched=0
 
-if [[ "${MODE}" == "fast" ]]; then
-  mapfile -t touched < <(detect_touched_files)
-
-  for f in "${touched[@]}"; do
+  local f
+  for f in "$@"; do
     [[ -z "${f}" ]] && continue
     case "${f}" in
+      tools/preci.sh|tools/ctest_guarded.sh|tools/mutation_sandbox.sh|tools/check_encapsulation.sh)
+        # NB: this arm must be checked before/independently of the glintfx/* and
+        #     src/*|include/*|Makefile|tests/* arms below -- it is not a prefix match on
+        #     either, so ordering does not matter here, but it DOES need to set BOTH
+        #     flags (see the header above for why: the gate serves both layers).
+        layer0_touched=1
+        layer1_touched=1
+        ;;
       glintfx/*)
         layer1_touched=1
         ;;
@@ -146,12 +179,7 @@ if [[ "${MODE}" == "fast" ]]; then
         ;;
     esac
   done
-
-  if [[ "${layer0_touched}" -eq 0 && "${layer1_touched}" -eq 0 ]]; then
-    echo "preci: no Layer 0 (src/include/Makefile/tests) or Layer 1 (glintfx/) changes detected vs origin/main + working tree -- nothing to gate, passing fast."
-    exit 0
-  fi
-fi
+}
 
 # -----------------------------------------------------------------------------
 # EN: 2) Layer 0 gate: `make build && make test` (root Makefile, zero-libc suite).
@@ -424,26 +452,94 @@ run_full_extras() {
 }
 
 # -----------------------------------------------------------------------------
-# EN: 5) Dispatch.
-# PT: 5) Despacho.
+# EN: 5) main -- wraps argument parsing + layer detection + dispatch so this file can
+#     also be safely `source`d for testing. SEED-GATE-NAO-GUARDA-SI-MESMO's self-test
+#     (tools/tests/preci_detect_test.sh) sources this file to call
+#     classify_touched_files() in isolation, without triggering a build. Before this
+#     wrap, sourcing tools/preci.sh would run the argument-parsing loop over the
+#     SOURCING shell's positional params and then either `exit 0` (nothing-to-gate
+#     case) or launch real gates against the real repo -- both unsafe for a unit test.
+#     Guarded at the very bottom by `BASH_SOURCE[0] == $0`: true only when this file is
+#     the shell's ENTRY point (executed directly -- `bash tools/preci.sh`, the
+#     pre-push hook's `exec`, `--help`, etc.), false when it is `source`d from
+#     somewhere else. Executed-directly behavior is byte-for-byte the same as before
+#     this refactor; only the sourced case is new. Every function defined above
+#     (section, detect_touched_files, classify_touched_files, run_*) is inert when
+#     sourced -- a function DEFINITION has no side effect, only this operative body
+#     (the former top-level argument-parsing/detection/dispatch code) did.
+# PT: 5) main -- embrulha parsing de argumento + detecção de camada + despacho pra este
+#     arquivo também poder ser `source`ado com segurança para teste. O self-test do
+#     SEED-GATE-NAO-GUARDA-SI-MESMO (tools/tests/preci_detect_test.sh) sourceia este
+#     arquivo pra chamar classify_touched_files() isolado, sem disparar build. Antes
+#     deste embrulho, sourcear tools/preci.sh rodaria o loop de parsing de argumento
+#     sobre os parâmetros posicionais do shell QUE SOURCEIA e depois ou daria `exit 0`
+#     (caso nothing-to-gate) ou lançaria gates de verdade contra o repo de verdade --
+#     os dois inseguros pra um teste unitário. Guardado no fim por
+#     `BASH_SOURCE[0] == $0`: verdadeiro só quando este arquivo é o PONTO DE ENTRADA do
+#     shell (executado direto -- `bash tools/preci.sh`, o `exec` do hook pre-push,
+#     `--help` etc.), falso quando é `source`ado de outro lugar. O comportamento
+#     executado-direto é byte-a-byte igual ao de antes deste refactor; só o caso
+#     sourceado é novo. Toda função definida acima (section, detect_touched_files,
+#     classify_touched_files, run_*) é inerte quando sourceada -- uma DEFINIÇÃO de
+#     função não tem efeito colateral, só este corpo operativo (o antigo código de
+#     topo de parsing/detecção/despacho) tinha.
 # -----------------------------------------------------------------------------
-if [[ "${MODE}" == "fast" ]]; then
-  [[ "${layer0_touched}" -eq 1 ]] && run_layer0
-  [[ "${layer1_touched}" -eq 1 ]] && run_layer1_fast
-  run_format_gate
-  run_doc_line_refs_gate
-else
-  run_layer0
-  run_layer1_full
-  run_full_extras
-  run_format_gate
-  run_doc_line_refs_gate
-fi
+main() {
+  local MODE="fast"
 
-if [[ "${ran_anything}" -eq 0 ]]; then
-  echo "preci: nothing ran (unexpected -- please report)." >&2
-  exit 1
-fi
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --full)
+        MODE="full"
+        shift
+        ;;
+      -h|--help)
+        grep -E '^# ' "${BASH_SOURCE[0]}" | sed -E 's/^# ?//'
+        exit 0
+        ;;
+      *)
+        echo "error: unknown argument '$1' (see --help)" >&2
+        exit 2
+        ;;
+    esac
+  done
 
-echo ""
-echo "== preci: OK (mode=${MODE}) =="
+  ran_anything=0
+  layer0_touched=0
+  layer1_touched=0
+
+  if [[ "${MODE}" == "fast" ]]; then
+    mapfile -t touched < <(detect_touched_files)
+    classify_touched_files "${touched[@]}"
+
+    if [[ "${layer0_touched}" -eq 0 && "${layer1_touched}" -eq 0 ]]; then
+      echo "preci: no Layer 0 (src/include/Makefile/tests) or Layer 1 (glintfx/) changes detected vs origin/main + working tree -- nothing to gate, passing fast."
+      exit 0
+    fi
+  fi
+
+  if [[ "${MODE}" == "fast" ]]; then
+    [[ "${layer0_touched}" -eq 1 ]] && run_layer0
+    [[ "${layer1_touched}" -eq 1 ]] && run_layer1_fast
+    run_format_gate
+    run_doc_line_refs_gate
+  else
+    run_layer0
+    run_layer1_full
+    run_full_extras
+    run_format_gate
+    run_doc_line_refs_gate
+  fi
+
+  if [[ "${ran_anything}" -eq 0 ]]; then
+    echo "preci: nothing ran (unexpected -- please report)." >&2
+    exit 1
+  fi
+
+  echo ""
+  echo "== preci: OK (mode=${MODE}) =="
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

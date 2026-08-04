@@ -167,6 +167,23 @@ std::array<unsigned char, 24> make_synthetic_event(std::uint16_t type, std::uint
 //     memory-constrained target that read-before-reject window IS the exact failure class this
 //     cap exists to close (see this comment's own top half) -- a looser cap defeats its own
 //     purpose by the same mechanism the cap was built to prevent, just at a larger scale.
+//     TWO headroom numbers, and the second is the one that matters for the future (added
+//     2026-08-04 after adversarial review measured the upstream file live): ~5.2x is against the
+//     FILTERED Linux-only subset this repo vendors (200,882 bytes). Against the FULL upstream
+//     `gamecontrollerdb.txt` (all platforms, mdqinc/SDL_GameControllerDB master, 602,815 bytes
+//     measured 2026-08-04) -- which a consumer can legitimately download and hand to
+//     `load_mappings_file()` without filtering by `platform:Linux` -- the headroom is only
+//     ~1.74x. That is still comfortable, but it is the number to watch: the upstream file grew
+//     ~15x in a decade (~40 KB in 2016 -> ~589 KiB today). Revisit this cap when it approaches.
+// PT: DOIS números de folga, e o segundo é o que importa pro futuro (acrescentado em 2026-08-04
+//     depois que o review adversarial mediu o arquivo upstream ao vivo): ~5,2x é contra o
+//     subconjunto FILTRADO só-Linux que este repo vendoriza (200.882 bytes). Contra o
+//     `gamecontrollerdb.txt` upstream COMPLETO (todas as plataformas, master do
+//     mdqinc/SDL_GameControllerDB, 602.815 bytes medidos em 2026-08-04) -- que um consumidor
+//     pode legitimamente baixar e entregar ao `load_mappings_file()` sem filtrar por
+//     `platform:Linux` -- a folga é de apenas ~1,74x. Ainda é confortável, mas é o número a
+//     vigiar: o upstream cresceu ~15x numa década (~40 KB em 2016 -> ~589 KiB hoje).
+//     Reavaliar este teto quando ele se aproximar.
 //     `text_raster.hpp`'s own `kMaxTextCallBytes = 1 MiB` (TX6, `text_raster.hpp`) lands on the
 //     same order of magnitude independently, for a different per-call ceiling -- cited here as
 //     CONFIRMATION that 1 MiB is a sane order of magnitude for this codebase's per-asset ceilings

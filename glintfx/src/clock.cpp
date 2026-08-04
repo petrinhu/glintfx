@@ -15,6 +15,7 @@
 #include <glintfx/clock.hpp>
 
 #include <chrono>
+#include <thread>
 
 namespace glintfx {
 
@@ -22,6 +23,21 @@ std::uint64_t monotonic_now_ns() {
   const auto now = std::chrono::steady_clock::now();
   const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
   return static_cast<std::uint64_t>(ns.count());
+}
+
+// EN: FW-SLEEP implementation. See glintfx/include/glintfx/clock.hpp for the full contract
+//     (the frame_callback/vsync warning, the declared ceiling, unit/type precedent, threading).
+//     A one-line delegation to std::this_thread::sleep_for -- this function adds nothing to the
+//     standard library's own guarantee beyond the fixed std::uint64_t-milliseconds ABI shape
+//     (same "thin wrapper, integer ABI" discipline as monotonic_now_ns() above).
+// PT: Implementação do FW-SLEEP. Ver glintfx/include/glintfx/clock.hpp pro contrato completo
+//     (o aviso frame_callback/vsync, o teto declarado, o precedente de unidade/tipo,
+//     threading). Uma delegação de uma linha pro std::this_thread::sleep_for -- esta função não
+//     adiciona nada à própria garantia da biblioteca padrão além da forma de ABI fixa em
+//     std::uint64_t-milissegundos (mesma disciplina "wrapper fino, ABI inteira" do
+//     monotonic_now_ns() acima).
+void sleep_ms(std::uint64_t ms) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
 } // namespace glintfx

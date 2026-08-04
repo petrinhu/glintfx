@@ -174,4 +174,81 @@ namespace glintfx {
 //     parede do sistema (a própria propriedade definidora do `std::chrono::steady_clock`).
 std::uint64_t monotonic_now_ns();
 
+// EN: FW-SLEEP (framework-2D, W26, requested by the consumer GusWorld 2026-07-30 -- the
+//     consumer ITSELF argued against its own request, and the argument is correct as far as it
+//     goes; see this project's `TODO.md` `FW-SLEEP` entry for the full back-and-forth) --
+//     cooperative, best-effort CPU cession for the CALLING thread, in whole milliseconds.
+//
+//     ⚠ DO NOT call this from inside `App::set_frame_callback`'s hook. `App` already has an
+//     opinion about frame cadence -- `set_swap_interval()` (see `app.hpp`) makes the driver's
+//     vsync block INSIDE the swap call, every frame. Sleeping inside the frame callback ADDS to
+//     that block instead of replacing it, so the two delays sum and the effective frame rate
+//     drops below what vsync alone would already deliver. This is exactly the objection the
+//     requesting consumer raised against their own request, and it is correct: this function is
+//     for the HOST's OWN modal loops (a menu loop the host drives itself, outside `App::run()`
+//     entirely) and for embed mode (`UiLayer`), where the host -- not this library -- owns frame
+//     cadence and decides when to yield. Neither of those two intended call sites has a vsync
+//     block already competing for the same time budget.
+//
+//     DECLARED CEILING (read before treating this as more than it is): this is CPU cession, not
+//     a timer. NO precision-of-wake guarantee -- the underlying `std::this_thread::sleep_for`
+//     may (and under a loaded scheduler, WILL) wake meaningfully later than requested; it is
+//     never specified or tested to wake EARLIER (see `clock_sanity.cpp`'s own test for why only
+//     the floor is asserted, never a ceiling -- asserting an upper bound on a shared,
+//     contended runner is flaky by construction, not a hardening). NO cancellation -- once
+//     called, the calling thread is blocked for at least the requested duration, full stop, no
+//     way to interrupt it from another thread. `0` is a valid, well-defined no-op-ish call (some
+//     `std::this_thread::sleep_for` implementations still yield the thread's remaining
+//     timeslice on `0`; this function makes no promise either way about that edge).
+//
+//     UNIT AND PARAMETER TYPE: `std::uint64_t` milliseconds, following this same header's
+//     `monotonic_now_ns()` precedent -- a plain, fixed-width integer crossing the public
+//     boundary (see that function's own point 3 above), not a `std::chrono::duration` template
+//     instantiation.
+//
+//     THREADING: blocks ONLY the calling thread (`std::this_thread::sleep_for`'s own contract);
+//     no shared/global state, safe to call from any thread, at any time, including before any
+//     `glintfx::App`/`glintfx::UiLayer` exists in this process -- same independence class as
+//     `monotonic_now_ns()` above.
+// PT: FW-SLEEP (framework-2D, W26, pedido do consumidor GusWorld 2026-07-30 -- o próprio
+//     consumidor argumentou CONTRA o próprio pedido, e o argumento está correto até onde vai;
+//     ver a entrada `FW-SLEEP` do `TODO.md` deste projeto pro debate completo) -- cessão de CPU
+//     cooperativa, best-effort, pela thread CHAMADORA, em milissegundos inteiros.
+//
+//     ⚠ NÃO chame isto de dentro do hook de `App::set_frame_callback`. O `App` já TEM opinião
+//     sobre cadência de quadro -- `set_swap_interval()` (ver `app.hpp`) faz o vsync do driver
+//     bloquear DENTRO da própria chamada de swap, a cada quadro. Dormir dentro do frame
+//     callback SOMA a esse bloqueio em vez de substituí-lo, então os dois atrasos se somam e a
+//     taxa efetiva de quadro cai abaixo do que o vsync sozinho já entregaria. Este é exatamente
+//     o argumento que o próprio consumidor que pediu levantou contra o próprio pedido, e ele
+//     está certo: esta função é para os LAÇOS MODAIS PRÓPRIOS do host (um laço de menu que o
+//     host mesmo dirige, fora do `App::run()` por inteiro) e para o modo embed (`UiLayer`), onde
+//     o host -- não esta biblioteca -- é dono da cadência de quadro e decide quando ceder.
+//     Nenhum dos dois sítios de chamada pretendidos tem um bloqueio de vsync já competindo pelo
+//     mesmo orçamento de tempo.
+//
+//     TETO DECLARADO (leia antes de tratar isto como mais do que é): isto é cessão de CPU, não
+//     um timer. SEM garantia de precisão de acordar -- o `std::this_thread::sleep_for`
+//     subjacente pode (e sob um escalonador carregado, VAI) acordar significativamente depois
+//     do pedido; nunca é especificado nem testado a acordar ANTES (ver o próprio teste do
+//     `clock_sanity.cpp` pro motivo de só o piso ser afirmado, nunca um teto -- afirmar um
+//     limite superior num runner compartilhado e contendido é flaky por construção, não um
+//     endurecimento). SEM cancelamento -- uma vez chamada, a thread chamadora fica bloqueada
+//     por pelo menos a duração pedida, ponto final, sem forma de interromper de outra thread.
+//     `0` é uma chamada válida e bem definida, quase-no-op (algumas implementações de
+//     `std::this_thread::sleep_for` ainda cedem o resto do timeslice da thread em `0`; esta
+//     função não promete nada sobre essa borda em nenhum dos dois sentidos).
+//
+//     UNIDADE E TIPO DO PARÂMETRO: `std::uint64_t` milissegundos, seguindo o mesmo precedente
+//     do `monotonic_now_ns()` deste header -- um inteiro simples, de largura fixa, cruzando a
+//     fronteira pública (ver o ponto 3 da própria função acima), não uma instanciação de
+//     template `std::chrono::duration`.
+//
+//     THREADING: bloqueia SÓ a thread chamadora (o próprio contrato do
+//     `std::this_thread::sleep_for`); sem estado compartilhado/global, seguro chamar de
+//     qualquer thread, a qualquer momento, inclusive antes de qualquer
+//     `glintfx::App`/`glintfx::UiLayer` existir neste processo -- mesma classe de independência
+//     do `monotonic_now_ns()` acima.
+void sleep_ms(std::uint64_t ms);
+
 } // namespace glintfx

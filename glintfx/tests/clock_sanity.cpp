@@ -252,6 +252,36 @@ int main() {
           "duration-based check it replaces)");
   }
 
+  // ---------------------------------------------------------------------------
+  // EN: FW-SLEEP (W26) -- glintfx::sleep_ms() floor-only check. This is deliberately the ONLY
+  //     assertion this slice makes about sleep_ms()'s duration: a FLOOR ("slept at LEAST the
+  //     requested time"), never a CEILING ("slept at MOST X"). A ceiling assertion is flaky by
+  //     construction on a shared, contended CI/local runner -- the scheduler gives no upper-bound
+  //     wake guarantee, and this project has already been burned by exactly that class of
+  //     flakiness elsewhere (see this slice's own brief). bracketed with the SAME
+  //     monotonic_now_ns() this file already exercises above, so this test adds no new
+  //     dependency.
+  // PT: FW-SLEEP (W26) -- checagem de SÓ PISO do glintfx::sleep_ms(). Esta é deliberadamente a
+  //     ÚNICA asserção que esta fatia faz sobre a duração do sleep_ms(): um PISO ("dormiu PELO
+  //     MENOS o tempo pedido"), nunca um TETO ("dormiu NO MÁXIMO X"). Uma asserção de teto é
+  //     flaky por construção num runner compartilhado e contendido -- o escalonador não dá
+  //     garantia de limite superior de acordar, e este projeto já foi queimado exatamente por
+  //     essa classe de flakiness em outro lugar (ver o próprio briefing desta fatia). Cercada
+  //     com o MESMO monotonic_now_ns() que este arquivo já exercita acima, então este teste não
+  //     soma dependência nova nenhuma.
+  // ---------------------------------------------------------------------------
+  {
+    constexpr std::uint64_t kSleepMs = 20;
+    const std::uint64_t before = glintfx::monotonic_now_ns();
+    glintfx::sleep_ms(kSleepMs);
+    const std::uint64_t after = glintfx::monotonic_now_ns();
+    const std::uint64_t elapsed_ns = after - before;
+    const std::uint64_t floor_ns = kSleepMs * 1'000'000ULL;
+    check(elapsed_ns >= floor_ns,
+          "sleep_ms(20): elapsed monotonic_now_ns() delta >= 20ms floor (floor-only, NEVER a "
+          "ceiling assertion -- see this block's own comment)");
+  }
+
   if (g_failures > 0) {
     std::fprintf(stderr, "clock_sanity: %d assertion(s) FAILED\n", g_failures);
     return 1;

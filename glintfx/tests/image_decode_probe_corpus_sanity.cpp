@@ -52,9 +52,11 @@
 //     reproducible at all). Reuses the SAME two-stage fork()+`setrlimit(RLIMIT_AS)`
 //     calibrate-then-squeeze oracle `image_decode_hardening_sanity.cpp`'s own Group B already
 //     proved (STAGE 1/2 measures the REAL `VmPeak` delta an unconstrained decode of THIS
-//     exact file needs; STAGE 2/2 squeezes a second child to 3/4 of that measured delta, short
-//     of what STAGE 1/2 proved was needed, so an allocation inside the call must genuinely
-//     fail) -- reimplemented HERE, independently, rather than shared via a common header,
+//     exact file needs; STAGE 2/2 squeezes a second child to 9/10 of that measured delta --
+//     NOT the 3/4 that file's own Group B uses for its much smaller fixture, see STAGE 2/2's
+//     own comment below for the measured, bisected reason the fraction does not carry over --
+//     short of what STAGE 1/2 proved was needed, so an allocation inside the call must
+//     genuinely fail) -- reimplemented HERE, independently, rather than shared via a common header,
 //     because this file and `image_decode_hardening_sanity.cpp` are owned by different W27
 //     slices editing disjoint files in the same wave (house rule against cross-file coupling
 //     between parallel agents' work). Measured, on this fixture, BEFORE this file was wired
@@ -151,8 +153,10 @@
 //     verdade). Reusa o MESMO oráculo de dois estágios fork()+`setrlimit(RLIMIT_AS)`
 //     calibrar-depois-apertar que o próprio Grupo B de `image_decode_hardening_sanity.cpp` já
 //     provou (o ESTÁGIO 1/2 mede o `VmPeak` REAL que um decode não-restringido DESTE arquivo
-//     exato precisa; o ESTÁGIO 2/2 aperta um segundo filho pra 3/4 daquele delta medido, abaixo
-//     do que o ESTÁGIO 1/2 provou ser necessário, então uma alocação dentro da chamada precisa
+//     exato precisa; o ESTÁGIO 2/2 aperta um segundo filho pra 9/10 daquele delta medido --
+//     NÃO o 3/4 que o Grupo B daquele arquivo usa pra fixture BEM menor dele, ver o próprio
+//     comentário do ESTÁGIO 2/2 mais abaixo pro motivo medido, por bisecção, da fração não se
+//     repetir -- abaixo do que o ESTÁGIO 1/2 provou ser necessário, então uma alocação dentro da chamada precisa
 //     falhar de verdade) -- reimplementado AQUI, de forma independente, em vez de compartilhado
 //     via um header comum, porque este arquivo e `image_decode_hardening_sanity.cpp` são
 //     donos de fatias W27 diferentes editando arquivos disjuntos na mesma onda (regra da casa
@@ -380,21 +384,75 @@ int main() {
 
       if (pid == 0) {
         // -------------------------------------------------------------------------------------
-        // EN: STAGE 2/2 -- SQUEEZE. baseline + cal_delta_bytes - margin, margin = 1/4 of the
-        //     CALIBRATED delta (same fraction image_decode_hardening_sanity.cpp's own Group B
-        //     measured to reliably force a genuine failure without run-to-run variance
-        //     occasionally letting the constrained run "unexpectedly fit").
-        // PT: ESTÁGIO 2/2 -- APERTAR. baseline + cal_delta_bytes - margem, margem = 1/4 do
-        //     delta CALIBRADO (mesma fração que o próprio Grupo B de image_decode_hardening_
-        //     sanity.cpp mediu pra forçar de forma confiável uma falha genuína sem que a
-        //     variância execução-a-execução ocasionalmente deixasse a execução restringida
-        //     "caber inesperadamente").
+        // EN: STAGE 2/2 -- SQUEEZE. baseline + cal_delta_bytes - margin, margin = 1/10 of the
+        //     CALIBRATED delta -- NOT the 1/4 image_decode_hardening_sanity.cpp's own Group B
+        //     uses for ITS (much smaller, 2560x2048/20 MiB) hand-rolled fixture. Measured, on
+        //     THIS 12000x12000/~1099 MiB fixture, BEFORE this margin was picked (a throwaway
+        //     bisection probe, DEC-NOTHROW's own try/catch removed in an isolated
+        //     `tools/mutation_sandbox.sh` sandbox, never the tracked file): margin fractions
+        //     0.05-0.20 reliably land the forced failure INSIDE the C++ `assign()` this
+        //     library's own `decode_straight_rgba()` performs (throws `std::bad_alloc` --
+        //     exactly what DEC-NOTHROW's `try`/`catch` exists to catch); 0.25 and above
+        //     reliably land it INSIDE `stb_image`'s own plain `malloc()` instead (returns
+        //     `NULL`, `decode_straight_rgba()` reports `ok == false` with NO exception at all --
+        //     an ALREADY-safe path, unaffected by whether DEC-NOTHROW's guard exists). 0.25 is
+        //     exactly the fraction that DOES generalise from the smaller fixture; it does NOT
+        //     here -- confirmed both ways: with the guard present, 0.10/0.18/0.22 all exited
+        //     cleanly with `ok == false` (3 repeats each, zero variance); with the guard
+        //     removed, the SAME three fractions all `SIGABRT`ed (3 repeats each, zero
+        //     variance). 0.10 is the fraction actually wired in below -- comfortably inside the
+        //     confirmed-crashing range, with headroom on BOTH sides of the measured 0.20-0.25
+        //     transition (unlike image_decode_hardening_sanity.cpp's own Group B, whose
+        //     smaller-margin attempt, 1/16, occasionally let the constrained run "unexpectedly
+        //     fit" -- the OPPOSITE failure mode from squeezing too tight -- this fixture's own
+        //     bisection showed no such variance even at 0.05, but 0.10 is used rather than 0.05
+        //     for the same margin-of-safety reasoning, not because 0.05 itself was observed to
+        //     be unstable). The absolute-byte overhead a squeeze margin has to clear (malloc
+        //     arena bookkeeping, page rounding, ASLR guard regions) is roughly CONSTANT
+        //     regardless of decode size, so it is a much SMALLER fraction of a ~1099 MiB delta
+        //     than of a ~20 MiB one -- which is why the two files' own margins differ by a
+        //     factor of 2.5x rather than being copy-pasted, and why this file reimplements the
+        //     oracle independently instead of sharing a constant with that one (see this file's
+        //     own top comment for the disjoint-files-in-the-same-wave reasoning too).
+        // PT: ESTÁGIO 2/2 -- APERTAR. baseline + cal_delta_bytes - margem, margem = 1/10 do
+        //     delta CALIBRADO -- NÃO o 1/4 que o próprio Grupo B de image_decode_hardening_
+        //     sanity.cpp usa pra fixture DELE (bem menor, 2560x2048/20 MiB, feita à mão).
+        //     Medido, nesta fixture 12000x12000/~1099 MiB, ANTES desta margem ser escolhida
+        //     (uma sonda de bisecção descartável, com o try/catch do DEC-NOTHROW removido num
+        //     sandbox isolado do `tools/mutation_sandbox.sh`, nunca no arquivo rastreado):
+        //     frações de margem 0.05-0.20 pousam a falha forçada de forma confiável DENTRO do
+        //     `assign()` C++ que o próprio `decode_straight_rgba()` desta biblioteca faz (lança
+        //     `std::bad_alloc` -- exatamente o que o `try`/`catch` do DEC-NOTHROW existe pra
+        //     pegar); 0.25 pra cima pousa de forma confiável DENTRO do `malloc()` puro do
+        //     próprio `stb_image` (devolve `NULL`, `decode_straight_rgba()` reporta
+        //     `ok == false` SEM exceção nenhuma -- um caminho JÁ seguro, não afetado por a
+        //     guarda do DEC-NOTHROW existir ou não). 0.25 é exatamente a fração que GENERALIZA
+        //     da fixture menor; AQUI não generaliza -- confirmado dos dois lados: com a guarda
+        //     presente, 0.10/0.18/0.22 saíram todas limpas com `ok == false` (3 repetições
+        //     cada, variância zero); com a guarda removida, as MESMAS três frações deram
+        //     `SIGABRT` todas (3 repetições cada, variância zero). 0.10 é a fração de fato
+        //     conectada abaixo -- confortavelmente dentro da faixa confirmada-que-crasha, com
+        //     folga dos DOIS lados da transição medida 0.20-0.25 (diferente do próprio Grupo B
+        //     de image_decode_hardening_sanity.cpp, cuja tentativa de margem menor, 1/16,
+        //     ocasionalmente deixava a execução restringida "caber inesperadamente" -- o modo
+        //     de falha OPOSTO de apertar demais -- a bisecção desta fixture não mostrou
+        //     variância nenhuma nem em 0.05, mas 0.10 é usado em vez de 0.05 pelo mesmo
+        //     racional de margem-de-segurança, não porque 0.05 em si tenha sido observado
+        //     instável). O overhead em bytes absolutos que uma margem de aperto precisa
+        //     superar (contabilidade de arena do malloc, arredondamento de página, regiões de
+        //     guarda ASLR) é aproximadamente CONSTANTE independente do tamanho do decode,
+        //     então é uma fração bem MENOR de um delta de ~1099 MiB do que de um de ~20 MiB --
+        //     por isso as margens dos dois arquivos diferem por um fator de 2,5x em vez de
+        //     serem copiadas-e-coladas, e por isso este arquivo reimplementa o oráculo de
+        //     forma independente em vez de compartilhar uma constante com aquele (ver o
+        //     próprio comentário de topo deste arquivo pro racional de arquivos-disjuntos-na-
+        //     mesma-onda também).
         // -------------------------------------------------------------------------------------
         const long baseline = read_vm_size_bytes();
         if (baseline < 0)
           _exit(2); // EN: cannot measure -- inconclusive. PT: não dá pra medir -- inconclusivo.
 
-        const long margin = cal_delta_bytes / 4;
+        const long margin = cal_delta_bytes / 10;
         const rlim_t limit = static_cast<rlim_t>(baseline) + static_cast<rlim_t>(cal_delta_bytes - margin);
         struct rlimit rl;
         rl.rlim_cur = limit;

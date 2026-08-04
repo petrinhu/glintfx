@@ -565,7 +565,7 @@ void App::process_event(const UiEvent& ev) {
 // EN: HOSTIN-1/2 (Onda 2, v0.19.0) -- thin forwards to WindowGlfw with the App-wide !ready() guard
 //     (same pattern as every other method in this file). WindowGlfw carries the real state
 //     table + callback plumbing (D2, window_glfw.cpp/.hpp).
-// PT: HOSTIN-1/2 (Onda 2, v0.19.0) -- repasses finos a WindowGlfw com a guarda !ok() de todo o
+// PT: HOSTIN-1/2 (Onda 2, v0.19.0) -- repasses finos a WindowGlfw com a guarda !ready() de todo o
 //     App (mesmo padrão de todo outro método deste arquivo). WindowGlfw carrega a tabela de
 //     estado + plomberia de callback de fato (D2, window_glfw.cpp/.hpp).
 bool App::is_key_down(Key k) const {

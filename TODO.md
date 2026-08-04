@@ -361,5 +361,7 @@ Trilha da biblioteca C++23 (compat C++17→23) que une RmlUi (UI) + renderer GL3
 > pediu": uma lacuna que um consumidor adiou pode ser a urgência de outro hoje, e o alvo
 > do projeto é distribuição para público amplo.
 
-Vazia. Descoberta nova entra aqui como 1 linha, sem Onda nem WSJF, e é integrada na
+- **SEMENTE `SEED-DOCREFS-DIRETO` -- o match DIRETO do gate de citações tem a mesma fraqueza de substring que o fallback acabou de perder, e ela esconde 4 citações PODRES hoje (2026-08-04, medido pelo implementer do conserto do `DOCREFS-RIGIDEZ` e conferido por mim)**: o `tools/check_doc_line_refs.sh` casa o símbolo por substring também quando ele ESTÁ na linha citada. Medição: 4 citações reais apontam `init` para `draw2d.hpp:457`, e essa linha só "passa" porque contém `init` dentro de **`never-initialized`** -- o `bool init();` de verdade está na **linha 499**. Ou seja: quatro citações da nossa doc estão erradas e o gate aprova. ⚠️ **Não foi consertado junto de propósito**: apertar o match direto com fronteira de palavra faz essas 4 virarem `FAIL` sob `--strict`, o que quebra o contrato do `--strict` de reproduzir `exit 0` no HEAD. O conserto de verdade é **corrigir as 4 citações primeiro** (apontar para 499) e só então apertar o gate -- nessa ordem, senão o gate reprova a própria árvore. Escopo: 4 citações + fronteira de palavra no `name_in_range()`.
+
+Descoberta nova entra aqui como 1 linha, sem Onda nem WSJF, e é integrada na
 próxima reordenação.

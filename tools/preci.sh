@@ -2,15 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # EN: Local pre-CI gate (TST-L1-PRECI, TESTES.md). Mirrors the fast day-to-day slice of
 #     CI BEFORE code becomes visible on a remote (líder's decision 2026-07-10: hooked at
-#     pre-push, not pre-commit -- the glintfx suite takes ~2min warm, which would break
-#     the flow of small frequent commits; pre-push is "before it becomes visible").
+#     pre-push, not pre-commit -- the glintfx suite takes ~5min warm (measured 2026-07-31,
+#     125 tests, fast-mode end-to-end = 5m01s; PRECI-TEMPO-DOC -- recalibrate this number
+#     with a fresh date+test-count when the suite grows, never leave it undated), which
+#     would break the flow of small frequent commits; pre-push is "before it becomes
+#     visible").
 #     Invoked by .githooks/pre-push (opt-in via `git config core.hooksPath .githooks`),
 #     or run directly by hand any time.
 #
 #     Two modes:
 #       - Fast (default): detects which layer(s) were actually touched (working tree +
 #         commits ahead of origin/main) and runs ONLY the matching build+test. This is
-#         the fast day-to-day gate -- keep it under ~2min warm so pre-push stays cheap.
+#         the fast day-to-day gate -- ~5min warm (same dated measurement as above: 2026-
+#         07-31, 125 tests) so pre-push stays cheap; that budget grows with the suite.
 #       - --full: the wide net. Both glintfx CMake configs (GLFW ON and OFF) +
 #         TST-L1-STATIC's encapsulation sub-check (tools/check_encapsulation.sh) +
 #         gitleaks (TST-L1-SECRETS) if installed. Intended for occasional manual runs
@@ -23,16 +27,19 @@
 #
 # PT: Gate de pré-CI local (TST-L1-PRECI, TESTES.md). Espelha a fatia rápida do dia a dia
 #     do CI ANTES do código ficar visível num remoto (decisão do líder 2026-07-10:
-#     enganchado no pre-push, não pre-commit -- a suíte glintfx leva ~2min warm, o que
-#     quebraria o fluxo de commits pequenos e frequentes; pre-push é "antes de ficar
-#     visível"). Invocado por .githooks/pre-push (opt-in via
+#     enganchado no pre-push, não pre-commit -- a suíte glintfx leva ~5min warm (medido em
+#     2026-07-31, 125 testes, fast-mode fim-a-fim = 5m01s; PRECI-TEMPO-DOC -- recalibrar
+#     este número com data+contagem de testes frescas quando a suíte crescer, nunca
+#     deixá-lo sem data), o que quebraria o fluxo de commits pequenos e frequentes;
+#     pre-push é "antes de ficar visível"). Invocado por .githooks/pre-push (opt-in via
 #     `git config core.hooksPath .githooks`), ou rodado direto à mão a qualquer momento.
 #
 #     Dois modos:
 #       - Rápido (default): detecta qual(is) camada(s) foram de fato tocadas (working
 #         tree + commits à frente de origin/main) e roda SÓ o build+teste
-#         correspondente. É o gate rápido do dia a dia -- manter sob ~2min warm pra o
-#         pre-push continuar barato.
+#         correspondente. É o gate rápido do dia a dia -- ~5min warm (mesma medição
+#         datada acima: 2026-07-31, 125 testes) pra o pre-push continuar barato; esse
+#         orçamento cresce junto com a suíte.
 #       - --full: a rede larga. As duas configs CMake do glintfx (GLFW ON e OFF) + o
 #         sub-check de encapsulamento do TST-L1-STATIC (tools/check_encapsulation.sh) +
 #         gitleaks (TST-L1-SECRETS) se instalado. Pensado para rodadas manuais

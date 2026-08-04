@@ -87,7 +87,7 @@ int main() {
     return 1;
   }
 
-  glintfx::UiLayer ui({.logical_width = 320, .logical_height = 240, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 320, .logical_height = 240});
   if (!ui.ok()) {
     std::puts("log_throttle_embed_sanity FAIL: ui attach failed");
     return 2;

@@ -42,7 +42,7 @@ int main() {
 
   // EN: UiLayer attaches to the CURRENT GL context (already made current by WindowGlfw::create).
   // PT: UiLayer anexa ao contexto GL CORRENTE (já tornado corrente por WindowGlfw::create).
-  glintfx::UiLayer ui({ .logical_width = 640, .logical_height = 480, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 640, .logical_height = 480});
   if (!ui.ok()) { std::puts("ui attach failed"); return 2; }
 
   // EN: load() must not crash (min.rml is a minimal document with no font reference).

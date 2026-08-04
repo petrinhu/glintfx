@@ -175,7 +175,7 @@ int main() {
     return 1;
   }
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::puts("fonteng_own_embed_sanity FAIL: ui attach failed");
     return 2;

@@ -49,7 +49,7 @@ int main() {
 
   // EN: UiLayer attaches to the host's CURRENT GL context (loads GL function pointers here).
   // PT: UiLayer anexa ao contexto GL CORRENTE do host (carrega os ponteiros de função GL aqui).
-  glintfx::UiLayer ui({ .logical_width = 400, .logical_height = 300, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 400, .logical_height = 300});
   if (!ui.ok()) {
     std::puts("FAIL: ui attach failed");
     return 2;

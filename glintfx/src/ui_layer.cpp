@@ -15,7 +15,7 @@
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Log.h> // EN: QW-GUARDLOG (v0.18.1) -- set_viewport's own pre-guard now warns.
                             // PT: QW-GUARDLOG (v0.18.1) -- pre-guard do set_viewport agora avisa.
-#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
+#include <string>           // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 
 namespace glintfx {
 
@@ -30,11 +30,11 @@ namespace glintfx {
 constexpr int kMaxViewportDim = 32768;
 
 struct UiLayer::Impl {
-  SystemClock clock;  // EN: minimal RmlUi SystemInterface (clock only, no GLFW).
-                      // PT: SystemInterface mínimo do RmlUi (só relógio, sem GLFW).
-  Engine      engine;
-  int  w   = 0;
-  int  h   = 0;
+  SystemClock clock; // EN: minimal RmlUi SystemInterface (clock only, no GLFW).
+                     // PT: SystemInterface mínimo do RmlUi (só relógio, sem GLFW).
+  Engine engine;
+  int w = 0;
+  int h = 0;
   // EN: F3 (v0.2.5) -- see set_viewport() doc comments in ui_layer.hpp for the full contract.
   //     x, y: public, top-down window-space offset (mirrors UiEvent's convention).
   //     target_h: last target_h given to the 5-arg overload; re-used by the Resize event
@@ -55,10 +55,10 @@ struct UiLayer::Impl {
   //     nenhuma. letterbox_mode: false = caminho legado de 2 args (offset sempre (0,0),
   //     Resize nunca o toca). true = caminho de 5 args -- Resize recalcula gl_offset_y (não
   //     gl_offset_x, x não depende de h).
-  int  x = 0, y = 0, target_h = 0;
-  int  gl_offset_x = 0, gl_offset_y = 0;
+  int x = 0, y = 0, target_h = 0;
+  int gl_offset_x = 0, gl_offset_y = 0;
   bool letterbox_mode = false;
-  bool ok  = false;
+  bool ok = false;
 };
 
 UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
@@ -116,12 +116,31 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   // EN: Load GL function pointers against the host's CURRENT context.
   //     glx_gl_load() is idempotent within one process — a repeat call just re-resolves
   //     and overwrites the same ~344 pointers (cheap, no allocation kept around).
-  //     Skip when the host has already initialised the loader (cfg.load_gl = false).
+  //     Skip when the host already claims the loader is populated -- SEED-LOADGL-NOME
+  //     (2026-08-04): EITHER field asking to skip is enough, so the combined guard is
+  //     `load_gl && !assume_gl_loaded`, not a straight read of one field. This is the ONE
+  //     internal site that still reads the deprecated `load_gl` (every other internal caller
+  //     of a UiLayerConfig uses only assume_gl_loaded or the fields' own defaults) -- the
+  //     pragma below silences this file warning about a deprecation this file itself is the
+  //     one keeping alive on purpose, for the one version load_gl stays functional.
   // PT: Carrega ponteiros de função GL contra o contexto CORRENTE do host.
   //     glx_gl_load() é idempotente dentro de um processo — uma chamada repetida apenas
   //     re-resolve e sobrescreve os mesmos ~344 ponteiros (barato, sem alocação retida).
-  //     Pular quando o host já inicializou o loader (cfg.load_gl = false).
-  if (cfg.load_gl) {
+  //     Pular quando o host já alega que o loader está populado -- SEED-LOADGL-NOME
+  //     (2026-08-04): QUALQUER um dos dois campos pedindo pra pular já basta, então a guarda
+  //     combinada é `load_gl && !assume_gl_loaded`, não a leitura direta de um campo só. Este é
+  //     o ÚNICO sítio interno que ainda lê o `load_gl` deprecated (todo outro chamador interno
+  //     de UiLayerConfig usa só assume_gl_loaded ou os próprios defaults dos campos) -- o pragma
+  //     abaixo silencia este arquivo avisando de uma depreciação que este mesmo arquivo é quem
+  //     mantém viva de propósito, pela uma versão em que load_gl segue funcional.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+  if (cfg.load_gl && !cfg.assume_gl_loaded) {
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     if (glx_gl_load() != 0) return;
   }
 
@@ -411,7 +430,8 @@ ElementBox UiLayer::get_element_box(const char* id) const {
   //     set_viewport(x,y,w,h,target_h) tenha posicionado a sub-viewport em outro lugar).
   box.x = x + static_cast<float>(impl_->x);
   box.y = y + static_cast<float>(impl_->y);
-  box.w = w; box.h = h;
+  box.w = w;
+  box.h = h;
   return box;
 }
 

@@ -80,7 +80,7 @@ int main() {
 
   // EN: UiLayer attaches (loads GL function pointers, initialises RmlUi).
   // PT: UiLayer anexa (carrega os ponteiros de função GL, inicializa RmlUi).
-  glintfx::UiLayer ui({.logical_width = 400, .logical_height = 300, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 400, .logical_height = 300});
   if (!ui.ok()) {
     std::puts("FAIL: ui attach failed");
     return 2;

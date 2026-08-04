@@ -68,7 +68,7 @@ int main() {
     return 1;
   }
 
-  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150});
   if (!ui.ok()) {
     std::puts("FAIL: ui attach failed");
     return 2;

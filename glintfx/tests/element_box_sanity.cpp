@@ -24,7 +24,7 @@ int main() {
   glintfx::WindowGlfw host;
   if (!host.create("elbox_host", 200, 150)) { std::puts("FAIL: host create"); return 1; }
 
-  glintfx::UiLayer ui({ .logical_width = 200, .logical_height = 150, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150});
   if (!ui.ok()) { std::puts("FAIL: ui attach"); return 2; }
 
   // (C) no document loaded yet.

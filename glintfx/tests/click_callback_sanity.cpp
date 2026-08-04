@@ -50,7 +50,7 @@ int main() {
   glintfx::WindowGlfw host;
   if (!host.create("click_cb_host", 300, 200)) { std::puts("FAIL: host create"); return 1; }
 
-  glintfx::UiLayer ui({ .logical_width = 300, .logical_height = 200, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 300, .logical_height = 200});
   if (!ui.ok()) { std::puts("FAIL: ui attach"); return 2; }
 
   std::vector<std::string> hits;

@@ -224,7 +224,7 @@ long count_ink_rect(const std::vector<unsigned char>& px, int fw, int fh,
 int measure(bool bypass, const char* label, EngineMetrics& out) {
   glintfx::own_font_engine_ab_bypass() = bypass;
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::fprintf(stderr, "fonteng_ab_compare FAIL: UiLayer attach failed (%s)\n", label);
     return 10;

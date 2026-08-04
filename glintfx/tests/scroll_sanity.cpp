@@ -188,7 +188,7 @@ int main() {
   glintfx::WindowGlfw host;
   if (!host.create("scroll_host", 200, 200)) { std::puts("FAIL: host create"); return 1; }
 
-  glintfx::UiLayer ui({ .logical_width = 200, .logical_height = 200, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 200});
   if (!ui.ok()) { std::puts("FAIL: ui attach"); return 2; }
 
   // ---------------------------------------------------------------------------

@@ -182,8 +182,7 @@ long count_ink_rect(const std::vector<unsigned char>& px, int fw, int fh,
 //     `UiLayerConfig::font_engine` passado em `engine` -- sem bypass, sem hook A/B. Retorna 0 no
 //     sucesso, não-zero numa falha de fixture.
 int measure(glintfx::FontEngine engine, const char* label, EngineMetrics& out) {
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true,
-                         .font_engine = engine });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .font_engine = engine});
   if (!ui.ok()) {
     std::fprintf(stderr, "fonteng_engine_select_sanity FAIL: UiLayer attach failed (%s)\n",
                  label);

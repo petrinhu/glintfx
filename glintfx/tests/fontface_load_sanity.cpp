@@ -279,7 +279,7 @@ void check_before_init() {
 //     FontEngine::Own (os guards de path/family são agnósticos de motor -- rodam antes do
 //     Rml::LoadFontFace sequer ser chamado, ver guard-1/guard-2 de Bootstrap::load_font_face).
 void check_valid_and_hostile() {
-  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true, .font_engine = glintfx::FontEngine::Own});
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .font_engine = glintfx::FontEngine::Own});
   if (!ui.ok()) {
     fail("[1] UiLayer attach failed");
     return;
@@ -341,7 +341,7 @@ void run_session(glintfx::FontEngine engine, const glintfx::FontFaceDesc& desc,
   load_ok = false;
   out = Probe{};
 
-  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true, .font_engine = engine});
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .font_engine = engine});
   if (!ui.ok()) return;
 
   if (!ui.load_font_face(desc)) return;
@@ -448,7 +448,7 @@ void check_derived_family() {
 // PT: [5] fallback_face=true, dirigido puramente programaticamente -- reusa as exatas duas
 //     fontes de fixture que a tarefa de review de fonteng_fallback_sanity.cpp estabeleceu.
 void check_programmatic_fallback() {
-  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true, .font_engine = glintfx::FontEngine::Own});
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .font_engine = glintfx::FontEngine::Own});
   if (!ui.ok()) {
     fail("[5] UiLayer attach failed");
     return;
@@ -644,7 +644,7 @@ AxisProbeResult run_axis_probe(const char* label, const char* family, glintfx::F
                                const char* rcss_weight_b) {
   AxisProbeResult result;
 
-  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true, .font_engine = glintfx::FontEngine::Own});
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .font_engine = glintfx::FontEngine::Own});
   if (!ui.ok()) {
     fail("[7] UiLayer attach failed");
     return result;

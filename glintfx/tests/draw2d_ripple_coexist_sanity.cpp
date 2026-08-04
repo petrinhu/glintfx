@@ -202,7 +202,7 @@ int main() {
     return 1;
   }
 
-  UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true});
+  UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::puts("draw2d_ripple_coexist_sanity FAIL: ui attach failed");
     return 2;

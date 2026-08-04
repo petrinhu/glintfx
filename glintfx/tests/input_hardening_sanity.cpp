@@ -92,7 +92,7 @@ int main() {
     return 1;
   }
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true, .dp_ratio = 1.0f });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .dp_ratio = 1.0f});
   if (!ui.ok()) {
     std::puts("input_hardening_sanity FAIL: ui attach failed");
     return 2;

@@ -95,8 +95,7 @@ int main() {
   // EN: Step 2 — UiLayer attaches with dp_ratio=1.0 (default via Config path).
   // PT: Passo 2 — UiLayer anexa com dp_ratio=1.0 (padrão via caminho Config).
   // ---------------------------------------------------------------------------
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H,
-                        .load_gl = true, .dp_ratio = 1.0f });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .dp_ratio = 1.0f});
   if (!ui.ok()) {
     std::puts("dp_ratio_sanity FAIL: ui attach failed");
     return 2;

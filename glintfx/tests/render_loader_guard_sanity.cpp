@@ -2,14 +2,23 @@
 // EN: render_loader_guard_sanity (GLPROC-CRASH, 2026-07-30) -- contract/regression test for
 //     `RenderGl3::init()`'s loader-not-ready guard (src/render_gl3.cpp, right before
 //     `RmlGL3::Initialize`/`new Impl`). This is the DIRECT regression test for a SIGSEGV
-//     measured by execution (gdb) while verifying `gl_proc_address()`'s own `Config::load_gl =
-//     false` caveat (see the doc-comment on `glintfx::gl_proc_address()`, gl_proc.hpp, and this
-//     library's own CHANGELOG/commit `f0cacbb` for the full writeup): before the guard,
-//     `glintfx::UiLayer{.load_gl = false}`, constructed as the FIRST glintfx entity in a
-//     process (so `glx_gl_load()` never ran anywhere before it), crashed inside its own
-//     constructor -- `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` ->
-//     `RenderInterface_GL3`'s own constructor (RmlUi) compiling GL3 shaders through a still-
-//     NULL `glCreateShader` (== `glx_glCreateShader`) function pointer.
+//     measured by execution (gdb) while verifying `gl_proc_address()`'s own loader-skip caveat
+//     (see the doc-comment on `glintfx::gl_proc_address()`, gl_proc.hpp, and this library's own
+//     CHANGELOG/commit `f0cacbb` for the full writeup): before the guard,
+//     `glintfx::UiLayer{.load_gl = false}` (the ORIGINAL field name at the time this bug was
+//     found), constructed as the FIRST glintfx entity in a process (so `glx_gl_load()` never ran
+//     anywhere before it), crashed inside its own constructor -- `Engine::attach()` ->
+//     `RenderGl3::init()` -> `new Impl` -> `RenderInterface_GL3`'s own constructor (RmlUi)
+//     compiling GL3 shaders through a still-NULL `glCreateShader` (== `glx_glCreateShader`)
+//     function pointer.
+//
+//     RENAMED, SAME CONTRACT (`SEED-LOADGL-NOME`, 2026-08-04): this file's own construction below
+//     now uses `.assume_gl_loaded = true`, the canonical replacement for `.load_gl = false` (see
+//     `UiLayerConfig`'s own doc-comment, `ui_layer.hpp`, for the full rename rationale and the
+//     inverted-polarity warning). The regression this test proves is UNCHANGED -- the guard in
+//     `RenderGl3::init()` reads a function-pointer sentinel, not either config field by name, so
+//     the SAME crash-class protection applies regardless of which spelling a caller reaches it
+//     through.
 //
 //     DELIBERATELY DOES NOT USE `_glintfx_test_ctx`/`WindowGlfw` (unlike every other embed test
 //     in this suite, e.g. `ui_layer_attach.cpp`, `gl_proc_address_embed_sanity.cpp`): that
@@ -22,8 +31,8 @@
 //     WHAT THIS PROVES: [1] `glintfx::gl_proc_address("glClear")` returns `nullptr` BEFORE any
 //     glintfx entity exists (same contract `gl_proc_address_sanity.cpp`/
 //     `gl_proc_address_embed_sanity.cpp` already prove, re-confirmed here against a REAL raw
-//     context rather than "no context at all"); [2] constructing `glintfx::UiLayer{.load_gl =
-//     false}` as the sole/first glintfx entity in this process does NOT crash -- if the guard in
+//     context rather than "no context at all"); [2] constructing `glintfx::UiLayer{
+//     .assume_gl_loaded = true}` as the sole/first glintfx entity in this process does NOT crash -- if the guard in
 //     `RenderGl3::init()` regresses (removed, or checks the wrong sentinel), this test crashes
 //     with SIGSEGV and ctest reports it as a hard failure, which IS the regression signal (no
 //     softer assertion would catch this class of defect as reliably as letting the process die);
@@ -41,14 +50,23 @@
 // PT: render_loader_guard_sanity (GLPROC-CRASH, 2026-07-30) -- teste de contrato/regressão para
 //     a guarda de loader-não-pronto de `RenderGl3::init()` (src/render_gl3.cpp, logo antes de
 //     `RmlGL3::Initialize`/`new Impl`). Este é o teste de regressão DIRETO pra um SIGSEGV medido
-//     por execução (gdb) ao verificar a própria ressalva `Config::load_gl = false` de
-//     `gl_proc_address()` (ver o doc-comment de `glintfx::gl_proc_address()`, gl_proc.hpp, e o
-//     próprio CHANGELOG/commit `f0cacbb` desta biblioteca pro relato completo): antes da guarda,
-//     `glintfx::UiLayer{.load_gl = false}`, construído como a PRIMEIRA entidade glintfx de um
-//     processo (então o `glx_gl_load()` nunca rodou em lugar nenhum antes dele), crashava dentro
-//     do próprio construtor -- `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` -> o
-//     próprio construtor de `RenderInterface_GL3` (RmlUi) compilando shaders GL3 através de um
-//     ponteiro de função `glCreateShader` (== `glx_glCreateShader`) ainda-NULO.
+//     por execução (gdb) ao verificar a própria ressalva de pular loader de `gl_proc_address()`
+//     (ver o doc-comment de `glintfx::gl_proc_address()`, gl_proc.hpp, e o próprio
+//     CHANGELOG/commit `f0cacbb` desta biblioteca pro relato completo): antes da guarda,
+//     `glintfx::UiLayer{.load_gl = false}` (o NOME ORIGINAL do campo no momento em que este bug
+//     foi achado), construído como a PRIMEIRA entidade glintfx de um processo (então o
+//     `glx_gl_load()` nunca rodou em lugar nenhum antes dele), crashava dentro do próprio
+//     construtor -- `Engine::attach()` -> `RenderGl3::init()` -> `new Impl` -> o próprio
+//     construtor de `RenderInterface_GL3` (RmlUi) compilando shaders GL3 através de um ponteiro
+//     de função `glCreateShader` (== `glx_glCreateShader`) ainda-NULO.
+//
+//     RENOMEADO, MESMO CONTRATO (`SEED-LOADGL-NOME`, 2026-08-04): a própria construção deste
+//     arquivo abaixo agora usa `.assume_gl_loaded = true`, o substituto canônico de
+//     `.load_gl = false` (ver o próprio doc-comment de `UiLayerConfig`, `ui_layer.hpp`, pro
+//     racional completo do rename e o aviso de polaridade invertida). A regressão que este teste
+//     prova fica INALTERADA -- a guarda em `RenderGl3::init()` lê uma sentinela de ponteiro de
+//     função, não qualquer um dos dois campos de config por nome, então a MESMA proteção de
+//     classe-de-crash se aplica independente de qual grafia um chamador usa pra alcançá-la.
 //
 //     DELIBERADAMENTE NÃO USA `_glintfx_test_ctx`/`WindowGlfw` (diferente de todo outro teste
 //     embed desta suíte, ex.: `ui_layer_attach.cpp`, `gl_proc_address_embed_sanity.cpp`): o
@@ -61,8 +79,8 @@
 //     O QUE ISTO PROVA: [1] `glintfx::gl_proc_address("glClear")` retorna `nullptr` ANTES de
 //     qualquer entidade glintfx existir (mesmo contrato que `gl_proc_address_sanity.cpp`/
 //     `gl_proc_address_embed_sanity.cpp` já provam, reconfirmado aqui contra um contexto cru
-//     REAL em vez de "contexto nenhum"); [2] construir `glintfx::UiLayer{.load_gl = false}` como
-//     a única/primeira entidade glintfx deste processo NÃO crasha -- se a guarda em
+//     REAL em vez de "contexto nenhum"); [2] construir `glintfx::UiLayer{.assume_gl_loaded =
+//     true}` como a única/primeira entidade glintfx deste processo NÃO crasha -- se a guarda em
 //     `RenderGl3::init()` regredir (removida, ou checando o sentinela errado), este teste
 //     crasha com SIGSEGV e o ctest reporta como falha dura, que É o sinal de regressão (nenhuma
 //     asserção mais branda pegaria esta classe de defeito de forma tão confiável quanto deixar o
@@ -141,15 +159,15 @@ int main() {
   //         needs a backtrace (gdb) to attribute to THIS specific guard, not just this test's
   //         own pass/fail text.
   // ---------------------------------------------------------------------------
-  glintfx::UiLayer ui({.logical_width = 64, .logical_height = 64, .load_gl = false});
+  glintfx::UiLayer ui({.logical_width = 64, .logical_height = 64, .assume_gl_loaded = true});
   std::puts(
-      "render_loader_guard_sanity [2] PASS: UiLayer{.load_gl=false} construction did not crash "
-      "(crash-based check -- see this call site's own comment: absence of a signal IS the "
+      "render_loader_guard_sanity [2] PASS: UiLayer{.assume_gl_loaded=true} construction did not "
+      "crash (crash-based check -- see this call site's own comment: absence of a signal IS the "
       "pass condition, not an assertion that fired)");
 
   if (ui.ok()) {
     std::fprintf(stderr,
-                 "render_loader_guard_sanity FAIL: [3] ui.ok() == true after a load_gl=false "
+                 "render_loader_guard_sanity FAIL: [3] ui.ok() == true after an assume_gl_loaded=true "
                  "construction with no prior glintfx entity in this process -- expected false (the "
                  "loader was never populated, so a working attach here would be a bigger surprise than "
                  "the crash this test guards against)\n");

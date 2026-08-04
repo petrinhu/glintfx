@@ -356,7 +356,7 @@ bool part_c_before_load() {
     std::puts("FAIL: part C host create");
     return false;
   }
-  glintfx::UiLayer ui({.logical_width = 120, .logical_height = 80, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 120, .logical_height = 80});
   if (!ui.ok()) {
     std::puts("FAIL: part C ui attach");
     return false;
@@ -506,7 +506,7 @@ bool part_g1_ctor_guard_rejects_and_capture_frame_noop() {
     std::puts("FAIL: part G1 host create");
     return false;
   }
-  glintfx::UiLayer ui({.logical_width = 0, .logical_height = 100, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 0, .logical_height = 100});
   if (ui.ok()) {
     std::puts(
         "FAIL: part G1 ui.ok() == true with logical_width = 0 -- UILAYER-CTOR-GUARD did not "
@@ -581,7 +581,7 @@ bool part_e_letterbox_region() {
     std::puts("FAIL: part E host create");
     return false;
   }
-  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150});
   if (!ui.ok()) {
     std::puts("FAIL: part E ui attach");
     return false;
@@ -730,7 +730,7 @@ bool part_f_width_not_multiple_of_4() {
     std::puts("FAIL: part F host create");
     return false;
   }
-  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::puts("FAIL: part F ui attach");
     return false;
@@ -793,7 +793,7 @@ int main() {
       std::puts("FAIL: parts A/B host create");
       return 1;
     }
-    glintfx::UiLayer ui({.logical_width = 300, .logical_height = 200, .load_gl = true});
+    glintfx::UiLayer ui({.logical_width = 300, .logical_height = 200});
     if (!ui.ok()) {
       std::puts("FAIL: parts A/B ui attach");
       return 2;

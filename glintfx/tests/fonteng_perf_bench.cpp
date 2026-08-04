@@ -305,8 +305,7 @@ int main(int argc, char** argv) {
 
   const auto t_bake0 = Clock::now();
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true,
-                         .dp_ratio = args.dp });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H, .dp_ratio = args.dp});
   if (!ui.ok()) {
     std::fprintf(stderr, "fonteng_perf_bench FAIL: UiLayer attach failed\n");
     return 10;

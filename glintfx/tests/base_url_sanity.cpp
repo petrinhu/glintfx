@@ -94,7 +94,7 @@ int main() {
   // EN: Step 2 -- UiLayer attaches. No base URL set yet.
   // PT: Passo 2 -- UiLayer anexa. Sem base URL definido ainda.
   // ---------------------------------------------------------------------------
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::puts("base_url_sanity FAIL: ui attach failed");
     return 2;

@@ -232,7 +232,7 @@ int capture_engine(bool ab_bypass, bool hint_bypass, bool darken_enable, bool pe
   //     glyph. Lido em tempo de bake (BakeFaceInstance), setado antes do ctor da UiLayer.
   glintfx::own_font_engine_vsnap_bypass() = vsnap_bypass;
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::fprintf(stderr, "fonteng_ab_visual FAIL: UiLayer attach failed (%s)\n", label);
     return 10;

@@ -26,7 +26,7 @@ int main() {
 
   // EN: UiLayer attaches to the current GL context (already made current by WindowGlfw::create).
   // PT: UiLayer anexa ao contexto GL corrente (tornado corrente por WindowGlfw::create).
-  glintfx::UiLayer ui({ .logical_width = 800, .logical_height = 600, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 800, .logical_height = 600});
   if (!ui.ok()) {
     std::puts("FAIL: ui attach");
     return 2;

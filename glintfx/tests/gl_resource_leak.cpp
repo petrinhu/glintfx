@@ -155,7 +155,7 @@ int main() {
   }
 
   auto ui = std::make_unique<glintfx::UiLayer>(
-      glintfx::UiLayerConfig{.logical_width = 320, .logical_height = 240, .load_gl = true});
+      glintfx::UiLayerConfig{.logical_width = 320, .logical_height = 240});
   if (!ui->ok()) {
     std::puts("FAIL: ui attach failed");
     return 2;
@@ -220,7 +220,7 @@ int main() {
   //     com o baseline.
   ui.reset();
   ui = std::make_unique<glintfx::UiLayer>(
-      glintfx::UiLayerConfig{.logical_width = 320, .logical_height = 240, .load_gl = true});
+      glintfx::UiLayerConfig{.logical_width = 320, .logical_height = 240});
   if (!ui->ok()) {
     std::puts("FAIL: ui re-attach after destroy failed");
     return 5;

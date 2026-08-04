@@ -103,7 +103,7 @@ int main() {
   // [1b] UiLayer attaches to the HOST-owned context (Config::load_gl = true default, matching
   //      ui_layer_attach.cpp -- glx_gl_load() runs against the already-current host context).
   // ---------------------------------------------------------------------------
-  glintfx::UiLayer ui({.logical_width = 320, .logical_height = 240, .load_gl = true});
+  glintfx::UiLayer ui({.logical_width = 320, .logical_height = 240});
   if (!ui.ok()) {
     std::puts("SKIP: UiLayer attach failed");
     return failures;

@@ -8,7 +8,7 @@
 #include <memory>
 #include <cstddef>
 #include <functional>
-#include <string>  // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
+#include <string> // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 #include <glintfx/ui_event.hpp>
 #include <glintfx/element_box.hpp>
 #include <glintfx/click_info.hpp>
@@ -24,9 +24,81 @@ namespace glintfx {
 //     Declarada em namespace scope para ser tipo completo ao ser usada como argumento padrão
 //     no construtor do UiLayer (default-args de inner-class atingem uma restrição da linguagem C++).
 struct UiLayerConfig {
-  int logical_width  = 1280;
+  int logical_width = 1280;
   int logical_height = 720;
-  bool load_gl       = true;
+
+  // EN: `SEED-LOADGL-NOME` (2026-08-04) -- canonical replacement for the deprecated `load_gl`
+  //     below. When `true`, the constructor SKIPS glintfx's own `glx_gl_load()` call, trusting
+  //     the caller's claim that some entity (a previous glintfx instance, or the host's own
+  //     equivalent loader step -- see the effective-rule sentence below) already populated it.
+  //     ⚠️ POLARITY, stated because getting it backwards is the exact failure mode this field
+  //     exists to prevent: `assume_gl_loaded = true` means "SKIP my own load" -- it does the
+  //     OPPOSITE of what its name might suggest to a reader thinking of it as "make glintfx load
+  //     for me". `load_gl` names the ACTION (load, yes/no); `assume_gl_loaded` names the STATE
+  //     the caller is claiming (already loaded, yes/no) -- that is precisely why `load_gl` was
+  //     misleading (see WHY THIS FIELD EXISTS below) and why this one is not.
+  //     EFFECTIVE RULE (both fields participate, see `ui_layer.cpp`'s combined read): the loader
+  //     runs if and only if `load_gl && !assume_gl_loaded`. The defaults `(load_gl=true,
+  //     assume_gl_loaded=false)` reproduce the pre-rename behaviour byte for byte; there is no
+  //     contradictory state -- either field alone asking to skip makes the constructor skip.
+  //     WHY THIS FIELD EXISTS (the rename, not a new capability): a consumer's own observation,
+  //     verbatim -- "the name `load_gl = false` promises 'I already loaded', and what it seems to
+  //     deliver is 'do not load again'. Those are different things when the tables are
+  //     different, and the second reading is only safe if the table is ALREADY populated through
+  //     some other route." The class-wide sweep this triggered (`GLPROC-CRASH`,
+  //     `glintfx/include/glintfx/gl_proc.hpp`'s own `gl_proc_address()` doc-comment carries the
+  //     full measurement -- referenced here, not repeated) confirmed a stronger claim than the
+  //     hypothesis: there is NO scenario where the flag is simultaneously safe AND useful. The
+  //     rename does not change that finding -- it only gives the caller's INTENT ("I already
+  //     populated the table elsewhere") a name that says what it means, instead of a name shaped
+  //     like a verb ("load: yes/no") that reads as a performance knob it never was.
+  // PT: `SEED-LOADGL-NOME` (2026-08-04) -- substituto canônico do `load_gl` deprecated abaixo.
+  //     Quando `true`, o construtor PULA a própria chamada de `glx_gl_load()` da glintfx,
+  //     confiando na alegação do chamador de que alguma entidade (uma instância glintfx
+  //     anterior, ou o próprio passo equivalente de loader do host -- ver a frase de REGRA
+  //     EFETIVA abaixo) já a populou.
+  //     ⚠️ POLARIDADE, dita porque errá-la ao contrário é exatamente o modo de falha que este
+  //     campo existe pra prevenir: `assume_gl_loaded = true` significa "PULE meu próprio load"
+  //     -- faz o OPOSTO do que o nome poderia sugerir a um leitor pensando nele como "faça a
+  //     glintfx carregar pra mim". `load_gl` nomeia a AÇÃO (carregar, sim/não); `assume_gl_loaded`
+  //     nomeia o ESTADO que o chamador está alegando (já carregado, sim/não) -- é exatamente por
+  //     isso que o `load_gl` enganava (ver POR QUE ESTE CAMPO EXISTE abaixo) e por que este não.
+  //     REGRA EFETIVA (os dois campos participam, ver a leitura combinada em `ui_layer.cpp`): o
+  //     loader roda se e somente se `load_gl && !assume_gl_loaded`. Os defaults
+  //     `(load_gl=true, assume_gl_loaded=false)` reproduzem o comportamento pré-rename byte a
+  //     byte; não há estado contraditório -- qualquer um dos dois campos sozinho pedindo pra
+  //     pular já faz o construtor pular.
+  //     POR QUE ESTE CAMPO EXISTE (o rename, não uma capacidade nova): a observação de um
+  //     consumidor, verbatim -- "o nome `load_gl = false` promete 'eu já carreguei', e o que ele
+  //     parece entregar é 'não carregue de novo'. São coisas diferentes quando as tabelas são
+  //     diferentes, e a segunda leitura só é segura se a tabela já estiver populada por outra
+  //     via." A varredura de classe inteira que isto disparou (`GLPROC-CRASH`, o próprio
+  //     doc-comment de `gl_proc_address()` em `glintfx/include/glintfx/gl_proc.hpp` carrega a
+  //     medição completa -- referenciada aqui, não repetida) confirmou uma formulação mais forte
+  //     que a hipótese: NÃO existe cenário onde o flag é ao mesmo tempo seguro E útil. O rename
+  //     não muda esse achado -- só dá à INTENÇÃO do chamador ("eu já populei a tabela em outro
+  //     lugar") um nome que diz o que ela significa, em vez de um nome com forma de verbo
+  //     ("carregar: sim/não") que lia como um botão de performance que nunca foi.
+  bool assume_gl_loaded = false;
+
+  // EN: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renamed to `assume_gl_loaded` above.
+  //     ⚠️ INVERTED POLARITY, the ONE fact a migrator cannot get wrong: `load_gl = false` <=>
+  //     `assume_gl_loaded = true`. Setting `assume_gl_loaded = false` where `load_gl = false` used
+  //     to be is NOT a no-op migration -- it flips the loader back ON where it used to be skipped.
+  //     Kept functional (see the combined read in `ui_layer.cpp`) for ONE version for source
+  //     compatibility; scheduled removal not before v0.31. Prefer `assume_gl_loaded` in new code.
+  // PT: DEPRECATED (`SEED-LOADGL-NOME`, 2026-08-04) -- renomeado para `assume_gl_loaded` acima.
+  //     ⚠️ POLARIDADE INVERTIDA, o ÚNICO fato que um migrador não pode errar: `load_gl = false`
+  //     <=> `assume_gl_loaded = true`. Definir `assume_gl_loaded = false` onde antes era
+  //     `load_gl = false` NÃO é uma migração no-op -- religa o loader onde antes era pulado.
+  //     Mantido funcional (ver a leitura combinada em `ui_layer.cpp`) por UMA versão, por
+  //     compatibilidade de fonte; remoção agendada não antes da v0.31. Prefira `assume_gl_loaded`
+  //     em código novo.
+  [[deprecated(
+      "renamed: use assume_gl_loaded (NOTE: inverted meaning -- "
+      "load_gl=false <=> assume_gl_loaded=true)")]]
+  bool load_gl = true;
+
   // EN: Initial density-independent pixel ratio (dp_ratio).
   //     1 dp = dp_ratio physical pixels. Set > 1.0 when the host renders at a higher
   //     physical resolution than the logical RCSS canvas (e.g. dp_ratio=2.0 means 1dp=2px).
@@ -101,7 +173,7 @@ public:
   //     acima para o contrato exato (só ok() e ~UiLayer() permanecem válidos na origem depois).
   UiLayer(UiLayer&&) noexcept;
   UiLayer& operator=(UiLayer&&) noexcept;
-  UiLayer(const UiLayer&)            = delete;
+  UiLayer(const UiLayer&) = delete;
   UiLayer& operator=(const UiLayer&) = delete;
 
   // EN: True when attach + engine init succeeded.
@@ -709,11 +781,11 @@ public:
 
   // EN: Bind a boolean cell.
   // PT: Liga uma célula booleana.
-  bool bind_bool  (const char* key, bool initial = false);
+  bool bind_bool(const char* key, bool initial = false);
 
   // EN: Bind a string-list cell (for data-for iteration in RML).
   // PT: Liga uma célula de lista de strings (para iteração data-for no RML).
-  bool bind_list  (const char* key);
+  bool bind_list(const char* key);
 
   // EN: Update a numeric cell after load. No-op when key is unknown.
   //     The change is reflected on the next update() call.
@@ -727,13 +799,13 @@ public:
 
   // EN: Update a boolean cell after load.
   // PT: Atualiza uma célula booleana após load.
-  void set_bool  (const char* key, bool value);
+  void set_bool(const char* key, bool value);
 
   // EN: Replace the entire string list and dirty the variable.
   //     items[0..count-1] are copied; caller retains ownership.
   // PT: Substitui a lista de strings inteira e marca a variável suja.
   //     items[0..count-1] são copiados; o chamador retém a propriedade.
-  void set_list  (const char* key, const char* const* items, std::size_t count);
+  void set_list(const char* key, const char* const* items, std::size_t count);
 
   // EN: Read-back the CURRENT value of a bound cell by key (L1.16-DOMRW, consumes
   //     AUD-PUB-6(e) -- the data-model was write-only before this: a host could push values in
@@ -793,7 +865,7 @@ public:
   //     (mesmas assinaturas).
   bool get_number(const char* key, double& out) const;
   bool get_string(const char* key, std::string& out) const;
-  bool get_bool  (const char* key, bool& out) const;
+  bool get_bool(const char* key, bool& out) const;
 
   // -------------------------------------------------------------------------
   // EN: `FRAMEGRAB-EMBED` (v0.27.0) -- the embed-mode sibling of `App::CapturedFrame`/

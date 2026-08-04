@@ -71,7 +71,7 @@ int main() {
   // PT: Passo 2 — UiLayer anexa ao contexto GL corrente.
   //     load_gl=true: UiLayer chama glx_gl_load() (idempotente neste processo).
   // ---------------------------------------------------------------------------
-  glintfx::UiLayer ui({ .logical_width = 900, .logical_height = 600, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 900, .logical_height = 600});
   if (!ui.ok()) {
     std::puts("ui_layer_sanity FAIL: ui attach failed");
     return 2;

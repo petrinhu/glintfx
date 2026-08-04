@@ -124,12 +124,13 @@ namespace glintfx {
 //     context glintfx::App or the host embedding glintfx::UiLayer owns and makes current (see
 //     this header's own top comment). Returns nullptr, never crashes, in these cases: `name` is
 //     nullptr or ""; or this is called before the REQUIRES precondition above has been met.
-//     ⚠ `Config::load_gl = false` AS THE FIRST GLINTFX ENTITY IN A PROCESS DOES NOT BUILD A
-//     WORKING `UiLayer` -- FIXED TO FAIL CLEAN (`GLPROC-CRASH`, W22, 2026-07-30; this paragraph
-//     replaces an earlier version of itself that documented a real, since-fixed SIGSEGV, MEASURED
-//     BY EXECUTION via gdb -- see `render_gl3.cpp`'s own `GLPROC-CRASH` comment for the guard and
-//     its own mutation proof): a `UiLayer` host that constructs with `Config::load_gl = false`
-//     (declaring "I already loaded my own GL pointers, skip yours") skips glintfx's own
+//     ⚠ ASKING TO SKIP `glx_gl_load()` (`Config::load_gl = false`, or its 2026-08-04 rename
+//     `Config::assume_gl_loaded = true` -- see below) AS THE FIRST GLINTFX ENTITY IN A PROCESS
+//     DOES NOT BUILD A WORKING `UiLayer` -- FIXED TO FAIL CLEAN (`GLPROC-CRASH`, W22, 2026-07-30;
+//     this paragraph replaces an earlier version of itself that documented a real, since-fixed
+//     SIGSEGV, MEASURED BY EXECUTION via gdb -- see `render_gl3.cpp`'s own `GLPROC-CRASH` comment
+//     for the guard and its own mutation proof): a `UiLayer` host that constructs asking to skip
+//     the loader (declaring "I already loaded my own GL pointers, skip yours") skips glintfx's own
 //     `glx_gl_load()` call. If NOTHING ELSE in the REQUIRES list above has ALREADY run earlier in
 //     this same process, `RenderGl3::init()` now REFUSES (`return false`) the moment it detects
 //     an unpopulated loader (`glx_glCreateShader == nullptr`, the sentinel proved -- not assumed
@@ -141,13 +142,19 @@ namespace glintfx {
 //     unguarded (every sibling already checks `ok()`/`impl_`/`initialized` before touching GL --
 //     `init()` is structurally the one place a constructor touches GL before any instance guard
 //     can exist yet to stop it). ⚠ FAILING CLEAN IS NOT THE SAME AS BEING USEFUL: a class-wide
-//     sweep (2026-07-30) found NO scenario where `load_gl = false` is simultaneously SAFE and
-//     USEFUL -- as the FIRST glintfx entity it is a trap (never builds a working `UiLayer`, guard
-//     or not); AFTER another entity has already run the loader it works, but saves only one cheap,
-//     idempotent call over leaving the default `true`. Whether the field itself should be renamed,
-//     kept, or reworked is an open, líder-level API decision (renaming a public struct field breaks
-//     every consumer's build) -- not resolved by this doc-comment, which states only the measured,
-//     current behaviour.
+//     sweep (2026-07-30) found NO scenario where asking to skip the loader is simultaneously SAFE
+//     and USEFUL -- as the FIRST glintfx entity it is a trap (never builds a working `UiLayer`,
+//     guard or not); AFTER another entity has already run the loader it works, but saves only one
+//     cheap, idempotent call over leaving the default (loader runs). ✅ RESOLVED 2026-08-04
+//     (`SEED-LOADGL-NOME`, líder decision): the field itself WAS renamed --
+//     `UiLayerConfig::load_gl` is now deprecated (kept functional for one version, source
+//     compatibility only) in favour of `UiLayerConfig::assume_gl_loaded`, whose polarity is
+//     INVERTED (`load_gl = false` <=> `assume_gl_loaded = true`). This finding (no safe+useful
+//     scenario) is UNCHANGED by the rename -- the rename only makes the caller's INTENT
+//     nameable ("I already populated the table elsewhere") instead of misleadingly shaped like a
+//     performance knob. See `UiLayerConfig`'s own doc-comment (`ui_layer.hpp`) for the exact
+//     mechanical contract (both fields participate: the loader runs iff
+//     `load_gl && !assume_gl_loaded`).
 //     ⚠ MEASURED, NOT ASSUMED (do not rely on the opposite): a NAME THAT NAMES NO REAL SYMBOL
 //     does NOT reliably return nullptr on every driver. Confirmed empirically under this
 //     library's own Mesa/llvmpipe CI environment: `gl_proc_address("totally_bogus_symbol")`
@@ -182,31 +189,39 @@ namespace glintfx {
 //     torna corrente (ver o próprio comentário de topo deste header). Retorna nullptr, nunca
 //     crasha, nestes casos: `name` é nullptr ou ""; ou isto é chamado antes da precondição EXIGE
 //     acima ter sido satisfeita.
-//     ⚠ `Config::load_gl = false` COMO PRIMEIRA ENTIDADE GLINTFX DE UM PROCESSO NÃO CONSTRÓI UM
-//     `UiLayer` FUNCIONAL -- CONSERTADO PRA FALHAR LIMPO (`GLPROC-CRASH`, W22, 2026-07-30; este
-//     parágrafo substitui uma versão anterior de si mesmo que documentava um SIGSEGV real, desde
-//     então consertado, MEDIDO POR EXECUÇÃO via gdb -- ver o próprio comentário `GLPROC-CRASH` de
-//     `render_gl3.cpp` pro guard e a própria prova de mutação dele): um host UiLayer que constrói
-//     com `Config::load_gl = false` (declarando "já carreguei meus próprios ponteiros GL, pule os
-//     seus") pula a própria chamada de `glx_gl_load()` da glintfx. Se NADA MAIS da lista EXIGE
-//     acima já rodou antes neste mesmo processo, o `RenderGl3::init()` agora RECUSA (`return
-//     false`) no momento em que detecta um loader não populado (`glx_glCreateShader == nullptr`,
-//     a sentinela provada -- não presumida -- de ser o ponteiro exato que este caminho lê
-//     primeiro), ANTES do construtor do lado RmlUi que costumava desreferenciá-lo. O
-//     `Engine::attach()` propaga esse `false`, então o construtor do `UiLayer` agora deixa
-//     `ok() == false` -- uma falha documentada, capturável, nunca um crash. Sem relação com a
-//     própria guarda desta função: é um guard dentro do próprio `RenderGl3::init()`, o ÚNICO ponto
-//     de entrada público de toda a superfície `Engine`/`UiLayer`/`App`/`Draw2d` que costumava
-//     ficar desguardado (todo irmão já checa `ok()`/`impl_`/`initialized` antes de tocar GL --
-//     `init()` é estruturalmente o único lugar onde um construtor toca GL antes de qualquer guard
-//     de instância existir pra impedi-lo). ⚠ FALHAR LIMPO NÃO É O MESMO QUE SER ÚTIL: uma
-//     varredura de classe (2026-07-30) não achou NENHUM cenário onde `load_gl = false` é ao mesmo
-//     tempo SEGURO e ÚTIL -- como PRIMEIRA entidade glintfx é uma armadilha (nunca constrói um
-//     `UiLayer` funcional, guard ou não); DEPOIS de outra entidade já ter rodado o loader funciona,
-//     mas economiza só uma chamada idempotente e barata sobre deixar o `true` padrão. Se o próprio
-//     campo deveria ser renomeado, mantido, ou reformulado é decisão de API em nível de líder
-//     aberta (renomear campo de struct pública quebra a build de todo consumidor) -- não resolvida
-//     por este doc-comment, que declara só o comportamento medido e atual.
+//     ⚠ PEDIR PRA PULAR O `glx_gl_load()` (`Config::load_gl = false`, ou o rename dela de
+//     2026-08-04 `Config::assume_gl_loaded = true` -- ver abaixo) COMO PRIMEIRA ENTIDADE GLINTFX
+//     DE UM PROCESSO NÃO CONSTRÓI UM `UiLayer` FUNCIONAL -- CONSERTADO PRA FALHAR LIMPO
+//     (`GLPROC-CRASH`, W22, 2026-07-30; este parágrafo substitui uma versão anterior de si mesmo
+//     que documentava um SIGSEGV real, desde então consertado, MEDIDO POR EXECUÇÃO via gdb -- ver
+//     o próprio comentário `GLPROC-CRASH` de `render_gl3.cpp` pro guard e a própria prova de
+//     mutação dele): um host UiLayer que constrói pedindo pra pular o loader (declarando "já
+//     carreguei meus próprios ponteiros GL, pule os seus") pula a própria chamada de
+//     `glx_gl_load()` da glintfx. Se NADA MAIS da lista EXIGE acima já rodou antes neste mesmo
+//     processo, o `RenderGl3::init()` agora RECUSA (`return false`) no momento em que detecta um
+//     loader não populado (`glx_glCreateShader == nullptr`, a sentinela provada -- não presumida
+//     -- de ser o ponteiro exato que este caminho lê primeiro), ANTES do construtor do lado RmlUi
+//     que costumava desreferenciá-lo. O `Engine::attach()` propaga esse `false`, então o
+//     construtor do `UiLayer` agora deixa `ok() == false` -- uma falha documentada, capturável,
+//     nunca um crash. Sem relação com a própria guarda desta função: é um guard dentro do próprio
+//     `RenderGl3::init()`, o ÚNICO ponto de entrada público de toda a superfície
+//     `Engine`/`UiLayer`/`App`/`Draw2d` que costumava ficar desguardado (todo irmão já checa
+//     `ok()`/`impl_`/`initialized` antes de tocar GL -- `init()` é estruturalmente o único lugar
+//     onde um construtor toca GL antes de qualquer guard de instância existir pra impedi-lo).
+//     ⚠ FALHAR LIMPO NÃO É O MESMO QUE SER ÚTIL: uma varredura de classe (2026-07-30) não achou
+//     NENHUM cenário onde pedir pra pular o loader é ao mesmo tempo SEGURO e ÚTIL -- como PRIMEIRA
+//     entidade glintfx é uma armadilha (nunca constrói um `UiLayer` funcional, guard ou não);
+//     DEPOIS de outra entidade já ter rodado o loader funciona, mas economiza só uma chamada
+//     idempotente e barata sobre deixar o padrão (loader roda). ✅ RESOLVIDO 2026-08-04
+//     (`SEED-LOADGL-NOME`, decisão do líder): o próprio campo FOI renomeado --
+//     `UiLayerConfig::load_gl` agora é deprecated (mantido funcional por uma versão, só por
+//     compatibilidade de fonte) em favor de `UiLayerConfig::assume_gl_loaded`, cuja polaridade é
+//     INVERTIDA (`load_gl = false` <=> `assume_gl_loaded = true`). Este achado (nenhum cenário
+//     seguro+útil) fica INALTERADO pelo rename -- ele só torna a INTENÇÃO do chamador nomeável
+//     ("eu já populei a tabela em outro lugar") em vez de enganosamente moldada como botão de
+//     performance. Ver o próprio doc-comment de `UiLayerConfig` (`ui_layer.hpp`) pro contrato
+//     mecânico exato (os dois campos participam: o loader roda sse
+//     `load_gl && !assume_gl_loaded`).
 //     ⚠ MEDIDO, NÃO PRESUMIDO (não conte com o oposto): um NOME QUE NÃO NOMEIA SÍMBOLO NENHUM
 //     NÃO retorna nullptr de forma confiável em todo driver. Confirmado empiricamente sob o
 //     próprio ambiente de CI Mesa/llvmpipe desta biblioteca:

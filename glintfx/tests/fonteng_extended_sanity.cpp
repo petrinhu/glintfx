@@ -163,7 +163,7 @@ int main() {
     return 1;
   }
 
-  glintfx::UiLayer ui({ .logical_width = W, .logical_height = H, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = W, .logical_height = H});
   if (!ui.ok()) {
     std::puts("fonteng_extended_sanity FAIL: UiLayer attach failed");
     return 2;

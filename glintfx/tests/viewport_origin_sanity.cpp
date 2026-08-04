@@ -137,7 +137,7 @@ int main() {
   glintfx::WindowGlfw host;
   if (!host.create("viewport_origin_host", WIN_W, WIN_H)) { std::puts("FAIL: host create"); return 1; }
 
-  glintfx::UiLayer ui({ .logical_width = 200, .logical_height = 150, .load_gl = true });
+  glintfx::UiLayer ui({.logical_width = 200, .logical_height = 150});
   if (!ui.ok()) { std::puts("FAIL: ui attach"); return 2; }
 
   std::vector<std::string> hits;

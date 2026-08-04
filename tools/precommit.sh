@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # EN: Cheap pre-commit gate for glintfx (GATE-PRECOMMIT, TODO.md). Shift-left companion
 #     to TST-L1-PRECI (tools/preci.sh, hooked at pre-push): where preci.sh is the wide
-#     "before it becomes visible on a remote" net (full build+ctest, ~2min warm),
+#     "before it becomes visible on a remote" net (full build+ctest, ~5min warm (medido 2026-07-31, 125 testes)),
 #     THIS script is the narrow "before it becomes a commit" net -- no build, no test
 #     run, only checks cheap enough to pay on every single commit. Born from Onda 3's
 #     own retrospective (see the GATE-PRECOMMIT line in TODO.md for the measured data):
@@ -116,7 +116,7 @@
 # PT: Gate barato de pre-commit para o glintfx (GATE-PRECOMMIT, TODO.md). Companheiro
 #     shift-left do TST-L1-PRECI (tools/preci.sh, enganchado no pre-push): onde o
 #     preci.sh é a rede larga "antes de ficar visível num remoto" (build+ctest
-#     completo, ~2min warm), ESTE script é a rede estreita "antes de virar commit" --
+#     completo, ~5min warm (medido 2026-07-31, 125 testes)), ESTE script é a rede estreita "antes de virar commit" --
 #     sem build, sem rodar teste, só checks baratos o bastante pra pagar em TODO commit.
 #     Nasceu da própria retrospectiva da Onda 3 (ver a linha GATE-PRECOMMIT no TODO.md
 #     pro dado medido): três rodadas de retrabalho evitável nesta onda -- um commit de

@@ -1541,6 +1541,57 @@ bool Bootstrap::scroll_element_into_view(const char* id, bool align_with_top) co
   return true;
 }
 
+// EN: Maps glintfx::ScrollAlign onto Rml::ScrollAlignment 1:1 (SCROLL-ALIGN, W26). Local
+//     (anonymous namespace) helper -- Rml::ScrollAlignment never crosses out of this
+//     translation unit, same encapsulation invariant as the rest of bootstrap.cpp.
+// PT: Mapeia glintfx::ScrollAlign para Rml::ScrollAlignment 1:1 (SCROLL-ALIGN, W26). Helper
+//     local (namespace anônimo) -- Rml::ScrollAlignment nunca sai desta unidade de tradução,
+//     mesmo invariante de encapsulamento do resto de bootstrap.cpp.
+namespace {
+Rml::ScrollAlignment ToRmlScrollAlignment(ScrollAlign align) {
+  switch (align) {
+    case ScrollAlign::Start:
+      return Rml::ScrollAlignment::Start;
+    case ScrollAlign::Center:
+      return Rml::ScrollAlignment::Center;
+    case ScrollAlign::End:
+      return Rml::ScrollAlignment::End;
+    case ScrollAlign::Nearest:
+      return Rml::ScrollAlignment::Nearest;
+    case ScrollAlign::Adaptive:
+      return Rml::ScrollAlignment::Adaptive;
+  }
+  // EN: Unreachable for a valid ScrollAlign value -- silences -Wreturn-type on an exhaustive
+  //     switch without a `default:` case (an explicit default would hide a future enumerator
+  //     going unmapped behind a silent fallback instead of a compiler warning).
+  // PT: Inalcançável para um ScrollAlign válido -- silencia -Wreturn-type num switch exaustivo
+  //     sem `default:` (um default explícito esconderia um enumerador futuro sem mapeamento
+  //     atrás de um fallback silencioso em vez de um aviso do compilador).
+  return Rml::ScrollAlignment::Start;
+}
+} // namespace
+
+bool Bootstrap::scroll_element_into_view(const char* id, ScrollAlign align) const {
+  // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
+  // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).
+  Rml::Element* el = find_element(id);
+  if (!el) return false;
+  // EN: Only `vertical` is set explicitly -- horizontal/behavior/parentage stay at
+  //     ScrollIntoViewOptions's own defaults (Nearest/Instant/All), byte-for-byte the same
+  //     defaults Element::ScrollIntoView(bool) sets for horizontal/behavior/parentage (see
+  //     RmlUi's Element.cpp), which is what keeps this overload instant/synchronous like the
+  //     bool one -- see scroll_types.hpp's "VERTICAL AXIS ONLY" note for the full rationale.
+  // PT: Só `vertical` é definido explicitamente -- horizontal/behavior/parentage ficam nos
+  //     próprios defaults de ScrollIntoViewOptions (Nearest/Instant/All), byte a byte os mesmos
+  //     defaults que Element::ScrollIntoView(bool) define para horizontal/behavior/parentage
+  //     (ver o Element.cpp do RmlUi), o que é o que mantém esta sobrecarga instantânea/síncrona
+  //     como a bool -- ver a nota "SÓ EIXO VERTICAL" de scroll_types.hpp pro racional completo.
+  Rml::ScrollIntoViewOptions options;
+  options.vertical = ToRmlScrollAlignment(align);
+  el->ScrollIntoView(options);
+  return true;
+}
+
 bool Bootstrap::get_element_scroll_top(const char* id, float& out_scroll_top) const {
   // EN: find_element() folds in the AUD-TEC-5 guard -- see its doc-comment (bootstrap.hpp).
   // PT: find_element() incorpora a guarda AUD-TEC-5 -- ver o doc-comment dela (bootstrap.hpp).

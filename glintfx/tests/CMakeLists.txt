@@ -2750,6 +2750,42 @@ add_test(NAME scroll_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: scroll_align_sanity -- verifies SCROLL-ALIGN (W26, consumer-driven by GusWorld: a
+#     controlled experiment measured scroll_element_into_view() re-anchoring an ALREADY
+#     VISIBLE element, y=204 -> y=136): the new scroll_element_into_view(id, ScrollAlign)
+#     overload (glintfx/include/glintfx/scroll_types.hpp) -- ScrollAlign::Adaptive is a
+#     delta-zero no-op on an already-visible element and scrolls to the midpoint when a scroll
+#     IS needed, ScrollAlign::Start/End reproduce the pre-existing bool overload's
+#     align_with_top=true/false by direct A/B comparison, and a single-argument call still
+#     compiles and dispatches to the OLD bool overload (the anti-ambiguity proof -- see the
+#     file header for why the new overload has no default argument). Reuses the shared
+#     scroll_scene.rml/.rcss fixture copied above (scroll_sanity block). Runs in BOTH build
+#     configs (embed-mode test, links ${_embed_dep} like scroll_sanity above). WORKING_DIRECTORY
+#     = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- same pattern as scroll_sanity/
+#     element_box_sanity.
+# PT: scroll_align_sanity -- verifica SCROLL-ALIGN (W26, consumer-driven pelo GusWorld: um
+#     experimento controlado mediu scroll_element_into_view() reancorando um elemento JÁ
+#     VISÍVEL, y=204 -> y=136): a nova sobrecarga scroll_element_into_view(id, ScrollAlign)
+#     (glintfx/include/glintfx/scroll_types.hpp) -- ScrollAlign::Adaptive é um no-op de
+#     delta-zero num elemento já visível e rola pro ponto médio quando uma rolagem É
+#     necessária, ScrollAlign::Start/End reproduzem align_with_top=true/false da sobrecarga
+#     bool pré-existente por comparação DIRETA A/B, e uma chamada de um único argumento
+#     continua compilando e caindo na sobrecarga bool ANTIGA (a prova anti-ambiguidade -- ver o
+#     cabeçalho do arquivo pro motivo da sobrecarga nova não ter argumento default). Reusa a
+#     fixture compartilhada scroll_scene.rml/.rcss copiada acima (bloco scroll_sanity). Roda em
+#     AMBAS as configs (teste de embed mode, linka ${_embed_dep} como scroll_sanity acima).
+#     WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de
+#     scroll_sanity/element_box_sanity.
+# ---------------------------------------------------------------------------
+add_executable(scroll_align_sanity scroll_align_sanity.cpp)
+target_link_libraries(scroll_align_sanity PRIVATE ${_embed_dep})
+add_test(NAME scroll_align_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:scroll_align_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: viewport_origin_sanity -- integration proof for UiLayer::set_viewport(x,y,w,h,target_h)
 #     (F3, v0.2.5): backward-compat of the legacy 2-arg overload, letterbox offset applied to
 #     get_element_box()'s window-space return value, click-through-offset (mouse translation),

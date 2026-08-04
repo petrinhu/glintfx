@@ -486,6 +486,11 @@ bool UiLayer::scroll_element_into_view(const char* id, bool align_with_top) cons
   return impl_->engine.scroll_element_into_view(id, align_with_top);
 }
 
+bool UiLayer::scroll_element_into_view(const char* id, ScrollAlign align) const {
+  if (!ready()) return false;
+  return impl_->engine.scroll_element_into_view(id, align);
+}
+
 bool UiLayer::get_element_scroll_top(const char* id, float& out_scroll_top) const {
   if (!ready()) return false;
   return impl_->engine.get_element_scroll_top(id, out_scroll_top);

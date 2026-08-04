@@ -4,13 +4,22 @@
 //     get_element_scroll_height()/get_element_client_height() -- proves the surface is wired
 //     on App and returns the expected true/values for a known id. Full behavioural proof (wheel
 //     forwarding, clamping, hardening) lives in scroll_sanity.cpp via UiLayer (same Engine
-//     path App delegates to).
+//     path App delegates to). Also covers App parity for the ScrollAlign overload
+//     (SCROLL-ALIGN, W26, glintfx/include/glintfx/scroll_types.hpp) -- full behavioural proof
+//     (Adaptive delta-zero-when-visible, Start/End vs. the bool overload, the anti-ambiguity
+//     1-arg call) lives in scroll_align_sanity.cpp via UiLayer, same Engine path App delegates
+//     to.
 // PT: Smoke de paridade do App para os cinco métodos de rolagem (GLINTFX-SCROLL-1, v0.4.0):
 //     scroll_element_into_view()/get_element_scroll_top()/set_element_scroll_top()/
 //     get_element_scroll_height()/get_element_client_height() -- prova que a superfície está
 //     conectada no App e retorna os true/valores esperados para um id conhecido. A prova
 //     comportamental completa (encaminhamento de wheel, saturação, hardening) está em
-//     scroll_sanity.cpp via UiLayer (mesmo caminho de Engine para o qual o App delega).
+//     scroll_sanity.cpp via UiLayer (mesmo caminho de Engine para o qual o App delega). Também
+//     cobre a paridade do App para a sobrecarga ScrollAlign (SCROLL-ALIGN, W26,
+//     glintfx/include/glintfx/scroll_types.hpp) -- a prova comportamental completa (Adaptive
+//     delta-zero-quando-visível, Start/End vs. a sobrecarga bool, a chamada de 1 argumento
+//     anti-ambiguidade) está em scroll_align_sanity.cpp via UiLayer, mesmo caminho de Engine
+//     para o qual o App delega.
 // Copyright (c) 2026 Petrus Silva Costa
 #include <glintfx/glintfx.hpp>
 #include <cmath>
@@ -48,6 +57,30 @@ int main() {
   if (!app.scroll_element_into_view("item-29")) { std::puts("FAIL: scroll_element_into_view"); return 6; }
   if (!app.get_element_scroll_top("scroller", top)) { std::puts("FAIL: get_element_scroll_top after scroll_into_view"); return 7; }
   if (!approx(top, 800.f, 1.5f)) { std::fprintf(stderr, "FAIL: scroll_top=%.2f expected ~800\n", top); return 8; }
+
+  // EN: ScrollAlign overload parity (SCROLL-ALIGN, W26) -- proves it is wired on App too, not
+  //     just UiLayer. Behavioural proof (Adaptive delta-zero, Start/End equivalence,
+  //     anti-ambiguity) lives in scroll_align_sanity.cpp; this is a smoke that the surface
+  //     exists and returns the expected clamped-800 oracle for item-29 with ScrollAlign::Start
+  //     (same oracle the bool-overload call above already proved).
+  // PT: Paridade da sobrecarga ScrollAlign (SCROLL-ALIGN, W26) -- prova que está conectada no
+  //     App também, não só no UiLayer. A prova comportamental (Adaptive delta-zero,
+  //     equivalência Start/End, anti-ambiguidade) está em scroll_align_sanity.cpp; isto é um
+  //     smoke de que a superfície existe e retorna o oráculo esperado de 800 (clampado) para o
+  //     item-29 com ScrollAlign::Start (mesmo oráculo que a chamada da sobrecarga bool acima já
+  //     provou).
+  if (!app.scroll_element_into_view("item-29", glintfx::ScrollAlign::Start)) {
+    std::puts("FAIL: scroll_element_into_view(ScrollAlign::Start)");
+    return 13;
+  }
+  if (!app.get_element_scroll_top("scroller", top)) {
+    std::puts("FAIL: get_element_scroll_top after scroll_into_view(ScrollAlign::Start)");
+    return 14;
+  }
+  if (!approx(top, 800.f, 1.5f)) {
+    std::fprintf(stderr, "FAIL: scroll_top=%.2f expected ~800 after ScrollAlign::Start\n", top);
+    return 15;
+  }
 
   std::puts("app_scroll_smoke OK");
   return 0;

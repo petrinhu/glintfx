@@ -22,6 +22,7 @@ namespace Rml { class Context; class SystemInterface; }
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
 #include <glintfx/font_face.hpp>
+#include <glintfx/scroll_types.hpp>
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 
 namespace glintfx {
@@ -314,6 +315,16 @@ public:
   //     Retorna false quando não ok(), nenhum documento estiver carregado, ou o id não for
   //     encontrado.
   bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Forwards to Bootstrap::scroll_element_into_view(id, ScrollAlign) (SCROLL-ALIGN, W26) --
+  //     see that method's doc-comment (bootstrap.hpp) for the full contract, and
+  //     glintfx/include/glintfx/scroll_types.hpp for why this overload exists and why it has
+  //     no default argument.
+  // PT: Encaminha a Bootstrap::scroll_element_into_view(id, ScrollAlign) (SCROLL-ALIGN, W26) --
+  //     ver o doc-comment daquele método (bootstrap.hpp) pro contrato completo, e
+  //     glintfx/include/glintfx/scroll_types.hpp pro motivo desta sobrecarga existir e não ter
+  //     argumento default.
+  bool scroll_element_into_view(const char* id, ScrollAlign align) const;
 
   // EN: Query an element's own vertical scroll offset -- forwards to
   //     Bootstrap::get_element_scroll_top (GLINTFX-SCROLL-1, v0.4.0). Returns false (out param

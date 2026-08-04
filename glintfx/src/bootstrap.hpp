@@ -25,6 +25,7 @@ class Element;
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
 #include <glintfx/font_face.hpp>
+#include <glintfx/scroll_types.hpp>
 
 namespace glintfx {
 
@@ -634,6 +635,37 @@ public:
   //     corretamente via get_element_scroll_top(). Retorna false (no-op) quando nenhum documento
   //     está carregado ou o id não é encontrado -- mesmo formato de guard de get_element_box.
   bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Same operation as the overload above, but taking a ScrollAlign instead of a bool
+  //     (SCROLL-ALIGN, W26 -- glintfx/include/glintfx/scroll_types.hpp has the full rationale:
+  //     the bool overload always re-anchors the element to an edge, even when it is already
+  //     fully visible, which a consumer measured as an unwanted jump on an already-visible
+  //     element; ScrollAlign::Adaptive fixes that -- no-op if already visible, center otherwise).
+  //     Maps 1:1 onto Rml::ScrollAlignment (Include/RmlUi/Core/ScrollTypes.h) for the VERTICAL
+  //     axis only -- horizontal alignment, ScrollBehavior, and ScrollParentage are left at
+  //     RmlUi's own defaults (Nearest/Instant/All), the exact same defaults the bool overload
+  //     above already uses under the hood, so this stays instant/synchronous too.
+  //     DELIBERATELY NO DEFAULT ARGUMENT: giving `align` a default here would make
+  //     scroll_element_into_view(id) ambiguous between this overload and the bool one above --
+  //     a hard compile error at every existing call site. Callers that want the old default
+  //     behaviour keep using the bool overload (unchanged, not deprecated). Same guard shape /
+  //     return-false contract as the bool overload (no document loaded, id not found).
+  // PT: Mesma operação da sobrecarga acima, mas recebendo um ScrollAlign em vez de um bool
+  //     (SCROLL-ALIGN, W26 -- glintfx/include/glintfx/scroll_types.hpp tem o racional completo:
+  //     a sobrecarga bool sempre reancora o elemento a uma borda, mesmo quando ele já está
+  //     totalmente visível, o que um consumidor mediu como um salto indesejado num elemento já
+  //     visível; ScrollAlign::Adaptive conserta isso -- no-op se já visível, centraliza senão).
+  //     Mapeia 1:1 para Rml::ScrollAlignment (Include/RmlUi/Core/ScrollTypes.h) só pro eixo
+  //     VERTICAL -- alinhamento horizontal, ScrollBehavior e ScrollParentage ficam nos defaults
+  //     do próprio RmlUi (Nearest/Instant/All), exatamente os mesmos defaults que a sobrecarga
+  //     bool acima já usa por baixo dos panos, então isto continua instantâneo/síncrono também.
+  //     DELIBERADAMENTE SEM ARGUMENTO DEFAULT: dar um default a `align` aqui tornaria
+  //     scroll_element_into_view(id) ambíguo entre esta sobrecarga e a bool acima -- um erro de
+  //     compilação forte em todo call-site existente. Chamadores que querem o comportamento
+  //     default antigo continuam usando a sobrecarga bool (inalterada, não depreciada). Mesmo
+  //     formato de guard / contrato de retornar false da sobrecarga bool (nenhum documento
+  //     carregado, id não encontrado).
+  bool scroll_element_into_view(const char* id, ScrollAlign align) const;
 
   // EN: Query the current vertical scroll offset of an element (its own scroll container, e.g.
   //     an overflow-y:auto div), in RCSS pixels. Thin wrapper over Rml::Element::GetScrollTop().

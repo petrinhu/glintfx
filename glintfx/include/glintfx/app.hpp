@@ -23,6 +23,7 @@
 #include <glintfx/click_info.hpp>
 #include <glintfx/font_engine.hpp>
 #include <glintfx/font_face.hpp>
+#include <glintfx/scroll_types.hpp>
 #include <glintfx/window_mode.hpp>  // EN: window mode (A4-WINMODES, framework-2D). PT: modo de janela (A4-WINMODES, framework-2D).
 #include <glintfx/ui_event.hpp>  // EN: process_event (A1, framework-2D). PT: process_event (A1, framework-2D).
 namespace glintfx {
@@ -713,6 +714,23 @@ public:
   //     (mesma assinatura/semântica -- ver lá o contrato completo: instantâneo/síncrono,
   //     encapsula Rml::Element::ScrollIntoView(bool)).
   bool scroll_element_into_view(const char* id, bool align_with_top = true) const;
+
+  // EN: Same operation as the overload above, but taking a ScrollAlign instead of a bool
+  //     (SCROLL-ALIGN, W26). Parity with UiLayer::scroll_element_into_view(id, ScrollAlign)
+  //     (same signature/semantics -- see there, and glintfx/include/glintfx/scroll_types.hpp,
+  //     for the full contract: exposes Rml::ScrollAlignment for the VERTICAL axis only,
+  //     ScrollAlign::Adaptive fixes a re-anchor-on-already-visible-element bug a consumer
+  //     measured on the bool overload above, and `align` deliberately has NO default argument
+  //     to avoid making scroll_element_into_view(id) ambiguous between the two overloads).
+  // PT: Mesma operação da sobrecarga acima, mas recebendo um ScrollAlign em vez de um bool
+  //     (SCROLL-ALIGN, W26). Paridade com UiLayer::scroll_element_into_view(id, ScrollAlign)
+  //     (mesma assinatura/semântica -- ver lá, e glintfx/include/glintfx/scroll_types.hpp, pro
+  //     contrato completo: expõe Rml::ScrollAlignment só pro eixo VERTICAL,
+  //     ScrollAlign::Adaptive conserta um bug de reancorar-em-elemento-já-visível que um
+  //     consumidor mediu na sobrecarga bool acima, e `align` deliberadamente NÃO tem argumento
+  //     default pra evitar tornar scroll_element_into_view(id) ambíguo entre as duas
+  //     sobrecargas).
+  bool scroll_element_into_view(const char* id, ScrollAlign align) const;
 
   // EN: Query an element's own vertical scroll offset, in RCSS pixels. Parity with
   //     UiLayer::get_element_scroll_top (same signature/semantics).

@@ -64,6 +64,16 @@ Description=glintfx heavy CI: ephemeral containerized GitHub Actions runner
 Documentation=file:///home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c_asm/tools/ci/runner_up.sh
 After=network-online.target
 Wants=network-online.target
+# EN: The ephemeral cycle restarts constantly by design, so systemd's default start-rate
+#     limit would eventually shut the unit down for "restarting too quickly". Disable it.
+#     (This directive belongs to [Unit] since systemd 230; putting it in [Service] is
+#     silently ignored -- `systemd-analyze --user verify` flags it as an unknown key.)
+# PT: O ciclo efêmero reinicia o tempo todo por desenho, então o limite padrão de taxa de
+#     partida do systemd acabaria desligando a unit por "reiniciando rápido demais".
+#     Desligado. (Esta diretiva pertence a [Unit] desde o systemd 230; colocá-la em
+#     [Service] é ignorado silenciosamente -- `systemd-analyze --user verify` acusa
+#     como chave desconhecida.)
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -73,12 +83,6 @@ ExecStart=/home/petrus/IDrive/Documentos/projetos_claudebrain/Projects/loucura_c
 ExecStopPost=-/usr/bin/docker rm -f glintfx-heavy-runner
 Restart=always
 RestartSec=5
-# EN: The ephemeral cycle restarts constantly by design, so systemd's default start-rate
-#     limit would eventually shut the unit down for "restarting too quickly". Disable it.
-# PT: O ciclo efêmero reinicia o tempo todo por desenho, então o limite padrão de taxa de
-#     partida do systemd acabaria desligando a unit por "reiniciando rápido demais".
-#     Desligado.
-StartLimitIntervalSec=0
 # EN: A job can legitimately take a while (ASan build of RmlUi from scratch at -j2); give
 #     an in-flight container time to wind down before SIGKILL.
 # PT: Um job pode legitimamente demorar (build ASan do RmlUi do zero a -j2); dá tempo pro

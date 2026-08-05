@@ -238,11 +238,32 @@ RML_TEST_WHITELIST=(
 #     started looking at tests/ at all. This is why the exemption is a DISTINCT
 #     list from RML_TEST_WHITELIST, not a merge into it: RML_TEST_WHITELIST is
 #     "old test debt that #includes RmlUi directly" (check (b)'s concern);
-#     RML_TEST_TOKEN_EXCEPTIONS is "test that must reference Rml:: value types on
+#     RML_TEST_TOKEN_ALLOWED is "test that must reference Rml:: value types on
 #     purpose to verify a conversion, without ever #including RmlUi" (check (c)'s
-#     concern, unrelated cause). Matched by FULL relative path, same doctrine as
-#     every other exception list in this file -- growing this list beyond these
-#     two, or merging it into RML_TEST_WHITELIST, is a decision for the líder.
+#     concern, unrelated cause).
+#
+#     RMLX-0 (2026-08-05, furo 2 -- symbol, not whole file): this used to be a
+#     plain path LIST folded into check (c)'s EXCL_FILES, which skips a matched
+#     file WHOLLY -- adversarial review proved that a real hole too: planting an
+#     UNRELATED value-type token (e.g. `Rml::String contrabando;`, or a fabricated
+#     `void contrabando(){ Rml::ElementDocument* d = nullptr; }` reaching for a type
+#     outside RML_TOKEN_PATTERN's own list) into either exempt file rode the
+#     whole-file skip clean, even though `Rml::ElementDocument` has nothing to do
+#     with the conversion boundary these two files exist to prove. Fix: this is now
+#     an associative array, path -> the ERE of the ONLY `Rml::` prefix this specific
+#     file is allowed to carry (confirmed by reading each file, not assumed --
+#     `grep -n 'Rml::' <file>` on both, 2026-08-05): input_map_sanity.cpp uses only
+#     `Rml::Input::*` (14 KeyIdentifier constants + 3 KeyModifier flags), so its
+#     entry is `Rml::Input`; type_bridge_review_sanity.cpp uses only
+#     `Rml::Vector2f` and `Rml::Colourb`, so its entry is `Rml::(Vector2|Colourb)`.
+#     Consumed generically via the EXCL_TOKEN_ALLOW global check_token_gate reads
+#     (see its own comment) -- run_real_check() below copies this map into
+#     EXCL_TOKEN_ALLOW keyed by the real repo path, same "caller populates a
+#     path-keyed global, function reads it back" convention EXCL_FILES already
+#     uses. Any `Rml::` token in RML_TOKEN_PATTERN's list OTHER than the allowed
+#     prefix, in either of these two files, now fails check (c) same as any other
+#     file -- growing either entry's allowed set, or this map beyond these two
+#     paths, is a decision for the líder.
 # PT: check (c) em glintfx/tests/ -- uma isenção SEPARADA, MENOR e DOCUMENTADA da
 #     RML_TEST_WHITELIST acima. Descoberta ao vivo (RMLX-0, 2026-08-05) no momento
 #     em que o check (c) foi alargado pra varrer glintfx/tests/ (fechando a lacuna
@@ -263,15 +284,38 @@ RML_TEST_WHITELIST=(
 #     e só depois que ele passou a olhar tests/. É por isso que a isenção é uma
 #     lista DISTINTA da RML_TEST_WHITELIST, não uma fusão nela: RML_TEST_WHITELIST
 #     é "dívida de teste velha que dá #include direto de RmlUi" (preocupação do
-#     check (b)); RML_TEST_TOKEN_EXCEPTIONS é "teste que precisa referenciar tipo
+#     check (b)); RML_TEST_TOKEN_ALLOWED é "teste que precisa referenciar tipo
 #     de valor Rml:: de propósito pra verificar uma conversão, sem nunca dar
-#     #include de RmlUi" (preocupação do check (c), causa não-relacionada). Casada
-#     pelo caminho relativo COMPLETO, mesma doutrina de toda outra lista de
-#     exceção deste arquivo -- aumentar esta lista além destes dois, ou fundi-la
-#     na RML_TEST_WHITELIST, é decisão do líder.
-RML_TEST_TOKEN_EXCEPTIONS=(
-  "glintfx/tests/input_map_sanity.cpp"
-  "glintfx/tests/type_bridge_review_sanity.cpp"
+#     #include de RmlUi" (preocupação do check (c), causa não-relacionada).
+#
+#     RMLX-0 (2026-08-05, furo 2 -- símbolo, não arquivo inteiro): isto era uma
+#     LISTA de caminhos comum, dobrada no EXCL_FILES do check (c), que pula um
+#     arquivo casado POR INTEIRO -- a revisão adversarial provou que isso também
+#     era um furo real: plantar um token de tipo-valor NÃO-RELACIONADO (ex.
+#     `Rml::String contrabando;`, ou um `void contrabando(){ Rml::ElementDocument*
+#     d = nullptr; }` fabricado alcançando um tipo fora da própria lista do
+#     RML_TOKEN_PATTERN) em qualquer um dos dois arquivos isentos passava de
+#     carona na isenção do arquivo inteiro, mesmo `Rml::ElementDocument` não tendo
+#     nada a ver com a fronteira de conversão que estes dois arquivos existem pra
+#     provar. Conserto: isto agora é um array associativo, caminho -> a ERE do
+#     ÚNICO prefixo `Rml::` que este arquivo específico tem permissão de carregar
+#     (confirmado lendo cada arquivo, não presumido -- `grep -n 'Rml::' <arquivo>`
+#     nos dois, 2026-08-05): input_map_sanity.cpp usa só `Rml::Input::*` (14
+#     constantes KeyIdentifier + 3 flags KeyModifier), então sua entrada é
+#     `Rml::Input`; type_bridge_review_sanity.cpp usa só `Rml::Vector2f` e
+#     `Rml::Colourb`, então sua entrada é `Rml::(Vector2|Colourb)`. Consumido de
+#     forma genérica via o global EXCL_TOKEN_ALLOW que check_token_gate lê (ver o
+#     comentário dela) -- o run_real_check() abaixo copia este mapa pro
+#     EXCL_TOKEN_ALLOW chaveado pelo caminho real do repo, a mesma convenção
+#     "chamador povoa um global chaveado por caminho, função lê de volta" que o
+#     EXCL_FILES já usa. Qualquer token `Rml::` da lista do RML_TOKEN_PATTERN FORA
+#     do prefixo permitido, em qualquer um dos dois arquivos, agora reprova o
+#     check (c) igual a qualquer outro arquivo -- aumentar o conjunto permitido de
+#     qualquer entrada, ou este mapa além destes dois caminhos, é decisão do
+#     líder.
+declare -A RML_TEST_TOKEN_ALLOWED=(
+  ["glintfx/tests/input_map_sanity.cpp"]='Rml::Input'
+  ["glintfx/tests/type_bridge_review_sanity.cpp"]='Rml::(Vector2|Colourb)'
 )
 
 # EN: check (a) -- see the header comment above ("KNOWN, FROZEN, DOCUMENTED
@@ -328,6 +372,46 @@ RML_TOKEN_EXCEPTIONS=(
 #     cabeçalho do próprio check_encapsulation.sh pro motivo de a ancoragem importar.
 RML_INCLUDE_PATTERN='^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"][^>"]*Rml[^>"]*[>"]'
 
+# EN: RMLX-0 (2026-08-05, furo 4) -- check (a2)/computed-include gate. Matches an
+#     `#include` directive whose argument is NOT a literal `<...>`/`"..."` text --
+#     i.e. `#include SOME_MACRO(...)` or `#include SOME_MACRO`, a macro-computed
+#     include. RML_INCLUDE_PATTERN above requires `<` or `"` right after `#include`
+#     (plus whitespace), by design (that is what lets it read the literal header
+#     name out of the directive) -- so it CANNOT see through a computed include: a
+#     macro that happens to expand to `<RmlUi/Core/Element.h>` is invisible to
+#     grep, proved live with `#include RML_HDR(Element)` (RML_HDR a local macro
+#     wrapping its argument in `<RmlUi/Core/name.h>`) planted in glintfx/src/app.cpp
+#     -- exit 0. This pattern does not try to resolve what the macro expands to
+#     (impossible for a grep-based gate without a real preprocessor); it instead
+#     recognizes "this #include's argument does not start with `<` or `"`" as
+#     itself unresolvable-by-this-gate, and check_computed_include_gate() (below)
+#     treats ANY match, anywhere it scans, as a violation -- fail CLOSED, same
+#     doctrine as the rest of this file: a false positive here means someone wrote
+#     a macro-computed #include for an unrelated header and has to spell it out
+#     literally or move the code into glintfx/src/rml/; a false negative would mean
+#     a NEW RmlUi include silently re-leaking through a macro nobody grep-audits.
+# PT: RMLX-0 (2026-08-05, furo 4) -- gate de include computado (a2). Casa uma
+#     diretiva `#include` cujo argumento NÃO é um texto literal `<...>`/`"..."` --
+#     ou seja, `#include MACRO_QUALQUER(...)` ou `#include MACRO_QUALQUER`, um
+#     include computado por macro. O RML_INCLUDE_PATTERN acima exige `<` ou `"`
+#     logo depois de `#include` (mais espaço), de propósito (é isso que permite
+#     ler o nome literal do header na diretiva) -- então ele NÃO CONSEGUE enxergar
+#     através de um include computado: uma macro que expande pra
+#     `<RmlUi/Core/Element.h>` é invisível ao grep, provado ao vivo com `#include
+#     RML_HDR(Element)` (RML_HDR uma macro local que envolve o argumento em
+#     `<RmlUi/Core/name.h>`) plantado em glintfx/src/app.cpp -- exit 0. Este padrão
+#     não tenta resolver pra o que a macro expande (impossível pra um gate baseado
+#     em grep sem um pré-processador de verdade); em vez disso reconhece "o
+#     argumento deste #include não começa com `<` nem `"`" como, em si,
+#     não-resolvível por este gate, e o check_computed_include_gate() (abaixo)
+#     trata QUALQUER casamento, onde varrer, como violação -- falha FECHADA, mesma
+#     doutrina do resto deste arquivo: um falso positivo aqui significa que
+#     alguém escreveu um #include computado por macro pra um header não
+#     relacionado e precisa escrevê-lo por extenso ou mover o código pra
+#     glintfx/src/rml/; um falso negativo significaria um #include NOVO de RmlUi
+#     vazando de novo em silêncio através de uma macro que ninguém audita por grep.
+RML_COMPUTED_INCLUDE_PATTERN='^[[:space:]]*#[[:space:]]*include[[:space:]]*[A-Za-z_]'
+
 # EN: check (c)'s blocking value-type token list.
 # PT: lista bloqueante de tokens de tipo-valor do check (c).
 RML_TOKEN_PATTERN='Rml::(String|Vector2|Colourb|Variant|Input|Log)'
@@ -335,6 +419,31 @@ RML_TOKEN_PATTERN='Rml::(String|Vector2|Colourb|Variant|Input|Log)'
 # EN: check (d)'s generic opaque-usage pattern (any Rml::Identifier).
 # PT: padrão genérico de uso opaco do check (d) (qualquer Rml::Identificador).
 RML_ANY_TOKEN_PATTERN='Rml::[A-Za-z_][A-Za-z0-9_]*'
+
+# EN: check (c) -- generic, path-keyed, CALLER-POPULATED global read by
+#     check_token_gate() (RMLX-0 2026-08-05, furo 2): maps a file's full relative
+#     path to the ERE of the ONLY `Rml::` prefix(es) that file is allowed to carry
+#     (see RML_TEST_TOKEN_ALLOWED above for the real data; run_real_check() copies
+#     it in here keyed the same way EXCL_FILES already is). Declared `-A` up front,
+#     once, so every later `EXCL_TOKEN_ALLOW=()` reset (selftest calls
+#     check_token_gate ~10 times against unrelated fixture trees and must not leak
+#     a stale entry from one call into the next) keeps the associative type --
+#     re-assigning without `-A` on an already-declared associative array preserves
+#     it; skipping this declaration would make a bare `EXCL_TOKEN_ALLOW=()` an
+#     ordinary indexed array instead, silently breaking the `[$path]` lookups.
+# PT: check (c) -- global genérico, chaveado por caminho, POVOADO PELO CHAMADOR e
+#     lido por check_token_gate() (RMLX-0 2026-08-05, furo 2): mapeia o caminho
+#     relativo completo de um arquivo pra ERE do(s) ÚNICO(S) prefixo(s) `Rml::`
+#     que aquele arquivo tem permissão de carregar (ver RML_TEST_TOKEN_ALLOWED
+#     acima pro dado real; o run_real_check() copia pra cá chaveado do mesmo jeito
+#     que o EXCL_FILES já é). Declarado `-A` uma vez, aqui em cima, pra todo reset
+#     `EXCL_TOKEN_ALLOW=()` seguinte (o selftest chama check_token_gate ~10 vezes
+#     contra árvores de fixture não-relacionadas, e não pode vazar uma entrada
+#     obsoleta de uma chamada pra outra) manter o tipo associativo -- reatribuir
+#     sem `-A` num array associativo já declarado preserva o tipo; pular esta
+#     declaração faria um `EXCL_TOKEN_ALLOW=()` cru virar array indexado comum,
+#     quebrando em silêncio os lookups por `[$caminho]`.
+declare -A EXCL_TOKEN_ALLOW=()
 
 # -----------------------------------------------------------------------------
 # EN: strip_comments FILE -- prints FILE with `//` line comments and `/* ... */` block
@@ -552,6 +661,202 @@ rml_find_files() {
 }
 
 # -----------------------------------------------------------------------------
+# EN: rml_matches_spliced FILE PATTERN -- RMLX-0 (2026-08-05, furo 3): shared
+#     `#include`-directive matcher used by BOTH check (a) and check (b), replacing
+#     a bare `grep -nE PATTERN FILE`. Prints "STARTLINE:content" for every LOGICAL
+#     line matching PATTERN (ERE), where a logical line is one or more PHYSICAL
+#     lines joined by C++ line-continuation (`\` as the last character before the
+#     newline, optionally followed by trailing space/tab -- clang/gcc still splice
+#     that case with a warning) with the backslash (and any trailing whitespace
+#     after it) removed and the remainder concatenated with NO separator, exactly
+#     as the C++ phase-2 translation step does. STARTLINE is the physical line
+#     number where the logical line BEGINS (matches what a human opening the file
+#     at that line number would see first).
+#
+#     Why this exists: a plain `grep -nE` sees the file as independent physical
+#     lines, so `#include <Rml\` + a newline + `Ui/Core/Element.h>` -- valid,
+#     unremarkable C++ (confirmed with `clang++ -E`) -- never matches
+#     RML_INCLUDE_PATTERN on EITHER physical line: line 1 is `#include <Rml`, no
+#     closing `>`; line 2 is `Ui/Core/Element.h>`, no `#include` at the front.
+#     Proved live: planting exactly that split in glintfx/src/app.cpp returned
+#     OK/exit 0, invisible even to check (a)'s own "any RmlUi #include" count --
+#     not merely misfiled as opaque debt, genuinely unseen. Splicing BEFORE
+#     matching closes this: the joined logical line `#include
+#     <RmlUi/Core/Element.h>` matches RML_INCLUDE_PATTERN normally.
+#
+#     Deliberately reimplements the splice as a small awk state machine instead of
+#     shelling out to e.g. `sed ':a;N;$!ba'` line-joining tricks -- needs the
+#     PHYSICAL start-line number preserved per logical line for arquivo:linha
+#     reporting, which a generic multi-line join loses. Not comment-aware (does
+#     NOT call strip_comments): check (a)/(b) match #include DIRECTIVES, which by
+#     C++ grammar cannot legally appear inside a comment body the preprocessor
+#     still recognizes as a directive, so this is deliberately kept a cheaper,
+#     narrower operation than strip_comments()'s full string/char/raw-string state
+#     machine -- growing it to reuse strip_comments() instead is a decision for
+#     the líder, not something this fix does unasked-for.
+# PT: rml_matches_spliced ARQUIVO PADRAO -- RMLX-0 (2026-08-05, furo 3): casador de
+#     diretiva `#include` compartilhado, usado tanto pelo check (a) quanto pelo
+#     check (b), substituindo um `grep -nE PADRAO ARQUIVO` cru. Imprime
+#     "LINHA_INICIO:conteúdo" pra toda LINHA LÓGICA que casa PADRAO (ERE), onde uma
+#     linha lógica é uma ou mais linhas FÍSICAS unidas por continuação de linha de
+#     C++ (`\` como último caractere antes da quebra de linha, opcionalmente
+#     seguido de espaço/tab -- clang/gcc ainda emendam esse caso com aviso) com a
+#     barra invertida (e qualquer espaço em branco depois dela) removida e o resto
+#     concatenado SEM separador, exatamente como o passo de tradução fase-2 do C++
+#     faz. LINHA_INICIO é o número da linha física onde a linha lógica COMEÇA
+#     (bate com o que um humano abrindo o arquivo naquele número de linha veria
+#     primeiro).
+#
+#     Por que isto existe: um `grep -nE` cru enxerga o arquivo como linhas físicas
+#     independentes, então `#include <Rml\` + uma quebra de linha + `Ui/Core/Element.h>`
+#     -- C++ válido, sem nada de anormal (confirmado com `clang++ -E`) -- nunca casa
+#     RML_INCLUDE_PATTERN em NENHUMA das duas linhas físicas: a linha 1 é `#include
+#     <Rml`, sem `>` de fechamento; a linha 2 é `Ui/Core/Element.h>`, sem
+#     `#include` na frente. Provado ao vivo: plantar exatamente esse split em
+#     glintfx/src/app.cpp devolveu OK/exit 0, invisível até pra própria contagem
+#     "qualquer #include de RmlUi" do check (a) -- não é só mal-classificado como
+#     dívida opaca, é genuinamente invisível. Emendar ANTES de casar fecha isso: a
+#     linha lógica unida `#include <RmlUi/Core/Element.h>` casa o
+#     RML_INCLUDE_PATTERN normalmente.
+#
+#     Reimplementa a emenda como uma pequena máquina de estados awk de propósito,
+#     em vez de terceirizar pra truques de junção de linha tipo `sed ':a;N;$!ba'`
+#     -- precisa do número de linha física de INÍCIO preservado por linha lógica
+#     pro relato arquivo:linha, o que uma junção multi-linha genérica perde. Não
+#     tem consciência de comentário (NÃO chama strip_comments): os checks (a)/(b)
+#     casam DIRETIVAS de #include, que pela gramática de C++ não podem
+#     legalmente aparecer dentro de um corpo de comentário que o pré-processador
+#     ainda reconheça como diretiva, então isto é deliberadamente mantido uma
+#     operação mais barata e mais estreita que a máquina de estados completa de
+#     string/char/raw-string do strip_comments() -- alargar pra reusar o
+#     strip_comments() é decisão do líder, não algo que este conserto faz sem
+#     pedido.
+# -----------------------------------------------------------------------------
+rml_matches_spliced() {
+  local file="$1" pattern="$2"
+  awk -v pat="$pattern" '
+    BEGIN { start = 0; buf = "" }
+    function flush() {
+      if (start != 0 && buf ~ pat) {
+        print start ":" buf
+      }
+      start = 0
+      buf = ""
+    }
+    {
+      line = $0
+      if (start == 0) { start = NR }
+      if (match(line, /\\[ \t]*$/)) {
+        buf = buf substr(line, 1, RSTART - 1)
+        next
+      }
+      buf = buf line
+      flush()
+    }
+    END { flush() }
+  ' "$file"
+}
+
+# EN: RMLX-0 (2026-08-05, furo 1) -- filters a check (a) MATCHES set (from
+#     rml_matches_spliced, "STARTLINE:content" lines) down to the ones that are
+#     STILL a violation for a file in RML_INCLUDE_EXCEPTIONS: keeps a line only if
+#     the #include's own ARGUMENT (the text strictly between the `<>`/`""` pair,
+#     re-extracted here via sed, ignoring anything after the closing delimiter)
+#     differs from RML_INCLUDE_EXCEPTION_ALLOWED. This replaces a bare `grep -vF
+#     "$RML_INCLUDE_EXCEPTION_ALLOWED"` run against the WHOLE matched line, which
+#     adversarial review proved lets the allowed text ride in through a TRAILING
+#     COMMENT rather than the actual include argument -- proved live: `#include
+#     <RmlUi/Core/ElementDocument.h> // ponte: RmlUi_Platform_GLFW.h` in
+#     glintfx/src/app.cpp (an include with ZERO relation to the GLFW bridge, its
+#     comment just happening to name-drop the allowed header) returned OK/exit 0,
+#     because `grep -vF` only cares whether the substring appears ANYWHERE on the
+#     line, comment included. Re-parsing the argument out of the already-matched
+#     text (it is known to match RML_INCLUDE_PATTERN, so the `[<"][^>"]*[>"]`
+#     shape is guaranteed present) and comparing that ALONE, by equality, closes
+#     it: only a line whose actual include argument IS the literal allowed text
+#     is dropped.
+# PT: RMLX-0 (2026-08-05, furo 1) -- filtra um conjunto de MATCHES do check (a)
+#     (de rml_matches_spliced, linhas "LINHA_INICIO:conteúdo") pras que AINDA são
+#     violação pra um arquivo em RML_INCLUDE_EXCEPTIONS: mantém uma linha só se o
+#     ARGUMENTO do próprio #include (o texto estritamente entre o par `<>`/`""`,
+#     re-extraído aqui via sed, ignorando qualquer coisa depois do delimitador de
+#     fechamento) for diferente de RML_INCLUDE_EXCEPTION_ALLOWED. Isto substitui um
+#     `grep -vF "$RML_INCLUDE_EXCEPTION_ALLOWED"` cru rodado contra a linha
+#     casada INTEIRA, que a revisão adversarial provou deixar o texto permitido
+#     entrar de carona por um COMENTÁRIO NA COLA em vez do argumento de include de
+#     verdade -- provado ao vivo: `#include <RmlUi/Core/ElementDocument.h> //
+#     ponte: RmlUi_Platform_GLFW.h` em glintfx/src/app.cpp (um include SEM relação
+#     nenhuma com a ponte GLFW, cujo comentário só por acaso cita o header
+#     permitido) devolvia OK/exit 0, porque `grep -vF` só liga se a substring
+#     aparece EM QUALQUER LUGAR da linha, comentário incluso. Re-parsear o
+#     argumento de dentro do texto já casado (sabe-se que casa RML_INCLUDE_PATTERN,
+#     então a forma `[<"][^>"]*[>"]` está garantida presente) e comparar SÓ isso,
+#     por igualdade, fecha o furo: só uma linha cujo argumento de include de
+#     verdade É o texto permitido literal é descartada.
+rml_filter_include_exception() {
+  local matches="$1"
+  local ln content arg out=""
+  while IFS= read -r ln; do
+    [[ -z "$ln" ]] && continue
+    content="${ln#*:}"
+    arg="$(printf '%s\n' "$content" | sed -E 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"]([^>"]*)[>"].*/\1/')"
+    if [[ "$arg" != "$RML_INCLUDE_EXCEPTION_ALLOWED" ]]; then
+      out="${out}${ln}"$'\n'
+    fi
+  done <<< "$matches"
+  printf '%s' "${out%$'\n'}"
+}
+
+# EN: RMLX-0 (2026-08-05, furo 2) -- filters a check (c) MATCHES set (from
+#     strip_comments()+grep, "LINE:content" lines) down to the ones that are STILL
+#     a violation for a file with an entry in EXCL_TOKEN_ALLOW: for each matched
+#     line, re-extracts EVERY RML_TOKEN_PATTERN occurrence on it (grep -oE) and
+#     drops the line only if EVERY occurrence matches `allowed` exactly -- a line
+#     mixing one allowed and one un-allowed token still fails, since the line as a
+#     whole still carries a violation. This replaces folding the file into
+#     EXCL_FILES (check_token_gate's other, WHOLE-FILE skip mechanism), which
+#     adversarial review proved lets an UNRELATED value-type token ride in on any
+#     file whose path happens to be on that list -- proved live: appending `void
+#     contrabando(){ Rml::String s; (void)s; }` to
+#     glintfx/tests/input_map_sanity.cpp (a file whose only legitimate `Rml::`
+#     contact is `Rml::Input::*`) returned OK/exit 0, because the whole-file skip
+#     does not care WHICH token appears, only THAT the path matched.
+# PT: RMLX-0 (2026-08-05, furo 2) -- filtra um conjunto de MATCHES do check (c)
+#     (de strip_comments()+grep, linhas "LINHA:conteúdo") pras que AINDA são
+#     violação pra um arquivo com entrada no EXCL_TOKEN_ALLOW: pra cada linha
+#     casada, re-extrai TODA ocorrência de RML_TOKEN_PATTERN nela (grep -oE) e só
+#     descarta a linha se TODA ocorrência casa `allowed` exatamente -- uma linha
+#     misturando um token permitido e um não-permitido continua reprovando, já que
+#     a linha como um todo ainda carrega uma violação. Isto substitui dobrar o
+#     arquivo no EXCL_FILES (o outro mecanismo do check_token_gate, de pulo do
+#     ARQUIVO INTEIRO), que a revisão adversarial provou deixar um token de
+#     tipo-valor NÃO-RELACIONADO entrar de carona em qualquer arquivo cujo caminho
+#     por acaso está naquela lista -- provado ao vivo: acrescentar `void
+#     contrabando(){ Rml::String s; (void)s; }` a
+#     glintfx/tests/input_map_sanity.cpp (um arquivo cujo único contato `Rml::`
+#     legítimo é `Rml::Input::*`) devolvia OK/exit 0, porque o pulo do arquivo
+#     inteiro não liga pra QUAL token aparece, só que o caminho casou.
+rml_filter_allowed_tokens() {
+  local matches="$1" allowed="$2"
+  local ln content offending tok out=""
+  while IFS= read -r ln; do
+    [[ -z "$ln" ]] && continue
+    content="${ln#*:}"
+    offending=0
+    while IFS= read -r tok; do
+      [[ -z "$tok" ]] && continue
+      if ! [[ "$tok" =~ ^($allowed)$ ]]; then
+        offending=1
+      fi
+    done < <(grep -oE "$RML_TOKEN_PATTERN" <<< "$content")
+    if [[ "$offending" -eq 1 ]]; then
+      out="${out}${ln}"$'\n'
+    fi
+  done <<< "$matches"
+  printf '%s' "${out%$'\n'}"
+}
+
+# -----------------------------------------------------------------------------
 # EN: check_include_gate SRC_ROOT_1 [SRC_ROOT_2 ...] -- shared engine for (a): finds
 #     every file matching rml_find_files()'s extension set under the given roots,
 #     following symlinks, skips anything under
@@ -576,21 +881,77 @@ check_include_gate() {
     case "$f" in
       "${EXCL_DIR}"/*) continue ;;
     esac
-    matches="$(grep -nE "$RML_INCLUDE_PATTERN" "$f" || true)"
-    # EN: RMLX-0 (2026-08-05) -- an EXCL_FILES entry no longer skips the whole file:
-    #     only lines whose include text is the single allowed one
-    #     (RML_INCLUDE_EXCEPTION_ALLOWED) are dropped from `matches`. Any OTHER RmlUi
-    #     #include the file carries survives the filter and still fails below.
-    # PT: RMLX-0 (2026-08-05) -- uma entrada de EXCL_FILES não pula mais o arquivo
-    #     inteiro: só as linhas cujo texto de include é o único permitido
-    #     (RML_INCLUDE_EXCEPTION_ALLOWED) são retiradas de `matches`. Qualquer OUTRO
-    #     #include de RmlUi que o arquivo carregue sobrevive ao filtro e continua
+    # EN: RMLX-0 (2026-08-05, furo 3) -- rml_matches_spliced() (not a bare
+    #     `grep -nE`) so a `#include` split across physical lines by a `\`
+    #     continuation cannot dodge RML_INCLUDE_PATTERN by hiding half the
+    #     directive on each of two lines grep would otherwise see independently.
+    # PT: RMLX-0 (2026-08-05, furo 3) -- rml_matches_spliced() (não um `grep -nE`
+    #     cru) pra um `#include` partido entre linhas físicas por continuação `\`
+    #     não conseguir escapar do RML_INCLUDE_PATTERN escondendo metade da
+    #     diretiva em cada uma de duas linhas que o grep veria independentes.
+    matches="$(rml_matches_spliced "$f" "$RML_INCLUDE_PATTERN")"
+    # EN: RMLX-0 (2026-08-05, furo 1) -- an EXCL_FILES entry no longer skips the
+    #     whole file, and no longer filters by substring-anywhere-on-the-line
+    #     either: rml_filter_include_exception() re-parses the #include's own
+    #     ARGUMENT out of each matched line and drops it only when that argument
+    #     -- not the trailing comment, not anything else on the line -- equals
+    #     RML_INCLUDE_EXCEPTION_ALLOWED exactly. Any OTHER RmlUi #include the file
+    #     carries, including one that merely MENTIONS the allowed text in a
+    #     comment, survives the filter and still fails below.
+    # PT: RMLX-0 (2026-08-05, furo 1) -- uma entrada de EXCL_FILES não pula mais o
+    #     arquivo inteiro, e também não filtra mais por substring-em-qualquer-lugar-
+    #     da-linha: rml_filter_include_exception() re-parseia o ARGUMENTO do
+    #     próprio #include de cada linha casada e só descarta quando esse
+    #     argumento -- não o comentário na cola, nem qualquer outra coisa na linha
+    #     -- é igual a RML_INCLUDE_EXCEPTION_ALLOWED exatamente. Qualquer OUTRO
+    #     #include de RmlUi que o arquivo carregue, inclusive um que só MENCIONE o
+    #     texto permitido num comentário, sobrevive ao filtro e continua
     #     reprovando abaixo.
     if [[ -n "$matches" ]] && rml_array_contains "$f" "${EXCL_FILES[@]}"; then
-      matches="$(printf '%s\n' "$matches" | grep -vF "$RML_INCLUDE_EXCEPTION_ALLOWED" || true)"
+      matches="$(rml_filter_include_exception "$matches")"
     fi
     if [[ -n "$matches" ]]; then
       echo "RmlUi #include fora da whitelist em $f:" >&2
+      echo "$matches" >&2
+      violations=1
+    fi
+  done < <(rml_find_files "$@")
+  return "$violations"
+}
+
+# -----------------------------------------------------------------------------
+# EN: check_computed_include_gate SRC_ROOT_1 [SRC_ROOT_2 ...] -- RMLX-0 (2026-08-05,
+#     furo 4): finds every `#include` directive under the given roots (outside
+#     EXCL_DIR) whose argument is macro-computed -- i.e. does NOT start with `<`
+#     or `"` -- and fails on ANY match, unconditionally (no EXCL_FILES exemption:
+#     a computed include is, by definition, text this grep-based gate cannot
+#     resolve, so even a file otherwise trusted via RML_INCLUDE_EXCEPTIONS gets no
+#     pass here -- a NEW computed include appearing there is exactly as unverifiable
+#     as one appearing anywhere else). Reuses rml_matches_spliced() (not a bare
+#     grep) for the same furo-3 reason check_include_gate does -- a computed
+#     include could just as easily be split across a `\` continuation.
+# PT: check_computed_include_gate RAIZ_1 [RAIZ_2 ...] -- RMLX-0 (2026-08-05, furo
+#     4): acha toda diretiva `#include` sob as raízes dadas (fora de EXCL_DIR)
+#     cujo argumento é computado por macro -- ou seja, NÃO começa com `<` nem `"`
+#     -- e reprova em QUALQUER casamento, incondicionalmente (sem isenção de
+#     EXCL_FILES: um include computado é, por definição, texto que este gate
+#     baseado em grep não consegue resolver, então até um arquivo confiado via
+#     RML_INCLUDE_EXCEPTIONS não passa aqui -- um #include computado NOVO
+#     aparecendo lá é exatamente tão não-verificável quanto um aparecendo em
+#     qualquer outro lugar). Reusa rml_matches_spliced() (não um grep cru) pelo
+#     mesmo motivo do furo-3 do check_include_gate -- um include computado
+#     poderia igualmente estar partido por uma continuação `\`.
+# -----------------------------------------------------------------------------
+check_computed_include_gate() {
+  local violations=0
+  local f matches
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      "${EXCL_DIR}"/*) continue ;;
+    esac
+    matches="$(rml_matches_spliced "$f" "$RML_COMPUTED_INCLUDE_PATTERN")"
+    if [[ -n "$matches" ]]; then
+      echo "#include computado por macro, nao resolvivel por grep, em $f (falha fechada -- nao da pra provar que nao aponta pra RmlUi; RMLX-0/F4 furo 4):" >&2
       echo "$matches" >&2
       violations=1
     fi
@@ -629,7 +990,11 @@ check_test_whitelist_gate() {
     if rml_array_contains "$f" "${EXCL_FILES[@]}"; then
       continue
     fi
-    matches="$(grep -nE "$RML_INCLUDE_PATTERN" "$f" || true)"
+    # EN: RMLX-0 (2026-08-05, furo 3) -- see check_include_gate's own comment;
+    #     same line-splicing exposure applies here.
+    # PT: RMLX-0 (2026-08-05, furo 3) -- ver o comentário do próprio
+    #     check_include_gate; a mesma exposição de emenda de linha vale aqui.
+    matches="$(rml_matches_spliced "$f" "$RML_INCLUDE_PATTERN")"
     if [[ -n "$matches" ]]; then
       echo "RmlUi #include em teste NOVO fora da whitelist congelada de 4, em $f:" >&2
       echo "$matches" >&2
@@ -654,7 +1019,7 @@ check_test_whitelist_gate() {
 # -----------------------------------------------------------------------------
 check_token_gate() {
   local violations=0
-  local f matches
+  local f matches allowed
   while IFS= read -r -d '' f; do
     case "$f" in
       "${EXCL_DIR}"/*) continue ;;
@@ -663,6 +1028,29 @@ check_token_gate() {
       continue
     fi
     matches="$(strip_comments "$f" | grep -nE "$RML_TOKEN_PATTERN" || true)"
+    # EN: RMLX-0 (2026-08-05, furo 2) -- EXCL_TOKEN_ALLOW (global, caller-set,
+    #     path -> allowed-token ERE) is a NARROWER, SYMBOL-level exemption than
+    #     EXCL_FILES above: a file listed there keeps failing on any token NOT
+    #     matching its allowed ERE. Checked separately from EXCL_FILES on purpose
+    #     -- a file can be in EITHER, not both, by convention (RML_TOKEN_EXCEPTIONS
+    #     and RML_TEST_WHITELIST stay whole-file EXCL_FILES entries; only
+    #     RML_TEST_TOKEN_ALLOWED's two paths use this narrower mechanism, see its
+    #     own declaration for why).
+    # PT: RMLX-0 (2026-08-05, furo 2) -- EXCL_TOKEN_ALLOW (global, setado pelo
+    #     chamador, caminho -> ERE de token permitido) é uma isenção mais ESTREITA,
+    #     no nível de SÍMBOLO, que o EXCL_FILES acima: um arquivo listado ali
+    #     continua reprovando em qualquer token que NÃO case sua ERE permitida.
+    #     Checado separado do EXCL_FILES de propósito -- um arquivo pode estar em
+    #     QUALQUER UM dos dois, não nos dois, por convenção (RML_TOKEN_EXCEPTIONS e
+    #     RML_TEST_WHITELIST continuam entradas de EXCL_FILES de arquivo inteiro;
+    #     só os dois caminhos de RML_TEST_TOKEN_ALLOWED usam este mecanismo mais
+    #     estreito, ver a declaração dela pro motivo).
+    if [[ -n "$matches" ]]; then
+      allowed="${EXCL_TOKEN_ALLOW[$f]-}"
+      if [[ -n "$allowed" ]]; then
+        matches="$(rml_filter_allowed_tokens "$matches" "$allowed")"
+      fi
+    fi
     if [[ -n "$matches" ]]; then
       echo "token de tipo-valor RmlUi fora de $RML_DIR em $f:" >&2
       echo "$matches" >&2
@@ -719,10 +1107,33 @@ run_real_check() {
   done
 
   local overall=0
+  local _rml_k
 
   EXCL_DIR="$RML_DIR"
   EXCL_FILES=("${RML_INCLUDE_EXCEPTIONS[@]}")
   if ! check_include_gate "${RML_SRC_ROOTS[@]}"; then
+    overall=1
+  fi
+
+  # EN: RMLX-0 (2026-08-05, furo 4) -- a macro-computed `#include` (its argument
+  #     starting with neither `<` nor `"`) is unresolvable by ANY of this file's
+  #     grep-based matching, in src/, include/, demos/ AND tests/ alike -- so this
+  #     scans the SAME roots as check (a) plus RML_TESTS_DIR in one pass, with no
+  #     EXCL_FILES exemption at all (see check_computed_include_gate's own
+  #     comment for why). Deliberately its own top-level call, not folded into
+  #     check_include_gate/check_test_whitelist_gate above -- it has no "outside
+  #     the whitelist" exemption logic to share with either.
+  # PT: RMLX-0 (2026-08-05, furo 4) -- um `#include` computado por macro (seu
+  #     argumento não começando nem com `<` nem com `"`) é não-resolvível por
+  #     QUALQUER casamento baseado em grep deste arquivo, em src/, include/,
+  #     demos/ E tests/ igualmente -- então isto varre as MESMAS raízes do check
+  #     (a) mais RML_TESTS_DIR numa passada só, sem isenção nenhuma de EXCL_FILES
+  #     (ver o comentário do próprio check_computed_include_gate pro motivo).
+  #     Chamada própria de nível superior, de propósito, não dobrada dentro do
+  #     check_include_gate/check_test_whitelist_gate acima -- ela não tem lógica
+  #     de isenção "fora da whitelist" pra compartilhar com nenhum dos dois.
+  EXCL_DIR="$RML_DIR"
+  if ! check_computed_include_gate "${RML_SRC_ROOTS[@]}" "$RML_TESTS_DIR"; then
     overall=1
   fi
 
@@ -776,8 +1187,29 @@ run_real_check() {
   #     de que nenhum dos dois dá #include direto de RmlUi. Qualquer OUTRO arquivo de
   #     teste -- novo ou velho, fora das TRÊS listas congeladas -- continua
   #     reprovando com token cru.
+  # EN: RMLX-0 (2026-08-05, furo 2) -- RML_TEST_TOKEN_ALLOWED's two paths are no
+  #     longer folded into EXCL_FILES (whole-file skip): they are copied into
+  #     EXCL_TOKEN_ALLOW (global, path -> allowed-token ERE, read by
+  #     check_token_gate) instead, so each keeps failing on any `Rml::` token
+  #     OUTSIDE its own allowed prefix -- see RML_TEST_TOKEN_ALLOWED's own
+  #     declaration for the furo and the fix. EXCL_FILES stays exactly the
+  #     whole-file skip for RML_TOKEN_EXCEPTIONS + RML_TEST_WHITELIST (unchanged,
+  #     an EXPLICIT choice already documented above them).
+  # PT: RMLX-0 (2026-08-05, furo 2) -- os dois caminhos de RML_TEST_TOKEN_ALLOWED
+  #     não são mais dobrados no EXCL_FILES (pulo do arquivo inteiro): são
+  #     copiados pro EXCL_TOKEN_ALLOW (global, caminho -> ERE de token permitido,
+  #     lido por check_token_gate) em vez disso, então cada um continua
+  #     reprovando em qualquer token `Rml::` FORA do seu próprio prefixo permitido
+  #     -- ver a própria declaração de RML_TEST_TOKEN_ALLOWED pro furo e o
+  #     conserto. EXCL_FILES continua exatamente o pulo de arquivo inteiro pra
+  #     RML_TOKEN_EXCEPTIONS + RML_TEST_WHITELIST (sem mudança, uma escolha
+  #     EXPLÍCITA já documentada acima deles).
   EXCL_DIR="$RML_DIR"
-  EXCL_FILES=("${RML_TOKEN_EXCEPTIONS[@]}" "${RML_TEST_WHITELIST[@]}" "${RML_TEST_TOKEN_EXCEPTIONS[@]}")
+  EXCL_FILES=("${RML_TOKEN_EXCEPTIONS[@]}" "${RML_TEST_WHITELIST[@]}")
+  EXCL_TOKEN_ALLOW=()
+  for _rml_k in "${!RML_TEST_TOKEN_ALLOWED[@]}"; do
+    EXCL_TOKEN_ALLOW["$_rml_k"]="${RML_TEST_TOKEN_ALLOWED[$_rml_k]}"
+  done
   if ! check_token_gate "${RML_SRC_ROOTS[@]}" "$RML_TESTS_DIR"; then
     overall=1
   fi
@@ -1260,12 +1692,182 @@ EOF
     ok=0
   fi
 
+  # --- fixture 12: RMLX-0 furo 1 -- the include-exception filter used to match a
+  #     bare substring ANYWHERE on the matched #include line, including a trailing
+  #     comment, so citing the allowed header's name in a comment on an UNRELATED
+  #     #include line let it dodge the filter. Two independent trees: (12a) the
+  #     exact exploit -- an unrelated RmlUi #include with the allowed text stuffed
+  #     into a trailing comment -- must still fail; (12b) the SAME exempted file
+  #     with only the genuinely allowed include, PLUS an unrelated trailing
+  #     comment of its own (noise, to prove the fix does not overcorrect into
+  #     rejecting the legitimate case just because a comment is present).
+  # PT: fixture 12 -- furo 1 da RMLX-0 -- o filtro de isenção de include casava uma
+  #     substring crua EM QUALQUER LUGAR da linha de #include casada, comentário
+  #     na cola incluso, então citar o nome do header permitido num comentário
+  #     numa linha de #include NÃO-RELACIONADA deixava escapar do filtro. Duas
+  #     árvores independentes: (12a) o exploit exato -- um #include de RmlUi
+  #     não-relacionado com o texto permitido enfiado num comentário na cola --
+  #     ainda tem de falhar; (12b) o MESMO arquivo isento só com o include
+  #     genuinamente permitido, MAIS um comentário na cola próprio não-relacionado
+  #     (ruído, pra provar que o conserto não super-corrige rejeitando o caso
+  #     legítimo só porque há um comentário presente).
+  local furo1_bad="$tmp/furo1_bad"
+  mkdir -p "$furo1_bad/src"
+  cat > "$furo1_bad/src/app.cpp" <<'EOF'
+#include "RmlUi_Platform_GLFW.h"
+#include <RmlUi/Core/ElementDocument.h> // ponte: RmlUi_Platform_GLFW.h
+void f() {}
+EOF
+  EXCL_DIR="$furo1_bad/src/rml"
+  EXCL_FILES=("$furo1_bad/src/app.cpp")
+  if check_include_gate "$furo1_bad/src"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include nao-relacionado com o texto permitido escondido num comentario na cola (falso negativo -- furo 1 da RMLX-0, isencao casava substring da linha inteira)" >&2
+    ok=0
+  fi
+
+  local furo1_ok="$tmp/furo1_ok"
+  mkdir -p "$furo1_ok/src"
+  cat > "$furo1_ok/src/app.cpp" <<'EOF'
+#include "RmlUi_Platform_GLFW.h" // GLFW platform backend adapter
+void f() {}
+EOF
+  EXCL_DIR="$furo1_ok/src/rml"
+  EXCL_FILES=("$furo1_ok/src/app.cpp")
+  if ! check_include_gate "$furo1_ok/src"; then
+    echo "selftest FAIL: check (a) reprovou o include genuinamente permitido so por ter um comentario na cola (falso positivo -- o conserto do furo 1 super-corrigiu)" >&2
+    ok=0
+  fi
+
+  # --- fixture 13: RMLX-0 furo 2 -- the check (c) test-boundary exemption used to
+  #     be a whole-file EXCL_FILES skip: any `Rml::` token in RML_TOKEN_PATTERN's
+  #     list rode in clean once the path matched, regardless of WHICH token.
+  #     Mirrors the real glintfx/tests/input_map_sanity.cpp shape (allowed prefix
+  #     `Rml::Input`) without touching the real file. Two independent trees:
+  #     (13a) the legitimate Rml::Input::* usage alone must still pass; (13b) the
+  #     SAME path with an added, unrelated `Rml::String` must now fail.
+  # PT: fixture 13 -- furo 2 da RMLX-0 -- a isencao de fronteira-de-teste do check
+  #     (c) era um pulo de EXCL_FILES do ARQUIVO INTEIRO: qualquer token `Rml::` da
+  #     lista do RML_TOKEN_PATTERN passava de carona assim que o caminho casava,
+  #     independente de QUAL token. Espelha a forma real de
+  #     glintfx/tests/input_map_sanity.cpp (prefixo permitido `Rml::Input`) sem
+  #     tocar o arquivo real. Duas arvores independentes: (13a) o uso legitimo de
+  #     Rml::Input::* sozinho ainda tem de passar; (13b) o MESMO caminho com um
+  #     `Rml::String` acrescentado, nao-relacionado, agora tem de falhar.
+  local furo2_ok="$tmp/furo2_ok/tests"
+  mkdir -p "$furo2_ok"
+  cat > "$furo2_ok/input_map_sanity.cpp" <<'EOF'
+#include <string>
+void f() { int x = static_cast<int>(Rml::Input::KI_UP); (void)x; }
+EOF
+  EXCL_DIR="$tmp/furo2_ok/nonexistent_rml"
+  EXCL_FILES=()
+  EXCL_TOKEN_ALLOW=(["$furo2_ok/input_map_sanity.cpp"]='Rml::Input')
+  if ! check_token_gate "$furo2_ok"; then
+    echo "selftest FAIL: check (c) reprovou Rml::Input::* legitimo no arquivo com isencao estreita (falso positivo -- EXCL_TOKEN_ALLOW nao esta funcionando)" >&2
+    ok=0
+  fi
+
+  local furo2_bad="$tmp/furo2_bad/tests"
+  mkdir -p "$furo2_bad"
+  cat > "$furo2_bad/input_map_sanity.cpp" <<'EOF'
+#include <string>
+void f() { int x = static_cast<int>(Rml::Input::KI_UP); (void)x; }
+void contrabando(){ Rml::String s; (void)s; }
+EOF
+  EXCL_DIR="$tmp/furo2_bad/nonexistent_rml"
+  EXCL_FILES=()
+  EXCL_TOKEN_ALLOW=(["$furo2_bad/input_map_sanity.cpp"]='Rml::Input')
+  if check_token_gate "$furo2_bad"; then
+    echo "selftest FAIL: check (c) NAO reprovou Rml::String nao-relacionado no arquivo com isencao estreita (falso negativo -- furo 2 da RMLX-0, isencao vazava o arquivo inteiro)" >&2
+    ok=0
+  fi
+  EXCL_TOKEN_ALLOW=()
+
+  # --- fixture 14: RMLX-0 furo 3 -- a `#include` directive split across two
+  #     PHYSICAL lines via a `\` line-continuation is valid, unremarkable C++
+  #     (confirmed with `clang++ -E`) that a bare `grep -nE` per-physical-line
+  #     never matches on either half. Two independent trees: (14a) a spliced RmlUi
+  #     include outside src/rml/ must now fail; (14b) a spliced include of an
+  #     ordinary, unrelated header must still pass (proves the splice-then-match
+  #     fix does not overcorrect into flagging every continued line).
+  # PT: fixture 14 -- furo 3 da RMLX-0 -- uma diretiva `#include` partida em duas
+  #     linhas FISICAS por continuacao de linha `\` e C++ valido, sem nada de
+  #     anormal (confirmado com `clang++ -E`) que um `grep -nE` cru por-linha-fisica
+  #     nunca casa em nenhuma das duas metades. Duas arvores independentes: (14a)
+  #     um include de RmlUi emendado fora de src/rml/ agora tem de falhar; (14b)
+  #     um include emendado de um header comum, nao-relacionado, ainda tem de
+  #     passar (prova que o conserto emenda-depois-casa nao super-corrige
+  #     acusando toda linha continuada).
+  local furo3_bad="$tmp/furo3_bad/src"
+  mkdir -p "$furo3_bad"
+  printf '#include <Rml\\\nUi/Core/Element.h>\nvoid f() {}\n' > "$furo3_bad/leaky.cpp"
+  EXCL_DIR="$tmp/furo3_bad/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$furo3_bad"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include de RmlUi partido por continuacao de linha (falso negativo -- furo 3 da RMLX-0, grep por linha fisica nao emenda)" >&2
+    ok=0
+  fi
+
+  local furo3_ok="$tmp/furo3_ok/src"
+  mkdir -p "$furo3_ok"
+  printf '#include <some\\\nthing.h>\nvoid f() {}\n' > "$furo3_ok/clean.cpp"
+  EXCL_DIR="$tmp/furo3_ok/src/rml"
+  EXCL_FILES=()
+  if ! check_include_gate "$furo3_ok"; then
+    echo "selftest FAIL: check (a) reprovou um #include emendado de header comum, nao-relacionado a RmlUi (falso positivo -- o conserto do furo 3 super-corrigiu)" >&2
+    ok=0
+  fi
+
+  # --- fixture 15: RMLX-0 furo 4 -- `#include RML_HDR(Element)` (argument
+  #     computed by a macro, not a literal `<...>`/`"..."`) never matches
+  #     RML_INCLUDE_PATTERN, which requires `<` or `"` right after `#include` --
+  #     this grep-based gate cannot resolve what the macro expands to, so it must
+  #     fail CLOSED rather than silently pass. Two independent trees: (15a) the
+  #     macro-computed include must now fail via check_computed_include_gate;
+  #     (15b) an ORDINARY literal include (`#include <string>`, unrelated to
+  #     RmlUi) must still pass the SAME check (proves it flags "unresolvable
+  #     computed include" specifically, not literal includes in general).
+  # PT: fixture 15 -- furo 4 da RMLX-0 -- `#include RML_HDR(Element)` (argumento
+  #     computado por macro, nao um `<...>`/`"..."` literal) nunca casa o
+  #     RML_INCLUDE_PATTERN, que exige `<` ou `"` logo apos `#include` -- este gate
+  #     baseado em grep nao consegue resolver pra o que a macro expande, entao
+  #     tem de falhar FECHADO em vez de passar em silencio. Duas arvores
+  #     independentes: (15a) o include computado por macro agora tem de falhar via
+  #     check_computed_include_gate; (15b) um include literal COMUM (`#include
+  #     <string>`, sem relacao com RmlUi) ainda tem de passar no MESMO check
+  #     (prova que ele acusa "include computado nao-resolvivel" especificamente,
+  #     nao include literal em geral).
+  local furo4_bad="$tmp/furo4_bad/src"
+  mkdir -p "$furo4_bad"
+  cat > "$furo4_bad/app.cpp" <<'EOF'
+#define RML_HDR(name) <RmlUi/Core/name.h>
+#include RML_HDR(Element)
+void f() {}
+EOF
+  EXCL_DIR="$tmp/furo4_bad/src/rml"
+  if check_computed_include_gate "$furo4_bad"; then
+    echo "selftest FAIL: check_computed_include_gate NAO reprovou #include computado por macro (falso negativo -- furo 4 da RMLX-0, RML_INCLUDE_PATTERN exige < ou \" logo apos #include)" >&2
+    ok=0
+  fi
+
+  local furo4_ok="$tmp/furo4_ok/src"
+  mkdir -p "$furo4_ok"
+  cat > "$furo4_ok/widget.cpp" <<'EOF'
+#include <string>
+void f() {}
+EOF
+  EXCL_DIR="$tmp/furo4_ok/src/rml"
+  if ! check_computed_include_gate "$furo4_ok"; then
+    echo "selftest FAIL: check_computed_include_gate reprovou um #include literal comum, sem relacao com RmlUi (falso positivo -- o conserto do furo 4 super-corrigiu)" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), e as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados, e os 4 furos de PRECISAO do casamento (isencao de include por substring da linha inteira, isencao de token por arquivo inteiro, #include partido por continuacao de linha, #include computado por macro nao-resolvivel) estao fechados, cada um com o par positivo (caso legitimo continua passando)"
   return 0
 }
 

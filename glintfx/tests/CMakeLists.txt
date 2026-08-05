@@ -1054,30 +1054,6 @@ target_link_libraries(input_map_sanity PRIVATE glintfx RmlUi::Core)
 add_test(NAME input_map_sanity COMMAND input_map_sanity)
 
 # ---------------------------------------------------------------------------
-# EN: engine_no_rmlui_include_sanity_TEMP (RMLX-0/F2, TDD scaffolding, REMOVED before this
-#     fatia's commit) -- a plain grep, not a compiled binary: fails red RIGHT NOW (engine.cpp
-#     still #includes <RmlUi/Core.h>/<RmlUi/Core/Input.h> at this point in the sequence) and is
-#     only meant to turn green once engine.cpp's #include list is edited later in this same
-#     fatia. This is deliberately NOT the permanent whitelist-based encapsulation gate the
-#     fatia's own brief assigns to F4 (a later wave) -- narrower in scope (this ONE file, a raw
-#     grep, no whitelist config) and REMOVED once its purpose (establishing a red state for the
-#     house's TDD guard before editing bootstrap.hpp/bootstrap.cpp/engine.cpp, all `production`
-#     per .claude/tdd-guard.json) is served. See TODO.md's RMLX-0 entry for F4's own scope.
-# PT: engine_no_rmlui_include_sanity_TEMP (RMLX-0/F2, andaime de TDD, REMOVIDO antes do commit
-#     desta fatia) -- um grep puro, não um binário compilado: falha vermelho AGORA MESMO
-#     (engine.cpp ainda dá #include <RmlUi/Core.h>/<RmlUi/Core/Input.h> neste ponto da
-#     sequência) e só fica verde quando a lista de #include de engine.cpp for editada mais
-#     adiante nesta mesma fatia. Isto deliberadamente NÃO é o gate permanente de encapsulamento
-#     baseado em whitelist que o próprio brief da fatia atribui à F4 (uma onda posterior) --
-#     escopo mais estreito (ESTE ÚNICO arquivo, um grep cru, sem config de whitelist) e
-#     REMOVIDO assim que seu propósito (estabelecer um estado vermelho para o guard de TDD da
-#     casa antes de editar bootstrap.hpp/bootstrap.cpp/engine.cpp, todos `production` conforme
-#     .claude/tdd-guard.json) for cumprido. Ver a entrada RMLX-0 do TODO.md pro escopo da F4.
-# ---------------------------------------------------------------------------
-add_test(NAME engine_no_rmlui_include_sanity_TEMP
-  COMMAND bash -c "! grep -q '#include <RmlUi' ${CMAKE_CURRENT_SOURCE_DIR}/../src/engine.cpp")
-
-# ---------------------------------------------------------------------------
 # EN: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- PURE unit test for src/log_dedup.hpp: no
 #     window, no GL context, no RmlUi/GLFW dependency AT ALL (LogDedup is a plain in-memory
 #     table). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as

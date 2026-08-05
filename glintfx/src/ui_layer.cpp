@@ -12,10 +12,25 @@
 #include <glintfx/ui_layer.hpp>
 #include "engine.hpp"
 #include "rml/system_clock.hpp"
-#include <RmlUi/Core/Context.h>
-#include <RmlUi/Core/Log.h> // EN: QW-GUARDLOG (v0.18.1) -- set_viewport's own pre-guard now warns.
-                            // PT: QW-GUARDLOG (v0.18.1) -- pre-guard do set_viewport agora avisa.
-#include <string>           // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
+// EN: RMLX-0/F3 -- glintfx::log_warn/log_error (glintfx/log.hpp) replace the direct
+//     Rml::Log::Message(LT_WARNING/LT_ERROR, ...) calls this file used before this fatia (same
+//     final destination -- a host's own installed sink, or the fprintf(stderr, ...) default --
+//     but routed through this library's OWN public log surface instead of RmlUi's, same move F2
+//     already made for engine.cpp). The Resize branch below (process_event()) no longer needs a
+//     raw Rml::Context* either -- it now drives the viewport resize through Engine::set_viewport,
+//     same as every other Engine caller -- so this file drops its RmlUi header include entirely,
+//     closing the LAST direct RmlUi contact point outside src/rml/ (RMLX-0's own goal).
+// PT: RMLX-0/F3 -- glintfx::log_warn/log_error (glintfx/log.hpp) substituem as chamadas diretas
+//     Rml::Log::Message(LT_WARNING/LT_ERROR, ...) que este arquivo usava antes desta fatia (mesmo
+//     destino final -- o sink próprio instalado por um host, ou o default fprintf(stderr, ...) --
+//     mas roteado pela superfície de log PRÓPRIA desta biblioteca em vez da do RmlUi, mesmo
+//     movimento que a F2 já fez para engine.cpp). O branch de Resize abaixo (process_event())
+//     também deixa de precisar de um Rml::Context* cru -- agora ele conduz o redimensionamento de
+//     viewport via Engine::set_viewport, igual a todo outro chamador do Engine -- então este
+//     arquivo deixa cair o próprio include de header do RmlUi por completo, fechando o ÚLTIMO ponto de
+//     contato direto com o RmlUi fora de src/rml/ (o próprio objetivo da RMLX-0).
+#include <glintfx/log.hpp>
+#include <string> // EN: std::string out-param (get_string, L1.16-DOMRW). PT: out-param std::string (get_string, L1.16-DOMRW).
 
 namespace glintfx {
 
@@ -103,10 +118,10 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   //     com `if (!ready()) return`), então não há valor obsoleto para corromper nada.
   if (cfg.logical_width <= 0 || cfg.logical_height <= 0 ||
       cfg.logical_width > kMaxViewportDim || cfg.logical_height > kMaxViewportDim) {
-    Rml::Log::Message(Rml::Log::LT_ERROR,
-                      "UiLayer(logical_width=%d, logical_height=%d) rejected -- dimensions must "
-                      "be positive and at most %d; ok() will return false.",
-                      cfg.logical_width, cfg.logical_height, kMaxViewportDim);
+    glintfx::log_error(
+        "UiLayer(logical_width=%d, logical_height=%d) rejected -- dimensions must "
+        "be positive and at most %d; ok() will return false.",
+        cfg.logical_width, cfg.logical_height, kMaxViewportDim);
     return;
   }
 
@@ -158,19 +173,19 @@ UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {
   if (glloader_host_load_path_active) {
     if (cfg.gl_proc_resolver) {
       if (glx_gl_load_with(cfg.gl_proc_resolver) != 0) {
-        Rml::Log::Message(Rml::Log::LT_ERROR,
-                          "UiLayer(...): gl_proc_resolver failed to resolve one or more core GL "
-                          "symbols (origin: host resolver); ok() will return false.");
+        glintfx::log_error(
+            "UiLayer(...): gl_proc_resolver failed to resolve one or more core GL "
+            "symbols (origin: host resolver); ok() will return false.");
         return;
       }
     } else {
       if (glx_gl_load() != 0) return;
     }
   } else if (cfg.gl_proc_resolver) {
-    Rml::Log::Message(Rml::Log::LT_WARNING,
-                      "UiLayer(...): gl_proc_resolver was set but the loader is being skipped "
-                      "(assume_gl_loaded=true, or the deprecated load_gl=false) -- the resolver "
-                      "is ignored; the caller's already-loaded claim takes precedence.");
+    glintfx::log_warn(
+        "UiLayer(...): gl_proc_resolver was set but the loader is being skipped "
+        "(assume_gl_loaded=true, or the deprecated load_gl=false) -- the resolver "
+        "is ignored; the caller's already-loaded claim takes precedence.");
   }
 
   // EN: AUD-UILAYER-MOVEDFROM (W26) -- local reference `impl`, used for the `ok` writes below.
@@ -242,10 +257,10 @@ void UiLayer::set_viewport(int w, int h) {
   //     algum em silêncio -- este é o ponto de rejeição de fato alcançável por eles, então também
   //     ganha aviso próprio.
   if (w <= 0 || h <= 0 || w > kMaxViewportDim || h > kMaxViewportDim) {
-    Rml::Log::Message(Rml::Log::LT_WARNING,
-                      "set_viewport(%d, %d) ignored -- dimensions must be positive and at most %d "
-                      "(previous viewport kept).",
-                      w, h, kMaxViewportDim);
+    glintfx::log_warn(
+        "set_viewport(%d, %d) ignored -- dimensions must be positive and at most %d "
+        "(previous viewport kept).",
+        w, h, kMaxViewportDim);
     return;
   }
   impl_->w = w;
@@ -288,10 +303,10 @@ void UiLayer::set_viewport(int x, int y, int w, int h, int target_h) {
       x < -kMaxViewportDim || x > kMaxViewportDim ||
       y < -kMaxViewportDim || y > kMaxViewportDim ||
       target_h <= 0 || target_h > kMaxViewportDim) {
-    Rml::Log::Message(Rml::Log::LT_WARNING,
-                      "set_viewport(%d, %d, %d, %d, %d) ignored -- w/h/target_h must be positive, all five "
-                      "values within [-%d, %d] (previous viewport kept).",
-                      x, y, w, h, target_h, kMaxViewportDim, kMaxViewportDim);
+    glintfx::log_warn(
+        "set_viewport(%d, %d, %d, %d, %d) ignored -- w/h/target_h must be positive, all five "
+        "values within [-%d, %d] (previous viewport kept).",
+        x, y, w, h, target_h, kMaxViewportDim, kMaxViewportDim);
     return;
   }
   impl_->x = x;
@@ -605,20 +620,40 @@ void UiLayer::process_event(const UiEvent& ev) {
   //     delegado -- ver o doc-comment de Engine::process_event em engine.hpp para o switch
   //     movido e os dois guards AUD-TEC-2 de não-finito que ele ainda enforça.
   if (ev.type == UiEvent::Type::Resize) {
-    Rml::Context* c = impl_->engine.context();
-    if (!c) return;
+    // EN: RMLX-0/F3 -- the "context is gone" half of this guard used to be a local
+    //     `Rml::Context* c = impl_->engine.context(); if (!c) return;`; replaced by
+    //     Engine::ok(), the same guard shape every OTHER Engine caller in this file already
+    //     uses (see ready()/impl_->engine.set_viewport() below), so this branch no longer names
+    //     an Rml:: type at all.
+    // PT: RMLX-0/F3 -- a metade "contexto sumiu" deste guard costumava ser um
+    //     `Rml::Context* c = impl_->engine.context(); if (!c) return;` local; substituída por
+    //     Engine::ok(), o MESMO formato de guard que todo OUTRO chamador do Engine neste arquivo
+    //     já usa (ver ready()/impl_->engine.set_viewport() abaixo), então este branch deixa de
+    //     nomear qualquer tipo Rml:: por completo.
+    if (!impl_->engine.ok()) return;
     // EN: Logical viewport resize — update cached dimensions and notify RmlUi.
     //     The next render_compose() uses the updated impl_->w/h via set_viewport().
     // PT: Redimensionamento lógico do viewport — atualiza dimensões cacheadas e notifica RmlUi.
     //     O próximo render_compose() usa o impl_->w/h atualizado via set_viewport().
 
     // EN: Guard: zero/negative dimensions are invalid for the layout engine — skip silently.
-    // PT: Guard: dimensões zero/negativas são inválidas para o motor de layout — ignorar silenciosamente.
+    //     Deliberately kept as its OWN local check, not folded into Engine::set_viewport's
+    //     internal guard below: that one ALSO warns via glintfx::log_warn on rejection
+    //     (QW-GUARDLOG), which would change this branch's long-standing silent-skip behaviour
+    //     for a resize event -- this local guard keeps that untouched by never letting an
+    //     invalid width/height reach Engine::set_viewport in the first place.
+    // PT: Guard: dimensões zero/negativas são inválidas para o motor de layout — ignorar
+    //     silenciosamente. Deliberadamente mantido como checagem LOCAL própria, não dobrado no
+    //     guard interno de Engine::set_viewport abaixo: aquele TAMBÉM avisa via
+    //     glintfx::log_warn ao rejeitar (QW-GUARDLOG), o que mudaria o comportamento de
+    //     ignorar-em-silêncio, de longa data, deste branch para um evento de resize -- este
+    //     guard local mantém isso intocado ao nunca deixar uma largura/altura inválida chegar a
+    //     Engine::set_viewport, de saída.
     if (ev.width <= 0 || ev.height <= 0) return;
 
     impl_->w = ev.width;
     impl_->h = ev.height;
-    c->SetDimensions(Rml::Vector2i(ev.width, ev.height));
+    impl_->engine.set_viewport(ev.width, ev.height);
     // EN: F3 (v0.2.5) -- keep gl_offset_y consistent with the new h when in letterbox mode
     //     (x/target_h stay whatever the last explicit set_viewport(x,y,w,h,target_h) set).
     //     Legacy mode stays at offset 0 -- unchanged behaviour, gl_offset_x untouched (does

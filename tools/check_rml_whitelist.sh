@@ -50,11 +50,20 @@
 #     directly, and system_glfw_dedup.hpp is App-mode's thin LogMessage-override
 #     subclass of that same upstream type (LOGTHR-1, TODO.md) -- hence its literal
 #     `Rml::Log::Type`/`Rml::String` signature, mandated by the base class it overrides,
-#     not a leak of glintfx's own choosing. Both files are EXPLICITLY exempted below
-#     (RML_INCLUDE_EXCEPTIONS for check (a); RML_TOKEN_EXCEPTIONS for check (c) --
-#     system_glfw_dedup.hpp only, app.cpp has zero non-comment Rml:: token use).
-#     Growing either list is a decision for the líder, not something this script's
-#     author gets to do unilaterally by adding a path to satisfy a red run.
+#     not a leak of glintfx's own choosing.
+#
+#     RMLX-0 (2026-08-05): the exemption for check (a) is scoped to the SINGLE include
+#     text `RmlUi_Platform_GLFW.h` (RML_INCLUDE_EXCEPTION_ALLOWED below), not to the
+#     whole file -- adversarial review proved the earlier whole-file skip was a real
+#     hole: planting an unrelated `#include <RmlUi/Core/ElementDocument.h>` in app.cpp
+#     (zero relation to the GLFW bridge) still returned OK/exit 0. check_include_gate()
+#     now filters, for files in RML_INCLUDE_EXCEPTIONS, only the matches whose text is
+#     the allowed include; any OTHER RmlUi #include in those same two files still
+#     fails check (a). check (c)'s RML_TOKEN_EXCEPTIONS is unrelated and stays a
+#     whole-file skip (system_glfw_dedup.hpp only, app.cpp has zero non-comment Rml::
+#     token use) -- growing either list, or widening RML_INCLUDE_EXCEPTION_ALLOWED, is
+#     a decision for the líder, not something this script's author gets to do
+#     unilaterally by adding a path to satisfy a red run.
 #
 # PT: RMLX-0/F4 -- gate de whitelist do RmlUi. Guarda o confinamento que F1-F3 já
 #     compraram: com o `#include <RmlUi/...>` movido para `glintfx/src/rml/` (F1) e
@@ -106,12 +115,21 @@
 #     alcançar app.cpp direto, e system_glfw_dedup.hpp é a subclasse fina de override de
 #     LogMessage desse mesmo tipo upstream, modo App (LOGTHR-1, TODO.md) -- daí a
 #     assinatura literal `Rml::Log::Type`/`Rml::String`, exigida pela classe-base que
-#     ela sobrescreve, não um vazamento de escolha própria da glintfx. Os dois arquivos
-#     são EXPLICITAMENTE isentos abaixo (RML_INCLUDE_EXCEPTIONS pro check (a);
-#     RML_TOKEN_EXCEPTIONS pro check (c) -- só system_glfw_dedup.hpp, app.cpp tem zero
-#     uso de token Rml:: fora de comentário). Aumentar qualquer uma das duas listas é
-#     decisão do líder, não algo que o autor deste script decide sozinho pra deixar um
-#     run vermelho passar.
+#     ela sobrescreve, não um vazamento de escolha própria da glintfx.
+#
+#     RMLX-0 (2026-08-05): a isenção do check (a) é escopada ao texto ÚNICO de include
+#     `RmlUi_Platform_GLFW.h` (RML_INCLUDE_EXCEPTION_ALLOWED abaixo), não ao arquivo
+#     inteiro -- revisão adversarial provou que o pulo do arquivo inteiro era um furo
+#     real: plantar um `#include <RmlUi/Core/ElementDocument.h>` não-relacionado em
+#     app.cpp (zero relação com a ponte GLFW) ainda devolvia OK/exit 0. O
+#     check_include_gate() agora filtra, pros arquivos em RML_INCLUDE_EXCEPTIONS, só os
+#     casamentos cujo texto é o include permitido; qualquer OUTRO #include de RmlUi
+#     nesses mesmos dois arquivos continua reprovando o check (a). O
+#     RML_TOKEN_EXCEPTIONS do check (c) não tem relação e continua sendo pulo de
+#     arquivo inteiro (só system_glfw_dedup.hpp, app.cpp tem zero uso de token Rml::
+#     fora de comentário) -- aumentar qualquer uma das duas listas, ou alargar
+#     RML_INCLUDE_EXCEPTION_ALLOWED, é decisão do líder, não algo que o autor deste
+#     script decide sozinho pra deixar um run vermelho passar.
 #
 # Usage / Uso:
 #   tools/check_rml_whitelist.sh              # selftest, then the real check (repo root CWD)
@@ -157,13 +175,36 @@ RML_TEST_WHITELIST=(
 )
 
 # EN: check (a) -- see the header comment above ("KNOWN, FROZEN, DOCUMENTED
-#     EXCEPTION") for why these two, and only these two, are here.
+#     EXCEPTION") for why these two, and only these two, are here. NOTE (RMLX-0,
+#     2026-08-05): being on this list no longer exempts the whole file -- see
+#     RML_INCLUDE_EXCEPTION_ALLOWED right below.
 # PT: check (a) -- ver o comentário de cabeçalho acima ("EXCEÇÃO CONHECIDA,
-#     CONGELADA E DOCUMENTADA") pro motivo de estes dois, e só estes dois, estarem aqui.
+#     CONGELADA E DOCUMENTADA") pro motivo de estes dois, e só estes dois, estarem
+#     aqui. NOTA (RMLX-0, 2026-08-05): estar nesta lista não isenta mais o arquivo
+#     inteiro -- ver RML_INCLUDE_EXCEPTION_ALLOWED logo abaixo.
 RML_INCLUDE_EXCEPTIONS=(
   "glintfx/src/app.cpp"
   "glintfx/src/system_glfw_dedup.hpp"
 )
+
+# EN: check (a) -- the ONLY include text that RML_INCLUDE_EXCEPTIONS files are
+#     allowed to carry. Any OTHER RmlUi #include in those same files still fails
+#     check (a) -- this is what closes the "isenta o arquivo inteiro" hole an
+#     adversarial reviewer proved (planting <RmlUi/Core/ElementDocument.h> in
+#     app.cpp used to pass clean). Matched as a plain grep -F substring against the
+#     already-matched #include line, not re-parsed -- the line already passed
+#     RML_INCLUDE_PATTERN, so this only needs to tell "the GLFW bridge quoted
+#     include" apart from any other Rml include text.
+# PT: check (a) -- o ÚNICO texto de include que os arquivos de
+#     RML_INCLUDE_EXCEPTIONS têm permissão de carregar. Qualquer OUTRO #include de
+#     RmlUi nesses mesmos arquivos continua reprovando o check (a) -- é isso que
+#     fecha o furo de "isenta o arquivo inteiro" que uma revisão adversarial provou
+#     (plantar <RmlUi/Core/ElementDocument.h> em app.cpp passava limpo). Casado como
+#     substring simples (grep -F) contra a linha de #include já casada, sem
+#     re-parsear -- a linha já passou por RML_INCLUDE_PATTERN, então só precisa
+#     distinguir "o include entre aspas da ponte GLFW" de qualquer outro texto de
+#     include Rml.
+RML_INCLUDE_EXCEPTION_ALLOWED='RmlUi_Platform_GLFW.h'
 
 # EN: check (c) -- same rationale, narrower: only system_glfw_dedup.hpp has real
 #     (non-comment) Rml::Log/Rml::String token use; app.cpp's Rml:: mentions are 100%
@@ -296,10 +337,19 @@ check_include_gate() {
     case "$f" in
       "${EXCL_DIR}"/*) continue ;;
     esac
-    if rml_array_contains "$f" "${EXCL_FILES[@]}"; then
-      continue
-    fi
     matches="$(grep -nE "$RML_INCLUDE_PATTERN" "$f" || true)"
+    # EN: RMLX-0 (2026-08-05) -- an EXCL_FILES entry no longer skips the whole file:
+    #     only lines whose include text is the single allowed one
+    #     (RML_INCLUDE_EXCEPTION_ALLOWED) are dropped from `matches`. Any OTHER RmlUi
+    #     #include the file carries survives the filter and still fails below.
+    # PT: RMLX-0 (2026-08-05) -- uma entrada de EXCL_FILES não pula mais o arquivo
+    #     inteiro: só as linhas cujo texto de include é o único permitido
+    #     (RML_INCLUDE_EXCEPTION_ALLOWED) são retiradas de `matches`. Qualquer OUTRO
+    #     #include de RmlUi que o arquivo carregue sobrevive ao filtro e continua
+    #     reprovando abaixo.
+    if [[ -n "$matches" ]] && rml_array_contains "$f" "${EXCL_FILES[@]}"; then
+      matches="$(printf '%s\n' "$matches" | grep -vF "$RML_INCLUDE_EXCEPTION_ALLOWED" || true)"
+    fi
     if [[ -n "$matches" ]]; then
       echo "RmlUi #include fora da whitelist em $f:" >&2
       echo "$matches" >&2
@@ -608,12 +658,58 @@ EOF
     ok=0
   fi
 
+  # --- fixture 4/5: RMLX-0 whole-file-exemption exploit -- proves check (a) exempts
+  #     only the ALLOWED include text (RmlUi_Platform_GLFW.h) in an EXCL_FILES entry,
+  #     not the whole file. Adversarial review of the pre-fix gate proved a real
+  #     hole: planting ANY RmlUi #include (e.g. <RmlUi/Core/ElementDocument.h>,
+  #     wholly unrelated to the GLFW bridge) in glintfx/src/app.cpp still passed the
+  #     gate clean, because the whole file was skipped once its path matched
+  #     EXCL_FILES. Two independent trees: (4) the single legitimately-exempt
+  #     include, alone in an excepted file, must still pass; (5) the SAME excepted
+  #     file with an unrelated RmlUi #include ALSO present must still fail.
+  # PT: fixture 4/5 -- exploit de isenção do arquivo inteiro da RMLX-0 -- prova que o
+  #     check (a) isenta só o texto de include PERMITIDO (RmlUi_Platform_GLFW.h) num
+  #     arquivo de EXCL_FILES, não o arquivo inteiro. A revisão adversarial do gate
+  #     pré-conserto provou um furo real: plantar QUALQUER #include de RmlUi (ex.
+  #     <RmlUi/Core/ElementDocument.h>, sem relação nenhuma com a ponte GLFW) em
+  #     glintfx/src/app.cpp ainda passava o gate limpo, porque o arquivo inteiro era
+  #     pulado assim que o caminho casava EXCL_FILES. Duas árvores independentes: (4)
+  #     o único include legitimamente isento, sozinho num arquivo isento, ainda tem
+  #     de passar; (5) o MESMO arquivo isento com um #include de RmlUi não
+  #     relacionado TAMBÉM presente ainda tem de falhar.
+  local except_ok="$tmp/except_ok"
+  mkdir -p "$except_ok/src"
+  cat > "$except_ok/src/app.cpp" <<'EOF'
+#include "RmlUi_Platform_GLFW.h"
+void f() {}
+EOF
+  EXCL_DIR="$except_ok/src/rml"
+  EXCL_FILES=("$except_ok/src/app.cpp")
+  if ! check_include_gate "$except_ok/src"; then
+    echo "selftest FAIL: check (a) reprovou o unico include permitido no arquivo isento (falso positivo)" >&2
+    ok=0
+  fi
+
+  local except_bad="$tmp/except_bad"
+  mkdir -p "$except_bad/src"
+  cat > "$except_bad/src/app.cpp" <<'EOF'
+#include "RmlUi_Platform_GLFW.h"
+#include <RmlUi/Core/ElementDocument.h>
+void f() {}
+EOF
+  EXCL_DIR="$except_bad/src/rml"
+  EXCL_FILES=("$except_bad/src/app.cpp")
+  if check_include_gate "$except_bad/src"; then
+    echo "selftest FAIL: check (a) NAO reprovou include RmlUi nao-relacionado plantado no arquivo isento (falso negativo -- o furo RMLX-0 que a revisao adversarial provou)" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), e a colisao de basename em subdir da RMLX-0 continua bloqueada"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, e a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro"
   return 0
 }
 

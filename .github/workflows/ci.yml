@@ -3,7 +3,8 @@
 #     Xvfb / Mesa llvmpipe (software GL) via a 2-config matrix, PLUS a parallel
 #     `lint-and-scan` job with 3 CI-now, sempre-verde gates (TESTES.md "Camada 1",
 #     TODO.md LW-TST): TST-L1-STATIC (clang-tidy + cppcheck + the
-#     tools/check_encapsulation.sh third-party-leak gate), TST-L1-SECRETS (gitleaks,
+#     tools/check_encapsulation.sh third-party-leak gate + RMLX-0/F4's
+#     tools/check_rml_whitelist.sh RmlUi whitelist gate), TST-L1-SECRETS (gitleaks,
 #     history + working tree), TST-L1-DEPS (grype dir scan). See job comments below
 #     for tool choice rationale and the exact severity thresholds.
 #       GLFW=ON  -- 18 tests: window_smoke render_smoke engine_smoke app_smoke
@@ -316,12 +317,20 @@ jobs:
   # EN: lint-and-scan -- 3 CI-now, sempre-verde gates (TESTES.md "Camada 1", TODO.md
   #     LW-TST). Independent of build-and-test (no matrix, no ctest); runs in parallel.
   #     Tool choice:
-  #       - clang-tidy + cppcheck (TST-L1-STATIC, part 1/2): both ship in ubuntu-latest's
+  #       - clang-tidy + cppcheck (TST-L1-STATIC, part 1/3): both ship in ubuntu-latest's
   #         default toolchain, zero extra install.
-  #       - tools/check_encapsulation.sh (TST-L1-STATIC, part 2/2): the encapsulation
+  #       - tools/check_encapsulation.sh (TST-L1-STATIC, part 2/3): the encapsulation
   #         gate -- grep on `#include` DIRECTIVES in glintfx/include/glintfx/*.hpp,
   #         not on raw substrings, so the GLINTFX_BACKEND_GLFW macro does not false-
   #         positive (see script header + CLAUDE.md/AGENTS.md "Gotchas críticos").
+  #       - tools/check_rml_whitelist.sh (TST-L1-STATIC, part 3/3, RMLX-0/F4): guards
+  #         the RmlUi confinement F1-F3 already bought -- fails if a new #include of
+  #         RmlUi lands outside glintfx/src/rml/ (or a value-type token like
+  #         Rml::String/Vector2/Colourb/Variant/Input/Log outside it), same
+  #         directive-grep doctrine as check_encapsulation.sh. Runs its own embedded
+  #         --selftest FIRST (SEED-GATE-NAO-GUARDA-SI-MESMO discipline): a gate
+  #         without teeth aborts itself before ever reaching the real check. Pure
+  #         grep, independent of platform -- runs once here, not per-OS.
   #       - gitleaks (TST-L1-SECRETS): scans the full git history (--source .), not
   #         just the working tree -- catches a secret that was committed then removed.
   #         Installed from the pinned upstream release tarball (not curl|sh) so the
@@ -339,13 +348,21 @@ jobs:
   # PT: lint-and-scan -- 3 gates CI-now, sempre-verde (TESTES.md "Camada 1", TODO.md
   #     LW-TST). Independente do build-and-test (sem matrix, sem ctest); roda em
   #     paralelo. Escolha de ferramenta:
-  #       - clang-tidy + cppcheck (TST-L1-STATIC, parte 1/2): já vêm no toolchain
+  #       - clang-tidy + cppcheck (TST-L1-STATIC, parte 1/3): já vêm no toolchain
   #         default do ubuntu-latest, zero instalação extra.
-  #       - tools/check_encapsulation.sh (TST-L1-STATIC, parte 2/2): o gate de
+  #       - tools/check_encapsulation.sh (TST-L1-STATIC, parte 2/3): o gate de
   #         encapsulamento -- grep em DIRETIVAS `#include` nos headers públicos
   #         (glintfx/include/glintfx/*.hpp), não em substring crua, para a macro
   #         GLINTFX_BACKEND_GLFW não dar falso positivo (ver cabeçalho do script +
   #         CLAUDE.md/AGENTS.md "Gotchas críticos").
+  #       - tools/check_rml_whitelist.sh (TST-L1-STATIC, parte 3/3, RMLX-0/F4): guarda
+  #         o confinamento do RmlUi que F1-F3 já compraram -- falha se um #include
+  #         novo de RmlUi cair fora de glintfx/src/rml/ (ou um token de tipo-valor tipo
+  #         Rml::String/Vector2/Colourb/Variant/Input/Log fora dele), mesma doutrina de
+  #         grep de diretiva do check_encapsulation.sh. Roda o próprio --selftest
+  #         embutido PRIMEIRO (disciplina SEED-GATE-NAO-GUARDA-SI-MESMO): um gate sem
+  #         dente aborta a si mesmo antes de chegar no check real. Grep puro,
+  #         independente de plataforma -- roda uma vez aqui, não por SO.
   #       - gitleaks (TST-L1-SECRETS): escaneia o histórico git inteiro (--source .),
   #         não só a working tree -- pega segredo que foi commitado e depois removido.
   #         Instalado a partir do tarball de release fixado (não curl|sh), para o
@@ -404,12 +421,32 @@ jobs:
             -DGLINTFX_BACKEND_GLFW=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      # EN: TST-L1-STATIC (1/3) -- encapsulation gate. Fails hard on any third-party
+      # EN: TST-L1-STATIC (1/4) -- encapsulation gate. Fails hard on any third-party
       #     #include in the public headers.
-      # PT: TST-L1-STATIC (1/3) -- gate de encapsulamento. Falha duro em qualquer
+      # PT: TST-L1-STATIC (1/4) -- gate de encapsulamento. Falha duro em qualquer
       #     #include de terceiro nos headers publicos.
       - name: TST-L1-STATIC -- encapsulation gate
         run: ./tools/check_encapsulation.sh glintfx/include/glintfx
+
+      # EN: TST-L1-STATIC (2/4, RMLX-0/F4) -- RmlUi whitelist gate. Fails hard on any
+      #     new #include of RmlUi outside glintfx/src/rml/, or a value-type token
+      #     (Rml::String/Vector2/Colourb/Variant/Input/Log) in code outside it, in
+      #     src/, include/ or demos/; also caps glintfx/tests/ to the frozen whitelist
+      #     of 4 pre-existing files. Runs its own --selftest first (no separate step
+      #     needed -- see the script's own header). Pure grep, no build dependency:
+      #     could run before "configure" above, kept here for locality with its
+      #     TST-L1-STATIC sibling.
+      # PT: TST-L1-STATIC (2/4, RMLX-0/F4) -- gate de whitelist do RmlUi. Falha duro em
+      #     qualquer #include novo de RmlUi fora de glintfx/src/rml/, ou um token de
+      #     tipo-valor (Rml::String/Vector2/Colourb/Variant/Input/Log) em código fora
+      #     dele, em src/, include/ ou demos/; também trava glintfx/tests/ na
+      #     whitelist congelada de 4 arquivos pré-existentes. Roda o próprio
+      #     --selftest primeiro (nenhum passo separado necessário -- ver o cabeçalho
+      #     do próprio script). Grep puro, sem dependência de build: poderia rodar
+      #     antes do "configure" acima, ficou aqui por localidade com o irmão
+      #     TST-L1-STATIC.
+      - name: TST-L1-STATIC -- RmlUi whitelist gate (RMLX-0/F4)
+        run: ./tools/check_rml_whitelist.sh
 
       # EN: SEC-CI-HARDEN (IMP-2, AUD-CI-RUNNER) -- enforced anti-fork gate for the
       #     self-hosted runner (heavy.yml). Runs here, on ubuntu-latest, deliberately
@@ -483,7 +520,7 @@ jobs:
           cmake --preset embed-only -S glintfx -DGLINTFX_BUILD_TESTS=OFF -DGLINTFX_BUILD_DEMOS=OFF
           rm -rf glintfx/build-full glintfx/build-embed-only
 
-      # EN: TST-L1-STATIC (2/3) -- clang-tidy. Checks and the WarningsAsErrors policy
+      # EN: TST-L1-STATIC (3/4) -- clang-tidy. Checks and the WarningsAsErrors policy
       #     live in glintfx/.clang-tidy (only clang-analyzer-* fails the build today;
       #     modernize-*/cppcoreguidelines-* are reported, not gated -- see that file's
       #     header comment for the sempre-verde rationale).
@@ -494,7 +531,7 @@ jobs:
       #     FX-CARVE-1 CI integration (S3). `bash -c` wraps the shell so `globstar`
       #     takes effect (the workflow's default `run:` shell already is bash on
       #     ubuntu-latest, but the option must be set explicitly in-line).
-      # PT: TST-L1-STATIC (2/3) -- clang-tidy. Checks e a politica de WarningsAsErrors
+      # PT: TST-L1-STATIC (3/4) -- clang-tidy. Checks e a politica de WarningsAsErrors
       #     vivem em glintfx/.clang-tidy (so clang-analyzer-* falha o build hoje;
       #     modernize-*/cppcoreguidelines-* sao reportados, nao gateados -- ver o
       #     comentario de cabecalho daquele arquivo para o motivo do sempre-verde).
@@ -510,7 +547,7 @@ jobs:
           shopt -s globstar
           clang-tidy -p glintfx/build-lint glintfx/src/**/*.cpp
 
-      # EN: TST-L1-STATIC (3/3) -- cppcheck, restricted to our own src/ (--file-filter)
+      # EN: TST-L1-STATIC (4/4) -- cppcheck, restricted to our own src/ (--file-filter)
       #     with vendored/fetched code suppressed (third_party/, _deps/) -- those are
       #     not our authorship and out of scope for this gate. --file-filter is
       #     '*glintfx/src/*' (leading bare '*', NOT '*/glintfx/src/*'): with a RELATIVE
@@ -518,7 +555,7 @@ jobs:
       #     relative paths with no leading '/' (e.g. "glintfx/src/foo.cpp"), so a filter
       #     requiring a literal '/' right before "glintfx" never matches -- reproduced
       #     and confirmed locally.
-      # PT: TST-L1-STATIC (3/3) -- cppcheck, restrito ao nosso proprio src/
+      # PT: TST-L1-STATIC (4/4) -- cppcheck, restrito ao nosso proprio src/
       #     (--file-filter) com codigo vendorizado/fetchado suprimido (third_party/,
       #     _deps/) -- fora da nossa autoria e fora do escopo deste gate. --file-filter
       #     e '*glintfx/src/*' (asterisco nu no inicio, NAO '*/glintfx/src/*'): com

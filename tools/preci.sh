@@ -17,6 +17,7 @@
 #         07-31, 125 tests) so pre-push stays cheap; that budget grows with the suite.
 #       - --full: the wide net. Both glintfx CMake configs (GLFW ON and OFF) +
 #         TST-L1-STATIC's encapsulation sub-check (tools/check_encapsulation.sh) +
+#         RMLX-0/F4's RmlUi whitelist gate (tools/check_rml_whitelist.sh) +
 #         gitleaks (TST-L1-SECRETS) if installed. Intended for occasional manual runs
 #         (e.g. before tagging a release), not every push -- it is slower by design.
 #         Local-first: everything here runs offline except the one-time RmlUi
@@ -42,6 +43,7 @@
 #         orçamento cresce junto com a suíte.
 #       - --full: a rede larga. As duas configs CMake do glintfx (GLFW ON e OFF) + o
 #         sub-check de encapsulamento do TST-L1-STATIC (tools/check_encapsulation.sh) +
+#         o gate de whitelist do RmlUi da RMLX-0/F4 (tools/check_rml_whitelist.sh) +
 #         gitleaks (TST-L1-SECRETS) se instalado. Pensado para rodadas manuais
 #         ocasionais (ex.: antes de taggear um release), não a cada push -- é mais lento
 #         por design. Local-first: tudo aqui roda offline exceto o fetch único do RmlUi
@@ -121,11 +123,12 @@ detect_touched_files() {
 #     The allowlist branch below is the fix for SEED-GATE-NAO-GUARDA-SI-MESMO
 #     (2026-07-31, TODO.md): before it existed, `tools/*` matched NONE of the case
 #     arms, so editing tools/preci.sh itself (or ctest_guarded.sh, mutation_sandbox.sh,
-#     check_encapsulation.sh -- the scripts that ARE this gate, or that this gate calls
-#     into) made preci.sh print "nothing to gate, passing fast" and exit 0 without
-#     running a single test. Measured live: the five tools/ commits of BUILDDIR-MUTACAO
-#     (W23) sailed through pre-push with the suite never running once. These four
-#     scripts force BOTH layers (the gate serves both, and Layer 0 is cheap) --
+#     check_encapsulation.sh, check_rml_whitelist.sh (RMLX-0/F4) -- the scripts that
+#     ARE this gate, or that this gate calls into) made preci.sh print "nothing to
+#     gate, passing fast" and exit 0 without running a single test. Measured live: the
+#     five tools/ commits of BUILDDIR-MUTACAO (W23) sailed through pre-push with the
+#     suite never running once. These five scripts force BOTH layers (the gate serves
+#     both, and Layer 0 is cheap) --
 #     deliberately NOT all of tools/, which is mostly build-irrelevant (doc checkers,
 #     CI-remote scripts, generators) and would make every tools/ touch pay the full
 #     ~5min suite for no reason.
@@ -144,12 +147,13 @@ detect_touched_files() {
 #     O braço de allowlist abaixo é o conserto do SEED-GATE-NAO-GUARDA-SI-MESMO
 #     (2026-07-31, TODO.md): antes dele existir, `tools/*` não casava com NENHUM braço
 #     do case, então editar o próprio tools/preci.sh (ou ctest_guarded.sh,
-#     mutation_sandbox.sh, check_encapsulation.sh -- os scripts que SÃO este gate, ou
-#     que este gate chama) fazia o preci.sh imprimir "nothing to gate, passing fast" e
-#     sair 0 sem rodar um teste sequer. Medido ao vivo: os cinco commits de tools/ da
-#     BUILDDIR-MUTACAO (W23) passaram pelo pre-push sem a suíte rodar uma vez. Estes
-#     quatro scripts forçam AS DUAS camadas (o gate serve as duas, e a Camada 0 é
-#     barata) -- deliberadamente NÃO todo o tools/, que na maior parte é irrelevante
+#     mutation_sandbox.sh, check_encapsulation.sh, check_rml_whitelist.sh (RMLX-0/F4)
+#     -- os scripts que SÃO este gate, ou que este gate chama) fazia o preci.sh
+#     imprimir "nothing to gate, passing fast" e sair 0 sem rodar um teste sequer.
+#     Medido ao vivo: os cinco commits de tools/ da BUILDDIR-MUTACAO (W23) passaram
+#     pelo pre-push sem a suíte rodar uma vez. Estes cinco scripts forçam AS DUAS
+#     camadas (o gate serve as duas, e a Camada 0 é barata) -- deliberadamente NÃO
+#     todo o tools/, que na maior parte é irrelevante
 #     pra build (checadores de doc, scripts de CI remoto, geradores) e faria todo toque
 #     em tools/ pagar a suíte inteira de ~5min à toa.
 # -----------------------------------------------------------------------------
@@ -161,7 +165,7 @@ classify_touched_files() {
   for f in "$@"; do
     [[ -z "${f}" ]] && continue
     case "${f}" in
-      tools/preci.sh|tools/ctest_guarded.sh|tools/mutation_sandbox.sh|tools/check_encapsulation.sh)
+      tools/preci.sh|tools/ctest_guarded.sh|tools/mutation_sandbox.sh|tools/check_encapsulation.sh|tools/check_rml_whitelist.sh)
         # NB: this arm must be checked before/independently of the glintfx/* and
         #     src/*|include/*|Makefile|tests/* arms below -- it is not a prefix match on
         #     either, so ordering does not matter here, but it DOES need to set BOTH
@@ -426,20 +430,29 @@ run_doc_line_refs_gate() {
 }
 
 # -----------------------------------------------------------------------------
-# EN: 4) --full extras: TST-L1-STATIC's encapsulation sub-check + TST-L1-SECRETS
-#     (gitleaks). Both are cheap and always-green per TESTES.md's adoption order, so
-#     they only run in --full (fast mode stays focused on build+test of the touched
-#     layer). gitleaks is optional: skip with a warning if not installed, do NOT fail
-#     the gate on a missing scanner.
-# PT: 4) Extras do --full: sub-check de encapsulamento do TST-L1-STATIC + TST-L1-SECRETS
-#     (gitleaks). Ambos são baratos e sempre-verdes pela ordem de adoção do TESTES.md,
-#     então só rodam no --full (o modo rápido fica focado em build+teste da camada
-#     tocada). gitleaks é opcional: pula com aviso se não instalado, NÃO falha o gate
-#     por um scanner ausente.
+# EN: 4) --full extras: TST-L1-STATIC's encapsulation sub-check + RMLX-0/F4's RmlUi
+#     whitelist gate + TST-L1-SECRETS (gitleaks). All three are cheap and
+#     always-green per TESTES.md's adoption order, so they only run in --full (fast
+#     mode stays focused on build+test of the touched layer). gitleaks is optional:
+#     skip with a warning if not installed, do NOT fail the gate on a missing scanner.
+#     check_rml_whitelist.sh runs its own embedded --selftest first every invocation
+#     (SEED-GATE-NAO-GUARDA-SI-MESMO discipline) -- no extra step needed here.
+# PT: 4) Extras do --full: sub-check de encapsulamento do TST-L1-STATIC + gate de
+#     whitelist do RmlUi da RMLX-0/F4 + TST-L1-SECRETS (gitleaks). Os três são
+#     baratos e sempre-verdes pela ordem de adoção do TESTES.md, então só rodam no
+#     --full (o modo rápido fica focado em build+teste da camada tocada). gitleaks é
+#     opcional: pula com aviso se não instalado, NÃO falha o gate por um scanner
+#     ausente. O check_rml_whitelist.sh já roda o próprio --selftest embutido em toda
+#     invocação (disciplina SEED-GATE-NAO-GUARDA-SI-MESMO) -- nenhum passo extra
+#     necessário aqui.
 # -----------------------------------------------------------------------------
 run_full_extras() {
   section "TST-L1-STATIC (sub-check) -- tools/check_encapsulation.sh"
   "${SCRIPT_DIR}/check_encapsulation.sh"
+  ran_anything=1
+
+  section "RMLX-0/F4 -- tools/check_rml_whitelist.sh"
+  "${SCRIPT_DIR}/check_rml_whitelist.sh"
   ran_anything=1
 
   section "TST-L1-SECRETS -- gitleaks"

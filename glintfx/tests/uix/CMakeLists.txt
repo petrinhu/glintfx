@@ -94,3 +94,44 @@ target_compile_definitions(uix_lexer_corpus_sanity PRIVATE
   GLINTFX_UIX_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
   GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase")
 add_test(NAME uix_lexer_corpus_sanity COMMAND uix_lexer_corpus_sanity)
+
+# EN: RMLX-1/S6b -- glintfx::uix::dump_document (glintfx/src/uix/dom/dumper.{hpp,cpp}), the
+#     dumper that walks THIS module's own DOM tree and serializes it into docs/uix-dom.md's
+#     canonical format -- one half of the S6a/S6b/S7 differential oracle (dumper.hpp's own header
+#     comment). Same "own CMake, zero RmlUi/GLFW/GL" discipline as every S1-S4 test above.
+#     dumper_sanity.cpp pins field-level byte-exactness (including uix-dom.md section 11's own
+#     worked example); dumper_determinism_sanity.cpp proves byte-exact reproducibility is not an
+#     accident of a single run; dumper_corpus_sanity.cpp proves the format comes out well-shaped
+#     for the whole real corpus. The determinism/corpus suites also link parser.{hpp,cpp} (S3) to
+#     get real trees from real fixtures -- still zero RmlUi/GLFW/GL, both are part of the same
+#     glintfx::uix_dom standalone target.
+# PT: RMLX-1/S6b -- glintfx::uix::dump_document (glintfx/src/uix/dom/dumper.{hpp,cpp}), o dumper
+#     que percorre a árvore DOM PRÓPRIA deste módulo e a serializa no formato canônico do
+#     docs/uix-dom.md -- uma metade do oráculo diferencial S6a/S6b/S7 (o próprio comentário de
+#     cabeçalho do dumper.hpp). Mesma disciplina "CMake próprio, zero RmlUi/GLFW/GL" de todo teste
+#     S1-S4 acima. O dumper_sanity.cpp fixa exatidão-de-byte em nível de campo (inclusive o
+#     próprio exemplo trabalhado da seção 11 do uix-dom.md); o dumper_determinism_sanity.cpp prova
+#     que a reprodutibilidade byte-exata não é acidente de uma única execução; o
+#     dumper_corpus_sanity.cpp prova que o formato sai bem-formado pro corpus real inteiro. As
+#     suítes de determinismo/corpus também linkam parser.{hpp,cpp} (S3) pra pegar árvores reais de
+#     fixtures reais -- ainda zero RmlUi/GLFW/GL, os dois fazem parte do mesmo alvo standalone
+#     glintfx::uix_dom.
+add_executable(uix_dumper_sanity dumper_sanity.cpp)
+target_link_libraries(uix_dumper_sanity PRIVATE glintfx::uix_dom)
+add_test(NAME uix_dumper_sanity COMMAND uix_dumper_sanity)
+
+add_executable(uix_dumper_determinism_sanity dumper_determinism_sanity.cpp)
+target_link_libraries(uix_dumper_determinism_sanity PRIVATE glintfx::uix_dom)
+target_compile_definitions(uix_dumper_determinism_sanity PRIVATE
+  GLINTFX_UIX_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures")
+add_test(NAME uix_dumper_determinism_sanity COMMAND uix_dumper_determinism_sanity)
+
+add_executable(uix_dumper_corpus_sanity dumper_corpus_sanity.cpp)
+target_link_libraries(uix_dumper_corpus_sanity PRIVATE glintfx::uix_dom)
+target_compile_definitions(uix_dumper_corpus_sanity PRIVATE
+  GLINTFX_UIX_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures")
+add_test(NAME uix_dumper_corpus_sanity COMMAND uix_dumper_corpus_sanity)

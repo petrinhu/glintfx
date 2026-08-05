@@ -15,7 +15,10 @@
 #           document_reload_leak.cpp) -> FAIL. Caps the pre-existing test debt: a NEW
 #           test that includes RmlUi directly fails the gate.
 #       (c) value-type tokens (Rml::String/Vector2/Colourb/Variant/Input/Log) in CODE
-#           (comments stripped) outside src/rml/ -> FAIL (file:line).
+#           (comments stripped) outside src/rml/, INCLUDING glintfx/tests/ (RMLX-0
+#           2026-08-05 -- see "FILE ENUMERATION FIX" below) -> FAIL (file:line). The
+#           FROZEN 4 test files whitelisted by check (b) are exempt here too, by full
+#           relative path (see RML_TOKEN_EXCEPTIONS below for why).
 #       (d) report-only, ALWAYS printed: count of files with residual opaque `Rml::`
 #           usage (forward-declared pointers -- Rml::Context*, Rml::SystemInterface* --
 #           i.e. anything NOT already caught by (c)'s value-type list) outside the
@@ -27,6 +30,24 @@
 #     (GLINTFX_BACKEND_GLFW contains the substring "GLFW" but is not a GLFW header
 #     include, so a naive grep must not trip on it; the analogous risk here would be a
 #     macro or identifier containing "Rml" that is not an #include).
+#
+#     FILE ENUMERATION FIX (RMLX-0, 2026-08-05): adversarial review found 4 gaps in
+#     WHAT the gate scans (not in the matching logic above), all silent exit-0 holes:
+#       1. the TOKEN checks ((c)/(d)) never scanned glintfx/tests/ at all -- a NEW
+#          test file with a raw `Rml::String` token, no #include, passed clean. Fixed
+#          by adding RML_TESTS_DIR to check (c)'s roots (see decision above); (d) is
+#          left scoped to RML_SRC_ROOTS on purpose, its job is opaque debt in the
+#          product, not test debt already tracked by (b)/(c).
+#       2. in glintfx/tests/, check (b)'s own `find` only matched *.cpp/*.hpp -- a
+#          NEW *.h test helper with a live RmlUi #include escaped it.
+#       3. `.cc`/`.cxx`/`.hh`/`.hxx` were outside every check's `find` everywhere --
+#          convention (the repo uses .cpp/.hpp today), not a gate.
+#       4. `find` without `-L` treats a symlink as type l, never type f, so `-type f`
+#          silently dropped a symlink pointing at a file with a real violation.
+#     Fix: one shared rml_find_files() (below) used by ALL FOUR checks -- `find -L`
+#     (follows symlinks) over the SAME 8-extension set (.cpp .hpp .cc .cxx .hh .hxx
+#     .h .c). One enumeration rule so a future extension/symlink fix lands once, not
+#     four times independently drifting (three of the four already had).
 #
 #     Comment stripping for (c)/(d): glintfx's public headers carry DOZENS of legitimate
 #     `Rml::` mentions in doc-comments explaining what a wrapper encapsulates (measured:
@@ -79,7 +100,11 @@
 #           form_events_sanity.cpp, document_reload_leak.cpp) -> FAIL. Trava a dívida
 #           pré-existente: um teste NOVO que inclua RmlUi direto reprova o gate.
 #       (c) tokens de tipo-valor (Rml::String/Vector2/Colourb/Variant/Input/Log) em
-#           CÓDIGO (comentário removido) fora de src/rml/ -> FAIL (arquivo:linha).
+#           CÓDIGO (comentário removido) fora de src/rml/, INCLUINDO glintfx/tests/
+#           (RMLX-0 2026-08-05 -- ver "CONSERTO DE ENUMERAÇÃO DE ARQUIVO" abaixo) ->
+#           FAIL (arquivo:linha). Os 4 arquivos de teste congelados na whitelist do
+#           check (b) ficam isentos aqui também, pelo caminho relativo completo (ver
+#           RML_TOKEN_EXCEPTIONS abaixo pro motivo).
 #       (d) report-only, SEMPRE impresso: contagem de arquivos com uso opaco residual
 #           de `Rml::` (ponteiro via fwd-decl -- Rml::Context*, Rml::SystemInterface* --
 #           ou seja, tudo que (c) NÃO já pega pela lista de tipo-valor) fora da
@@ -91,6 +116,27 @@
 #     (GLINTFX_BACKEND_GLFW contém a substring "GLFW" mas não é include de header GLFW,
 #     então um grep ingênuo não pode disparar nela; o risco análogo aqui seria uma macro
 #     ou identificador contendo "Rml" que não é um #include).
+#
+#     CONSERTO DE ENUMERAÇÃO DE ARQUIVO (RMLX-0, 2026-08-05): revisão adversarial achou
+#     4 lacunas no que o gate VARRE (não na lógica de casamento acima), todas furos
+#     silenciosos de exit-0:
+#       1. os checks de TOKEN ((c)/(d)) nunca varriam glintfx/tests/ -- um arquivo de
+#          teste NOVO com um token `Rml::String` cru, sem #include, passava limpo.
+#          Consertado adicionando RML_TESTS_DIR às raízes do check (c) (ver decisão
+#          acima); o (d) fica de propósito escopado a RML_SRC_ROOTS -- seu trabalho é
+#          dívida opaca no produto, não dívida de teste já rastreada por (b)/(c).
+#       2. em glintfx/tests/, o próprio `find` do check (b) só casava *.cpp/*.hpp --
+#          um *.h NOVO de apoio de teste com #include de RmlUi vivo escapava.
+#       3. `.cc`/`.cxx`/`.hh`/`.hxx` ficavam fora do `find` de todo check, em todo
+#          lugar -- convenção (o repo usa .cpp/.hpp hoje), não gate.
+#       4. `find` sem `-L` trata symlink como type l, nunca type f, então `-type f`
+#          descartava em silêncio um symlink apontando pra um arquivo com violação
+#          real.
+#     Conserto: um rml_find_files() compartilhado (abaixo) usado pelos QUATRO checks --
+#     `find -L` (segue symlink) sobre o MESMO conjunto de 8 extensões (.cpp .hpp .cc
+#     .cxx .hh .hxx .h .c). Uma regra de enumeração só, pra um conserto futuro de
+#     extensão/symlink pousar uma vez, não quatro vezes divergindo independentemente
+#     (três das quatro já tinham divergido).
 #
 #     Remoção de comentário para (c)/(d): os headers públicos da glintfx carregam
 #     DEZENAS de menções legítimas a `Rml::` em doc-comment explicando o que um wrapper
@@ -172,6 +218,60 @@ RML_TEST_WHITELIST=(
   "glintfx/tests/focus_sanity.cpp"
   "glintfx/tests/form_events_sanity.cpp"
   "glintfx/tests/document_reload_leak.cpp"
+)
+
+# EN: check (c) in glintfx/tests/ -- a SEPARATE, SMALLER, DOCUMENTED exemption from
+#     RML_TEST_WHITELIST above. Discovered live (RMLX-0, 2026-08-05) the moment
+#     check (c) was widened to scan glintfx/tests/ at all (closing gap 1 of the F4
+#     file-enumeration fix -- see the header comment's "FILE ENUMERATION FIX"):
+#     `check_token_gate glintfx/tests` came back red on the UNMODIFIED real tree,
+#     not just on the planted fixture. Root cause: these two files test the
+#     RMLX-0 confinement boundary ITSELF -- glintfx/tests/input_map_sanity.cpp
+#     exercises src/rml/input_map.hpp's Key -> Rml::Input::KeyIdentifier mapping,
+#     glintfx/tests/type_bridge_review_sanity.cpp exercises src/rml/type_bridge.hpp's
+#     value-type round-trip -- and asserting the conversion is correct means
+#     literally writing the target Rml:: type's name in the assertion. Confirmed
+#     NEITHER file #includes RmlUi directly (`grep -n '^#include' <file>` on both:
+#     only `../src/rml/{input_map,type_bridge}.hpp` and stdlib headers) -- so
+#     check (a)/(b), which only look at #include DIRECTIVES, correctly never had
+#     reason to flag them; only check (c)'s raw-token scan does, and only once it
+#     started looking at tests/ at all. This is why the exemption is a DISTINCT
+#     list from RML_TEST_WHITELIST, not a merge into it: RML_TEST_WHITELIST is
+#     "old test debt that #includes RmlUi directly" (check (b)'s concern);
+#     RML_TEST_TOKEN_EXCEPTIONS is "test that must reference Rml:: value types on
+#     purpose to verify a conversion, without ever #including RmlUi" (check (c)'s
+#     concern, unrelated cause). Matched by FULL relative path, same doctrine as
+#     every other exception list in this file -- growing this list beyond these
+#     two, or merging it into RML_TEST_WHITELIST, is a decision for the líder.
+# PT: check (c) em glintfx/tests/ -- uma isenção SEPARADA, MENOR e DOCUMENTADA da
+#     RML_TEST_WHITELIST acima. Descoberta ao vivo (RMLX-0, 2026-08-05) no momento
+#     em que o check (c) foi alargado pra varrer glintfx/tests/ (fechando a lacuna
+#     1 do conserto de enumeração de arquivo da F4 -- ver "CONSERTO DE ENUMERAÇÃO
+#     DE ARQUIVO" no comentário de cabeçalho): `check_token_gate glintfx/tests`
+#     voltou vermelho na árvore real NÃO MODIFICADA, não só na fixture plantada.
+#     Causa raiz: estes dois arquivos testam a própria fronteira de confinamento
+#     RMLX-0 -- glintfx/tests/input_map_sanity.cpp exercita o mapeamento Key ->
+#     Rml::Input::KeyIdentifier de src/rml/input_map.hpp,
+#     glintfx/tests/type_bridge_review_sanity.cpp exercita a ida-e-volta de
+#     tipo-valor de src/rml/type_bridge.hpp -- e afirmar que a conversão está
+#     correta significa escrever literalmente o nome do tipo Rml:: alvo na
+#     asserção. Confirmado que NENHUM dos dois dá #include direto de RmlUi
+#     (`grep -n '^#include' <arquivo>` nos dois: só
+#     `../src/rml/{input_map,type_bridge}.hpp` e headers de stdlib) -- então os
+#     checks (a)/(b), que só olham DIRETIVA de #include, corretamente nunca
+#     tiveram motivo pra acusá-los; só a varredura de token cru do check (c) tem,
+#     e só depois que ele passou a olhar tests/. É por isso que a isenção é uma
+#     lista DISTINTA da RML_TEST_WHITELIST, não uma fusão nela: RML_TEST_WHITELIST
+#     é "dívida de teste velha que dá #include direto de RmlUi" (preocupação do
+#     check (b)); RML_TEST_TOKEN_EXCEPTIONS é "teste que precisa referenciar tipo
+#     de valor Rml:: de propósito pra verificar uma conversão, sem nunca dar
+#     #include de RmlUi" (preocupação do check (c), causa não-relacionada). Casada
+#     pelo caminho relativo COMPLETO, mesma doutrina de toda outra lista de
+#     exceção deste arquivo -- aumentar esta lista além destes dois, ou fundi-la
+#     na RML_TEST_WHITELIST, é decisão do líder.
+RML_TEST_TOKEN_EXCEPTIONS=(
+  "glintfx/tests/input_map_sanity.cpp"
+  "glintfx/tests/type_bridge_review_sanity.cpp"
 )
 
 # EN: check (a) -- see the header comment above ("KNOWN, FROZEN, DOCUMENTED
@@ -420,15 +520,49 @@ rml_array_contains() {
 }
 
 # -----------------------------------------------------------------------------
+# EN: rml_find_files ROOT_1 [ROOT_2 ...] -- single, shared file enumeration for ALL
+#     FOUR checks (a)/(b)/(c)/(d): NUL-separated, sorted, following symlinks
+#     (`find -L`, so a symlink to a regular file with a leaking include/token is not
+#     invisible to the gate -- `-type f` without `-L` treats the symlink itself as
+#     type l, never f, and drops it silently) over the SAME 8-extension set
+#     (.cpp .hpp .cc .cxx .hh .hxx .h .c -- RMLX-0 2026-08-05 widened this from the
+#     narrower, and in one case DIFFERENT, subset the four call sites used to
+#     hardcode independently: check (b)'s own `find` only matched *.cpp/*.hpp,
+#     silently letting a NEW *.h test helper carry a live RmlUi #include past the
+#     gate). One function, one enumeration rule, so a future extension or symlink
+#     fix only has to land in ONE place.
+# PT: rml_find_files RAIZ_1 [RAIZ_2 ...] -- enumeração de arquivo única e
+#     compartilhada pelos QUATRO checks (a)/(b)/(c)/(d): NUL-separado, ordenado,
+#     seguindo symlink (`find -L`, pra um symlink apontando pra um arquivo comum
+#     com include/token vazando não ficar invisível ao gate -- `-type f` sem `-L`
+#     trata o próprio symlink como type l, nunca f, e descarta em silêncio) sobre o
+#     MESMO conjunto de 8 extensões (.cpp .hpp .cc .cxx .hh .hxx .h .c -- RMLX-0
+#     2026-08-05 alargou isso do subconjunto mais estreito, e num caso DIFERENTE,
+#     que os quatro pontos de chamada hardcodeavam de forma independente: o próprio
+#     `find` do check (b) só casava *.cpp/*.hpp, deixando em silêncio um *.h NOVO de
+#     apoio de teste carregar um #include de RmlUi vivo pelo gate). Uma função, uma
+#     regra de enumeração, pra um conserto futuro de extensão ou symlink só
+#     precisar pousar em UM lugar.
+# -----------------------------------------------------------------------------
+rml_find_files() {
+  find -L "$@" -type f \( \
+    -name '*.cpp' -o -name '*.hpp' -o -name '*.cc' -o -name '*.cxx' \
+    -o -name '*.hh' -o -name '*.hxx' -o -name '*.h' -o -name '*.c' \
+  \) -print0 2>/dev/null | sort -z
+}
+
+# -----------------------------------------------------------------------------
 # EN: check_include_gate SRC_ROOT_1 [SRC_ROOT_2 ...] -- shared engine for (a): finds
-#     every *.c/*.cpp/*.h/*.hpp under the given roots, skips anything under
+#     every file matching rml_find_files()'s extension set under the given roots,
+#     following symlinks, skips anything under
 #     EXCL_DIR (global, set by caller) and anything in EXCL_FILES (global array),
 #     and reports arquivo:linha for any #include matching RML_INCLUDE_PATTERN.
 #     EXCL_DIR/EXCL_FILES are read as globals (not params) to keep call sites in
 #     check (a)/selftest terse -- same "unqualified globals read by convention"
 #     pattern tools/preci.sh documents for its own classify_touched_files().
 # PT: check_include_gate RAIZ_1 [RAIZ_2 ...] -- motor compartilhado do (a): acha todo
-#     *.c/*.cpp/*.h/*.hpp sob as raízes dadas, pula tudo sob EXCL_DIR (global, setado
+#     arquivo do conjunto de extensão do rml_find_files() sob as raízes dadas,
+#     seguindo symlink, pula tudo sob EXCL_DIR (global, setado
 #     pelo chamador) e tudo em EXCL_FILES (array global), e reporta arquivo:linha pra
 #     qualquer #include que case RML_INCLUDE_PATTERN. EXCL_DIR/EXCL_FILES são lidos
 #     como globais (não parâmetros) pra manter os pontos de chamada de (a)/selftest
@@ -460,7 +594,7 @@ check_include_gate() {
       echo "$matches" >&2
       violations=1
     fi
-  done < <(find "$@" -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 2>/dev/null | sort -z)
+  done < <(rml_find_files "$@")
   return "$violations"
 }
 
@@ -470,13 +604,22 @@ check_include_gate() {
 #     TESTS_DIR-prefixed, not basename) is in EXCL_FILES (global, caller-set to the
 #     frozen 4). Basename-only matching used to let a NEW file at
 #     TESTS_DIR/subdir/<frozen-basename> ride through on the debt entry's name alone;
-#     matching the full path closes that hole.
+#     matching the full path closes that hole. Scans rml_find_files()'s full
+#     8-extension set (RMLX-0 2026-08-05 -- this used to hardcode its OWN narrower
+#     `find -name '*.cpp' -o -name '*.hpp'` here, independently of every other
+#     check's extension list, and had already drifted: a NEW *.h test helper
+#     carrying a live RmlUi #include escaped it silently).
 # PT: check_test_whitelist_gate DIR_TESTES -- (b): todo #include de RmlUi em
 #     DIR_TESTES precisa estar num arquivo cujo CAMINHO RELATIVO COMPLETO (como o
 #     `find` devolve -- prefixado por DIR_TESTES, não basename) está em EXCL_FILES
 #     (global, setado pelo chamador pros 4 congelados). Casar só pelo basename deixava
 #     um arquivo NOVO em DIR_TESTES/subdir/<basename-congelado> passar de carona no
-#     nome da entrada de dívida; casar pelo caminho completo fecha esse furo.
+#     nome da entrada de dívida; casar pelo caminho completo fecha esse furo. Varre o
+#     conjunto completo de 8 extensões do rml_find_files() (RMLX-0 2026-08-05 -- isto
+#     hardcodeava um `find -name '*.cpp' -o -name '*.hpp'` PRÓPRIO aqui, mais estreito
+#     e independente da lista de extensão de todo outro check, e já tinha divergido:
+#     um *.h NOVO de apoio de teste carregando um #include de RmlUi vivo escapava em
+#     silêncio).
 # -----------------------------------------------------------------------------
 check_test_whitelist_gate() {
   local tests_dir="$1"
@@ -492,17 +635,22 @@ check_test_whitelist_gate() {
       echo "$matches" >&2
       violations=1
     fi
-  done < <(find "$tests_dir" -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 2>/dev/null | sort -z)
+  done < <(rml_find_files "$tests_dir")
   return "$violations"
 }
 
 # -----------------------------------------------------------------------------
 # EN: check_token_gate SRC_ROOT_1 [...] -- (c): comment-stripped scan for
 #     RML_TOKEN_PATTERN outside EXCL_DIR, skipping EXCL_FILES (global, caller-set to
-#     the frozen exception).
+#     the frozen exception -- RMLX-0 2026-08-05: the run_real_check() call site now
+#     passes RML_TESTS_DIR as one of the roots too, see the comment there for why,
+#     with EXCL_FILES widened to also cover the check (b) frozen 4).
 # PT: check_token_gate RAIZ_1 [...] -- (c): varredura com comentário removido por
 #     RML_TOKEN_PATTERN fora de EXCL_DIR, pulando EXCL_FILES (global, setado pelo
-#     chamador pra exceção congelada).
+#     chamador pra exceção congelada -- RMLX-0 2026-08-05: o ponto de chamada em
+#     run_real_check() agora passa RML_TESTS_DIR como uma das raízes também, ver o
+#     comentário lá pro motivo, com EXCL_FILES alargado pra cobrir também os 4
+#     congelados do check (b)).
 # -----------------------------------------------------------------------------
 check_token_gate() {
   local violations=0
@@ -520,7 +668,7 @@ check_token_gate() {
       echo "$matches" >&2
       violations=1
     fi
-  done < <(find "$@" -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 2>/dev/null | sort -z)
+  done < <(rml_find_files "$@")
   return "$violations"
 }
 
@@ -530,11 +678,17 @@ check_token_gate() {
 #     are NOT already fully accounted for by RML_TOKEN_PATTERN. Report-only, no
 #     concept of EXCL_FILES here on purpose -- (d) is meant to surface ALL residual
 #     opaque debt, including inside the (a)/(c) frozen exceptions, not hide it.
+#     Deliberately still scoped to RML_SRC_ROOTS only (unlike (c) as of RMLX-0
+#     2026-08-05, which now also scans RML_TESTS_DIR) -- (d)'s job is opaque debt in
+#     the PRODUCT, not test debt (b)/(c) already track by name.
 # PT: opaque_debt_count RAIZ_1 [...] -- (d): conta arquivos (não ocorrências) com uso
 #     `Rml::Identificador` (comentário removido) fora de EXCL_DIR cujas linhas casadas
 #     NÃO já são totalmente cobertas por RML_TOKEN_PATTERN. Só relatório, sem conceito
 #     de EXCL_FILES aqui de propósito -- (d) existe pra expor TODA a dívida opaca
 #     residual, inclusive dentro das exceções congeladas de (a)/(c), não escondê-la.
+#     De propósito continua escopado só a RML_SRC_ROOTS (diferente do (c) desde a
+#     RMLX-0 2026-08-05, que agora varre RML_TESTS_DIR também) -- o trabalho do (d) é
+#     dívida opaca do PRODUTO, não dívida de teste que (b)/(c) já rastreiam por nome.
 # -----------------------------------------------------------------------------
 opaque_debt_count() {
   local count=0
@@ -548,7 +702,7 @@ opaque_debt_count() {
     if [[ -n "$residual" ]]; then
       count=$((count + 1))
     fi
-  done < <(find "$@" -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 2>/dev/null | sort -z)
+  done < <(rml_find_files "$@")
   echo "$count"
 }
 
@@ -577,9 +731,54 @@ run_real_check() {
     overall=1
   fi
 
+  # EN: RMLX-0 (2026-08-05) -- check (c) now scans RML_TESTS_DIR too, closing gap 1
+  #     from the F4 fix ("os checks de TOKEN nunca varrem glintfx/tests/"): a NEW test
+  #     file with a raw value-type Rml:: token, no #include at all, used to pass the
+  #     gate silently (check (a)/(b) only look at #include DIRECTIVES, never at the
+  #     token itself). EXCL_FILES is deliberately widened to ALSO cover
+  #     RML_TEST_WHITELIST, not just RML_TOKEN_EXCEPTIONS -- DECISION (líder to
+  #     confirm): the check (b) frozen 4 (domrw_sanity.cpp, focus_sanity.cpp,
+  #     form_events_sanity.cpp, document_reload_leak.cpp) already #include RmlUi
+  #     directly ON PURPOSE (that is what check (b) whitelists), so their value-type
+  #     Rml:: token use is expected debt, not a new leak -- exempting them from check
+  #     (c) too avoids re-flagging debt already accounted for by (b) under a
+  #     different check. This is an EXPLICIT choice, not the accidental blanket-skip
+  #     gap (b) itself just closed for basename collisions: matched by FULL relative
+  #     path (RML_TEST_WHITELIST already stores full paths), never basename. ALSO
+  #     RML_TEST_TOKEN_EXCEPTIONS -- FOUND LIVE (líder to confirm): the moment check
+  #     (c) started scanning tests/, the UNMODIFIED real tree came back red (not just
+  #     the planted fixture) because of 2 pre-existing files that test the src/rml/
+  #     boundary itself (input_map_sanity.cpp, type_bridge_review_sanity.cpp) -- see
+  #     the comment at RML_TEST_TOKEN_EXCEPTIONS's declaration above for the full
+  #     rationale and the proof that neither #includes RmlUi directly. Any OTHER
+  #     test file -- new or old, not in any of the THREE frozen lists -- still fails
+  #     on a raw token.
+  # PT: RMLX-0 (2026-08-05) -- o check (c) agora varre RML_TESTS_DIR também, fechando
+  #     a lacuna 1 do conserto F4 ("os checks de TOKEN nunca varrem glintfx/tests/"):
+  #     um arquivo de teste NOVO com um token Rml:: de tipo-valor cru, sem #include
+  #     nenhum, passava o gate em silêncio (os checks (a)/(b) só olham DIRETIVA de
+  #     #include, nunca o token em si). EXCL_FILES é alargado de propósito pra cobrir
+  #     TAMBÉM RML_TEST_WHITELIST, não só RML_TOKEN_EXCEPTIONS -- DECISÃO (líder
+  #     confirma): os 4 congelados do check (b) (domrw_sanity.cpp, focus_sanity.cpp,
+  #     form_events_sanity.cpp, document_reload_leak.cpp) já dão #include direto de
+  #     RmlUi DE PROPÓSITO (é isso que o check (b) permite), então o uso deles de
+  #     token Rml:: de tipo-valor é dívida esperada, não um vazamento novo -- isentá-
+  #     los do check (c) também evita reacusar dívida que o (b) já contabiliza sob
+  #     outro check. Isto é uma escolha EXPLÍCITA, não a isenção-de-arquivo-inteiro
+  #     acidental que o próprio (b) acabou de fechar pra colisão de basename: casado
+  #     pelo caminho relativo COMPLETO (RML_TEST_WHITELIST já guarda caminho
+  #     completo), nunca basename. TAMBÉM RML_TEST_TOKEN_EXCEPTIONS -- ACHADO AO VIVO
+  #     (líder confirma): assim que o check (c) passou a varrer tests/, a árvore real
+  #     NÃO MODIFICADA voltou vermelha (não só a fixture plantada) por causa de 2
+  #     arquivos pré-existentes que testam a fronteira src/rml/ em si
+  #     (input_map_sanity.cpp, type_bridge_review_sanity.cpp) -- ver o comentário na
+  #     declaração de RML_TEST_TOKEN_EXCEPTIONS acima pro motivo completo e a prova
+  #     de que nenhum dos dois dá #include direto de RmlUi. Qualquer OUTRO arquivo de
+  #     teste -- novo ou velho, fora das TRÊS listas congeladas -- continua
+  #     reprovando com token cru.
   EXCL_DIR="$RML_DIR"
-  EXCL_FILES=("${RML_TOKEN_EXCEPTIONS[@]}")
-  if ! check_token_gate "${RML_SRC_ROOTS[@]}"; then
+  EXCL_FILES=("${RML_TOKEN_EXCEPTIONS[@]}" "${RML_TEST_WHITELIST[@]}" "${RML_TEST_TOKEN_EXCEPTIONS[@]}")
+  if ! check_token_gate "${RML_SRC_ROOTS[@]}" "$RML_TESTS_DIR"; then
     overall=1
   fi
 
@@ -886,12 +1085,187 @@ EOF
     ok=0
   fi
 
+  # --- fixture 8: RMLX-0 gap 1 -- token checks never scanned glintfx/tests/. Three
+  #     independent sub-cases: (8a) a NEW test file with a raw Rml:: value-type
+  #     token and NO #include at all must now fail check (c); (8b) the check (b)
+  #     frozen whitelist, EXEMPTED from check (c) too by the explicit RMLX-0
+  #     decision (documented at the run_real_check() call site), must still pass
+  #     when it legitimately uses RmlUi types, matched by FULL path; (8c) a
+  #     DIFFERENT file that merely shares a frozen entry's basename must NOT ride
+  #     the exemption -- same basename-collision doctrine fixture 3 already proved
+  #     for check (b), now proved for check (c)'s own EXCL_FILES match too.
+  # PT: fixture 8 -- lacuna 1 da RMLX-0 -- os checks de token nunca varriam
+  #     glintfx/tests/. Tres sub-casos independentes: (8a) um arquivo de teste NOVO
+  #     com um token Rml:: de tipo-valor cru e SEM #include nenhum agora tem de
+  #     reprovar o check (c); (8b) a whitelist congelada do check (b), ISENTA do
+  #     check (c) tambem pela decisao explicita da RMLX-0 (documentada no ponto de
+  #     chamada de run_real_check()), ainda tem de passar quando usa tipo RmlUi de
+  #     verdade, casada pelo caminho COMPLETO; (8c) um arquivo DIFERENTE que so
+  #     compartilha o basename de uma entrada congelada NAO pode andar de carona na
+  #     isencao -- mesma doutrina de colisao de basename que a fixture 3 ja provou
+  #     pro check (b), agora provada pro proprio casamento de EXCL_FILES do check
+  #     (c).
+  local tests_token_leak="$tmp/tests_token_leak"
+  mkdir -p "$tests_token_leak/tests"
+  cat > "$tests_token_leak/tests/token_sem_include.cpp" <<'EOF'
+#include <string>
+void f(const Rml::String& s) { (void)s; }
+EOF
+  EXCL_DIR="$tests_token_leak/nonexistent_rml"
+  EXCL_FILES=()
+  if check_token_gate "$tests_token_leak/tests"; then
+    echo "selftest FAIL: check (c) NAO reprovou token Rml:: cru em glintfx/tests/, sem #include algum (falso negativo -- lacuna 1 da RMLX-0)" >&2
+    ok=0
+  fi
+
+  local tests_token_exempt="$tmp/tests_token_exempt"
+  mkdir -p "$tests_token_exempt/tests"
+  cat > "$tests_token_exempt/tests/domrw_sanity.cpp" <<'EOF'
+#include <RmlUi/Core/ElementDocument.h>
+void f(const Rml::String& s) { (void)s; }
+EOF
+  EXCL_DIR="$tests_token_exempt/nonexistent_rml"
+  EXCL_FILES=("$tests_token_exempt/tests/domrw_sanity.cpp")
+  if ! check_token_gate "$tests_token_exempt/tests"; then
+    echo "selftest FAIL: check (c) reprovou Rml::String legitimo no arquivo de teste congelado isento (falso positivo -- a isencao explicita da RMLX-0 nao esta funcionando)" >&2
+    ok=0
+  fi
+
+  local tests_token_collision="$tmp/tests_token_collision"
+  mkdir -p "$tests_token_collision/tests/subdir"
+  cat > "$tests_token_collision/tests/subdir/domrw_sanity.cpp" <<'EOF'
+#include <RmlUi/Core/ElementDocument.h>
+void f(const Rml::String& s) { (void)s; }
+EOF
+  EXCL_DIR="$tests_token_collision/nonexistent_rml"
+  EXCL_FILES=("$tests_token_collision/tests/domrw_sanity.cpp")
+  if check_token_gate "$tests_token_collision/tests"; then
+    echo "selftest FAIL: check (c) NAO reprovou colisao de basename em subdir nao-isento (falso negativo -- a isencao vazou por basename, nao por caminho completo)" >&2
+    ok=0
+  fi
+
+  # --- fixture 8d/8e: RML_TEST_TOKEN_EXCEPTIONS -- the SEPARATE exemption found
+  #     live when the real tree (not just a synthetic fixture) came back red the
+  #     moment check (c) started scanning tests/ (input_map_sanity.cpp,
+  #     type_bridge_review_sanity.cpp -- see the exception's own declaration
+  #     comment for the full story). Mirrors 8b/8c's shape but against the
+  #     SEPARATE list: (8d) a file at the exact frozen path, with no RmlUi
+  #     #include at all (proving this exemption is independent of check (b)'s),
+  #     must still pass check (c); (8e) a same-basename file at a DIFFERENT path
+  #     must NOT ride the exemption.
+  # PT: fixture 8d/8e -- RML_TEST_TOKEN_EXCEPTIONS -- a isencao SEPARADA achada ao
+  #     vivo quando a arvore real (nao so uma fixture sintetica) voltou vermelha
+  #     no momento em que o check (c) passou a varrer tests/
+  #     (input_map_sanity.cpp, type_bridge_review_sanity.cpp -- ver o comentario da
+  #     propria declaracao da excecao pra historia completa). Espelha o formato de
+  #     8b/8c mas contra a lista SEPARADA: (8d) um arquivo no caminho congelado
+  #     exato, sem #include de RmlUi nenhum (provando que esta isencao e
+  #     independente da do check (b)), ainda tem de passar o check (c); (8e) um
+  #     arquivo de mesmo basename num caminho DIFERENTE nao pode andar de carona
+  #     na isencao.
+  local tests_bridge_exempt="$tmp/tests_bridge_exempt"
+  mkdir -p "$tests_bridge_exempt/tests"
+  cat > "$tests_bridge_exempt/tests/input_map_sanity.cpp" <<'EOF'
+#include <string>
+void f() { int x = static_cast<int>(Rml::Input::KI_UP); (void)x; }
+EOF
+  EXCL_DIR="$tests_bridge_exempt/nonexistent_rml"
+  EXCL_FILES=("$tests_bridge_exempt/tests/input_map_sanity.cpp")
+  if ! check_token_gate "$tests_bridge_exempt/tests"; then
+    echo "selftest FAIL: check (c) reprovou token Rml:: legitimo no arquivo de teste-fronteira isento (falso positivo -- RML_TEST_TOKEN_EXCEPTIONS nao esta funcionando)" >&2
+    ok=0
+  fi
+
+  local tests_bridge_collision="$tmp/tests_bridge_collision"
+  mkdir -p "$tests_bridge_collision/tests/subdir"
+  cat > "$tests_bridge_collision/tests/subdir/input_map_sanity.cpp" <<'EOF'
+#include <string>
+void f() { int x = static_cast<int>(Rml::Input::KI_UP); (void)x; }
+EOF
+  EXCL_DIR="$tests_bridge_collision/nonexistent_rml"
+  EXCL_FILES=("$tests_bridge_collision/tests/input_map_sanity.cpp")
+  if check_token_gate "$tests_bridge_collision/tests"; then
+    echo "selftest FAIL: check (c) NAO reprovou colisao de basename em subdir nao-isento na RML_TEST_TOKEN_EXCEPTIONS (falso negativo -- a isencao vazou por basename, nao por caminho completo)" >&2
+    ok=0
+  fi
+
+  # --- fixture 9: RMLX-0 gap 2 -- in glintfx/tests/, check (b)'s own `find` only
+  #     matched *.cpp/*.hpp. A NEW *.h test helper with a live RmlUi #include must
+  #     now fail check (b).
+  # PT: fixture 9 -- lacuna 2 da RMLX-0 -- em glintfx/tests/, o proprio `find` do
+  #     check (b) so casava *.cpp/*.hpp. Um *.h NOVO de apoio de teste com
+  #     #include de RmlUi vivo agora tem de reprovar o check (b).
+  local tests_header_leak="$tmp/tests_header_leak"
+  mkdir -p "$tests_header_leak/tests"
+  cat > "$tests_header_leak/tests/novo_widget.h" <<'EOF'
+#include <RmlUi/Core/Element.h>
+EOF
+  EXCL_FILES=()
+  if check_test_whitelist_gate "$tests_header_leak/tests"; then
+    echo "selftest FAIL: check (b) NAO reprovou #include de RmlUi num .h NOVO de teste (falso negativo -- lacuna 2 da RMLX-0)" >&2
+    ok=0
+  fi
+
+  # --- fixture 10: RMLX-0 gap 3 -- .cc/.cxx/.hh/.hxx were outside every check's
+  #     `find` everywhere. A live RmlUi #include in a .cc file (check a) and a raw
+  #     value-type token in a .hh file (check c) must both now be caught.
+  # PT: fixture 10 -- lacuna 3 da RMLX-0 -- .cc/.cxx/.hh/.hxx ficavam fora do
+  #     `find` de todo check, em todo lugar. Um #include de RmlUi vivo num arquivo
+  #     .cc (check a) e um token de tipo-valor cru num arquivo .hh (check c) agora
+  #     tem os dois de ser pegos.
+  local ext_leak="$tmp/ext_leak"
+  mkdir -p "$ext_leak/src/rml"
+  cat > "$ext_leak/src/leaky.cc" <<'EOF'
+#include <RmlUi/Core/Element.h>
+void f() {}
+EOF
+  cat > "$ext_leak/src/typeleak.hh" <<'EOF'
+void g(const Rml::String& s) { (void)s; }
+EOF
+  EXCL_DIR="$ext_leak/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$ext_leak/src"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include de RmlUi em arquivo .cc (falso negativo -- lacuna 3 da RMLX-0, extensao fora do find)" >&2
+    ok=0
+  fi
+  EXCL_DIR="$ext_leak/src/rml"
+  EXCL_FILES=()
+  if check_token_gate "$ext_leak/src"; then
+    echo "selftest FAIL: check (c) NAO reprovou token Rml:: em arquivo .hh (falso negativo -- lacuna 3 da RMLX-0, extensao fora do find)" >&2
+    ok=0
+  fi
+
+  # --- fixture 11: RMLX-0 gap 4 -- `find` without `-L` treats a symlink as type l,
+  #     never type f, so a symlink pointing at a file with a real violation was
+  #     silently dropped. Real file lives OUTSIDE the scanned tree; only a symlink
+  #     inside it points at the violation -- a pass here can only mean `-L` is
+  #     working, not that the real file was scanned directly.
+  # PT: fixture 11 -- lacuna 4 da RMLX-0 -- `find` sem `-L` trata symlink como type
+  #     l, nunca type f, entao um symlink apontando pra um arquivo com violacao
+  #     real era descartado em silencio. O arquivo real vive FORA da arvore
+  #     varrida; so um symlink dentro dela aponta pra violacao -- uma reprovacao
+  #     aqui so pode significar que o `-L` esta funcionando, nao que o arquivo real
+  #     foi varrido direto.
+  local symlink_leak="$tmp/symlink_leak"
+  mkdir -p "$symlink_leak/real" "$symlink_leak/src/rml"
+  cat > "$symlink_leak/real/hidden_leaky.cpp" <<'EOF'
+#include <RmlUi/Core/Element.h>
+void f() {}
+EOF
+  ln -s "$symlink_leak/real/hidden_leaky.cpp" "$symlink_leak/src/via_symlink.cpp"
+  EXCL_DIR="$symlink_leak/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$symlink_leak/src"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include de RmlUi atras de um symlink (falso negativo -- lacuna 4 da RMLX-0, find sem -L)" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, e o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima)"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), e as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados"
   return 0
 }
 

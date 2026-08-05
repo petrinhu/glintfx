@@ -84,6 +84,7 @@
 //     cabeçalho de gl_proc_address_sanity.cpp.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/rml/base_url_file_interface.hpp"
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -92,7 +93,7 @@ namespace {
 
 // EN: Reads the full contents of an already-open handle back into a string, then Close()s it.
 // PT: Lê o conteúdo completo de um handle já aberto de volta pra uma string, depois dá Close().
-std::string slurp_and_close(glintfx::BaseUrlFileInterface& fi, Rml::FileHandle h) {
+std::string slurp_and_close(glintfx::BaseUrlFileInterface& fi, uintptr_t h) {
   std::string out;
   char buf[256];
   size_t n;
@@ -116,7 +117,7 @@ int main() {
   // [1] Legitimate relative path inside the base opens and reads back correctly.
   // ---------------------------------------------------------------------------
   {
-    Rml::FileHandle h = fi.Open("safe.txt");
+    uintptr_t h = fi.Open("safe.txt");
     if (h == 0) {
       std::fprintf(stderr,
                    "asset_path_traversal_sanity FAIL [1]: Open(\"safe.txt\") refused -- a legitimate "
@@ -139,7 +140,7 @@ int main() {
   // [2] "../outside/secret.txt" escapes to a SIBLING directory of base -- must be refused.
   // ---------------------------------------------------------------------------
   {
-    Rml::FileHandle h = fi.Open("../outside/secret.txt");
+    uintptr_t h = fi.Open("../outside/secret.txt");
     if (h != 0) {
       std::fprintf(stderr,
                    "asset_path_traversal_sanity FAIL [2]: Open(\"../outside/secret.txt\") SUCCEEDED -- "
@@ -156,7 +157,7 @@ int main() {
   //     absolute system file. Must be refused regardless of whether the target exists.
   // ---------------------------------------------------------------------------
   {
-    Rml::FileHandle h = fi.Open("../../etc/passwd");
+    uintptr_t h = fi.Open("../../etc/passwd");
     if (h != 0) {
       std::fprintf(stderr,
                    "asset_path_traversal_sanity FAIL [3]: Open(\"../../etc/passwd\") SUCCEEDED -- the "
@@ -182,7 +183,7 @@ int main() {
           "asset_path_traversal_sanity [4] SKIP: sandbox symlink 'link_to_outside' not present "
           "(could not be created at configure time on this filesystem)");
     } else {
-      Rml::FileHandle h = fi.Open("link_to_outside");
+      uintptr_t h = fi.Open("link_to_outside");
       if (h != 0) {
         std::fprintf(stderr,
                      "asset_path_traversal_sanity FAIL [4]: Open(\"link_to_outside\") SUCCEEDED -- a "
@@ -200,7 +201,7 @@ int main() {
   //     Must succeed: the guard must not over-block ordinary relative navigation.
   // ---------------------------------------------------------------------------
   {
-    Rml::FileHandle h = fi.Open("sub/../safe.txt");
+    uintptr_t h = fi.Open("sub/../safe.txt");
     if (h == 0) {
       std::fprintf(stderr,
                    "asset_path_traversal_sanity FAIL [5]: Open(\"sub/../safe.txt\") refused -- this "

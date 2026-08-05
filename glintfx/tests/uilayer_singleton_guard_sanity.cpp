@@ -63,6 +63,29 @@
 #include <glintfx/glintfx.hpp>
 #include <cstdio>
 
+// EN: SEED-EMBED-APP-GUARD-FALTANTE fix -- Parts 1-3 are backend-agnostic (UiLayer +
+//     white-box Bootstrap), which is why this whole executable is registered OUTSIDE
+//     tests/CMakeLists.txt's `if(GLINTFX_BACKEND_GLFW)` block (via ${_embed_dep}, builds and
+//     runs under BOTH configs). Part 4 alone constructs a real `glintfx::App`, whose header
+//     (include/glintfx/app.hpp) `#error`s out when GLINTFX_BACKEND_GLFW=OFF -- so `App` is not
+//     even a declared type in an embed-only translation unit. Guard exactly like
+//     glintfx.hpp's own `#if GLINTFX_BACKEND_GLFW` / `#include <glintfx/app.hpp>` block (the
+//     house pattern for anything App-shaped): GLFW=OFF builds skip Part 4 entirely -- there is
+//     no second App-vs-UiLayer claim to prove without GLFW to host it, and Parts 1-3 already
+//     exercise the SAME process-wide claim through UiLayer/Bootstrap, so nothing about the
+//     guard itself goes unverified in an embed-only build.
+// PT: Conserto do SEED-EMBED-APP-GUARD-FALTANTE -- as Partes 1-3 são independentes de backend
+//     (UiLayer + Bootstrap white-box), por isso este executável inteiro é registrado FORA do
+//     bloco `if(GLINTFX_BACKEND_GLFW)` de tests/CMakeLists.txt (via ${_embed_dep}, builda e
+//     roda nas DUAS configs). Só a Parte 4 constrói um `glintfx::App` de verdade, cujo header
+//     (include/glintfx/app.hpp) dá `#error` quando GLINTFX_BACKEND_GLFW=OFF -- então `App` nem
+//     é um tipo declarado numa unidade de tradução embed-only. Guarda exatamente como o
+//     próprio bloco `#if GLINTFX_BACKEND_GLFW` / `#include <glintfx/app.hpp>` de glintfx.hpp
+//     (o padrão da casa para qualquer coisa em formato App): builds GLFW=OFF pulam a Parte 4
+//     por inteiro -- não há um segundo claim App-vs-UiLayer para provar sem GLFW para
+//     hospedá-lo, e as Partes 1-3 já exercitam o MESMO claim de escopo-processo via
+//     UiLayer/Bootstrap, então nada do guard em si fica sem verificação num build embed-only.
+
 using namespace glintfx;
 
 namespace {
@@ -165,10 +188,13 @@ int main() {
     recovers.shutdown();
   }
 
+#if GLINTFX_BACKEND_GLFW
   // ---------------------------------------------------------------------------------------
   // Part 4 -- the SAME process-wide claim rejects a second `App` while a `UiLayer` is alive
   // (the "consequence declared" scope: not just a second UiLayer). Last part: App::App() owns
   // and makes current its OWN window/context, so nothing below may rely on `host`'s context.
+  // GLFW=OFF builds (see the guard's own rationale, top of file) skip this part entirely --
+  // `App` does not exist to construct.
   // ---------------------------------------------------------------------------------------
   {
     UiLayer layer({.logical_width = 320, .logical_height = 240});
@@ -180,6 +206,7 @@ int main() {
         "same process-wide claim, no per-type special-casing",
         !app.ok());
   }
+#endif
 
   if (g_failures != 0) {
     std::fprintf(stderr, "uilayer_singleton_guard_sanity: %d failure(s)\n", g_failures);

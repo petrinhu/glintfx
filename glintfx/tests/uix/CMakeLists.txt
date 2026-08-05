@@ -34,6 +34,15 @@ add_executable(uix_dom_tree_hardening_sanity dom_tree_hardening_sanity.cpp)
 target_link_libraries(uix_dom_tree_hardening_sanity PRIVATE glintfx::uix_dom)
 add_test(NAME uix_dom_tree_hardening_sanity COMMAND uix_dom_tree_hardening_sanity)
 
+# EN: RMLX-1/S4 -- glintfx::uix::{set_text,add_class,remove_class} (glintfx/src/uix/dom/dom_api.
+#     {hpp,cpp}), same "own CMake, zero RmlUi/GLFW/GL" discipline as the S2 dom_tree tests above.
+# PT: RMLX-1/S4 -- glintfx::uix::{set_text,add_class,remove_class} (glintfx/src/uix/dom/dom_api.
+#     {hpp,cpp}), mesma disciplina "CMake próprio, zero RmlUi/GLFW/GL" dos testes de dom_tree da
+#     S2 acima.
+add_executable(uix_dom_api_sanity dom_api_sanity.cpp)
+target_link_libraries(uix_dom_api_sanity PRIVATE glintfx::uix_dom)
+add_test(NAME uix_dom_api_sanity COMMAND uix_dom_api_sanity)
+
 # EN: GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR: absolute paths to the two real corpus
 #     directories, resolved at CONFIGURE time (portable regardless of ctest's CWD at RUN time,
 #     same reasoning the rest of this repo's tests already apply to WORKING_DIRECTORY handling).

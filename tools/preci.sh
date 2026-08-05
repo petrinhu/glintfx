@@ -383,8 +383,60 @@ run_format_gate() {
   local gate_failed=0
 
   if [[ "${#tracked_cpp[@]}" -gt 0 ]]; then
+    # EN: CI-FMTRENAME -- widen the pathspec passed to `git diff -M` with each tracked
+    #     target's PRE-rename path (if any), same technique tools/precommit.sh already
+    #     carries for its own (staged-diff) flavor of this gate since c4cc5d5
+    #     (fix(precommit): clang-format-diff pareia rename com git mv puro (-M +
+    #     old-path)) -- ported here, not reinvented, because the underlying git
+    #     mechanic is identical; only the base differs (precommit.sh diffs `--cached`,
+    #     this script diffs against `${base}` = origin/main or the empty-tree
+    #     fallback). Do NOT collapse this back into the old bare
+    #     `git diff -U0 "${base}" -- "${tracked_cpp[@]}"` one-arg-set call: without -M
+    #     AND without the old path in the pathspec, git's rename pairing (which needs
+    #     BOTH sides of a rename present in the SAME diff invocation) never engages, a
+    #     pure `git mv` reads as a brand-new file, and clang-format-diff dutifully
+    #     reports every pre-existing formatting quirk across the WHOLE file as "drift
+    #     in touched lines" -- 47 false positives measured live 2026-08-05 (RMLX-0/F1's
+    #     17-file glintfx/src -> glintfx/src/rml move, still tripping the gate a
+    #     second time here after c4cc5d5 fixed only the sibling script). Detecting
+    #     renames needs its OWN `git diff --name-status` call (not reusable with the
+    #     content diff below, which wants -U0) -- see check_doc_line_refs.sh-adjacent
+    #     precedent in precommit.sh for the same two-call shape.
+    # PT: CI-FMTRENAME -- amplia o pathspec passado ao `git diff -M` com o caminho
+    #     PRÉ-rename de cada target rastreado (se houver), a mesma técnica que o
+    #     tools/precommit.sh já carrega para a variante dele (diff staged) deste gate
+    #     desde c4cc5d5 (fix(precommit): clang-format-diff pareia rename com git mv
+    #     puro (-M + old-path)) -- portada aqui, não reinventada, porque a mecânica do
+    #     git por baixo é idêntica; só a base muda (precommit.sh diffa `--cached`, este
+    #     script diffa contra `${base}` = origin/main ou o fallback de árvore vazia).
+    #     NÃO reduzir de volta pro antigo `git diff -U0 "${base}" --
+    #     "${tracked_cpp[@]}"` cru, com um único conjunto de caminhos: sem -M E sem o
+    #     caminho antigo no pathspec, o pareamento de rename do git (que precisa dos
+    #     DOIS lados de um rename presentes na MESMA invocação de diff) nunca entra em
+    #     ação, um `git mv` puro é lido como arquivo totalmente novo, e o
+    #     clang-format-diff reporta obedientemente toda peculiaridade de formatação
+    #     pré-existente do arquivo INTEIRO como "drift em linhas tocadas" -- 47
+    #     falsos-positivos medidos ao vivo em 2026-08-05 (o move de 17 arquivos
+    #     glintfx/src -> glintfx/src/rml da RMLX-0/F1, tropeçando neste gate uma
+    #     segunda vez depois que c4cc5d5 consertou só o script irmão). Detectar
+    #     renames exige sua PRÓPRIA chamada `git diff --name-status` (não reaproveitável
+    #     com o diff de conteúdo abaixo, que quer -U0) -- ver o precedente adjacente ao
+    #     check_doc_line_refs.sh em precommit.sh pela mesma forma de duas chamadas.
+    local -a rename_pathspec=("${tracked_cpp[@]}")
+    local status_line old_path new_path t
+    while IFS=$'\t' read -r status_line old_path new_path; do
+      [[ "${status_line}" == R* ]] || continue
+      [[ -n "${new_path}" ]] || continue
+      for t in "${tracked_cpp[@]}"; do
+        if [[ "${t}" == "${new_path}" ]]; then
+          rename_pathspec+=("${old_path}")
+          break
+        fi
+      done
+    done < <(git diff -M --name-status "${base}" -- . 2>/dev/null || true)
+
     local diff_out
-    diff_out="$(git diff -U0 "${base}" -- "${tracked_cpp[@]}" 2>/dev/null | clang-format-diff -p1 -style=file || true)"
+    diff_out="$(git diff -M -U0 "${base}" -- "${rename_pathspec[@]}" 2>/dev/null | clang-format-diff -p1 -style=file || true)"
     if [[ -n "${diff_out}" ]]; then
       echo "${diff_out}"
       echo "error: clang-format-diff flagged formatting drift in touched lines of: ${tracked_cpp[*]}" >&2

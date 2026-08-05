@@ -114,6 +114,47 @@ void check_color_endpoints() {
         "from_rml(0,0,0,0) did not map to ColorF{0,0,0,0} exactly");
 }
 
+// EN: MUTATION-TESTING-DRIVEN ADDITION (RMLX-0/F1 review) -- the exhaustive byte round-trip
+//     above (check_color_byte_roundtrip_exhaustive) only feeds to_rml() inputs of the exact
+//     form `byte/255.f` (i.e. values that already came out of from_rml()), and a planted mutant
+//     that replaces `std::lround(x*255.f)` with plain truncation `(unsigned char)(x*255.f)`
+//     SURVIVED it -- every `k/255.f*255.f` in float32 happened to round back to `k` under
+//     truncation too, for all 256 values, so that test cannot observe the rounding-vs-
+//     truncation difference the header's own doc-comment claims to defend against ("nearest,
+//     not truncated"). A ColorF that is NOT derived from from_rml() -- e.g. produced by
+//     blending/interpolation -- can land exactly on a half-integer boundary, where the two
+//     algorithms diverge by definition. x=0.5f is the sharpest such case: 0.5f*255.f == 127.5f
+//     EXACTLY in float32 (127.5 = 255/2, exactly representable), so std::lround must yield 128
+//     (round-half-AWAY-FROM-ZERO) while plain truncation yields 127. This is the test that
+//     should have been there from the start; written here as a direct consequence of a mutant
+//     surviving, not from re-reading the source.
+// PT: ADIÇÃO DIRIGIDA POR MUTATION TESTING (review RMLX-0/F1) -- o round-trip exaustivo de byte
+//     acima (check_color_byte_roundtrip_exhaustive) só alimenta to_rml() com entradas na forma
+//     exata `byte/255.f` (ou seja, valores que já saíram de from_rml()), e um mutante plantado
+//     que troca `std::lround(x*255.f)` por truncamento puro `(unsigned char)(x*255.f)`
+//     SOBREVIVEU a ele -- todo `k/255.f*255.f` em float32 por acaso arredondou de volta pra `k`
+//     também sob truncamento, nos 256 valores, então aquele teste não consegue observar a
+//     diferença arredondamento-vs-truncamento que o próprio doc-comment do header afirma
+//     defender ("nearest, not truncated"). Um ColorF que NÃO vem de from_rml() -- ex.: produzido
+//     por blend/interpolação -- pode cair exatamente numa fronteira de meio-inteiro, onde os
+//     dois algoritmos divergem por definição. x=0.5f é o caso mais afiado: 0.5f*255.f ==
+//     127.5f EXATAMENTE em float32 (127.5 = 255/2, exatamente representável), então
+//     std::lround tem que dar 128 (arredonda PRA-LONGE-DE-ZERO no meio) enquanto truncamento
+//     puro dá 127. Este é o teste que deveria ter existido desde o início; escrito aqui como
+//     consequência direta de um mutante sobrevivente, não de reler o source.
+void check_color_rounding_not_truncation() {
+  glintfx::ColorF half{0.5f, 0.5f, 0.5f, 0.5f};
+  Rml::Colourb rc = glintfx::to_rml(half);
+  CHECK(rc.red == 128,
+        "to_rml(0.5f): red channel is 127 (truncated) instead of 128 (rounded) -- "
+        "lround regressed to truncation?");
+  CHECK(rc.green == 128,
+        "to_rml(0.5f): green channel is 127 (truncated) instead of 128 (rounded)");
+  CHECK(rc.blue == 128, "to_rml(0.5f): blue channel is 127 (truncated) instead of 128 (rounded)");
+  CHECK(rc.alpha == 128,
+        "to_rml(0.5f): alpha channel is 127 (truncated) instead of 128 (rounded)");
+}
+
 } // namespace
 
 int main() {
@@ -121,6 +162,7 @@ int main() {
   check_color_channel_order();
   check_color_byte_roundtrip_exhaustive();
   check_color_endpoints();
+  check_color_rounding_not_truncation();
 
   if (g_failures != 0) {
     std::fprintf(stderr, "type_bridge_review_sanity: %d check(s) FAILED\n", g_failures);

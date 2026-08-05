@@ -7,9 +7,11 @@
 > type: **reference**. Audience: the implementer of `S6a`, the implementer of `S6b` (each reads
 > **only** this document, never the other's source -- that separation is deliberate, see
 > "Why this document exists" below), and whoever implements `S7`'s diff harness. Owner:
-> `software-architect`; written **2026-08-05** against `main` at `84baf37`, before any of `S1-S9`
-> (parser, tree, `S6a`, `S6b`, `S7`) exist -- this document is the **first** artifact of the
-> `RMLX-1` wave, not a description of code already written.
+> `software-architect`; written **2026-08-05** against `main` at `84baf37`, before any of
+> `RMLX-1`'s slices (parser, tree, `S6a`, `S6b`, `S7`; see
+> [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md) for the canonical map) exist -- this
+> document is the **first** artifact of the `RMLX-1` wave, not a description of code already
+> written.
 > **PT:** A serialização textual canônica, byte-exata, de um documento RML já interpretado, usada
 > como **único contrato** entre os dois dumpers independentes de oráculo diferencial `RMLX-1/S6a`
 > (percorre o `Rml::ElementDocument` real, confinado a `glintfx/src/rml/`) e `RMLX-1/S6b` (percorre
@@ -18,8 +20,9 @@
 > **só** este documento, nunca o fonte um do outro -- essa separação é deliberada, ver "Por que
 > este documento existe" abaixo), e quem implementar o harness de diff da `S7`. Owner:
 > `software-architect`; escrito em **2026-08-05** contra `main` em `84baf37`, antes de qualquer uma
-> das `S1-S9` (parser, árvore, `S6a`, `S6b`, `S7`) existir -- este documento é o **primeiro**
-> artefato da onda `RMLX-1`, não a descrição de um código já escrito.
+> das fatias da `RMLX-1` (parser, árvore, `S6a`, `S6b`, `S7`; ver
+> [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md) pro mapa canônico) existir -- este documento
+> é o **primeiro** artefato da onda `RMLX-1`, não a descrição de um código já escrito.
 
 **Cross-ref:** [`docs/rmlx-subset.md`](rmlx-subset.md) (o subconjunto congelado que este documento
 serve -- este dump nunca captura nada fora dele: sem valores computados, sem geometria, sem
@@ -356,7 +359,8 @@ instead of fixed once at the source. Stop adding rows, re-read sections 1-8 agai
 that produced the last several rows, and revise the format -- the same failure mode section 6's
 whitespace rule exists specifically to have pre-empted.
 
-**Ledger table.** Empty at the time this document is written (`S1-S9` do not exist yet). Columns:
+**Ledger table.** Empty at the time this document is written (`RMLX-1`'s slices do not exist yet --
+see [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md)). Columns:
 date found, class (a/b/c), one-line description, fixture that proves it (path, relative to
 `glintfx/tests/` or the GusWorld corpus copy), resolution (commit or cross-ref).
 
@@ -369,8 +373,9 @@ date found, class (a/b/c), one-line description, fixture that proves it (path, r
 Restated from the brief, so a reader of only this file has the full boundary without needing
 `docs/rmlx-subset.md` open side-by-side: computed style values, layout boxes/geometry, focus state,
 hover state. These belong to `RMLX-2` (RCSS/cascade), `RMLX-3` (layout), and `RMLX-5` (events/
-focus) respectively -- none of them are DOM facts, and none of them are in scope for `S1-S9`'s
-parser-and-tree work. A future dump format for those waves is **not** an extension of this one by
+focus) respectively -- none of them are DOM facts, and none of them are in scope for `RMLX-1`'s
+parser-and-tree work (see [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md) for the slice map).
+A future dump format for those waves is **not** an extension of this one by
 default; it is a new decision, made the same way this one was (spec first, sign-off, then code),
 not silently bolted onto this file.
 
@@ -773,7 +778,8 @@ fixture em vez de consertada uma vez na fonte. Parar de somar linhas, reler as s
 fixtures que produziram as últimas entradas, e revisar o formato -- o mesmo modo de falha que a
 regra de whitespace da seção 6 existe especificamente pra ter prevenido.
 
-**Tabela do ledger.** Vazia no momento em que este documento é escrito (`S1-S9` ainda não existem).
+**Tabela do ledger.** Vazia no momento em que este documento é escrito (as fatias da `RMLX-1`
+ainda não existem -- ver [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md)).
 Colunas: data do achado, classe (a/b/c), descrição de uma linha, fixture que prova (caminho,
 relativo a `glintfx/tests/` ou à cópia do corpus GusWorld), resolução (commit ou cross-ref).
 
@@ -787,7 +793,8 @@ Restated do brief, pra quem lê só este arquivo ter a fronteira completa sem pr
 `docs/rmlx-subset.md` ao lado: valores computados de estilo, caixas/geometria de layout, estado de
 foco, estado de hover. Pertencem à `RMLX-2` (RCSS/cascata), `RMLX-3` (layout) e `RMLX-5`
 (eventos/foco) respectivamente -- nenhum deles é fato de DOM, e nenhum está no escopo do trabalho
-de parser-e-árvore da `S1-S9`. Um futuro formato de dump pra essas ondas **não** é uma extensão
+de parser-e-árvore da `RMLX-1` (ver [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md) pro mapa
+de fatias). Um futuro formato de dump pra essas ondas **não** é uma extensão
 deste por padrão; é uma decisão nova, tomada do mesmo jeito que esta foi (spec primeiro, aval,
 só então código), não aparafusada em silêncio neste arquivo.
 

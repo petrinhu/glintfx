@@ -17,6 +17,7 @@
 #pragma once
 #include "RmlUi_Platform_GLFW.h"
 #include <glintfx/log.hpp>
+#include <functional>
 #include <string>
 #include "log_dedup.hpp"
 
@@ -50,8 +51,35 @@ public:
     return true;
   }
 
+  // EN: AUD-PUB-6g -- observer, not replacement: calls the INHERITED
+  //     SystemInterface_GLFW::SetMouseCursor() FIRST (the real glfwSetCursor the window already
+  //     relied on, unchanged), THEN forwards the same name to the registered callback. Same
+  //     "fires on change only" contract as SystemClock::SetMouseCursor (embed half, see
+  //     src/rml/system_clock.hpp) -- RmlUi's Context::UpdateHoverChain is what decides WHEN this
+  //     is called, identically for both SystemInterface implementations. Local-copy-before-
+  //     invoke reentrancy guard (AUD-TEC-3): see SystemClock::SetMouseCursor's doc-comment for
+  //     the full use-after-free rationale this mirrors.
+  // PT: AUD-PUB-6g -- observador, não substituição: chama PRIMEIRO o
+  //     SystemInterface_GLFW::SetMouseCursor() HERDADO (o glfwSetCursor real do qual a janela
+  //     já dependia, sem mudança), DEPOIS repassa o mesmo nome ao callback registrado. Mesmo
+  //     contrato "dispara só na mudança" de SystemClock::SetMouseCursor (metade embed, ver
+  //     src/rml/system_clock.hpp) -- o Context::UpdateHoverChain do RmlUi é quem decide QUANDO
+  //     isto é chamado, identicamente para as duas implementações de SystemInterface. Guarda de
+  //     reentrância cópia-local-antes-de-invocar (AUD-TEC-3): ver o doc-comment de
+  //     SystemClock::SetMouseCursor para o racional completo de use-after-free que isto espelha.
+  void SetMouseCursor(const Rml::String& cursor_name) override {
+    SystemInterface_GLFW::SetMouseCursor(cursor_name);
+    auto cb = cursor_cb_;
+    if (cb) cb(cursor_name.c_str());
+  }
+
+  void set_cursor_callback(std::function<void(const char*)> cb) {
+    cursor_cb_ = std::move(cb);
+  }
+
 private:
   LogDedup dedup_;
+  std::function<void(const char*)> cursor_cb_;
 };
 
 } // namespace glintfx

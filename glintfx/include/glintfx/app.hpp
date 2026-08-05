@@ -717,6 +717,34 @@ public:
   void set_blur_callback(std::function<void(const char* id)> cb);
   void set_hover_callback(std::function<void(const char* id, bool entered)> cb);
 
+  // EN: Register a cursor callback (AUD-PUB-6g) -- reports the RmlUi `cursor` name (e.g.
+  //     "pointer", "" for the default arrow) every time it CHANGES, mirroring
+  //     UiLayer::set_cursor_callback's "fires on change only" contract (see that doc-comment,
+  //     glintfx/include/glintfx/ui_layer.hpp, for the full RmlUi Context::UpdateHoverChain
+  //     rationale). On App the callback is an OBSERVER, not a replacement: App's
+  //     SystemInterfaceGlfwDedup::SetMouseCursor calls the inherited real glfwSetCursor() FIRST
+  //     (the window already relies on it for the actual OS cursor shape), THEN forwards the
+  //     same name to this callback -- App does not stop changing the OS cursor when this is
+  //     registered. The `name` pointer is valid only for the duration of the invocation (same
+  //     LIFETIME rule as set_click_callback's `element_id`). Reentrant re-registration from
+  //     inside the callback itself is safe (AUD-TEC-3 discipline). Null/empty callback is a safe
+  //     no-op. No ordering constraint versus load(). Parity with UiLayer::set_cursor_callback
+  //     (same signature).
+  // PT: Registra um callback de cursor (AUD-PUB-6g) -- reporta o nome de `cursor` do RmlUi (ex.:
+  //     "pointer", "" para a seta default) toda vez que ele MUDA, espelhando o contrato "dispara
+  //     só na mudança" de UiLayer::set_cursor_callback (ver aquele doc-comment,
+  //     glintfx/include/glintfx/ui_layer.hpp, para o racional completo do
+  //     Context::UpdateHoverChain do RmlUi). No App o callback OBSERVA, não substitui: o
+  //     SystemInterfaceGlfwDedup::SetMouseCursor do App chama PRIMEIRO o glfwSetCursor() real
+  //     herdado (a janela já depende dele para a forma real do cursor do SO), DEPOIS repassa o
+  //     mesmo nome a este callback -- o App não para de mudar o cursor do SO quando isto é
+  //     registrado. O ponteiro `name` só é válido durante a invocação (mesma regra de LIFETIME
+  //     do `element_id` de set_click_callback). Re-registro reentrante de dentro do próprio
+  //     callback é seguro (disciplina AUD-TEC-3). Callback nulo/vazio é no-op seguro. Sem
+  //     restrição de ordem vs. load(). Paridade com UiLayer::set_cursor_callback (mesma
+  //     assinatura).
+  void set_cursor_callback(std::function<void(const char* name)> cb);
+
   // EN: Query the border-box geometry of an element by id. Coordinate space: window physical
   //     pixels, top-left origin, y-down -- App owns the whole window, so there is no sub-
   //     viewport offset to translate (unlike UiLayer, whose set_viewport(x,y,w,h,target_h)

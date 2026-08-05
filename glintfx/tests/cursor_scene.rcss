@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: Apache-2.0
+   EN: "cursor_el" carries `cursor: pointer;` (RCSS property, PropertyId::Cursor, default "",
+       inherited -- StyleSheetSpecification.cpp). "plain" carries no cursor property at all, so
+       its computed value stays at the "" default -- the same value the RmlUi Context starts
+       with before any SetMouseCursor dispatch (see Context::cursor_name's default construction,
+       Context.h). This pair is exactly what cursor_callback_sanity.cpp needs to prove BOTH
+       halves of "RmlUi only calls SetMouseCursor on a change": entering cursor_el dispatches
+       ("" -> "pointer"), moving within cursor_el does NOT redispatch (still "pointer"), and
+       leaving to plain dispatches again ("pointer" -> "").
+   PT: "cursor_el" carrega `cursor: pointer;` (propriedade RCSS, PropertyId::Cursor, default "",
+       herdada -- StyleSheetSpecification.cpp). "plain" não carrega propriedade cursor nenhuma,
+       então seu valor computado fica no default "" -- o MESMO valor com que o Context do RmlUi
+       começa antes de qualquer despacho de SetMouseCursor (ver a construção default de
+       Context::cursor_name, Context.h). Este par é exatamente o que cursor_callback_sanity.cpp
+       precisa para provar as DUAS metades de "o RmlUi só chama SetMouseCursor quando o valor
+       MUDA": entrar em cursor_el dispara ("" -> "pointer"), mover dentro de cursor_el NÃO
+       redispara (continua "pointer"), e sair para plain dispara de novo ("pointer" -> ""). */
+body { background-color: #101010; }
+div  { display: block; position: absolute; }
+#cursor_el { left: 10px; top: 10px;  width: 80px; height: 60px; background-color: #ff8800; cursor: pointer; }
+#plain     { left: 10px; top: 90px;  width: 80px; height: 60px; background-color: #444444; }

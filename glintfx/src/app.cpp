@@ -641,6 +641,22 @@ void App::set_click_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_click_callback(std::move(cb));
 }
 
+// EN: AUD-PUB-6g -- straight to impl_->system (the SystemInterfaceGlfwDedup this App owns),
+//     NOT through Engine/Bootstrap like set_click_callback above: same reasoning as
+//     UiLayer::set_cursor_callback (src/ui_layer.cpp) -- the cursor signal originates in
+//     Rml::SystemInterface::SetMouseCursor(), intercepted directly by glintfx's own
+//     SystemInterface subclass rather than routed through Bootstrap's RmlUi event listeners.
+// PT: Direto para impl_->system (o SystemInterfaceGlfwDedup que este App possui), NÃO via
+//     Engine/Bootstrap como o set_click_callback acima: mesmo raciocínio de
+//     UiLayer::set_cursor_callback (src/ui_layer.cpp) -- o sinal de cursor se origina em
+//     Rml::SystemInterface::SetMouseCursor(), interceptado diretamente pela subclasse própria
+//     de SystemInterface da glintfx em vez de roteado pelos listeners de evento do RmlUi do
+//     Bootstrap.
+void App::set_cursor_callback(std::function<void(const char*)> cb) {
+  if (!ready()) return;
+  impl_->system->set_cursor_callback(std::move(cb));
+}
+
 void App::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
   if (!ready()) return;
   // EN: Straight passthrough (AUD-PUB-4, v0.5.0) -- no coordinate translation needed: App owns

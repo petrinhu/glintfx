@@ -399,6 +399,22 @@ void UiLayer::set_click_callback(std::function<void(const char*)> cb) {
   impl_->engine.set_click_callback(std::move(cb));
 }
 
+// EN: AUD-PUB-6g -- straight to impl_->clock (the SystemClock this UiLayer owns directly),
+//     NOT through Engine/Bootstrap like set_click_callback above: the cursor signal originates
+//     in Rml::SystemInterface::SetMouseCursor(), which glintfx's own SystemInterface
+//     implementations (SystemClock here, SystemInterfaceGlfwDedup in App) intercept directly --
+//     see src/rml/system_clock.hpp's SetMouseCursor override doc-comment for the full contract.
+// PT: Direto para impl_->clock (o SystemClock que este UiLayer possui diretamente), NÃO via
+//     Engine/Bootstrap como o set_click_callback acima: o sinal de cursor se origina em
+//     Rml::SystemInterface::SetMouseCursor(), que as próprias implementações de SystemInterface
+//     da glintfx (SystemClock aqui, SystemInterfaceGlfwDedup no App) interceptam diretamente --
+//     ver o doc-comment do override SetMouseCursor de src/rml/system_clock.hpp para o contrato
+//     completo.
+void UiLayer::set_cursor_callback(std::function<void(const char*)> cb) {
+  if (!ready()) return;
+  impl_->clock.set_cursor_callback(std::move(cb));
+}
+
 void UiLayer::set_click_info_callback(std::function<void(const ClickInfo&)> cb) {
   if (!ready()) return;
   // EN: AUD-PUB-4 (v0.5.0): unlike set_click_callback (id-only, no coordinate translation

@@ -94,6 +94,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rml
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resize_scene.rcss
                ${CMAKE_CURRENT_BINARY_DIR}/resize_scene.rcss COPYONLY)
 
+# EN: cursor_scene.rml/.rcss (AUD-PUB-6g) -- shared by cursor_callback_sanity (embed, both
+#     configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) and app_cursor_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- addressed there via "tests/" prefix).
+#     Copied once here, next to resize_scene.*, so both consumers find the same single copy --
+#     same reasoning as click_scene.*/scroll_scene.* above.
+# PT: cursor_scene.rml/.rcss (AUD-PUB-6g) -- compartilhado por cursor_callback_sanity (embed,
+#     2 configs, WORKING_DIRECTORY=CMAKE_CURRENT_BINARY_DIR) e app_cursor_callback_smoke
+#     (GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR -- endereçado lá via prefixo "tests/").
+#     Copiado uma vez aqui, junto do resize_scene.*, para que os dois consumidores achem a
+#     mesma cópia -- mesma razão do click_scene.*/scroll_scene.* acima.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cursor_scene.rml
+               ${CMAKE_CURRENT_BINARY_DIR}/cursor_scene.rml COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cursor_scene.rcss
+               ${CMAKE_CURRENT_BINARY_DIR}/cursor_scene.rcss COPYONLY)
+
 # EN: app_process_event_scene.rml/.rcss (A1, framework-2D) -- shared by app_process_event_smoke
 #     AND app_frame_callback_smoke (both GLFW-only, WORKING_DIRECTORY=CMAKE_BINARY_DIR,
 #     addressed there via "tests/" prefix, same convention as resize_scene.*/element_box_scene.*
@@ -202,6 +217,31 @@ if(GLINTFX_BACKEND_GLFW)
   add_test(NAME app_click_callback_smoke
     COMMAND ${CMAKE_COMMAND}
       -DEXE=$<TARGET_FILE:app_click_callback_smoke>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
+  # EN: app_cursor_callback_smoke -- App parity smoke for set_cursor_callback() (AUD-PUB-6g).
+  #     No dispatch-on-change assertion (that is cursor_callback_sanity's job via UiLayer, same
+  #     RmlUi Context::UpdateHoverChain path); this only proves the surface is wired on App
+  #     (SystemInterfaceGlfwDedup::SetMouseCursor forwards to the callback AFTER calling the
+  #     inherited real glfwSetCursor) and ok() stays true after render. WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR (repo-wide GLFW-block convention); cursor_scene.rml is copied once to
+  #     CMAKE_CURRENT_BINARY_DIR above, addressed here as "tests/cursor_scene.rml".
+  # PT: app_cursor_callback_smoke -- smoke de paridade do App para set_cursor_callback()
+  #     (AUD-PUB-6g). Sem asserção de disparo-na-mudança (isso é papel de
+  #     cursor_callback_sanity via UiLayer, mesmo caminho Context::UpdateHoverChain do RmlUi);
+  #     só prova que a superfície está conectada no App (SystemInterfaceGlfwDedup::
+  #     SetMouseCursor repassa ao callback DEPOIS de chamar o glfwSetCursor real herdado) e
+  #     ok() permanece true após o render. WORKING_DIRECTORY = CMAKE_BINARY_DIR (convenção do
+  #     bloco GLFW em todo o repo); cursor_scene.rml é copiado uma vez para
+  #     CMAKE_CURRENT_BINARY_DIR acima, endereçado aqui como "tests/cursor_scene.rml".
+  # ---------------------------------------------------------------------------
+  add_executable(app_cursor_callback_smoke app_cursor_callback_smoke.cpp)
+  target_link_libraries(app_cursor_callback_smoke PRIVATE glintfx)
+  add_test(NAME app_cursor_callback_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_cursor_callback_smoke>
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -2857,6 +2897,36 @@ target_link_libraries(click_callback_sanity PRIVATE ${_embed_dep})
 add_test(NAME click_callback_sanity
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:click_callback_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: cursor_callback_sanity -- verifies UiLayer::set_cursor_callback() (AUD-PUB-6g): fires
+#     only when RmlUi's computed `cursor` actually CHANGES (Context::UpdateHoverChain's own
+#     cache, not a per-MouseMove signal), both on the "" -> named and named -> "" transitions,
+#     live re-comparison against the CURRENT cache (not a one-shot latch), and AUD-TEC-3
+#     reentrancy (a callback that re-registers itself from inside its own invocation must not
+#     use-after-free). Runs in BOTH build configs (embed-mode test, links ${_embed_dep} like
+#     the other embed tests above). WORKING_DIRECTORY = CMAKE_CURRENT_BINARY_DIR (= build/
+#     tests/) -- same pattern as click_callback_sanity/element_box_sanity (scene-specific rml/
+#     rcss pair copied next to resize_scene.* at the top of this file, addressed here by bare
+#     filename).
+# PT: cursor_callback_sanity -- verifica UiLayer::set_cursor_callback() (AUD-PUB-6g): dispara
+#     só quando o `cursor` computado do RmlUi de fato MUDA (cache próprio do
+#     Context::UpdateHoverChain, não um sinal por-MouseMove), nas duas transições ("" -> nomeado
+#     e nomeado -> ""), comparação viva contra o cache CORRENTE (não uma trava de um-tiro-só), e
+#     reentrância AUD-TEC-3 (um callback que se re-registra de dentro da própria invocação não
+#     pode dar use-after-free). Roda em AMBAS as configs (teste de embed mode, linka
+#     ${_embed_dep} como os outros testes embed acima). WORKING_DIRECTORY =
+#     CMAKE_CURRENT_BINARY_DIR (= build/tests/) -- mesmo padrão de click_callback_sanity/
+#     element_box_sanity (par rml/rcss específico da cena, copiado junto do resize_scene.* no
+#     topo deste arquivo, endereçado aqui por nome de arquivo simples).
+# ---------------------------------------------------------------------------
+add_executable(cursor_callback_sanity cursor_callback_sanity.cpp)
+target_link_libraries(cursor_callback_sanity PRIVATE ${_embed_dep})
+add_test(NAME cursor_callback_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:cursor_callback_sanity>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 

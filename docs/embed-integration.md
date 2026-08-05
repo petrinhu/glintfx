@@ -1647,6 +1647,46 @@ void SomeScreen::enter() {
 
 **Por que este aviso precisa viver AQUI, na biblioteca, e não só no código próprio de um consumidor.** O consumidor conhecido documenta esta não-coexistência em ONZE arquivos independentes no próprio repo, em SEIS redações diferentes pro mesmo fato -- ninguém escreve a mesma coisa de seis jeitos diferentes em onze lugares por gosto. Quem pagou o preço deste defeito não confia que UMA nota baste, porque o próprio diagnóstico ensinou que a informação não estava onde ele foi procurar primeiro. Três sítios seriam uma observação; onze é um PADRÃO, e o padrão descreve a própria natureza do defeito: um sintoma deslocado no tempo e apontando pra direção errada produz documentação defensiva espalhada, porque a pessoa já não sabe mais onde a próxima vítima vai olhar. Este aviso existe aqui pra que o próximo integrador não precise escrever o próprio décimo segundo arquivo.
 
+## 30. Cursor callback (`set_cursor_callback`, `AUD-PUB-6g`) / Callback de cursor (`set_cursor_callback`, `AUD-PUB-6g`)
+
+**EN:** `set_cursor_callback(std::function<void(const char* name)>)` on both `UiLayer` and `App` (parity, same signature) -- reports the RmlUi `cursor` property name (e.g. `"pointer"`, `""` for the default arrow) every time it **changes**. Serves a productivity/creative app that wants a contextual cursor (resize handle, hover feedback) without polling.
+
+**Fires on CHANGE only, not per `MouseMove`.** Confirmed by reading the pinned RmlUi source, not assumed: `Context::UpdateHoverChain` caches the last-dispatched cursor name (`Context::cursor_name`, default `""`) and calls `Rml::SystemInterface::SetMouseCursor()` **only** when the newly-hovered element's computed `cursor` property differs from that cache. Two `MouseMove`s that stay within the same computed-cursor region produce **one** call, not two -- a host that assumes "one call per move" will write a listener that fires far more often than it should. The dedup is a **live** comparison against the current cache, not a one-shot latch: moving out and back in re-fires.
+
+**`set_cursor_callback` is an OBSERVER of a signal glintfx already implements, not a new mechanism.** `UiLayer`'s `SystemClock` (embed, no GLFW) forwards the name directly to the callback. `App`'s `SystemInterfaceGlfwDedup` calls the **inherited, real** `glfwSetCursor()` **first** -- the window keeps changing the actual OS cursor shape exactly as it always did -- **then** forwards the same name to the callback. Registering this callback never disables or replaces the OS cursor change on `App`.
+
+**Lifetime and reentrancy, same discipline as `set_click_callback` (section 10).** The `name` pointer is valid only for the duration of the invocation -- copy it (e.g. into a `std::string`) if the value is needed after the callback returns. Reentrant re-registration from inside the callback itself (calling `set_cursor_callback(...)` again while the current invocation is still running) is safe: the dispatcher copies the functor locally before invoking it (`AUD-TEC-3`), the same guard `ClickEventListener::ProcessEvent` (`bootstrap.cpp`) already carries -- without it, the `std::move`-assignment into the stored callback would destroy the very closure currently executing, a genuine use-after-free ASan catches.
+
+```cpp
+ui.set_cursor_callback([](const char* name) {
+  // name == "pointer" on entering a `cursor: pointer` element,
+  // "" on leaving to an element with no cursor property.
+  // Copy before returning if needed after this call.
+  host_set_os_cursor(name);
+});
+```
+
+Null/empty callback is a safe no-op. No ordering constraint versus `load()`. Verified by `cursor_callback_sanity` (`UiLayer`, six legs covering both dedup directions, the live-not-latch re-entry, and reentrancy) and `app_cursor_callback_smoke` (`App` parity -- surface wiring only, the dispatch-on-change behaviour itself is the same `Context::UpdateHoverChain` path already covered via `UiLayer`).
+
+**PT:** `set_cursor_callback(std::function<void(const char* name)>)` em `UiLayer` e `App` (paridade, mesma assinatura) -- reporta o nome da propriedade `cursor` do RmlUi (ex.: `"pointer"`, `""` para a seta default) toda vez que ele **muda**. Serve um app produtivo/criativo que quer um cursor contextual (resize handle, feedback de hover) sem polling.
+
+**Dispara SÓ na MUDANÇA, não por `MouseMove`.** Confirmado lendo o source pinado do RmlUi, não suposto: `Context::UpdateHoverChain` cacheia o último nome de cursor despachado (`Context::cursor_name`, default `""`) e só chama `Rml::SystemInterface::SetMouseCursor()` quando a propriedade `cursor` computada do elemento recém-hovered difere desse cache. Dois `MouseMove` que permanecem na mesma região de cursor computado produzem **uma** chamada, não duas -- um host que supõe "uma chamada por movimento" vai escrever um listener que dispara com frequência bem maior que deveria. O dedup é uma comparação **viva** contra o cache corrente, não uma trava de um-tiro-só: sair e voltar redispara.
+
+**`set_cursor_callback` é um OBSERVADOR de um sinal que a glintfx já implementa, não um mecanismo novo.** O `SystemClock` do `UiLayer` (embed, sem GLFW) repassa o nome direto ao callback. O `SystemInterfaceGlfwDedup` do `App` chama PRIMEIRO o `glfwSetCursor()` real herdado -- a janela continua mudando a forma real do cursor do SO exatamente como sempre mudou -- DEPOIS repassa o mesmo nome ao callback. Registrar este callback nunca desliga nem substitui a mudança do cursor do SO no `App`.
+
+**Lifetime e reentrância, mesma disciplina do `set_click_callback` (seção 10).** O ponteiro `name` só é válido durante a invocação -- copie-o (ex.: para um `std::string`) se o valor for necessário depois que o callback retornar. Re-registro reentrante de dentro do próprio callback (chamar `set_cursor_callback(...)` de novo enquanto a invocação corrente ainda está rodando) é seguro: o despachante copia o functor localmente antes de invocá-lo (`AUD-TEC-3`), a mesma guarda que `ClickEventListener::ProcessEvent` (`bootstrap.cpp`) já carrega -- sem ela, a atribuição por `std::move` no callback armazenado destruiria a própria closure em execução naquele momento, um use-after-free genuíno que o ASan captura.
+
+```cpp
+ui.set_cursor_callback([](const char* name) {
+  // name == "pointer" ao entrar num elemento `cursor: pointer`,
+  // "" ao sair para um elemento sem propriedade cursor.
+  // Copie antes de retornar se precisar depois desta chamada.
+  host_set_os_cursor(name);
+});
+```
+
+Callback nulo/vazio é no-op seguro. Sem restrição de ordem vs. `load()`. Verificado por `cursor_callback_sanity` (`UiLayer`, seis pernas cobrindo as duas direções do dedup, a reentrada viva-não-trava, e a reentrância) e `app_cursor_callback_smoke` (paridade `App` -- só conexão de superfície, o próprio comportamento de disparo-na-mudança é o mesmo caminho `Context::UpdateHoverChain` já coberto via `UiLayer`).
+
 ## See also / Veja também
 
 - [ADR-0008](adr/0008-embed-guest-mode.md): embed/guest mode decision, including the GL state save and restore clause (d). / decisão do embed/guest mode, incluindo a cláusula (d) de save e restore de estado GL.

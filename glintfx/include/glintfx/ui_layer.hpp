@@ -605,6 +605,42 @@ public:
   void set_blur_callback(std::function<void(const char* id)> cb);
   void set_hover_callback(std::function<void(const char* id, bool entered)> cb);
 
+  // EN: Register a cursor callback (AUD-PUB-6g) -- reports the RmlUi `cursor` name (e.g.
+  //     "pointer", "" for the default arrow) every time it CHANGES. This is an OBSERVER of the
+  //     same signal RmlUi's own SystemInterface::SetMouseCursor() carries -- glintfx's
+  //     SystemClock (embed) forwards it here directly; App's dedup subclass calls the inherited
+  //     GLFW glfwSetCursor() FIRST, then forwards the SAME name to this callback (see
+  //     App::set_cursor_callback's doc-comment for that ordering). Fires ONLY on change, not per
+  //     MouseMove -- confirmed by reading the pinned RmlUi source: Context::UpdateHoverChain
+  //     caches the last-dispatched name (Context::cursor_name, default "") and calls
+  //     SetMouseCursor() only when the newly-hovered element's computed `cursor` property
+  //     differs from that cache. Two mouse moves that stay within the same computed-cursor
+  //     region do NOT produce two calls. The `name` pointer is valid only for the duration of
+  //     the invocation (same LIFETIME rule as set_click_callback's `element_id`) -- copy it (e.g.
+  //     into a std::string) if needed after the callback returns. Reentrant re-registration from
+  //     inside the callback itself is safe (AUD-TEC-3 discipline: the dispatcher copies the
+  //     functor locally before invoking it, same as ClickEventListener::ProcessEvent). Null/
+  //     empty callback is a safe no-op. No ordering constraint versus load(). Parity with
+  //     App::set_cursor_callback (same signature).
+  // PT: Registra um callback de cursor (AUD-PUB-6g) -- reporta o nome de `cursor` do RmlUi (ex.:
+  //     "pointer", "" para a seta default) toda vez que ele MUDA. É um OBSERVADOR do mesmo sinal
+  //     que o SystemInterface::SetMouseCursor() do próprio RmlUi carrega -- o SystemClock da
+  //     glintfx (embed) repassa direto aqui; a subclasse de dedup do App chama PRIMEIRO o
+  //     glfwSetCursor() herdado do GLFW, depois repassa o MESMO nome a este callback (ver o
+  //     doc-comment de App::set_cursor_callback para essa ordem). Dispara SÓ na mudança, não por
+  //     MouseMove -- confirmado lendo o source pinado do RmlUi: Context::UpdateHoverChain cacheia
+  //     o último nome despachado (Context::cursor_name, default "") e só chama SetMouseCursor()
+  //     quando a propriedade `cursor` computada do elemento recém-hovered difere desse cache.
+  //     Dois movimentos de mouse que permanecem na mesma região de cursor computado NÃO produzem
+  //     duas chamadas. O ponteiro `name` só é válido durante a invocação (mesma regra de
+  //     LIFETIME do `element_id` de set_click_callback) -- copie-o (ex.: para um std::string) se
+  //     precisar depois que o callback retornar. Re-registro reentrante de dentro do próprio
+  //     callback é seguro (disciplina AUD-TEC-3: o despachante copia o functor localmente antes
+  //     de invocá-lo, igual a ClickEventListener::ProcessEvent). Callback nulo/vazio é no-op
+  //     seguro. Sem restrição de ordem vs. load(). Paridade com App::set_cursor_callback (mesma
+  //     assinatura).
+  void set_cursor_callback(std::function<void(const char* name)> cb);
+
   // EN: Query the border-box geometry of an element by id. Coordinate space: window/render-
   //     target physical pixels, top-left origin, y-down -- the SAME space as UiEvent's mouse
   //     coordinates (see ElementBox doc-comment and docs/embed-integration.md section 10).

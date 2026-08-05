@@ -21,6 +21,7 @@
 #include <RmlUi/Core/SystemInterface.h>
 #include <glintfx/log.hpp>
 #include <chrono>
+#include <functional>
 #include <string>
 #include "../log_dedup.hpp"
 
@@ -68,9 +69,38 @@ public:
     return true;
   }
 
+  // EN: AUD-PUB-6g -- RmlUi calls this ONLY when Context::UpdateHoverChain's cached cursor name
+  //     (Context::cursor_name, default "") changes; see UiLayer::set_cursor_callback's
+  //     doc-comment (glintfx/include/glintfx/ui_layer.hpp) for the full "fires on change only"
+  //     contract this forwards verbatim. Copies the functor locally before invoking it
+  //     (AUD-TEC-3, same discipline as ClickEventListener::ProcessEvent in bootstrap.cpp): if
+  //     the callback itself calls set_cursor_callback(...) reentrantly, that std::move-assigns
+  //     a NEW value into cursor_cb_ while this invocation is still executing, which would
+  //     destroy the std::function's current target out from under itself -- a local copy
+  //     survives that reentrant reassignment.
+  // PT: AUD-PUB-6g -- o RmlUi chama isto SÓ quando o nome de cursor cacheado pelo
+  //     Context::UpdateHoverChain (Context::cursor_name, default "") muda; ver o doc-comment de
+  //     UiLayer::set_cursor_callback (glintfx/include/glintfx/ui_layer.hpp) para o contrato
+  //     completo "dispara só na mudança" que isto repassa ipsis litteris. Copia o functor
+  //     localmente antes de invocá-lo (AUD-TEC-3, mesma disciplina de
+  //     ClickEventListener::ProcessEvent em bootstrap.cpp): se o próprio callback chamar
+  //     set_cursor_callback(...) reentrantemente, isso faz std::move-assign de um valor NOVO em
+  //     cursor_cb_ enquanto esta invocação ainda está executando, o que destruiria o alvo atual
+  //     do std::function debaixo de si mesmo -- uma cópia local sobrevive a essa reatribuição
+  //     reentrante.
+  void SetMouseCursor(const Rml::String& cursor_name) override {
+    auto cb = cursor_cb_;
+    if (cb) cb(cursor_name.c_str());
+  }
+
+  void set_cursor_callback(std::function<void(const char*)> cb) {
+    cursor_cb_ = std::move(cb);
+  }
+
 private:
   std::chrono::steady_clock::time_point start_;
   LogDedup dedup_;
+  std::function<void(const char*)> cursor_cb_;
 };
 
 } // namespace glintfx

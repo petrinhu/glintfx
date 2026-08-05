@@ -13,7 +13,7 @@ Decisão de arquitetura: [ADR-0006](docs/adr/0006-layered-hybrid-architecture.md
 
 ## glintfx -- o produto ativo (Camada 1)
 
-`glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença Apache-2.0 (tags até `v0.28.0` seguem MPL-2.0 para sempre -- [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)), que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito.
+`glintfx` é uma **biblioteca C++ drop-in para Linux x86-64** (piso C++17, alvo C++23), licença Apache-2.0 (tags até `v0.28.0` seguem MPL-2.0 para sempre -- [ADR-0019](docs/adr/0019-license-rotation-apache-2.0.md)), que funde [RmlUi 6.3](https://github.com/mikke89/RmlUi) (UI HTML/CSS + layout) com um **renderer de efeitos GL3** (glow, degradê, backdrop-blur, drop-shadow, mask), tudo declarado em `.rcss` -- sem API imperativa de efeito. **O RmlUi está em rota de saída** (assim como gl3w -- [ADR-0009](docs/adr/0009-internalization-boundary.md) -- e FreeType -- [ADR-0011](docs/adr/0011-soft-font-flip.md) -- já internalizados): 12 ondas `RMLX-0..11` (`TODO.md`) vão substituí-lo por um motor de UI/RCSS clean-room próprio da glintfx, com a fronteira do que cada onda tem permissão de construir congelada em [`docs/rmlx-subset.md`](docs/rmlx-subset.md) e a decisão em [ADR-0020](docs/adr/0020-rml-anticorruption-layer.md); a `RMLX-0` (costura de confinamento) já foi entregue, zero mudança de comportamento pra quem consome a lib.
 
 - **Lançada:** v0.1.0 → **v0.9.1** (2026-07-10). Histórico completo em [`CHANGELOG.md`](CHANGELOG.md).
 - **Dois modos de consumo:**

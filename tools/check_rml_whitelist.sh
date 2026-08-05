@@ -1992,17 +1992,49 @@ EOF
     ok=0
   fi
 
+  # EN: furo5_d MUST put the cited `#include` text at the very START of a
+  #     PHYSICAL line (inside an still-open, multi-line `/* ... */` block) --
+  #     that is the actual reproducer: rml_matches_spliced() (pre-furo5)
+  #     matches per PHYSICAL line with no knowledge of comment state, so a
+  #     line beginning with `#include` is indistinguishable from real code to
+  #     it, however deep inside an unterminated block comment it sits. A
+  #     doc-comment where the citation is merely MID-line (the shape furo5_a
+  #     through furo5_c already use to prove the true-positive side) never
+  #     starts a line with `#` in the first place and would pass even on the
+  #     PRE-fix gate -- confirmed live while writing this fixture: that
+  #     shape returns exit 0 on git commit 90d77ca (the last commit before
+  #     furo 5), so it does not exercise item 3's bug at all. This exact
+  #     shape (`#include` alone on line 2, inside the block opened on line 1
+  #     and closed on line 3) DOES: confirmed live against 90d77ca -- exit 1
+  #     (false positive).
+  # PT: a furo5_d TEM de pôr o texto citado de `#include` bem no INÍCIO de
+  #     uma linha FÍSICA (dentro de um bloco `/* ... */` multi-linha ainda
+  #     aberto) -- esse é o reprodutor de verdade: o rml_matches_spliced()
+  #     (pré-furo5) casa por linha FÍSICA sem conhecimento nenhum de estado
+  #     de comentário, então uma linha começando com `#include` é
+  #     indistinguível de código de verdade pra ele, não importa o quão
+  #     fundo dentro de um comentário de bloco não-terminado ela esteja. Um
+  #     comentário de documentação onde a citação está só NO MEIO da linha
+  #     (a forma que furo5_a até furo5_c já usam pra provar o lado do
+  #     positivo verdadeiro) nunca começa uma linha com `#` de saída e
+  #     passaria mesmo no gate PRÉ-conserto -- confirmado ao vivo escrevendo
+  #     esta fixture: essa forma devolve exit 0 no commit git 90d77ca (o
+  #     último commit antes do furo 5), então ela não exercita o bug do item
+  #     3 nenhum pouco. Esta forma exata (`#include` sozinho na linha 2,
+  #     dentro do bloco aberto na linha 1 e fechado na linha 3) exercita SIM:
+  #     confirmado ao vivo contra 90d77ca -- exit 1 (falso positivo).
   local furo5_d="$tmp/furo5_d/src"
   mkdir -p "$furo5_d"
   cat > "$furo5_d/doc_example.cpp" <<'EOF'
-/* Example: #include <RmlUi/Core/Element.h> is intentionally blocked by
-   design. Do not add this include outside glintfx/src/rml/. */
+/* Example:
+#include <RmlUi/Core/Element.h>
+is intentionally blocked by design, see glintfx/src/rml/. */
 void f() {}
 EOF
   EXCL_DIR="$tmp/furo5_d/src/rml"
   EXCL_FILES=()
   if ! check_include_gate "$furo5_d"; then
-    echo "selftest FAIL: check (a) reprovou um #include proibido citado em PROSA dentro de comentario de bloco (falso positivo -- item 3, o strip_comments() aplicado ao check (a) tem de remover o comentario inteiro, nao so mudar como ele falha)" >&2
+    echo "selftest FAIL: check (a) reprovou um #include proibido citado em PROSA dentro de comentario de bloco -- texto na linha 2, dentro do bloco aberto na linha 1 (falso positivo -- item 3, o strip_comments() aplicado ao check (a) tem de remover o comentario inteiro, nao so mudar como ele falha)" >&2
     ok=0
   fi
 
@@ -2017,15 +2049,30 @@ EOF
     ok=0
   fi
 
+  # EN: same correction as furo5_d above -- the cited `#include` has to sit
+  #     ALONE at the start of a physical line inside a still-open multi-line
+  #     block comment to actually reproduce item 3's bug for check (b); a
+  #     mid-line citation never starts a line with `#` and passes even
+  #     pre-fix (confirmed live against 90d77ca: exit 0, does not exercise
+  #     the bug). This shape does: confirmed live against 90d77ca -- exit 1.
+  # PT: mesma correção da furo5_d acima -- o `#include` citado tem de ficar
+  #     SOZINHO no início de uma linha física dentro de um comentário de
+  #     bloco multi-linha ainda aberto pra realmente reproduzir o bug do
+  #     item 3 no check (b); uma citação no meio da linha nunca começa uma
+  #     linha com `#` e passa mesmo pré-conserto (confirmado ao vivo contra
+  #     90d77ca: exit 0, não exercita o bug). Esta forma exercita: confirmado
+  #     ao vivo contra 90d77ca -- exit 1.
   local furo5_f="$tmp/furo5_f/tests"
   mkdir -p "$furo5_f"
   cat > "$furo5_f/doc_example_sanity.cpp" <<'EOF'
-/* Example: #include <RmlUi/Core/Context.h> is intentionally blocked by design. */
+/* Example:
+#include <RmlUi/Core/Context.h>
+is intentionally blocked by design. */
 int main() { return 0; }
 EOF
   EXCL_FILES=()
   if ! check_test_whitelist_gate "$furo5_f"; then
-    echo "selftest FAIL: check (b) reprovou um #include proibido citado em PROSA num teste (falso positivo -- item 3 tambem vale pro check (b))" >&2
+    echo "selftest FAIL: check (b) reprovou um #include proibido citado em PROSA num teste -- texto na linha 2, dentro do bloco aberto na linha 1 (falso positivo -- item 3 tambem vale pro check (b))" >&2
     ok=0
   fi
 

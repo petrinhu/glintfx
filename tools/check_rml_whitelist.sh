@@ -133,15 +133,27 @@ RML_SRC_ROOTS=(glintfx/src glintfx/include glintfx/demos)
 RML_DIR="glintfx/src/rml"
 RML_TESTS_DIR="glintfx/tests"
 
-# EN: check (b) -- frozen whitelist of test basenames allowed to #include RmlUi
-#     directly. Matched by basename only (tests/ is a flat-ish dir today).
-# PT: check (b) -- whitelist congelada de basenames de teste com permissão de
-#     #include direto de RmlUi. Casado só pelo basename (tests/ é hoje quase plano).
+# EN: check (b) -- frozen whitelist of test FILES allowed to #include RmlUi directly.
+#     Matched by full relative path (RML_TESTS_DIR-prefixed, same string `find` yields
+#     for $f below) -- NOT by basename. RMLX-0 adversarial review proved the
+#     basename-only match was a real gate hole: a NEW file at
+#     glintfx/tests/subdir/domrw_sanity.cpp (same basename as the frozen debt entry,
+#     but a different, un-audited file) with a live RmlUi #include passed the gate
+#     clean. Full-path matching closes that: only the exact frozen path is exempt.
+# PT: check (b) -- whitelist congelada de arquivos de teste com permissão de #include
+#     direto de RmlUi. Casado pelo caminho relativo COMPLETO (prefixado por
+#     RML_TESTS_DIR, a mesma string que o `find` devolve pro $f abaixo) -- NÃO pelo
+#     basename. A revisão adversarial da RMLX-0 provou que o casamento só-por-basename
+#     era um furo real do gate: um arquivo NOVO em
+#     glintfx/tests/subdir/domrw_sanity.cpp (mesmo basename da entrada de dívida
+#     congelada, mas um arquivo diferente, não auditado) com um #include de RmlUi vivo
+#     passava o gate limpo. Casar pelo caminho completo fecha isso: só o caminho
+#     congelado exato fica isento.
 RML_TEST_WHITELIST=(
-  "domrw_sanity.cpp"
-  "focus_sanity.cpp"
-  "form_events_sanity.cpp"
-  "document_reload_leak.cpp"
+  "glintfx/tests/domrw_sanity.cpp"
+  "glintfx/tests/focus_sanity.cpp"
+  "glintfx/tests/form_events_sanity.cpp"
+  "glintfx/tests/document_reload_leak.cpp"
 )
 
 # EN: check (a) -- see the header comment above ("KNOWN, FROZEN, DOCUMENTED
@@ -299,19 +311,24 @@ check_include_gate() {
 
 # -----------------------------------------------------------------------------
 # EN: check_test_whitelist_gate TESTS_DIR -- (b): every RmlUi #include in TESTS_DIR
-#     must be in a file whose BASENAME is in EXCL_FILES (global, caller-set to the
-#     frozen 4).
+#     must be in a file whose FULL RELATIVE PATH (as `find` yields it -- i.e.
+#     TESTS_DIR-prefixed, not basename) is in EXCL_FILES (global, caller-set to the
+#     frozen 4). Basename-only matching used to let a NEW file at
+#     TESTS_DIR/subdir/<frozen-basename> ride through on the debt entry's name alone;
+#     matching the full path closes that hole.
 # PT: check_test_whitelist_gate DIR_TESTES -- (b): todo #include de RmlUi em
-#     DIR_TESTES precisa estar num arquivo cujo BASENAME está em EXCL_FILES (global,
-#     setado pelo chamador pros 4 congelados).
+#     DIR_TESTES precisa estar num arquivo cujo CAMINHO RELATIVO COMPLETO (como o
+#     `find` devolve -- prefixado por DIR_TESTES, não basename) está em EXCL_FILES
+#     (global, setado pelo chamador pros 4 congelados). Casar só pelo basename deixava
+#     um arquivo NOVO em DIR_TESTES/subdir/<basename-congelado> passar de carona no
+#     nome da entrada de dívida; casar pelo caminho completo fecha esse furo.
 # -----------------------------------------------------------------------------
 check_test_whitelist_gate() {
   local tests_dir="$1"
   local violations=0
-  local f base matches
+  local f matches
   while IFS= read -r -d '' f; do
-    base="$(basename "$f")"
-    if rml_array_contains "$base" "${EXCL_FILES[@]}"; then
+    if rml_array_contains "$f" "${EXCL_FILES[@]}"; then
       continue
     fi
     matches="$(grep -nE "$RML_INCLUDE_PATTERN" "$f" || true)"
@@ -549,12 +566,54 @@ EOF
     ok=0
   fi
 
+  # --- fixture 3: RMLX-0 basename-collision exploit -- proves check (b) now matches
+  #     by FULL PATH, not basename. Adversarial review of the pre-fix gate proved a
+  #     real hole: a NEW file whose basename collided with a frozen whitelist entry
+  #     (but lived at a DIFFERENT path, e.g. a subdir) rode the gate clean because
+  #     only the basename was compared. Two independent trees, each isolated from any
+  #     other violation, so a failure here can only mean the collision itself: (3a)
+  #     the legitimately whitelisted file at its exact frozen path must still pass;
+  #     (3b) a same-basename file at a DIFFERENT, un-whitelisted path must still fail.
+  # PT: fixture 3 -- exploit de colisão de basename da RMLX-0 -- prova que o check (b)
+  #     agora casa por CAMINHO COMPLETO, não por basename. A revisão adversarial do
+  #     gate pré-conserto provou um furo real: um arquivo NOVO cujo basename colidia
+  #     com uma entrada congelada da whitelist (mas vivia em um caminho DIFERENTE, ex.
+  #     um subdir) passava o gate limpo porque só o basename era comparado. Duas
+  #     árvores independentes, cada uma isolada de qualquer outra violação, pra uma
+  #     falha aqui só poder significar a própria colisão: (3a) o arquivo
+  #     legitimamente whitelisted no seu caminho congelado exato ainda tem de passar;
+  #     (3b) um arquivo de mesmo basename num caminho DIFERENTE, não-whitelisted,
+  #     ainda tem de falhar.
+  local collision_ok="$tmp/collision_ok"
+  mkdir -p "$collision_ok/tests"
+  cat > "$collision_ok/tests/domrw_sanity.cpp" <<'EOF'
+#include <RmlUi/Core/ElementDocument.h>
+int main() { return 0; }
+EOF
+  EXCL_FILES=("$collision_ok/tests/domrw_sanity.cpp")
+  if ! check_test_whitelist_gate "$collision_ok/tests"; then
+    echo "selftest FAIL: check (b) reprovou o arquivo whitelisted legitimo no caminho completo exato (falso positivo)" >&2
+    ok=0
+  fi
+
+  local collision_bad="$tmp/collision_bad"
+  mkdir -p "$collision_bad/tests/subdir"
+  cat > "$collision_bad/tests/subdir/domrw_sanity.cpp" <<'EOF'
+#include <RmlUi/Core/ElementDocument.h>
+int main() { return 0; }
+EOF
+  EXCL_FILES=("$collision_bad/tests/domrw_sanity.cpp")
+  if check_test_whitelist_gate "$collision_bad/tests"; then
+    echo "selftest FAIL: check (b) NAO reprovou colisao de basename em subdir nao-whitelisted (falso negativo -- o furo RMLX-0 que a revisao adversarial provou)" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3, independentemente"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), e a colisao de basename em subdir da RMLX-0 continua bloqueada"
   return 0
 }
 

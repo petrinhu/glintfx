@@ -79,7 +79,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-add_library(glintfx_uix_dom STATIC lexer.cpp dom_tree.cpp dom_api.cpp)
+add_library(glintfx_uix_dom STATIC lexer.cpp dom_tree.cpp dom_api.cpp parser.cpp)
 target_include_directories(glintfx_uix_dom PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 # EN: -Wall -Wextra -Wpedantic, GCC/Clang only -- same portability guard pattern as

@@ -1,0 +1,319 @@
+// SPDX-License-Identifier: Apache-2.0
+// EN: RMLX-1/S3 -- functional/shape unit test for glintfx::uix::parse_document. Standalone, no
+//     RmlUi/GLFW/GL -- see glintfx/src/uix/dom/parser.hpp's own header comment for the full
+//     scope/boundary this module holds itself to. Every case below traces back to a specific
+//     docs/uix-dom.md decision or this slice's own brief, same discipline as
+//     lexer_tokens_sanity.cpp.
+// PT: RMLX-1/S3 -- teste unit de forma/funcional pro glintfx::uix::parse_document. Standalone,
+//     sem RmlUi/GLFW/GL -- ver o próprio comentário de cabeçalho do
+//     glintfx/src/uix/dom/parser.hpp pro escopo/fronteira completos a que este módulo se prende.
+//     Todo caso abaixo remonta a uma decisão específica do docs/uix-dom.md ou ao próprio briefing
+//     desta fatia, mesma disciplina do lexer_tokens_sanity.cpp.
+// Copyright (c) 2026 Petrus Silva Costa
+#include "uix/dom/parser.hpp"
+
+#include <cstdio>
+#include <string>
+#include <string_view>
+
+namespace {
+
+int g_failures = 0;
+
+void check(bool cond, const char* what) {
+  if (!cond) {
+    std::fprintf(stderr, "FAIL: %s\n", what);
+    ++g_failures;
+  }
+}
+
+void check_eq(std::string_view got, std::string_view want, const char* what) {
+  if (got != want) {
+    std::fprintf(stderr, "FAIL: %s (got \"%.*s\", want \"%.*s\")\n", what,
+                 static_cast<int>(got.size()), got.data(), static_cast<int>(want.size()),
+                 want.data());
+    ++g_failures;
+  }
+}
+
+using glintfx::uix::Document;
+using glintfx::uix::Element;
+using glintfx::uix::parse_document;
+using glintfx::uix::ParseResult;
+
+// EN: Asserts a clean parse (no error), returning the document by reference into `out`. On
+//     failure, prints the ParseError (message/line/column) and fails a synthetic check so the
+//     caller's remaining assertions don't cascade into null-deref UB.
+// PT: Garante um parse limpo (sem erro), devolvendo o documento por referência em `out`. Na
+//     falha, imprime o ParseError (mensagem/linha/coluna) e falha uma checagem sintética pra as
+//     asserções restantes do chamador não cascatearem em UB de deref-nulo.
+bool expect_ok(ParseResult& result, const char* what) {
+  if (result.error.has_value()) {
+    std::fprintf(stderr, "FAIL: %s (unexpected ParseError at %zu:%zu: %s)\n", what,
+                 result.error->line, result.error->column, result.error->message.c_str());
+    ++g_failures;
+    return false;
+  }
+  check(result.document != nullptr, what);
+  return result.document != nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 1 -- absolute minimum: <rml><body>text</body></rml>. No <head>.
+// PT: Caso 1 -- mínimo absoluto: <rml><body>texto</body></rml>. Sem <head>.
+// ---------------------------------------------------------------------------
+void test_minimal_document() {
+  ParseResult r = parse_document("<rml><body>hello glintfx</body></rml>");
+  if (!expect_ok(r, "minimal: parse ok")) return;
+
+  Document& doc = *r.document;
+  check(!doc.head().present, "minimal: HEAD ABSENT");
+  Element& body = doc.body();
+  check_eq(body.tag(), "body", "minimal: root tag is 'body'");
+  check(body.child_count() == 1, "minimal: body has exactly 1 child (the text)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 2 -- id/class/generic attributes, all three storage locations exercised.
+// PT: Caso 2 -- atributos id/class/genéricos, os três locais de armazenamento exercitados.
+// ---------------------------------------------------------------------------
+void test_attributes() {
+  ParseResult r = parse_document(
+      "<rml><body><div id=\"panel\" class=\"wide highlighted\" data-if=\"flag\" "
+      "title=\"Panel\"></div></body></rml>");
+  if (!expect_ok(r, "attrs: parse ok")) return;
+
+  Element& body = r.document->body();
+  check(body.child_count() == 1, "attrs: body has 1 child");
+  auto* div = glintfx::uix::as_element(body.children()[0].get());
+  check(div != nullptr, "attrs: child is an Element");
+  if (div == nullptr) return;
+
+  check_eq(div->id(), "panel", "attrs: id value");
+  check(div->has_class("wide"), "attrs: has class 'wide'");
+  check(div->has_class("highlighted"), "attrs: has class 'highlighted'");
+  check(div->classes().size() == 2, "attrs: exactly 2 classes (deduplicated by construction)");
+  auto data_if = div->attribute("data-if");
+  check(data_if.has_value() && *data_if == "flag", "attrs: data-if generic attribute value");
+  auto title = div->attribute("title");
+  check(title.has_value() && *title == "Panel", "attrs: title generic attribute value");
+  check(!div->has_attribute("id"), "attrs: 'id' never leaks into the generic attribute map");
+  check(!div->has_attribute("class"),
+        "attrs: 'class' never leaks into the generic attribute map");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 3 -- nested elements + self-closing leaf. Mirrors ordinary corpus shape.
+// PT: Caso 3 -- elementos aninhados + folha auto-fechada. Espelha forma comum de corpus.
+// ---------------------------------------------------------------------------
+void test_nesting_and_self_close() {
+  ParseResult r = parse_document(
+      "<rml><body><div id=\"outer\"><span>x</span><br/></div></body></rml>");
+  if (!expect_ok(r, "nesting: parse ok")) return;
+
+  Element& body = r.document->body();
+  auto* outer = glintfx::uix::as_element(body.children()[0].get());
+  check(outer != nullptr && outer->child_count() == 2,
+        "nesting: outer div has 2 children (span, br)");
+  if (outer == nullptr || outer->child_count() != 2) return;
+
+  auto* span = glintfx::uix::as_element(outer->children()[0].get());
+  check(span != nullptr && span->tag() == "span", "nesting: 1st child is <span>");
+  check(span != nullptr && span->child_count() == 1, "nesting: span has 1 text child");
+
+  auto* br = glintfx::uix::as_element(outer->children()[1].get());
+  check(br != nullptr && br->tag() == "br", "nesting: 2nd child is self-closed <br/>");
+  check(br != nullptr && br->child_count() == 0, "nesting: self-closed <br/> has no children");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 4 -- whitespace-only text nodes never occupy a child-index slot (dom_tree's own
+//     invariant, this parser just has to NOT pre-filter and trust append_child).
+// PT: Caso 4 -- nós de texto só-whitespace nunca ocupam slot de índice de filho (invariante do
+//     próprio dom_tree, este parser só precisa NÃO pré-filtrar e confiar no append_child).
+// ---------------------------------------------------------------------------
+void test_whitespace_only_text_filtered() {
+  ParseResult r = parse_document("<rml>\n<body>\n  <div>a</div>\n  <div>b</div>\n</body>\n</rml>");
+  if (!expect_ok(r, "ws-filter: parse ok")) return;
+
+  Element& body = r.document->body();
+  check(body.child_count() == 2, "ws-filter: body has exactly 2 children (both <div>s, no ws)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 5 -- text content preserved byte-verbatim (no trim/collapse), matching uix-dom.md 6(b).
+// PT: Caso 5 -- conteúdo de texto preservado byte-verbatim (sem trim/colapso), batendo com o
+//     uix-dom.md 6(b).
+// ---------------------------------------------------------------------------
+void test_text_verbatim() {
+  ParseResult r = parse_document("<rml><body><span>  Hello   world  </span></body></rml>");
+  if (!expect_ok(r, "verbatim: parse ok")) return;
+
+  Element& body = r.document->body();
+  auto* span = glintfx::uix::as_element(body.children()[0].get());
+  check(span != nullptr && span->child_count() == 1, "verbatim: span has 1 text child");
+  if (span == nullptr || span->child_count() != 1) return;
+  auto* text = glintfx::uix::as_text(span->children()[0].get());
+  check(text != nullptr, "verbatim: child is a Text node");
+  if (text != nullptr) {
+    check_eq(text->content(), "  Hello   world  ", "verbatim: all spaces intact, no trim");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 6 -- entity decoding: named (amp/lt/gt/quot/apos/nbsp) + numeric (decimal/hex), in
+//     BOTH text content and attribute values.
+// PT: Caso 6 -- decodificação de entidade: nomeada (amp/lt/gt/quot/apos/nbsp) + numérica
+//     (decimal/hex), TANTO em conteúdo de texto QUANTO em valor de atributo.
+// ---------------------------------------------------------------------------
+void test_entity_decoding() {
+  ParseResult r = parse_document(
+      "<rml><body><div title=\"A&amp;B &#38;&#x26; &lt;tag&gt;\">Hi&nbsp;there "
+      "&amp; &lt;x&gt; &quot;q&quot; &apos;a&apos; &#65;&#x41;</div></body></rml>");
+  if (!expect_ok(r, "entities: parse ok")) return;
+
+  Element& body = r.document->body();
+  auto* div = glintfx::uix::as_element(body.children()[0].get());
+  check(div != nullptr, "entities: child is an Element");
+  if (div == nullptr) return;
+
+  auto title = div->attribute("title");
+  check(title.has_value(), "entities: title attribute present");
+  if (title.has_value()) {
+    check_eq(*title, "A&B && <tag>", "entities: attribute value entities decoded");
+  }
+
+  check(div->child_count() == 1, "entities: div has 1 text child");
+  if (div->child_count() != 1) return;
+  auto* text = glintfx::uix::as_text(div->children()[0].get());
+  check(text != nullptr, "entities: child is a Text node");
+  if (text != nullptr) {
+    check_eq(text->content(), "Hi\xC2\xA0there & <x> \"q\" 'a' AA",
+             "entities: text content entities decoded, including nbsp (U+00A0, C2 A0)");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 7 -- comments are tokenized by S1 but discarded here: NOT a DOM node, and do not
+//     perturb sibling child-indices.
+// PT: Caso 7 -- comentários são tokenizados pela S1 mas descartados aqui: NÃO viram nó de DOM, e
+//     não perturbam índice de filho de irmão.
+// ---------------------------------------------------------------------------
+void test_comments_discarded() {
+  ParseResult r = parse_document(
+      "<rml><!-- top comment --><body><!-- c1 --><div>a</div><!-- c2 --></body></rml>");
+  if (!expect_ok(r, "comments: parse ok")) return;
+
+  Element& body = r.document->body();
+  check(body.child_count() == 1, "comments: body has exactly 1 child (the div), comments gone");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 8 -- <head> opacity: content captured raw, verbatim, entities NOT decoded, and its
+//     inner tags (style/link/title) never become queryable Elements anywhere in the tree.
+//     Mirrors docs/uix-dom.md section 11's own worked example.
+// PT: Caso 8 -- opacidade de <head>: conteúdo capturado cru, verbatim, entidades NÃO decodificadas,
+//     e as tags internas dele (style/link/title) nunca viram Element consultável em lugar nenhum
+//     da árvore. Espelha o próprio exemplo trabalhado da seção 11 do docs/uix-dom.md.
+// ---------------------------------------------------------------------------
+void test_head_opacity() {
+  ParseResult r = parse_document(
+      "<rml>\n"
+      "<head>\n"
+      "<style>body{color:white}</style>\n"
+      "</head>\n"
+      "<body>\n"
+      "<div id=\"panel\" class=\"wide highlighted\" data-if=\"flag\" title=\"Panel\">\n"
+      "  <span class=\"highlighted wide\">Hi&nbsp;there</span>\n"
+      "</div>\n"
+      "</body>\n"
+      "</rml>");
+  if (!expect_ok(r, "head-opacity: parse ok")) return;
+
+  Document& doc = *r.document;
+  check(doc.head().present, "head-opacity: HEAD PRESENT");
+  check_eq(doc.head().raw, "\n<style>body{color:white}</style>\n",
+           "head-opacity: raw payload verbatim, entities NOT decoded, exactly the worked example");
+
+  // No "style" element exists ANYWHERE -- head's content never entered the tree at all.
+  check(doc.body().find_by_id("panel") != nullptr, "head-opacity: body's own #panel is findable");
+  Element& body = doc.body();
+  check(body.child_count() == 1,
+        "head-opacity: body has exactly 1 child (the div), head's "
+        "'\\n' text sibling is NOT part of body");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 9 -- self-closed <head/> (no fixture exercises this, but the grammar permits it):
+//     HEAD PRESENT with an empty raw payload, not HEAD ABSENT.
+// PT: Caso 9 -- <head/> auto-fechado (nenhuma fixture exercita isto, mas a gramática permite):
+//     HEAD PRESENT com payload cru vazio, não HEAD ABSENT.
+// ---------------------------------------------------------------------------
+void test_self_closed_head() {
+  ParseResult r = parse_document("<rml><head/><body>x</body></rml>");
+  if (!expect_ok(r, "self-closed-head: parse ok")) return;
+  check(r.document->head().present, "self-closed-head: HEAD PRESENT (not ABSENT)");
+  check(r.document->head().raw.empty(), "self-closed-head: empty raw payload");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 10 -- tag-name case folding: BOTH open and close fold to lowercase (uix-dom.md
+//     section 8, XMLParser.cpp:136,167) -- <DIV>...</div> genuinely matches and closes.
+// PT: Caso 10 -- dobra de caixa de nome de tag: abertura E fechamento dobram pra minúscula
+//     (uix-dom.md seção 8, XMLParser.cpp:136,167) -- <DIV>...</div> genuinamente casa e fecha.
+// ---------------------------------------------------------------------------
+void test_tag_case_folding() {
+  ParseResult r = parse_document("<RML><BODY><DIV>x</div></BODY></RML>");
+  if (!expect_ok(r, "case-fold: parse ok")) return;
+  Element& body = r.document->body();
+  check_eq(body.tag(), "body", "case-fold: root tag folded to lowercase 'body'");
+  check(body.child_count() == 1, "case-fold: body has 1 child");
+  if (body.child_count() != 1) return;
+  auto* div = glintfx::uix::as_element(body.children()[0].get());
+  check(div != nullptr && div->tag() == "div", "case-fold: <DIV> stored as lowercase 'div'");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 11 -- duplicate id/class on the SAME tag: last occurrence wins, whole-value replace
+//     for class (not merged across occurrences) -- this slice's own documented, non-corpus-
+//     exercised policy (see parser.hpp header comment).
+// PT: Caso 11 -- id/class duplicados na MESMA tag: última ocorrência vence, substituição de
+//     VALOR INTEIRO pro class (não mesclado entre ocorrências) -- política própria e documentada
+//     desta fatia, não exercitada por corpus (ver comentário de cabeçalho do parser.hpp).
+// ---------------------------------------------------------------------------
+void test_duplicate_id_class_last_wins() {
+  ParseResult r = parse_document(
+      "<rml><body><div id=\"a\" id=\"b\" class=\"x y\" class=\"z\"></div></body></rml>");
+  if (!expect_ok(r, "dup-attrs: parse ok")) return;
+  Element& body = r.document->body();
+  auto* div = glintfx::uix::as_element(body.children()[0].get());
+  check(div != nullptr, "dup-attrs: child is Element");
+  if (div == nullptr) return;
+  check_eq(div->id(), "b", "dup-attrs: last id wins");
+  check(div->classes().size() == 1 && div->has_class("z"),
+        "dup-attrs: last class attribute WHOLE VALUE replaces, 'x'/'y' from the earlier "
+        "occurrence are gone, not merged");
+}
+
+} // namespace
+
+int main() {
+  test_minimal_document();
+  test_attributes();
+  test_nesting_and_self_close();
+  test_whitespace_only_text_filtered();
+  test_text_verbatim();
+  test_entity_decoding();
+  test_comments_discarded();
+  test_head_opacity();
+  test_self_closed_head();
+  test_tag_case_folding();
+  test_duplicate_id_class_last_wins();
+
+  if (g_failures > 0) {
+    std::fprintf(stderr, "parser_tokens_sanity: %d assertion(s) FAILED\n", g_failures);
+    return 1;
+  }
+  std::puts("parser_tokens_sanity: PASS");
+  return 0;
+}

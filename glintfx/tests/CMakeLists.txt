@@ -2786,6 +2786,26 @@ target_link_libraries(byte_ceiling_dedup_sanity PRIVATE RmlUi::Core)
 add_test(NAME byte_ceiling_dedup_sanity COMMAND byte_ceiling_dedup_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: type_bridge_review_sanity (RMLX-0/F1 adversarial review, qa-engineer, 2026-08-05) --
+#     REVIEW-ONLY scratch test: exercises glintfx/src/rml/type_bridge.hpp's to_rml/from_rml
+#     conversions, which had zero consumer/test as of e7506a2. Pure value-type round-trip, no
+#     RmlUi document, no GL context, no window -- links `glintfx` for the public
+#     <glintfx/draw2d.hpp> include path (Vec2F/ColorF, same rationale as primitives2d_sanity
+#     above) plus `RmlUi::Core` directly for <RmlUi/Core/Types.h> (Vector2f/Colourb), same
+#     pairing byte_ceiling_dedup_sanity above uses.
+# PT: type_bridge_review_sanity (review adversarial RMLX-0/F1, qa-engineer, 2026-08-05) --
+#     teste-rascunho SÓ-DE-REVIEW: exercita as conversões to_rml/from_rml de
+#     glintfx/src/rml/type_bridge.hpp, que tinham zero consumidor/teste no e7506a2. Ida-e-volta
+#     pura de tipo-valor, sem documento RmlUi, sem contexto GL, sem janela -- linka `glintfx`
+#     pelo include path público de <glintfx/draw2d.hpp> (Vec2F/ColorF, mesmo racional de
+#     primitives2d_sanity acima) mais `RmlUi::Core` direto pra <RmlUi/Core/Types.h>
+#     (Vector2f/Colourb), mesmo par que byte_ceiling_dedup_sanity acima usa.
+# ---------------------------------------------------------------------------
+add_executable(type_bridge_review_sanity type_bridge_review_sanity.cpp)
+target_link_libraries(type_bridge_review_sanity PRIVATE glintfx RmlUi::Core)
+add_test(NAME type_bridge_review_sanity COMMAND type_bridge_review_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: ua_stylesheet_sanity — verifies the embedded UA-stylesheet (v0.2.4 T1):
 #     'display: block' defaults for structural elements (div, p, h1..h6, ul, ol, li,
 #     section, article, header, footer, nav, main), applied by Bootstrap::load() to

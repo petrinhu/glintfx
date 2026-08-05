@@ -61,7 +61,7 @@
 //     de execução (mesma convenção do repo inteiro que render_gl3.cpp; este é o primeiro
 //     arquivo de *decorator* a precisar dele, já que é dono de uma VAO/VBO/EBO crua -- ver
 //     o cabeçalho do arquivo acima e o ADR-0010).
-#include "gl_loader.h"
+#include "../gl_loader.h"
 
 #include "decorator_image_tint.hpp"
 

@@ -74,7 +74,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/byte_ceiling.hpp"
 #include "../src/image_decode.hpp"
-#include "../src/base_url_file_interface.hpp"
+#include "../src/rml/base_url_file_interface.hpp"
 
 #include <cstdio>
 

@@ -22,7 +22,7 @@
 #include <glintfx/log.hpp>
 #include <chrono>
 #include <string>
-#include "log_dedup.hpp"
+#include "../log_dedup.hpp"
 
 namespace glintfx {
 

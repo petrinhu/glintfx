@@ -846,9 +846,9 @@ configure_file(
 #     agregado `glintfx` mais abaixo (incondicional), e glintfx/gl_proc.hpp vem do mesmo include
 #     dir PÚBLICO que todo outro source desta lista já resolve.
 set(_glintfx_sources
-  src/render_gl3.cpp
-  src/bootstrap.cpp
-  src/data_binder.cpp
+  src/rml/render_gl3.cpp
+  src/rml/bootstrap.cpp
+  src/rml/data_binder.cpp
   src/engine.cpp
   src/ui_layer.cpp
   src/gl_proc.cpp
@@ -957,8 +957,8 @@ if(GLINTFX_OWN_FONT_ENGINE)
   #     nome de header de biblioteca padrão que a raiz include/ da Camada 0 por acaso também
   #     forneça.
   set_source_files_properties(
-    src/bootstrap.cpp
-    src/font_engine_own.cpp
+    src/rml/bootstrap.cpp
+    src/rml/font_engine_own.cpp
     ${_glx_core_src_dir}/sfnt.c
     ${_glx_core_src_dir}/raster.c
     ${_glx_core_src_dir}/hint.c
@@ -1207,7 +1207,7 @@ endif()
 #     OBJECT em outra pode propagar os objetos dela transitivamente pro alvo final e arriscaria
 #     reintroduzir o exato símbolo duplicado que esta divisão remove.
 if(GLINTFX_OWN_FONT_ENGINE)
-  add_library(glintfx_text OBJECT src/font_engine_own.cpp)
+  add_library(glintfx_text OBJECT src/rml/font_engine_own.cpp)
   target_include_directories(glintfx_text PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
@@ -1309,10 +1309,10 @@ endif()
 #     de carregar.
 if(GLINTFX_MODULE_FX)
   add_library(glintfx_fx OBJECT
-    src/fx/effects_gl3.cpp
-    src/decorator_polygon.cpp
-    src/decorator_image_tint.cpp
-    src/decorator_ripple.cpp)
+    src/rml/fx/effects_gl3.cpp
+    src/rml/decorator_polygon.cpp
+    src/rml/decorator_image_tint.cpp
+    src/rml/decorator_ripple.cpp)
   target_include_directories(glintfx_fx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>

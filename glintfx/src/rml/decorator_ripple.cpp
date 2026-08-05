@@ -35,7 +35,7 @@
 //     execução (mesma convenção repo-wide de decorator_image_tint.cpp; este decorator também é
 //     dono de uma VAO/VBO/EBO crua -- ver decorator_ripple.hpp e o precedente do ADR-0010 para o
 //     image-tint).
-#include "gl_loader.h"
+#include "../gl_loader.h"
 
 #include "decorator_ripple.hpp"
 

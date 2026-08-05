@@ -56,9 +56,9 @@
 //     falham (segundo instância indevidamente tem sucesso / claim nunca libera), pós-fix as
 //     quatro passam.
 // Copyright (c) 2026 Petrus Silva Costa
-#include "../src/bootstrap.hpp"
+#include "../src/rml/bootstrap.hpp"
 #include "../src/render_gl3.hpp"
-#include "../src/system_clock.hpp"
+#include "../src/rml/system_clock.hpp"
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>
 #include <cstdio>

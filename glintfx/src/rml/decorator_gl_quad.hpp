@@ -55,7 +55,7 @@
 //     GL 3.x carregados em tempo de execução); inofensivo repetir aqui já que os dois sítios de
 //     chamada já o incluem antes deste header, mas este header não deve depender dessa ordem do
 //     sítio de chamada pra se sustentar sozinho.
-#include "gl_loader.h"
+#include "../gl_loader.h"
 
 #include <RmlUi/Core/Types.h>
 

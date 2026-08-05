@@ -7,7 +7,7 @@
 //     diretamente com argumento WindowGlfw (removido de Bootstrap::init na T1).
 #include "../src/window_glfw.hpp"
 #include "../src/engine.hpp"
-#include "../src/system_clock.hpp"
+#include "../src/rml/system_clock.hpp"
 #include <cstdio>
 
 int main() {

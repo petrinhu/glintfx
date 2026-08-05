@@ -225,7 +225,7 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "../src/window_glfw.hpp"
 #include "../src/engine.hpp"       // EN: Part G2 drives Engine::capture_frame directly (bypasses UiLayer, same pattern engine_smoke.cpp uses). PT: Parte G2 dirige Engine::capture_frame direto (contorna o UiLayer, mesmo padrão de engine_smoke.cpp).
-#include "../src/system_clock.hpp" // EN: minimal SystemInterface for the standalone Engine in Part G2. PT: SystemInterface mínimo para o Engine avulso da Parte G2.
+#include "../src/rml/system_clock.hpp" // EN: minimal SystemInterface for the standalone Engine in Part G2. PT: SystemInterface mínimo para o Engine avulso da Parte G2.
 #include <glintfx/glintfx.hpp>
 #include "offscreen.hpp" // EN: includes gl_loader.h. PT: inclui gl_loader.h.
 #include <cstdio>

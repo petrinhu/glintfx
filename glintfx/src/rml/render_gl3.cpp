@@ -6,9 +6,9 @@
 
 // EN: gl_loader.h FIRST — defines all GL 3.x function pointers loaded at runtime.
 // PT: gl_loader.h PRIMEIRO — define todos os ponteiros de função GL 3.x carregados em tempo de execução.
-#include "gl_loader.h"
+#include "../gl_loader.h"
 
-#include "render_gl3.hpp"
+#include "../render_gl3.hpp"
 // EN: Backend header from rmlui_SOURCE_DIR/Backends (added via CMake include path).
 // PT: Header do backend do RmlUi a partir de rmlui_SOURCE_DIR/Backends (via CMake).
 #include "RmlUi_Renderer_GL3.h"
@@ -31,8 +31,8 @@
 //     de tamanho de arquivo pré-leitura do LoadTexture, que permanece aqui). Traz as declarações
 //     de stb_image.h transitivamente (implementação ainda compilada uma vez em
 //     stb_image_impl.cpp) -- nenhum include direto de stb_image.h mais necessário neste arquivo.
-#include "byte_ceiling.hpp"
-#include "image_decode.hpp"
+#include "../byte_ceiling.hpp"
+#include "../image_decode.hpp"
 
 // EN: FX-CARVE-1 — the seam header to the optional fx module (src/fx/effects_gl3.cpp). Declares
 //     FxHook + CreateGl3FxHook(); see fx_hook.hpp's own file header for the full gate mechanism.

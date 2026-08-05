@@ -19,7 +19,7 @@
 //     rule as render_gl3.cpp's own file header).
 // PT: gl_loader.h PRIMEIRO — define todos os ponteiros de função GL 3.x carregados em tempo de
 //     execução (mesma regra de ordem do próprio cabeçalho de arquivo de render_gl3.cpp).
-#include "../gl_loader.h"
+#include "../../gl_loader.h"
 
 // EN: Backend header from rmlui_SOURCE_DIR/Backends (added via CMake include path) -- gives the
 //     full definition of RenderInterface_GL3 this file needs to call

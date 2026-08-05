@@ -9,7 +9,7 @@
 //     para que nenhum header RmlUi seja exigido pelos callers de data_binder.hpp.
 // Copyright (c) 2026 Petrus Silva Costa
 
-#include "data_binder.hpp"
+#include "../data_binder.hpp"
 #include <RmlUi/Core.h>
 
 #include <map>

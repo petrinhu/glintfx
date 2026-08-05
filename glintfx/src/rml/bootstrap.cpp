@@ -5,9 +5,9 @@
 //     RenderInterface ao RmlUi. O chamador é DONO do lifetime do SystemInterface.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "bootstrap.hpp"
-#include "render_gl3.hpp"
+#include "../render_gl3.hpp"
 #include "base_url_file_interface.hpp"
-#include "ua_stylesheet.hpp"
+#include "../ua_stylesheet.hpp"
 #include <glintfx/config.hpp>
 // EN: FX-CARVE-1 -- the 3 decorator instancer headers (polygon/image-tint/ripple) are only
 //     pulled in when the fx module is compiled; with GLINTFX_MODULE_FX=OFF, none of

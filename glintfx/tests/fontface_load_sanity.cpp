@@ -160,7 +160,7 @@
 //     mesma base que todo outro teste de readback fonteng_* desta suíte já usa (ver o cabeçalho
 //     de fonteng_ab_compare.cpp pra estabilidade medida próprio-vs-FreeType em que isto se apoia).
 // Copyright (c) 2026 Petrus Silva Costa
-#include "../src/bootstrap.hpp"
+#include "../src/rml/bootstrap.hpp"
 #include "../src/engine.hpp"
 #include "../src/window_glfw.hpp"
 #include <glintfx/glintfx.hpp>

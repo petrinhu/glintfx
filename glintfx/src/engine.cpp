@@ -8,7 +8,7 @@
 #include "gl_state.hpp"
 #include "engine.hpp"
 #include "render_gl3.hpp"
-#include "bootstrap.hpp"
+#include "rml/bootstrap.hpp"
 #include "data_binder.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/Input.h>

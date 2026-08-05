@@ -297,6 +297,72 @@ CPPCHECK_COMMON_ARGS=(
   --suppress='*:*/third_party/*'
   --suppress='*:*/_deps/*'
   --suppress='constParameterCallback:*/image_encode.cpp'
+  # EN: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- this repo's
+  #     OWN LOCAL-ONLY fallback (see the header comment above, "a header with NO
+  #     consuming TU in the db yet ... falls back to the flag-less per-file pass"),
+  #     not the CI cppcheck step (that one runs `--project=glintfx/build-lint/
+  #     compile_commands.json`, and glintfx/src/uix/ is PERMANENTLY absent from that db
+  #     -- it is a deliberately standalone CMake project, see
+  #     glintfx/src/uix/dom/CMakeLists.txt's own header comment -- so CI's --project
+  #     mode never even LOOKS at these files, no suppression needed there). False-
+  #     positived exactly the sprite_batch.hpp way described above the moment
+  #     lexer.hpp/lexer.cpp were staged for the very first time: cppcheck's isolated,
+  #     flag-less, per-file pass over lexer.hpp alone cannot see that lexer.cpp (a
+  #     SEPARATE isolated pass) is the real consumer of every `Token`/`Lexer` member.
+  #     This is a wildcard on the whole DIRECTORY, not one file, because every future
+  #     header this standalone module gains (S2's tree, S3's parser, ...) hits the
+  #     identical structural cause for as long as the module stays unwired -- see this
+  #     precommit run's own precedent below of re-deriving the SAME false positive
+  #     per-file otherwise. Revisit/narrow/remove this suppression once RMLX-10/11
+  #     wires glintfx/src/uix/ into the main glintfx CMake graph for real (at which
+  #     point it gains a real compile_commands.json entry and the documented routing
+  #     fix above starts finding it on its own, same as it already does for
+  #     sprite_batch.hpp today).
+  # PT: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- o PRÓPRIO
+  #     fallback SÓ-LOCAL deste repo (ver o comentário de cabeçalho acima, "um header
+  #     SEM TU consumidora no db ainda ... cai no fallback sem flags por-arquivo"), não
+  #     o passo cppcheck do CI (aquele roda `--project=glintfx/build-lint/
+  #     compile_commands.json`, e glintfx/src/uix/ está PERMANENTEMENTE ausente daquele
+  #     db -- é um projeto CMake deliberadamente standalone, ver o próprio comentário
+  #     de cabeçalho do glintfx/src/uix/dom/CMakeLists.txt -- então o modo --project do
+  #     CI nem OLHA pra estes arquivos, nenhuma supressão necessária lá). Deu falso-
+  #     positivo exatamente do jeito sprite_batch.hpp descrito acima no momento em que
+  #     lexer.hpp/lexer.cpp foram staged pela primeira vez: a passada isolada e
+  #     sem-flags do cppcheck sobre o lexer.hpp sozinho não consegue ver que o
+  #     lexer.cpp (uma passada isolada SEPARADA) é o consumidor real de todo membro de
+  #     `Token`/`Lexer`. É um wildcard no DIRETÓRIO inteiro, não um arquivo só, porque
+  #     todo header futuro que este módulo standalone ganhar (a árvore da S2, o parser
+  #     da S3, ...) bate na mesma causa estrutural enquanto o módulo ficar não-amarrado
+  #     -- ver o próprio precedente desta rodada de precommit de re-derivar o MESMO
+  #     falso positivo por-arquivo do contrário. Revisar/estreitar/remover esta
+  #     supressão quando a RMLX-10/11 amarrar o glintfx/src/uix/ no grafo CMake
+  #     principal da glintfx de verdade (nesse ponto ele ganha uma entrada real de
+  #     compile_commands.json e o conserto de roteamento documentado acima passa a
+  #     achá-lo sozinho, igual já faz hoje pro sprite_batch.hpp).
+  #     Bare leading '*' (NOT '*/glintfx/src/uix/*') -- reproduced live, same gotcha
+  #     the CI cppcheck step's own --file-filter comment already names: this LOCAL
+  #     flag-less fallback hands cppcheck a RELATIVE path with no leading '/'
+  #     ("glintfx/src/uix/dom/lexer.hpp"), so a pattern requiring a literal '/' right
+  #     before "glintfx" never matches here (confirmed: '*/glintfx/src/uix/*' left the
+  #     4 findings above un-suppressed; '*glintfx/src/uix/*' suppresses all 4). The
+  #     pre-existing 'constParameterCallback:*/image_encode.cpp' entry above gets away
+  #     with the leading '*/' only because THAT invocation is --project mode, whose
+  #     compile_commands.json entries are ABSOLUTE paths (a real '/' precedes
+  #     "image_encode.cpp" there) -- the two entries are not actually the same shape
+  #     underneath, even though they look alike.
+  # PT: Asterisco líder nu (NÃO '*/glintfx/src/uix/*') -- reproduzido ao vivo, a mesma
+  #     pegadinha que o próprio comentário do --file-filter do passo cppcheck do CI já
+  #     nomeia: este fallback LOCAL sem flags entrega ao cppcheck um caminho RELATIVO
+  #     sem '/' no início ("glintfx/src/uix/dom/lexer.hpp"), então um padrão exigindo
+  #     um '/' literal logo antes de "glintfx" nunca casa aqui (confirmado:
+  #     '*/glintfx/src/uix/*' deixou os 4 achados acima sem-supressão;
+  #     '*glintfx/src/uix/*' suprime os 4). A entrada pré-existente
+  #     'constParameterCallback:*/image_encode.cpp' acima escapa com o '*/' líder só
+  #     porque AQUELA invocação é modo --project, cujas entradas de
+  #     compile_commands.json são caminhos ABSOLUTOS (um '/' real precede
+  #     "image_encode.cpp" lá) -- as duas entradas não são de fato a mesma forma por
+  #     baixo, mesmo parecendo iguais.
+  --suppress='unusedStructMember:*glintfx/src/uix/*'
   --error-exitcode=1
 )
 

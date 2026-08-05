@@ -143,6 +143,35 @@
 #     é tratado como "push desconhecido, falha segura": roda --full. Nunca tratado
 #     como "pular".
 #
+#     REL-TAGCONSIST-GATE (2026-08-05, líder's decision, born from a real incident):
+#     `v0.30.0` was tagged with glintfx/CMakeLists.txt's `project(VERSION ...)` still
+#     reading `0.29.0` (glintfx::version() lied on a published release -- REINCIDENCE
+#     of the exact same bug this project already shipped once, in `v0.2.5`) and with
+#     no `## [0.30.0]` section in CHANGELOG.md at all. check_tag_release_consistency()
+#     (see its own header comment, right above tag_commit_is_verified() below) now
+#     reads BOTH files straight from the TAGGED COMMIT (never the working tree) for
+#     every vX.Y.Z-shaped tag ref in the push, and ABORTS the push if the CMakeLists
+#     version disagrees with the tag name or the CHANGELOG section is missing. Called
+#     from main() BEFORE decide_action() -- unconditionally, independent of
+#     CI-TAGFAST's full-vs-skip verdict -- because the CI-TAGFAST skip path is
+#     precisely the one case where nothing else in this hook ever looks at a tagged
+#     commit's file content.
+#
+#     PT: REL-TAGCONSIST-GATE (2026-08-05, decisão do líder, nascido de um incidente
+#     real): a `v0.30.0` foi taggeada com o `project(VERSION ...)` do
+#     glintfx/CMakeLists.txt ainda lendo `0.29.0` (o glintfx::version() mentiu numa
+#     release publicada -- REINCIDÊNCIA do mesmo bug exato que este projeto já lançou
+#     uma vez, na `v0.2.5`) e sem seção `## [0.30.0]` nenhuma no CHANGELOG.md. O
+#     check_tag_release_consistency() (ver o próprio comentário de cabeçalho dele,
+#     logo acima do tag_commit_is_verified() abaixo) agora lê os DOIS arquivos direto
+#     do COMMIT TAGGEADO (nunca a working tree) pra toda ref de tag com forma
+#     vX.Y.Z no push, e ABORTA o push se a versão do CMakeLists discordar do nome da
+#     tag ou a seção do CHANGELOG estiver ausente. Chamado do main() ANTES do
+#     decide_action() -- incondicionalmente, independente do veredito full-vs-skip do
+#     CI-TAGFAST -- porque o caminho de pular do CI-TAGFAST é precisamente o único
+#     caso em que mais nada neste hook jamais olha o conteúdo de arquivo de um commit
+#     taggeado.
+#
 #     This hook is OPT-IN, not installed by default (git only looks in .git/hooks/ out
 #     of the box). Activation has TWO valid routes depending on whether `core.hooksPath`
 #     is already claimed globally by something else on this machine (found the hard way,
@@ -220,7 +249,13 @@ readonly RELEASE_BRANCH="main"
 #                          (excludes tag DELETIONS, whose local sha is all-zeros --
 #                          deleting a tag makes nothing new visible, so there is
 #                          nothing to verify for that ref).
-#     No `local` on the three globals above -- same unqualified-assignment convention
+#       push_tag_refs   -- array of the FULL ref names ("refs/tags/vX.Y.Z") for the
+#                          exact same tags as push_tag_shas, SAME INDEX order (added
+#                          for REL-TAGCONSIST-GATE: push_tag_shas alone is enough to
+#                          ask "is this commit reachable from main", but the version-
+#                          consistency check also needs the tag's OWN name to compare
+#                          against -- a SHA carries no version number by itself).
+#     No `local` on the four globals above -- same unqualified-assignment convention
 #     tools/preci.sh already uses for layer0_touched/layer1_touched, so callers read
 #     them straight after the call.
 # PT: classify_push_refs LINE... -- classificação pura (estilo SEED-GATE, mesma forma
@@ -238,7 +273,14 @@ readonly RELEASE_BRANCH="main"
 #                          ATUALIZADAS (exclui DELEÇÕES de tag, cujo sha local é
 #                          zero -- apagar uma tag não torna nada novo visível, então
 #                          não há o que verificar naquela ref).
-#     Sem `local` nos três globais acima -- mesma convenção de atribuição sem
+#       push_tag_refs   -- array com o NOME COMPLETO da ref ("refs/tags/vX.Y.Z") pra
+#                          exatamente as mesmas tags de push_tag_shas, MESMA ORDEM de
+#                          índice (adicionado pro REL-TAGCONSIST-GATE: push_tag_shas
+#                          sozinho já basta pra perguntar "esse commit é alcançável a
+#                          partir da main", mas a checagem de consistência de versão
+#                          também precisa do PRÓPRIO nome da tag pra comparar contra --
+#                          um SHA não carrega número de versão nenhum sozinho).
+#     Sem `local` nos quatro globais acima -- mesma convenção de atribuição sem
 #     qualificador que o tools/preci.sh já usa para layer0_touched/layer1_touched, os
 #     chamadores leem eles direto depois da chamada.
 # -----------------------------------------------------------------------------
@@ -246,6 +288,7 @@ classify_push_refs() {
   push_saw_ref=0
   push_only_tags=1
   push_tag_shas=()
+  push_tag_refs=()
 
   local line
   for line in "$@"; do
@@ -261,12 +304,189 @@ classify_push_refs() {
           continue # tag deletion -- no commit to verify, nothing becomes visible
         fi
         push_tag_shas+=("${local_sha}")
+        push_tag_refs+=("${remote_ref}")
         ;;
       *)
         push_only_tags=0
         ;;
     esac
   done
+}
+
+# -----------------------------------------------------------------------------
+# EN: REL_TAG_VERSION_RE -- REL-TAGCONSIST-GATE (2026-08-05, líder's decision, born
+#     from a real incident: `v0.30.0` was tagged with glintfx/CMakeLists.txt still
+#     saying `VERSION 0.29.0` -- glintfx::version() lied on a published release, the
+#     SAME class of bug this project already shipped once before, in `v0.2.5`).
+#     The one place that defines what counts as a "release tag" for
+#     check_tag_release_consistency() below: refs/tags/vX.Y.Z, X/Y/Z each one-or-more
+#     digits, nothing else after the patch number (anchored both ends). A tag ref that
+#     does not match this shape (an experimental/non-release tag, if this project ever
+#     makes one) is OUT OF SCOPE for this check -- it only knows how to verify semver
+#     release tags, the ones a consumer actually pins to.
+# PT: REL_TAG_VERSION_RE -- REL-TAGCONSIST-GATE (2026-08-05, decisão do líder, nascido
+#     de um incidente real: a `v0.30.0` foi taggeada com o glintfx/CMakeLists.txt
+#     ainda dizendo `VERSION 0.29.0` -- o glintfx::version() mentiu numa release
+#     publicada, a MESMA classe de bug que este projeto já lançou uma vez antes, na
+#     `v0.2.5`). O único lugar que define o que conta como "tag de release" pro
+#     check_tag_release_consistency() abaixo: refs/tags/vX.Y.Z, X/Y/Z cada um
+#     um-ou-mais dígitos, nada depois do número de patch (ancorado nas duas pontas).
+#     Uma ref de tag que não tem esta forma (uma tag experimental/não-release, se este
+#     projeto algum dia fizer uma) está FORA DO ESCOPO desta checagem -- ela só sabe
+#     verificar tags de release semver, as que um consumidor de fato pina.
+# -----------------------------------------------------------------------------
+readonly REL_TAG_VERSION_RE='^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$'
+
+# -----------------------------------------------------------------------------
+# EN: extract_cmake_version SHA -- prints glintfx's project(VERSION ...) exactly as
+#     read from glintfx/CMakeLists.txt AT THAT COMMIT (`git show <sha>:<path>`, NEVER
+#     the working tree -- this house's own canon: the working tree can be mid-mutation
+#     from another agent's session (mutation testing, an unrelated in-flight edit); the
+#     COMMIT is the deliverable, and a tag points at a commit, not at whatever happens
+#     to be on disk right now). Exit 1 with EMPTY stdout on ANY failure to extract
+#     (file missing at that commit, the `project(glintfx ...)` line missing, or the
+#     VERSION field missing/malformed) -- fail-closed, this function never guesses a
+#     version, it either reads one cleanly or reports nothing.
+# PT: extract_cmake_version SHA -- imprime o project(VERSION ...) do glintfx exatamente
+#     como lido de glintfx/CMakeLists.txt NAQUELE COMMIT (`git show <sha>:<path>`,
+#     NUNCA a working tree -- cânone desta casa: a working tree pode estar em meio a
+#     uma mutação de sessão de outro agente (mutation testing, uma edição em voo sem
+#     relação); o COMMIT é o entregável, e uma tag aponta pra um commit, não pro que
+#     estiver no disco agora). Sai 1 com stdout VAZIO em QUALQUER falha de extração
+#     (arquivo ausente naquele commit, a linha `project(glintfx ...)` ausente, ou o
+#     campo VERSION ausente/malformado) -- fail-closed, esta função nunca chuta uma
+#     versão, ou lê uma limpa ou não reporta nada.
+# -----------------------------------------------------------------------------
+extract_cmake_version() {
+  local sha="$1"
+
+  local content
+  content="$(git show "${sha}:glintfx/CMakeLists.txt" 2>/dev/null)" || return 1
+
+  local version
+  version="$(printf '%s\n' "${content}" \
+    | grep -m1 -oE 'project\(glintfx[^)]*VERSION[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')" || return 1
+
+  printf '%s' "${version}"
+}
+
+# -----------------------------------------------------------------------------
+# EN: changelog_has_release_section SHA VERSION -- true (exit 0) iff CHANGELOG.md AT
+#     THAT COMMIT (git show, same "commit not working-tree" rule as
+#     extract_cmake_version above) has a line starting with "## [VERSION]" -- the
+#     exact Keep-a-Changelog heading shape every other release section in this file
+#     already uses (see the ones for v0.29.0/v0.28.0/... in CHANGELOG.md). False
+#     (exit 1) if the file is missing at that commit or the heading is absent.
+#     VERSION's dots are regex-escaped before matching -- an unescaped "." in an ERE
+#     matches ANY character, which would silently accept a heading like
+#     "## [0X29X0]" as a match for "0.29.0".
+# PT: changelog_has_release_section SHA VERSION -- verdadeiro (exit 0) sse o
+#     CHANGELOG.md NAQUELE COMMIT (git show, mesma regra "commit não working tree" do
+#     extract_cmake_version acima) tem uma linha começando com "## [VERSION]" -- a
+#     forma exata de heading Keep-a-Changelog que toda outra seção de release deste
+#     arquivo já usa (ver as de v0.29.0/v0.28.0/... no CHANGELOG.md). Falso (exit 1)
+#     se o arquivo está ausente naquele commit ou o heading está ausente. Os pontos da
+#     VERSION são escapados de regex antes de casar -- um "." sem escape numa ERE casa
+#     QUALQUER caractere, o que aceitaria em silêncio um heading tipo "## [0X29X0]"
+#     como casamento pra "0.29.0".
+# -----------------------------------------------------------------------------
+changelog_has_release_section() {
+  local sha="$1"
+  local version="$2"
+
+  local content
+  content="$(git show "${sha}:CHANGELOG.md" 2>/dev/null)" || return 1
+
+  local version_re="${version//./\\.}"
+  printf '%s\n' "${content}" | grep -qE "^## \\[${version_re}\\]"
+}
+
+# -----------------------------------------------------------------------------
+# EN: check_tag_release_consistency -- REL-TAGCONSIST-GATE, the actual gate. Runs for
+#     EVERY tag ref classify_push_refs() collected into push_tag_shas/push_tag_refs
+#     (deletions already excluded there), regardless of what decide_action() will
+#     later decide about --full vs skip (CI-TAGFAST). 🔴 Called from main() BEFORE
+#     decide_action(), ON PURPOSE -- this is the whole point of this gate: CI-TAGFAST's
+#     skip path exists PRECISELY for the tag-already-verified-so-skip-the-suite case,
+#     and that is EXACTLY the path a version/CHANGELOG mismatch would otherwise sail
+#     through untouched, because nothing else in this hook ever inspects a tagged
+#     commit's file CONTENT -- decide_action() only asks "is this SHA reachable",
+#     never "does this SHA's CMakeLists/CHANGELOG agree with the tag name pinned to
+#     it". Hanging this check off the TAGFAST branch (or after decide_action()) would
+#     make it dead code on arrival: the one push shape it most needs to catch (tag-only,
+#     commit already on main) is the one CI-TAGFAST is built to skip everything for.
+#
+#     Ref names not shaped like refs/tags/vX.Y.Z (REL_TAG_VERSION_RE) are out of scope
+#     -- see that variable's own comment.
+#
+#     For each in-scope tag: extract_cmake_version(sha) must succeed AND its value
+#     must equal the version parsed from the TAG'S OWN ref name; separately,
+#     changelog_has_release_section(sha, that same version) must be true. Any single
+#     failure prints a side-by-side diagnostic (both values, or which one could not be
+#     read) and marks the batch failed -- but the loop does not stop at the first
+#     failure: it checks every tag in the push before returning, so a push carrying
+#     two bad tags reports both, not just the first one hit.
+# PT: check_tag_release_consistency -- REL-TAGCONSIST-GATE, o gate de fato. Roda para
+#     TODA ref de tag que classify_push_refs() juntou em
+#     push_tag_shas/push_tag_refs (deleções já excluídas lá), independente do que
+#     decide_action() vai decidir depois sobre --full vs pular (CI-TAGFAST). 🔴
+#     Chamado do main() ANTES do decide_action(), DE PROPÓSITO -- este é o ponto
+#     inteiro deste gate: o caminho de pular do CI-TAGFAST existe PRECISAMENTE pro
+#     caso tag-já-verificada-então-pula-a-suíte, e esse é EXATAMENTE o caminho por
+#     onde uma divergência de versão/CHANGELOG passaria intocada, porque mais nada
+#     neste hook jamais inspeciona o CONTEÚDO de arquivo de um commit taggeado --
+#     decide_action() só pergunta "esse SHA é alcançável", nunca "o
+#     CMakeLists/CHANGELOG desse SHA concorda com o nome da tag pinada nele". Pendurar
+#     esta checagem no ramo do TAGFAST (ou depois do decide_action()) a tornaria
+#     código morto de nascença: a única forma de push que ela mais precisa pegar
+#     (só-tag, commit já na main) é exatamente a que o CI-TAGFAST foi construído pra
+#     pular tudo.
+#
+#     Nomes de ref que não têm a forma refs/tags/vX.Y.Z (REL_TAG_VERSION_RE) estão
+#     fora de escopo -- ver o comentário daquela variável.
+#
+#     Para cada tag em escopo: extract_cmake_version(sha) precisa ter sucesso E o
+#     valor precisa igualar a versão lida do PRÓPRIO nome da ref da tag;
+#     separadamente, changelog_has_release_section(sha, essa mesma versão) precisa
+#     ser verdadeiro. Qualquer falha isolada imprime um diagnóstico lado a lado (os
+#     dois valores, ou qual deles não pôde ser lido) e marca o lote como reprovado --
+#     mas o laço não para na primeira falha: checa toda tag do push antes de
+#     retornar, então um push com duas tags ruins reporta as duas, não só a primeira
+#     encontrada.
+# -----------------------------------------------------------------------------
+check_tag_release_consistency() {
+  local ok=1
+  local i
+
+  for ((i = 0; i < ${#push_tag_refs[@]}; i++)); do
+    local ref="${push_tag_refs[i]}"
+    local sha="${push_tag_shas[i]}"
+
+    if [[ ! "${ref}" =~ ${REL_TAG_VERSION_RE} ]]; then
+      continue # not a vX.Y.Z-shaped tag -- out of scope, see REL_TAG_VERSION_RE
+    fi
+    local tag_version="${BASH_REMATCH[1]}"
+
+    local cmake_version
+    if ! cmake_version="$(extract_cmake_version "${sha}")" || [[ -z "${cmake_version}" ]]; then
+      echo "pre-push: REL-TAGCONSIST-GATE -- não consegui ler project(VERSION) de glintfx/CMakeLists.txt no commit da tag '${ref}' (${sha}). Reprovado (fail-closed)." >&2
+      ok=0
+      continue
+    fi
+
+    if [[ "${cmake_version}" != "${tag_version}" ]]; then
+      echo "pre-push: REL-TAGCONSIST-GATE -- versão inconsistente para '${ref}': a tag diz '${tag_version}', glintfx/CMakeLists.txt (no commit da tag) diz '${cmake_version}'. Reprovado." >&2
+      ok=0
+    fi
+
+    if ! changelog_has_release_section "${sha}" "${tag_version}"; then
+      echo "pre-push: REL-TAGCONSIST-GATE -- CHANGELOG.md (no commit da tag '${ref}', ${sha}) não tem a seção '## [${tag_version}]'. Reprovado." >&2
+      ok=0
+    fi
+  done
+
+  [[ "${ok}" -eq 1 ]]
 }
 
 # -----------------------------------------------------------------------------
@@ -380,6 +600,21 @@ main() {
   fi
 
   classify_push_refs "${lines[@]}"
+
+  # EN: REL-TAGCONSIST-GATE runs UNCONDITIONALLY here, BEFORE decide_action() -- see
+  #     check_tag_release_consistency()'s own header comment for why this exact
+  #     placement (not inside the "skip" branch below, not after) is the one that
+  #     actually gates the tag-only/already-verified push CI-TAGFAST is built to fast-
+  #     path past.
+  # PT: o REL-TAGCONSIST-GATE roda INCONDICIONALMENTE aqui, ANTES do decide_action()
+  #     -- ver o próprio comentário de cabeçalho do check_tag_release_consistency()
+  #     pro porquê deste posicionamento exato (não dentro do ramo "skip" abaixo, não
+  #     depois) ser o único que de fato gateia o push só-tag/já-verificada que o
+  #     CI-TAGFAST foi construído pra pular direto.
+  if ! check_tag_release_consistency; then
+    echo "pre-push: REL-TAGCONSIST-GATE reprovou o push -- corrija glintfx/CMakeLists.txt e/ou o CHANGELOG.md antes de taggear (ver mensagens acima). ABORTADO." >&2
+    exit 1
+  fi
 
   local action
   action="$(decide_action "${remote_name}")"

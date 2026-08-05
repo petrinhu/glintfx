@@ -14,16 +14,24 @@
 #           files (domrw_sanity.cpp, focus_sanity.cpp, form_events_sanity.cpp,
 #           document_reload_leak.cpp) -> FAIL. Caps the pre-existing test debt: a NEW
 #           test that includes RmlUi directly fails the gate.
-#       (c) value-type tokens (Rml::String/Vector2/Colourb/Variant/Input/Log) in CODE
+#       (c) ANY `Rml::Identifier` token (RMLX-0 2026-08-05, furo 6 -- was a fixed
+#           value-type list, Rml::String/Vector2/Colourb/Variant/Input/Log; a fixed
+#           enumeration only closes what someone thought to enumerate) in CODE
 #           (comments stripped) outside src/rml/, INCLUDING glintfx/tests/ (RMLX-0
 #           2026-08-05 -- see "FILE ENUMERATION FIX" below) -> FAIL (file:line). The
 #           FROZEN 4 test files whitelisted by check (b) are exempt here too, by full
-#           relative path (see RML_TOKEN_EXCEPTIONS below for why).
-#       (d) report-only, ALWAYS printed: count of files with residual opaque `Rml::`
-#           usage (forward-declared pointers -- Rml::Context*, Rml::SystemInterface* --
-#           i.e. anything NOT already caught by (c)'s value-type list) outside the
-#           whitelist. Format: "divida opaca: N arquivos". Printed even when N is 0 --
-#           "zero declared" proves someone looked, an absent line does not.
+#           relative path (see RML_TOKEN_EXCEPTIONS below for why); so are the 2
+#           test-boundary files and the 4 opaque-pointer files below, each ONLY for
+#           the specific `Rml::` prefix they are declared to legitimately carry (see
+#           RML_TEST_TOKEN_ALLOWED / RML_OPAQUE_PTR_TOKEN_ALLOWED).
+#       (d) report-only, ALWAYS printed: count of files with residual `Rml::` usage
+#           outside the whitelist NOT already classified as legacy value-type debt by
+#           RML_TOKEN_PATTERN (forward-declared pointers -- Rml::Context*,
+#           Rml::SystemInterface* -- being the main remaining category). Now a purely
+#           REPORTING split within what check (c) already blocks, not a "does (c) see
+#           this at all" split (that ended at furo 6 -- (c) now blocks BOTH
+#           categories). Format: "divida opaca: N arquivos". Printed even when N is 0
+#           -- "zero declared" proves someone looked, an absent line does not.
 #
 #     Deliberately grep-based on `#include` DIRECTIVES for (a)/(b), never on a raw
 #     substring of the whole file -- same doctrine as tools/check_encapsulation.sh
@@ -135,16 +143,26 @@
 #           CONGELADA de 4 arquivos (domrw_sanity.cpp, focus_sanity.cpp,
 #           form_events_sanity.cpp, document_reload_leak.cpp) -> FAIL. Trava a dívida
 #           pré-existente: um teste NOVO que inclua RmlUi direto reprova o gate.
-#       (c) tokens de tipo-valor (Rml::String/Vector2/Colourb/Variant/Input/Log) em
-#           CÓDIGO (comentário removido) fora de src/rml/, INCLUINDO glintfx/tests/
-#           (RMLX-0 2026-08-05 -- ver "CONSERTO DE ENUMERAÇÃO DE ARQUIVO" abaixo) ->
-#           FAIL (arquivo:linha). Os 4 arquivos de teste congelados na whitelist do
-#           check (b) ficam isentos aqui também, pelo caminho relativo completo (ver
-#           RML_TOKEN_EXCEPTIONS abaixo pro motivo).
-#       (d) report-only, SEMPRE impresso: contagem de arquivos com uso opaco residual
-#           de `Rml::` (ponteiro via fwd-decl -- Rml::Context*, Rml::SystemInterface* --
-#           ou seja, tudo que (c) NÃO já pega pela lista de tipo-valor) fora da
-#           whitelist. Formato: "divida opaca: N arquivos". Impresso mesmo quando N é 0
+#       (c) QUALQUER token `Rml::Identificador` (RMLX-0 2026-08-05, furo 6 -- era
+#           uma lista fixa de tipo-valor, Rml::String/Vector2/Colourb/Variant/
+#           Input/Log; uma enumeração fixa só fecha o que alguém pensou em
+#           enumerar) em CÓDIGO (comentário removido) fora de src/rml/, INCLUINDO
+#           glintfx/tests/ (RMLX-0 2026-08-05 -- ver "CONSERTO DE ENUMERAÇÃO DE
+#           ARQUIVO" abaixo) -> FAIL (arquivo:linha). Os 4 arquivos de teste
+#           congelados na whitelist do check (b) ficam isentos aqui também, pelo
+#           caminho relativo completo (ver RML_TOKEN_EXCEPTIONS abaixo pro motivo);
+#           também os 2 arquivos de fronteira-de-teste e os 4 arquivos de ponteiro
+#           opaco abaixo, cada um SÓ pro prefixo `Rml::` específico que está
+#           declarado a carregar legitimamente (ver RML_TEST_TOKEN_ALLOWED /
+#           RML_OPAQUE_PTR_TOKEN_ALLOWED).
+#       (d) report-only, SEMPRE impresso: contagem de arquivos com uso residual de
+#           `Rml::` fora da whitelist que o RML_TOKEN_PATTERN legado AINDA NÃO
+#           classifica como dívida de tipo-valor conhecida (ponteiro via fwd-decl --
+#           Rml::Context*, Rml::SystemInterface* -- sendo a categoria remanescente
+#           principal). Agora é um recorte puramente de RELATÓRIO dentro do que o
+#           check (c) já bloqueia, não mais um recorte "o (c) enxerga isto ou não"
+#           (isso acabou no furo 6 -- o (c) agora bloqueia AS DUAS categorias).
+#           Formato: "divida opaca: N arquivos". Impresso mesmo quando N é 0
 #           -- "zero declarado" prova que alguém olhou, linha ausente não prova nada.
 #
 #     Deliberadamente baseado em grep de DIRETIVAS `#include` para (a)/(b), nunca em
@@ -349,9 +367,119 @@ RML_TEST_WHITELIST=(
 #     check (c) igual a qualquer outro arquivo -- aumentar o conjunto permitido de
 #     qualquer entrada, ou este mapa além destes dois caminhos, é decisão do
 #     líder.
+#
+# EN: RMLX-0 (2026-08-05, furo 6 -- latent extraction-truncation bug, found by
+#     the real-tree run required before closing furo 6): the
+#     `type_bridge_review_sanity.cpp` entry read `Rml::(Vector2|Colourb)`, but
+#     the real, full symbol used in that file (confirmed above and by
+#     docs/rmlx-subset.md) is `Rml::Vector2f` -- the trailing `f` was always
+#     part of the real identifier. Under the OLD RML_TOKEN_PATTERN (the fixed
+#     alternation `Rml::(String|Vector2|Colourb|Variant|Input|Log)`),
+#     `grep -oE` against `Rml::Vector2f` extracted only `Rml::Vector2`
+#     (the alternation's `Vector2` branch has no `f`, so the match stops
+#     there) -- a TRUNCATED fragment that happened to equal this entry's
+#     `Vector2` verbatim, so the exemption "worked" by coincidence, not by
+#     matching the real name. RML_ANY_TOKEN_PATTERN (furo 6's wider blocking
+#     pattern) extracts the FULL identifier correctly -- `Rml::Vector2f`,
+#     confirmed live: `grep -oE 'Rml::[A-Za-z_][A-Za-z0-9_]*'` against the
+#     real file's line 48 (`Rml::Vector2f r = ...`) yields `Rml::Vector2f`,
+#     not `Rml::Vector2` -- so the OLD entry's `Vector2` branch no longer
+#     equals what is extracted, and the file started failing check (c) even
+#     though its `Rml::` contact did not change. Fixed the entry to name the
+#     REAL symbol (`Vector2f`, matching this comment block's own prose above,
+#     which already said `Rml::Vector2f` -- only the regex itself carried the
+#     truncation). This is a match-PRECISION fix to an EXISTING, already-
+#     mandated exemption (same doctrine as furos 1-4), not a new or widened
+#     exemption -- the allowed set of types this file may touch is unchanged
+#     (Vector2f, Colourb); only the spelling used to recognize the first one
+#     is corrected to the symbol's real name.
+# PT: RMLX-0 (2026-08-05, furo 6 -- bug latente de truncamento de extração,
+#     achado pela rodada na árvore real exigida antes de fechar o furo 6): a
+#     entrada de `type_bridge_review_sanity.cpp` dizia
+#     `Rml::(Vector2|Colourb)`, mas o símbolo real e completo usado no
+#     arquivo (confirmado acima e pelo docs/rmlx-subset.md) é
+#     `Rml::Vector2f` -- o `f` na cola sempre foi parte do identificador
+#     real. Sob o RML_TOKEN_PATTERN ANTIGO (a alternância fixa
+#     `Rml::(String|Vector2|Colourb|Variant|Input|Log)`), o `grep -oE`
+#     contra `Rml::Vector2f` extraía só `Rml::Vector2` (o ramo `Vector2` da
+#     alternância não tem `f`, então o casamento para ali) -- um fragmento
+#     TRUNCADO que por acaso batia com o `Vector2` desta entrada ao pé da
+#     letra, então a isenção "funcionava" por coincidência, não por casar o
+#     nome real. O RML_ANY_TOKEN_PATTERN (o padrão de bloqueio alargado do
+#     furo 6) extrai o identificador COMPLETO corretamente --
+#     `Rml::Vector2f`, confirmado ao vivo: `grep -oE
+#     'Rml::[A-Za-z_][A-Za-z0-9_]*'` contra a linha 48 do arquivo real
+#     (`Rml::Vector2f r = ...`) devolve `Rml::Vector2f`, não `Rml::Vector2`
+#     -- então o ramo `Vector2` da entrada ANTIGA deixou de ser igual ao que
+#     é extraído, e o arquivo passou a reprovar o check (c) mesmo sem seu
+#     contato `Rml::` ter mudado. Consertada a entrada pra nomear o símbolo
+#     REAL (`Vector2f`, batendo com a própria prosa deste bloco de
+#     comentário acima, que já dizia `Rml::Vector2f` -- só a regex em si
+#     carregava o truncamento). Isto é um conserto de PRECISÃO de casamento
+#     de uma isenção EXISTENTE e já mandatada (mesma doutrina dos furos
+#     1-4), não uma isenção nova ou alargada -- o conjunto permitido de
+#     tipos que este arquivo pode tocar não muda (Vector2f, Colourb); só a
+#     grafia usada pra reconhecer o primeiro é corrigida pro nome real do
+#     símbolo.
 declare -A RML_TEST_TOKEN_ALLOWED=(
   ["glintfx/tests/input_map_sanity.cpp"]='Rml::Input'
-  ["glintfx/tests/type_bridge_review_sanity.cpp"]='Rml::(Vector2|Colourb)'
+  ["glintfx/tests/type_bridge_review_sanity.cpp"]='Rml::(Vector2f|Colourb)'
+)
+
+# EN: check (c) furo 6 (RMLX-0, 2026-08-05) -- MANDATED, DATED debt exception
+#     (not an implementer-invented one; see docs/rmlx-subset.md section 5),
+#     same narrow symbol-level mechanism as RML_TEST_TOKEN_ALLOWED above,
+#     consumed the same way (merged into EXCL_TOKEN_ALLOW by run_real_check()).
+#     Widening check (c) from the fixed RML_TOKEN_PATTERN list to "any Rml::
+#     token" would otherwise newly fail these 4 files, which carry a
+#     forward-declared OPAQUE POINTER (`Rml::Context*`, `Rml::SystemInterface*`,
+#     `Rml::RenderInterface*`) by design -- confirmed by reading each file
+#     (`grep -n 'Rml::' <file>`, 2026-08-05): data_binder.hpp's ONLY contact is
+#     `Rml::Context*` (create()'s parameter); engine.hpp/engine.cpp's ONLY
+#     contact is `Rml::Context*` (context()'s return type) and
+#     `Rml::SystemInterface*` (attach()'s parameter); render_gl3.hpp's ONLY
+#     contact is `Rml::RenderInterface*` (iface()'s return type). Per
+#     docs/rmlx-subset.md section 5, all 4 retire at RMLX-11 (excision), not
+#     earlier -- RMLX-10 is a SOFT flip (ADR-0011 precedent) that keeps RmlUi
+#     fully linked as the rollback path, so these pointer types stay real and
+#     live through RMLX-10 regardless of which engine is selected at runtime.
+#     Any `Rml::` token in either file OTHER than its listed allowed prefix
+#     still fails check (c) same as any other file -- growing either entry's
+#     allowed set, or this map beyond these 4 paths, is a decision for the
+#     líder (see the F4 brief's own "não crie isenção nova por conta própria"
+#     -- this map codifies the exception the brief EXPLICITLY named as one
+#     that "tem de sobreviver", it does not invent a new one).
+# PT: check (c) furo 6 (RMLX-0, 2026-08-05) -- isenção de dívida MANDATADA E
+#     DATADA (não inventada pelo implementer; ver docs/rmlx-subset.md seção
+#     5), mesmo mecanismo estreito no nível de símbolo do
+#     RML_TEST_TOKEN_ALLOWED acima, consumido do mesmo jeito (dobrado no
+#     EXCL_TOKEN_ALLOW por run_real_check()). Alargar o check (c) da lista
+#     fixa RML_TOKEN_PATTERN pra "qualquer token Rml::" reprovaria de novo
+#     estes 4 arquivos, que carregam um PONTEIRO OPACO fwd-declarado
+#     (`Rml::Context*`, `Rml::SystemInterface*`, `Rml::RenderInterface*`) de
+#     propósito -- confirmado lendo cada arquivo (`grep -n 'Rml::' <arquivo>`,
+#     2026-08-05): o ÚNICO contato de data_binder.hpp é `Rml::Context*`
+#     (parâmetro do create()); o ÚNICO contato de engine.hpp/engine.cpp é
+#     `Rml::Context*` (tipo de retorno do context()) e
+#     `Rml::SystemInterface*` (parâmetro do attach()); o ÚNICO contato de
+#     render_gl3.hpp é `Rml::RenderInterface*` (tipo de retorno do iface()).
+#     Pela seção 5 do docs/rmlx-subset.md, os 4 quitam na RMLX-11 (excisão),
+#     não antes -- a RMLX-10 é um flip SUAVE (precedente do ADR-0011) que
+#     mantém o RmlUi plenamente linkado como caminho de rollback, então estes
+#     tipos de ponteiro seguem reais e vivos durante toda a RMLX-10,
+#     independente de qual motor está selecionado em runtime. Qualquer token
+#     `Rml::` em qualquer um dos arquivos FORA do prefixo permitido listado
+#     continua reprovando o check (c) igual a qualquer outro arquivo --
+#     aumentar o conjunto permitido de qualquer entrada, ou este mapa além
+#     destes 4 caminhos, é decisão do líder (ver o próprio "não crie isenção
+#     nova por conta própria" do brief da F4 -- este mapa codifica a exceção
+#     que o brief nomeou EXPLICITAMENTE como tendo "de sobreviver", não
+#     inventa uma nova).
+declare -A RML_OPAQUE_PTR_TOKEN_ALLOWED=(
+  ["glintfx/src/data_binder.hpp"]='Rml::Context'
+  ["glintfx/src/engine.hpp"]='Rml::(Context|SystemInterface)'
+  ["glintfx/src/engine.cpp"]='Rml::(Context|SystemInterface)'
+  ["glintfx/src/render_gl3.hpp"]='Rml::RenderInterface'
 )
 
 # EN: check (a) -- see the header comment above ("KNOWN, FROZEN, DOCUMENTED
@@ -448,12 +576,41 @@ RML_INCLUDE_PATTERN='^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"][^>"]*Rml[
 #     vazando de novo em silêncio através de uma macro que ninguém audita por grep.
 RML_COMPUTED_INCLUDE_PATTERN='^[[:space:]]*#[[:space:]]*include[[:space:]]*[A-Za-z_]'
 
-# EN: check (c)'s blocking value-type token list.
-# PT: lista bloqueante de tokens de tipo-valor do check (c).
+# EN: LEGACY value-type token list. RMLX-0 (2026-08-05, furo 6): check (c) no
+#     longer blocks THIS pattern -- it blocks RML_ANY_TOKEN_PATTERN (below),
+#     any `Rml::Identifier` whatsoever. A fixed enumeration only closes what
+#     someone thought to enumerate: `Rml::Dictionary`, `Rml::ElementDocument`,
+#     `Rml::Variant`, or any OTHER token outside this list used to fall into
+#     (d)'s report-only "dívida opaca" bucket instead of failing -- the same
+#     enumeration-closes-only-what-it-enumerates mechanism that already bit
+#     this gate twice (furo 2's whole-file EXCL_FILES skip, furo 1's
+#     substring-anywhere-on-the-line include filter). This constant SURVIVES,
+#     narrowed to a single remaining job: opaque_debt_count() (d) still uses
+#     it (vs. RML_ANY_TOKEN_PATTERN) to classify a file's residual `Rml::`
+#     usage as "already-known value-type debt" vs. genuinely opaque -- a
+#     REPORTING distinction only, no longer a blocking one.
+# PT: Lista LEGADA de tokens de tipo-valor. RMLX-0 (2026-08-05, furo 6): o
+#     check (c) não bloqueia mais ESTE padrão -- ele bloqueia o
+#     RML_ANY_TOKEN_PATTERN (abaixo), qualquer `Rml::Identificador` que seja.
+#     Uma enumeração fixa só fecha o que alguém pensou em enumerar:
+#     `Rml::Dictionary`, `Rml::ElementDocument`, `Rml::Variant`, ou qualquer
+#     OUTRO token fora desta lista caía no balde só-relatório "dívida opaca"
+#     do (d) em vez de reprovar -- o mesmo mecanismo de
+#     enumeração-fecha-só-o-que-enumera que já mordeu este gate duas vezes
+#     (o pulo de arquivo inteiro via EXCL_FILES do furo 2, o filtro de
+#     include por substring-em-qualquer-lugar-da-linha do furo 1). Esta
+#     constante SOBREVIVE, estreitada a um único trabalho remanescente: o
+#     opaque_debt_count() (d) continua usando ela (contra o
+#     RML_ANY_TOKEN_PATTERN) pra classificar o uso residual de `Rml::` de um
+#     arquivo como "dívida de tipo-valor já conhecida" vs. genuinamente
+#     opaca -- uma distinção só de RELATÓRIO, não mais de bloqueio.
 RML_TOKEN_PATTERN='Rml::(String|Vector2|Colourb|Variant|Input|Log)'
 
-# EN: check (d)'s generic opaque-usage pattern (any Rml::Identifier).
-# PT: padrão genérico de uso opaco do check (d) (qualquer Rml::Identificador).
+# EN: check (c)'s blocking pattern as of furo 6 (any Rml::Identifier), and
+#     check (d)'s generic opaque-usage pattern (unchanged role for (d)).
+# PT: padrão bloqueante do check (c) desde o furo 6 (qualquer
+#     Rml::Identificador), e padrão genérico de uso opaco do check (d)
+#     (papel inalterado pro (d)).
 RML_ANY_TOKEN_PATTERN='Rml::[A-Za-z_][A-Za-z0-9_]*'
 
 # EN: check (c) -- generic, path-keyed, CALLER-POPULATED global read by
@@ -843,13 +1000,14 @@ rml_filter_include_exception() {
   printf '%s' "${out%$'\n'}"
 }
 
-# EN: RMLX-0 (2026-08-05, furo 2) -- filters a check (c) MATCHES set (from
-#     strip_comments()+grep, "LINE:content" lines) down to the ones that are STILL
-#     a violation for a file with an entry in EXCL_TOKEN_ALLOW: for each matched
-#     line, re-extracts EVERY RML_TOKEN_PATTERN occurrence on it (grep -oE) and
-#     drops the line only if EVERY occurrence matches `allowed` exactly -- a line
-#     mixing one allowed and one un-allowed token still fails, since the line as a
-#     whole still carries a violation. This replaces folding the file into
+# EN: RMLX-0 (2026-08-05, furo 2; pattern widened at furo 6) -- filters a
+#     check (c) MATCHES set (from strip_comments()+grep, "LINE:content" lines)
+#     down to the ones that are STILL a violation for a file with an entry in
+#     EXCL_TOKEN_ALLOW: for each matched line, re-extracts EVERY
+#     RML_ANY_TOKEN_PATTERN occurrence on it (grep -oE) and drops the line only
+#     if EVERY occurrence matches `allowed` exactly -- a line mixing one
+#     allowed and one un-allowed token still fails, since the line as a whole
+#     still carries a violation. This replaces folding the file into
 #     EXCL_FILES (check_token_gate's other, WHOLE-FILE skip mechanism), which
 #     adversarial review proved lets an UNRELATED value-type token ride in on any
 #     file whose path happens to be on that list -- proved live: appending `void
@@ -857,21 +1015,40 @@ rml_filter_include_exception() {
 #     glintfx/tests/input_map_sanity.cpp (a file whose only legitimate `Rml::`
 #     contact is `Rml::Input::*`) returned OK/exit 0, because the whole-file skip
 #     does not care WHICH token appears, only THAT the path matched.
-# PT: RMLX-0 (2026-08-05, furo 2) -- filtra um conjunto de MATCHES do check (c)
-#     (de strip_comments()+grep, linhas "LINHA:conteúdo") pras que AINDA são
-#     violação pra um arquivo com entrada no EXCL_TOKEN_ALLOW: pra cada linha
-#     casada, re-extrai TODA ocorrência de RML_TOKEN_PATTERN nela (grep -oE) e só
-#     descarta a linha se TODA ocorrência casa `allowed` exatamente -- uma linha
-#     misturando um token permitido e um não-permitido continua reprovando, já que
-#     a linha como um todo ainda carrega uma violação. Isto substitui dobrar o
-#     arquivo no EXCL_FILES (o outro mecanismo do check_token_gate, de pulo do
-#     ARQUIVO INTEIRO), que a revisão adversarial provou deixar um token de
-#     tipo-valor NÃO-RELACIONADO entrar de carona em qualquer arquivo cujo caminho
-#     por acaso está naquela lista -- provado ao vivo: acrescentar `void
+#     RMLX-0 (2026-08-05, furo 6): re-extraction switched from RML_TOKEN_PATTERN
+#     (the legacy fixed value-type list) to RML_ANY_TOKEN_PATTERN -- it MUST
+#     match whatever check_token_gate() itself now scans for, or a line
+#     carrying an out-of-list token (e.g. `Rml::Context`) would extract ZERO
+#     candidate `tok` values, the offending-tracking loop below would never
+#     run, `offending` would stay its initial 0, and the line would be dropped
+#     as if it matched `allowed` -- silently re-opening exactly the enumeration
+#     hole furo 6 exists to close, one function downstream of where it was
+#     closed.
+# PT: RMLX-0 (2026-08-05, furo 2; padrão alargado no furo 6) -- filtra um
+#     conjunto de MATCHES do check (c) (de strip_comments()+grep, linhas
+#     "LINHA:conteúdo") pras que AINDA são violação pra um arquivo com entrada
+#     no EXCL_TOKEN_ALLOW: pra cada linha casada, re-extrai TODA ocorrência de
+#     RML_ANY_TOKEN_PATTERN nela (grep -oE) e só descarta a linha se TODA
+#     ocorrência casa `allowed` exatamente -- uma linha misturando um token
+#     permitido e um não-permitido continua reprovando, já que a linha como um
+#     todo ainda carrega uma violação. Isto substitui dobrar o arquivo no
+#     EXCL_FILES (o outro mecanismo do check_token_gate, de pulo do ARQUIVO
+#     INTEIRO), que a revisão adversarial provou deixar um token de tipo-valor
+#     NÃO-RELACIONADO entrar de carona em qualquer arquivo cujo caminho por
+#     acaso está naquela lista -- provado ao vivo: acrescentar `void
 #     contrabando(){ Rml::String s; (void)s; }` a
 #     glintfx/tests/input_map_sanity.cpp (um arquivo cujo único contato `Rml::`
 #     legítimo é `Rml::Input::*`) devolvia OK/exit 0, porque o pulo do arquivo
 #     inteiro não liga pra QUAL token aparece, só que o caminho casou.
+#     RMLX-0 (2026-08-05, furo 6): a re-extração trocou de RML_TOKEN_PATTERN (a
+#     lista fixa legada de tipo-valor) pro RML_ANY_TOKEN_PATTERN -- ela TEM de
+#     casar o que o próprio check_token_gate() agora varre, senão uma linha
+#     carregando um token fora da lista (ex. `Rml::Context`) extrairia ZERO
+#     valores candidatos de `tok`, o laço de rastreio de `offending` abaixo
+#     nunca rodaria, `offending` ficaria no valor inicial 0, e a linha seria
+#     descartada como se casasse `allowed` -- reabrindo em silêncio exatamente
+#     o furo de enumeração que o furo 6 existe pra fechar, uma função rio
+#     abaixo de onde ele foi fechado.
 rml_filter_allowed_tokens() {
   local matches="$1" allowed="$2"
   local ln content offending tok out=""
@@ -884,7 +1061,7 @@ rml_filter_allowed_tokens() {
       if ! [[ "$tok" =~ ^($allowed)$ ]]; then
         offending=1
       fi
-    done < <(grep -oE "$RML_TOKEN_PATTERN" <<< "$content")
+    done < <(grep -oE "$RML_ANY_TOKEN_PATTERN" <<< "$content")
     if [[ "$offending" -eq 1 ]]; then
       out="${out}${ln}"$'\n'
     fi
@@ -1072,16 +1249,22 @@ check_test_whitelist_gate() {
 
 # -----------------------------------------------------------------------------
 # EN: check_token_gate SRC_ROOT_1 [...] -- (c): comment-stripped scan for
-#     RML_TOKEN_PATTERN outside EXCL_DIR, skipping EXCL_FILES (global, caller-set to
-#     the frozen exception -- RMLX-0 2026-08-05: the run_real_check() call site now
-#     passes RML_TESTS_DIR as one of the roots too, see the comment there for why,
-#     with EXCL_FILES widened to also cover the check (b) frozen 4).
+#     RML_ANY_TOKEN_PATTERN (RMLX-0 2026-08-05, furo 6 -- was the fixed
+#     RML_TOKEN_PATTERN value-type list; see that constant's own declaration
+#     for why a fixed enumeration was itself a hole) outside EXCL_DIR, skipping
+#     EXCL_FILES (global, caller-set to the frozen exception -- RMLX-0
+#     2026-08-05: the run_real_check() call site now passes RML_TESTS_DIR as
+#     one of the roots too, see the comment there for why, with EXCL_FILES
+#     widened to also cover the check (b) frozen 4).
 # PT: check_token_gate RAIZ_1 [...] -- (c): varredura com comentário removido por
-#     RML_TOKEN_PATTERN fora de EXCL_DIR, pulando EXCL_FILES (global, setado pelo
-#     chamador pra exceção congelada -- RMLX-0 2026-08-05: o ponto de chamada em
-#     run_real_check() agora passa RML_TESTS_DIR como uma das raízes também, ver o
-#     comentário lá pro motivo, com EXCL_FILES alargado pra cobrir também os 4
-#     congelados do check (b)).
+#     RML_ANY_TOKEN_PATTERN (RMLX-0 2026-08-05, furo 6 -- era a lista fixa
+#     RML_TOKEN_PATTERN de tipo-valor; ver a declaração dessa constante pro
+#     motivo de uma enumeração fixa ser, ela mesma, um furo) fora de EXCL_DIR,
+#     pulando EXCL_FILES (global, setado pelo chamador pra exceção congelada --
+#     RMLX-0 2026-08-05: o ponto de chamada em run_real_check() agora passa
+#     RML_TESTS_DIR como uma das raízes também, ver o comentário lá pro
+#     motivo, com EXCL_FILES alargado pra cobrir também os 4 congelados do
+#     check (b)).
 # -----------------------------------------------------------------------------
 check_token_gate() {
   local violations=0
@@ -1093,7 +1276,7 @@ check_token_gate() {
     if rml_array_contains "$f" "${EXCL_FILES[@]}"; then
       continue
     fi
-    matches="$(strip_comments "$f" | grep -nE "$RML_TOKEN_PATTERN" || true)"
+    matches="$(strip_comments "$f" | grep -nE "$RML_ANY_TOKEN_PATTERN" || true)"
     # EN: RMLX-0 (2026-08-05, furo 2) -- EXCL_TOKEN_ALLOW (global, caller-set,
     #     path -> allowed-token ERE) is a NARROWER, SYMBOL-level exemption than
     #     EXCL_FILES above: a file listed there keeps failing on any token NOT
@@ -1118,7 +1301,7 @@ check_token_gate() {
       fi
     fi
     if [[ -n "$matches" ]]; then
-      echo "token de tipo-valor RmlUi fora de $RML_DIR em $f:" >&2
+      echo "token Rml:: fora de $RML_DIR em $f (RMLX-0 furo 6 -- qualquer Rml::Identificador reprova, nao so tipo-valor):" >&2
       echo "$matches" >&2
       violations=1
     fi
@@ -1270,11 +1453,31 @@ run_real_check() {
   #     conserto. EXCL_FILES continua exatamente o pulo de arquivo inteiro pra
   #     RML_TOKEN_EXCEPTIONS + RML_TEST_WHITELIST (sem mudança, uma escolha
   #     EXPLÍCITA já documentada acima deles).
+  # EN: RMLX-0 (2026-08-05, furo 6) -- EXCL_TOKEN_ALLOW is now populated from
+  #     TWO maps, not one: RML_TEST_TOKEN_ALLOWED (the test-boundary narrow
+  #     exception, furo 2) AND RML_OPAQUE_PTR_TOKEN_ALLOWED (the 4-file
+  #     opaque-pointer exception this widening would otherwise newly break --
+  #     see that map's own declaration for the docs/rmlx-subset.md citation
+  #     and why it is a MANDATED exception, not an invented one). Both merge
+  #     into the SAME global by the SAME loop shape -- no new mechanism, one
+  #     more caller-populated map read back by check_token_gate.
+  # PT: RMLX-0 (2026-08-05, furo 6) -- o EXCL_TOKEN_ALLOW agora é povoado de
+  #     DOIS mapas, não um: RML_TEST_TOKEN_ALLOWED (a isenção estreita de
+  #     fronteira-de-teste, furo 2) E RML_OPAQUE_PTR_TOKEN_ALLOWED (a isenção
+  #     dos 4 arquivos de ponteiro opaco que este alargamento quebraria de
+  #     novo -- ver a própria declaração desse mapa pela citação do
+  #     docs/rmlx-subset.md e o motivo de ser uma isenção MANDATADA, não
+  #     inventada). Os dois se fundem no MESMO global pelo MESMO formato de
+  #     laço -- nenhum mecanismo novo, só mais um mapa povoado pelo chamador,
+  #     lido de volta pelo check_token_gate.
   EXCL_DIR="$RML_DIR"
   EXCL_FILES=("${RML_TOKEN_EXCEPTIONS[@]}" "${RML_TEST_WHITELIST[@]}")
   EXCL_TOKEN_ALLOW=()
   for _rml_k in "${!RML_TEST_TOKEN_ALLOWED[@]}"; do
     EXCL_TOKEN_ALLOW["$_rml_k"]="${RML_TEST_TOKEN_ALLOWED[$_rml_k]}"
+  done
+  for _rml_k in "${!RML_OPAQUE_PTR_TOKEN_ALLOWED[@]}"; do
+    EXCL_TOKEN_ALLOW["$_rml_k"]="${RML_OPAQUE_PTR_TOKEN_ALLOWED[$_rml_k]}"
   done
   if ! check_token_gate "${RML_SRC_ROOTS[@]}" "$RML_TESTS_DIR"; then
     overall=1
@@ -2076,12 +2279,87 @@ EOF
     ok=0
   fi
 
+  # --- fixture 17: RMLX-0 furo 6 -- check (c) blocked only a FIXED value-type
+  #     list (RML_TOKEN_PATTERN); any OTHER `Rml::` token (Rml::Dictionary,
+  #     Rml::ElementDocument, or any type nobody thought to enumerate) fell
+  #     into (d)'s report-only bucket instead of failing. Three independent
+  #     trees: (17a) `Rml::Dictionary`, a token OUTSIDE the old fixed list and
+  #     with NO exemption, must now fail check (c) (used to pass -- it is not
+  #     `String/Vector2/Colourb/Variant/Input/Log`); (17b) a file carrying ONLY
+  #     an ALTERNATION-group allowed prefix (`Rml::(Context|SystemInterface)`,
+  #     the exact shape engine.hpp/engine.cpp use, not the single-symbol shape
+  #     fixture 13 already covers) must still pass under the widened
+  #     RML_ANY_TOKEN_PATTERN; (17c) the SAME file with an added, unrelated
+  #     `Rml::Dictionary` must now fail -- proves the narrow EXCL_TOKEN_ALLOW
+  #     mechanism (furo 2) still holds a multi-symbol allowed set to account
+  #     under the wider blocking pattern, not just the single-symbol case
+  #     fixture 13 already proved.
+  # PT: fixture 17 -- furo 6 da RMLX-0 -- o check (c) bloqueava só uma lista
+  #     FIXA de tipo-valor (RML_TOKEN_PATTERN); qualquer OUTRO token `Rml::`
+  #     (Rml::Dictionary, Rml::ElementDocument, ou qualquer tipo que ninguém
+  #     pensou em enumerar) caía no balde só-relatório do (d) em vez de
+  #     reprovar. Três árvores independentes: (17a) `Rml::Dictionary`, um
+  #     token FORA da lista fixa antiga e sem isenção nenhuma, agora tem de
+  #     reprovar o check (c) (antes passava -- não é
+  #     `String/Vector2/Colourb/Variant/Input/Log`); (17b) um arquivo
+  #     carregando SÓ um prefixo permitido em ALTERNÂNCIA
+  #     (`Rml::(Context|SystemInterface)`, a forma exata que
+  #     engine.hpp/engine.cpp usam, não a forma de símbolo único que a
+  #     fixture 13 já cobre) ainda tem de passar sob o RML_ANY_TOKEN_PATTERN
+  #     alargado; (17c) o MESMO arquivo com um `Rml::Dictionary`
+  #     acrescentado, não-relacionado, agora tem de falhar -- prova que o
+  #     mecanismo estreito EXCL_TOKEN_ALLOW (furo 2) continua responsabilizando
+  #     um conjunto permitido MULTI-símbolo sob o padrão de bloqueio alargado,
+  #     não só o caso de símbolo único que a fixture 13 já provou.
+  local furo6_bad="$tmp/furo6_bad/src"
+  mkdir -p "$furo6_bad"
+  cat > "$furo6_bad/dict_leak.cpp" <<'EOF'
+void f(const Rml::Dictionary& d) { (void)d; }
+EOF
+  EXCL_DIR="$tmp/furo6_bad/src/rml"
+  EXCL_FILES=()
+  EXCL_TOKEN_ALLOW=()
+  if check_token_gate "$furo6_bad"; then
+    echo "selftest FAIL: check (c) NAO reprovou Rml::Dictionary, token fora da lista fixa antiga (falso negativo -- furo 6 da RMLX-0, enumeracao fixa so fecha o que enumera)" >&2
+    ok=0
+  fi
+
+  local furo6_ok="$tmp/furo6_ok/src"
+  mkdir -p "$furo6_ok"
+  cat > "$furo6_ok/ptr_owner.hpp" <<'EOF'
+bool attach(Rml::SystemInterface* system);
+Rml::Context* context();
+EOF
+  EXCL_DIR="$tmp/furo6_ok/src/rml"
+  EXCL_FILES=()
+  EXCL_TOKEN_ALLOW=(["$furo6_ok/ptr_owner.hpp"]='Rml::(Context|SystemInterface)')
+  if ! check_token_gate "$furo6_ok"; then
+    echo "selftest FAIL: check (c) reprovou Rml::Context/Rml::SystemInterface legitimos num arquivo com isencao em ALTERNANCIA (falso positivo -- EXCL_TOKEN_ALLOW multi-simbolo nao funciona sob o padrao alargado)" >&2
+    ok=0
+  fi
+
+  local furo6_bad2="$tmp/furo6_bad2/src"
+  mkdir -p "$furo6_bad2"
+  cat > "$furo6_bad2/ptr_owner.hpp" <<'EOF'
+bool attach(Rml::SystemInterface* system);
+Rml::Context* context();
+void contrabando(const Rml::Dictionary& d) { (void)d; }
+EOF
+  EXCL_DIR="$tmp/furo6_bad2/src/rml"
+  EXCL_FILES=()
+  EXCL_TOKEN_ALLOW=(["$furo6_bad2/ptr_owner.hpp"]='Rml::(Context|SystemInterface)')
+  if check_token_gate "$furo6_bad2"; then
+    echo "selftest FAIL: check (c) NAO reprovou Rml::Dictionary nao-relacionado no arquivo com isencao em ALTERNANCIA (falso negativo -- a isencao vazou o arquivo inteiro em vez de so o prefixo permitido)" >&2
+    ok=0
+  fi
+  EXCL_TOKEN_ALLOW=()
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados, os 4 furos de PRECISAO do casamento (isencao de include por substring da linha inteira, isencao de token por arquivo inteiro, #include partido por continuacao de linha, #include computado por macro nao-resolvivel) estao fechados, cada um com o par positivo (caso legitimo continua passando), e o furo 5 (comentario ANTES do #include, 3 formas, nos checks (a) e (b)) esta fechado sem reabrir falso positivo no #include proibido citado em prosa dentro de comentario de bloco"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados, os 4 furos de PRECISAO do casamento (isencao de include por substring da linha inteira, isencao de token por arquivo inteiro, #include partido por continuacao de linha, #include computado por macro nao-resolvivel) estao fechados, cada um com o par positivo (caso legitimo continua passando), o furo 5 (comentario ANTES do #include, 3 formas, nos checks (a) e (b)) esta fechado sem reabrir falso positivo no #include proibido citado em prosa dentro de comentario de bloco, e o furo 6 (check (c) bloqueia QUALQUER token Rml::, nao so a lista fixa de tipo-valor) esta fechado -- Rml::Dictionary fora de src/rml/ agora reprova, e a isencao estreita EXCL_TOKEN_ALLOW continua responsabilizando um conjunto permitido multi-simbolo em alternancia (Rml::(Context|SystemInterface))"
   return 0
 }
 

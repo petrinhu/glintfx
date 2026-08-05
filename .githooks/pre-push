@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# EN: git pre-push hook (TST-L1-PRECI). Runs tools/preci.sh --full before any
-#     `git push` -- the local gate "before it becomes visible on a remote" (líder's
-#     2026-07-10 decision: pre-push, not pre-commit, because the glintfx suite is too
-#     slow (~2min warm) for the fast small-commit loop; pushing is the right checkpoint
-#     for "this is about to be visible"). A non-zero exit here ABORTS the push.
+# EN: git pre-push hook (TST-L1-PRECI). Runs tools/preci.sh before any `git push` -- the
+#     local gate "before it becomes visible on a remote" (líder's 2026-07-10 decision:
+#     pre-push, not pre-commit, because the glintfx suite is too slow (~2min warm) for
+#     the fast small-commit loop; pushing is the right checkpoint for "this is about to
+#     be visible"). A non-zero exit here ABORTS the push.
 #
 #     RMLX-0 (2026-08-05, líder's decision): switched from fast mode (default, no
 #     args) to `--full`. Fast mode skips run_full_extras() -- the encapsulation
@@ -13,6 +13,135 @@
 #     checkpoint meant to catch a secret before it becomes visible. This repo is
 #     PUBLIC. Only the caller changed here -- tools/preci.sh's own fast/--full logic
 #     is untouched.
+#
+#     CI-TAGFAST (2026-08-05, líder's decision, same day): dropped the blanket
+#     "--full on every push" for the ONE case where it is pure waste -- a push that is
+#     ONLY tag ref(s), whose target commit(s) are already reachable from the remote's
+#     `main`. That exact code already went through --full at the moment it became
+#     reachable from main (either it WAS the commit pushed to main, or it descends
+#     from one that was). Re-running --full there rebuilds and re-tests the SAME code
+#     a second time -- roughly 20min total for one release (~10min gating the branch
+#     push, ~10min gating the tag push right after) for zero new coverage.
+#
+#     🔴 THE NUANCE THAT MATTERS (read before "simplifying" this to "skip --full for
+#     any tag"): skipping is safe ONLY when the tagged commit was ALREADY gated by a
+#     push to `main`. If someone tags a commit that was never pushed (e.g.
+#     `git tag vX.Y.Z <old-sha>` on something still local-only, or a commit that only
+#     lives on some other branch), the tag push would be the FIRST time that code is
+#     about to become visible -- skipping there would let it out with ZERO
+#     verification. So the rule is not "it's a tag => skip", it is "it's a tag AND its
+#     commit is already an ancestor of <remote>/main => skip". See
+#     classify_push_refs()/tag_commit_is_verified()/decide_action() below for the
+#     actual check.
+#
+#     Why the check asks the REMOTE (`git ls-remote`) instead of trusting the local
+#     refs/remotes/<remote>/main tracking ref: this repo's own house rule is "the push
+#     message lies, ls-remote is proof" (2026-07-22 memory) -- born from a dual-remote
+#     bug where a push message said "up to date" while a remote was actually behind.
+#     The dual-remote is gone (GitHub-only since 2026-07-25), but the underlying gap
+#     is not repo-specific: refs/remotes/<remote>/main only reflects reality up to the
+#     last fetch/push THIS clone did, and can be stale relative to the remote's true
+#     state (another agent/machine pushed to main since; or this clone predates that
+#     push). The network round-trip (a few hundred ms) is a fair price to avoid a
+#     false "already verified" letting an unverified tag slip through.
+#
+#     Why "skip" means "no gate at all", not "fall back to fast mode": tools/preci.sh's
+#     fast mode is scoped to `origin/main...HEAD` UNION the working tree, not to the
+#     specific commit the tag object points at. For an already-verified tag those two
+#     are typically the same commit (fast mode would just print "nothing to gate" and
+#     exit 0 -- no coverage gained over skipping outright). But if HEAD has moved on
+#     since (e.g. WIP for the next feature already sitting in the working tree,
+#     unrelated to the release being tagged), fast mode would gate THAT unrelated work
+#     under the tag push's name -- either wrongly blocking a release on an unfinished,
+#     unrelated change, or wrongly appearing to "verify" the tag by testing code that
+#     has nothing to do with it. Skipping outright is the honest choice: it does not
+#     pretend to verify something it structurally cannot verify (a discrete tagged
+#     commit, not "whatever happens to be in the tree right now") -- it relies instead
+#     on the fact that the exact tagged code already passed --full when it became
+#     reachable from main.
+#
+#     A push containing ANY branch ref alongside the tag(s) (`git push --follow-tags`,
+#     or `git push origin main v1.2.3` in one invocation) still ALWAYS runs --full --
+#     the presence of a branch ref alone forces it, independent of tag verification.
+#     git delivers the whole push (every ref) to ONE hook invocation via stdin, one
+#     line per ref -- see classify_push_refs() below.
+#
+#     Empty stdin (no ref lines at all -- e.g. an unexpected invocation shape this
+#     hook has never actually observed git produce, but nothing guarantees it can't)
+#     is treated as "unknown push, fail safe": runs --full. Never treated as "skip".
+#
+# PT: hook git pre-push (TST-L1-PRECI). Roda tools/preci.sh antes de qualquer
+#     `git push` -- o gate local "antes de ficar visível num remoto" (decisão do
+#     líder de 2026-07-10: pre-push, não pre-commit, porque a suíte glintfx é lenta
+#     demais (~2min warm) pro loop rápido de commits pequenos; o push é o checkpoint
+#     certo para "isso está prestes a ficar visível"). Uma saída não-zero aqui ABORTA
+#     o push.
+#
+#     RMLX-0 (2026-08-05, decisão do líder): trocou do modo rápido (default, sem
+#     args) pro `--full`. O modo rápido pula o run_full_extras() -- o check de
+#     encapsulamento, o gate de whitelist do RmlUi (RMLX-0/F4) e o gitleaks
+#     (TST-L1-SECRETS) moram lá, então o gitleaks estava instalado mas nunca era de
+#     fato chamado no único checkpoint pensado pra pegar um segredo antes de ficar
+#     visível. Este repositório é PÚBLICO. Só o chamador mudou aqui -- a lógica de
+#     fast/--full do próprio tools/preci.sh não foi tocada.
+#
+#     CI-TAGFAST (2026-08-05, decisão do líder, mesmo dia): tirou o "--full em todo
+#     push" cru pro ÚNICO caso em que isso é puro desperdício -- um push que é SÓ
+#     ref(s) de tag, cujo(s) commit(s) alvo já são alcançáveis a partir da `main` do
+#     remoto. Aquele exato código já passou pelo --full no momento em que ficou
+#     alcançável a partir da main (ou FOI o commit empurrado pra main, ou descende de
+#     um que foi). Rodar --full de novo ali reconstrói e retesta o MESMO código uma
+#     segunda vez -- por volta de 20min ao todo pra um release (~10min gateando o push
+#     do branch, ~10min gateando o push da tag logo em seguida) sem cobertura nova
+#     nenhuma.
+#
+#     🔴 A NUANCE QUE IMPORTA (leia antes de "simplificar" isto pra "pula --full pra
+#     qualquer tag"): pular só é seguro QUANDO o commit taggeado JÁ foi gateado por um
+#     push pra `main`. Se alguém taggear um commit que nunca foi empurrado (ex.:
+#     `git tag vX.Y.Z <sha-antigo>` em algo ainda só-local, ou um commit que só existe
+#     em outra branch), o push da tag seria a PRIMEIRA vez que esse código está prestes
+#     a ficar visível -- pular ali deixaria subir com ZERO verificação. Então a regra
+#     não é "é tag => pula", é "é tag E o commit dela já é ancestral de <remote>/main
+#     => pula". Ver classify_push_refs()/tag_commit_is_verified()/decide_action()
+#     abaixo pra checagem de fato.
+#
+#     Por que a checagem pergunta ao REMOTO (`git ls-remote`) em vez de confiar no ref
+#     de tracking local refs/remotes/<remote>/main: a regra da casa deste repo é "a
+#     mensagem do push mente, o ls-remote é a prova" (memória 2026-07-22) -- nascida de
+#     um bug de dual-remote em que a mensagem do push dizia "up to date" enquanto um
+#     remoto de fato estava atrasado. O dual-remote acabou (GitHub-only desde
+#     2026-07-25), mas o buraco de fundo não é específico deste repo:
+#     refs/remotes/<remote>/main só reflete a realidade até o último fetch/push que
+#     ESTE clone fez, e pode estar velho em relação ao estado real do remoto (outro
+#     agente/máquina empurrou pra main desde então; ou este clone é anterior a esse
+#     push). A ida à rede (poucas centenas de ms) é um preço justo pra evitar um "já
+#     verificado" falso deixando uma tag não-verificada passar.
+#
+#     Por que "pular" significa "nenhum gate", não "cai pro modo rápido": o modo
+#     rápido do tools/preci.sh é escopado a `origin/main...HEAD` UNIÃO a working tree,
+#     não ao commit específico que o objeto da tag aponta. Pra uma tag já verificada
+#     os dois costumam ser o mesmo commit (o modo rápido só imprimiria "nada a
+#     gatear" e sairia 0 -- nenhuma cobertura a mais do que pular direto). Mas se o
+#     HEAD já andou desde então (ex.: WIP da próxima feature já sentado na working
+#     tree, sem relação com o release sendo taggeado), o modo rápido gatearia ESSE
+#     trabalho não relacionado em nome do push da tag -- ou bloqueando errado um
+#     release por uma mudança inacabada e não relacionada, ou parecendo "verificar" a
+#     tag errado ao testar código que não tem nada a ver com ela. Pular direto é a
+#     escolha honesta: não finge verificar o que estruturalmente não consegue
+#     verificar (um commit taggeado discreto, não "o que estiver na árvore agora") --
+#     em vez disso confia no fato de que o código exato taggeado já passou pelo --full
+#     quando ficou alcançável a partir da main.
+#
+#     Um push com QUALQUER ref de branch junto da(s) tag(s) (`git push --follow-tags`,
+#     ou `git push origin main v1.2.3` numa invocação só) continua SEMPRE rodando
+#     --full -- a presença de um ref de branch sozinho já força, independente da
+#     verificação da tag. O git entrega o push inteiro (toda ref) a UMA invocação do
+#     hook via stdin, uma linha por ref -- ver classify_push_refs() abaixo.
+#
+#     stdin vazio (nenhuma linha de ref -- ex.: um formato de invocação inesperado que
+#     este hook nunca observou o git produzir de fato, mas nada garante que não possa)
+#     é tratado como "push desconhecido, falha segura": roda --full. Nunca tratado
+#     como "pular".
 #
 #     This hook is OPT-IN, not installed by default (git only looks in .git/hooks/ out
 #     of the box). Activation has TWO valid routes depending on whether `core.hooksPath`
@@ -28,21 +157,6 @@
 #     To bypass for one push (e.g. an emergency, or a push that touches neither layer):
 #       git push --no-verify
 #     Use sparingly -- this is the gate, not a formality.
-#
-# PT: hook git pre-push (TST-L1-PRECI). Roda tools/preci.sh --full antes de qualquer
-#     `git push` -- o gate local "antes de ficar visível num remoto" (decisão do
-#     líder de 2026-07-10: pre-push, não pre-commit, porque a suíte glintfx é lenta
-#     demais (~2min warm) pro loop rápido de commits pequenos; o push é o checkpoint
-#     certo para "isso está prestes a ficar visível"). Uma saída não-zero aqui ABORTA
-#     o push.
-#
-#     RMLX-0 (2026-08-05, decisão do líder): trocou do modo rápido (default, sem
-#     args) pro `--full`. O modo rápido pula o run_full_extras() -- o check de
-#     encapsulamento, o gate de whitelist do RmlUi (RMLX-0/F4) e o gitleaks
-#     (TST-L1-SECRETS) moram lá, então o gitleaks estava instalado mas nunca era de
-#     fato chamado no único checkpoint pensado pra pegar um segredo antes de ficar
-#     visível. Este repositório é PÚBLICO. Só o chamador mudou aqui -- a lógica de
-#     fast/--full do próprio tools/preci.sh não foi tocada.
 #
 #     Este hook é OPT-IN, não é instalado por padrão (o git só olha .git/hooks/ de
 #     fábrica). A ativação tem DUAS rotas válidas dependendo de o `core.hooksPath` já
@@ -61,8 +175,230 @@
 #     das camadas):
 #       git push --no-verify
 #     Usar com moderação -- isto é o gate, não uma formalidade.
+#
+# EN: sourceable for testing -- see the BASH_SOURCE[0]==$0 guard at the bottom (same
+#     shape as tools/preci.sh's own main()/guard). tools/tests/pre_push_gate_test.sh
+#     sources this file to exercise classify_push_refs()/decide_action() in isolation,
+#     stdin-free and network-free (it overrides tag_commit_is_verified() after
+#     sourcing, dependency-injection style), without ever calling main() or exec'ing
+#     tools/preci.sh.
+# PT: sourceável pra teste -- ver o guard BASH_SOURCE[0]==$0 no final (mesma forma do
+#     main()/guard do próprio tools/preci.sh). O tools/tests/pre_push_gate_test.sh
+#     sourceia este arquivo pra exercer classify_push_refs()/decide_action() isolado,
+#     sem stdin e sem rede (ele sobrescreve tag_commit_is_verified() depois de
+#     sourcear, estilo injeção de dependência), sem nunca chamar main() nem exec'ar o
+#     tools/preci.sh.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
 
-exec "${REPO_ROOT}/tools/preci.sh" --full
+# EN: the single branch this repo's whole release flow gates against (CLAUDE.md /
+#     AGENTS.md: "push to main" is the one checkpoint; CI triggers off it). Not
+#     detected dynamically on purpose -- this repo has exactly one long-lived branch,
+#     and hardcoding avoids a symbolic-ref lookup that could itself go stale the same
+#     way a tracking ref can.
+# PT: a única branch contra a qual todo o fluxo de release deste repo gateia
+#     (CLAUDE.md / AGENTS.md: "push pra main" é o único checkpoint; o CI dispara
+#     nela). Não detectada dinamicamente de propósito -- este repo tem exatamente uma
+#     branch de vida longa, e fixar evita uma consulta de symbolic-ref que poderia ela
+#     mesma ficar velha do mesmo jeito que um ref de tracking.
+readonly RELEASE_BRANCH="main"
+
+# -----------------------------------------------------------------------------
+# EN: classify_push_refs LINE... -- pure classification (SEED-GATE style, same shape
+#     as tools/preci.sh's classify_touched_files()): takes each pre-push stdin LINE
+#     ("<local ref> <local sha> <remote ref> <remote sha>") as a POSITIONAL ARG, not
+#     via stdin/pipe (same reason as preci.sh: a pipe's last stage runs in a subshell
+#     by default in bash, which would silently drop these global assignments the
+#     moment this were called via `... | classify_push_refs`). Sets the GLOBALS:
+#       push_saw_ref    -- 1 if at least one non-blank ref line was given, else 0.
+#       push_only_tags  -- 1 if EVERY ref line targets refs/tags/*, else 0. Meaningless
+#                          (left at its default 1) when push_saw_ref is 0 -- callers
+#                          must check push_saw_ref first.
+#       push_tag_shas   -- array of local SHAs for tag refs being CREATED/UPDATED
+#                          (excludes tag DELETIONS, whose local sha is all-zeros --
+#                          deleting a tag makes nothing new visible, so there is
+#                          nothing to verify for that ref).
+#     No `local` on the three globals above -- same unqualified-assignment convention
+#     tools/preci.sh already uses for layer0_touched/layer1_touched, so callers read
+#     them straight after the call.
+# PT: classify_push_refs LINE... -- classificação pura (estilo SEED-GATE, mesma forma
+#     do classify_touched_files() do tools/preci.sh): recebe cada LINHA do stdin do
+#     pre-push ("<local ref> <local sha> <remote ref> <remote sha>") como ARGUMENTO
+#     POSICIONAL, não via stdin/pipe (mesmo motivo do preci.sh: o último estágio de um
+#     pipe roda em subshell por padrão no bash, o que apagaria silenciosamente estas
+#     atribuições globais no instante em que isto fosse chamado via
+#     `... | classify_push_refs`). Seta os GLOBAIS:
+#       push_saw_ref    -- 1 se ao menos uma linha de ref não-vazia foi dada, senão 0.
+#       push_only_tags  -- 1 se TODA linha de ref mira refs/tags/*, senão 0. Sem
+#                          sentido (fica no default 1) quando push_saw_ref é 0 -- quem
+#                          chama precisa checar push_saw_ref primeiro.
+#       push_tag_shas   -- array de SHAs locais das refs de tag sendo CRIADAS/
+#                          ATUALIZADAS (exclui DELEÇÕES de tag, cujo sha local é
+#                          zero -- apagar uma tag não torna nada novo visível, então
+#                          não há o que verificar naquela ref).
+#     Sem `local` nos três globais acima -- mesma convenção de atribuição sem
+#     qualificador que o tools/preci.sh já usa para layer0_touched/layer1_touched, os
+#     chamadores leem eles direto depois da chamada.
+# -----------------------------------------------------------------------------
+classify_push_refs() {
+  push_saw_ref=0
+  push_only_tags=1
+  push_tag_shas=()
+
+  local line
+  for line in "$@"; do
+    [[ -z "${line}" ]] && continue
+    push_saw_ref=1
+
+    local local_sha remote_ref
+    read -r _ local_sha remote_ref _ <<<"${line}"
+
+    case "${remote_ref}" in
+      refs/tags/*)
+        if [[ "${local_sha}" =~ ^0+$ ]]; then
+          continue # tag deletion -- no commit to verify, nothing becomes visible
+        fi
+        push_tag_shas+=("${local_sha}")
+        ;;
+      *)
+        push_only_tags=0
+        ;;
+    esac
+  done
+}
+
+# -----------------------------------------------------------------------------
+# EN: tag_commit_is_verified SHA REMOTE -- true (exit 0) iff SHA (a tag object OR a
+#     plain commit -- `^{commit}` peels either the same way) is already an ancestor of
+#     REMOTE's CURRENT `refs/heads/main`, per a live `git ls-remote` (not the local
+#     tracking ref -- see the file header's "why ls-remote" section). False (exit 1)
+#     on ANY doubt: remote unreachable, branch not found, or SHA not an ancestor --
+#     all fail toward running --full, never toward skipping it.
+#
+#     Deliberately overridable: this is the ONE function in this file that touches the
+#     network, so tools/tests/pre_push_gate_test.sh redefines it (function
+#     redefinition after `source`, plain bash, no framework) to drive both branches of
+#     decide_action() below without a real remote.
+# PT: tag_commit_is_verified SHA REMOTE -- verdadeiro (exit 0) sse SHA (um objeto de
+#     tag OU um commit puro -- `^{commit}` descasca os dois do mesmo jeito) já é
+#     ancestral do `refs/heads/main` ATUAL do REMOTE, segundo um `git ls-remote` ao
+#     vivo (não o ref de tracking local -- ver a seção "por que ls-remote" do
+#     cabeçalho do arquivo). Falso (exit 1) em QUALQUER dúvida: remoto inalcançável,
+#     branch não encontrada, ou SHA não sendo ancestral -- todas falham em direção a
+#     rodar --full, nunca em direção a pular.
+#
+#     Deliberadamente sobrescrevível: esta é a ÚNICA função deste arquivo que toca a
+#     rede, então o tools/tests/pre_push_gate_test.sh a redefine (redefinição de
+#     função depois de `source`, bash puro, sem framework) pra exercitar os dois ramos
+#     do decide_action() abaixo sem um remoto de verdade.
+# -----------------------------------------------------------------------------
+tag_commit_is_verified() {
+  local sha="$1"
+  local remote_name="$2"
+
+  local commit_sha
+  commit_sha="$(git rev-parse --verify --quiet "${sha}^{commit}" 2>/dev/null)" || return 1
+  [[ -n "${commit_sha}" ]] || return 1
+
+  local remote_branch_sha
+  remote_branch_sha="$(git ls-remote --exit-code "${remote_name}" "refs/heads/${RELEASE_BRANCH}" 2>/dev/null | cut -f1)" || return 1
+  [[ -n "${remote_branch_sha}" ]] || return 1
+
+  git merge-base --is-ancestor "${commit_sha}" "${remote_branch_sha}" 2>/dev/null
+}
+
+# -----------------------------------------------------------------------------
+# EN: decide_action REMOTE -- reads the push_saw_ref/push_only_tags/push_tag_shas
+#     globals set by a prior classify_push_refs() call, and echoes EXACTLY ONE of
+#     "full" | "skip" to stdout (nothing else -- callers capture it with `$(...)`).
+#     No exec, no exit -- side-effect-free apart from calling tag_commit_is_verified()
+#     for each candidate tag sha, which is itself the one overridable seam (see
+#     above). This split (decide, then act) is what makes the decision testable
+#     without ever invoking tools/preci.sh or a real network.
+# PT: decide_action REMOTE -- lê os globais push_saw_ref/push_only_tags/push_tag_shas
+#     setados por uma chamada anterior de classify_push_refs(), e ecoa EXATAMENTE UM
+#     de "full" | "skip" pro stdout (nada mais -- quem chama captura com `$(...)`).
+#     Sem exec, sem exit -- livre de efeito colateral fora de chamar
+#     tag_commit_is_verified() pra cada sha de tag candidato, que é ela mesma o único
+#     ponto sobrescrevível (ver acima). Esta divisão (decidir, depois agir) é o que
+#     torna a decisão testável sem nunca chamar o tools/preci.sh ou uma rede de
+#     verdade.
+# -----------------------------------------------------------------------------
+decide_action() {
+  local remote_name="$1"
+
+  if [[ "${push_saw_ref}" -eq 0 ]]; then
+    echo "full" # empty/unrecognized stdin -- fail safe, see file header
+    return 0
+  fi
+
+  if [[ "${push_only_tags}" -ne 1 ]]; then
+    echo "full" # at least one non-tag ref in the batch -- always full
+    return 0
+  fi
+
+  local sha
+  if [[ "${#push_tag_shas[@]}" -gt 0 ]]; then
+    for sha in "${push_tag_shas[@]}"; do
+      if ! tag_commit_is_verified "${sha}" "${remote_name}"; then
+        echo "full" # at least one tag not yet reachable from <remote>/main
+        return 0
+      fi
+    done
+  fi
+
+  echo "skip" # only-tags push, every tag sha already verified (or all were deletions)
+}
+
+# -----------------------------------------------------------------------------
+# EN: main REMOTE_NAME [REMOTE_URL] -- git's actual pre-push argv. Reads the WHOLE of
+#     stdin into a variable up front (destructive on a pipe -- there is no "peek" --
+#     which is exactly why it happens before any decision, not interleaved with one),
+#     classifies it, decides, then acts. tools/preci.sh itself never reads stdin (it
+#     has no interactive/piped input of its own), so there is nothing to "forward" to
+#     it on the `exec` below -- consuming stdin here does not lose anything preci.sh
+#     would have used.
+# PT: main REMOTE_NAME [REMOTE_URL] -- o argv real que o git passa ao pre-push. Lê o
+#     stdin INTEIRO pra uma variável logo de cara (destrutivo num pipe -- não existe
+#     "espiar" -- e é exatamente por isso que acontece antes de qualquer decisão, não
+#     intercalado com uma), classifica, decide, e então age. O próprio tools/preci.sh
+#     nunca lê stdin (não tem entrada interativa/via pipe própria), então não há nada
+#     a "repassar" a ele no `exec` abaixo -- consumir o stdin aqui não perde nada que o
+#     preci.sh fosse usar.
+# -----------------------------------------------------------------------------
+main() {
+  local remote_name="${1:-origin}"
+
+  local stdin_data
+  stdin_data="$(cat)"
+
+  local -a lines=()
+  if [[ -n "${stdin_data}" ]]; then
+    mapfile -t lines <<<"${stdin_data}"
+  fi
+
+  classify_push_refs "${lines[@]}"
+
+  local action
+  action="$(decide_action "${remote_name}")"
+
+  case "${action}" in
+    skip)
+      echo "pre-push: push é só tag(s) cujo commit já é alcançável a partir de '${remote_name}/${RELEASE_BRANCH}' -- esse código já passou pelo --full quando entrou na ${RELEASE_BRANCH}. Pulando o gate (CI-TAGFAST)."
+      exit 0
+      ;;
+    full)
+      exec "${REPO_ROOT}/tools/preci.sh" --full
+      ;;
+    *)
+      echo "pre-push: decisão interna desconhecida ('${action}') -- falhando seguro com --full." >&2
+      exec "${REPO_ROOT}/tools/preci.sh" --full
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

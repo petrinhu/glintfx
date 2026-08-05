@@ -112,6 +112,45 @@ struct App::Impl {
   //     para verificar a ordem de composição) não estaria exercitando o hook nenhuma vez. Mede
   //     dt do mesmo jeito que os dois call sites faziam inline antes.
   void render_frame(int w, int h);
+
+  // EN: AUD-PUB-6g-TEARDOWN (bugfix, twin of UiLayer::Impl's own ~Impl(), src/ui_layer.cpp) --
+  //     disarms the cursor callback BEFORE the implicit member teardown below runs `engine`'s
+  //     destructor (Engine::~Engine -> Bootstrap::~Bootstrap -> Bootstrap::shutdown() ->
+  //     Rml::Shutdown()). Same mechanism, same fix, only the SystemInterface type differs
+  //     (SystemInterfaceGlfwDedup here vs. SystemClock in the embed half) -- see UiLayer::Impl's
+  //     own ~Impl() doc-comment for the full RmlUi-source-confirmed rationale
+  //     (Context::~Context() -> UnloadAllDocuments() -> UnloadDocument() -> UpdateHoverChain()
+  //     can dispatch one final SetMouseCursor() as the hover chain clears) and
+  //     tests/app_cursor_teardown_sanity.cpp for the ASan-provable regression this closes on
+  //     the App side (stack-use-after-scope, same shape as cursor_callback_sanity.cpp's own
+  //     reentrancy leg (F) that caught the embed-side twin first, CI run 31014883530). `system`
+  //     is declared BEFORE `engine` (so it is destroyed AFTER `engine`, per reverse-declaration
+  //     order) and therefore remains valid right up through `engine`'s entire destructor --
+  //     this call is not a use-after-free of `system`, only a preemptive clear of what it
+  //     forwards to. Null-guarded: `system` stays null when App's constructor bails out early
+  //     (e.g. WindowGlfw::create() failure) before reaching the
+  //     `impl_->system = std::make_unique<...>(...)` line above.
+  // PT: AUD-PUB-6g-TEARDOWN (bugfix, gêmeo do próprio ~Impl() de UiLayer::Impl,
+  //     src/ui_layer.cpp) -- desarma o callback de cursor ANTES do teardown implícito de membro
+  //     abaixo rodar o destrutor do `engine` (Engine::~Engine -> Bootstrap::~Bootstrap ->
+  //     Bootstrap::shutdown() -> Rml::Shutdown()). Mesmo mecanismo, mesmo fix, só o tipo de
+  //     SystemInterface difere (SystemInterfaceGlfwDedup aqui vs. SystemClock na metade embed)
+  //     -- ver o próprio doc-comment do ~Impl() de UiLayer::Impl pro racional completo
+  //     confirmado no source do RmlUi (Context::~Context() -> UnloadAllDocuments() ->
+  //     UnloadDocument() -> UpdateHoverChain() pode despachar um SetMouseCursor() final
+  //     enquanto a hover chain limpa) e tests/app_cursor_teardown_sanity.cpp pra regressão
+  //     provável-por-ASan que isto fecha do lado App (stack-use-after-scope, mesma forma da
+  //     própria perna de reentrância (F) do cursor_callback_sanity.cpp que pegou o gêmeo
+  //     embed-side primeiro, run de CI 31014883530). `system` é declarado ANTES de `engine`
+  //     (então é destruído DEPOIS de `engine`, por ordem-reversa-de-declaração) e portanto
+  //     continua válido durante todo o destrutor de `engine` -- esta chamada não é um
+  //     use-after-free do `system`, só uma limpeza preventiva do que ele repassa. Guarda de
+  //     nulo: `system` fica nulo quando o construtor do App sai cedo (ex.: falha do
+  //     WindowGlfw::create()) antes de alcançar a linha
+  //     `impl_->system = std::make_unique<...>(...)` acima.
+  ~Impl() {
+    if (system) system->set_cursor_callback(nullptr);
+  }
 };
 
 App::App(AppConfig cfg) : impl_(std::make_unique<Impl>()) {

@@ -246,6 +246,30 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_cursor_teardown_sanity -- AUD-PUB-6g-TEARDOWN regression, the App/
+  #     SystemInterfaceGlfwDedup twin of cursor_callback_sanity.cpp's own reentrancy leg (F)
+  #     heap-use-after-free (see that test's header comment, and this one's own, for the full
+  #     RmlUi-Context-teardown mechanism). WORKING_DIRECTORY = CMAKE_BINARY_DIR (repo-wide
+  #     GLFW-block convention); cursor_scene.rml is copied once to CMAKE_CURRENT_BINARY_DIR
+  #     above, addressed here as "tests/cursor_scene.rml" -- same pattern as
+  #     app_cursor_callback_smoke immediately above.
+  # PT: app_cursor_teardown_sanity -- regressão AUD-PUB-6g-TEARDOWN, o gêmeo modo-App/
+  #     SystemInterfaceGlfwDedup do próprio heap-use-after-free da perna de reentrância (F) do
+  #     cursor_callback_sanity.cpp (ver o comentário de cabeçalho daquele teste, e o deste, pro
+  #     mecanismo completo de teardown do Context do RmlUi). WORKING_DIRECTORY =
+  #     CMAKE_BINARY_DIR (convenção do bloco GLFW em todo o repo); cursor_scene.rml é copiado
+  #     uma vez para CMAKE_CURRENT_BINARY_DIR acima, endereçado aqui como
+  #     "tests/cursor_scene.rml" -- mesmo padrão do app_cursor_callback_smoke logo acima.
+  # ---------------------------------------------------------------------------
+  add_executable(app_cursor_teardown_sanity app_cursor_teardown_sanity.cpp)
+  target_link_libraries(app_cursor_teardown_sanity PRIVATE glintfx)
+  add_test(NAME app_cursor_teardown_sanity
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_cursor_teardown_sanity>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
   # EN: app_element_box_smoke -- App parity smoke for get_element_box() (F2, v0.2.5).
   #     No pixel assertion (that is element_box_sanity's job via UiLayer, same Engine path);
   #     this only proves the surface is wired on App and returns found=true for a known id.

@@ -74,6 +74,68 @@ struct UiLayer::Impl {
   int gl_offset_x = 0, gl_offset_y = 0;
   bool letterbox_mode = false;
   bool ok = false;
+
+  // EN: AUD-PUB-6g-TEARDOWN (bugfix) -- disarms the cursor callback BEFORE the implicit member
+  //     teardown below runs `engine`'s destructor (Engine::~Engine -> Bootstrap::~Bootstrap ->
+  //     Bootstrap::shutdown() -> Rml::Shutdown()). Confirmed by reading the pinned RmlUi source
+  //     (Context::~Context() -> UnloadAllDocuments() -> UnloadDocument() -> UpdateHoverChain(),
+  //     RmlUi/Source/Core/Context.cpp): unloading the last document clears the hover chain, and
+  //     if the computed cursor differs from Context::cursor_name's last-dispatched value (it
+  //     almost always does -- hovering nothing computes ""), RmlUi calls
+  //     SystemInterface::SetMouseCursor() ONE LAST TIME as part of ITS OWN teardown, which
+  //     SystemClock::SetMouseCursor (src/rml/system_clock.hpp) forwards straight to whatever
+  //     callback a consumer last installed via set_cursor_callback(). A consumer has no reason
+  //     to expect ITS OWN callback to fire again after telling US to shut down (destroying the
+  //     UiLayer) -- a callback that captures references to the consumer's own locals (a normal,
+  //     documented pattern this library's own AUD-TEC-3 reentrancy guard explicitly supports)
+  //     is invoked with those locals potentially already destroyed by the time OUR destructor
+  //     runs, a heap-use-after-free that is NOT the consumer's fault (measured via ASan,
+  //     cursor_callback_sanity.cpp's own reentrancy leg (F) tripped it first: CI run 31014883530
+  //     job "sanitize (self-hosted / GLFW=ON)", heap-use-after-free at
+  //     tests/cursor_callback_sanity.cpp:154, `#16 SystemClock::SetMouseCursor`,
+  //     `#17 Context::UpdateHoverChain`, `#18-19 Unload{Document,AllDocuments}`,
+  //     `#20-21 Context::~Context`). Clearing `clock`'s callback HERE -- in this destructor's
+  //     body, which runs BEFORE the implicit reverse-declaration-order member teardown below --
+  //     means clock.SetMouseCursor()'s `if (cb) cb(...)` guard sees an EMPTY std::function by
+  //     the time RmlUi's internal teardown reaches it: a safe no-op, identical to "no callback
+  //     was ever registered". This is an API-contract fix, not a test-hygiene workaround: a
+  //     consumer must never be called back once it has asked to be torn down. `clock` itself is
+  //     declared BEFORE `engine` (so it is destroyed AFTER `engine`, per reverse-declaration
+  //     order) and therefore remains a valid object right up through `engine`'s entire
+  //     destructor -- this call is not a use-after-free of `clock`, only a preemptive clear of
+  //     what it forwards to.
+  // PT: AUD-PUB-6g-TEARDOWN (bugfix) -- desarma o callback de cursor ANTES do teardown
+  //     implícito de membro abaixo rodar o destrutor do `engine` (Engine::~Engine ->
+  //     Bootstrap::~Bootstrap -> Bootstrap::shutdown() -> Rml::Shutdown()). Confirmado lendo o
+  //     source pinado do RmlUi (Context::~Context() -> UnloadAllDocuments() ->
+  //     UnloadDocument() -> UpdateHoverChain(), RmlUi/Source/Core/Context.cpp): descarregar o
+  //     último documento limpa a hover chain, e se o cursor computado difere do último valor
+  //     despachado em Context::cursor_name (quase sempre difere -- hover em nada computa ""), o
+  //     RmlUi chama SystemInterface::SetMouseCursor() UMA ÚLTIMA VEZ como parte do PRÓPRIO
+  //     teardown dele, que o SystemClock::SetMouseCursor (src/rml/system_clock.hpp) repassa
+  //     direto para o que quer que um consumidor tenha instalado por último via
+  //     set_cursor_callback(). Um consumidor não tem motivo para esperar que O PRÓPRIO callback
+  //     dispare de novo depois de nos mandar desligar (destruir o UiLayer) -- um callback que
+  //     captura referências aos próprios locais do consumidor (um padrão normal, documentado,
+  //     que a própria guarda de reentrância AUD-TEC-3 desta biblioteca explicitamente suporta)
+  //     é invocado com esses locais potencialmente já destruídos no momento em que NOSSO
+  //     destrutor roda, um heap-use-after-free que NÃO é culpa do consumidor (medido via ASan,
+  //     a própria perna de reentrância (F) do cursor_callback_sanity.cpp o disparou primeiro:
+  //     run de CI 31014883530, job "sanitize (self-hosted / GLFW=ON)", heap-use-after-free em
+  //     tests/cursor_callback_sanity.cpp:154, `#16 SystemClock::SetMouseCursor`,
+  //     `#17 Context::UpdateHoverChain`, `#18-19 Unload{Document,AllDocuments}`,
+  //     `#20-21 Context::~Context`). Limpar o callback do `clock` AQUI -- no corpo deste
+  //     destrutor, que roda ANTES do teardown implícito de membro em ordem-reversa-de-
+  //     declaração abaixo -- significa que a guarda `if (cb) cb(...)` de clock.SetMouseCursor()
+  //     vê um std::function VAZIO no momento em que o teardown interno do RmlUi o alcança: um
+  //     no-op seguro, idêntico a "nenhum callback foi registrado nunca". Este é um fix de
+  //     CONTRATO DE API, não uma gambiarra de higiene de teste: um consumidor nunca deve ser
+  //     chamado de volta depois de pedir para ser desligado. O próprio `clock` é declarado
+  //     ANTES de `engine` (então é destruído DEPOIS de `engine`, por ordem-reversa-de-
+  //     declaração) e portanto continua um objeto válido durante todo o destrutor de `engine`
+  //     -- esta chamada não é um use-after-free do `clock`, só uma limpeza preventiva do que
+  //     ele repassa.
+  ~Impl() { clock.set_cursor_callback(nullptr); }
 };
 
 UiLayer::UiLayer(Config cfg) : impl_(std::make_unique<Impl>()) {

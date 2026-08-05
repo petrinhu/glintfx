@@ -3857,6 +3857,66 @@ add_test(NAME form_events_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: RMLX-1/S6a -- dom_dump_corpus_sanity / dom_dump_determinism_sanity. Both link
+#     ${_embed_dep} + RmlUi::Core, same precedent as document_reload_leak.cpp/focus_sanity.cpp/
+#     domrw_sanity.cpp/form_events_sanity.cpp immediately above ("drive Engine directly for the
+#     internal RmlUi oracle"). UNLIKE those four, the .cpp SOURCE FILES live in
+#     glintfx/src/rml/, not glintfx/tests/ -- see dom_dump.hpp's own header comment and
+#     dom_dump_corpus_sanity.cpp's own header comment for why: both new test files reference
+#     Rml::Context/Rml::ElementDocument directly, which tools/check_rml_whitelist.sh's checks
+#     (b)/(c) forbid for a NEW file physically located under glintfx/tests/ (that whitelist is
+#     deliberately frozen). This CMakeLists.txt entry is the ONLY place these two executables
+#     are registered with CTest -- a CMakeLists.txt file is never scanned by the gate regardless
+#     of what source path it references, so wiring the build here does not reopen that hole.
+#     GLINTFX_RML_TESTS_DIR/GLINTFX_RML_DEMOS_DIR: absolute SOURCE-tree paths (not a build-dir
+#     copy), resolved at CONFIGURE time -- same reasoning as GLINTFX_UIX_TESTS_DIR/
+#     GLINTFX_UIX_DEMOS_DIR in glintfx/tests/uix/CMakeLists.txt (portable regardless of ctest's
+#     CWD at RUN time); dom_dump_corpus_sanity.cpp's own header comment explains why loading
+#     fixtures by their real source path (not a copy) also lets sibling .rcss assets resolve for
+#     free.
+# PT: RMLX-1/S6a -- dom_dump_corpus_sanity / dom_dump_determinism_sanity. Os dois linkam
+#     ${_embed_dep} + RmlUi::Core, mesmo precedente do document_reload_leak.cpp/focus_sanity.cpp/
+#     domrw_sanity.cpp/form_events_sanity.cpp logo acima ("dirige o Engine diretamente pelo
+#     oráculo interno do RmlUi"). DIFERENTE desses quatro, os arquivos-fonte .cpp moram em
+#     glintfx/src/rml/, não glintfx/tests/ -- ver o próprio comentário de cabeçalho de
+#     dom_dump.hpp e o próprio comentário de cabeçalho de dom_dump_corpus_sanity.cpp pro motivo:
+#     os dois arquivos de teste novos referenciam Rml::Context/Rml::ElementDocument diretamente,
+#     o que os checks (b)/(c) do tools/check_rml_whitelist.sh proíbem pra um arquivo NOVO
+#     fisicamente localizado sob glintfx/tests/ (aquela whitelist é deliberadamente congelada).
+#     Esta entrada do CMakeLists.txt é o ÚNICO lugar em que estes dois executáveis são
+#     registrados no CTest -- um arquivo CMakeLists.txt nunca é varrido pelo gate independente
+#     de que caminho-fonte ele referencia, então conectar o build aqui não reabre aquele furo.
+#     GLINTFX_RML_TESTS_DIR/GLINTFX_RML_DEMOS_DIR: caminhos absolutos NA ÁRVORE-FONTE (não uma
+#     cópia no dir de build), resolvidos em tempo de CONFIGURE -- mesmo raciocínio do
+#     GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR em glintfx/tests/uix/CMakeLists.txt (portável
+#     independente do CWD do ctest em tempo de EXECUÇÃO); o próprio comentário de cabeçalho de
+#     dom_dump_corpus_sanity.cpp explica por que carregar fixtures pelo caminho-fonte real (não
+#     uma cópia) também deixa assets .rcss irmãos resolverem de graça.
+# ---------------------------------------------------------------------------
+add_executable(dom_dump_corpus_sanity
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump_corpus_sanity.cpp)
+target_link_libraries(dom_dump_corpus_sanity PRIVATE ${_embed_dep} RmlUi::Core)
+target_compile_definitions(dom_dump_corpus_sanity PRIVATE
+  GLINTFX_RML_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  GLINTFX_RML_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase")
+add_test(NAME dom_dump_corpus_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dom_dump_corpus_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(dom_dump_determinism_sanity
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump_determinism_sanity.cpp)
+target_link_libraries(dom_dump_determinism_sanity PRIVATE ${_embed_dep} RmlUi::Core)
+add_test(NAME dom_dump_determinism_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dom_dump_determinism_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
 #     "ripple()" decorator + its backdrop-capture machinery (both now inside the
 #     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated

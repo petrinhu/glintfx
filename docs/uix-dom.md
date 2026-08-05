@@ -241,17 +241,34 @@ upstream RmlUi's own behaviour, not just a design preference this document is as
 authority -- `RMLX-3` (layout) is the wave that may collapse runs of whitespace for *rendering*
 purposes; the DOM never does, and this dump never pretends it does.
 
-**(c) Entity decoding is a content-policy detail, not an existence-filter detail.** `&nbsp;`,
-`&amp;`, etc. decode to their literal character at text-node-construction time (standard XML
-character-data handling, upstream of the whitespace filter above) and the decoded byte(s) are what
-gets dumped, escaped per section 2 like any other content. ⚠️ **U+00A0 (`&nbsp;`, UTF-8 `C2 A0`) is
-NOT in section 2's escape set** (it is not `\`, `\n`, `\r` or `\t`) and is **visually
-indistinguishable from a plain space** in almost every editor, terminal and `diff` pager. A `TEXT`
-line that "looks unchanged" in a diff view may still differ at the byte level if a plain space on
-one side was an nbsp on the other -- when a `TEXT` line's diff looks like a no-op, re-check with a
-byte-exact tool (`diff <(xxd a) <(xxd b)`, `cmp`) before trusting the eye. This exact class of bug
-is why the house's own conventions distrust text-extraction/eyeball verification in general; nbsp-
-vs-space is the DOM-dump-shaped instance of it.
+**(c) Entity decoding is a content-policy detail, not an existence-filter detail.** 🔴
+**CORRECTED 2026-08-05, `S6a` finding (verified against `examples/RmlUi/Source/Core/
+StringUtilities.cpp:128-218`, `StringUtilities::DecodeRml`, AND against a live run of `S6a`
+against the ORIGINAL version of this example, which failed):** RmlUi's `DecodeRml` recognizes
+exactly FIVE entity forms -- `&lt;`, `&gt;`, `&amp;`, `&quot;`, and a numeric character reference,
+either decimal (`&#160;`) or hex (`&#xA0;`). **`&nbsp;` is NOT one of them** -- RML is XML-like,
+not HTML, and XML's own predefined-entity set is `lt`/`gt`/`amp`/`quot`/`apos` (RmlUi implements
+the first four; `DecodeRml` has no `apos` branch either, so a literal `&apos;` also passes through
+undecoded, though no fixture in this wave's corpus exercises that). A named HTML entity like
+`&nbsp;` that is not one of RmlUi's four literal forms falls through `DecodeRml`'s own `& ->
+copy-one-byte-and-continue` default case (`StringUtilities.cpp:214-215`) and survives into the
+text node **completely undecoded, as its own six literal ASCII bytes** `&nbsp;` -- NOT as U+00A0.
+An earlier version of this document's own worked example (section 11) asserted the opposite and
+was **wrong**; this correction (and section 11's matching fix) is the artifact of that bug being
+caught. The DECODED-byte/escaping mechanics this subsection otherwise describes are correct and
+still apply in full to whichever entity form actually decodes -- e.g. a numeric reference like
+`&#160;` (U+00A0, non-breaking space) decodes to the two raw UTF-8 bytes `C2 A0` at
+text-node-construction time (standard XML character-data handling, upstream of the whitespace
+filter above), and THOSE decoded bytes are what gets dumped, escaped per section 2 like any other
+content. ⚠️ **U+00A0 (UTF-8 `C2 A0`) is NOT in section 2's escape set** (it is not `\`, `\n`, `\r`
+or `\t`) and is **visually indistinguishable from a plain space** in almost every editor, terminal
+and `diff` pager. A `TEXT` line that "looks unchanged" in a diff view may still differ at the byte
+level if a plain space on one side was an nbsp on the other -- when a `TEXT` line's diff looks like
+a no-op, re-check with a byte-exact tool (`diff <(xxd a) <(xxd b)`, `cmp`) before trusting the eye.
+This exact class of bug is why the house's own conventions distrust text-extraction/eyeball
+verification in general; nbsp-vs-space is the DOM-dump-shaped instance of it -- and, per the
+correction above, `&nbsp;`-vs-`&#160;` is now a SECOND instance of the same family: two source
+spellings that look interchangeable to a human author and are not.
 
 ### 7. Attribute and class ordering (why sorted, why byte-wise)
 
@@ -359,6 +376,16 @@ not silently bolted onto this file.
 
 ### 11. Worked example (byte-exact)
 
+🔴 **CORRECTED 2026-08-05 (`S6a` finding):** this example originally used the named HTML entity
+`&nbsp;` where it now uses the numeric character reference `&#160;`. Section 6c explains why:
+RmlUi's `DecodeRml` does not recognize `&nbsp;` at all (it is not one of the 4 literal forms
+`DecodeRml` implements, nor a numeric reference) -- the ORIGINAL version of this example asserted
+`&nbsp;` decodes to U+00A0, which a live run of `S6a` against real RmlUi disproved (the text
+survived as its own 6 literal ASCII bytes `&nbsp;`, not U+00A0). `&#160;` is the numeric spelling
+of the exact same code point and DOES decode correctly -- it preserves this example's whole
+teaching point (an invisible byte a `diff` viewer conflates with plain space) without asserting a
+falsehood about upstream behaviour.
+
 Source fragment (indentation and line breaks below are the literal, exact source bytes -- this is
 the whole point of the example):
 
@@ -369,7 +396,7 @@ the whole point of the example):
 </head>
 <body>
 <div id="panel" class="wide highlighted" data-if="flag" title="Panel">
-  <span class="highlighted wide">Hi&nbsp;there</span>
+  <span class="highlighted wide">Hi&#160;there</span>
 </div>
 </body>
 </rml>
@@ -418,12 +445,13 @@ example elsewhere -- the annotations are the point, not the 13 lines on their ow
 - `body/0 ATTR data-if=flag` before `body/0 ATTR title=Panel`: sorted by attribute name,
   `data-if` < `title` byte-wise (section 7); `id`/`class` do not reappear here (excluded from the
   generic `ATTR` block, section 7).
-- `body/0/0/0 TEXT Hi<NBSP>there`: `&nbsp;` decodes to U+00A0 (section 6c). The literal dump line
-  contains the real UTF-8 bytes `C2 A0` at that position, not the four ASCII characters `<`, `N`,
-  `B`, `S`, `P`, `>` -- `<NBSP>` here is this document's typographic placeholder for "the invisible
-  byte", used because U+00A0 cannot be typed unambiguously in Markdown prose without a reader
-  mistaking it for a regular space (the exact confusion section 6c warns a `diff` viewer will also
-  fall into). A conforming dumper must never emit the literal string `<NBSP>` -- that would be
+- `body/0/0/0 TEXT Hi<NBSP>there`: `&#160;` decodes to U+00A0 (section 6c) -- `&nbsp;` would NOT
+  (see this section's own 2026-08-05 correction note above). The literal dump line contains the
+  real UTF-8 bytes `C2 A0` at that position, not the four ASCII characters `<`, `N`, `B`, `S`,
+  `P`, `>` -- `<NBSP>` here is this document's typographic placeholder for "the invisible byte",
+  used because U+00A0 cannot be typed unambiguously in Markdown prose without a reader mistaking
+  it for a regular space (the exact confusion section 6c warns a `diff` viewer will also fall
+  into). A conforming dumper must never emit the literal string `<NBSP>` -- that would be
   **wrong**, indistinguishable from a literal 6-character attribute glitch; it must emit the two
   raw bytes `0xC2 0xA0`.
 
@@ -623,17 +651,36 @@ este documento afirma por autoridade própria -- a `RMLX-3` (layout) é a onda q
 de whitespace pra fins de *renderização*; o DOM nunca faz isso, e este dump nunca finge que faz.
 
 **(c) Decodificação de entidade é um detalhe de política de conteúdo, não de filtro de
-existência.** `&nbsp;`, `&amp;`, etc. decodificam pro caractere literal no momento de construção do
-nó de texto (tratamento padrão de character-data XML, anterior ao filtro de whitespace acima) e
-o(s) byte(s) decodificado(s) é(são) o que vai pro dump, escapado pela seção 2 como qualquer outro
-conteúdo. ⚠️ **U+00A0 (`&nbsp;`, UTF-8 `C2 A0`) NÃO está no conjunto de escape da seção 2** (não é
-`\`, `\n`, `\r` nem `\t`) e é **visualmente indistinguível de um espaço comum** em quase todo
-editor, terminal e pager de `diff`. Uma linha `TEXT` que "parece sem mudança" numa view de diff
-ainda pode diferir no nível de byte se um espaço comum de um lado era um nbsp do outro -- quando o
-diff de uma linha `TEXT` parece um no-op, reconferir com ferramenta byte-exata
-(`diff <(xxd a) <(xxd b)`, `cmp`) antes de confiar no olho. Esta classe exata de bug é por que as
-convenções da própria casa desconfiam de extração-de-texto/verificação a olho em geral; nbsp-vs-
-espaço é a instância no-formato-de-dump-de-DOM disso.
+existência.** 🔴 **CORRIGIDO em 2026-08-05, achado da `S6a` (verificado contra
+`examples/RmlUi/Source/Core/StringUtilities.cpp:128-218`, `StringUtilities::DecodeRml`, E contra
+uma rodada ao vivo da `S6a` contra a versão ORIGINAL deste exemplo, que falhou):** o `DecodeRml`
+do RmlUi reconhece exatamente CINCO formas de entidade -- `&lt;`, `&gt;`, `&amp;`, `&quot;`, e uma
+referência numérica de caractere, decimal (`&#160;`) ou hex (`&#xA0;`). **`&nbsp;` NÃO é uma
+delas** -- o RML é estilo-XML, não HTML, e o próprio conjunto de entidades predefinidas do XML é
+`lt`/`gt`/`amp`/`quot`/`apos` (o RmlUi implementa as quatro primeiras; o `DecodeRml` também não
+tem ramo pra `apos`, então um `&apos;` literal também passa sem decodificar, embora nenhuma
+fixture do corpus desta onda exercite isso). Uma entidade HTML nomeada como `&nbsp;`, que não é
+uma das quatro formas literais do RmlUi, cai no caso default do próprio `DecodeRml` (`& ->
+copia-um-byte-e-continua`, `StringUtilities.cpp:214-215`) e sobrevive no nó de texto
+**completamente não-decodificada, como seus próprios seis bytes ASCII literais** `&nbsp;` -- NÃO
+como U+00A0. Uma versão anterior do próprio exemplo trabalhado deste documento (seção 11) afirmava
+o oposto e estava **errada**; esta correção (e o conserto correspondente da seção 11) é o
+artefato desse bug tendo sido pego. A mecânica de byte-decodificado/escape que esta subseção
+descreve fora isso está correta e continua valendo por completo pra qualquer forma de entidade que
+de fato decodifique -- ex.: uma referência numérica como `&#160;` (U+00A0, espaço
+não-quebrável) decodifica pros dois bytes UTF-8 crus `C2 A0` no momento de construção do nó de
+texto (tratamento padrão de character-data XML, anterior ao filtro de whitespace acima), e ESSES
+bytes decodificados são o que vai pro dump, escapado pela seção 2 como qualquer outro conteúdo.
+⚠️ **U+00A0 (UTF-8 `C2 A0`) NÃO está no conjunto de escape da seção 2** (não é `\`, `\n`, `\r`
+nem `\t`) e é **visualmente indistinguível de um espaço comum** em quase todo editor, terminal e
+pager de `diff`. Uma linha `TEXT` que "parece sem mudança" numa view de diff ainda pode diferir no
+nível de byte se um espaço comum de um lado era um nbsp do outro -- quando o diff de uma linha
+`TEXT` parece um no-op, reconferir com ferramenta byte-exata (`diff <(xxd a) <(xxd b)`, `cmp`)
+antes de confiar no olho. Esta classe exata de bug é por que as convenções da própria casa
+desconfiam de extração-de-texto/verificação a olho em geral; nbsp-vs-espaço é a instância
+no-formato-de-dump-de-DOM disso -- e, pela correção acima, `&nbsp;`-vs-`&#160;` agora é uma
+SEGUNDA instância da mesma família: duas grafias-fonte que parecem intercambiáveis pra um autor
+humano e não são.
 
 ### 7. Ordenação de atributo e classe (por que ordenado, por que byte-a-byte)
 
@@ -746,6 +793,17 @@ só então código), não aparafusada em silêncio neste arquivo.
 
 ### 11. Exemplo trabalhado (byte-exato)
 
+🔴 **CORRIGIDO em 2026-08-05 (achado da `S6a`):** este exemplo originalmente usava a entidade
+HTML nomeada `&nbsp;` onde agora usa a referência numérica de caractere `&#160;`. A seção 6c
+explica o motivo: o `DecodeRml` do RmlUi não reconhece `&nbsp;` de jeito nenhum (não é uma das 4
+formas literais que o `DecodeRml` implementa, nem uma referência numérica) -- a versão ORIGINAL
+deste exemplo afirmava que `&nbsp;` decodifica pra U+00A0, o que uma rodada ao vivo da `S6a`
+contra o RmlUi real desmentiu (o texto sobreviveu como seus próprios 6 bytes ASCII literais
+`&nbsp;`, não U+00A0). `&#160;` é a grafia numérica do EXATO mesmo ponto de código e DECODIFICA
+corretamente -- preserva o ponto pedagógico inteiro deste exemplo (um byte invisível que um
+visualizador de `diff` confunde com espaço comum) sem afirmar uma falsidade sobre o comportamento
+upstream.
+
 Fragmento-fonte (a indentação e as quebras de linha abaixo são os bytes-fonte literais, exatos --
 este é o ponto inteiro do exemplo):
 
@@ -756,7 +814,7 @@ este é o ponto inteiro do exemplo):
 </head>
 <body>
 <div id="panel" class="wide highlighted" data-if="flag" title="Panel">
-  <span class="highlighted wide">Hi&nbsp;there</span>
+  <span class="highlighted wide">Hi&#160;there</span>
 </div>
 </body>
 </rml>
@@ -805,7 +863,8 @@ exemplo pra outro lugar -- as anotações são o ponto, não as 13 linhas sozinh
 - `body/0 ATTR data-if=flag` antes de `body/0 ATTR title=Panel`: ordenado por nome de atributo,
   `data-if` < `title` byte-a-byte (seção 7); `id`/`class` não reaparecem aqui (excluídos do bloco
   genérico `ATTR`, seção 7).
-- `body/0/0/0 TEXT Hi<NBSP>there`: `&nbsp;` decodifica pra U+00A0 (seção 6c). A linha de dump
+- `body/0/0/0 TEXT Hi<NBSP>there`: `&#160;` decodifica pra U+00A0 (seção 6c) -- `&nbsp;` NÃO
+  decodificaria (ver a nota de correção de 2026-08-05 desta seção acima). A linha de dump
   literal contém os bytes UTF-8 reais `C2 A0` naquela posição, não os seis caracteres ASCII `<`,
   `N`, `B`, `S`, `P`, `>` -- `<NBSP>` aqui é o placeholder tipográfico deste documento pro "byte
   invisível", usado porque U+00A0 não pode ser digitado sem ambiguidade em prosa Markdown sem um

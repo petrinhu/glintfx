@@ -86,6 +86,42 @@
 #     a decision for the líder, not something this script's author gets to do
 #     unilaterally by adding a path to satisfy a red run.
 #
+#     RMLX-0 (2026-08-05, furo 5): checks (a)/(b) now match against a
+#     COMMENT-STRIPPED stream too (previously only (c)/(d) did). Two
+#     independent problems shared one fix: (i) a comment BEFORE `#include` on
+#     the same physical line (`/* c */ #include <RmlUi/Core/Element.h>`,
+#     `/**/#include "..."`, `  /* x */  #  include <...>`) becomes whitespace
+#     at C++ phase 3, before phase 4 recognizes the directive -- valid,
+#     unremarkable C++ (confirmed with `clang++ -E`: the include IS
+#     processed) that RML_INCLUDE_PATTERN's `^[[:space:]]*#` anchor, run
+#     against the RAW line, never matches (first non-space char is `/`); (ii)
+#     the mirror false positive: a `/* ... */` doc-comment that merely
+#     DOCUMENTS the forbidden `#include <RmlUi/...>` pattern in prose (a real
+#     genre of text -- this very header does exactly that, repeatedly) used
+#     to fail the gate as if it were code. check_include_gate() and
+#     check_test_whitelist_gate() now call rml_matches_spliced() against
+#     `<(strip_comments "$f")` (process substitution, not the raw file) --
+#     strip_comments() already existed and already solves both problems for
+#     (c)/(d); reusing it here closes (i) and (ii) with the SAME machinery.
+# PT: RMLX-0 (2026-08-05, furo 5): os checks (a)/(b) agora casam contra um
+#     fluxo com COMENTÁRIO REMOVIDO também (antes só (c)/(d) faziam isso).
+#     Dois problemas independentes, um conserto só: (i) um comentário ANTES
+#     do `#include` na mesma linha física (`/* c */ #include
+#     <RmlUi/Core/Element.h>`, `/**/#include "..."`, `  /* x */  #  include
+#     <...>`) vira espaço em branco na fase 3 do C++, antes da fase 4
+#     reconhecer a diretiva -- C++ válido, sem nada de anormal (confirmado
+#     com `clang++ -E`: o include É processado) que a âncora
+#     `^[[:space:]]*#` do RML_INCLUDE_PATTERN, rodada contra a linha CRUA,
+#     nunca casa (primeiro caractere não-espaço é `/`); (ii) o falso positivo
+#     espelho: um comentário de bloco `/* ... */` que só DOCUMENTA o padrão
+#     proibido `#include <RmlUi/...>` em prosa (um gênero de texto real --
+#     este próprio cabeçalho faz isso, repetidamente) reprovava o gate como
+#     se fosse código. check_include_gate() e check_test_whitelist_gate()
+#     agora chamam rml_matches_spliced() contra `<(strip_comments "$f")`
+#     (process substitution, não o arquivo cru) -- o strip_comments() já
+#     existia e já resolve os dois problemas pro (c)/(d); reusar aqui fecha
+#     (i) e (ii) com a MESMA maquinaria.
+#
 # PT: RMLX-0/F4 -- gate de whitelist do RmlUi. Guarda o confinamento que F1-F3 já
 #     compraram: com o `#include <RmlUi/...>` movido para `glintfx/src/rml/` (F1) e
 #     `engine.cpp`/`ui_layer.cpp` desmamados do RmlUi por completo (F2/F3), nada impede
@@ -889,7 +925,32 @@ check_include_gate() {
     #     cru) pra um `#include` partido entre linhas físicas por continuação `\`
     #     não conseguir escapar do RML_INCLUDE_PATTERN escondendo metade da
     #     diretiva em cada uma de duas linhas que o grep veria independentes.
-    matches="$(rml_matches_spliced "$f" "$RML_INCLUDE_PATTERN")"
+    # EN: RMLX-0 (2026-08-05, furo 5) -- fed the COMMENT-STRIPPED stream (via
+    #     process substitution, one output line per input line so physical line
+    #     numbers survive), not the raw file: a comment between line-start and the
+    #     `#` (`/* c */ #include <...>`, `/**/#include "..."`, `  /* x */  #
+    #     include <...>`) becomes whitespace at C++ phase 3, BEFORE phase 4 sees
+    #     the directive -- valid, unremarkable C++ (confirmed with `clang++ -E`:
+    #     the include IS processed) that RML_INCLUDE_PATTERN's `^[[:space:]]*#`
+    #     anchor, run against the raw line, never matches (the first non-space
+    #     char is `/`, not `#`). Proved live: all 3 forms above returned OK/exit 0
+    #     pre-fix. strip_comments() already removes exactly this text (that is
+    #     its job for (c)/(d)); reusing it here closes the hole with the same
+    #     machinery, not a second one.
+    # PT: RMLX-0 (2026-08-05, furo 5) -- alimentado pelo fluxo com COMENTÁRIO
+    #     REMOVIDO (via process substitution, uma linha de saída por linha de
+    #     entrada pra número de linha física sobreviver), não pelo arquivo cru: um
+    #     comentário entre o início de linha e o `#` (`/* c */ #include <...>`,
+    #     `/**/#include "..."`, `  /* x */  #  include <...>`) vira espaço em
+    #     branco na fase 3 do C++, ANTES da fase 4 enxergar a diretiva -- C++
+    #     válido, sem nada de anormal (confirmado com `clang++ -E`: o include É
+    #     processado) que a âncora `^[[:space:]]*#` do RML_INCLUDE_PATTERN,
+    #     rodada contra a linha crua, nunca casa (o primeiro caractere não-espaço
+    #     é `/`, não `#`). Provado ao vivo: as 3 formas acima devolviam OK/exit 0
+    #     pré-conserto. O strip_comments() já remove exatamente esse texto (é o
+    #     trabalho dele pro (c)/(d)); reusar aqui fecha o furo com a mesma
+    #     maquinaria, não uma segunda.
+    matches="$(rml_matches_spliced <(strip_comments "$f") "$RML_INCLUDE_PATTERN")"
     # EN: RMLX-0 (2026-08-05, furo 1) -- an EXCL_FILES entry no longer skips the
     #     whole file, and no longer filters by substring-anywhere-on-the-line
     #     either: rml_filter_include_exception() re-parses the #include's own
@@ -994,7 +1055,12 @@ check_test_whitelist_gate() {
     #     same line-splicing exposure applies here.
     # PT: RMLX-0 (2026-08-05, furo 3) -- ver o comentário do próprio
     #     check_include_gate; a mesma exposição de emenda de linha vale aqui.
-    matches="$(rml_matches_spliced "$f" "$RML_INCLUDE_PATTERN")"
+    # EN: RMLX-0 (2026-08-05, furo 5) -- comment-stripped stream, same fix and
+    #     same rationale as check_include_gate's own furo-5 comment above.
+    # PT: RMLX-0 (2026-08-05, furo 5) -- fluxo com comentário removido, mesmo
+    #     conserto e mesma racional do comentário de furo-5 do próprio
+    #     check_include_gate acima.
+    matches="$(rml_matches_spliced <(strip_comments "$f") "$RML_INCLUDE_PATTERN")"
     if [[ -n "$matches" ]]; then
       echo "RmlUi #include em teste NOVO fora da whitelist congelada de 4, em $f:" >&2
       echo "$matches" >&2
@@ -1862,12 +1928,113 @@ EOF
     ok=0
   fi
 
+  # --- fixture 16: RMLX-0 furo 5 -- a comment BEFORE the `#include` directive
+  #     (same physical line) becomes whitespace at C++ phase 3, before phase 4
+  #     recognizes the directive -- valid, unremarkable C++ (confirmed with
+  #     `clang++ -E`: the include IS processed) that RML_INCLUDE_PATTERN's
+  #     `^[[:space:]]*#` anchor, run against the RAW line, never matches (first
+  #     non-space char is `/`). Three independent variants, all must now fail:
+  #     (16a) `/* c */ #include <...>` (space-padded comment); (16b)
+  #     `/**/#include "..."` (zero-width comment, no space at all); (16c)
+  #     `  /* x */  #  include <...>` (leading indent + spaced `#  include`).
+  #     Fourth tree (16d) is the MIRROR false positive this same fix must not
+  #     introduce: a `/* ... */` block comment, in a file with no real
+  #     #include, that merely DOCUMENTS the forbidden pattern in prose (a real
+  #     genre of text -- this very script's own header comments cite
+  #     `#include <RmlUi/...>` verbatim as prose) must still pass clean --
+  #     proves strip_comments() removed the comment's TEXT, not just made the
+  #     directive-in-comment case fail differently.
+  # PT: fixture 16 -- furo 5 da RMLX-0 -- um comentário ANTES da diretiva
+  #     `#include` (mesma linha física) vira espaço em branco na fase 3 do C++,
+  #     antes da fase 4 reconhecer a diretiva -- C++ válido, sem nada de anormal
+  #     (confirmado com `clang++ -E`: o include É processado) que a âncora
+  #     `^[[:space:]]*#` do RML_INCLUDE_PATTERN, rodada contra a linha CRUA,
+  #     nunca casa (primeiro caractere não-espaço é `/`). Três variantes
+  #     independentes, todas têm de falhar agora: (16a) `/* c */ #include <...>`
+  #     (comentário com espaço nos dois lados); (16b) `/**/#include "..."`
+  #     (comentário de largura zero, sem espaço nenhum); (16c) `  /* x */  #
+  #     include <...>` (indentação + `#  include` espaçado). A quarta árvore
+  #     (16d) é o ESPELHO -- o falso positivo que este mesmo conserto não pode
+  #     introduzir: um comentário de bloco `/* ... */`, num arquivo sem
+  #     #include real nenhum, que só DOCUMENTA o padrão proibido em prosa (um
+  #     gênero de texto real -- os próprios comentários de cabeçalho deste
+  #     script citam `#include <RmlUi/...>` ao pé da letra como prosa) ainda tem
+  #     de passar limpo -- prova que o strip_comments() removeu o TEXTO do
+  #     comentário, não só fez o caso "diretiva dentro de comentário" falhar
+  #     diferente.
+  local furo5_a="$tmp/furo5_a/src"
+  mkdir -p "$furo5_a"
+  printf '/* c */ #include <RmlUi/Core/Element.h>\nvoid f() {}\n' > "$furo5_a/leaky.cpp"
+  EXCL_DIR="$tmp/furo5_a/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$furo5_a"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include com comentario ANTES na mesma linha, forma /* c */ #include (falso negativo -- furo 5 da RMLX-0, comentario vira espaco na fase 3 do C++)" >&2
+    ok=0
+  fi
+
+  local furo5_b="$tmp/furo5_b/src"
+  mkdir -p "$furo5_b"
+  printf '/**/#include "RmlUi/Core/Context.h"\nvoid f() {}\n' > "$furo5_b/leaky.cpp"
+  EXCL_DIR="$tmp/furo5_b/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$furo5_b"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include com comentario de largura zero /**/#include (falso negativo -- furo 5 da RMLX-0)" >&2
+    ok=0
+  fi
+
+  local furo5_c="$tmp/furo5_c/src"
+  mkdir -p "$furo5_c"
+  printf '  /* x */  #  include <RmlUi/Core/Element.h>\nvoid f() {}\n' > "$furo5_c/leaky.cpp"
+  EXCL_DIR="$tmp/furo5_c/src/rml"
+  EXCL_FILES=()
+  if check_include_gate "$furo5_c"; then
+    echo "selftest FAIL: check (a) NAO reprovou #include indentado com comentario e espacos internos ao # include (falso negativo -- furo 5 da RMLX-0)" >&2
+    ok=0
+  fi
+
+  local furo5_d="$tmp/furo5_d/src"
+  mkdir -p "$furo5_d"
+  cat > "$furo5_d/doc_example.cpp" <<'EOF'
+/* Example: #include <RmlUi/Core/Element.h> is intentionally blocked by
+   design. Do not add this include outside glintfx/src/rml/. */
+void f() {}
+EOF
+  EXCL_DIR="$tmp/furo5_d/src/rml"
+  EXCL_FILES=()
+  if ! check_include_gate "$furo5_d"; then
+    echo "selftest FAIL: check (a) reprovou um #include proibido citado em PROSA dentro de comentario de bloco (falso positivo -- item 3, o strip_comments() aplicado ao check (a) tem de remover o comentario inteiro, nao so mudar como ele falha)" >&2
+    ok=0
+  fi
+
+  # (b) mirrors (a)'s furo 5: same comment-before-directive exposure, same fix,
+  # against check_test_whitelist_gate instead of check_include_gate.
+  local furo5_e="$tmp/furo5_e/tests"
+  mkdir -p "$furo5_e"
+  printf '/* c */ #include <RmlUi/Core/Element.h>\nint main() { return 0; }\n' > "$furo5_e/novo_sanity.cpp"
+  EXCL_FILES=()
+  if check_test_whitelist_gate "$furo5_e"; then
+    echo "selftest FAIL: check (b) NAO reprovou #include de teste NOVO com comentario ANTES na mesma linha (falso negativo -- furo 5 da RMLX-0 tambem vale pro check (b))" >&2
+    ok=0
+  fi
+
+  local furo5_f="$tmp/furo5_f/tests"
+  mkdir -p "$furo5_f"
+  cat > "$furo5_f/doc_example_sanity.cpp" <<'EOF'
+/* Example: #include <RmlUi/Core/Context.h> is intentionally blocked by design. */
+int main() { return 0; }
+EOF
+  EXCL_FILES=()
+  if ! check_test_whitelist_gate "$furo5_f"; then
+    echo "selftest FAIL: check (b) reprovou um #include proibido citado em PROSA num teste (falso positivo -- item 3 tambem vale pro check (b))" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados, e os 4 furos de PRECISAO do casamento (isencao de include por substring da linha inteira, isencao de token por arquivo inteiro, #include partido por continuacao de linha, #include computado por macro nao-resolvivel) estao fechados, cada um com o par positivo (caso legitimo continua passando)"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima), as 4 lacunas de enumeracao de arquivo da RMLX-0 (token em tests/, header .h em tests/, extensoes .cc/.cxx/.hh/.hxx, symlink) estao fechadas sem reabrir falso positivo na isencao explicita dos 4 congelados, os 4 furos de PRECISAO do casamento (isencao de include por substring da linha inteira, isencao de token por arquivo inteiro, #include partido por continuacao de linha, #include computado por macro nao-resolvivel) estao fechados, cada um com o par positivo (caso legitimo continua passando), e o furo 5 (comentario ANTES do #include, 3 formas, nos checks (a) e (b)) esta fechado sem reabrir falso positivo no #include proibido citado em prosa dentro de comentario de bloco"
   return 0
 }
 

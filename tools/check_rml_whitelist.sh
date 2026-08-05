@@ -240,24 +240,85 @@ RML_ANY_TOKEN_PATTERN='Rml::[A-Za-z_][A-Za-z0-9_]*'
 # EN: strip_comments FILE -- prints FILE with `//` line comments and `/* ... */` block
 #     comments removed, one output line per input line (so line numbers used by
 #     downstream grep -n stay correct). Minimal string/char-literal awareness: a `/`
-#     inside `"..."`/`'...'` does not start a comment. Not a full C++ tokenizer
-#     (raw-string literals R"(...)" are not special-cased -- none of the files this
-#     gate scans use them; if one ever does, that is a false-negative risk, not a
-#     false-positive one, and the doctrine here (grep is a hint, not a compiler) is
-#     that a miss is far cheaper than a spurious block on unrelated work).
+#     inside `"..."`/`'...'` does not start a comment. Not a full C++ tokenizer, but it
+#     DOES understand C++ raw-string literals (`R"delim(...)delim"`, RMLX-0
+#     2026-08-05, see below) since real files this gate scans use them
+#     (glintfx/src/draw2d.cpp's GLSL shader sources).
+#
+#     RMLX-0 (2026-08-05) -- raw-string furo and fix: `in_block` is GLOBAL, carried
+#     across lines (same as always), but the ORIGINAL awk had zero awareness of
+#     `R"delim(...)delim"`. A raw string's body is opaque -- none of `//`, `/*`, `"`,
+#     `'` inside it mean anything -- but the old state machine parsed it as plain code,
+#     so an unescaped `/*` inside a multi-line raw string (with no `*/` on the same
+#     line) opened a REAL `in_block=1` that survived past the raw string's own closing
+#     `)delim"` and silently swallowed every line of real code after it, including a
+#     value-type `Rml::` token check (c) exists to catch. Proved live: planting
+#     `Rml::String leaked_token_should_be_caught` right after such a raw string made
+#     the gate return OK/exit 0. Fix: a second GLOBAL, cross-line state pair
+#     (`raw_active`, `raw_delim`) mirrors `in_block`'s persistence. On a `R"` not
+#     already inside a string/char/comment, the awk scans forward on the SAME line
+#     (a raw string's delimiter cannot itself contain a newline -- C++ grammar) for a
+#     d-char-sequence of up to 16 chars (matching the standard's own cap) followed by
+#     `(`; space/tab/`(`/`)`/backslash/`"` are excluded from the delimiter charset
+#     (`"` is technically unspecified by the grammar, but excluding it removes an
+#     ambiguity this simple parser has no need to court). On success, everything from
+#     `R"` through the matched `(` is copied to `out` verbatim and `raw_active` turns
+#     on; every subsequent character (this line and, via the global, however many
+#     lines follow) is copied through UNINTERPRETED until the exact closing
+#     `)delim"` is found, which turns `raw_active` back off. FAIL-CLOSED by
+#     construction on both sides of the risk: (1) if the `R"...(` scan does not find a
+#     valid delimiter+`(` on the same line, `raw_active` is never entered and the `R`
+#     is emitted as a plain character -- the following `"` then opens ordinary
+#     `in_str` handling, which is the strictly safer of the two readings whenever this
+#     parser is unsure it is looking at a real raw string; (2) once inside
+#     `raw_active`, nothing short of the EXACT closing delimiter turns it back off --
+#     an unterminated raw string swallows the rest of the file rather than guess a
+#     close, which is the same "erred toward keeping too much, never toward dropping
+#     code silently" bias the whole function already had for `in_str`/`in_chr`.
 # PT: strip_comments ARQUIVO -- imprime ARQUIVO com comentário de linha `//` e de
 #     bloco `/* ... */` removidos, uma linha de saída por linha de entrada (pra os
 #     números de linha usados pelo grep -n rio abaixo continuarem corretos). Consciência
 #     mínima de literal string/char: um `/` dentro de `"..."`/`'...'` não abre
-#     comentário. Não é um tokenizer C++ completo (raw-string R"(...)" não tem
-#     tratamento especial -- nenhum arquivo que este gate varre usa isso; se algum dia
-#     usar, o risco é de falso-negativo, não falso-positivo, e a doutrina aqui (grep é
-#     pista, não compilador) é que um erro-por-omissão é bem mais barato que travar
-#     trabalho não relacionado à toa).
+#     comentário. Não é um tokenizer C++ completo, mas ENTENDE raw-string literal de
+#     C++ (`R"delim(...)delim"`, RMLX-0 2026-08-05, ver abaixo) -- arquivo real que
+#     este gate varre usa isso (as fontes de shader GLSL do
+#     glintfx/src/draw2d.cpp).
+#
+#     RMLX-0 (2026-08-05) -- o furo do raw string e o conserto: `in_block` é GLOBAL,
+#     carregado entre linhas (como sempre foi), mas o awk ORIGINAL tinha zero
+#     conhecimento de `R"delim(...)delim"`. O corpo de um raw string é opaco -- nada
+#     de `//`, `/*`, `"`, `'` dentro dele significa qualquer coisa -- mas a máquina de
+#     estados velha interpretava tudo como código comum, então um `/*` sem escape
+#     dentro de um raw string multi-linha (sem `*/` na mesma linha) abria um
+#     `in_block=1` REAL que sobrevivia além do próprio fechamento `)delim"` do raw
+#     string e engolia em silêncio toda linha de código de verdade depois dele,
+#     inclusive um token `Rml::` de tipo-valor que o check (c) existe pra pegar.
+#     Provado ao vivo: plantar `Rml::String leaked_token_should_be_caught` logo depois
+#     de um raw string desses fazia o gate devolver OK/exit 0. Conserto: um segundo par
+#     de estado GLOBAL, persistente entre linhas (`raw_active`, `raw_delim`) espelha a
+#     persistência de `in_block`. Ao ver `R"` fora de string/char/comentário, o awk
+#     varre pra frente NA MESMA LINHA (o delimitador de um raw string não pode conter
+#     newline -- gramática de C++) por uma d-char-sequence de até 16 caracteres
+#     (mesmo teto da norma) seguida de `(`; espaço/tab/`(`/`)`/backslash/`"` ficam de
+#     fora do conjunto de caracteres do delimitador (`"` tecnicamente não é vedado pela
+#     gramática, mas excluir remove uma ambiguidade que este parser simples não precisa
+#     correr). Em caso de sucesso, tudo de `R"` até o `(` casado é copiado pro `out` ao
+#     pé da letra e `raw_active` liga; todo caractere seguinte (desta linha e, via o
+#     global, de quantas linhas vierem depois) é copiado SEM interpretação até achar o
+#     `)delim"` de fechamento exato, que desliga `raw_active` de novo. FALHA FECHADA por
+#     construção nos dois lados do risco: (1) se a varredura `R"...(` não acha
+#     delimitador+`(` válido na mesma linha, `raw_active` nunca entra e o `R` é
+#     emitido como caractere normal -- a `"` seguinte então abre o `in_str` comum, que
+#     é a leitura estritamente mais segura sempre que este parser não tem certeza de
+#     estar olhando pra um raw string de verdade; (2) uma vez dentro de `raw_active`,
+#     nada além do delimitador de fechamento EXATO desliga de novo -- um raw string
+#     não-terminado engole o resto do arquivo em vez de arriscar um fechamento por
+#     achismo, o mesmo viés de "errar pro lado de guardar demais, nunca de derrubar
+#     código em silêncio" que a função inteira já tinha pra `in_str`/`in_chr`.
 # -----------------------------------------------------------------------------
 strip_comments() {
   awk '
-    BEGIN { in_block = 0 }
+    BEGIN { in_block = 0; raw_active = 0; raw_delim = "" }
     {
       line = $0
       n = length(line)
@@ -273,6 +334,24 @@ strip_comments() {
             i += 2
             continue
           }
+          i += 1
+          continue
+        }
+        # RMLX-0 (2026-08-05): raw-string body -- opaque, copied through
+        # uncondicionalmente ate o fechamento EXATO ")delim\"" (raw_delim e o
+        # delimitador capturado na abertura, ver abaixo). Precisa vir ANTES de
+        # in_str/in_chr porque um raw string pode conter aspas/apostrofos
+        # desemparelhados no proprio corpo (razao de existir da sintaxe).
+        if (raw_active) {
+          dlen = length(raw_delim)
+          if (c == ")" && substr(line, i + 1, dlen) == raw_delim && substr(line, i + 1 + dlen, 1) == "\"") {
+            out = out c raw_delim "\""
+            raw_active = 0
+            raw_delim = ""
+            i += 2 + dlen
+            continue
+          }
+          out = out c
           i += 1
           continue
         }
@@ -292,6 +371,32 @@ strip_comments() {
         }
         if (c == "\"") { in_str = 1; out = out c; i += 1; continue }
         if (c == "'"'"'") { in_chr = 1; out = out c; i += 1; continue }
+        # RMLX-0 (2026-08-05): tentativa de abertura de raw string -- R" seguido de
+        # d-char-sequence (<=16 chars, sem espaco/tab/parenteses/backslash/aspas) e
+        # "(". Se nao casar, FALHA FECHADA: nao consome nada, o "R" vira caractere
+        # comum e a "\"" seguinte abre in_str normal na proxima iteracao -- a leitura
+        # mais segura quando este parser simples nao tem certeza.
+        if (c == "R" && substr(line, i + 1, 1) == "\"") {
+          j = i + 2
+          delim = ""
+          delim_len = 0
+          raw_open_ok = 0
+          while (j <= n) {
+            dc = substr(line, j, 1)
+            if (dc == "(") { raw_open_ok = 1; break }
+            if (delim_len >= 16 || dc == " " || dc == "\t" || dc == ")" || dc == "\\" || dc == "\"") { break }
+            delim = delim dc
+            delim_len += 1
+            j += 1
+          }
+          if (raw_open_ok) {
+            out = out substr(line, i, j - i + 1)
+            raw_active = 1
+            raw_delim = delim
+            i = j + 1
+            continue
+          }
+        }
         if (c == "/" && substr(line, i + 1, 1) == "/") { break }
         if (c == "/" && substr(line, i + 1, 1) == "*") { in_block = 1; i += 2; continue }
         out = out c
@@ -704,12 +809,89 @@ EOF
     ok=0
   fi
 
+  # --- fixture 6/7: RMLX-0 raw-string comment-swallow exploit -- proves
+  #     strip_comments() understands C++ raw-string literals
+  #     (R"delim(...)delim") and does not let an unterminated `/*` INSIDE a raw
+  #     string's body open a real block-comment state that survives past the raw
+  #     string's own close and swallows real code after it. Adversarial review of
+  #     the pre-fix gate proved a real hole: planting
+  #     `Rml::String leaked_token_should_be_caught` right after a multi-line raw
+  #     string whose body had an unescaped `/*` (no matching `*/` on that same
+  #     line) still returned OK/exit 0, because `in_block` -- global, carried
+  #     across lines -- opened on that stray `/*` and never closed, silently
+  #     deleting every line after it, including the real token. Two independent
+  #     trees, non-empty delimiter ("GLSL", not the trivial empty-delimiter case)
+  #     so the delimiter-matching path itself is exercised, not just the fast
+  #     empty-delim shortcut: (6) a real `Rml::String` token AFTER such a raw
+  #     string must still be caught (proves the fix); (7) the SAME
+  #     unterminated-looking `/*` inside a raw string, but with ZERO Rml:: contact
+  #     anywhere in the file, must stay a clean pass (proves the fix does not
+  #     overcorrect into a false positive on legitimate shader-source raw
+  #     strings -- the exact genre of text glintfx/src/draw2d.cpp carries for
+  #     real).
+  # PT: fixture 6/7 -- exploit de engolir-comentario via raw string da RMLX-0 --
+  #     prova que o strip_comments() entende raw-string literal de C++
+  #     (R"delim(...)delim") e nao deixa um `/*` sem fechar DENTRO do corpo de um
+  #     raw string abrir um estado de comentario-de-bloco real que sobrevive alem
+  #     do proprio fechamento do raw string e engole codigo de verdade depois
+  #     dele. A revisao adversarial do gate pre-conserto provou um furo real:
+  #     plantar `Rml::String leaked_token_should_be_caught` logo apos um raw
+  #     string multi-linha cujo corpo tinha um `/*` sem escape (sem `*/` casado
+  #     na mesma linha) ainda devolvia OK/exit 0, porque `in_block` -- global,
+  #     carregado entre linhas -- abria naquele `/*` perdido e nunca fechava,
+  #     apagando em silencio toda linha depois dele, inclusive o token real. Duas
+  #     arvores independentes, com delimitador NAO-vazio ("GLSL", nao o caso
+  #     trivial de delimitador vazio) pra exercitar o proprio caminho de
+  #     casamento de delimitador, nao so o atalho rapido de delim vazio: (6) um
+  #     token `Rml::String` real DEPOIS de um raw string desses ainda tem de ser
+  #     pego (prova o conserto); (7) o MESMO `/*` com jeito de nao-fechado dentro
+  #     de um raw string, mas com ZERO contato Rml:: no arquivo inteiro, tem de
+  #     continuar passando limpo (prova que o conserto nao super-corrige pra
+  #     falso positivo em raw string de shader legitimo -- o mesmo genero de
+  #     texto que glintfx/src/draw2d.cpp carrega de verdade).
+  local rawleak="$tmp/rawleak"
+  mkdir -p "$rawleak/src"
+  cat > "$rawleak/src/shader_leak.cpp" <<'EOF'
+// EN: raw string body below carries an unterminated `/*` marker -- the awk state
+// machine must NOT treat this as opening a real block comment that survives past
+// the raw string's own close.
+const char* kShader = R"GLSL(
+/* this looks like it opens a block comment but never closes inside the raw string
+void main() {}
+)GLSL";
+void leak(const Rml::String& s) { (void)s; }
+EOF
+  EXCL_DIR="$rawleak/src/rml"
+  EXCL_FILES=()
+  if check_token_gate "$rawleak/src"; then
+    echo "selftest FAIL: check (c) NAO reprovou o token Rml::String apos um raw string com /* nao fechado (falso negativo -- o furo de raw string que a revisao adversarial provou)" >&2
+    ok=0
+  fi
+
+  local rawclean="$tmp/rawclean"
+  mkdir -p "$rawclean/src"
+  cat > "$rawclean/src/shader_clean.cpp" <<'EOF'
+// EN: same unterminated-looking `/*` inside a raw string body, but with ZERO Rml::
+// contact anywhere in the file -- must stay a clean pass end-to-end (proves the fix
+// does not overcorrect into a false positive on legitimate shader-source raw strings).
+const char* kShader = R"GLSL(
+/* also looks like an open block comment, still just shader text */
+void main() {}
+)GLSL";
+EOF
+  EXCL_DIR="$rawclean/src/rml"
+  EXCL_FILES=()
+  if ! check_token_gate "$rawclean/src"; then
+    echo "selftest FAIL: check (c) reprovou raw string legitima (com /* no corpo) sem nenhum token Rml:: (falso positivo)" >&2
+    ok=0
+  fi
+
   rm -rf "$tmp"
 
   if [[ "$ok" -ne 1 ]]; then
     return 1
   fi
-  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, e a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro"
+  echo "selftest OK: fixture limpa passa nos 3 checks bloqueantes, fixture suja falha nos 3 (independentemente), a colisao de basename em subdir da RMLX-0 continua bloqueada, a isencao do check (a) agora vale so o include permitido -- nao o arquivo inteiro --, e o strip_comments() entende raw string de C++ (pega o token apos /* nao fechado dentro do raw string, e nao falso-positiva em raw string legitima)"
   return 0
 }
 

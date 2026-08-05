@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# EN: git pre-push hook (TST-L1-PRECI). Runs tools/preci.sh in fast mode before any
+# EN: git pre-push hook (TST-L1-PRECI). Runs tools/preci.sh --full before any
 #     `git push` -- the local gate "before it becomes visible on a remote" (líder's
 #     2026-07-10 decision: pre-push, not pre-commit, because the glintfx suite is too
 #     slow (~2min warm) for the fast small-commit loop; pushing is the right checkpoint
 #     for "this is about to be visible"). A non-zero exit here ABORTS the push.
+#
+#     RMLX-0 (2026-08-05, líder's decision): switched from fast mode (default, no
+#     args) to `--full`. Fast mode skips run_full_extras() -- the encapsulation
+#     check, the RmlUi whitelist gate (RMLX-0/F4), and gitleaks (TST-L1-SECRETS) all
+#     live there, so gitleaks was installed but never actually invoked at the one
+#     checkpoint meant to catch a secret before it becomes visible. This repo is
+#     PUBLIC. Only the caller changed here -- tools/preci.sh's own fast/--full logic
+#     is untouched.
 #
 #     This hook is OPT-IN, not installed by default (git only looks in .git/hooks/ out
 #     of the box). Activation has TWO valid routes depending on whether `core.hooksPath`
@@ -21,12 +29,20 @@
 #       git push --no-verify
 #     Use sparingly -- this is the gate, not a formality.
 #
-# PT: hook git pre-push (TST-L1-PRECI). Roda tools/preci.sh em modo rápido antes de
-#     qualquer `git push` -- o gate local "antes de ficar visível num remoto" (decisão
-#     do líder de 2026-07-10: pre-push, não pre-commit, porque a suíte glintfx é lenta
+# PT: hook git pre-push (TST-L1-PRECI). Roda tools/preci.sh --full antes de qualquer
+#     `git push` -- o gate local "antes de ficar visível num remoto" (decisão do
+#     líder de 2026-07-10: pre-push, não pre-commit, porque a suíte glintfx é lenta
 #     demais (~2min warm) pro loop rápido de commits pequenos; o push é o checkpoint
 #     certo para "isso está prestes a ficar visível"). Uma saída não-zero aqui ABORTA
 #     o push.
+#
+#     RMLX-0 (2026-08-05, decisão do líder): trocou do modo rápido (default, sem
+#     args) pro `--full`. O modo rápido pula o run_full_extras() -- o check de
+#     encapsulamento, o gate de whitelist do RmlUi (RMLX-0/F4) e o gitleaks
+#     (TST-L1-SECRETS) moram lá, então o gitleaks estava instalado mas nunca era de
+#     fato chamado no único checkpoint pensado pra pegar um segredo antes de ficar
+#     visível. Este repositório é PÚBLICO. Só o chamador mudou aqui -- a lógica de
+#     fast/--full do próprio tools/preci.sh não foi tocada.
 #
 #     Este hook é OPT-IN, não é instalado por padrão (o git só olha .git/hooks/ de
 #     fábrica). A ativação tem DUAS rotas válidas dependendo de o `core.hooksPath` já
@@ -49,4 +65,4 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-exec "${REPO_ROOT}/tools/preci.sh"
+exec "${REPO_ROOT}/tools/preci.sh" --full

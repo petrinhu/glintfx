@@ -171,6 +171,28 @@ jobs:
       - name: checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # EN: MEMORY GATE (CI-MEMGATE) -- first substantive step, right after checkout and
+      #     before anything that touches memory (cache restore, configure, build). Reads
+      #     the HOST's MemAvailable (the container has no lxcfs, so /proc/meminfo already
+      #     reports the host) and waits for headroom before letting a build compete with
+      #     whatever the lead is doing on his own machine. Full rationale, including why a
+      #     timeout fails the job instead of building anyway, lives in the script's own
+      #     header -- read it before touching the thresholds below.
+      # PT: GATE DE MEMÓRIA (CI-MEMGATE) -- primeiro passo substantivo, logo após o
+      #     checkout e antes de qualquer coisa que toque memória (restaurar cache,
+      #     configure, build). Lê o MemAvailable do HOST (o container não tem lxcfs, então
+      #     o /proc/meminfo já reporta o host) e espera por folga antes de deixar um build
+      #     competir com o que o líder estiver fazendo na própria máquina. Racional
+      #     completo, inclusive por que um timeout falha o job em vez de buildar assim
+      #     mesmo, mora no cabeçalho do próprio script -- leia antes de mexer nos limiares
+      #     abaixo.
+      - name: gate de memoria (espera folga no host)
+        run: tools/ci/wait_for_memory.sh
+        env:
+          GLINTFX_CI_MIN_MEM_GIB: "12"
+          GLINTFX_CI_MEM_TIMEOUT_S: "2700"
+          GLINTFX_CI_MEM_POLL_S: "15"
+
       # EN: Cache key namespaced "selfhosted-f42" -- deliberately DIFFERENT from the
       #     ubuntu-latest jobs' "rmlui-${{ runner.os }}-..." keys. The cached path holds
       #     RmlUi's BUILT objects (FetchContent's _deps), so reusing an ubuntu entry here
@@ -293,6 +315,19 @@ jobs:
       #     duas actions.
       - name: checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # EN: MEMORY GATE (CI-MEMGATE) -- same gate as the `sanitize` job above, same
+      #     rationale (see this script's own header, and the long comment on the
+      #     `sanitize` job's copy of this step).
+      # PT: GATE DE MEMÓRIA (CI-MEMGATE) -- mesmo gate do job `sanitize` acima, mesmo
+      #     racional (ver o cabeçalho do próprio script, e o comentário longo na cópia
+      #     deste passo no job `sanitize`).
+      - name: gate de memoria (espera folga no host)
+        run: tools/ci/wait_for_memory.sh
+        env:
+          GLINTFX_CI_MIN_MEM_GIB: "12"
+          GLINTFX_CI_MEM_TIMEOUT_S: "2700"
+          GLINTFX_CI_MEM_POLL_S: "15"
 
       - name: cache rmlui (fetchcontent)
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

@@ -849,6 +849,22 @@ set(_glintfx_sources
   src/rml/render_gl3.cpp
   src/rml/bootstrap.cpp
   src/rml/data_binder.cpp
+  # EN: src/rml/input_map.cpp (RMLX-0/F2) -- glintfx::Key/Mod_* -> Rml::Input::KeyIdentifier/
+  #   KeyModifier translation, extracted from engine.cpp so that file no longer needs any RmlUi
+  #   #include. Consumed by bootstrap.cpp's process_key/process_mouse_move/
+  #   process_mouse_button/process_mouse_wheel (RMLX-0's Bootstrap "driving" surface). Same
+  #   unconditional-entry reasoning as its src/rml/ siblings right above -- both build
+  #   configurations (GLINTFX_BACKEND_GLFW ON/OFF) need it, since Bootstrap itself is
+  #   unconditional. See src/rml/input_map.hpp's own doc-comment for the full rationale.
+  # PT: src/rml/input_map.cpp (RMLX-0/F2) -- tradução glintfx::Key/Mod_* para
+  #   Rml::Input::KeyIdentifier/KeyModifier, extraída de engine.cpp para que aquele arquivo
+  #   deixe de precisar de qualquer #include do RmlUi. Consumido por process_key/
+  #   process_mouse_move/process_mouse_button/process_mouse_wheel do bootstrap.cpp (a
+  #   superfície de "condução" que a RMLX-0 somou ao Bootstrap). Mesma racional de entrada
+  #   incondicional dos irmãos src/rml/ logo acima -- as duas configurações de build
+  #   (GLINTFX_BACKEND_GLFW ON/OFF) precisam dele, já que o próprio Bootstrap é incondicional.
+  #   Ver o próprio doc-comment de src/rml/input_map.hpp pro racional completo.
+  src/rml/input_map.cpp
   src/engine.cpp
   src/ui_layer.cpp
   src/gl_proc.cpp

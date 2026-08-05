@@ -10,70 +10,12 @@
 #include "render_gl3.hpp"
 #include "rml/bootstrap.hpp"
 #include "data_binder.hpp"
-#include <RmlUi/Core.h>
-#include <RmlUi/Core/Input.h>
+#include <glintfx/log.hpp> // EN: glintfx::log_warn (RMLX-0/F2 -- replaces the two Rml::Log::Message calls below). PT: glintfx::log_warn (RMLX-0/F2 -- substitui as duas chamadas Rml::Log::Message abaixo).
 #include <cmath>     // EN: std::isfinite (dp-ratio input hardening / process_event guards). PT: std::isfinite (hardening do dp-ratio / guards do process_event).
 #include <exception> // EN: std::exception (CAPTURE-NOTHROW, capture_frame's own try/catch). PT: std::exception (CAPTURE-NOTHROW, try/catch do próprio capture_frame).
 #include <vector>    // EN: intermediate RGB scratch buffer (capture_frame, FRAMEGRAB-EMBED). PT: buffer RGB intermediário (capture_frame, FRAMEGRAB-EMBED).
 
 namespace glintfx {
-
-// ---------------------------------------------------------------------------
-// EN: Internal translation helpers — never exposed in public headers. Moved here from
-//     ui_layer.cpp (A1, framework-2D, docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
-//     section 2.1) so process_event() below is the ONE place both App and UiLayer route
-//     through -- see that method's doc-comment in engine.hpp.
-// PT: Helpers internos de tradução — nunca expostos nos headers públicos. Movidos para cá de
-//     ui_layer.cpp (A1, framework-2D, docs/superpowers/plans/2026-07-19-framework2d-A1-input.md
-//     seção 2.1) para que process_event() abaixo seja o ÚNICO lugar por onde App e UiLayer
-//     passam -- ver o doc-comment desse método em engine.hpp.
-// ---------------------------------------------------------------------------
-
-// EN: Map glintfx::Key to Rml::Input::KeyIdentifier.
-//     Gamepad nav: Up/Down/Left/Right → arrow keys; Enter → Return; Escape stays Escape.
-//     Tab drives RmlUi's built-in focus cycle; Space/Backspace for text widget editing.
-//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
-//     KI_NEXT — names confirmed by grepping the pinned RmlUi source
-//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR is Page Up,
-//     KI_NEXT is Page Down — RmlUi's own naming, not a typo here).
-// PT: Mapeia glintfx::Key para Rml::Input::KeyIdentifier.
-//     Nav por gamepad: Up/Down/Left/Right → setas; Enter → Return; Escape permanece Escape.
-//     Tab aciona o ciclo de foco interno do RmlUi; Space/Backspace para edição em widget de texto.
-//     AUD-PUB-3 (v0.5.0): Delete/Home/End/PageUp/PageDown → KI_DELETE/KI_HOME/KI_END/KI_PRIOR/
-//     KI_NEXT — nomes confirmados grepando o source pinado do RmlUi
-//     (build/_deps/rmlui-src/Include/RmlUi/Core/Input.h:115-128; KI_PRIOR é Page Up,
-//     KI_NEXT é Page Down — nomenclatura do próprio RmlUi, não é erro de digitação aqui).
-static Rml::Input::KeyIdentifier to_rml_key(Key k) noexcept {
-  switch (k) {
-    case Key::Up:        return Rml::Input::KI_UP;
-    case Key::Down:      return Rml::Input::KI_DOWN;
-    case Key::Left:      return Rml::Input::KI_LEFT;
-    case Key::Right:     return Rml::Input::KI_RIGHT;
-    case Key::Enter:     return Rml::Input::KI_RETURN;
-    case Key::Escape:    return Rml::Input::KI_ESCAPE;
-    case Key::Tab:       return Rml::Input::KI_TAB;
-    case Key::Space:     return Rml::Input::KI_SPACE;
-    case Key::Backspace: return Rml::Input::KI_BACK;
-    case Key::Delete:    return Rml::Input::KI_DELETE;
-    case Key::Home:      return Rml::Input::KI_HOME;
-    case Key::End:       return Rml::Input::KI_END;
-    case Key::PageUp:    return Rml::Input::KI_PRIOR;
-    case Key::PageDown:  return Rml::Input::KI_NEXT;
-    default:             return Rml::Input::KI_UNKNOWN;
-  }
-}
-
-// EN: Map glintfx::Mod bitmask to Rml::Input::KeyModifier bitmask.
-//     glintfx::Mod_Shift=1, Mod_Ctrl=2, Mod_Alt=4
-//     Rml::Input::KM_CTRL=1, KM_SHIFT=2, KM_ALT=4
-// PT: Mapeia bitmask de glintfx::Mod para bitmask de Rml::Input::KeyModifier.
-static int to_rml_mods(int mods) noexcept {
-  int result = 0;
-  if (mods & Mod_Shift) result |= Rml::Input::KM_SHIFT;  // EN: Shift. PT: Shift.
-  if (mods & Mod_Ctrl)  result |= Rml::Input::KM_CTRL;   // EN: Ctrl.  PT: Ctrl.
-  if (mods & Mod_Alt)   result |= Rml::Input::KM_ALT;    // EN: Alt.   PT: Alt.
-  return result;
-}
 
 struct Engine::Impl {
   RenderGl3  render;
@@ -133,15 +75,29 @@ void Engine::set_viewport(int w, int h) {
   //     próprio do UiLayer (ui_layer.cpp) é logado separadamente, já que ele intercepta antes de
   //     sequer chegar até aqui.
   if (w <= 0 || h <= 0) {
-    Rml::Log::Message(Rml::Log::LT_WARNING,
-                      "set_viewport(%d, %d) ignored -- viewport dimensions must both be positive "
-                      "(previous viewport kept).",
-                      w, h);
+    // EN: RMLX-0/F2 -- glintfx::log_warn (glintfx/log.hpp) replaces the direct
+    //     Rml::Log::Message(LT_WARNING, ...) call this guard used before this fatia: same final
+    //     destination (a host's own installed sink, or the fprintf(stderr, ...) default), but
+    //     routed through this library's OWN public log surface instead of RmlUi's, so engine.cpp
+    //     no longer needs to touch Rml::Log at all. See src/rml/bootstrap.hpp's own doc-comment
+    //     on the "driving" surface below (set_dimensions) for why the w/h > 0 guard itself
+    //     stays HERE (pure int comparison, needs nothing RmlUi-shaped) rather than moving into
+    //     Bootstrap.
+    // PT: RMLX-0/F2 -- glintfx::log_warn (glintfx/log.hpp) substitui a chamada direta
+    //     Rml::Log::Message(LT_WARNING, ...) que esta guarda usava antes desta fatia: mesmo
+    //     destino final (o sink próprio instalado por um host, ou o default
+    //     fprintf(stderr, ...)), mas roteado pela superfície de log PRÓPRIA desta biblioteca em
+    //     vez da do RmlUi, então engine.cpp deixa de precisar tocar Rml::Log de qualquer forma.
+    //     Ver o próprio doc-comment da superfície de "condução" em src/rml/bootstrap.hpp
+    //     (set_dimensions) pro motivo da guarda w/h > 0 em si permanecer AQUI (comparação de
+    //     int pura, não precisa de nada em formato RmlUi) em vez de mudar para o Bootstrap.
+    glintfx::log_warn(
+        "set_viewport(%d, %d) ignored -- viewport dimensions must both be positive "
+        "(previous viewport kept).",
+        w, h);
     return;
   }
-  if (auto* c = impl_->boot.context()) {
-    c->SetDimensions(Rml::Vector2i(w, h));
-  }
+  impl_->boot.set_dimensions(w, h);
 }
 
 void Engine::set_dp_ratio(float ratio) {
@@ -165,18 +121,17 @@ void Engine::set_dp_ratio(float ratio) {
   //     para que App e UiLayer sejam ambos cobertos. Espelha o espírito fail-high do hardening do
   //     sides de polygon(): entrada inválida é ignorada, nunca propagada.
   if (!std::isfinite(ratio) || ratio <= 0.0f) {
-    Rml::Log::Message(Rml::Log::LT_WARNING,
+    // EN: RMLX-0/F2 -- glintfx::log_warn replaces Rml::Log::Message here, same reasoning as
+    //     set_viewport's own guard right above.
+    // PT: RMLX-0/F2 -- glintfx::log_warn substitui o Rml::Log::Message aqui, mesma racional da
+    //     própria guarda de set_viewport logo acima.
+    glintfx::log_warn(
         "set_dp_ratio(%g) ignored -- dp ratio must be a finite positive number "
-        "(previous ratio kept).", ratio);
+        "(previous ratio kept).",
+        ratio);
     return;
   }
-  if (auto* c = impl_->boot.context()) {
-    // EN: SetDensityIndependentPixelRatio is idempotent when ratio hasn't changed;
-    //     it re-triggers layout when it has, so no need to guard here.
-    // PT: SetDensityIndependentPixelRatio é idempotente quando ratio não mudou;
-    //     re-dispara layout quando mudou, portanto sem guard necessário aqui.
-    c->SetDensityIndependentPixelRatio(ratio);
-  }
+  impl_->boot.set_density_independent_pixel_ratio(ratio);
 }
 
 void Engine::set_asset_base_url(const char* url) {
@@ -186,7 +141,7 @@ void Engine::set_asset_base_url(const char* url) {
 
 void Engine::update() {
   if (!impl_->ok) return;
-  if (auto* c = impl_->boot.context()) c->Update();
+  impl_->boot.update();
 }
 
 void Engine::render_standalone(int w, int h, const std::function<void()>& scene_hook) {
@@ -205,7 +160,7 @@ void Engine::render_standalone(int w, int h, const std::function<void()>& scene_
     scene_hook();
   }                      // EN: ~guard restores it here, before Context::Render() below.
                          // PT: ~guard o restaura aqui, antes do Context::Render() abaixo.
-  if (auto* c = impl_->boot.context()) c->Render();
+  impl_->boot.render();
   impl_->render.end_frame();
 }
 
@@ -222,7 +177,7 @@ void Engine::render_compose(int offset_x, int offset_y, int w, int h) {
   GlStateGuard guard;                                         // EN: saves host GL state.
                                                               // PT: salva estado GL do host.
   impl_->render.begin_frame_compose(offset_x, offset_y, w, h);
-  if (auto* c = impl_->boot.context()) c->Render();
+  impl_->boot.render();
   impl_->render.end_frame_compose();
 }                                                             // EN: ~guard restores here.
                                                               // PT: ~guard restaura aqui.
@@ -232,15 +187,23 @@ Rml::Context* Engine::context() {
 }
 
 void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
-  // EN: Guard: drop events when the engine is not ready or context is gone (same shape as
-  //     every other Engine method — "!ok() -> no-op"). Moved verbatim from
-  //     UiLayer::process_event (A1, framework-2D).
-  // PT: Guard: descarta eventos quando o engine não está pronto ou o contexto sumiu (mesmo
-  //     formato de todo outro método do Engine — "!ok() -> no-op"). Movido tal-e-qual de
-  //     UiLayer::process_event (A1, framework-2D).
+  // EN: Guard: drop events when the engine is not ready (same shape as every other Engine
+  //     method — "!ok() -> no-op"). Moved verbatim from UiLayer::process_event (A1,
+  //     framework-2D). RMLX-0/F2: the extra "context is gone" half of this guard that used to
+  //     live here (`Rml::Context* c = impl_->boot.context(); if (!c) return;`) is now folded
+  //     into EACH of the Bootstrap "driving" calls below (process_mouse_move/
+  //     process_mouse_button/process_key/process_text/process_mouse_wheel all internally guard
+  //     `if (!impl_ || !impl_->ctx) return;`, bootstrap.hpp/.cpp) -- this switch no longer needs
+  //     a local `Rml::Context*` at all.
+  // PT: Guard: descarta eventos quando o engine não está pronto (mesmo formato de todo outro
+  //     método do Engine — "!ok() -> no-op"). Movido tal-e-qual de UiLayer::process_event (A1,
+  //     framework-2D). RMLX-0/F2: a metade extra "contexto sumiu" desta guarda que morava aqui
+  //     (`Rml::Context* c = impl_->boot.context(); if (!c) return;`) agora fica dobrada dentro
+  //     de CADA chamada de "condução" do Bootstrap abaixo (process_mouse_move/
+  //     process_mouse_button/process_key/process_text/process_mouse_wheel todas guardam
+  //     internamente `if (!impl_ || !impl_->ctx) return;`, bootstrap.hpp/.cpp) -- este switch
+  //     não precisa mais de um `Rml::Context*` local nenhum.
   if (!impl_->ok) return;
-  Rml::Context* c = impl_->boot.context();
-  if (!c) return;
 
   using T = UiEvent::Type;
   switch (ev.type) {
@@ -271,30 +234,30 @@ void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
       //     host pode repassar coords NaN/inf (glitch de driver, replay de rede) -- rejeita
       //     antes do cast, mesma regra já aplicada em set_element_scroll_top.
       if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
-      c->ProcessMouseMove(static_cast<int>(ev.x) - offset_x, static_cast<int>(ev.y) - offset_y,
-                          to_rml_mods(ev.modifiers));
+      impl_->boot.process_mouse_move(static_cast<int>(ev.x) - offset_x,
+                                     static_cast<int>(ev.y) - offset_y, ev.modifiers);
       break;
 
     case T::MouseButton:
-      // EN: button: 0=left, 1=right, 2=middle — matches Rml convention directly.
-      // PT: button: 0=esquerdo, 1=direito, 2=meio — bate diretamente com a convenção Rml.
-      if (ev.pressed)
-        c->ProcessMouseButtonDown(ev.button, to_rml_mods(ev.modifiers));
-      else
-        c->ProcessMouseButtonUp(ev.button, to_rml_mods(ev.modifiers));
+      // EN: button: 0=left, 1=right, 2=middle — matches Rml convention directly (translation
+      //     itself now lives in Bootstrap::process_mouse_button, RMLX-0/F2).
+      // PT: button: 0=esquerdo, 1=direito, 2=meio — bate diretamente com a convenção Rml
+      //     (tradução em si agora mora em Bootstrap::process_mouse_button, RMLX-0/F2).
+      impl_->boot.process_mouse_button(ev.button, ev.pressed, ev.modifiers);
       break;
 
     case T::Key:
-      // EN: Gamepad nav: Key::Up/Down/Left/Right/Enter/Escape → Rml arrow/Return/Escape.
-      //     RmlUi uses ProcessKeyDown + a subsequent ProcessTextInput for printable chars;
-      //     for nav-only keys (arrows, Return, Escape, Tab) text input is not needed.
-      // PT: Nav por gamepad: Key::Up/Down/Left/Right/Enter/Escape → Rml seta/Return/Escape.
-      //     RmlUi usa ProcessKeyDown + ProcessTextInput para chars imprimíveis;
-      //     para teclas só de navegação (setas, Return, Escape, Tab) text input não é necessário.
-      if (ev.pressed)
-        c->ProcessKeyDown(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
-      else
-        c->ProcessKeyUp(to_rml_key(ev.key), to_rml_mods(ev.modifiers));
+      // EN: Gamepad nav: Key::Up/Down/Left/Right/Enter/Escape → Rml arrow/Return/Escape (the
+      //     Key->Rml::Input::KeyIdentifier mapping itself now lives in input_map.hpp/.cpp,
+      //     RMLX-0/F2, driven from Bootstrap::process_key). RmlUi uses ProcessKeyDown + a
+      //     subsequent ProcessTextInput for printable chars; for nav-only keys (arrows, Return,
+      //     Escape, Tab) text input is not needed.
+      // PT: Nav por gamepad: Key::Up/Down/Left/Right/Enter/Escape → Rml seta/Return/Escape (o
+      //     mapeamento Key->Rml::Input::KeyIdentifier em si agora mora em input_map.hpp/.cpp,
+      //     RMLX-0/F2, conduzido a partir de Bootstrap::process_key). RmlUi usa ProcessKeyDown +
+      //     ProcessTextInput para chars imprimíveis; para teclas só de navegação (setas, Return,
+      //     Escape, Tab) text input não é necessário.
+      impl_->boot.process_key(ev.key, ev.pressed, ev.modifiers);
       break;
 
     case T::Text:
@@ -302,7 +265,7 @@ void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
       //     text must remain valid for the duration of this call; caller owns the lifetime.
       // PT: Entrada de texto UTF-8 — repassado ao RmlUi como-está (lida com sequências multi-byte).
       //     text deve permanecer válido durante esta chamada; lifetime é do chamador.
-      if (ev.text) c->ProcessTextInput(Rml::String(ev.text));
+      if (ev.text) impl_->boot.process_text(ev.text);
       break;
 
     case T::MouseWheel:
@@ -310,19 +273,21 @@ void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
       //     GusWorld's 30-item overflow-y:auto menu list, which could not scroll in embed mode).
       //     Unlike MouseMove/MouseButton, NO offset translation here: ev.x/ev.y are a DELTA
       //     (scroll amount), not a window-space position, so there is nothing to subtract
-      //     offset_x/offset_y from -- RmlUi's Context::ProcessMouseWheel(Vector2f, mods) takes
-      //     the delta as-is and scrolls whatever element is currently under `hover` (set by the
-      //     most recent ProcessMouseMove/ProcessMouseButtonDown -- confirmed by reading
-      //     Context.cpp: it reads the `hover` member, resolves
-      //     Element::GetClosestScrollableContainer() from there, and is a no-op when hover is
-      //     null). The Vector2f overload is used, not the deprecated single-float one (see
-      //     Context.h: "@deprecated Please use the Vector2f version").
+      //     offset_x/offset_y from -- RmlUi's Context::ProcessMouseWheel(Vector2f, mods) (called
+      //     from Bootstrap::process_mouse_wheel, RMLX-0/F2) takes the delta as-is and scrolls
+      //     whatever element is currently under `hover` (set by the most recent
+      //     ProcessMouseMove/ProcessMouseButtonDown -- confirmed by reading Context.cpp: it
+      //     reads the `hover` member, resolves Element::GetClosestScrollableContainer() from
+      //     there, and is a no-op when hover is null). The Vector2f overload is used, not the
+      //     deprecated single-float one (see Context.h: "@deprecated Please use the Vector2f
+      //     version").
       // PT: Encaminhamento de delta de roda/trackpad (GLINTFX-SCROLL-1, v0.4.0 -- consumer-driven
       //     pela lista de menu de 30 itens overflow-y:auto do GusWorld, que não conseguia rolar em
       //     embed mode). Diferente de MouseMove/MouseButton, SEM tradução de offset aqui: ev.x/
       //     ev.y são um DELTA (quantidade de rolagem), não uma posição espaço-janela, então não
       //     há nada para subtrair de offset_x/offset_y -- o
-      //     Context::ProcessMouseWheel(Vector2f, mods) do RmlUi recebe o delta como está e rola o
+      //     Context::ProcessMouseWheel(Vector2f, mods) do RmlUi (chamado a partir de
+      //     Bootstrap::process_mouse_wheel, RMLX-0/F2) recebe o delta como está e rola o
       //     elemento que estiver sob `hover` no momento (definido pelo ProcessMouseMove/
       //     ProcessMouseButtonDown mais recente -- confirmado lendo Context.cpp: lê o membro
       //     `hover`, resolve Element::GetClosestScrollableContainer() a partir dele, e é no-op
@@ -333,7 +298,7 @@ void Engine::process_event(const UiEvent& ev, int offset_x, int offset_y) {
       // PT: Guard (AUD-TEC-2): um delta não-finito envenenaria o offset de scroll com NaN
       //     dentro do RmlUi. Rejeita antes de repassar -- mesma regra do MouseMove acima.
       if (!std::isfinite(ev.x) || !std::isfinite(ev.y)) break;
-      c->ProcessMouseWheel(Rml::Vector2f(ev.x, ev.y), to_rml_mods(ev.modifiers));
+      impl_->boot.process_mouse_wheel(ev.x, ev.y, ev.modifiers);
       break;
 
     case T::Resize:

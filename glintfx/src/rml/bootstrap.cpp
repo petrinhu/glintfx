@@ -8,6 +8,7 @@
 #include "../render_gl3.hpp"
 #include "base_url_file_interface.hpp"
 #include "../ua_stylesheet.hpp"
+#include "input_map.hpp" // EN: to_rml_key/to_rml_mods (RMLX-0/F2 driving surface below). PT: to_rml_key/to_rml_mods (superfície de condução da RMLX-0/F2 abaixo).
 #include <glintfx/config.hpp>
 // EN: FX-CARVE-1 -- the 3 decorator instancer headers (polygon/image-tint/ripple) are only
 //     pulled in when the fx module is compiled; with GLINTFX_MODULE_FX=OFF, none of
@@ -1476,6 +1477,89 @@ bool Bootstrap::load(const char* rml_path) {
 
 Rml::Context* Bootstrap::context() { return impl_ ? impl_->ctx : nullptr; }
 
+// EN: "Driving" surface (RMLX-0/F2) -- see the doc-comments on the declarations (bootstrap.hpp)
+//     for the full contract each of the 9 methods below implements. All of them share the same
+//     `if (!impl_ || !impl_->ctx) return;` guard shape as context() right above (find_element(),
+//     further down this file, is the id-keyed sibling of this same discipline).
+// PT: Superfície de "condução" (RMLX-0/F2) -- ver os doc-comments das declarações
+//     (bootstrap.hpp) pro contrato completo que cada um dos 9 métodos abaixo implementa. Todos
+//     compartilham o mesmo formato de guarda `if (!impl_ || !impl_->ctx) return;` do context()
+//     logo acima (find_element(), mais abaixo neste arquivo, é o irmão indexado-por-id desta
+//     mesma disciplina).
+void Bootstrap::update() {
+  if (!impl_ || !impl_->ctx) return;
+  impl_->ctx->Update();
+}
+
+void Bootstrap::render() {
+  if (!impl_ || !impl_->ctx) return;
+  impl_->ctx->Render();
+}
+
+void Bootstrap::set_dimensions(int w, int h) {
+  if (!impl_ || !impl_->ctx) return;
+  impl_->ctx->SetDimensions(Rml::Vector2i(w, h));
+}
+
+void Bootstrap::set_density_independent_pixel_ratio(float ratio) {
+  if (!impl_ || !impl_->ctx) return;
+  // EN: SetDensityIndependentPixelRatio is idempotent when ratio hasn't changed; it re-triggers
+  //     layout when it has, so no need to guard here (mirrors the pre-move comment in
+  //     engine.cpp's Engine::set_dp_ratio).
+  // PT: SetDensityIndependentPixelRatio é idempotente quando ratio não mudou; re-dispara layout
+  //     quando mudou, portanto sem guard necessário aqui (espelha o comentário pré-mudança em
+  //     Engine::set_dp_ratio de engine.cpp).
+  impl_->ctx->SetDensityIndependentPixelRatio(ratio);
+}
+
+void Bootstrap::process_mouse_move(int x, int y, int mods) {
+  if (!impl_ || !impl_->ctx) return;
+  impl_->ctx->ProcessMouseMove(x, y, to_rml_mods(mods));
+}
+
+void Bootstrap::process_mouse_button(int button, bool pressed, int mods) {
+  if (!impl_ || !impl_->ctx) return;
+  // EN: button: 0=left, 1=right, 2=middle -- matches Rml convention directly (mirrors the
+  //     pre-move comment in engine.cpp's Engine::process_event, UiEvent::Type::MouseButton).
+  // PT: button: 0=esquerdo, 1=direito, 2=meio -- bate diretamente com a convenção Rml (espelha
+  //     o comentário pré-mudança em Engine::process_event de engine.cpp,
+  //     UiEvent::Type::MouseButton).
+  if (pressed)
+    impl_->ctx->ProcessMouseButtonDown(button, to_rml_mods(mods));
+  else
+    impl_->ctx->ProcessMouseButtonUp(button, to_rml_mods(mods));
+}
+
+void Bootstrap::process_key(Key key, bool pressed, int mods) {
+  if (!impl_ || !impl_->ctx) return;
+  // EN: RmlUi uses ProcessKeyDown + a subsequent ProcessTextInput for printable chars; for
+  //     nav-only keys (arrows, Return, Escape, Tab) text input is not needed (mirrors the
+  //     pre-move comment in engine.cpp's Engine::process_event, UiEvent::Type::Key).
+  // PT: RmlUi usa ProcessKeyDown + ProcessTextInput para chars imprimíveis; para teclas só de
+  //     navegação (setas, Return, Escape, Tab) text input não é necessário (espelha o
+  //     comentário pré-mudança em Engine::process_event de engine.cpp, UiEvent::Type::Key).
+  if (pressed)
+    impl_->ctx->ProcessKeyDown(to_rml_key(key), to_rml_mods(mods));
+  else
+    impl_->ctx->ProcessKeyUp(to_rml_key(key), to_rml_mods(mods));
+}
+
+void Bootstrap::process_text(const char* text) {
+  if (!impl_ || !impl_->ctx || !text) return;
+  impl_->ctx->ProcessTextInput(Rml::String(text));
+}
+
+void Bootstrap::process_mouse_wheel(float dx, float dy, int mods) {
+  if (!impl_ || !impl_->ctx) return;
+  // EN: Vector2f overload, not the deprecated single-float one (mirrors the pre-move comment in
+  //     engine.cpp's Engine::process_event, UiEvent::Type::MouseWheel -- see Context.h:
+  //     "@deprecated Please use the Vector2f version").
+  // PT: Sobrecarga de Vector2f, não a de float único deprecada (espelha o comentário
+  //     pré-mudança em Engine::process_event de engine.cpp, UiEvent::Type::MouseWheel -- ver
+  //     Context.h: "@deprecated Please use the Vector2f version").
+  impl_->ctx->ProcessMouseWheel(Rml::Vector2f(dx, dy), to_rml_mods(mods));
+}
+
 void Bootstrap::set_click_callback(std::function<void(const char*)> cb) {
   if (impl_) impl_->click_cb = std::move(cb);
 }
@@ -1772,12 +1856,13 @@ void Bootstrap::set_asset_base_url(const char* url) {
 
 // EN: Translation helpers -- glintfx::FontStyle/FontWeight (glintfx/include/glintfx/
 //     font_face.hpp) to the RmlUi-level types Rml::LoadFontFace expects. `static` free
-//     functions, not a class member -- same idiom as engine.cpp's to_rml_key/to_rml_mods
-//     (internal, never exposed in a public header).
+//     functions, not a class member -- same idiom as input_map.cpp's to_rml_key/to_rml_mods
+//     (RMLX-0/F2 -- moved there from engine.cpp; internal, never exposed in a public header).
 // PT: Helpers de tradução -- glintfx::FontStyle/FontWeight (glintfx/include/glintfx/
 //     font_face.hpp) para os tipos em nível RmlUi que Rml::LoadFontFace espera. Funções livres
-//     `static`, não membro de classe -- mesmo idioma de to_rml_key/to_rml_mods de engine.cpp
-//     (internos, nunca expostos num header público).
+//     `static`, não membro de classe -- mesmo idioma de to_rml_key/to_rml_mods de
+//     input_map.cpp (RMLX-0/F2 -- movidas para lá de engine.cpp; internos, nunca expostos num
+//     header público).
 static Rml::Style::FontStyle to_rml_font_style(FontStyle style) noexcept {
   switch (style) {
     case FontStyle::Italic:

@@ -1025,6 +1025,59 @@ target_link_libraries(input_state_sanity PRIVATE glintfx)
 add_test(NAME input_state_sanity COMMAND input_state_sanity)
 
 # ---------------------------------------------------------------------------
+# EN: input_map_sanity (RMLX-0/F2) -- PURE unit test for src/rml/input_map.hpp: no window, no
+#     GL context, no Rml::Initialise() anywhere (see the test file's own header for the full
+#     "why this exists" rationale -- it is the mutation-testing dente against the keymap
+#     conversion-formula-without-a-delta-test bug class). Links `glintfx` (pulls in the
+#     input_map.cpp object already built into the library, PUBLIC glintfx/ include dir) PLUS
+#     `RmlUi::Core` EXPLICITLY -- RmlUi::Core is a PRIVATE dep of glintfx and not propagated to
+#     consumers (same reasoning documented at engine_smoke's/asset_path_traversal_sanity's own
+#     target_link_libraries lines above), and this test's own #include of
+#     ../src/rml/input_map.hpp needs <RmlUi/Core/Input.h>'s include dir at compile time.
+#     Registered UNCONDITIONALLY -- input_map.cpp is compiled into the always-built
+#     _glintfx_sources list (glintfx/CMakeLists.txt), so this runs in BOTH build configurations.
+# PT: input_map_sanity (RMLX-0/F2) -- teste unit PURO para src/rml/input_map.hpp: sem janela,
+#     sem contexto GL, sem Rml::Initialise() em lugar nenhum (ver o próprio cabeçalho do arquivo
+#     de teste pro racional completo do "por que existe" -- é o dente de mutation-testing contra
+#     a classe de bug fórmula-de-conversão-do-keymap-sem-teste-de-delta). Linka `glintfx` (puxa
+#     o objeto input_map.cpp já compilado na biblioteca, e o include dir PÚBLICO glintfx/) MAIS
+#     `RmlUi::Core` EXPLICITAMENTE -- RmlUi::Core é dep PRIVATE da glintfx e não propagada aos
+#     consumidores (mesma racional documentada nas próprias linhas target_link_libraries do
+#     engine_smoke/asset_path_traversal_sanity acima), e o próprio #include deste teste de
+#     ../src/rml/input_map.hpp precisa do include dir de <RmlUi/Core/Input.h> em tempo de
+#     compilação. Registrado INCONDICIONALMENTE -- input_map.cpp é compilado na lista sempre-
+#     construída _glintfx_sources (glintfx/CMakeLists.txt), então isto roda em AMBAS as
+#     configurações de build.
+# ---------------------------------------------------------------------------
+add_executable(input_map_sanity input_map_sanity.cpp)
+target_link_libraries(input_map_sanity PRIVATE glintfx RmlUi::Core)
+add_test(NAME input_map_sanity COMMAND input_map_sanity)
+
+# ---------------------------------------------------------------------------
+# EN: engine_no_rmlui_include_sanity_TEMP (RMLX-0/F2, TDD scaffolding, REMOVED before this
+#     fatia's commit) -- a plain grep, not a compiled binary: fails red RIGHT NOW (engine.cpp
+#     still #includes <RmlUi/Core.h>/<RmlUi/Core/Input.h> at this point in the sequence) and is
+#     only meant to turn green once engine.cpp's #include list is edited later in this same
+#     fatia. This is deliberately NOT the permanent whitelist-based encapsulation gate the
+#     fatia's own brief assigns to F4 (a later wave) -- narrower in scope (this ONE file, a raw
+#     grep, no whitelist config) and REMOVED once its purpose (establishing a red state for the
+#     house's TDD guard before editing bootstrap.hpp/bootstrap.cpp/engine.cpp, all `production`
+#     per .claude/tdd-guard.json) is served. See TODO.md's RMLX-0 entry for F4's own scope.
+# PT: engine_no_rmlui_include_sanity_TEMP (RMLX-0/F2, andaime de TDD, REMOVIDO antes do commit
+#     desta fatia) -- um grep puro, não um binário compilado: falha vermelho AGORA MESMO
+#     (engine.cpp ainda dá #include <RmlUi/Core.h>/<RmlUi/Core/Input.h> neste ponto da
+#     sequência) e só fica verde quando a lista de #include de engine.cpp for editada mais
+#     adiante nesta mesma fatia. Isto deliberadamente NÃO é o gate permanente de encapsulamento
+#     baseado em whitelist que o próprio brief da fatia atribui à F4 (uma onda posterior) --
+#     escopo mais estreito (ESTE ÚNICO arquivo, um grep cru, sem config de whitelist) e
+#     REMOVIDO assim que seu propósito (estabelecer um estado vermelho para o guard de TDD da
+#     casa antes de editar bootstrap.hpp/bootstrap.cpp/engine.cpp, todos `production` conforme
+#     .claude/tdd-guard.json) for cumprido. Ver a entrada RMLX-0 do TODO.md pro escopo da F4.
+# ---------------------------------------------------------------------------
+add_test(NAME engine_no_rmlui_include_sanity_TEMP
+  COMMAND bash -c "! grep -q '#include <RmlUi' ${CMAKE_CURRENT_SOURCE_DIR}/../src/engine.cpp")
+
+# ---------------------------------------------------------------------------
 # EN: log_dedup_sanity (LOGTHR-1, Onda 2, v0.19.0) -- PURE unit test for src/log_dedup.hpp: no
 #     window, no GL context, no RmlUi/GLFW dependency AT ALL (LogDedup is a plain in-memory
 #     table). Registered UNCONDITIONALLY, same "no display to isolate here" reasoning as

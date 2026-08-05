@@ -26,6 +26,7 @@ class Element;
 #include <glintfx/font_engine.hpp>
 #include <glintfx/font_face.hpp>
 #include <glintfx/scroll_types.hpp>
+#include <glintfx/ui_event.hpp> // EN: glintfx::Key (process_key, RMLX-0/F2). PT: glintfx::Key (process_key, RMLX-0/F2).
 
 namespace glintfx {
 
@@ -115,6 +116,120 @@ public:
   // EN: Returns the active Rml::Context (valid after successful init()), or nullptr.
   // PT: Retorna o Rml::Context ativo (válido após init() com sucesso), ou nullptr.
   Rml::Context* context();
+
+  // -------------------------------------------------------------------------
+  // EN: "Driving" surface (RMLX-0/F2) -- the 9 methods below are the ONLY place engine.cpp now
+  //     touches the active Rml::Context: Update()/Render(), SetDimensions/
+  //     SetDensityIndependentPixelRatio, and the 5 Context::Process* input-event calls. Added so
+  //     that engine.cpp -- previously the single largest concentration of direct Rml::Context/
+  //     Rml::Input use outside src/rml/ (36 occurrences, 24 of them the Key->Rml::Input keymap
+  //     now living in input_map.hpp/.cpp) -- can drop its `#include <RmlUi/...>` entirely,
+  //     narrowing RmlUi contact down to src/rml/ only (RMLX-0's own anticorruption-seam goal;
+  //     see TODO.md and type_bridge.hpp/input_map.hpp's doc-comments for the two other seams
+  //     this same wave draws). Every method here mirrors the guard shape ALREADY used by
+  //     context()/find_element() above: `if (!impl_ || !impl_->ctx) return;` (or the `false`
+  //     equivalent) -- silent no-op before init() or after a failed one, never a null-deref.
+  //     Key/modifier translation is delegated to input_map.hpp's to_rml_key()/to_rml_mods()
+  //     internally (bootstrap.cpp), so this header's callers (engine.cpp) only ever pass
+  //     glintfx-native types (glintfx::Key, a plain `int` Mod_* bitmask, ints, floats) -- never
+  //     an Rml:: type -- across this boundary.
+  // PT: Superfície de "condução" (RMLX-0/F2) -- os 9 métodos abaixo são o ÚNICO lugar em que
+  //     engine.cpp agora toca o Rml::Context ativo: Update()/Render(), SetDimensions/
+  //     SetDensityIndependentPixelRatio, e as 5 chamadas Context::Process* de evento de input.
+  //     Somados para que engine.cpp -- antes a maior concentração isolada de uso direto de
+  //     Rml::Context/Rml::Input fora de src/rml/ (36 ocorrências, 24 delas o keymap
+  //     Key->Rml::Input que agora mora em input_map.hpp/.cpp) -- deixe cair o próprio
+  //     `#include <RmlUi/...>` por completo, estreitando o contato com o RmlUi só para
+  //     src/rml/ (o próprio objetivo de costura-anticorrupção da RMLX-0; ver TODO.md e os
+  //     doc-comments de type_bridge.hpp/input_map.hpp pras outras duas costuras que esta mesma
+  //     onda traça). Todo método aqui espelha o formato de guard JÁ usado por
+  //     context()/find_element() acima: `if (!impl_ || !impl_->ctx) return;` (ou o equivalente
+  //     em `false`) -- no-op silencioso antes do init() ou após um que falhou, nunca um
+  //     null-deref. A tradução de tecla/modificador é delegada internamente a
+  //     to_rml_key()/to_rml_mods() de input_map.hpp (bootstrap.cpp), então os chamadores deste
+  //     header (engine.cpp) só passam tipos nativos da glintfx (glintfx::Key, um bitmask Mod_*
+  //     `int` puro, ints, floats) através desta fronteira -- nunca um tipo Rml::.
+  // -------------------------------------------------------------------------
+
+  // EN: Advance the RmlUi context by one step (Rml::Context::Update()).
+  // PT: Avança o contexto RmlUi um passo (Rml::Context::Update()).
+  void update();
+
+  // EN: Render the active document (Rml::Context::Render()). Does not clear/swap -- same
+  //     no-op-before-init() contract as every other method here.
+  // PT: Renderiza o documento ativo (Rml::Context::Render()). Não limpa/troca buffer -- mesmo
+  //     contrato de no-op-antes-do-init() de todo outro método aqui.
+  void render();
+
+  // EN: Notify RmlUi of a viewport resize -- Rml::Context::SetDimensions(Vector2i(w, h)).
+  //     Callers (Engine::set_viewport) are expected to validate w/h > 0 BEFORE calling this --
+  //     this method forwards blindly, no guard duplicated here.
+  // PT: Notifica o RmlUi de um redimensionamento de viewport --
+  //     Rml::Context::SetDimensions(Vector2i(w, h)). Chamadores (Engine::set_viewport) devem
+  //     validar w/h > 0 ANTES de chamar isto -- este método repassa cegamente, sem duplicar
+  //     guarda aqui.
+  void set_dimensions(int w, int h);
+
+  // EN: Set the density-independent pixel ratio -- Rml::Context::
+  //     SetDensityIndependentPixelRatio(ratio). Caller (Engine::set_dp_ratio) is expected to
+  //     validate `ratio` is finite and positive BEFORE calling this -- forwarded blindly.
+  // PT: Define o density-independent pixel ratio --
+  //     Rml::Context::SetDensityIndependentPixelRatio(ratio). O chamador (Engine::set_dp_ratio)
+  //     deve validar que `ratio` é finito e positivo ANTES de chamar isto -- repassado
+  //     cegamente.
+  void set_density_independent_pixel_ratio(float ratio);
+
+  // EN: Forwards to Rml::Context::ProcessMouseMove(x, y, to_rml_mods(mods)). `x`/`y` are
+  //     ALREADY in content-local space (offset already subtracted by the caller -- see
+  //     Engine::process_event's own doc-comment, engine.hpp) and already `static_cast<int>` +
+  //     isfinite-checked by the caller; this method does no further translation of the
+  //     coordinates themselves, only of `mods`.
+  // PT: Encaminha a Rml::Context::ProcessMouseMove(x, y, to_rml_mods(mods)). `x`/`y` já estão
+  //     em espaço local de conteúdo (offset já subtraído pelo chamador -- ver o próprio
+  //     doc-comment de Engine::process_event, engine.hpp) e já passaram por
+  //     `static_cast<int>` + checagem isfinite no chamador; este método não faz mais nenhuma
+  //     tradução das coordenadas em si, só de `mods`.
+  void process_mouse_move(int x, int y, int mods);
+
+  // EN: Forwards to Rml::Context::ProcessMouseButtonDown/Up(button, to_rml_mods(mods))
+  //     depending on `pressed`. `button`: 0=left, 1=right, 2=middle -- matches Rml's convention
+  //     directly, no translation needed for the button index itself.
+  // PT: Encaminha a Rml::Context::ProcessMouseButtonDown/Up(button, to_rml_mods(mods))
+  //     conforme `pressed`. `button`: 0=esquerdo, 1=direito, 2=meio -- bate diretamente com a
+  //     convenção do Rml, sem tradução necessária para o índice do botão em si.
+  void process_mouse_button(int button, bool pressed, int mods);
+
+  // EN: Forwards to Rml::Context::ProcessKeyDown/Up(to_rml_key(key), to_rml_mods(mods))
+  //     depending on `pressed`. See input_map.hpp's to_rml_key() doc-comment for the full
+  //     Key->KeyIdentifier mapping table.
+  // PT: Encaminha a Rml::Context::ProcessKeyDown/Up(to_rml_key(key), to_rml_mods(mods))
+  //     conforme `pressed`. Ver o doc-comment de to_rml_key() em input_map.hpp pra tabela
+  //     completa de mapeamento Key->KeyIdentifier.
+  void process_key(Key key, bool pressed, int mods);
+
+  // EN: Forwards to Rml::Context::ProcessTextInput(Rml::String(text)) -- UTF-8, handles
+  //     multi-byte sequences. `text` must remain valid for the duration of this call (caller
+  //     owns the lifetime); a `nullptr` `text` is a no-op (caller is expected to guard this,
+  //     same as Engine::process_event's pre-existing `if (ev.text)` check, but this method also
+  //     tolerates it defensively).
+  // PT: Encaminha a Rml::Context::ProcessTextInput(Rml::String(text)) -- UTF-8, lida com
+  //     sequências multi-byte. `text` deve permanecer válido durante esta chamada (lifetime é
+  //     do chamador); um `text` `nullptr` é no-op (o chamador deve guardar isto, mesmo check
+  //     pré-existente `if (ev.text)` de Engine::process_event, mas este método também tolera
+  //     defensivamente).
+  void process_text(const char* text);
+
+  // EN: Forwards to Rml::Context::ProcessMouseWheel(Vector2f(dx, dy), to_rml_mods(mods)) -- the
+  //     Vector2f overload, not the deprecated single-float one. `dx`/`dy` are a DELTA, not a
+  //     position -- no offset translation applies (see Engine::process_event's own doc-comment
+  //     on UiEvent::Type::MouseWheel for why). Caller is expected to isfinite-check `dx`/`dy`
+  //     before calling this.
+  // PT: Encaminha a Rml::Context::ProcessMouseWheel(Vector2f(dx, dy), to_rml_mods(mods)) -- a
+  //     sobrecarga de Vector2f, não a de float único deprecada. `dx`/`dy` são um DELTA, não uma
+  //     posição -- nenhuma tradução de offset se aplica (ver o próprio doc-comment de
+  //     Engine::process_event sobre UiEvent::Type::MouseWheel pro motivo). O chamador deve
+  //     checar isfinite de `dx`/`dy` antes de chamar isto.
+  void process_mouse_wheel(float dx, float dy, int mods);
 
   // EN: Register a click callback -- reports the id of the ancestor-or-self nearest to the
   //     clicked element that has a non-empty id ("" if none). No ordering constraint versus

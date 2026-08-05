@@ -1,0 +1,163 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- RMLX1-CORPUS fixture -- verbatim markup captured AT RUNTIME by the GusWorld repo (Apache-2.0)
+     and handed back over this repo's git bus channel 2026-08-05 (one of 15 files, originally
+     dump_markup_5_telas/; the consumer's own reply is archived at
+     gusworld_ia_autocomm/archive/2026-08-05-gusworld-dump-markup-5-telas.md). The consumer loads
+     documents by PATH, not by string, so the .rml file its own stage directory wrote when this
+     screen actually ran on-screen already WAS this exact byte sequence -- nothing here was retyped,
+     reconstructed, or edited to fit this module's current limitations (re-confirmed: recapturing
+     title_menu__sem_save.rml in a fresh run gave a byte-identical md5). This is this repo's own
+     "markup real entra verbatim" discipline, the same one RMLX-1/S3's gusworld_battle_cockpit.rml
+     (the one other fixture already in this directory) already follows.
+     Screen state this file represents: save/load menu, Save mode, the Auto slot occupied. Placement
+     -- why this directory, glintfx/src/uix/dom/test_fixtures/, and not one of the two directories
+     lexer_corpus_sanity.cpp already scans: this is a THIRD corpus directory, scanned by
+     parser_corpus_sanity.cpp and dumper_corpus_sanity.cpp (both go through parse_document(), immune
+     by construction -- its own <head>-opacity raw-byte-scan never re-tokenizes <head>'s interior
+     with the Lexer) but deliberately NOT by lexer_corpus_sanity.cpp. Real RCSS comment prose inside
+     several of these 15 files' <head>/<style> blocks contains a literal, un-escaped '<' the
+     standalone Lexer -- which has no CDATA-tag concept for style/script, lexer.hpp's own documented
+     boundary -- cannot tokenize (UIX-LEXER-OPACO, TODO.md). Measured 2026-08-05, this file's own
+     standalone Lexer run: passes cleanly to EndOfFile, no Error. Never edited to dodge that gap --
+     see UIX-LEXER-OPACO's own "not something to silently work around" clause and
+     parser_hardening_sanity.cpp's own test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt
+     for the explicit, non-silent pin of the underlying mechanism. -->
+<rml>
+<head>
+<style>
+
+body { font-family: "Pixel Operator Mono"; background: transparent; width: 100%; height: 100%; }
+#slmenu-scrim {
+  position: absolute; top: 0dp; left: 0dp; right: 0dp; bottom: 0dp;
+  background-color: #05070ca8;
+}
+#slmenu-panel {
+  box-sizing: border-box;
+  position: absolute; top: 40dp; left: 50%; margin-left: -230dp;
+  width: 460dp;
+  decorator: linear-gradient( 180deg, #3A4566 0%, #1B2238 42%, #0A0E1A 100% );
+  border: 1dp #7A5A2E;
+  border-radius: 20dp;
+  padding: 26dp 26dp 22dp 26dp;
+  box-shadow: #22D3EE1a 0dp 0dp 20dp 0dp;
+}
+.corner {
+  position: absolute; width: 18dp; height: 18dp;
+  decorator: polygon( 6, radial-gradient( circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100% ) );
+  filter: drop-shadow( #00000080 0dp 1dp 3dp );
+}
+.corner.tl { top: 8dp; left: 8dp; }
+.corner.tr { top: 8dp; right: 8dp; }
+.corner.bl { bottom: 8dp; left: 8dp; }
+.corner.br { bottom: 8dp; right: 8dp; }
+.title { text-align: center; font-size: 20dp; line-height: 30dp; color: #F0D98C; margin: 2dp 0dp 4dp 0dp; padding-top: 4dp; letter-spacing: 3dp; }
+.subtitle { text-align: center; color: #9AA5C0; font-size: 10dp; line-height: 15dp; margin-bottom: 14dp; }
+.slot-list { height: 300dp; overflow-x: hidden; overflow-y: auto; margin-top: 2dp; padding-right: 10dp; }
+#slmenu-list scrollbarvertical { width: 8dp; }
+#slmenu-list scrollbarvertical slidertrack { background-color: #0A0E1A80; border-radius: 999dp; }
+#slmenu-list scrollbarvertical sliderbar { background-color: #C9A24Bb3; border-radius: 999dp; min-height: 24dp; }
+#slmenu-list scrollbarvertical sliderbar:hover { background-color: #C9A24Bff; }
+#slmenu-list scrollbarvertical sliderarrowdec,
+#slmenu-list scrollbarvertical sliderarrowinc { height: 0dp; }
+.slot {
+  box-sizing: border-box; display: flex; align-items: center;
+  /* LAYOUT slot x scrollbar (bug 2/8, retoque ao vivo do lider): largura reduzida
+     (era 400dp) - com .slot-list.padding-right:10dp (era 6dp) sobre o conteudo de
+     408dp de #slmenu-panel (460dp - 2x26dp de padding), o slot fica com ~12dp de
+     folga do inicio da faixa de 8dp da scrollbar (nao mais "encostado" nela) -
+     provado pelo harness headless (save_load_menu_interaction_test.cpp,
+     assert_no_horizontal_overlap). */
+  width: 388dp; padding: 10dp 12dp; margin: 6dp 0dp; border-radius: 10dp;
+  decorator: vertical-gradient( #1a2238 #141b2e );
+  border: 1dp #33405e;
+}
+.slot.readonly { opacity: 0.85; }
+.slot.empty { border: 1dp #3a4256; color: #6B6F7A; }
+.slot.focused {
+  border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset;
+}
+/* HOVER (mouse, decisao do lider 2026-08-01, revisao 2 - "last-input-wins",
+   CommonUI Input Technical Guide/Epic): o mouse ESCREVE em state.selected via
+   route_mouse_hover (save_load_menu_loop.cpp), nao existe mais um pseudo-
+   estado :hover NATIVO separado do .focused - so ha 1 selecao possivel por
+   vez, entao NENHUMA regra ":hover" e necessaria aqui: .focused JA reflete
+   onde o mouse esteve por ultimo (ou o teclado, o que tiver agido por
+   ultimo). A revisao 1 (":hover" identico ao ".focused") ficou redundante e
+   foi removida - ver o historico deste arquivo se precisar do contexto do
+   bug original (2 itens pintados iguais ao mesmo tempo, mouse != teclado). */
+.slot.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 24dp 3dp;
+}
+.slot-num {
+  flex: 0 0 auto; width: 32dp; height: 32dp; margin-right: 12dp; border-radius: 7dp;
+  text-align: center; line-height: 32dp;
+  decorator: vertical-gradient( #0d1320 #0d1320 );
+  border: 1dp #7A5A2E; color: #F0D98C; font-size: 14dp;
+}
+.slot-body { flex: 1; }
+.slot-title { color: #E7ECF5; font-size: 12dp; margin-bottom: 2dp; }
+.slot-title .loc { color: #F0D98C; }
+.slot-title .ro { color: #6B6F7A; font-size: 10dp; }
+.slot-meta { color: #9AA5C0; font-size: 10dp; }
+.slot-empty-label { color: #6B6F7A; font-size: 11dp; }
+.slot-delete {
+  flex: 0 0 auto; box-sizing: border-box; margin-left: 8dp; padding: 5dp 9dp;
+  border-radius: 6dp; text-align: center; font-size: 9dp; letter-spacing: 1dp;
+  color: #E2555A; border: 1dp #5A3238;
+  decorator: vertical-gradient( #2A1620 #1A1015 );
+}
+.slot-delete:hover { color: #ffffff; border: 1dp #E2555A; box-shadow: #E2555A 0dp 0dp 10dp 1dp; }
+.footer {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 12dp; padding-top: 10dp; border-top: 1dp #33281a;
+}
+.footer-hint { color: #9AA5C0; font-size: 10dp; }
+.btn-back {
+  box-sizing: border-box; text-align: center; width: 100dp; padding: 6dp 10dp;
+  border: 1dp #3A4566; border-radius: 999dp; color: #9AA5C0; font-size: 11dp; letter-spacing: 1dp;
+}
+// "Voltar" NAO participa de state.selected (nunca e alcancado por
+// UP/DOWN/teclado) - sempre desenhado com a classe "focused" fixa (ver
+// build_save_load_menu_rml), entao o :hover SUTIL abaixo e so um
+// microfeedback extra pro mouse, sem relacao com a mecanica last-input-wins
+// dos slots/pills (esses SIM tem :hover removido, ver o comentario de
+// .slot.focused acima).
+.btn-back:hover { color: #c3cadb; border-color: #6a7aa2; }
+.btn-back.focused { color: #ffffff; border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 14dp 1dp; }
+.btn-back.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); color: #071019; border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 22dp 3dp;
+}
+.confirm-title { text-align: center; color: #E7ECF5; font-size: 13dp; line-height: 20dp; margin: 20dp 0dp 20dp 0dp; }
+.confirm-pill {
+  box-sizing: border-box; width: 300dp; padding: 8dp 16dp; margin: 6dp auto;
+  text-align: center; decorator: vertical-gradient( #3A4566 #1B2238 );
+  border: 1dp #ffffff12; border-radius: 999dp; font-size: 12dp; color: #E7ECF5; letter-spacing: 1dp;
+}
+.confirm-pill.focused { color: #ffffff; border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 18dp 1dp; }
+/* (sem :hover aqui - as pills participam de state.confirm_selected/delete_
+   confirm_selected/warning_selected, mecanica last-input-wins, ver o
+   comentario de .slot.focused acima; .focused sozinho ja reflete o mouse.) */
+/* EFEITO DE PRESS (B2, decisao do lider 2026-08-01) - MESMO efeito de
+   .slot.pressed/.btn-back.pressed acima, pras 3 pills de mini-dialogo/aviso
+   (overwrite/delete/warning) - ver pressed_class/kSlotCount+N abaixo. */
+.confirm-pill.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 24dp 3dp;
+}
+/* SAVE-LOAD-AVISOS (aviso #1, mock Tela 4a "warn-box"/"warn-btn.danger"): reusa
+   .confirm-title/.confirm-pill (MESMO layout/foco cyan das outras 2 confirmacoes
+   acima) - so o titulo (vermelho, severidade) e o botao PERIGOSO ("Tentar
+   recuperar") ganham o tingimento var(--warn) do mock, via as classes abaixo. */
+.warn-title { text-align: center; color: #F43F5E; font-size: 13dp; line-height: 20dp; margin: 20dp 0dp 20dp 0dp; }
+.confirm-pill.danger { border: 1dp #F43F5E; color: #ffd7de; decorator: vertical-gradient( #3a1620 #25101a ); }
+.slot-empty-label.unreadable { color: #F43F5E; }
+.slot.unreadable { border: 1dp #F43F5E55; }
+
+</style>
+</head>
+<body>
+<div id="slmenu-scrim"></div><div id="slmenu-panel"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div><div class="title">Salvar</div><div class="subtitle">7 espaços (lista rola) - gravar por cima pede confirmação - o espaço Auto é só-leitura</div><div class="slot-list" id="slmenu-list"><div class="slot readonly" id="slmenu-slot-0"><div class="slot-num">Auto</div><div class="slot-body"><div class="slot-title">Auto <span class="loc">- Praça da Compilação</span> <span class="ro">(só-leitura)</span></div><div class="slot-meta">05/08/2026 18:56  -  0h 00m  -  XP 0  -  Cap. 1</div></div><div class="slot-delete" id="slmenu-delete-0">Apagar</div></div><div class="slot empty focused" id="slmenu-slot-1"><div class="slot-num">1</div><div class="slot-body"><div class="slot-empty-label">Espaço 1 - vazio</div></div></div><div class="slot empty" id="slmenu-slot-2"><div class="slot-num">2</div><div class="slot-body"><div class="slot-empty-label">Espaço 2 - vazio</div></div></div><div class="slot empty" id="slmenu-slot-3"><div class="slot-num">3</div><div class="slot-body"><div class="slot-empty-label">Espaço 3 - vazio</div></div></div><div class="slot empty" id="slmenu-slot-4"><div class="slot-num">4</div><div class="slot-body"><div class="slot-empty-label">Espaço 4 - vazio</div></div></div><div class="slot empty" id="slmenu-slot-5"><div class="slot-num">5</div><div class="slot-body"><div class="slot-empty-label">Espaço 5 - vazio</div></div></div><div class="slot empty" id="slmenu-slot-6"><div class="slot-num">6</div><div class="slot-body"><div class="slot-empty-label">Espaço 6 - vazio</div></div></div></div><div class="footer"><span class="footer-hint">Cima/Baixo navega (roda também) - Enter grava aqui - Esc volta</span><div class="btn-back focused" id="slmenu-back">Voltar</div></div></div>
+</body>
+</rml>

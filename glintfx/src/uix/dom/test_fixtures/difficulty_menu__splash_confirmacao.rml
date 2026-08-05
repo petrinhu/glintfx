@@ -1,0 +1,106 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- RMLX1-CORPUS fixture -- verbatim markup captured AT RUNTIME by the GusWorld repo (Apache-2.0)
+     and handed back over this repo's git bus channel 2026-08-05 (one of 15 files, originally
+     dump_markup_5_telas/; the consumer's own reply is archived at
+     gusworld_ia_autocomm/archive/2026-08-05-gusworld-dump-markup-5-telas.md). The consumer loads
+     documents by PATH, not by string, so the .rml file its own stage directory wrote when this
+     screen actually ran on-screen already WAS this exact byte sequence -- nothing here was retyped,
+     reconstructed, or edited to fit this module's current limitations (re-confirmed: recapturing
+     title_menu__sem_save.rml in a fresh run gave a byte-identical md5). This is this repo's own
+     "markup real entra verbatim" discipline, the same one RMLX-1/S3's gusworld_battle_cockpit.rml
+     (the one other fixture already in this directory) already follows.
+     Screen state this file represents: difficulty menu, the confirmation splash -- replaces the
+     option list with 2 pills. Placement -- why this directory, glintfx/src/uix/dom/test_fixtures/,
+     and not one of the two directories lexer_corpus_sanity.cpp already scans: this is a THIRD
+     corpus directory, scanned by parser_corpus_sanity.cpp and dumper_corpus_sanity.cpp (both go
+     through parse_document(), immune by construction -- its own <head>-opacity raw-byte-scan never
+     re-tokenizes <head>'s interior with the Lexer) but deliberately NOT by lexer_corpus_sanity.cpp.
+     Real RCSS comment prose inside several of these 15 files' <head>/<style> blocks contains a
+     literal, un-escaped '<' the standalone Lexer -- which has no CDATA-tag concept for
+     style/script, lexer.hpp's own documented boundary -- cannot tokenize (UIX-LEXER-OPACO,
+     TODO.md). Measured 2026-08-05, this file's own standalone Lexer run: passes cleanly to
+     EndOfFile, no Error. Never edited to dodge that gap -- see UIX-LEXER-OPACO's own "not something
+     to silently work around" clause and parser_hardening_sanity.cpp's own
+     test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt for the explicit, non-silent pin
+     of the underlying mechanism. -->
+<rml>
+<head>
+<style>
+
+body { font-family: "Pixel Operator Mono"; background: transparent; width: 100%; height: 100%; }
+#difficulty-scrim {
+  position: absolute; top: 0dp; left: 0dp; right: 0dp; bottom: 0dp;
+  background-color: #05070ca8;
+}
+#difficulty-panel {
+  box-sizing: border-box;
+  position: absolute; top: 50%; left: 50%; margin-left: -220dp; margin-top: -228dp;
+  width: 440dp;
+  decorator: linear-gradient( 180deg, #3A4566 0%, #1B2238 42%, #0A0E1A 100% );
+  border: 1dp #7A5A2E;
+  border-radius: 20dp;
+  padding: 20dp 22dp 14dp 22dp;
+  text-align: center;
+  box-shadow: #22D3EE1a 0dp 0dp 20dp 0dp;
+}
+.corner {
+  position: absolute; width: 18dp; height: 18dp;
+  decorator: polygon( 6, radial-gradient( circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100% ) );
+  filter: drop-shadow( #00000080 0dp 1dp 3dp );
+}
+.corner.tl { top: 8dp; left: 8dp; }
+.corner.tr { top: 8dp; right: 8dp; }
+.corner.bl { bottom: 8dp; left: 8dp; }
+.corner.br { bottom: 8dp; right: 8dp; }
+.difficulty-title { font-size: 18dp; letter-spacing: 2dp; color: #ffffff; margin: 2dp 0dp 12dp 0dp; }
+.difficulty-item {
+  box-sizing: border-box; display: block; width: 100%; margin: 6dp 0dp; padding: 8dp 14dp;
+  border-radius: 9dp; border: 1dp #7A5A2E;
+  decorator: vertical-gradient( #1e2740 #141b2e );
+  text-align: left;
+}
+.difficulty-item.sel {
+  border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp 0dp 16dp 0dp;
+}
+.difficulty-item.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 22dp 3dp;
+}
+.difficulty-item:hover { border: 1dp #22D3EE88; }
+.difficulty-item-label { color: #E7ECF5; font-size: 13dp; letter-spacing: 1dp; margin-bottom: 3dp; }
+.difficulty-item.sel .difficulty-item-label { color: #ffffff; }
+.difficulty-badge {
+  display: inline-block; margin-left: 8dp; padding: 1dp 7dp; border-radius: 999dp;
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); font-size: 8dp; color: #071019;
+  letter-spacing: 0.5dp;
+}
+.difficulty-item-desc { color: #9AA5C0; font-size: 10dp; line-height: 14dp; }
+.difficulty-hint { color: #9AA5C0; font-size: 9dp; line-height: 13dp; margin-top: 10dp; }
+.difficulty-foot { color: #9AA5C0; font-size: 9dp; margin-top: 6dp; letter-spacing: 0.5dp; }
+.difficulty-item.locked {
+  decorator: vertical-gradient( #171d30 #10141f ); border: 1dp #33281a;
+  cursor: default;
+}
+.difficulty-item.locked .difficulty-item-label { color: #6B6F7A; }
+.difficulty-item.locked .difficulty-item-desc { color: #565C6E; }
+.difficulty-item.locked:hover { border: 1dp #33281a; }
+.difficulty-badge-locked {
+  display: inline-block; margin-left: 8dp; padding: 1dp 7dp; border-radius: 999dp;
+  decorator: vertical-gradient( #4a4f5c #333740 ); font-size: 8dp; color: #C7CBD6;
+  letter-spacing: 0.5dp;
+}
+.confirm-title { color: #E7ECF5; font-size: 13dp; line-height: 18dp; margin: 10dp 0dp 10dp 0dp; }
+.confirm-body { color: #9AA5C0; font-size: 10dp; line-height: 15dp; margin: 0dp 0dp 18dp 0dp; }
+.confirm-pill {
+  box-sizing: border-box; width: 280dp; padding: 8dp 14dp; margin: 6dp auto;
+  decorator: vertical-gradient( #3A4566 #1B2238 ); border: 1dp #ffffff12; border-radius: 999dp;
+  font-size: 11dp; color: #E7ECF5; letter-spacing: 1dp;
+}
+.confirm-pill.focused { color: #ffffff; border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 18dp 1dp; }
+
+</style>
+</head>
+<body>
+<div id="difficulty-scrim"></div><div id="difficulty-panel"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div><div class="difficulty-title">Escolha a dificuldade</div><div class="confirm-title">Jogar no Médio?</div><div class="confirm-body">Vale pra este save inteiro e não muda depois de começar. Pra jogar diferente, é só criar um save novo quando quiser.</div><div class="confirm-pill" id="difficulty-confirm-0">Sim, jogar no Médio</div><div class="confirm-pill focused" id="difficulty-confirm-1">Cancelar</div></div>
+</body>
+</rml>

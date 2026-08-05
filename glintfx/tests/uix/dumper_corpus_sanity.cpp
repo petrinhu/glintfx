@@ -4,8 +4,10 @@
 //     (glintfx/tests/ + glintfx/demos/ + this arc's own glintfx/src/uix/dom/test_fixtures/, the
 //     same three directories parser_corpus_sanity.cpp already enumerates) that parses cleanly.
 //     This is this slice's own acceptance criterion, restated as a test: "emits the format of
-//     docs/uix-dom.md for the whole corpus of fixtures the wave gathers (45, measured
-//     2026-08-05)". Deliberately does NOT re-prove determinism (dumper_determinism_sanity.cpp's
+//     docs/uix-dom.md for the whole corpus of fixtures the wave gathers (60, measured
+//     2026-08-05 -- RMLX1-CORPUS, TODO.md, grew the third directory's original 1 fixture by 15
+//     more real GusWorld runtime-captured screens, 45 -> 60)". Deliberately does NOT re-prove
+//     determinism (dumper_determinism_sanity.cpp's
 //     own job) or field-level byte-exactness against the spec's worked example
 //     (dumper_sanity.cpp's own job) -- this file's only job is SHAPE, at corpus scale: every
 //     fixture dumps without crashing, the first line is always a HEAD record, the output always
@@ -16,8 +18,10 @@
 //     (glintfx/tests/ + glintfx/demos/ + o test_fixtures/ próprio deste arco em
 //     glintfx/src/uix/dom/, os MESMOS três diretórios que o parser_corpus_sanity.cpp já enumera)
 //     que parseia limpo. Este é o próprio critério de aceite desta fatia, reformulado como teste:
-//     "emite o formato do docs/uix-dom.md pro corpus inteiro de fixtures que a onda reúne (45,
-//     medidas 2026-08-05)". Deliberadamente NÃO reprova determinismo (trabalho próprio do
+//     "emite o formato do docs/uix-dom.md pro corpus inteiro de fixtures que a onda reúne (60,
+//     medidas 2026-08-05 -- a RMLX1-CORPUS, TODO.md, fez a 1 fixture original do terceiro
+//     diretório crescer com mais 15 telas reais do GusWorld capturadas em runtime, 45 -> 60)".
+//     Deliberadamente NÃO reprova determinismo (trabalho próprio do
 //     dumper_determinism_sanity.cpp) nem exatidão-de-byte em nível de campo contra o exemplo
 //     trabalhado da spec (trabalho próprio do dumper_sanity.cpp) -- o único trabalho deste
 //     arquivo é FORMA, em escala de corpus: toda fixture dumpa sem crashar, a primeira linha é
@@ -143,11 +147,26 @@ int main() {
   const std::vector<fs::path> s3_fixtures = find_rml_fixtures(GLINTFX_UIX_S3_FIXTURES_DIR);
   fixtures.insert(fixtures.end(), s3_fixtures.begin(), s3_fixtures.end());
 
-  // EN: same >= 40 sanity floor as parser_corpus_sanity.cpp -- 45 measured 2026-08-05.
-  // PT: mesmo piso de sanidade >= 40 do parser_corpus_sanity.cpp -- 45 medidas 2026-08-05.
+  // EN: same >= 40 sanity floor as parser_corpus_sanity.cpp -- 60 measured 2026-08-05
+  //     (RMLX1-CORPUS, TODO.md, grew the third directory from 1 to 16 real GusWorld fixtures).
+  // PT: mesmo piso de sanidade >= 40 do parser_corpus_sanity.cpp -- 60 medidas 2026-08-05 (a
+  //     RMLX1-CORPUS, TODO.md, fez o terceiro diretório crescer de 1 pra 16 fixtures reais do
+  //     GusWorld).
   check(fixtures.size() >= 40,
         "corpus discovery found a plausible number of .rml fixtures (>= 40) -- directory "
         "wiring sanity");
+
+  // EN: RMLX1-CORPUS (TODO.md) -- same exact-count guard parser_corpus_sanity.cpp added: pins
+  //     the third directory's own size so a future accidental deletion (or a fixture silently
+  //     not landing here) fails loud instead of hiding inside the >= 40 floor above.
+  // PT: RMLX1-CORPUS (TODO.md) -- mesma guarda de contagem exata que o parser_corpus_sanity.cpp
+  //     somou: fixa o tamanho do terceiro diretório em si pra uma deleção acidental futura (ou
+  //     uma fixture que silenciosamente não caia aqui) falhar alto em vez de se esconder dentro
+  //     do piso >= 40 acima.
+  check(s3_fixtures.size() == 16,
+        "this arc's own third fixture directory (glintfx/src/uix/dom/test_fixtures/) holds "
+        "exactly 16 .rml files -- the 1 original gusworld_battle_cockpit.rml plus the 15 real "
+        "GusWorld runtime-captured screens RMLX1-CORPUS added, none missing, none extra");
 
   std::size_t dumped = 0;
   for (const fs::path& fixture : fixtures) {

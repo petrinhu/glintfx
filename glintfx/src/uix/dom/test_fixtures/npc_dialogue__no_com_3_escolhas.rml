@@ -1,0 +1,147 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- RMLX1-CORPUS fixture -- verbatim markup captured AT RUNTIME by the GusWorld repo (Apache-2.0)
+     and handed back over this repo's git bus channel 2026-08-05 (one of 15 files, originally
+     dump_markup_5_telas/; the consumer's own reply is archived at
+     gusworld_ia_autocomm/archive/2026-08-05-gusworld-dump-markup-5-telas.md). The consumer loads
+     documents by PATH, not by string, so the .rml file its own stage directory wrote when this
+     screen actually ran on-screen already WAS this exact byte sequence -- nothing here was retyped,
+     reconstructed, or edited to fit this module's current limitations (re-confirmed: recapturing
+     title_menu__sem_save.rml in a fresh run gave a byte-identical md5). This is this repo's own
+     "markup real entra verbatim" discipline, the same one RMLX-1/S3's gusworld_battle_cockpit.rml
+     (the one other fixture already in this directory) already follows.
+     Screen state this file represents: NPC dialogue, a branching node with 3 player choices --
+     carries real &nbsp;/&gt; entities. Placement -- why this directory,
+     glintfx/src/uix/dom/test_fixtures/, and not one of the two directories lexer_corpus_sanity.cpp
+     already scans: this is a THIRD corpus directory, scanned by parser_corpus_sanity.cpp and
+     dumper_corpus_sanity.cpp (both go through parse_document(), immune by construction -- its own
+     <head>-opacity raw-byte-scan never re-tokenizes <head>'s interior with the Lexer) but
+     deliberately NOT by lexer_corpus_sanity.cpp. Real RCSS comment prose inside several of these 15
+     files' <head>/<style> blocks contains a literal, un-escaped '<' the standalone Lexer -- which
+     has no CDATA-tag concept for style/script, lexer.hpp's own documented boundary -- cannot
+     tokenize (UIX-LEXER-OPACO, TODO.md). Measured 2026-08-05, this file's own standalone Lexer run:
+     passes cleanly to EndOfFile, no Error. Never edited to dodge that gap -- see UIX-LEXER-OPACO's
+     own "not something to silently work around" clause and parser_hardening_sanity.cpp's own
+     test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt for the explicit, non-silent pin
+     of the underlying mechanism. -->
+<rml>
+<head>
+<style>
+
+body { font-family: "Pixel Operator Mono"; background: transparent; width: 100%; height: 100%; }
+
+#npcdlg-scrim {
+  position: absolute; top: 0dp; left: 0dp; right: 0dp; bottom: 0dp;
+  background-color: #05070c66;
+}
+
+/* width:820dp -> margin-left:-410dp (metade), MESMO truque de #sysmenu-panel
+   (system_menu_rml.cpp) pra centralizar sem depender de `transform`. */
+#npcdlg-box {
+  box-sizing: border-box;
+  position: absolute; left: 50%; bottom: 36dp; margin-left: -410dp;
+  width: 820dp;
+  decorator: linear-gradient( 180deg, #241812 0%, #170F0B 100% );
+  border: 1dp #7A5A2E; border-radius: 14dp;
+  padding: 20dp 26dp;
+  box-shadow: #000000ff 0dp 0dp 0dp 1dp, #E9A33D1a 0dp 0dp 46dp 0dp;
+}
+
+/* CANTOS DE LATAO: circulos (border-radius:999dp - MESMO truque de "totalmente
+   redondo" ja usado em .verb-pill/.slider-node deste projeto, evita depender de
+   border-radius percentual) com radial-gradient nativo, straddling a borda
+   (offsets NEGATIVOS) - EXATAMENTE como o mock aprovado desenha (o "parafuso"
+   meio-dentro/meio-fora da moldura). */
+.warm-corner {
+  position: absolute; width: 16dp; height: 16dp; border-radius: 999dp;
+  decorator: radial-gradient( circle at 35% 30%, #F0D98C, #C9A24B 55%, #7A5A2E 100% );
+  box-shadow: #00000080 0dp 1dp 3dp 0dp;
+}
+.warm-corner.tl { top: -8dp; left: -8dp; }
+.warm-corner.tr { top: -8dp; right: -8dp; }
+.warm-corner.bl { bottom: -8dp; left: -8dp; }
+.warm-corner.br { bottom: -8dp; right: -8dp; }
+
+/* RETRATO: decorator: image( <flat> cover ) - MESMA tecnica ja usada por #pic no
+   cockpit da batalha (battle_preview.cpp), evita depender de <img>/object-fit
+   (nao usado em nenhum outro RCSS deste projeto). */
+#npcdlg-portrait {
+  position: absolute; top: 20dp; left: 26dp; width: 96dp; height: 96dp;
+  border: 3dp #C9A24B; border-radius: 12dp;
+  background-color: #000000;
+  box-shadow: #E9A33D59 0dp 0dp 22dp 0dp;
+}
+
+#npcdlg-body { position: relative; margin-left: 116dp; min-height: 96dp; }
+#npcdlg-name {
+  font-size: 13dp; letter-spacing: 2dp; color: #E8A33D; margin-bottom: 8dp;
+}
+#npcdlg-line { font-size: 19dp; line-height: 1.5; color: #F3E9DD; }
+
+.warm-choices { margin-top: 14dp; }
+.warm-choice {
+  box-sizing: border-box;
+  padding: 3dp 8dp; border-radius: 8dp;
+  font-size: 15dp; line-height: 1.7; color: #B9A392;
+}
+/* NUMERACAO (pedido do lider - "1."/"2."/"3." visivel): badge discreto ANTES do
+   marcador de selecao/texto, dourado da moldura (#C9A24B, MESMA cor de
+   .warm-corner/#npcdlg-name) pra destacar sem competir com o texto da opcao. */
+.warm-choice-num { color: #C9A24B; }
+/* HOVER (mouse, pedido do lider - MESMA ordem/motivo de .verb-pill:hover em
+   system_menu_rml.cpp): declarado ANTES de .selected/.pressed pra empate de
+   especificidade cair a favor do estado REAL (cursor de teclado / flash de
+   confirmacao) quando os dois coincidem no mesmo frame. */
+.warm-choice:hover {
+  color: #F3E9DD;
+  background-color: #ffffff0d;
+}
+.warm-choice.selected { color: #F3E9DD; }
+/* PRESS (flash de confirmacao, pedido do lider - MESMO papel de
+   .warm-continue-btn.pressed acima): tocado pelo CHAMADOR
+   (npc_dialogue_loop_gl.cpp) por alguns frames ANTES de confirmar a escolha -
+   MESMO choke-point pros 3 canais de entrada (clique de mouse, tecla de
+   numero, Enter/Espaco no item navegado por teclado). */
+.warm-choice.pressed {
+  decorator: vertical-gradient( #E9A33D #C9A24B );
+  color: #170F0B;
+  box-shadow: #F3E9DD 0dp 0dp 14dp 1dp;
+}
+
+/* BOTAO "Continuar" (pedido do lider - ver header): MESMA receita de .btn-back
+   (system_menu_rml.cpp) - box-sizing:border-box, display:inline-block (a
+   caixa fica do tamanho do texto+padding, nao ocupa a linha toda como o
+   antigo .warm-continue-hint - mantem o "botao pequeno" que ja existia
+   visualmente, so agora clicavel/reativo). Paleta QUENTE (latao/dourado da
+   moldura, #7A5A2E/#C9A24B/#E9A33D/#F3E9DD), coerente com .warm-box/
+   .warm-corner acima (NAO a paleta cyan do menu de sistema). */
+.warm-continue-btn {
+  box-sizing: border-box;
+  display: inline-block;
+  margin-top: 10dp; padding: 5dp 16dp;
+  border: 1dp #7A5A2E; border-radius: 999dp;
+  decorator: vertical-gradient( #2A1D14 #170F0B );
+  color: #B9A392; font-size: 12dp; letter-spacing: .5dp;
+}
+/* HOVER (mouse) - MESMA ordem/motivo de .btn-back:hover (system_menu_rml.cpp):
+   declarado ANTES de .pressed pra empate de especificidade cair a favor do
+   estado de PRESS real, caso os dois coincidam no mesmo frame. */
+.warm-continue-btn:hover {
+  color: #F3E9DD; border-color: #C9A24B;
+  decorator: vertical-gradient( #3A2A1C #201409 );
+}
+/* PRESS (flash de confirmacao, NOSSO - nao nativo do glintfx, MESMO padrao de
+   .btn-back.pressed): fundo dourado solido + texto escuro + glow claro,
+   tocado pelo CHAMADOR (npc_dialogue_loop_gl.cpp) por alguns frames ANTES de
+   avancar o dialogo de fato. */
+.warm-continue-btn.pressed {
+  decorator: vertical-gradient( #E9A33D #C9A24B );
+  color: #170F0B; border: 1dp #F3E9DD;
+  box-shadow: #F3E9DD 0dp 0dp 22dp 2dp;
+}
+
+</style>
+</head>
+<body>
+<div id="npcdlg-scrim"></div><div id="npcdlg-box"><div class="warm-corner tl"></div><div class="warm-corner tr"></div><div class="warm-corner bl"></div><div class="warm-corner br"></div><div id="npcdlg-portrait" style="decorator: image( retrato_seu_bertoldo_caim.png cover );"></div><div id="npcdlg-body"><div id="npcdlg-name">Seu Bertoldo</div><div id="npcdlg-line">Aquilo ali, ninguém mais para pra olhar. Você parou. Isso já diz alguma coisa sobre você.</div><div class="warm-choices"><div class="warm-choice selected" id="npcdlg-choice-0"><span class="warm-choice-num">1.</span>&nbsp;&gt; O desenho ali não fecha. Tem um padrão, eu sei que tem.</div><div class="warm-choice" id="npcdlg-choice-1"><span class="warm-choice-num">2.</span>&nbsp;&nbsp;&nbsp;É perigoso? Por onde eu sigo?</div><div class="warm-choice" id="npcdlg-choice-2"><span class="warm-choice-num">3.</span>&nbsp;&nbsp;&nbsp;(Só aceno e sigo andando.)</div></div></div></div>
+</body>
+</rml>

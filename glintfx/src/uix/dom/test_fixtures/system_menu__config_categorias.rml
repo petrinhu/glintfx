@@ -1,0 +1,531 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- RMLX1-CORPUS fixture -- verbatim markup captured AT RUNTIME by the GusWorld repo (Apache-2.0)
+     and handed back over this repo's git bus channel 2026-08-05 (one of 15 files, originally
+     dump_markup_5_telas/; the consumer's own reply is archived at
+     gusworld_ia_autocomm/archive/2026-08-05-gusworld-dump-markup-5-telas.md). The consumer loads
+     documents by PATH, not by string, so the .rml file its own stage directory wrote when this
+     screen actually ran on-screen already WAS this exact byte sequence -- nothing here was retyped,
+     reconstructed, or edited to fit this module's current limitations (re-confirmed: recapturing
+     title_menu__sem_save.rml in a fresh run gave a byte-identical md5). This is this repo's own
+     "markup real entra verbatim" discipline, the same one RMLX-1/S3's gusworld_battle_cockpit.rml
+     (the one other fixture already in this directory) already follows.
+     Screen state this file represents: system menu, Settings category picker --
+     Audio/Video/Controls/Language. Placement -- why this directory,
+     glintfx/src/uix/dom/test_fixtures/, and not one of the two directories lexer_corpus_sanity.cpp
+     already scans: this is a THIRD corpus directory, scanned by parser_corpus_sanity.cpp and
+     dumper_corpus_sanity.cpp (both go through parse_document(), immune by construction -- its own
+     <head>-opacity raw-byte-scan never re-tokenizes <head>'s interior with the Lexer) but
+     deliberately NOT by lexer_corpus_sanity.cpp. Real RCSS comment prose inside several of these 15
+     files' <head>/<style> blocks contains a literal, un-escaped '<' the standalone Lexer -- which
+     has no CDATA-tag concept for style/script, lexer.hpp's own documented boundary -- cannot
+     tokenize (UIX-LEXER-OPACO, TODO.md). Measured 2026-08-05, this file's own standalone Lexer run:
+     hits UIX-LEXER-OPACO's documented gap -- an honest, expected Lexer Error on a literal, un-
+     escaped '<' inside <style> comment prose ("... delta < 0.01px ..."), never a crash, never
+     silently-wrong tokenization; parse_document() on this same file is immune and parses cleanly.
+     Never edited to dodge that gap -- see UIX-LEXER-OPACO's own "not something to silently work
+     around" clause and parser_hardening_sanity.cpp's own
+     test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt for the explicit, non-silent pin
+     of the underlying mechanism. -->
+<rml>
+<head>
+<style>
+
+/* CAUSA RAIZ DO DESLOCAMENTO (MENU-PAUSA-CONFIG-SOM, achado por probe headless
+   2026-07-04): o <body> do RmlUi, quando so tem filhos position:absolute e NAO
+   declara a propria largura/altura, colapsa pra uma content-box de tamanho 0dp x
+   0dp (shrink-to-fit sem conteudo em fluxo normal - confirmado lendo
+   ElementDocument::UpdateLayout, que usa GetParentNode()->GetBox() como
+   containing block do body, mas o body em si so herda ESSE tamanho se tiver uma
+   regra de largura/altura que o force a preenche-lo). Com isso, QUALQUER
+   porcentagem resolvida contra o body (containing block dos filhos absolutos,
+   ja que body fica position:static) vira 0: `left: 50%` = 50% de 0dp = 0dp - so
+   o `margin-left: -210dp` (valor FIXO, nao percentual) sobra, empurrando o
+   painel todo pra fora da borda esquerda (exatamente o bug relatado ao vivo: o
+   centro do painel caindo perto do x=0 da janela, cortado). O cockpit da
+   batalha (battle_preview.cpp) NUNCA bateu nesse caminho porque todo elemento
+   dele usa offsets FIXOS em dp (ex. "top:20dp;left:20dp") - nao percentual nem
+   0dp+0dp simetrico - entao o bug ficou latente e invisivel ate aqui. Provado
+   por probe standalone (glintfx::UiLayer isolado, Xvfb headless, 3 larguras de
+   janela): com body sem width/height, left:50% sempre resolvia a 0
+   independente de dp_ratio/viewport; com width:100%;height:100% no body, o
+   mesmo RCSS centraliza EXATO em qualquer largura testada (960/1330/1920px).
+   FIX: dar ao body a largura/altura cheia do viewport (100%, contra o ROOT que
+   SetDimensions() ja tamanho corretamente) - assim ele vira o containing block
+   correto pros filhos absolutos, com ou sem porcentagem. Bonus: o
+   #sysmenu-scrim (left/right/top/bottom:0dp, pensado pra cobrir a tela toda)
+   sofria do MESMO bug (virava 0x0, invisivel) - corrigido de graca pelo mesmo
+   fix, sem mexer na regra dele. NAO e bug do glintfx: e uso incompleto do RCSS
+   deste documento (falta de width/height no body) - nao ha nada a reportar ao
+   dev da lib. */
+body { font-family: "Pixel Operator Mono"; background: transparent; width: 100%; height: 100%; }
+
+#sysmenu-scrim {
+  position: absolute; top: 0dp; left: 0dp; right: 0dp; bottom: 0dp;
+  background-color: #05070ca8;
+}
+
+#sysmenu-panel {
+  /* box-sizing:border-box (residuo do MESMO probe acima): sem isto, "width:420dp" e
+     CONTEUDO (default content-box), e a border(1dp*2)+padding(28dp*2) somam 58dp que o
+     "margin-left:-210dp" (metade de 420, nao de 478) nao compensa - o centro ficava
+     ~29-58px a DIREITA do centro real da janela (escalando com dp_ratio), pequeno mas
+     mensuravel. border-box faz "width:420dp" jah incluir border+padding, batendo com a
+     conta de metade (210dp) usada no margin-left - centralizacao exata confirmada pelo
+     probe headless (delta < 0.01px em 960/1330/1920/800px de janela). */
+  box-sizing: border-box;
+  position: absolute; top: 90dp; left: 50%; margin-left: -210dp;
+  width: 420dp;
+  decorator: linear-gradient( 180deg, #3A4566 0%, #1B2238 42%, #0A0E1A 100% );
+  border: 1dp #7A5A2E;
+  border-radius: 20dp;
+  /* padding-bottom 24dp->40dp (ONDA ARVORE (3), ver header): folga real contra os
+     cantos hexagonais inferiores - detalhe na conta no header deste arquivo. */
+  padding: 30dp 28dp 40dp 28dp;
+  box-shadow: #22D3EE1a 0dp 0dp 50dp 0dp;
+}
+
+/* CANTOS HEXAGONAIS: decorator: polygon(6, <fill>) do glintfx v0.3.1 (bump
+   ver CMakeLists.txt/GIT_TAG). O fill agora aceita radial-gradient(...) real
+   (per-pixel, mesmo shader do radial-gradient nativo do RmlUi - ver
+   docs/effects.md do glintfx vendorizado, secao "a polygon with a gradient
+   fill"), reproduzindo o "parafuso de latao com luz" do mock original
+   (01-menu-sistema-proposta-a-console-centralizado.html, radial-gradient num
+   circulo). "at 40% 35%" desloca o highlight pra cima-esquerda (luz
+   off-center); o ultimo stop (100%) cai exatamente na borda do circulo
+   inscrito do hexagono. */
+.corner {
+  position: absolute; width: 20dp; height: 20dp;
+  decorator: polygon( 6, radial-gradient( circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100% ) );
+  filter: drop-shadow( #00000080 0dp 1dp 3dp );
+}
+.corner.tl { top: 8dp; left: 8dp; }
+.corner.tr { top: 8dp; right: 8dp; }
+.corner.bl { bottom: 8dp; left: 8dp; }
+.corner.br { bottom: 8dp; right: 8dp; }
+
+.kicker { text-align: center; color: #9AA5C0; font-size: 11dp; letter-spacing: 4dp; margin-bottom: 2dp; }
+/* line-height 36dp (era o default herdado "1.2", ~31dp) + padding-top 4dp
+   (achado da analise das capturas headless 2026-07-04, PROBLEMA 2): maiuscula
+   acentuada ("Á" de "Áudio", ver menu_audio.png) tinha o topo do acento CORTADO
+   - a caixa da linha nao tinha folga suficiente acima do cap-height pro
+   diacritico da fonte pixel (Pixel Operator Mono) render inteiro. Aumentar
+   line-height da folga vertical ao redor da linha (RmlUi distribui o excesso
+   simetricamente acima/abaixo da baseline - RegisterProperty("line-height")
+   em StyleSheetSpecification.cpp) e o padding-top da uma folga adicional fixa
+   SO no topo (onde o corte acontecia) sem mexer no espacamento existente
+   ate o divider (margin-bottom:18dp preservado - nao desalinha o resto). */
+.title { text-align: center; font-size: 26dp; line-height: 36dp; color: #ffffff; margin: 2dp 0dp 18dp 0dp; padding-top: 4dp; letter-spacing: 4dp; }
+.divider { height: 1dp; background-color: #ffffff2e; margin-bottom: 20dp; }
+
+/* BOTOES COMPACTOS, 2a LEVA (ONDA ARVORE (2), ver header): 340dp de largura
+   (era 364dp) + padding vertical 7dp (era 9dp) + margin-bottom 6dp (era 8dp) -
+   Pause/ConfigCategories agora tem 4 itens (era 3), a economia de altura por
+   pill importa mais. Reusada pelas categorias de ConfigCategories tambem (MESMO
+   estilo de "pill de acao" que os verbos de Pause).
+   text-align:center + box-sizing:border-box (retoque ao vivo do lider): rotulo
+   centralizado (era esquerda) pra ficar uniforme com .btn-back (que ja nasceu
+   centralizado); border-box pelo MESMO motivo documentado em #sysmenu-panel
+   acima - garante que "width:340dp" seja a caixa RENDERIZADA final (incluindo
+   padding+border), nao so o conteudo, pra bater exatamente com .btn-back. */
+.verb-pill {
+  box-sizing: border-box;
+  position: relative; width: 340dp; padding: 7dp 16dp;
+  margin-top: 0dp; margin-bottom: 6dp; margin-left: auto; margin-right: auto;
+  text-align: center;
+  decorator: vertical-gradient( #3A4566 #1B2238 );
+  border: 1dp #ffffff12; border-radius: 999dp;
+  font-size: 13dp; color: #E7ECF5; letter-spacing: 2dp;
+}
+/* HOVER (mouse, PEDIDO 2a - MESMA receita/ORDEM de .verb:hover em
+   battle_preview.cpp:352-360, ver o comentario de la): DECLARADO ANTES de
+   .focused/.danger/.pressed abaixo de proposito. :hover conta como 1
+   pseudo-classe - a MESMA especificidade de uma classe (.focused/.danger/
+   .pressed tem cada 2: .verb-pill + a propria), entao .verb-pill:hover (tambem
+   2: .verb-pill + :hover) EMPATA com elas; o empate cai pra ORDEM DE FONTE, e
+   quem vem DEPOIS vence. Declarando :hover PRIMEIRO garante que
+   focado/pressionado sempre "ganham" o hover simultaneo (o glow FORTE da
+   selecao real nunca e ofuscado pelo feedback discreto do mouse). Fundo mais
+   claro + borda neutra clara, SEM box-shadow (zero glow que dispute com o
+   .focused) - mesma paleta discreta usada no cockpit. */
+.verb-pill:hover {
+  decorator: vertical-gradient( #47547a #232b46 );
+  border-color: #5a6a92;
+}
+.verb-pill.focused {
+  color: #ffffff; border: 1dp #22D3EE;
+  box-shadow: #22D3EE 0dp 0dp 22dp 2dp;
+}
+.verb-pill.danger { border: 1dp #E11D7459; }
+/* PRESS (ONDA ARVORE (4), ver header): flash de ~100ms ANTES da transicao real -
+   inverte pra fundo cyan solido + texto escuro + glow branco intenso. Efeito
+   NOSSO (system_menu_loop.cpp gera o RML com pressed_index setado, renderiza
+   alguns frames, SO ENTAO aplica a acao) - nao e estado nativo do glintfx. */
+.verb-pill.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 );
+  color: #071019; border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 30dp 4dp;
+}
+
+.footer-hint { text-align: center; color: #9AA5C0; font-size: 11dp; margin-top: 6dp; }
+
+.field { margin-bottom: 20dp; }
+/* .field-row (achado da analise das capturas headless 2026-07-04, PROBLEMA 3):
+   nome do campo e percentual vinham COLADOS (ex. "70%" grudado no rotulo
+   sem nenhum espaco visivel, ver menu_audio.png) - o espaco literal entre os
+   2 <span> no RML nao bastava (padrao de tela de configuracao pede
+   nome-esquerda/valor-direita claramente separados, nao so 1 espaco).
+   display:flex + justify-content:
+   space-between joga o nome pra ESQUERDA e o valor pra DIREITA da linha (a
+   largura cheia do .field, MESMA API flexbox ja suportada pelo RmlUi 6.3 -
+   RegisterProperty("justify-content") em StyleSheetSpecification.cpp inclui
+   "space-between"); align-items:baseline alinha as duas fontes de tamanho
+   diferente (11dp/13dp) pela linha de base, nao pelo topo/centro da caixa.
+   Wrapper PROPRIO (nao o .field inteiro) porque .field tambem e pai do
+   .track/slider logo abaixo - se o flex fosse no .field, o track viraria um
+   3o item da MESMA linha flex (quebraria o layout vertical nome+valor / barra
+   embaixo). */
+.field-row { display: flex; justify-content: space-between; align-items: baseline; }
+.field .name { color: #9AA5C0; font-size: 11dp; letter-spacing: 1dp; }
+.field .val { color: #22D3EE; font-size: 13dp; }
+.track {
+  position: relative; height: 14dp; border-radius: 999dp; margin-top: 10dp;
+  decorator: vertical-gradient( #0A0E1A #000000 );
+  box-shadow: #00000080 0dp 2dp 5dp 0dp;
+}
+.fill {
+  position: absolute; top: 0dp; left: 0dp; bottom: 0dp; border-radius: 999dp;
+  decorator: horizontal-gradient( #0891A8 #22D3EE );
+  box-shadow: #22D3EE8c 0dp 0dp 12dp 0dp;
+}
+/* HEXAGONO NATIVO (glintfx v0.3.0, ver header): 2 camadas concentricas - a de FORA
+   (cyan/branco conforme foco) faz as vezes do "stroke" do mock, a de DENTRO
+   (.slider-node-hex-inner, escura, 18dp/2dp de inset) faz as vezes do "fill". */
+.slider-node {
+  position: absolute; top: -4dp; width: 22dp; height: 22dp; margin-left: -11dp;
+  decorator: polygon( 6, #22D3EE );
+  filter: drop-shadow( #22D3EEd9 0dp 0dp 6dp );
+}
+.slider-node.focused {
+  decorator: polygon( 6, #ffffff );
+  filter: drop-shadow( #22D3EEff 0dp 0dp 10dp );
+}
+.slider-node-hex-inner {
+  position: absolute; top: 2dp; left: 2dp; width: 18dp; height: 18dp;
+  decorator: polygon( 6, #0A0E1A );
+}
+
+/* Voltar (Audio/ConfigCategories/placeholders) - MESMA leva de compactacao do
+   .verb-pill acima (largura 340dp, padding 7dp).
+   box-sizing:border-box + padding horizontal 16dp (retoque ao vivo do lider):
+   antes o padding era so "7dp" (7dp nos 4 lados, 7dp de horizontal) contra os
+   "7dp 16dp" (16dp de horizontal) do .verb-pill - em content-box (default) as
+   duas caixas RENDERIZADAS ficavam com larguras totais diferentes (356dp vs
+   374dp) mesmo com o mesmo "width:340dp" declarado, entao a coluna nao
+   alinhava (Voltar parecia mais estreito/deslocado). Copiando box-sizing +
+   padding horizontal do .verb-pill garante caixa IDENTICA (mesma borda
+   esquerda/direita) - so o estilo (border mais sutil, sem preenchimento,
+   cor mais apagada) continua distinto. */
+.btn-back {
+  box-sizing: border-box;
+  text-align: center; width: 340dp; padding: 7dp 16dp;
+  margin-top: 6dp; margin-left: auto; margin-right: auto;
+  border: 1dp #3A4566; border-radius: 999dp; color: #9AA5C0;
+  font-size: 12dp; letter-spacing: 2dp;
+}
+/* HOVER (mouse, PEDIDO 2a) - MESMA ordem/logica de .verb-pill:hover acima
+   (declarado ANTES de .focused/.pressed pra empate de especificidade cair a
+   favor do foco/press real). */
+.btn-back:hover { color: #c3cadb; border-color: #6a7aa2; }
+.btn-back.focused { color: #ffffff; border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 18dp 1dp; }
+.btn-back.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 );
+  color: #071019; border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 26dp 3dp;
+}
+
+/* Telas placeholder (Save/Video/Language, ONDA ARVORE (1)): so o texto "em breve" +
+   Voltar - sem controle nenhum (a feature real e uma peca futura). */
+.placeholder-text {
+  text-align: center; color: #9AA5C0; font-size: 13dp;
+  margin: 24dp 0dp 30dp 0dp;
+}
+
+/* TELA CONTROLES (M2, mock docs/design/mockups/06-controles-remap.html): painel
+   MAIS LARGO (o mock usa 3 colunas Acao/Teclado/Controle - nao cabe nos 420dp
+   das demais 7 telas). #sysmenu-panel.wide sobrescreve width/margin-left
+   (mesma formula -metade da largura, ver o comentario de #sysmenu-panel acima).
+   ALTURA (BUG-1 ao vivo, achado por probe headless Xvfb :99): as 7 outras telas
+   usam auto-height (cabem sobrando) e top:90dp fixo; a tela Controles, com
+   cabecalho de colunas + lista + rodape, tinha altura de conteudo ~525dp -
+   ESTOURANDO o canvas de 540dp quando somada ao top:90dp herdado (bottom ~615dp,
+   75dp ALEM do rodape do canvas - os botoes Restaurar/Voltar ficavam fora da
+   viewport, EXATAMENTE o bug relatado ao vivo pelo lider: "botoes do rodape fora
+   da tela"). FIX: `top: 20dp` (em vez do 90dp herdado - o painel largo precisa de
+   mais espaco vertical, nao faz sentido comecar tao baixo) + `.ctrl-list` com
+   altura REDUZIDA (270dp -> 220dp, ver abaixo) - o total passa a caber com folga
+   dentro do canvas 540dp (medido empiricamente: bottom final < 500dp, > 30dp de
+   folga antes do fim do canvas).
+
+   BUG-B (moldura "totalmente errada", achado por probe headless Xvfb :99 nesta
+   investigacao M2 - NAO era um dos 3 bugs originais, mas a causa raiz do
+   "painel de Controles parece diferente das telas irmas"): o #sysmenu-panel
+   herda `box-shadow: #22D3EE1a 0dp 0dp 50dp 0dp` (glow suave, ver a regra
+   acima) - nas 7 telas normais (top:90dp, painel raso ~315dp de altura) esse
+   glow cabe folgado dentro do canvas 540dp. No painel LARGO (top:20dp, altura
+   ~477dp - quase o canvas inteiro, ver o paragrafo acima), o MESMO blur de
+   50dp faz RmlUi pedir uma textura de sombra de ~627px de altura
+   (GeometryBoxShadow::Resolve: extend = 1.5*blur_radius = 75px pra cada lado)
+   contra um canvas de so 540px - RmlUi ENTAO CLAMPA a textura pro tamanho da
+   janela (RenderManager::GetScissorRegion, log "desired box-shadow texture
+   dimensions (770, 627) are larger than the current window region (770,
+   540)") e o resultado sai CORROMPIDO (cantos hexagonais topo/base
+   deformados + uma emenda vertical visivel na borda esquerda - achado
+   comparando screenshot headless Controles vs Audio lado a lado, PROVADO
+   fechando o box-shadow do painel largo e vendo o artefato sumir). NAO e bug
+   do glintfx nem do RmlUi (comportamento documentado - a lib avisa e clampa
+   em vez de crashar); e o MESMO glow generico batendo num painel geometricamente
+   incompativel (alto demais perto da borda do canvas). FIX: box-shadow PROPRIO
+   pro painel largo com blur REDUZIDO (10dp em vez de 50dp - extend=15px, cabe
+   com folga nos 20dp de margem acima do painel) - MESMA cor/alpha (#22D3EE1a,
+   10% opacidade) e MESMO offset/spread (0dp/0dp) da regra original, so o raio
+   do blur muda (a 10% de opacidade o glow ja e quase imperceptivel nas telas
+   normais - reduzir o raio no painel largo nao muda a leitura visual "moldura
+   consistente", so elimina o clamp/corrupcao). Corners/borda/gradiente/header
+   continuam 100% herdados de #sysmenu-panel, INTOCADOS - so este 1 valor
+   (box-shadow) precisou de override. */
+#sysmenu-panel.wide {
+  width: 620dp; margin-left: -310dp; top: 20dp;
+  box-shadow: #22D3EE1a 0dp 0dp 10dp 0dp;
+}
+
+/* padding-right 6dp->18dp (GLINTFX-SCROLL, corredor da scrollbar, ver o comentario
+   completo em cima de `.ctrl-row` abaixo): `.ctrl-row` perdeu 12dp de largura pra
+   nao colidir mais com o thumb da scrollbar - sem este ajuste EQUIVALENTE aqui, o
+   cabecalho de colunas (fora de `.ctrl-list`, nao encolhe sozinho) ficaria 12dp
+   mais LARGO que as linhas de baixo, desalinhando "Teclado"/"Controle" do
+   cabecalho contra os keycaps das linhas (a coluna .c-act, flex:1, absorve
+   qualquer diferenca de largura total entre cabecalho/linha - MESMA logica que
+   fez o cabecalho ficar 4dp mais largo que a linha ANTES desta onda, ver o -4dp
+   ja existente aqui vs a antiga width:558dp de baixo). +12dp de padding-right
+   preserva esse MESMO gap relativo de 4dp (nao desfaz o alinhamento pre-existente,
+   so acompanha o corte novo da linha). */
+.ctrl-cols-head {
+  display: flex; color: #9AA5C0; font-size: 10dp; letter-spacing: 2dp;
+  text-transform: uppercase; padding: 0dp 18dp 6dp 6dp; border-bottom: 1dp #33281a;
+}
+.ctrl-cols-head .c-act { flex: 1; }
+.ctrl-cols-head .c-key { width: 130dp; text-align: center; }
+.ctrl-cols-head .c-pad { width: 100dp; text-align: center; }
+
+/* Lista ROLAVEL (30 actions nao cabem sem scroll - overflow-y:auto, MESMO
+   espirito do mock, mas com ALTURA FIXA em vez de flex:1 - o #sysmenu-panel
+   das outras telas usa fluxo de bloco normal, nao flexbox, entao "flex:1"
+   nao teria container flex pra resolver contra; altura fixa e mais simples e
+   coerente com o resto do arquivo). ALTURA 220dp (era 270dp, BUG-1 ao vivo, ver
+   o comentario de #sysmenu-panel.wide acima) - reduzida pra o painel inteiro
+   caber no canvas 540dp com o novo `top:20dp`. */
+.ctrl-list {
+  height: 220dp; overflow-x: hidden; overflow-y: auto; margin-top: 4dp; padding-right: 4dp;
+}
+/* SCROLLBAR ESTILIZADA (M2, GLINTFX-SCROLL, glintfx v0.6.0): a v0.6.0 do
+   glintfx passou a embutir defaults de UA-stylesheet pra scrollbarvertical/
+   slidertrack/sliderbar/sliderarrowdec/sliderarrowinc (antes eram tamanho 0,
+   invisiveis - ver CHANGELOG glintfx [0.6.0]) - sem isto a lista de 30 actions
+   rolava mas SEM NENHUM indicador visual de posicao/tamanho. O default vem
+   generico (cinza) - fora da paleta azul+latao do resto do painel; override
+   abaixo pinta o thumb/track na MESMA identidade visual (latao/brass sobre
+   fundo escuro), coerente com `.keycap.pad`/`.corner`/`.ctrl-btn`.
+
+   PEGADINHA DE ESPECIFICIDADE (documentada no CHANGELOG glintfx [0.6.0] e em
+   docs/effects.md "How-to: style scrollbars" do glintfx vendorizado): os
+   defaults da UA usam seletor COMPOSTO de 2 tags (ex. `scrollbarvertical
+   sliderbar`, ~20000 de especificidade) - um override de 1 tag ISOLADA
+   (`sliderbar { ... }` solto, ~10000) PERDE pro default e simplesmente NAO
+   aplicaria (RmlUi resolve por especificidade, nao por "autor vs. builtin").
+   Por isso toda regra abaixo usa `#ctrl-list scrollbarvertical ...`
+   (id + composto de 2 tags - especificidade MAIOR que o default generico,
+   nunca perde). CONFIRMADO que o override PEGA de verdade por probe headless
+   (Xvfb :99, screenshot antes/depois: thumb generico cinza -> thumb
+   latao/brass translucido). */
+#ctrl-list scrollbarvertical { width: 8dp; }
+#ctrl-list scrollbarvertical slidertrack {
+  background-color: #0A0E1A80; border-radius: 999dp;
+}
+#ctrl-list scrollbarvertical sliderbar {
+  background-color: #C9A24Bb3; border-radius: 999dp; min-height: 24dp;
+}
+#ctrl-list scrollbarvertical sliderbar:hover { background-color: #C9A24Bff; }
+/* Setas ESCONDIDAS (height:0dp): o par decremento/incremento generico da UA
+   nao combina com a paleta latao/brass e e ruido visual desnecessario - a
+   lista ja rola por wheel/drag-do-thumb/teclado (setas Cima/Baixo, ver
+   CONTROLS_NAV_HINT), track+thumb discretos bastam. */
+#ctrl-list scrollbarvertical sliderarrowdec,
+#ctrl-list scrollbarvertical sliderarrowinc { height: 0dp; }
+.ctrl-group {
+  color: #C9A24B; font-size: 10dp; letter-spacing: 2dp; text-transform: uppercase;
+  margin: 10dp 0dp 4dp 6dp; opacity: 0.8;
+}
+/* CAUSA RAIZ DO "MOUSE NAO SELECIONA NADA" (BUG-A, achado NOVO por probe Xvfb
+   :99 nesta investigacao - nao era um dos 3 relatados originalmente, mas era a
+   causa raiz de um deles): SEM `width` explicita, `.ctrl-row` (display:flex,
+   filho de `.ctrl-list` que tem `overflow-y:auto`) colapsava pra ~16px de
+   largura (so o padding esquerdo+direito, 6dp+6dp=12dp*dp_ratio - o CONTEUDO
+   flex ficava com largura 0) em vez de ~750px (a largura real disponivel,
+   confirmada medindo `.ctrl-cols-head` - MESMO display:flex, MESMA largura de
+   conteudo, mas FORA do `overflow-y:auto` - la o flex funcionava normal). A
+   caixa de hit-test que o mouse do loop usa (get_element_box) reportava essa
+   MESMA largura colapsada - qualquer clique fora da fresta de 12dp perto da
+   borda esquerda ERRAVA o hit-test (o texto da linha so aparecia visualmente
+   porque o conteudo flex TRANSBORDAVA a caixa colapsada, sem overflow:hidden
+   na propria .ctrl-row - por isso a linha "parecia" normal na tela mas o
+   clique nao registrava em quase nenhum ponto dela). `width:100%` (percentual)
+   tambem falhou (mesmo colapso) - so um comprimento ABSOLUTO (558dp, a largura
+   de conteudo real de #sysmenu-panel.wide menos padding/border/gutter da
+   lista) contornou o bug. `box-sizing:border-box` pareia com o padding:6dp
+   (mesma receita de .verb-pill/.btn-back acima - width JA inclui padding). */
+/* CORREDOR DA SCROLLBAR (GLINTFX-SCROLL, bug reportado ao vivo pelo lider: o
+   thumb dourado da scrollbar SOBREPUNHA o contorno de selecao/captura da linha
+   em foco): `.ctrl-list` (overflow-y:auto) reserva o `#ctrl-list scrollbarvertical
+   { width: 8dp; }` (regra acima) DENTRO do proprio padding-box do container - a
+   LayoutDetails::GetContainingBlock do RmlUi confirma isto subtraindo
+   GetScrollbarSize(VERTICAL) do containing block usado por filhos static/relative
+   (Source/Core/Layout/LayoutDetails.cpp:178-188, lido no vendorizado) - MAS essa
+   subtracao so vale pra filhos com largura AUTO/percentual; `.ctrl-row` usa um
+   valor ABSOLUTO fixo (558dp, ver BUG-A acima - width:100%/auto colapsava o
+   flex) que NUNCA reagia a essa reserva. Nas contas: `.ctrl-list` tem
+   padding-box=562dp e padding-right:4dp -> content-box=558dp (o `width:558dp`
+   antigo enchia esse content-box INTEIRO); o thumb (8dp), ancorado na borda
+   DIREITA do padding-box, ocupa a faixa [554dp, 562dp] - 4dp dela CAIA
+   dentro do content-box (554 a 558), exatamente onde `.ctrl-row` (e o
+   box-shadow inset de selecao/captura, desenhado na PROPRIA borda da linha)
+   terminava - confirmado por probe headless (Xvfb :99, zoom em pixel real: o
+   contorno dourado da linha 0 selecionada se FUNDIA com o thumb dourado no
+   canto superior-direito, virando 1 blob so).
+   FIX: `width: 546dp` (558dp - 12dp = 8dp do thumb + 4dp de folga extra, MESMA
+   margem de seguranca pedida - nao so o minimo matematico) - a linha (e seu anel
+   de selecao/captura) agora sempre termina 8dp ANTES do inicio do corredor do
+   thumb, em QUALQUER posicao de scroll (o calculo acima nao depende de onde a
+   lista esta rolada, so da largura fixa do container/scrollbar). `.ctrl-cols-head`
+   (cabecalho de colunas, IRMAO de `.ctrl-list`, NAO um filho dela - nao reage a
+   esse corredor sozinho) ganhou o padding-right EQUIVALENTE (+12dp, ver acima)
+   pra as colunas Teclado/Controle continuarem alinhadas com os keycaps de baixo. */
+.ctrl-row {
+  display: flex; align-items: center; padding: 6dp 6dp; border-radius: 6dp;
+  box-sizing: border-box; width: 546dp;
+}
+.ctrl-row .c-act { flex: 1; color: #E7ECF5; font-size: 12dp; }
+.ctrl-row .c-key { width: 130dp; text-align: center; }
+.ctrl-row .c-pad { width: 100dp; text-align: center; }
+/* CONTORNO INSET (M2, achado por probe Xvfb :99 nesta investigacao - bug do
+   contorno ciano "cortado"): `.ctrl-list` (overflow-y:auto) so declara
+   `padding-right:4dp` - top/left/bottom ficam com 0dp de padding, entao o
+   CLIP de overflow (RmlUi clip_area=BoxArea::Padding, ver Element.cpp) cai
+   EXATAMENTE na borda de conteudo da lista nesses 3 lados (zero folga). O
+   box-shadow ORIGINAL (`#22D3EE 0dp 0dp 0dp 1dp`, sem `inset`) e um anel
+   EXTERNO - spread positivo empurra 1dp pra FORA do border-box da linha
+   (GeometryBoxShadow::Resolve usa BoxArea::Border pro anel externo) - e
+   "fora" so cabe se houver folga na direcao certa. QUALQUER linha
+   selecionada/capturada e SEMPRE realinhada ao TOPO do recorte por
+   `UiLayer::scroll_element_into_view(id)` (chamado incondicionalmente a cada
+   reload() em system_menu_loop.cpp, `align_with_top=true` por default -
+   RmlUi::ScrollAlignment::Start SEMPRE forca o alinhamento, mesmo quando a
+   linha ja estava visivel - Element::GetScrollOffsetDelta, caso Start
+   devolve begin_offset incondicional, NUNCA "so se precisar"). O efeito:
+   toda linha .sel/.capturing acaba com o TOPO do proprio border-box colado
+   no topo do recorte de `.ctrl-list` (0dp de folga) - o 1dp do anel externo
+   que deveria desenhar ACIMA da linha e cortado pelo clip, sobrando so os
+   3 outros lados (achado CONFIRMADO por leitura de pixel real via
+   glReadPixels: linha reta do topo cai de ~736px cyan pra 6px, os outros 3
+   lados continuam 100% solidos - screenshot headless comparativo
+   before/after, Xvfb :99). FIX: `inset` no box-shadow - GeometryBoxShadow
+   usa BoxArea::Padding e spread NEGATIVO pro anel inset (desenha 1dp PRA
+   DENTRO do proprio padding-box, nunca sai da caixa da linha) - o anel fica
+   IMUNE ao clip do ancestral, em QUALQUER posicao de scroll (topo, meio,
+   fim), sem tocar `.ctrl-list`/scroll/glintfx. MESMA identidade visual (cor/
+   opacidade), so o lado do desenho muda (dentro em vez de fora) -
+   `.ctrl-row.sel` recebeu o MESMO tratamento (idêntico problema estrutural,
+   so menos visivel pela cor gold/opacidade mais baixa que a captura ciano
+   que o lider circulou).
+
+   SPREAD 2dp (nao 1dp): a linha 0 (a PRIMEIRA da lista) e um caso-limite
+   RESIDUAL do mesmo mecanismo - quando ELA e o alvo do align-to-top,
+   `ScrollAlignment::Start` (Element.cpp) por vezes fecha com um residuo
+   sub-pixel (~0.3px medido no probe, arredondamento de float acumulado do
+   `.ctrl-group` acima dela) que deixa o proprio TOPO do border-box da linha
+   (nao so o anel) uma fresta ACIMA do clip - `padding-top` em `.ctrl-list`
+   NAO resolve isso (tentado e descartado nesta investigacao): o alvo do
+   scroll usa `GetClientTop()` no calculo de `ScrollIntoView`, que segue a
+   convencao DOM (largura da BORDA, nao do padding) - qualquer padding-top
+   so desloca o conteudo em repouso, e o align-to-top persegue o MESMO ponto
+   de recorte de qualquer forma, "engolindo" o padding via scroll (medido:
+   list.h cresceu com o padding, mas controls-item-0.y pos-scroll ficou
+   IDENTICO). Como o anel INSET desenha relativo a PROPRIA borda da linha
+   (imune ao jogo de scroll), aumentar o spread pra 2dp da ~1dp/1.3px REAL de
+   folga a mais entre a borda da linha e o traco do anel - >4x o residuo de
+   0.3px medido, cobre a linha 0 (e qualquer residuo futuro semelhante) sem
+   depender de padding do container. Confirmado por probe (linhas 0/1/5/15/
+   25/29 - PRIMEIRA e ULTIMA incluidas - todas com os 4 lados fechados). */
+.ctrl-row.sel {
+  box-shadow: #C9A24B66 0dp 0dp 0dp 2dp inset; decorator: vertical-gradient( #C9A24B24 #C9A24B0a );
+}
+.ctrl-row.capturing {
+  box-shadow: #22D3EE 0dp 0dp 0dp 2dp inset; decorator: vertical-gradient( #22D3EE1a #22D3EE0a );
+}
+.ctrl-row.capturing .ctrl-capture-text { color: #22D3EE; font-size: 11dp; }
+.ctrl-conflict { color: #F43F5E; font-size: 10dp; margin-top: 2dp; }
+
+.keycap {
+  display: inline-block; min-width: 40dp; padding: 3dp 8dp; border-radius: 5dp;
+  background-color: #0d1320; border: 1dp #33405e; color: #E7ECF5; font-size: 11dp;
+}
+.keycap.pad { border: 1dp #3a2e18; background-color: #1a140b; color: #F0D98C; }
+.keycap.none { color: #6B6F7A; border: 1dp #3a4256; }
+
+/* RODAPE (M2 STAGED CHANGES, reforma de UX aprovada pelo lider): passou de 2
+   pra 3 botoes - Restaurar padrao (ESQUERDA, sozinho) + Aplicar/Voltar
+   (DIREITA, agrupados) - "aplica na hora" foi trocado por mudancas preparadas
+   + Aplicar explicito (ver o comentario STAGED CHANGES em system_menu.hpp).
+   .ctrl-foot continua space-between (Restaurar de um lado, o GRUPO
+   Aplicar+Voltar do outro); .ctrl-foot-right e um flex ANINHADO (gap nativo do
+   RmlUi 6.3 - shorthand "row-gap, column-gap", ver StyleSheetSpecification.cpp)
+   so pra manter Aplicar e Voltar coladinhos, sem competir com o
+   space-between externo. */
+.ctrl-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10dp; padding-top: 10dp; border-top: 1dp #33281a;
+}
+.ctrl-foot-right { display: flex; gap: 8dp; align-items: center; }
+.ctrl-btn {
+  font-size: 11dp; letter-spacing: 1dp; padding: 6dp 14dp; border-radius: 8dp;
+  border: 1dp #7A5A2E; decorator: vertical-gradient( #2a2113 #1a140b ); color: #F0D98C;
+}
+.ctrl-btn.ghost { color: #9AA5C0; border: 1dp #3a4256; }
+/* "Aplicar" (M2 STAGED CHANGES): cor cyan (mesma familia do resto da UI de
+   confirmacao/foco) pra se destacar como a acao PRIMARIA do rodape - e o
+   UNICO botao que de fato persiste em disco/vale no jogo. */
+.ctrl-btn.apply { color: #22D3EE; border: 1dp #0e6a7d; }
+/* Sinal visual (OPCIONAL, ver o pedido) de "nada a aplicar ainda" -
+   esmaece o botao quando !controls_dirty; continua clicavel (no-op seguro,
+   persistir a MESMA config que ja esta em disco nao faz mal nenhum). */
+.ctrl-btn.apply.disabled { opacity: 0.45; }
+.ctrl-btn.focused { border: 1dp #22D3EE; box-shadow: #22D3EE 0dp 0dp 14dp 1dp; color: #ffffff; }
+.ctrl-btn.pressed {
+  decorator: vertical-gradient( #22D3EE #0EA5C9 ); color: #071019; border: 1dp #ffffff;
+  box-shadow: #ffffff 0dp 0dp 22dp 3dp;
+}
+
+/* Mini-dialogo de confirmacao do Restaurar padrao (decisao 4 do lider: pede
+   confirmacao) E do descarte de alteracoes nao aplicadas (M2 STAGED CHANGES,
+   MESMA mecanica/linguagem visual). Substitui a lista por um prompt + 2 pills
+   (reusa .verb-pill/.focused do resto do arquivo). */
+.ctrl-confirm-title {
+  text-align: center; color: #E7ECF5; font-size: 13dp; line-height: 20dp;
+  margin: 20dp 0dp 20dp 0dp;
+}
+
+</style>
+</head>
+<body>
+<div id="sysmenu-scrim"></div><div id="sysmenu-panel" class=""><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div><div class="kicker">Sistema</div><div class="title">Configurações</div><div class="divider"></div><div class="verb-pill focused" id="category-item-0">Áudio</div><div class="verb-pill" id="category-item-1">Vídeo</div><div class="verb-pill" id="category-item-2">Controles</div><div class="verb-pill" id="category-item-3">Idioma</div><div class="btn-back" id="category-item-4">Voltar</div></div>
+</body>
+</rml>

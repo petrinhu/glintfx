@@ -74,6 +74,24 @@
 //     pin explícito, não-silencioso, deste achado exato (tanto a rejeição em nível de Lexer QUANTO
 //     a imunidade deste parser, lado a lado).
 //
+//     🔴 RMLX1-CORPUS (TODO.md, 2026-08-05) -- 15 MORE real GusWorld screens joined
+//     `gusworld_battle_cockpit.rml` in that same third directory (16 files total now), all
+//     runtime-captured, never hand-retyped (see each file's own provenance header). 5 of the 15
+//     reproduce the identical class of gap this comment already describes (a literal `<` inside
+//     `<style>` comment prose the standalone Lexer cannot tokenize) at a DIFFERENT byte offset
+//     (a stray "delta < 0.01px" in prose, not the "<<" this comment names above) -- same
+//     mechanism, same reason they live here and not in one of lexer_corpus_sanity.cpp's two
+//     directories, this parser immune to all of them for the identical reason.
+// PT: 🔴 RMLX1-CORPUS (TODO.md, 2026-08-05) -- mais 15 telas reais do GusWorld se juntaram à
+//     `gusworld_battle_cockpit.rml` nesse mesmo terceiro diretório (16 arquivos agora), todas
+//     capturadas em runtime, nunca retipadas à mão (ver o próprio cabeçalho de proveniência de
+//     cada arquivo). 5 das 15 reproduzem a MESMA classe de lacuna que este comentário já descreve
+//     (um `<` literal dentro de prosa de comentário `<style>` que o Lexer standalone não
+//     consegue tokenizar) num offset de byte DIFERENTE (um "delta < 0.01px" perdido em prosa, não
+//     o "<<" que este comentário nomeia acima) -- mesmo mecanismo, mesmo motivo de morarem aqui e
+//     não num dos dois diretórios do lexer_corpus_sanity.cpp, este parser imune a todas elas pelo
+//     mesmo motivo.
+//
 //     Enumerated at RUNTIME via std::filesystem, same reason lexer_corpus_sanity.cpp gives: a
 //     FUTURE fixture is picked up automatically, nobody has to remember to update this list.
 // PT: Enumerado em TEMPO DE EXECUÇÃO via std::filesystem, mesmo motivo do lexer_corpus_sanity.cpp:
@@ -163,17 +181,35 @@ int main() {
   const std::vector<fs::path> s3_fixtures = find_rml_fixtures(GLINTFX_UIX_S3_FIXTURES_DIR);
   fixtures.insert(fixtures.end(), s3_fixtures.begin(), s3_fixtures.end());
 
-  // EN: >= 40 real fixtures (44 measured 2026-08-05 across the two shared directories, +1 this
-  //     slice's own GusWorld battle_cockpit fixture in its own third directory = 45) -- same "a
-  //     silently-vacuous pass over zero files proves nothing" sanity lexer_corpus_sanity.cpp
-  //     already applies.
-  // PT: >= 40 fixtures reais (44 medidas 2026-08-05 nos dois diretórios compartilhados, +1 a
-  //     própria fixture do GusWorld battle_cockpit desta fatia no terceiro diretório próprio dela
-  //     = 45) -- mesma sanidade "um 'passa' vazio em silêncio sobre zero arquivos não prova nada"
-  //     que o lexer_corpus_sanity.cpp já aplica.
+  // EN: >= 40 real fixtures (44 measured 2026-08-05 across the two shared directories, +16 in
+  //     this arc's own third directory = 60, measured 2026-08-05: the 1 original GusWorld
+  //     battle_cockpit fixture + 15 more real GusWorld runtime-captured screens added by
+  //     RMLX1-CORPUS, TODO.md) -- same "a silently-vacuous pass over zero files proves nothing"
+  //     sanity lexer_corpus_sanity.cpp already applies. The floor itself stays a conservative
+  //     >= 40 (not bumped to 60) on purpose: it is a directory-wiring smoke check, not a
+  //     re-assertion of the exact corpus size the two counts below already pin precisely.
+  // PT: >= 40 fixtures reais (44 medidas 2026-08-05 nos dois diretórios compartilhados, +16 no
+  //     terceiro diretório próprio deste arco = 60, medidas 2026-08-05: a 1 fixture original do
+  //     GusWorld battle_cockpit + 15 outras telas reais do GusWorld capturadas em runtime,
+  //     somadas pela RMLX1-CORPUS, TODO.md) -- mesma sanidade "um 'passa' vazio em silêncio sobre
+  //     zero arquivos não prova nada" que o lexer_corpus_sanity.cpp já aplica. O piso em si segue
+  //     conservador em >= 40 (não elevado a 60) de propósito: é uma checagem de fumaça de fiação
+  //     de diretório, não uma reafirmação do tamanho exato do corpus que as duas contagens abaixo
+  //     já fixam com precisão.
   check(fixtures.size() >= 40,
         "corpus discovery found a plausible number of .rml fixtures (>= 40) -- directory "
         "wiring sanity");
+
+  // EN: RMLX1-CORPUS (TODO.md) -- exact count of the third directory's own fixtures, so a future
+  //     accidental deletion (or a future fixture silently NOT landing there) fails loud instead
+  //     of hiding inside the >= 40 floor above.
+  // PT: RMLX1-CORPUS (TODO.md) -- contagem exata das fixtures do terceiro diretório em si, pra
+  //     uma futura deleção acidental (ou uma futura fixture que silenciosamente NÃO caia lá)
+  //     falhar alto em vez de se esconder dentro do piso >= 40 acima.
+  check(s3_fixtures.size() == 16,
+        "this arc's own third fixture directory (glintfx/src/uix/dom/test_fixtures/) holds "
+        "exactly 16 .rml files -- the 1 original gusworld_battle_cockpit.rml plus the 15 real "
+        "GusWorld runtime-captured screens RMLX1-CORPUS added, none missing, none extra");
 
   bool found_gusworld_fixture = false;
   for (const fs::path& fixture : fixtures) {

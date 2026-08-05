@@ -13,14 +13,16 @@
 //           `std::string_view` the CURRENT `lexer_` was constructed over) go through `abs_offset_`
 //           -- 0 before any rebuild, set once to the rebuild's resume point after it. Every call
 //           site that reports a raw `Token::offset` adds `abs_offset_`.
-//       (2) Errors derived from a TOKEN's `.text`/`.value` string_view (entity-decoding failures)
-//           bypass `abs_offset_` entirely and use POINTER ARITHMETIC against `source_` instead
+//       (2) Errors derived from a TOKEN's `.text`/`.value` SPAN (e.g. non-whitespace text
+//           directly inside `<rml>`, `abs_offset_of_span(tok.text)` below) bypass `abs_offset_`
+//           entirely and use POINTER ARITHMETIC against `source_` instead
 //           (`span.data() - source_.data()`) -- correct regardless of which `lexer_` generation
 //           produced the span, because `std::string_view::substr` never copies: every `Token`'s
 //           `text`/`value`, from either lexer generation, is still a view into the SAME
-//           underlying character array `source_` itself points at. This is more robust than
-//           threading `abs_offset_` through decode_entities() and is the reason this file bothers
-//           with two mechanisms instead of one.
+//           underlying character array `source_` itself points at. UIX-ENTITY-PARIDADE (2026-08)
+//           removed this mechanism's ORIGINAL motivating case -- entity-decoding failures --
+//           because decode_entities() can no longer fail (see its own header comment); the
+//           mechanism itself stays, for the other span-relative error this file still reports.
 //
 //     🔴 KNOWN GAP (found while corpus-testing this slice, NOT fixed here -- see
 //     parser_hardening_sanity.cpp's own `test_known_gap_lexer_cannot_tokenize_head_style_with_
@@ -55,14 +57,17 @@
 //           `abs_offset_` -- 0 antes de qualquer reconstrução, setado uma vez pro ponto de retomada
 //           da reconstrução depois dela. Todo call site que relata um `Token::offset` cru soma
 //           `abs_offset_`.
-//       (2) Erros derivados do `.text`/`.value` string_view de um TOKEN (falhas de decodificação
-//           de entidade) contornam `abs_offset_` por completo e usam ARITMÉTICA DE PONTEIRO contra
-//           `source_` em vez disso (`span.data() - source_.data()`) -- correto independente de
-//           qual geração de `lexer_` produziu o span, porque `std::string_view::substr` nunca
-//           copia: todo `text`/`value` de `Token`, de qualquer geração de lexer, ainda é uma view
-//           sobre o MESMO array de caractere subjacente que o próprio `source_` aponta. Isto é mais
-//           robusto que passar `abs_offset_` através do decode_entities() e é o motivo deste
-//           arquivo se dar ao trabalho de ter dois mecanismos em vez de um.
+//       (2) Erros derivados do SPAN `.text`/`.value` de um TOKEN (ex.: texto não-whitespace
+//           direto dentro de `<rml>`, `abs_offset_of_span(tok.text)` abaixo) contornam
+//           `abs_offset_` por completo e usam ARITMÉTICA DE PONTEIRO contra `source_` em vez
+//           disso (`span.data() - source_.data()`) -- correto independente de qual geração de
+//           `lexer_` produziu o span, porque `std::string_view::substr` nunca copia: todo
+//           `text`/`value` de `Token`, de qualquer geração de lexer, ainda é uma view sobre o
+//           MESMO array de caractere subjacente que o próprio `source_` aponta.
+//           UIX-ENTITY-PARIDADE (2026-08) removeu o caso motivador ORIGINAL deste mecanismo --
+//           falhas de decodificação de entidade -- porque o decode_entities() não pode mais
+//           falhar (ver o próprio comentário de cabeçalho dela); o mecanismo em si fica, pro
+//           outro erro relativo-a-span que este arquivo ainda relata.
 //
 //     🔴 LACUNA CONHECIDA (achada testando corpus nesta fatia, NÃO consertada aqui -- ver o
 //     próprio `test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt` do
@@ -107,10 +112,14 @@
 //         whitespace text directly inside `<rml>` -- THIS file's own `ParseError`.
 //       - Trailing content (anything but whitespace/comments) after `</rml>` -- THIS file's own
 //         `ParseError`.
-//       - Unrecognised named entity (`&foo;`), a bare '&' never closed by a terminating ';'
-//         within a short bounded scan, or a numeric character reference that is 0 (NUL), a UTF-16
-//         surrogate (0xD800-0xDFFF), or above the Unicode maximum (0x10FFFF) -- THIS file's own
-//         `ParseError`.
+//       - 🔴 REMOVED (UIX-ENTITY-PARIDADE, 2026-08): entity syntax used to be here -- an
+//         unrecognised named entity, a bare '&' never closed by a terminating ';', or an
+//         out-of-range numeric character reference. NONE of these are rejected anymore;
+//         decode_entities() (below) can no longer fail at all, matching upstream's own
+//         `StringUtilities::DecodeRml`, which never fails either -- see that function's own
+//         header comment for the full construction-by-construction proof. A real fixture
+//         (`test_fixtures/system_menu__config_controles_tabela.rml`, a bare literal '&' in a
+//         label) is what exposed this parser rejecting a document RmlUi loads fine.
 //       - `<style>`/`<script>` content with a literal, un-escaped run of two or more '<' -- see
 //         the "known gap" paragraph above (only reachable outside `<head>`, zero corpus
 //         occurrences; inside `<head>`, this parser is immune).
@@ -241,21 +250,82 @@ std::optional<std::string> utf8_encode(std::uint32_t cp) {
   return s;
 }
 
-// EN: The fixed named-entity table (uix-dom.md section 6c + this slice's own brief): the 5
-//     standard XML entities plus `nbsp` (the one extra the real corpus measures). `std::nullopt`
-//     for anything else -- an UNRECOGNISED name is not this table's job to guess at, it is
-//     decode_entities()'s caller's job to reject (fail-high).
-// PT: A tabela fixa de entidade nomeada (uix-dom.md seção 6c + o próprio briefing desta fatia):
-//     as 5 entidades XML padrão mais `nbsp` (a única extra que o corpus real mede).
+// EN: The fixed named-entity table -- UIX-ENTITY-PARIDADE (2026-08, RMLX-1) narrowed this to
+//     EXACTLY the 4 names upstream's own `StringUtilities::DecodeRml` recognises
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:136,142,148,154 -- four literal
+//     character-by-character checks, `'l'`/`'g'`/`'a'`/`'q'` right after the '&', nothing else).
+//     Both `apos` AND `nbsp` were in this table until this slice; BOTH REMOVED, because DecodeRml
+//     has no branch for either:
+//       - `apos`'s first character 'a' only ever matches the START of the `amp` check
+//         (StringUtilities.cpp:148, `s[i+1]=='a'`), which then requires `'m'` at the next
+//         position; `apos`'s second character is `'p'`, so the check fails.
+//       - `nbsp`'s first character 'n' matches none of `'l'/'g'/'a'/'q'` at all.
+//     Either way DecodeRml falls through to its own final `result += s[i]; i += 1;`
+//     (StringUtilities.cpp:214-215) -- `&apos;`/`&nbsp;` are copied through as their own literal
+//     6-byte text, never decoded to `'`/U+00A0. This module's own decode_entities() now
+//     reproduces that exact fall-through (see its header comment below), so removing both names
+//     from this table is enough -- no special-casing needed elsewhere.
+//
+//     🔴 `nbsp`'S REMOVAL HAS A HISTORY WORTH KEEPING VISIBLE, NOT JUST STATING THE OUTCOME: this
+//     slice's OWN first pass argued to KEEP `nbsp` decoding -- docs/uix-dom.md section 6c (the
+//     canonical spec) and glintfx/tests/uix/dumper_sanity.cpp (a concurrent agent's own file, not
+//     this module's to touch) both asserted `&nbsp;` decodes to U+00A0 at the time, and flipping
+//     it here alone would have silently diverged from BOTH of them mid-flight while that other
+//     agent's work was still in progress -- so this slice deliberately shipped `nbsp` decoding
+//     UNCHANGED and flagged the finding to the orchestrator/líder instead of resolving it
+//     unilaterally. That other agent then independently re-verified section 6c against a LIVE run
+//     of RmlUi (`S6a`, per that section's own 2026-08-05 correction) and confirmed `&nbsp;`
+//     survives as its own six literal ASCII bytes upstream, never U+00A0 -- the spec itself was
+//     wrong, not just this table. This table now matches the corrected spec. The general
+//     principle this episode reinforces: an isolated-looking table entry that also lives in a
+//     canonical cross-module doc, exercised by ANOTHER agent's concurrent tests, is not this
+//     slice's call to flip alone even when the evidence points the same way -- coordinate first.
+//
+//     `std::nullopt` for anything else -- an UNRECOGNISED name is not this table's job to guess
+//     at, it is decode_entities()'s own job to fall back on (no longer a rejection -- see below).
+// PT: A tabela fixa de entidade nomeada -- UIX-ENTITY-PARIDADE (2026-08, RMLX-1) estreitou isto
+//     pros EXATOS 4 nomes que o próprio `StringUtilities::DecodeRml` do upstream reconhece
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:136,142,148,154 -- quatro checagens de
+//     caractere-literal, `'l'`/`'g'`/`'a'`/`'q'` logo após o '&', nada mais). Tanto `apos` QUANTO
+//     `nbsp` estavam nesta tabela até esta fatia; AMBOS REMOVIDOS, porque o DecodeRml não tem
+//     ramo nenhum pra nenhum dos dois:
+//       - o primeiro caractere de `apos`, 'a', só casa o INÍCIO da checagem de `amp`
+//         (StringUtilities.cpp:148, `s[i+1]=='a'`), que então exige `'m'` na posição seguinte; o
+//         segundo caractere de `apos` é `'p'`, então a checagem falha.
+//       - o primeiro caractere de `nbsp`, 'n', não casa nenhum de `'l'/'g'/'a'/'q'` de jeito
+//         nenhum.
+//     Dos dois jeitos o DecodeRml cai pro próprio `result += s[i]; i += 1;` final
+//     (StringUtilities.cpp:214-215) -- `&apos;`/`&nbsp;` são copiados como o próprio texto
+//     literal de 6 bytes, nunca decodificados pra `'`/U+00A0. O próprio decode_entities() deste
+//     módulo agora reproduz esse mesmo fall-through (ver o comentário de cabeçalho dele abaixo),
+//     então remover os dois nomes desta tabela basta -- nenhum caso especial precisa em lugar
+//     nenhum.
+//
+//     🔴 A REMOÇÃO DE `nbsp` TEM UM HISTÓRICO QUE VALE MANTER VISÍVEL, NÃO SÓ AFIRMAR O
+//     DESFECHO: a PRIMEIRA passada desta própria fatia argumentou por MANTER `nbsp`
+//     decodificando -- a seção 6c do docs/uix-dom.md (a spec canônica) e o
+//     glintfx/tests/uix/dumper_sanity.cpp (arquivo de um agente concorrente, não deste módulo pra
+//     tocar) ambos afirmavam, na época, que `&nbsp;` decodifica pra U+00A0, e inverter isto aqui
+//     sozinho teria divergido em silêncio dos DOIS no meio do trabalho ainda em curso daquele
+//     outro agente -- então esta fatia deliberadamente entregou a decodificação de `nbsp`
+//     INALTERADA e sinalizou o achado ao orquestrador/líder em vez de resolver sozinha. Aquele
+//     outro agente então reverificou a seção 6c independentemente contra uma rodada AO VIVO do
+//     RmlUi (`S6a`, pela própria correção de 2026-08-05 daquela seção) e confirmou que `&nbsp;`
+//     sobrevive como os próprios seis bytes ASCII literais no upstream, nunca U+00A0 -- a própria
+//     spec estava errada, não só esta tabela. Esta tabela agora bate com a spec corrigida. O
+//     princípio geral que este episódio reforça: uma entrada de tabela que parece isolada mas
+//     também mora numa doc canônica cross-módulo, exercitada pelos testes concorrentes de OUTRO
+//     agente, não é decisão desta fatia inverter sozinha mesmo quando a evidência aponta pro
+//     mesmo lugar -- coordenar primeiro.
+//
 //     `std::nullopt` pra qualquer outra coisa -- um nome NÃO-RECONHECIDO não é trabalho desta
-//     tabela chutar, é trabalho de quem chama o decode_entities() rejeitar (fail-high).
+//     tabela chutar, é trabalho do próprio decode_entities() cair pro fallback (não é mais uma
+//     rejeição -- ver abaixo).
 std::optional<std::string> decode_named_entity(std::string_view name) {
   if (name == "amp") return std::string("&");
   if (name == "lt") return std::string("<");
   if (name == "gt") return std::string(">");
   if (name == "quot") return std::string("\"");
-  if (name == "apos") return std::string("'");
-  if (name == "nbsp") return std::string("\xC2\xA0");
   return std::nullopt;
 }
 
@@ -299,31 +369,165 @@ std::optional<std::uint32_t> parse_numeric_ref(std::string_view body) {
   return value;
 }
 
-struct DecodeOutcome {
-  bool ok = false;
-  std::string text;             // valid iff ok
-  std::size_t error_offset = 0; // relative to the `raw` span passed in, valid iff !ok
-  std::string error_message;    // valid iff !ok
-};
-
-// EN: Entity-decodes `raw` (a lexer Text/Attr-value payload, entities NOT yet decoded) per
-//     uix-dom.md section 6c + this slice's own fixed table above. A bare '&' must be closed by a
-//     ';' within kMaxEntityScan bytes -- an entity reference in this grammar is always short (the
-//     longest recognised NAME is 4 bytes, "nbsp"/"apos"; the longest recognised NUMERIC body is
-//     kMaxDigits+1 with the 'x'), so this bounds a hostile unterminated '&' to a fixed scan
-//     length instead of running to the end of an already-kMaxTokenBytes-capped token before
-//     failing -- same "belt-and-suspenders against a hostile scan" discipline lexer.hpp's own
-//     kMaxTokenBytes paragraph documents one layer down.
+// EN: Entity-decodes `raw` (a lexer Text/Attr-value payload, entities NOT yet decoded) to match
+//     upstream's own `StringUtilities::DecodeRml`
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:128-218) BYTE FOR BYTE for every
+//     construction this module's real corpus exercises -- UIX-ENTITY-PARIDADE (2026-08, RMLX-1).
+//
+//     THE PARITY BREAK THIS SLICE FOUND AND CLOSES: this function used to be FAIL-HIGH (a
+//     `ParseError`) for a bare '&' not closed by ';', or a "'&'...';'" span whose body did not
+//     decode. Upstream's DecodeRml NEVER fails -- there is no error return at all in its own
+//     signature (`String DecodeRml(const String&)`), and its four fixed literal-character checks
+//     (`&lt;`/`&gt;`/`&amp;`/`&quot;`, StringUtilities.cpp:136,142,148,154) either match and
+//     decode, or the WHOLE function falls through to its own final
+//     `result += s[i]; i += 1;` (StringUtilities.cpp:214-215) -- copying the SINGLE '&' byte
+//     literally and resuming scanning right after it, never consuming whatever text happened to
+//     follow. A real fixture GusWorld measured
+//     (glintfx/src/uix/dom/test_fixtures/system_menu__config_controles_tabela.rml, a rótulo
+//     "Interagir & Diálogo" with a bare literal '&', no entity intended at all) loads fine in
+//     RmlUi today and would have failed to load in THIS parser at the old fail-high boundary.
+//     This function now reproduces that exact fall-through: a name outside {amp,lt,gt,quot} (see
+//     decode_named_entity()'s own header -- `apos`/`nbsp` are BOTH gone from that table now, no
+//     exceptions), a bare '&' with no ';' anywhere in the bounded scan window below, a malformed
+//     numeric body, or a numeric codepoint utf8_encode() itself refuses (see that function's own
+//     header) all take the SAME fallback: emit '&' alone, resume scanning at `amp_pos + 1` --
+//     NEVER at the matched `;` this function's own bounded scan found (that `;`, if any, may
+//     belong to an entity of its OWN starting mid-body -- e.g. `&foo&amp;bar;`: DecodeRml's
+//     per-character resumption reaches the real `&amp;` and decodes it to `"&foo&bar;"`; jumping
+//     past the scanned span instead would swallow it, a genuine behavioural bug this exact
+//     fallback position avoids). Consequence: this function can no longer fail -- entity syntax
+//     is never again a reason for `parse_document()` to reject a document RmlUi would happily
+//     load (uix-dom.md's own fail-high posture still applies to every OTHER construction this
+//     module rejects; entities are the one place upstream itself never rejects, so parity wins
+//     here, per this slice's own brief).
+//
+//     🔴 `&nbsp;` WAS A KEPT DIVERGENCE IN THIS SLICE'S FIRST PASS -- NO LONGER: this function's
+//     first pass deliberately did NOT narrow `nbsp` to match upstream (strict byte-parity means
+//     `&nbsp;` falls through as literal text, same as `&apos;`), because at the time
+//     docs/uix-dom.md section 6c (the canonical spec) and glintfx/tests/uix/dumper_sanity.cpp (a
+//     concurrent agent's own file, not this module's to touch) both asserted `&nbsp;` decodes to
+//     U+00A0, and flipping it here alone would have silently diverged from both mid-flight. That
+//     other agent independently re-verified section 6c against a LIVE run of RmlUi and confirmed
+//     the spec itself was wrong -- `&nbsp;` survives undecoded upstream, same as `&apos;`. Both
+//     docs/uix-dom.md and this module now agree: `&nbsp;` is NOT special-cased, it takes the
+//     exact same fallback path as any other unrecognised name. See decode_named_entity()'s own
+//     header for the full history of this correction.
+//
+//     NOT BYTE-REPLICATED EITHER, judged acceptable, out of scope: numeric references whose
+//     codepoint is a UTF-16 surrogate (0xD800-0xDFFF) or above 0x10FFFF. Upstream's own numeric
+//     branch (StringUtilities.cpp:160-211) treats these as "successfully decoded" at the
+//     DecodeRml layer (no fallback, `i` advances past the whole reference) and defers the actual
+//     byte production to `ToUTF8()` (StringUtilities.cpp:497-538): for a surrogate, ToUTF8 has NO
+//     range check at all and emits a real (if technically invalid per RFC 3629) 3-byte UTF-8
+//     sequence for it (the unconditional `c < 0x10000` branch); for >0x10FFFF, ToUTF8 sets
+//     `invalid_character` and appends NOTHING -- the reference silently vanishes, zero bytes,
+//     behind a warning log nothing downstream of DecodeRml's return value can see. (Codepoint 0
+//     is NOT part of this divergence -- DecodeRml's own `code_point != 0` guard,
+//     StringUtilities.cpp:180/204, routes it to the SAME fall-through this function already
+//     replicates, so codepoint 0 IS byte-parity.) This function's own `utf8_encode()` refuses all
+//     three (`std::nullopt` for 0, a surrogate, or >0x10FFFF -- see its own header), which this
+//     function's generic fallback then renders as the READABLE LITERAL TEXT of the reference
+//     (`&#xD800;` stays `&#xD800;`) instead of either upstream outcome. Judged acceptable, NOT
+//     upstream-identical, for two reasons: (1) zero corpus occurrence across all 44+15 real
+//     fixtures -- nobody hand-authors a raw UTF-16 surrogate or an out-of-Unicode-range numeric
+//     reference in game UI markup; (2) the two upstream outcomes this function declines to
+//     replicate are THEMSELVES a genuinely invalid UTF-8 byte sequence and a silent content-loss,
+//     respectively -- matching them byte-for-byte would mean this module deliberately
+//     manufacturing invalid UTF-8 inside `Document`/`Element`/`Text`, an invariant no other part
+//     of this DOM violates on purpose. The LOAD-SUCCEEDS/LOAD-FAILS parity this slice's brief
+//     cares about most is still preserved either way -- a document with one of these two numeric
+//     forms loads in BOTH engines, just with different (and, for this module, always
+//     well-formed) bytes for that one reference.
+//
+//     kMaxEntityScan=32 (the bounded-scan window that finds a candidate `;`) is generously larger
+//     than DecodeRml's own effective lookahead (at most ~10 characters: `#` + up to 8 hex digits
+//     + `;`, or 6 for the `quot` check) -- this is fine, not a divergence: whenever a candidate
+//     body is found but does not decode, OR no `;` exists in the window at all, this function's
+//     fallback is identical either way (emit '&' alone), so a wider window than upstream's
+//     effective one never changes the observable outcome, it just costs a few more comparisons on
+//     a hostile input before reaching the same fallback DecodeRml would have reached much sooner.
 // PT: Decodifica entidade em `raw` (um payload Text/valor-de-Attr do lexer, entidades AINDA NÃO
-//     decodificadas) pela seção 6c do uix-dom.md + a própria tabela fixa acima. Um '&' cru
-//     precisa ser fechado por um ';' dentro de kMaxEntityScan bytes -- uma referência de entidade
-//     nesta gramática é sempre curta (o maior NOME reconhecido tem 4 bytes, "nbsp"/"apos"; o
-//     maior corpo NUMÉRICO reconhecido tem kMaxDigits+1 com o 'x'), então isto limita um '&' cru
-//     não-terminado hostil a um comprimento de scan fixo em vez de correr até o fim de um token
-//     já-limitado-por-kMaxTokenBytes antes de falhar -- mesma disciplina "belt-and-suspenders
-//     contra scan hostil" que o próprio parágrafo kMaxTokenBytes do lexer.hpp documenta uma
-//     camada abaixo.
-DecodeOutcome decode_entities(std::string_view raw) {
+//     decodificadas) pra bater com o próprio `StringUtilities::DecodeRml` do upstream
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:128-218) BYTE A BYTE pra toda construção
+//     que o corpus real deste módulo exercita -- UIX-ENTITY-PARIDADE (2026-08, RMLX-1).
+//
+//     A QUEBRA DE PARIDADE QUE ESTA FATIA ACHOU E FECHA: esta função costumava ser FAIL-HIGH (um
+//     `ParseError`) pra um '&' cru não fechado por ';', ou um span "'&'...';'" cujo corpo não
+//     decodificava. O DecodeRml do upstream NUNCA falha -- não existe retorno de erro nenhum na
+//     própria assinatura dele (`String DecodeRml(const String&)`), e as quatro checagens de
+//     caractere-literal fixas dele (`&lt;`/`&gt;`/`&amp;`/`&quot;`,
+//     StringUtilities.cpp:136,142,148,154) ou casam e decodificam, ou a função INTEIRA cai pro
+//     próprio `result += s[i]; i += 1;` final (StringUtilities.cpp:214-215) -- copiando o byte
+//     '&' SOLITÁRIO literalmente e retomando o scan logo depois dele, nunca consumindo o texto
+//     que por acaso vinha depois. Uma fixture real que o GusWorld mediu
+//     (glintfx/src/uix/dom/test_fixtures/system_menu__config_controles_tabela.rml, um rótulo
+//     "Interagir & Diálogo" com um '&' literal cru, entidade nenhuma pretendida) carrega normal
+//     no RmlUi hoje e teria falhado ao carregar NESTE parser na antiga fronteira fail-high. Esta
+//     função agora reproduz esse mesmo fall-through: um nome fora de {amp,lt,gt,quot} (ver o
+//     próprio cabeçalho do decode_named_entity() -- `apos`/`nbsp` estão AMBOS fora dessa tabela
+//     agora, nenhuma exceção), um '&' cru sem ';' nenhum na janela de scan limitado abaixo, um
+//     corpo numérico malformado, ou um codepoint numérico que o próprio utf8_encode() recusa (ver
+//     o cabeçalho dele) tomam TODOS o mesmo fallback: emite só '&', retoma o scan em
+//     `amp_pos + 1` -- NUNCA no `;` que o próprio scan limitado desta função achou (aquele `;`,
+//     se existir, pode pertencer a uma entidade PRÓPRIA começando no meio do corpo -- ex.:
+//     `&foo&amp;bar;`: a retomada por-caractere do DecodeRml alcança o `&amp;` real e decodifica
+//     pra `"&foo&bar;"`; pular o span escaneado inteiro em vez disso engoliria ele, um bug de
+//     comportamento genuíno que esta posição exata de fallback evita). Consequência: esta função
+//     não pode mais falhar -- sintaxe de entidade nunca mais é motivo pro `parse_document()`
+//     rejeitar um documento que o RmlUi carregaria feliz (a própria postura fail-high do
+//     uix-dom.md segue valendo pra toda OUTRA construção que este módulo rejeita; entidade é o
+//     único lugar onde o próprio upstream nunca rejeita, então paridade vence aqui, pelo próprio
+//     briefing desta fatia).
+//
+//     🔴 `&nbsp;` ERA UMA DIVERGÊNCIA MANTIDA NA PRIMEIRA PASSADA DESTA FATIA -- NÃO MAIS: a
+//     primeira passada desta função deliberadamente NÃO estreitou `nbsp` pro upstream (paridade
+//     estrita de byte significa `&nbsp;` cair como texto literal, igual `&apos;`), porque na
+//     época a seção 6c do docs/uix-dom.md (a spec canônica) e o
+//     glintfx/tests/uix/dumper_sanity.cpp (arquivo de um agente concorrente, não deste módulo pra
+//     tocar) ambos afirmavam que `&nbsp;` decodifica pra U+00A0, e inverter isto aqui sozinho
+//     teria divergido em silêncio dos dois no meio do trabalho. Aquele outro agente reverificou a
+//     seção 6c independentemente contra uma rodada AO VIVO do RmlUi e confirmou que a própria
+//     spec estava errada -- `&nbsp;` sobrevive não-decodificado no upstream, igual `&apos;`.
+//     Tanto o docs/uix-dom.md quanto este módulo agora concordam: `&nbsp;` NÃO é caso especial,
+//     toma o mesmo caminho de fallback que qualquer outro nome não-reconhecido. Ver o próprio
+//     cabeçalho do decode_named_entity() pro histórico completo desta correção.
+//
+//     TAMBÉM NÃO REPLICADO EM BYTE, julgado aceitável, fora de escopo: referências numéricas cujo
+//     codepoint é um substituto UTF-16 (0xD800-0xDFFF) ou acima de 0x10FFFF. O próprio ramo
+//     numérico do upstream (StringUtilities.cpp:160-211) trata estes como "decodificados com
+//     sucesso" na camada do DecodeRml (sem fallback, `i` avança pela referência inteira) e adia a
+//     produção de byte de verdade pro `ToUTF8()` (StringUtilities.cpp:497-538): pra um
+//     substituto, o ToUTF8 NÃO TEM checagem de faixa nenhuma e emite uma sequência UTF-8 real (se
+//     tecnicamente inválida pela RFC 3629) de 3 bytes pra ele (o ramo incondicional `c <
+//     0x10000`); pra >0x10FFFF, o ToUTF8 seta `invalid_character` e não anexa NADA -- a
+//     referência desaparece em silêncio, zero bytes, atrás de um log de aviso que nada depois do
+//     valor de retorno do DecodeRml consegue ver. (Codepoint 0 NÃO faz parte desta divergência --
+//     o próprio guard `code_point != 0` do DecodeRml, StringUtilities.cpp:180/204, roteia ele pro
+//     MESMO fall-through que esta função já replica, então codepoint 0 É paridade de byte.) O
+//     próprio `utf8_encode()` desta função recusa os três (`std::nullopt` pra 0, um substituto,
+//     ou >0x10FFFF -- ver o cabeçalho dele), que o fallback genérico desta função então
+//     renderiza como o TEXTO LITERAL LEGÍVEL da referência (`&#xD800;` fica `&#xD800;`) em vez de
+//     qualquer um dos dois desfechos do upstream. Julgado aceitável, NÃO idêntico-ao-upstream,
+//     por duas razões: (1) zero ocorrência de corpus nas 44+15 fixtures reais -- ninguém escreve
+//     à mão um substituto UTF-16 cru ou uma referência numérica fora do range Unicode em markup
+//     de UI de jogo; (2) os dois desfechos do upstream que esta função recusa replicar são ELES
+//     MESMOS uma sequência UTF-8 genuinamente inválida e uma perda-de-conteúdo silenciosa,
+//     respectivamente -- casar eles byte a byte significaria este módulo fabricando UTF-8
+//     inválido de propósito dentro de `Document`/`Element`/`Text`, um invariante que nenhuma
+//     outra parte deste DOM viola de propósito. A paridade CARREGA/NÃO-CARREGA que o briefing
+//     desta fatia mais se importa segue preservada dos dois jeitos -- um documento com uma destas
+//     duas formas numéricas carrega nos DOIS motores, só com bytes diferentes (e, pra este
+//     módulo, sempre bem-formados) pra aquela referência.
+//
+//     kMaxEntityScan=32 (a janela de scan limitado que acha um `;` candidato) é generosamente
+//     maior que a própria lookahead efetiva do DecodeRml (no máximo ~10 caracteres: `#` + até 8
+//     dígitos hex + `;`, ou 6 pra checagem de `quot`) -- isto está OK, não é divergência: sempre
+//     que um corpo candidato é achado mas não decodifica, OU nenhum `;` existe na janela nenhuma,
+//     o fallback desta função é idêntico dos dois jeitos (emite só '&'), então uma janela mais
+//     larga que a efetiva do upstream nunca muda o desfecho observável, só custa umas
+//     comparações a mais num input hostil antes de chegar no mesmo fallback que o DecodeRml
+//     alcançaria bem antes.
+std::string decode_entities(std::string_view raw) {
   constexpr std::size_t kMaxEntityScan = 32;
   std::string out;
   out.reserve(raw.size());
@@ -342,29 +546,37 @@ DecodeOutcome decode_entities(std::string_view raw) {
     const std::size_t semi =
         (semi_in_window == std::string_view::npos) ? std::string_view::npos
                                                    : (i + 1 + semi_in_window);
-    if (semi == std::string_view::npos) {
-      return DecodeOutcome{false, {}, amp_pos,
-                           "malformed entity reference: '&' not closed by a terminating ';' "
-                           "within a bounded scan"};
-    }
-    const std::string_view body = raw.substr(i + 1, semi - i - 1);
     std::optional<std::string> decoded;
-    if (!body.empty() && body[0] == '#') {
-      const std::optional<std::uint32_t> cp = parse_numeric_ref(body.substr(1));
-      if (cp.has_value()) {
-        decoded = utf8_encode(*cp);
+    if (semi != std::string_view::npos) {
+      const std::string_view body = raw.substr(i + 1, semi - i - 1);
+      if (!body.empty() && body[0] == '#') {
+        const std::optional<std::uint32_t> cp = parse_numeric_ref(body.substr(1));
+        if (cp.has_value()) {
+          decoded = utf8_encode(*cp);
+        }
+      } else {
+        decoded = decode_named_entity(body);
       }
+    }
+    if (decoded.has_value()) {
+      out += *decoded;
+      i = semi + 1;
     } else {
-      decoded = decode_named_entity(body);
+      // EN: Fallback matching DecodeRml's own final `result += s[i]; i += 1;`
+      //     (StringUtilities.cpp:214-215) -- copy the lone '&' and resume scanning right after it
+      //     (`amp_pos + 1`), NOT after whatever ';' the bounded scan above found -- see this
+      //     function's own header comment for why that distinction matters (the `&foo&amp;bar;`
+      //     case).
+      // PT: Fallback batendo com o próprio `result += s[i]; i += 1;` final do DecodeRml
+      //     (StringUtilities.cpp:214-215) -- copia o '&' solitário e retoma o scan logo depois
+      //     dele (`amp_pos + 1`), NÃO depois de qualquer ';' que o scan limitado acima tenha
+      //     achado -- ver o próprio comentário de cabeçalho desta função pro motivo desta
+      //     distinção importar (o caso `&foo&amp;bar;`).
+      out.push_back('&');
+      i = amp_pos + 1;
     }
-    if (!decoded.has_value()) {
-      return DecodeOutcome{
-          false, {}, amp_pos, "unrecognised or out-of-range entity reference '&" + std::string(body) + ";'"};
-    }
-    out += *decoded;
-    i = semi + 1;
   }
-  return DecodeOutcome{true, std::move(out), 0, {}};
+  return out;
 }
 
 // EN: Raw-scans `source` starting at `start` for the literal `</head` (case-folded) + whitespace*
@@ -579,14 +791,16 @@ private:
   }
 
   // EN: Collects Attr tokens after an already-consumed TagOpenStart, entity-decoding each value
-  //     as it goes (so a malformed entity in an attribute value fails HERE, at the point of the
-  //     attribute, not later at apply time). `terminator_out` is the TagOpenEnd/TagSelfClose that
-  //     ended the scan -- callers need its offset+length to compute where the tag's `>` sits.
+  //     as it goes. UIX-ENTITY-PARIDADE (2026-08): decode_entities() can no longer fail (see its
+  //     own header comment) -- this loop no longer has an entity-decode error path, only the
+  //     lexer-Error/unexpected-token ones below. `terminator_out` is the TagOpenEnd/TagSelfClose
+  //     that ended the scan -- callers need its offset+length to compute where the tag's `>` sits.
   // PT: Coleta tokens Attr depois de um TagOpenStart já consumido, decodificando entidade de cada
-  //     valor à medida que avança (então uma entidade malformada num valor de atributo falha
-  //     AQUI, no ponto do atributo, não depois em tempo de aplicação). `terminator_out` é o
-  //     TagOpenEnd/TagSelfClose que encerrou o scan -- chamadores precisam do offset+length dele
-  //     pra computar onde o '>' da tag fica.
+  //     valor à medida que avança. UIX-ENTITY-PARIDADE (2026-08): decode_entities() não pode mais
+  //     falhar (ver o próprio comentário de cabeçalho dela) -- este laço não tem mais caminho de
+  //     erro de decodificação de entidade, só os de lexer-Error/token-inesperado abaixo.
+  //     `terminator_out` é o TagOpenEnd/TagSelfClose que encerrou o scan -- chamadores precisam do
+  //     offset+length dele pra computar onde o '>' da tag fica.
   bool collect_attributes(std::vector<AttrRaw>& attrs_out, bool& self_closing_out,
                           Token& terminator_out, ParseError& err) {
     attrs_out.clear();
@@ -594,13 +808,7 @@ private:
       Token tok = next_token();
       switch (tok.kind) {
         case TokenKind::Attr: {
-          DecodeOutcome decoded = decode_entities(tok.value);
-          if (!decoded.ok) {
-            err = error_at(decoded.error_message,
-                           abs_offset_of_span(tok.value) + decoded.error_offset);
-            return false;
-          }
-          attrs_out.push_back(AttrRaw{tok.text, std::move(decoded.text)});
+          attrs_out.push_back(AttrRaw{tok.text, decode_entities(tok.value)});
           continue;
         }
         case TokenKind::TagOpenEnd:
@@ -813,13 +1021,14 @@ private:
         case TokenKind::Comment:
           continue;
         case TokenKind::Text: {
-          DecodeOutcome decoded = decode_entities(tok.text);
-          if (!decoded.ok) {
-            err = error_at(decoded.error_message,
-                           abs_offset_of_span(tok.text) + decoded.error_offset);
-            return false;
-          }
-          auto text_node = std::make_unique<Text>(std::move(decoded.text));
+          // EN: UIX-ENTITY-PARIDADE (2026-08): decode_entities() can no longer fail (see its own
+          //     header comment) -- no entity-decode error path here anymore, only the
+          //     lexer-Error/EOF/depth-ceiling ones this switch already handles.
+          // PT: UIX-ENTITY-PARIDADE (2026-08): decode_entities() não pode mais falhar (ver o
+          //     próprio comentário de cabeçalho dela) -- nenhum caminho de erro de decodificação
+          //     de entidade aqui mais, só os de lexer-Error/EOF/teto-de-profundidade que este
+          //     switch já trata.
+          auto text_node = std::make_unique<Text>(decode_entities(tok.text));
           AppendResult r = element.append_child(std::move(text_node));
           if (r.outcome == AppendOutcome::RejectedDepthCeiling) {
             err = error_at("nesting exceeds kMaxElementDepth (256) ceiling",

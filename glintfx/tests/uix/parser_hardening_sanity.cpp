@@ -31,6 +31,23 @@ void check(bool cond, const char* what) {
   }
 }
 
+// EN: Same shape as parser_tokens_sanity.cpp's own check_eq() -- added here (UIX-ENTITY-PARIDADE)
+//     because this file's new tolerance tests need to assert exact decoded TEXT content, not just
+//     accept/reject.
+// PT: Mesma forma do próprio check_eq() do parser_tokens_sanity.cpp -- somado aqui
+//     (UIX-ENTITY-PARIDADE) porque os novos testes de tolerância deste arquivo precisam afirmar o
+//     conteúdo TEXT decodificado exato, não só aceita/rejeita.
+void check_eq(std::string_view got, std::string_view want, const char* what) {
+  if (got != want) {
+    std::fprintf(stderr, "FAIL: %s (got \"%.*s\", want \"%.*s\")\n", what,
+                 static_cast<int>(got.size()), got.data(), static_cast<int>(want.size()),
+                 want.data());
+    ++g_failures;
+  }
+}
+
+using glintfx::uix::as_text;
+using glintfx::uix::Element;
 using glintfx::uix::parse_document;
 using glintfx::uix::ParseResult;
 
@@ -63,6 +80,27 @@ void expect_ok(std::string_view source, const char* what) {
     return;
   }
   check(r.document != nullptr, what);
+}
+
+// EN: Overload for a caller that already HAS a `ParseResult` and wants to inspect the tree
+//     afterwards (the `source`-taking overload above throws the tree away) -- same shape as
+//     parser_tokens_sanity.cpp's own `expect_ok(ParseResult&, const char*)`, added here
+//     (UIX-ENTITY-PARIDADE) for this file's new decoded-content assertions. Returns whether it is
+//     safe to keep inspecting `r.document` (false on failure, after already recording it).
+// PT: Sobrecarga pra um chamador que já TEM um `ParseResult` e quer inspecionar a árvore depois
+//     (a sobrecarga que recebe `source` acima descarta a árvore) -- mesma forma do próprio
+//     `expect_ok(ParseResult&, const char*)` do parser_tokens_sanity.cpp, somada aqui
+//     (UIX-ENTITY-PARIDADE) pras novas asserções de conteúdo decodificado deste arquivo. Devolve
+//     se é seguro seguir inspecionando `r.document` (false na falha, já registrada).
+bool expect_ok(ParseResult& r, const char* what) {
+  if (r.error.has_value()) {
+    std::fprintf(stderr, "FAIL: %s (unexpected ParseError at %zu:%zu: %s)\n", what,
+                 r.error->line, r.error->column, r.error->message.c_str());
+    ++g_failures;
+    return false;
+  }
+  check(r.document != nullptr, what);
+  return r.document != nullptr;
 }
 
 void test_missing_rml_wrapper() {
@@ -145,26 +183,144 @@ void test_lexer_error_propagates() {
                 "reject: unterminated comment (lexer Error propagated)");
 }
 
-void test_entity_hardening() {
-  expect_reject("<rml><body>bad &foo; entity</body></rml>",
-                "reject: unrecognised named entity");
-  expect_reject("<rml><body>AT&T no semicolon</body></rml>",
-                "reject: bare '&' never closed by ';'");
-  expect_reject("<rml><body>&;</body></rml>", "reject: empty entity name '&;'");
-  expect_reject("<rml><body>&#x110000;</body></rml>",
-                "reject: numeric entity above the Unicode max (0x10FFFF)");
-  expect_reject("<rml><body>&#xD800;</body></rml>",
-                "reject: numeric entity in the UTF-16 surrogate range (invalid codepoint)");
-  expect_reject("<rml><body>&#0;</body></rml>", "reject: numeric entity for NUL (codepoint 0)");
-  expect_reject("<rml><body><div title=\"bad &foo; entity\">x</div></body></rml>",
-                "reject: unrecognised entity inside an ATTRIBUTE VALUE too, not just text");
+// ---------------------------------------------------------------------------
+// EN: UIX-ENTITY-PARIDADE (2026-08, RMLX-1) -- entity syntax this parser used to FAIL-HIGH on is
+//     no longer rejected: upstream's own `StringUtilities::DecodeRml`
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:128-218) NEVER fails for any of these forms
+//     -- every one of its four fixed literal-character checks either matches and decodes, or the
+//     WHOLE function falls through to its own final `result += s[i]; i += 1;`
+//     (StringUtilities.cpp:214-215), copying the lone '&' byte literally and resuming right after
+//     it. A real fixture GusWorld measured (`system_menu__config_controles_tabela.rml`, a rótulo
+//     "Interagir & Diálogo" with a bare literal '&') loads fine in RmlUi today and would have
+//     failed to load in THIS parser at the old fail-high boundary -- exactly the parity break
+//     UIX-ENTITY-PARIDADE closes. See decode_entities()'s own header comment
+//     (glintfx/src/uix/dom/parser.cpp) for the full construction-by-construction proof against
+//     the upstream source.
+// PT: UIX-ENTITY-PARIDADE (2026-08, RMLX-1) -- sintaxe de entidade que este parser costumava
+//     FAIL-HIGH não é mais rejeitada: o próprio `StringUtilities::DecodeRml` do upstream
+//     (examples/RmlUi/Source/Core/StringUtilities.cpp:128-218) NUNCA falha pra nenhuma destas
+//     formas -- cada uma das quatro checagens de caractere-literal fixas dele ou casa e decodifica,
+//     ou a função INTEIRA cai pro próprio `result += s[i]; i += 1;` final
+//     (StringUtilities.cpp:214-215), copiando o byte '&' solitário literalmente e retomando logo
+//     depois dele. Uma fixture real que o GusWorld mediu
+//     (`system_menu__config_controles_tabela.rml`, um rótulo "Interagir & Diálogo" com um '&'
+//     literal cru) carrega normal no RmlUi hoje e teria falhado ao carregar NESTE parser na
+//     antiga fronteira fail-high -- exatamente a quebra de paridade que a UIX-ENTITY-PARIDADE
+//     fecha. Ver o próprio comentário de cabeçalho do decode_entities()
+//     (glintfx/src/uix/dom/parser.cpp) pra prova completa, construção por construção, contra o
+//     fonte upstream.
+// ---------------------------------------------------------------------------
+void test_entity_tolerance() {
+  // EN: The exact real-world shape (bare '&' in prose, no entity intended at all) -- the fixture
+  //     that drove this slice.
+  // PT: A forma exata do mundo real (um '&' cru em prosa, entidade nenhuma pretendida) -- a
+  //     fixture que dirigiu esta fatia.
+  {
+    ParseResult r = parse_document(
+        "<rml><body><div>Interagir &amp; Di\xC3\xA1logo</div><div>Interagir & "
+        "Di\xC3\xA1logo</div></body></rml>");
+    expect_ok(r, "accept: bare '&' in text, GusWorld's own measured shape");
+  }
 
-  // EN: The accept side of the exact same boundary -- proves this is a real reject, not an
-  //     accidentally-broken decoder.
-  // PT: O lado aceita da mesma fronteira exata -- prova que isto é uma rejeição real, não um
-  //     decodificador quebrado por acidente.
-  expect_ok("<rml><body>&amp;&lt;&gt;&quot;&apos;&nbsp;&#65;&#x41;</body></rml>",
-            "accept: every recognised entity form, named + numeric decimal + numeric hex");
+  expect_ok("<rml><body>bad &foo; entity</body></rml>",
+            "accept: unrecognised named entity falls through literal, matching DecodeRml");
+  expect_ok("<rml><body>AT&T no semicolon</body></rml>",
+            "accept: bare '&' never closed by ';' falls through literal");
+  expect_ok("<rml><body>&;</body></rml>", "accept: empty entity name '&;' falls through literal");
+  expect_ok("<rml><body>&#x110000;</body></rml>",
+            "accept: numeric entity above the Unicode max (0x10FFFF) falls through literal "
+            "(known, argued byte-content divergence from upstream -- see decode_entities() "
+            "header)");
+  expect_ok("<rml><body>&#xD800;</body></rml>",
+            "accept: numeric entity in the UTF-16 surrogate range falls through literal (same "
+            "known, argued divergence)");
+  expect_ok("<rml><body>&#0;</body></rml>",
+            "accept: numeric entity for NUL (codepoint 0) falls through literal -- this one IS "
+            "byte-parity with DecodeRml (its own `code_point != 0` guard routes here too)");
+  expect_ok("<rml><body><div title=\"bad &foo; entity\">x</div></body></rml>",
+            "accept: unrecognised entity inside an ATTRIBUTE VALUE too, not just text");
+
+  // EN: An unrecognised name is NOT a licence to swallow a real entity right after it -- the
+  //     fallback consumes ONLY the lone '&', never the whole scanned span up to a found ';', so a
+  //     genuine `&amp;` immediately after a malformed `&foo` (no ';' before it) still decodes.
+  //     Mirrors DecodeRml's own per-character resumption (StringUtilities.cpp:215, `i += 1`, not
+  //     "skip past whatever this position's failed match consumed").
+  // PT: Um nome não-reconhecido NÃO é licença pra engolir uma entidade real logo depois -- o
+  //     fallback consome SÓ o '&' solitário, nunca o span inteiro escaneado até um ';' achado,
+  //     então um `&amp;` genuíno logo após um `&foo` malformado (sem ';' antes) ainda decodifica.
+  //     Espelha a própria retomada por-caractere do DecodeRml (StringUtilities.cpp:215, `i += 1`,
+  //     não "pula o que quer que esta posição tenha consumido na tentativa falha").
+  {
+    ParseResult r = parse_document("<rml><body>&foo&amp;bar;</body></rml>");
+    if (!expect_ok(r, "accept: malformed entity immediately followed by a real one")) return;
+    Element& body = r.document->body();
+    auto* text = glintfx::uix::as_text(body.children()[0].get());
+    check(text != nullptr, "fallback-resync: child is a Text node");
+    if (text != nullptr) {
+      check_eq(text->content(), "&foo&bar;",
+               "fallback-resync: only the lone '&' is swallowed by the failed match, the real "
+               "&amp; right after it still decodes");
+    }
+  }
+
+  // EN: `apos` and `nbsp` are BOTH REMOVED from the recognised table (UIX-ENTITY-PARIDADE) --
+  //     DecodeRml never had either (see decode_entities()/decode_named_entity() headers; the
+  //     `nbsp` removal specifically closes the SECOND, more treacherous parity break this slice
+  //     found, confirmed against a live RmlUi run by another agent's corrected docs/uix-dom.md
+  //     section 6c after this slice's own first pass had ARGUED to keep it decoding -- see
+  //     decode_named_entity()'s own header for the full history). `&apos;`/`&nbsp;` now BOTH fall
+  //     through as literal text, same as any other unrecognised name -- `&nbsp;` survives as its
+  //     own SIX literal ASCII bytes, never U+00A0.
+  // PT: `apos` E `nbsp` foram AMBOS REMOVIDOS da tabela reconhecida (UIX-ENTITY-PARIDADE) -- o
+  //     DecodeRml nunca teve nenhum dos dois (ver cabeçalhos do decode_entities()/
+  //     decode_named_entity(); a remoção de `nbsp` especificamente fecha a SEGUNDA quebra de
+  //     paridade, mais traiçoeira, que esta fatia achou, confirmada contra uma rodada ao vivo do
+  //     RmlUi pelo docs/uix-dom.md corrigido de outro agente da seção 6c depois da PRIMEIRA
+  //     passada desta fatia ter ARGUMENTADO por manter decodificando -- ver o próprio cabeçalho
+  //     do decode_named_entity() pro histórico completo). `&apos;`/`&nbsp;` agora caem AMBOS como
+  //     texto literal, igual qualquer outro nome não-reconhecido -- `&nbsp;` sobrevive como os
+  //     próprios SEIS bytes ASCII literais, nunca U+00A0.
+  {
+    ParseResult r = parse_document("<rml><body>&apos;&nbsp;</body></rml>");
+    if (!expect_ok(r, "accept: &apos; and &nbsp; no longer decoded")) return;
+    Element& body = r.document->body();
+    auto* text = glintfx::uix::as_text(body.children()[0].get());
+    check(text != nullptr, "apos-nbsp-literal: child is a Text node");
+    if (text != nullptr) {
+      check_eq(text->content(), "&apos;&nbsp;",
+               "apos-nbsp-literal: both pass through verbatim (matches DecodeRml, which has no "
+               "apos/nbsp branch -- 'n' matches none of 'l'/'g'/'a'/'q'), never U+00A0/a quote");
+    }
+  }
+
+  // EN: The accept side of the STILL-RECOGNISED forms -- proves the table narrowing didn't break
+  //     what upstream really does decode. `&#160;` (the NUMERIC spelling of the exact same
+  //     codepoint `&nbsp;` used to alias) is the replacement this suite now uses wherever a real
+  //     U+00A0 byte sequence is actually wanted -- it IS one of DecodeRml's five recognised forms
+  //     (a numeric character reference), unlike `&nbsp;`.
+  // PT: O lado aceita das formas AINDA-RECONHECIDAS -- prova que o estreitamento da tabela não
+  //     quebrou o que o upstream de fato decodifica. `&#160;` (a grafia NUMÉRICA do exato mesmo
+  //     codepoint que `&nbsp;` costumava apelidar) é a substituição que esta suíte agora usa onde
+  //     um byte U+00A0 de verdade é de fato desejado -- ELE é uma das cinco formas reconhecidas do
+  //     DecodeRml (uma referência numérica de caractere), diferente de `&nbsp;`.
+  {
+    ParseResult r = parse_document("<rml><body>&amp;&lt;&gt;&quot;&#160;&#65;&#x41;</body></rml>");
+    if (!expect_ok(r,
+                   "accept: every still-recognised entity form, named + numeric decimal + "
+                   "numeric hex, including &#160; as the real U+00A0 spelling")) {
+      return;
+    }
+    Element& body = r.document->body();
+    auto* text = glintfx::uix::as_text(body.children()[0].get());
+    check(text != nullptr, "still-recognised: child is a Text node");
+    if (text != nullptr) {
+      check_eq(text->content(),
+               "&<>\"\xC2\xA0"
+               "AA",
+               "still-recognised: &#160; decodes to the real 2-byte U+00A0 (C2 A0), unlike "
+               "&nbsp; above");
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,7 +474,7 @@ int main() {
   test_mismatched_close_tag();
   test_unclosed_element_eof();
   test_lexer_error_propagates();
-  test_entity_hardening();
+  test_entity_tolerance();
   test_depth_ceiling();
   test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt();
 

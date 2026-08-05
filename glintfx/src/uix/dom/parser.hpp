@@ -7,12 +7,21 @@
 //
 //     WHAT THIS SLICE RESOLVES (the two points lexer.hpp explicitly left open, plus the ones this
 //     slice's own brief names):
-//       - Entity decoding (docs/uix-dom.md, "uix-dom.md" hereafter, section 6c): a FIXED table --
-//         the 5 standard XML named entities (`amp`/`lt`/`gt`/`quot`/`apos`) plus `nbsp` (the one
-//         extra entity the real corpus uses), and numeric character references (`&#38;` decimal,
-//         `&#x26;` hex) decoded to their UTF-8 bytes. An entity this table does not recognise, or
-//         a bare '&' not closed by a terminating ';' within a short bounded scan, is FAIL-HIGH: a
-//         `ParseError`, never silently dropped or passed through raw. Applies to BOTH `Text`
+//       - Entity decoding (docs/uix-dom.md, "uix-dom.md" hereafter, section 6c): 🔴
+//         UIX-ENTITY-PARIDADE (2026-08, RMLX-1) REPLACED this slice's ORIGINAL fail-high design
+//         with byte-for-byte parity against upstream's own `StringUtilities::DecodeRml`
+//         (examples/RmlUi/Source/Core/StringUtilities.cpp:128-218) -- see parser.cpp's own
+//         decode_entities()/decode_named_entity() header comments for the full,
+//         construction-by-construction proof against that source. A FIXED table -- EXACTLY the 4
+//         named entities DecodeRml itself recognises (`amp`/`lt`/`gt`/`quot`; NEITHER `apos` NOR
+//         `nbsp` -- both were in this table originally, both REMOVED once a real fixture and a
+//         corrected uix-dom.md section 6c proved DecodeRml decodes neither) -- plus numeric
+//         character references (`&#38;` decimal, `&#x26;` hex) decoded to their UTF-8 bytes. An
+//         entity this table does not recognise, or a bare '&' not closed by a terminating ';'
+//         within a short bounded scan, is NO LONGER fail-high: it falls through as literal text,
+//         matching DecodeRml's own default case exactly (a real fixture,
+//         `test_fixtures/system_menu__config_controles_tabela.rml`, has a bare literal '&' in a
+//         label that RmlUi loads fine and this parser used to reject). Applies to BOTH `Text`
 //         content and attribute VALUES (standard XML character-data handling covers both) -- NOT
 //         to `<head>`'s opaque payload, which uix-dom.md section 4's own last paragraph exempts
 //         explicitly (CSS has no entity syntax; decoding it would corrupt it).

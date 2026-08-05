@@ -161,15 +161,41 @@ void test_text_verbatim() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: Case 6 -- entity decoding: named (amp/lt/gt/quot/apos/nbsp) + numeric (decimal/hex), in
-//     BOTH text content and attribute values.
-// PT: Caso 6 -- decodificação de entidade: nomeada (amp/lt/gt/quot/apos/nbsp) + numérica
-//     (decimal/hex), TANTO em conteúdo de texto QUANTO em valor de atributo.
+// EN: Case 6 -- entity decoding: named (amp/lt/gt/quot) + numeric (decimal/hex, INCLUDING
+//     `&#160;` as the real U+00A0 spelling), in BOTH text content and attribute values. `apos`
+//     AND `nbsp` REMOVED from this case's own input (UIX-ENTITY-PARIDADE, 2026-08) -- upstream's
+//     `StringUtilities::DecodeRml` never recognised either (see glintfx/src/uix/dom/parser.cpp's
+//     own decode_entities()/decode_named_entity() header comments for the source-cited proof, and
+//     docs/uix-dom.md section 6c for the corrected, live-RmlUi-verified worked example this case
+//     now agrees with). `&nbsp;` is the more treacherous of the two removals: it used to decode
+//     to a real 2-byte U+00A0 sequence, so a stale assertion here would not have crashed, just
+//     silently asserted the WRONG bytes forever -- `&#160;` is the numeric spelling that DOES
+//     survive as U+00A0 both upstream and here, used below wherever this case actually wants that
+//     codepoint. parser_hardening_sanity.cpp's own `test_entity_tolerance` is where
+//     `&apos;`/`&nbsp;`'s new literal-passthrough behaviour is pinned explicitly; this case only
+//     needed the two stale entries dropped from ITS input+expectation so it keeps testing what
+//     upstream actually does.
+// PT: Caso 6 -- decodificação de entidade: nomeada (amp/lt/gt/quot) + numérica (decimal/hex,
+//     INCLUINDO `&#160;` como a grafia real de U+00A0), TANTO em conteúdo de texto QUANTO em
+//     valor de atributo. `apos` E `nbsp` REMOVIDOS do próprio input deste caso
+//     (UIX-ENTITY-PARIDADE, 2026-08) -- o `StringUtilities::DecodeRml` do upstream nunca
+//     reconheceu nenhum dos dois (ver os próprios comentários de cabeçalho do
+//     decode_entities()/decode_named_entity() em glintfx/src/uix/dom/parser.cpp pra prova citada
+//     na fonte, e a seção 6c do docs/uix-dom.md pro exemplo trabalhado corrigido, verificado ao
+//     vivo contra o RmlUi, que este caso agora concorda). `&nbsp;` é a mais traiçoeira das duas
+//     remoções: ele costumava decodificar pra uma sequência real de 2 bytes U+00A0, então uma
+//     asserção velha aqui não teria crashado, só afirmado os bytes ERRADOS em silêncio pra
+//     sempre -- `&#160;` é a grafia numérica que DE FATO sobrevive como U+00A0 tanto no upstream
+//     quanto aqui, usada abaixo onde este caso realmente quer aquele codepoint. O próprio
+//     `test_entity_tolerance` do parser_hardening_sanity.cpp é onde o novo comportamento de
+//     passagem-literal de `&apos;`/`&nbsp;` é fixado explicitamente; este caso só precisava
+//     soltar as duas entradas velhas do input+expectativa dele pra continuar testando o que o
+//     upstream de fato faz.
 // ---------------------------------------------------------------------------
 void test_entity_decoding() {
   ParseResult r = parse_document(
-      "<rml><body><div title=\"A&amp;B &#38;&#x26; &lt;tag&gt;\">Hi&nbsp;there "
-      "&amp; &lt;x&gt; &quot;q&quot; &apos;a&apos; &#65;&#x41;</div></body></rml>");
+      "<rml><body><div title=\"A&amp;B &#38;&#x26; &lt;tag&gt;\">Hi&#160;there "
+      "&amp; &lt;x&gt; &quot;q&quot; &#65;&#x41;</div></body></rml>");
   if (!expect_ok(r, "entities: parse ok")) return;
 
   Element& body = r.document->body();
@@ -188,8 +214,9 @@ void test_entity_decoding() {
   auto* text = glintfx::uix::as_text(div->children()[0].get());
   check(text != nullptr, "entities: child is a Text node");
   if (text != nullptr) {
-    check_eq(text->content(), "Hi\xC2\xA0there & <x> \"q\" 'a' AA",
-             "entities: text content entities decoded, including nbsp (U+00A0, C2 A0)");
+    check_eq(text->content(), "Hi\xC2\xA0there & <x> \"q\" AA",
+             "entities: text content entities decoded, including &#160; (U+00A0, C2 A0 -- NOT "
+             "&nbsp;, which upstream leaves undecoded, see this case's own header comment)");
   }
 }
 
@@ -211,10 +238,17 @@ void test_comments_discarded() {
 // ---------------------------------------------------------------------------
 // EN: Case 8 -- <head> opacity: content captured raw, verbatim, entities NOT decoded, and its
 //     inner tags (style/link/title) never become queryable Elements anywhere in the tree.
-//     Mirrors docs/uix-dom.md section 11's own worked example.
+//     Mirrors docs/uix-dom.md section 11's own worked example -- UPDATED (UIX-ENTITY-PARIDADE,
+//     2026-08) to use `&#160;` instead of the ORIGINAL `&nbsp;`, following that section's own
+//     2026-08-05 correction: `&nbsp;` is not one of DecodeRml's recognised forms and would have
+//     survived undecoded, not as the U+00A0 this fixture's markup means to exercise.
 // PT: Caso 8 -- opacidade de <head>: conteúdo capturado cru, verbatim, entidades NÃO decodificadas,
 //     e as tags internas dele (style/link/title) nunca viram Element consultável em lugar nenhum
-//     da árvore. Espelha o próprio exemplo trabalhado da seção 11 do docs/uix-dom.md.
+//     da árvore. Espelha o próprio exemplo trabalhado da seção 11 do docs/uix-dom.md --
+//     ATUALIZADO (UIX-ENTITY-PARIDADE, 2026-08) pra usar `&#160;` em vez do `&nbsp;` ORIGINAL,
+//     seguindo a própria correção de 2026-08-05 daquela seção: `&nbsp;` não é uma das formas
+//     reconhecidas do DecodeRml e teria sobrevivido não-decodificado, não como o U+00A0 que o
+//     markup desta fixture pretende exercitar.
 // ---------------------------------------------------------------------------
 void test_head_opacity() {
   ParseResult r = parse_document(
@@ -224,7 +258,7 @@ void test_head_opacity() {
       "</head>\n"
       "<body>\n"
       "<div id=\"panel\" class=\"wide highlighted\" data-if=\"flag\" title=\"Panel\">\n"
-      "  <span class=\"highlighted wide\">Hi&nbsp;there</span>\n"
+      "  <span class=\"highlighted wide\">Hi&#160;there</span>\n"
       "</div>\n"
       "</body>\n"
       "</rml>");

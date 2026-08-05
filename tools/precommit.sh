@@ -363,6 +363,44 @@ CPPCHECK_COMMON_ARGS=(
   #     "image_encode.cpp" lá) -- as duas entradas não são de fato a mesma forma por
   #     baixo, mesmo parecendo iguais.
   --suppress='unusedStructMember:*glintfx/src/uix/*'
+  # EN: `returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp` (RMLX-1/S2, 2026-08-05) --
+  #     genuine cppcheck false positive, not a two-pass-isolation artifact like the
+  #     `unusedStructMember` entry above (this one is independent of whether the module has a
+  #     `compile_commands.json` entry -- it is a value-flow limitation in cppcheck's own
+  #     lifetime analysis, verified by re-running THIS suppression's exact finding under a
+  #     manual, fully-flagged standalone build of the module: still flagged). Site:
+  #     `Element::append_child` takes `raw = child.get()` on a local `unique_ptr<Node>`
+  #     parameter, THEN `std::move(child)`-s it into `children_.push_back(...)`; cppcheck
+  #     reads "pointer obtained from a local that is then moved" and assumes `raw` dangles.
+  #     It does not: `child.get()` returns a pointer to the heap-allocated `Node` object the
+  #     `unique_ptr` OWNS, not to the `unique_ptr` handle itself -- a `unique_ptr` move never
+  #     relocates its pointee, only transfers ownership of the handle, so the address `raw`
+  #     holds stays valid for as long as SOME `unique_ptr` (now `children_`'s own element)
+  #     keeps owning it. This is a documented, common cppcheck false-positive shape for the
+  #     `T* p = up.get(); consume(std::move(up)); return p;` idiom. Scoped to this one file
+  #     (not the whole `glintfx/src/uix/*` directory like the entry above) because this is a
+  #     property of ONE function's code shape, not of the module's build-graph isolation --
+  #     it does not automatically apply to files this module gains later.
+  # PT: `returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp` (RMLX-1/S2, 2026-08-05) --
+  #     falso positivo genuíno do cppcheck, não um artefato de isolamento-em-duas-passadas
+  #     como a entrada `unusedStructMember` acima (este é independente de o módulo ter
+  #     entrada em `compile_commands.json` ou não -- é uma limitação de análise de
+  #     value-flow/lifetime do próprio cppcheck, verificada re-rodando o achado exato desta
+  #     supressão sob um build standalone manual e totalmente-flagged do módulo: continua
+  #     acusando). Sítio: `Element::append_child` toma `raw = child.get()` sobre um parâmetro
+  #     local `unique_ptr<Node>`, DEPOIS faz `std::move(child)` pra dentro de
+  #     `children_.push_back(...)`; o cppcheck lê "ponteiro obtido de um local que depois é
+  #     movido" e assume que `raw` fica pendurado. Não fica: `child.get()` retorna um
+  #     ponteiro pro objeto `Node` alocado no heap que o `unique_ptr` POSSUI, não pro próprio
+  #     handle `unique_ptr` -- um move de `unique_ptr` nunca realoca o objeto apontado, só
+  #     transfere a posse do handle, então o endereço que `raw` guarda continua válido
+  #     enquanto ALGUM `unique_ptr` (agora o próprio elemento de `children_`) continuar dono
+  #     dele. É uma forma documentada e comum de falso-positivo do cppcheck pro idioma
+  #     `T* p = up.get(); consume(std::move(up)); return p;`. Restrito a este único arquivo
+  #     (não o diretório `glintfx/src/uix/*` inteiro como a entrada acima) porque isto é uma
+  #     propriedade da forma de código de UMA função, não do isolamento do grafo de build do
+  #     módulo -- não vale automaticamente pra arquivos que este módulo ganhar depois.
+  --suppress='returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp'
   --error-exitcode=1
 )
 

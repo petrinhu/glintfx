@@ -22,6 +22,18 @@ add_executable(uix_lexer_hardening_sanity lexer_hardening_sanity.cpp)
 target_link_libraries(uix_lexer_hardening_sanity PRIVATE glintfx::uix_dom)
 add_test(NAME uix_lexer_hardening_sanity COMMAND uix_lexer_hardening_sanity)
 
+# EN: RMLX-1/S2 -- glintfx::uix::{Node,Element,Text,Document} (glintfx/src/uix/dom/dom_tree.{hpp,
+#     cpp}), same "own CMake, zero RmlUi/GLFW/GL" discipline as the S1 lexer tests above.
+# PT: RMLX-1/S2 -- glintfx::uix::{Node,Element,Text,Document} (glintfx/src/uix/dom/dom_tree.{hpp,
+#     cpp}), mesma disciplina "CMake próprio, zero RmlUi/GLFW/GL" dos testes de lexer da S1 acima.
+add_executable(uix_dom_tree_sanity dom_tree_sanity.cpp)
+target_link_libraries(uix_dom_tree_sanity PRIVATE glintfx::uix_dom)
+add_test(NAME uix_dom_tree_sanity COMMAND uix_dom_tree_sanity)
+
+add_executable(uix_dom_tree_hardening_sanity dom_tree_hardening_sanity.cpp)
+target_link_libraries(uix_dom_tree_hardening_sanity PRIVATE glintfx::uix_dom)
+add_test(NAME uix_dom_tree_hardening_sanity COMMAND uix_dom_tree_hardening_sanity)
+
 # EN: GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR: absolute paths to the two real corpus
 #     directories, resolved at CONFIGURE time (portable regardless of ctest's CWD at RUN time,
 #     same reasoning the rest of this repo's tests already apply to WORKING_DIRECTORY handling).

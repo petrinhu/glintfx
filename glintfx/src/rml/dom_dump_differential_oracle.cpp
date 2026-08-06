@@ -376,58 +376,21 @@ constexpr std::size_t kPrefixHeadLen = 64;
 //     de idioma. Uma linha aqui sem linha no ledger (ou vice-versa) é, ela mesma, um bug de
 //     escrituração: esta tabela é o que a máquina checa, o ledger é o que um humano lê, e as duas
 //     são duas vistas de um fato só.
+// EN: `UIX-HEAD-COMENTARIO` -- the 15-row `kHeadCommentCollision` pin (S6a's HEAD scan being
+//     comment-unaware) was REMOVED here in the same commit that fixed `dom_dump_scan_head()`
+//     (glintfx/src/rml/dom_dump.cpp's `locate_head_tag_span()`) to be comment/quote/opaque-
+//     content-aware -- all 16 corpus fixtures are byte-IDENTICAL now, so there is nothing left to
+//     pin. See docs/uix-dom.md section 9's ledger for the corresponding row removal and the
+//     "measured, deliberately not fixed" -> "fixed" transition write-up.
+// PT: `UIX-HEAD-COMENTARIO` -- o pin de 15 linhas `kHeadCommentCollision` (o scan de HEAD da S6a
+//     sendo sem consciência de comentário) foi REMOVIDO daqui no mesmo commit que consertou o
+//     `dom_dump_scan_head()` (`locate_head_tag_span()` do glintfx/src/rml/dom_dump.cpp) pra ficar
+//     consciente de comentário/aspas/conteúdo-opaco -- as 16 fixtures do corpus são byte-
+//     IDÊNTICAS agora, então não sobra nada pra pinar. Ver o ledger da seção 9 do
+//     docs/uix-dom.md pra remoção de linha correspondente e a redação da transição "medido,
+//     deliberadamente não consertado" -> "consertado".
 const std::vector<KnownDivergence>& known_divergences() {
-  // EN: `kHeadCommentCollision` -- ONE mechanism, 15 fixtures. `S6a`'s `dom_dump_scan_head()` is
-  //     a comment-unaware raw text scan: it takes the FIRST literal `<head` in the source, and in
-  //     these 15 fixtures that occurrence is inside the leading `<!-- ... -->` provenance comment
-  //     (the prose "its own `<head>`-opacity raw-byte-scan..."), not the real `<head>` element.
-  //     `S6b` skips comments and starts at the real element. Both stop at the same `</head`, hence
-  //     the strict-suffix shape. The 16th fixture, gusworld_battle_cockpit.rml, has no `<head` in
-  //     its comment and is byte-IDENTICAL -- which is the control that proves this diagnosis
-  //     rather than merely asserting it. Full write-up: docs/uix-dom.md section 9's ledger.
-  // PT: `kHeadCommentCollision` -- UM mecanismo, 15 fixtures. O `dom_dump_scan_head()` da `S6a` é
-  //     um scan de texto cru sem consciência de comentário: pega o PRIMEIRO `<head` literal da
-  //     fonte, e nestas 15 fixtures essa ocorrência está dentro do comentário de proveniência
-  //     `<!-- ... -->` inicial (a prosa "its own `<head>`-opacity raw-byte-scan..."), não o
-  //     elemento `<head>` real. A `S6b` pula comentários e começa no elemento real. Os dois param
-  //     no mesmo `</head`, daí a forma de sufixo estrito. A 16ª fixture,
-  //     gusworld_battle_cockpit.rml, não tem `<head` no comentário e é byte-IDÊNTICA -- que é o
-  //     controle que PROVA este diagnóstico em vez de só afirmá-lo. Redação completa: o ledger da
-  //     seção 9 do docs/uix-dom.md.
-  static constexpr const char* kHeadCommentCollision =
-      "docs/uix-dom.md section 9, row 2026-08-05 class (a): S6a's HEAD scan is comment-unaware";
-  static const std::vector<KnownDivergence> rows = {
-      {"difficulty_menu__lista_hardcore_bloqueado.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"difficulty_menu__splash_confirmacao.rml", 835,
-       "-opacity raw-byte-scan never\\n     re-tokenizes <head>'s interio", kHeadCommentCollision},
-      {"npc_dialogue__no_com_3_escolhas.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"npc_dialogue__no_linear_fala_curta.rml", 835,
-       "-opacity raw-byte-scan never\\n     re-tokenizes <head>'s interio", kHeadCommentCollision},
-      {"npc_dialogue__no_linear_fala_longa.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"save_load_menu__modo_carregar_dois_slots_ocupados.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"save_load_menu__modo_salvar_com_autosave.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"save_load_menu__modo_salvar_todos_vazios.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"system_menu__config_audio_sliders.rml", 1082,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"system_menu__config_categorias.rml", 1083,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"system_menu__config_controles_tabela.rml", 1083,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"system_menu__confirmacao_menu_inicial.rml", 1083,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"system_menu__pause_raiz.rml", 1082,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior\\n   ", kHeadCommentCollision},
-      {"title_menu__com_save.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-      {"title_menu__sem_save.rml", 829,
-       "-opacity raw-byte-scan never re-tokenizes <head>'s interior with", kHeadCommentCollision},
-  };
+  static const std::vector<KnownDivergence> rows = {};
   return rows;
 }
 

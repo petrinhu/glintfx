@@ -160,6 +160,70 @@ int main() {
   }
 
   // ---------------------------------------------------------------------------
+  // EN: `UIX-HEAD-COMENTARIO` -- the S7 oracle measured (docs/uix-dom.md section 9's ledger,
+  //     class (a)) that `dom_dump_scan_head()` was a comment-UNAWARE literal substring search:
+  //     the FIRST `<head` byte sequence anywhere in the source, real tag or not. 15 of 16 corpus
+  //     fixtures have exactly this shape -- a leading provenance comment whose own prose mentions
+  //     "<head". These four cases pin the fix, enumerating the space the brief named rather than
+  //     only the one the corpus happened to expose: comment, quoted attribute value of ANY tag
+  //     (not just <head>'s own), opaque <style>/<script> content, and -- the same dominó applied
+  //     to the CLOSING tag, since a coincidental "</head" living inside the real <head>'s own
+  //     <style> block would have broken the OLD plain `ifind(source, "</head", ...)` search too.
+  // PT: `UIX-HEAD-COMENTARIO` -- o oráculo da S7 mediu (ledger da seção 9 do docs/uix-dom.md,
+  //     classe (a)) que `dom_dump_scan_head()` era uma busca de substring literal SEM
+  //     consciência de comentário: a PRIMEIRA sequência de bytes `<head` em qualquer lugar da
+  //     fonte, tag real ou não. 15 das 16 fixtures do corpus têm exatamente essa forma -- um
+  //     comentário de proveniência inicial cuja própria prosa menciona "<head". Estes quatro
+  //     casos fixam o conserto, enumerando o espaço que o brief nomeou em vez de só o que o
+  //     corpus por acaso expôs: comentário, valor de atributo entre aspas de QUALQUER tag (não só
+  //     a própria <head>), conteúdo opaco <style>/<script>, e -- o mesmo dominó aplicado à tag de
+  //     FECHAMENTO, já que um "</head" coincidente vivendo dentro do próprio bloco <style> da
+  //     <head> real teria quebrado a antiga busca `ifind(source, "</head", ...)` plana também.
+  // ---------------------------------------------------------------------------
+  {
+    const auto r = glintfx::dom_dump_scan_head(
+        "<!-- a comment that mentions <head as prose, not a real tag -->\n"
+        "<rml><head>REAL</head><body>x</body></rml>");
+    check(r.present, "scan_head: <head-shaped prose inside a leading comment -> still finds the REAL <head>");
+    check_eq(r.raw, "REAL",
+             "scan_head: comment-aware scan skips the decoy and lands on the real element "
+             "(UIX-HEAD-COMENTARIO, the exact shape 15/16 corpus fixtures have)");
+  }
+  {
+    const auto r = glintfx::dom_dump_scan_head(
+        "<rml><meta title=\"looks like <head> right here\"/><head>REAL</head><body>x</body></rml>");
+    check(r.present, "scan_head: <head-shaped text inside ANOTHER tag's quoted attribute value -> still finds the REAL <head>");
+    check_eq(r.raw, "REAL",
+             "scan_head: a quoted attribute value of a tag OTHER than <head> itself is now "
+             "protected too, not just <head>'s own attributes");
+  }
+  {
+    const auto r = glintfx::dom_dump_scan_head(
+        "<rml><style>/* what about <head> in a CSS comment? */</style><head>REAL</head><body>x</body></rml>");
+    check(r.present, "scan_head: <head-shaped text inside <style> opaque content -> still finds the REAL <head>");
+    check_eq(r.raw, "REAL", "scan_head: <style> content is treated as opaque, mirroring RmlUi's own persistent-CDATA-tag handling");
+  }
+  {
+    const auto r = glintfx::dom_dump_scan_head(
+        "<rml><script>var s = \"<head>fake</head>\";</script><head>REAL</head><body>x</body></rml>");
+    check(r.present, "scan_head: <head-shaped text inside <script> opaque content -> still finds the REAL <head>");
+    check_eq(r.raw, "REAL", "scan_head: <script> content is treated as opaque too, same mechanism as <style>");
+  }
+  {
+    // EN: The dominó case for the CLOSING tag: a coincidental "</head" living inside the real
+    //     <head>'s OWN <style> block content must not truncate the payload early.
+    // PT: O caso dominó pra tag de FECHAMENTO: um "</head" coincidente vivendo dentro do
+    //     conteúdo do PRÓPRIO bloco <style> da <head> real não pode truncar o payload cedo.
+    const auto r = glintfx::dom_dump_scan_head(
+        "<rml><head><style>/* mentions </head inside a CSS comment */</style>REALCONTENT</head>"
+        "<body>x</body></rml>");
+    check(r.present, "scan_head: real <head> whose own <style> content contains a coincidental </head");
+    check_eq(r.raw, "<style>/* mentions </head inside a CSS comment */</style>REALCONTENT",
+             "scan_head: closing scan is not fooled by a </head-shaped run inside <style> opaque "
+             "content -- the REAL closing tag is the one right after REALCONTENT");
+  }
+
+  // ---------------------------------------------------------------------------
   // EN: Tier 3 -- dom_dump_document() against a REAL Rml::ElementDocument. One shared
   //     Engine/Context for the whole tier (same GL-context-fixture pattern as
   //     document_reload_leak.cpp), documents loaded directly via

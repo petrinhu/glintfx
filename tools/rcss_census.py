@@ -253,10 +253,24 @@ def scan_top_level_blocks(text: str) -> tuple[list[Block], str]:
             elif c == "}":
                 depth -= 1
             j += 1
+        if depth != 0:
+            # EN: Ran out of text before the brace closed -- a TRUNCATED block, not a
+            # real one. Only surfaces on deliberately-malformed fixtures (this repo's
+            # own .rcss/.rml corpus is always well-formed) or on a C++-embedded
+            # fragment cut short by `<<` interpolation -- never silently treated as a
+            # closed rule with fabricated content. The unclosed span becomes leftover,
+            # tagged so a caller can tell "truncated" apart from "just whitespace".
+            # PT: Acabou o texto antes da chave fechar -- um bloco TRUNCADO, nao um de
+            # verdade. So aparece em fixture deliberadamente malformada (o corpus
+            # .rcss/.rml deste repo e sempre bem-formado) ou num fragmento embutido em
+            # C++ cortado por interpolacao `<<` -- nunca tratado em silencio como regra
+            # fechada com conteudo fabricado. O trecho nao-fechado vira sobra, marcada
+            # pra quem chama distinguir "truncado" de "so espaco em branco".
+            leftover_parts.append(f"\x00TRUNCATED\x00{text[i:]}")
+            i = n
+            break
         body = text[brace + 1:j - 1]
         leftover_parts.append(prelude if prelude.strip() == "" else "")
-        if prelude.strip() != "":
-            pass  # handled by caller via classify_prelude / leftover check below
         blocks.append(_classify(prelude, body))
         i = j
     leftover = "".join(leftover_parts)
@@ -283,6 +297,355 @@ def parse_stylesheet(text: str) -> tuple[list[Block], str]:
             children, _leftover2 = scan_top_level_blocks(b.body)
             b.children = children
     return blocks, leftover
+
+
+# ---------------------------------------------------------------------------
+# 3b. C++-embedded RCSS extraction -- THE THIRD ORIGIN
+#     Extracao de RCSS embutida em C++ -- A TERCEIRA ORIGEM
+# ---------------------------------------------------------------------------
+#
+# EN: RCSS in this repo lives in three places, not two: `.rcss` files, `<style>`
+# blocks inside `.rml` files (both handled above), and C++ string/raw-string
+# literals in `.cpp`/`.hpp` files -- either production (`glintfx/src/ua_stylesheet.hpp`,
+# the base stylesheet applied to EVERY document glintfx loads) or test/demo fixtures
+# built at runtime (`f << "body { margin: 0; ... }\n" ...`). The original census
+# folded this third origin in; this census's first pass (commit `0de859f`) did not,
+# because the task that produced it scoped the surviving corpus as ".rml + .rcss"
+# only. This section closes that gap -- added on the coordinator's own explicit
+# correction, not discovered independently the first time (see `docs/uix-rcss-censo.md`
+# section 5 for the full account of why that mattered: 3 of the census's own 15
+# comma-list selector instances live ONLY in `ua_stylesheet.hpp`).
+#
+# PT: RCSS neste repo mora em tres lugares, nao dois: arquivos `.rcss`, blocos
+# `<style>` dentro de `.rml` (os dois tratados acima), e literais de string/raw-string
+# de C++ em `.cpp`/`.hpp` -- produção (`glintfx/src/ua_stylesheet.hpp`, a folha base
+# aplicada a TODO documento que a glintfx carrega) ou fixture de teste/demo construída
+# em runtime (`f << "body { margin: 0; ... }\n" ...`). O censo original incluía essa
+# terceira origem; a primeira passada deste censo (commit `0de859f`) não, porque a
+# tarefa que a produziu escopou o corpus sobrevivente só como ".rml + .rcss". Esta
+# seção fecha essa lacuna -- acrescentada por correção explícita do coordenador, não
+# descoberta de forma independente da primeira vez (ver `docs/uix-rcss-censo.md`
+# seção 5 pro relato completo de por que isso importou: 3 das próprias 15 instâncias
+# de seletor comma-list do censo só vivem em `ua_stylesheet.hpp`).
+#
+# Classification rule (reproducible, structural -- NOT filename-pattern guessing,
+# and NOT a hand-typed path list). A candidate is "test/demo" if its path is under
+# `glintfx/demos/`, OR its basename is a source argument of some `add_executable(...)`
+# in any git-tracked `glintfx/tests/**/CMakeLists.txt` -- i.e. it is actually compiled
+# into a CTest binary, which is the real, structural ground truth for "this is a
+# test", independent of which directory the source file physically lives in or what
+# its filename happens to end with.
+#
+# EN: this rule was tightened after a real miss: the first version matched filenames
+# ending `_sanity`/`_smoke`/`_bench`/`_test`, and silently misclassified
+# `glintfx/src/rml/dom_dump_spec_conformance.cpp` as "production" -- its own header
+# doc-comment says "byte-exact oracle", i.e. it plainly IS a test, but its name ends
+# in `_conformance`, not one of the four guessed suffixes. Checked directly:
+# `grep -l dom_dump_spec_conformance glintfx/tests/CMakeLists.txt` finds it registered
+# as an `add_executable` source there (alongside its sibling
+# `dom_dump_determinism_sanity.cpp`) even though the `.cpp` itself lives in
+# `glintfx/src/rml/` by this repo's own convention (the RMLX-1 DOM-dump oracle tests
+# are co-located with the implementation they test). A name-pattern guess is exactly
+# the kind of "looks right, isn't verified against the build system" shortcut this
+# whole census exists to replace with structural fact -- so the CMake-registration
+# check, not the filename, is now the rule.
+# PT: esta regra foi apertada depois de um erro real: a primeira versao casava nome
+# de arquivo terminado em `_sanity`/`_smoke`/`_bench`/`_test`, e classificou em
+# silencio `glintfx/src/rml/dom_dump_spec_conformance.cpp` como "producao" -- o
+# proprio doc-comment de cabecalho dele diz "oraculo byte-exato", ou seja, e'
+# claramente um teste, mas o nome termina em `_conformance`, nao um dos quatro
+# sufixos chutados. Conferido direto: `grep -l dom_dump_spec_conformance
+# glintfx/tests/CMakeLists.txt` acha ele registrado como fonte de `add_executable`
+# la (ao lado do irmao `dom_dump_determinism_sanity.cpp`) mesmo o `.cpp` em si
+# morando em `glintfx/src/rml/` pela propria convencao deste repo (os testes de
+# oraculo do dump de DOM da RMLX-1 ficam ao lado da implementacao que testam). Um
+# chute por padrao de nome e' exatamente o tipo de atalho "parece certo, nao foi
+# verificado contra o sistema de build" que este censo inteiro existe pra trocar por
+# fato estrutural -- entao a checagem de registro no CMake, nao o nome, e' a regra
+# agora.
+
+_CMAKE_TEST_SOURCES_CACHE: set[str] | None = None
+
+
+_ADD_EXECUTABLE_RE = re.compile(r"add_executable\s*\(([^)]*)\)", re.IGNORECASE | re.DOTALL)
+
+
+def _cmake_test_executable_basenames(repo_root: Path) -> set[str]:
+    """Return every basename that appears as a SOURCE ARGUMENT of an
+    `add_executable(...)` call in any `glintfx/tests/**/CMakeLists.txt`.
+
+    EN: Deliberately narrower than "the basename appears anywhere in the CMake
+    file" -- `ua_stylesheet.hpp`'s own basename appears in
+    `glintfx/tests/uix_style/CMakeLists.txt`, but only inside a
+    `target_compile_definitions(... GLINTFX_UIX_STYLE_UA_STYLESHEET="...ua_stylesheet.hpp")`
+    string (a path handed to a test at runtime, not a source the test is BUILT
+    from) -- a plain substring search would have misclassified it as test/demo.
+    Parsing `add_executable(...)`'s own argument list specifically avoids that.
+    PT: Deliberadamente mais estreito que "o nome aparece em algum lugar do
+    arquivo CMake" -- o nome de `ua_stylesheet.hpp` aparece em
+    `glintfx/tests/uix_style/CMakeLists.txt`, mas só dentro de uma string de
+    `target_compile_definitions(... GLINTFX_UIX_STYLE_UA_STYLESHEET="...ua_stylesheet.hpp")`
+    (um caminho passado a um teste em runtime, não um fonte do qual o teste é
+    CONSTRUÍDO) -- uma busca de substring simples teria classificado errado como
+    teste/demo. Parsear especificamente a lista de argumentos do próprio
+    `add_executable(...)` evita isso.
+    """
+    global _CMAKE_TEST_SOURCES_CACHE
+    if _CMAKE_TEST_SOURCES_CACHE is None:
+        all_files = git_ls_files(repo_root, "*CMakeLists.txt")
+        cmake_files = [f for f in all_files if f.startswith("glintfx/tests/")]
+        basenames: set[str] = set()
+        for rel in cmake_files:
+            try:
+                text = (repo_root / rel).read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for m in _ADD_EXECUTABLE_RE.finditer(text):
+                for tok in m.group(1).split():
+                    if tok.endswith(".cpp") or tok.endswith(".hpp"):
+                        basenames.add(Path(tok).name)
+        _CMAKE_TEST_SOURCES_CACHE = basenames
+    return _CMAKE_TEST_SOURCES_CACHE
+
+# EN: Known RCSS/RmlUi property names, used only as a HINT to decide whether an
+# already-extracted, already-brace-balanced C++ string fragment is plausibly real
+# RCSS worth feeding to the parser -- never used to find rule/selector boundaries
+# (that is exclusively `scan_top_level_blocks`'s job, string/brace-aware, comment-
+# blind-to-line-boundary). A doc-comment sentence that merely MENTIONS a property
+# name in prose (e.g. "an author who writes `decorator: image-tint();`") does not
+# pass this filter's structural half (see `require_hint` usage below) unless the
+# surrounding text is *also* brace-balanced, which prose almost never is.
+# PT: Nomes de propriedade RCSS/RmlUi conhecidos, usados so como DICA pra decidir se
+# um fragmento de string C++ ja extraido e ja balanceado em chave e' plausivelmente
+# RCSS real que vale a pena mandar pro parser -- nunca usado pra achar fronteira de
+# regra/seletor (isso e' so trabalho do `scan_top_level_blocks`, sensivel a
+# chave/string, cego a fronteira de linha). Uma frase de doc-comment que so MENCIONA
+# um nome de propriedade em prosa nao passa a metade estrutural deste filtro (ver uso
+# de `require_hint` abaixo) a menos que o texto ao redor tambem esteja balanceado em
+# chave, o que prosa quase nunca esta.
+_KNOWN_PROP_HINT = re.compile(
+    r"(?<![A-Za-z-])(color|width|height|display|decorator|box-shadow|background|margin|"
+    r"padding|position|font-family|font-size|ripple-[a-z-]+|transform|border-radius|"
+    r"opacity|image-tint|mask-image|filter)\s*:"
+)
+
+
+def is_cpp_test_or_demo(rel_path: str, repo_root: Path) -> bool:
+    if rel_path.startswith("glintfx/tests/") or rel_path.startswith("glintfx/demos/"):
+        return True
+    basename = Path(rel_path).name
+    return basename in _cmake_test_executable_basenames(repo_root)
+
+
+@dataclass
+class CppToken:
+    kind: str  # "string" | "raw" | "other"
+    text: str  # decoded content for string/raw, raw source span for "other"
+
+
+def tokenize_cpp_strings(code: str) -> list[CppToken]:
+    """Walk already-comment-stripped C++ source, yielding STRING/RAW/OTHER tokens.
+
+    EN: A `"..."` token decodes `\\n`/`\\t`/`\\\\`/`\\"` (the escapes this corpus's
+    fixtures actually use; anything else passes through the backslashed character
+    unchanged, which is always at least as safe as guessing). A raw-string token
+    `R"delim(...)delim"` is captured with its delimiter and un-escaped content
+    verbatim (raw strings do not process escapes by definition). Every other run of
+    source (operators, identifiers, whitespace) becomes one OTHER token, so a caller
+    can tell "two literals separated only by whitespace/newline" (true C++ adjacent-
+    literal concatenation, byte-for-byte identical to one literal) apart from "two
+    literals separated by real code" (e.g. `<< some_variable <<`, a value the source
+    computes at runtime -- never guessable from static text).
+    PT: Percorre fonte C++ ja sem comentario, gerando tokens STRING/RAW/OTHER. Um
+    token `"..."` decodifica `\\n`/`\\t`/`\\\\`/`\\"` (os escapes que as fixtures
+    deste corpus de fato usam; qualquer outro passa o caractere apos a barra sem
+    mudar, o que e' sempre pelo menos tao seguro quanto chutar). Um token raw-string
+    `R"delim(...)delim"` e' capturado com seu delimitador e conteudo sem-escape
+    verbatim (raw string nao processa escape por definicao). Todo outro trecho de
+    fonte (operador, identificador, espaco) vira um token OTHER, pra quem chama
+    distinguir "dois literais separados so por espaco/quebra" (concatenacao
+    adjacente de C++ de verdade, byte-a-byte identica a um literal so) de "dois
+    literais separados por codigo real" (ex. `<< alguma_variavel <<`, um valor que a
+    fonte computa em runtime -- nunca chutavel a partir de texto estatico).
+    """
+    tokens: list[CppToken] = []
+    i, n = 0, len(code)
+    other_buf: list[str] = []
+
+    def flush_other():
+        if other_buf:
+            tokens.append(CppToken("other", "".join(other_buf)))
+            other_buf.clear()
+
+    raw_start_re = re.compile(r'R"([A-Za-z_]{0,16})\(')
+    while i < n:
+        m = raw_start_re.match(code, i)
+        if m:
+            delim = m.group(1)
+            close = f'){delim}"'
+            end = code.find(close, m.end())
+            if end == -1:
+                other_buf.append(code[i:])
+                i = n
+                break
+            flush_other()
+            tokens.append(CppToken("raw", code[m.end():end]))
+            i = end + len(close)
+            continue
+        c = code[i]
+        if c == '"':
+            j = i + 1
+            buf = []
+            esc = {"n": "\n", "t": "\t", "\\": "\\", '"': '"'}
+            while j < n and code[j] != '"':
+                if code[j] == "\\" and j + 1 < n:
+                    buf.append(esc.get(code[j + 1], code[j + 1]))
+                    j += 2
+                    continue
+                buf.append(code[j])
+                j += 1
+            flush_other()
+            tokens.append(CppToken("string", "".join(buf)))
+            i = j + 1
+            continue
+        other_buf.append(c)
+        i += 1
+    flush_other()
+    return tokens
+
+
+@dataclass
+class CppRcssRun:
+    text: str          # merged, decoded content of the run
+    is_raw: bool        # True if the run was a single raw-string literal
+    gap_before: bool     # True if this run is preceded by real (non-whitespace) code
+    gap_after: bool      # True if this run is followed by real (non-whitespace) code
+
+
+def merge_adjacent_literal_runs(tokens: list[CppToken]) -> list[CppRcssRun]:
+    """Group STRING/RAW tokens separated only by whitespace into single runs.
+
+    EN: Two adjacent C++ string literals with nothing but whitespace between them
+    ARE, by the language's own rule, one literal -- merging them loses no
+    information and is not a guess. A `raw` token never merges with a neighbour (a
+    raw string is already one complete literal on its own). Any OTHER token whose
+    stripped content is non-empty breaks the run and is recorded as a `gap` on both
+    sides of the break, so a caller knows this run may be a TRUNCATED fragment of a
+    larger, runtime-interpolated value, not full text.
+    PT: Dois literais de string C++ adjacentes com nada alem de espaco entre eles
+    SAO, pela propria regra da linguagem, um literal so -- juntar os dois nao perde
+    informacao nenhuma e nao e' chute. Um token `raw` nunca se junta a um vizinho
+    (raw string ja e' um literal completo sozinho). Qualquer token OTHER cujo
+    conteudo sem espaco nao seja vazio quebra o run e fica registrado como um `gap`
+    dos dois lados da quebra, pra quem chama saber que este run pode ser um
+    fragmento TRUNCADO de um valor maior, interpolado em runtime, nao o texto
+    inteiro.
+    """
+    runs: list[CppRcssRun] = []
+    cur: list[str] = []
+    cur_gap_before = False
+    pending_gap = False
+    for tok in tokens:
+        if tok.kind == "other":
+            if tok.text.strip():
+                if cur:
+                    runs.append(CppRcssRun("".join(cur), False, cur_gap_before, True))
+                    cur = []
+                pending_gap = True
+            continue
+        if tok.kind == "raw":
+            if cur:
+                runs.append(CppRcssRun("".join(cur), False, cur_gap_before, pending_gap))
+                cur = []
+            runs.append(CppRcssRun(tok.text, True, pending_gap, False))
+            pending_gap = False
+            cur_gap_before = False
+            continue
+        # tok.kind == "string"
+        if not cur:
+            cur_gap_before = pending_gap
+        cur.append(tok.text)
+        pending_gap = False
+    if cur:
+        runs.append(CppRcssRun("".join(cur), False, cur_gap_before, False))
+    return runs
+
+
+@dataclass
+class CppEmbedFile:
+    path: str
+    category: str  # "production" | "test-demo"
+    extracted_blocks: int = 0
+    extracted_declarations: int = 0
+    truncated_runs: int = 0
+    truncated_bytes: int = 0
+    truncated_examples: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def find_cpp_embedded_rcss_files(repo_root: Path) -> list[str]:
+    """Discover every git-tracked `.cpp`/`.hpp` file (excluding the two forbidden
+    implementation paths) that contains at least one self-contained, brace-balanced
+    fragment matching a known RCSS property -- the automated re-derivation this
+    section's module docstring promises, not a hand-typed list.
+    """
+    all_files = sorted(set(
+        git_ls_files(repo_root, "*.cpp") + git_ls_files(repo_root, "*.hpp")
+    ))
+    candidates = [
+        f for f in all_files
+        if not f.startswith("glintfx/src/uix/style/")
+        and not f.startswith("glintfx/src/rml/rcss_dump")
+    ]
+    found = []
+    for rel in candidates:
+        p = repo_root / rel
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        code = strip_comments(text)
+        runs = merge_adjacent_literal_runs(tokenize_cpp_strings(code))
+        for run in runs:
+            if run.text.count("{") >= 1 and _KNOWN_PROP_HINT.search(run.text):
+                found.append(rel)
+                break
+    return found
+
+
+def extract_cpp_embedded_rcss(census: "Census", repo_root: Path, files: list[str]) -> list[CppEmbedFile]:
+    """Parse each candidate file's merged literal runs; fold CLOSED (non-truncated)
+    blocks into `census` under a distinct `origin` tag; report truncated/gap runs
+    honestly instead of guessing their content.
+    """
+    results: list[CppEmbedFile] = []
+    for rel in files:
+        p = repo_root / rel
+        text = p.read_text(encoding="utf-8")
+        code = strip_comments(text)
+        runs = merge_adjacent_literal_runs(tokenize_cpp_strings(code))
+        entry = CppEmbedFile(path=rel, category="test-demo" if is_cpp_test_or_demo(rel, repo_root) else "production")
+        for run in runs:
+            if not (run.text.count("{") >= 1 and _KNOWN_PROP_HINT.search(run.text)):
+                continue
+            blocks, leftover = parse_stylesheet(run.text)
+            for b in blocks:
+                entry.extracted_blocks += 1
+                process_block(census, b, f"{rel}#cpp-literal", top_level=True)
+                entry.extracted_declarations += len(split_declarations(b.body))
+            if "\x00TRUNCATED\x00" in leftover or run.gap_before or run.gap_after:
+                truncated_text = leftover.replace("\x00TRUNCATED\x00", "")
+                if truncated_text.strip() or run.gap_before or run.gap_after:
+                    entry.truncated_runs += 1
+                    entry.truncated_bytes += len(truncated_text)
+                    reason = "runtime-interpolated (`<<`) value adjacent to this fragment" \
+                        if (run.gap_before or run.gap_after) else "brace never closed within this run"
+                    if len(entry.truncated_examples) < 3:
+                        entry.truncated_examples.append(f"{reason}: {truncated_text.strip()[:120]!r}")
+        if entry.extracted_blocks == 0 and entry.truncated_runs == 0:
+            entry.notes.append("candidate matched by hint but no run reached the parser (should not happen)")
+        results.append(entry)
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +856,7 @@ class Census:
     box_shadow_spread_present: int = 0
     shorthand_value_count_hist: dict = field(default_factory=lambda: defaultdict(Counter))
     files_with_comma_list: set = field(default_factory=set)
+    cpp_embedded_summary: list = field(default_factory=list)  # populated only by --cpp-embedded
 
 
 FAMILY_A_PROPS = {
@@ -731,6 +1095,31 @@ def run(repo_root: Path, extra_hpp: list[str]) -> Census:
     return census
 
 
+def fold_in_cpp_embedded(census: Census, repo_root: Path) -> None:
+    """Discover + extract the third origin (C++ literals) and fold CLOSED blocks
+    into `census` in place; always populates `census.cpp_embedded_summary` with a
+    per-file report (category, extracted counts, truncated/gap evidence) regardless
+    of how many blocks actually made it into the statistics -- a file that
+    contributes 0 closed blocks still gets a row, with its truncated bytes/reason
+    shown, per this task's own "declare not-extracted with reason" instruction.
+    """
+    files = find_cpp_embedded_rcss_files(repo_root)
+    results = extract_cpp_embedded_rcss(census, repo_root, files)
+    census.cpp_embedded_summary = [
+        {
+            "path": r.path,
+            "category": r.category,
+            "extracted_blocks": r.extracted_blocks,
+            "extracted_declarations": r.extracted_declarations,
+            "truncated_runs": r.truncated_runs,
+            "truncated_bytes": r.truncated_bytes,
+            "truncated_examples": r.truncated_examples,
+            "notes": r.notes,
+        }
+        for r in results
+    ]
+
+
 def to_jsonable(census: Census) -> dict:
     d = {}
     for k, v in census.__dict__.items():
@@ -759,12 +1148,32 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo-root", default=".", type=Path)
     ap.add_argument("--include-hpp", nargs="*", default=[],
-                     help="extra .hpp/.cpp paths with R\"rcss(...)rcss\" raw strings to fold in, labeled separately")
+                     help="extra .hpp/.cpp paths with R\"rcss(...)rcss\" raw strings to fold in, labeled separately (legacy, superseded by --cpp-embedded)")
+    ap.add_argument("--cpp-embedded", action="store_true",
+                     help="also discover+extract the third origin (RCSS embedded in .cpp/.hpp string/raw-string "
+                          "literals, production and test/demo alike) and fold CLOSED blocks into the same census")
+    ap.add_argument("--list-cpp-embedded", action="store_true",
+                     help="only print the third-origin discovery table (path, category, extracted/truncated "
+                          "counts) and exit -- does not fold into the census or print the full JSON")
     ap.add_argument("--out", default=None, help="write JSON to this path instead of stdout")
     args = ap.parse_args()
 
     repo_root = args.repo_root.resolve()
+
+    if args.list_cpp_embedded:
+        census = Census()
+        fold_in_cpp_embedded(census, repo_root)
+        for row in census.cpp_embedded_summary:
+            print(f"{row['category']:12s} {row['path']:60s} "
+                  f"blocks={row['extracted_blocks']:2d} decls={row['extracted_declarations']:3d} "
+                  f"truncated_runs={row['truncated_runs']} truncated_bytes={row['truncated_bytes']}")
+            for ex in row["truncated_examples"]:
+                print(f"             not-extracted: {ex}")
+        return
+
     census = run(repo_root, args.include_hpp)
+    if args.cpp_embedded:
+        fold_in_cpp_embedded(census, repo_root)
     payload = to_jsonable(census)
     text = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False)
     if args.out:

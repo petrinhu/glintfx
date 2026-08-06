@@ -76,34 +76,79 @@ a afirmação da gramática de decorators, cuja seção em português explicitam
 "mesmo conteúdo técnico", em vez de repetir o caminho uma 16ª vez), 2 no `docs/rmlx-subset.md` (a
 própria linha de cabeçalho do documento pras seções que ele chama de "cópia durável").
 
-| # | Doc:line | Language | Claim (paraphrased) |
-| :--- | :--- | :--- | :--- |
-| 1 | `uix-rcss.md:209` | EN | `:hover` 53-37 uses depending on repo, always composite; `:focus` 3, `:active` 2 |
-| 2 | `uix-rcss.md:1283` | PT | mirror of #1 |
-| 3 | `uix-rcss.md:256` | EN | `%` means 3 unrelated things per property (families a/b/c), evidenced by census §5.1 |
-| 4 | `uix-rcss.md:1331` | PT | mirror of #3 |
-| 5 | `uix-rcss.md:319` | EN | the 72-entry property registry is built exclusively from names the census measured (§3) |
-| 6 | `uix-rcss.md:1397` | PT | mirror of #5 |
-| 7 | `uix-rcss.md:437` | EN | `max-height`/`max-width` are the only 2 of 72 registry entries with zero corpus occurrences |
-| 8 | `uix-rcss.md:1448` | PT | mirror of #7, adds "not reachable through any of the 13 shorthands" |
-| 9 | `uix-rcss.md:533` | EN | 4 hex color forms measured (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`), corrects a stale comment |
-| 10 | `uix-rcss.md:1517` | PT | mirror of #9 |
-| 11 | `uix-rcss.md:594` | EN | every measured length sits in the 0-3000 range; largest single value `-228dp` |
-| 12 | `uix-rcss.md:1581` | PT | mirror of #11 |
-| 13 | `uix-rcss.md:637` | EN | angle usage: 24 instances, all `deg`, 0 `rad` |
-| 14 | `uix-rcss.md:1627` | PT | mirror of #13 |
-| 15 | `uix-rcss.md:718` | EN | in-scope decorator/filter/mask-image function set, per census §9's measured sub-languages |
-| -- | *(no PT mirror -- `uix-rcss.md:1650` explicitly defers to the EN section instead of re-citing)* | | |
-| 16 | `rmlx-subset.md:126` | EN | header line: 62 source files, 866 style blocks, 3424 declarations |
-| 17 | `rmlx-subset.md:301` | PT | mirror of #16 |
+⚠️ **Anchored by section + literal snippet, not by line number -- see section 0b below for why.** The
+first version of this table cited `uix-rcss.md:<line>` for all 17; every one of those 20 line numbers
+(17 citations, `uix-rcss.md`+`rmlx-subset.md` together, some cited twice across EN/PT) went stale the
+same week, when `UIX-RCSS-ERRATA-2` (`bdf3f45`) inserted +693 lines into `uix-rcss.md`. A line number is
+kept below **only** as a courtesy, explicitly labeled "valid at `<sha>`" -- never the primary anchor.
+
+| # | Doc | Section | Anchor snippet (search for this, not a line number) | Language | Claim (paraphrased) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `uix-rcss.md` | §4 | `:hover`: 53-37 uses depending on which repository is counted, always in a composite selector | EN | `:hover` 53-37 uses depending on repo, always composite; `:focus` 3, `:active` 2 |
+| 2 | `uix-rcss.md` | §4 (PT) | mirror of #1's own sentence, translated | PT | mirror of #1 |
+| 3 | `uix-rcss.md` | §5 | a `%` value means three geometrically unrelated things depending on which property carries it, evidenced by the census | EN | `%` means 3 unrelated things per property (families a/b/c), evidenced by census §5.1 |
+| 4 | `uix-rcss.md` | §5 (PT) | mirror of #3 | PT | mirror of #3 |
+| 5 | `uix-rcss.md` | §6 | this registry is built **exclusively** from names the census measured at least once | EN | the 72-entry property registry is built exclusively from names the census measured (§3) |
+| 6 | `uix-rcss.md` | §6 (PT) | mirror of #5 | PT | mirror of #5 |
+| 7 | `uix-rcss.md` | §6.1 | the **only** 2 of the 72 longhand entries with **zero** measured occurrences anywhere in this document's own corpus | EN | `max-height`/`max-width` are the only 2 of 72 registry entries with zero corpus occurrences |
+| 8 | `uix-rcss.md` | §6.1 (PT) | mirror of #7, adds "não alcançáveis por nenhum dos 13 shorthands" | PT | mirror of #7, adds "not reachable through any of the 13 shorthands" |
+| 9 | `uix-rcss.md` | §7.1 | authorized by the census's own measured 4 hex forms | EN | 4 hex color forms measured (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`), corrects a stale comment |
+| 10 | `uix-rcss.md` | §7.1 (PT) | mirror of #9 | PT | mirror of #9 |
+| 11 | `uix-rcss.md` | §8 | Every measured length in the corpus sits in the 0-3000 range | EN | every measured length sits in the 0-3000 range; largest single value `-228dp` -- ⚠️ **already corrected in-place by `UIX-RCSS-ERRATA-2` before this census's own commit landed, see section 6.1 below** |
+| 12 | `uix-rcss.md` | §8 (PT) | mirror of #11 | PT | mirror of #11 |
+| 13 | `uix-rcss.md` | §8.2 | 100% of the corpus's angle usage ... is already authored in degrees | EN | angle usage: 24 instances, all `deg`, 0 `rad` |
+| 14 | `uix-rcss.md` | §8.2 (PT) | mirror of #13 | PT | mirror of #13 |
+| 15 | `uix-rcss.md` | §9.2 | In-scope functions, per the census's own measured decorator sub-languages | EN | in-scope decorator/filter/mask-image function set, per census §9's measured sub-languages -- ⚠️ **`vertical-gradient` gap already closed by `UIX-RCSS-ERRATA-2`, see section 6.2 below** |
+| -- | `uix-rcss.md` | §9.2 (PT, deferred) | *(PT section explicitly says "mesmo conteúdo técnico" instead of re-citing -- no independent PT anchor exists for #15)* | | |
+| 16 | `rmlx-subset.md` | §6 | an independent measurement (`qa-engineer`, read-only, no repo writes) covering 62 source files, 866 style blocks, 3424 declarations | EN | header line: 62 source files, 866 style blocks, 3424 declarations |
+| 17 | `rmlx-subset.md` | §6 (PT) | mirror of #16 | PT | mirror of #16 |
 
 ⚠️ **The task brief said "17 citações" and named `docs/uix-rcss.md` as the document to read them from.**
-Counted literally, `docs/uix-rcss.md` alone has **15** occurrences of the census path (`grep -c
-'/var/tmp/censo-rcss-qa1/censo.md' docs/uix-rcss.md` → `15`), not 17. The other 2 live in
-`docs/rmlx-subset.md`, which `uix-rcss.md`'s own cross-ref block names as part of the same contract.
-17 is correct **across the two documents together**; this is recorded as a measured correction to the
-brief's own count, not silently absorbed, per this task's own standing rule (divergence is reported,
-never quietly fixed).
+Counted literally at the commit this census was first written against (`1173ae3`), `docs/uix-rcss.md`
+alone had **15** occurrences of the census path, not 17. The other 2 lived in `docs/rmlx-subset.md`,
+which `uix-rcss.md`'s own cross-ref block names as part of the same contract. 17 is correct **across the
+two documents together**; this is recorded as a measured correction to the brief's own count, not
+silently absorbed, per this task's own standing rule (divergence is reported, never quietly fixed).
+
+### 0b. Citation anchoring in a living document: line number rots, content doesn't / Ancoragem de citação em documento vivo: número de linha apodrece, conteúdo não
+
+**EN:** This section exists because this census's own first commit (`0de859f`) cited all 17 sources by
+`file:line`, and every one of those 20 line-number citations (17 sources, some cited on 2 lines across
+EN/PT) went stale **the same week** -- `UIX-RCSS-ERRATA-1` and `UIX-RCSS-ERRATA-2` (`f747ae8`, `bdf3f45`)
+inserted hundreds of lines into `uix-rcss.md` fixing 7 BLOQUEIA + 3 PROVÁVEL findings from an independent
+ambiguity audit, and `uix-rcss.md:209` stopped being the `:hover` sentence and started being unrelated
+prose about a different finding entirely. **The rule, going forward, for this document and any future
+one that cites a spec under active errata churn:** cite **section number + a short literal snippet**
+(quoted verbatim, searchable), never a bare line number as the primary anchor. A line number may be kept
+as a reader convenience **only if labeled `valid at <sha>`** -- unlabeled, it is a reference that lies
+silently the moment the cited document gains or loses a single line above the citation. The snippet
+anchor has a second, deliberate property: when the quoted text **stops existing** in the cited document,
+that is not a bug in this census, it is a **signal** that the underlying claim itself changed --
+information worth having, not noise to route around.
+
+**PT:** Esta seção existe porque o primeiro commit deste censo (`0de859f`) citou as 17 fontes por
+`arquivo:linha`, e cada uma dessas 20 citações de linha (17 fontes, algumas citadas em 2 linhas entre
+EN/PT) apodreceu **na mesma semana** -- a `UIX-RCSS-ERRATA-1` e a `UIX-RCSS-ERRATA-2` (`f747ae8`,
+`bdf3f45`) inseriram centenas de linhas no `uix-rcss.md` consertando 7 achados BLOQUEIA + 3 PROVÁVEL de
+uma auditoria de ambiguidade independente, e `uix-rcss.md:209` parou de ser a frase do `:hover` e virou
+prosa sem relação nenhuma sobre um achado diferente. **A regra, daqui em diante, pra este documento e
+qualquer futuro que cite uma spec sob errata ativa:** citar **número de seção + um trecho literal curto**
+(citado ao pé da letra, buscável), nunca um número de linha cru como âncora primária. Um número de linha
+pode ficar como conveniência de leitor **só se marcado `válido em <sha>`** -- sem marca, é uma referência
+que mente em silêncio no instante em que o documento citado ganha ou perde uma linha só acima da
+citação. A âncora de trecho tem uma segunda propriedade, deliberada: quando o texto citado **deixa de
+existir** no documento-alvo, isso não é bug deste censo, é **sinal** de que a própria afirmação mudou --
+informação que vale a pena ter, não ruído pra contornar.
+
+**Other line-number citations to `uix-rcss.md`/`uix-dom.md` found while checking, NOT fixed here (not
+this census's document to edit):** `docs/uix-rcss-ambiguidades.md:284` and `:716` cite
+`` `docs/uix-dom.md:71-72` ``; `TODO.md`'s `RMLX1-MAPA-FATIAS` entry cites `` `uix-dom.md:729` ``. Both
+reported to the coordinator; per this task's own rule ("não saia consertando documento de outro dono"),
+left for their owners to decide. / **Outras citações por número de linha a `uix-rcss.md`/`uix-dom.md`
+achadas ao checar, NÃO consertadas aqui (não é documento deste censo pra editar):** `docs/uix-rcss-
+ambiguidades.md:284` e `:716` citam `` `docs/uix-dom.md:71-72` ``; o item `RMLX1-MAPA-FATIAS` do
+`TODO.md` cita `` `uix-dom.md:729` ``. Ambas reportadas ao coordenador; pela própria regra desta tarefa
+("não saia consertando documento de outro dono"), deixadas para os donos decidirem.
 
 ---
 
@@ -247,7 +292,7 @@ This matches `docs/rmlx-subset.md`'s own already-published, once-corrected table
 census's method against a table that document had already independently corrected twice (see its own
 section 6.1 "the orchestrator's own error" note).
 
-**What `uix-rcss.md:209-212`'s "53-37... `:focus`: 3, `:active`: 2" actually is:** these four numbers
+**What `uix-rcss.md` §4's "53-37... `:focus`: 3, `:active`: 2" sentence actually is:** these four numbers
 are **not all from the same corpus**. `rmlx-subset.md` section 2 states plainly that its 12-number
 table (`:hover` 53, `:focus` 3, `:active` 2, among others) is **"Medido pelo consumidor"** -- GusWorld's
 own repository, a different codebase this qa-engineer has no access to and this task's brief explicitly
@@ -272,7 +317,7 @@ Bate exatamente com a tabela já publicada (e já corrigida uma vez) do `docs/rm
 censo contra uma tabela que aquele documento já tinha corrigido de forma independente duas vezes (ver a
 própria nota "erro do orquestrador" na seção 6.1 de lá).
 
-**O que "53-37... `:focus`: 3, `:active`: 2" do `uix-rcss.md:209-212` realmente é:** esses quatro
+**O que a frase "53-37... `:focus`: 3, `:active`: 2" da §4 do `uix-rcss.md` realmente é:** esses quatro
 números **não vêm todos do mesmo corpus**. A seção 2 do `rmlx-subset.md` diz claramente que sua tabela
 de 12 números (`:hover` 53, `:focus` 3, `:active` 2, entre outros) foi **"medido pelo consumidor"** -- o
 próprio repositório do GusWorld, um código-base diferente ao qual este qa-engineer não tem acesso e que
@@ -352,7 +397,7 @@ transform:2             vertical-align:1      white-space:14          width:247
 **`max-height` and `max-width`: 0 occurrences, confirmed** -- neither name appears anywhere in this
 corpus's directly-written declarations, matching the doc's claim exactly. **`font-style` and
 `font-weight`: 0 occurrences, also confirmed** (the doc's own section 13 exclusion list, cited at
-`uix-rcss.md:1757/1773`, without a `/var/tmp` path on that specific line but backed by the same census).
+`uix-rcss.md` §13's own exclusion list -- anchor snippet: "measured **zero** in the census despite `font-family`" -- without a `/var/tmp` path on that specific sentence but backed by the same census).
 
 **On "not reachable through any of the 13 shorthands" (citation #8):** section 6.2 of `uix-rcss.md`
 itself lists exactly 13 shorthand names (`margin`, `padding`, `border-radius`, `border-color`,
@@ -371,7 +416,7 @@ própria disciplina de escopo da seção 6, não uma lacuna): ver bloco acima (b
 **`max-height` e `max-width`: 0 ocorrências, confirmado** -- nenhum dos dois nomes aparece em nenhuma
 declaração escrita direto neste corpus, batendo exatamente com a afirmação do documento. **`font-style`
 e `font-weight`: 0 ocorrências, também confirmado** (a própria lista de exclusão da seção 13 do
-documento, citada em `uix-rcss.md:1757/1773`, sem caminho `/var/tmp` nessa linha específica mas
+documento, seção 13 -- trecho-âncora: "medidas **zero** no censo apesar de" -- sem caminho `/var/tmp` nesse trecho específico mas
 apoiada no mesmo censo).
 
 **Sobre "não alcançáveis por nenhum dos 13 shorthands" (citação #8):** a própria seção 6.2 do
@@ -451,12 +496,23 @@ fixture irmã) mas não é nem o maior valor positivo (999 > 228) nem a maior ma
 `npc_dialogue__no_com_3_escolhas.rml:41`/`system_menu__config_audio_sliders.rml:296` e mais 4 fixtures
 irmãs cada). Top-5 por magnitude absoluta: ver tabela acima (bilíngue).
 
-**Verdict / Veredito: PARTIAL DIVERGE.** The range claim (0-3000, 3-digit-max order of magnitude, hence
-the precision argument) is correct; the specific cited example (`-228dp` as "the largest single value
-observed") is not the largest by either sign -- `999dp` and `-410dp` both exceed it. Reported as a
-finding, the underlying spec conclusion (4 decimal digits is enough precision) is unaffected because it
-only depends on the *order of magnitude* staying 3-digit, which both the cited and the actual record
-share.
+**Verdict / Veredito: PARTIAL DIVERGE -- already closed by `UIX-RCSS-ERRATA-2`.** The range claim
+(0-3000, 3-digit-max order of magnitude, hence the precision argument) is correct; the specific cited
+example (`-228dp` as "the largest single value observed") was not the largest by either sign -- `999dp`
+and `-410dp` both exceed it. Reported as a finding, the underlying spec conclusion (4 decimal digits is
+enough precision) is unaffected because it only depends on the *order of magnitude* staying 3-digit,
+which both the cited and the actual record share. ✅ **`uix-rcss.md` §8 was corrected in-place by
+`UIX-RCSS-ERRATA-2` (`bdf3f45`, 2026-08-06), citing `tools/rcss_census.py` by name and this census's own
+`999dp`/`-410dp` numbers verbatim** -- the tech-lead independently re-verified both before applying the
+fix (own words: "verified directly by the `tech-lead`, not merely trusted from the report that raised
+them"). This is the loop this census exists to close: measurement → reported divergence → verified →
+fixed in the document that mattered, not left as a standing correction only this census knows about.
+/ **Veredito: DIVERGÊNCIA PARCIAL -- já fechada pela `UIX-RCSS-ERRATA-2`.** ✅ A §8 do `uix-rcss.md` foi
+corrigida no lugar pela `UIX-RCSS-ERRATA-2` (`bdf3f45`, 2026-08-06), citando o `tools/rcss_census.py`
+pelo nome e os números `999dp`/`-410dp` deste censo ao pé da letra -- o tech-lead reverificou os dois de
+forma independente antes de aplicar o conserto. É o laço que este censo existe pra fechar: medição →
+divergência reportada → verificada → corrigida no documento que importava, não deixada como correção
+paralela que só este censo conhece.
 
 ### 3.6 Angle units (citations #13-14)
 
@@ -508,13 +564,25 @@ forma-atalho de 2-stops do `mask-image`", explicitamente nomeada; `vertical-grad
 nenhuma das seções do `uix-rcss.md` que este qa-engineer leu. É a maior lacuna sozinha entre o que a
 seção 9.2 autoriza e o que este corpus de fato usa em produção.
 
-**Verdict / Veredito: DIVERGE (significant).** `docs/effects.md` is out of this census's read scope (not
-excluded by the brief, simply not read to keep this document focused on the corpus, not the shipped
-grammar reference) -- it is plausible `vertical-gradient` is already documented there and simply missing
-from `uix-rcss.md` section 9.2's own table; either way, section 9.2's claim that its function list is
-"per the census's own measured decorator sub-languages" does not match this census's own measurement of
-the same corpus for this one function, and `RMLX-2`'s own header clause ("stop, edit this spec with a
-diff, get the líder's sign-off") applies squarely here before any dumper implements `decorator`.
+**Verdict / Veredito: DIVERGE (significant) -- already closed by `UIX-RCSS-ERRATA-2`, and named by the
+errata itself as "the single most consequential fix in this entire errata pass."** ✅ **`uix-rcss.md`
+§9.2 gained a `vertical-gradient` row (`UIX-RCSS-ERRATA-2`, `bdf3f45`)**, citing 107 corpus occurrences
+across 16 files -- this census's own number, reproduced exactly, plus the errata's own consequence
+analysis this census did not attempt: combined with a separate fix to the fail-high rule (an unknown
+decorator function previously, wrongly, dropped only itself; corrected to drop the **whole property**),
+the pre-fix table would have made **both** independent oracle sides silently agree on the same wrong
+empty output for every one of those 107 declarations -- "a green oracle for the wrong reason," in the
+errata's own words. `docs/effects.md` (out of this census's read scope, not excluded by the brief, just
+not read to stay focused on the corpus) is not what closed the gap; the corpus measurement is what did.
+/ **Veredito: DIVERGÊNCIA (significativa) -- já fechada pela `UIX-RCSS-ERRATA-2`, e nomeada pela própria
+errata como "o conserto mais consequente de toda esta passada de errata."** ✅ A §9.2 do `uix-rcss.md`
+ganhou uma linha `vertical-gradient` (`UIX-RCSS-ERRATA-2`, `bdf3f45`), citando 107 ocorrências de corpus
+em 16 arquivos -- o número deste censo, reproduzido exato, mais a análise de consequência da própria
+errata que este censo não tentou: combinado com um conserto separado na regra fail-high (uma função de
+decorator desconhecida antes, errado, derrubava só a si mesma; corrigido pra derrubar a propriedade
+**inteira**), a tabela pré-conserto teria feito os **dois** lados independentes do oráculo concordarem em
+silêncio na mesma saída vazia errada em cada uma dessas 107 declarações -- "um oráculo verde pelo motivo
+errado," nas palavras da própria errata.
 
 ### 3.8 Overall unit distribution (citations #16-17, `rmlx-subset.md`)
 
@@ -636,12 +704,28 @@ campos de comprimento presentes" uma vez que zero sem unidade é aceito como tok
 (o próprio parser do RmlUi aceita `0` cru pra qualquer argumento tipo-comprimento), levando o total de
 camada única a 128 = 127 + 1.
 
-**Verdict / Veredito: DIVERGE (significant, high-value finding).** This is exactly the class of claim
-the task brief calls out as most valuable to catch -- an **absence/frequency** claim nobody could
-re-verify without the report, now measured directly against the surviving corpus and found reversed.
-Does not change section 9.1's own *algorithm* (spread still defaults to `0.0000px` when omitted, that
-mechanism is a code fact this census does not adjudicate) -- only the corpus-frequency claim used to
-justify why the default matters.
+**Verdict / Veredito: DIVERGE (significant, high-value finding) -- already closed by
+`UIX-RCSS-ERRATA-2`.** This is exactly the class of claim the task brief calls out as most valuable to
+catch -- an **absence/frequency** claim nobody could re-verify without the report, now measured directly
+against the surviving corpus and found reversed. Does not change section 9.1's own *algorithm* (spread
+still defaults to `0.0000px` when omitted, that mechanism is a code fact this census does not
+adjudicate) -- only the corpus-frequency claim used to justify why the default matters. ✅
+**`uix-rcss.md` §9.1 was corrected in-place (`UIX-RCSS-ERRATA-2`, `bdf3f45`)**, citing an independent
+re-measurement ("script + the tech-lead's own direct declaration-by-declaration walk") that landed at
+**123 of 124** single-layer declarations specifying `spread` explicitly, only 1 omitting it -- same
+finding, same direction, a **small residual against this census's own 127/128** (the errata's own text
+does not explain the 4-declaration gap, and this census does not either; both numbers agree on what
+matters -- the ratio is reversed from the original "124 of 135 omit" claim, not merely off by a little
+-- and the residual is noted here rather than silently reconciled to either number). / **Veredito:
+DIVERGÊNCIA (significativa, achado de alto valor) -- já fechada pela `UIX-RCSS-ERRATA-2`.** ✅ A §9.1 do
+`uix-rcss.md` foi corrigida no lugar (`UIX-RCSS-ERRATA-2`, `bdf3f45`), citando uma remedição
+independente ("script + a própria varredura declaração-por-declaração direta do tech-lead") que chegou
+em **123 de 124** declarações single-layer especificando `spread` explicitamente, só 1 omitindo -- mesmo
+achado, mesma direção, um **pequeno resíduo contra o 127/128 próprio deste censo** (o texto da própria
+errata não explica a lacuna de 4 declarações, e este censo também não -- os dois números concordam no
+que importa: a proporção está invertida contra a afirmação original "124 de 135 omitem", não só um pouco
+fora; o resíduo fica registrado aqui em vez de reconciliado em silêncio com qualquer um dos dois
+números).
 
 ### 4.2 Shorthand value-count distributions (`docs/uix-rcss.md` §6.2 table)
 
@@ -677,7 +761,238 @@ on 1-value only).
 
 ---
 
-## 5. Verdict summary / Resumo de veredito
+## 5. The third origin: RCSS embedded in C++ (production + test/demo) / A terceira origem: RCSS embutida em C++ (produção + teste/demo)
+
+**EN:** This section did not exist in this census's first commit (`0de859f`). The coordinator corrected
+it: RCSS in this repository lives in **three** places, not two --- `.rcss` files, `<style>` blocks
+inside `.rml` (both section 2 already covers), and **C++ string/raw-string literals** in `.cpp`/`.hpp`
+test fixtures and one production file. Excluding the third origin was a scope decision this census made
+explicitly (section 6 of the first commit said so), but the exclusion had a real, measured cost: 3 of
+the original census's own 15 comma-list-selector instances live **only** in the third origin
+(`glintfx/src/ua_stylesheet.hpp`), including the single most important example -- the 16-tag rule that
+is the **first rule in the file** and sets `display: block` on every structural element of every
+document glintfx renders. A census that excludes that file cannot reproduce the evidence that justified
+authorizing comma-list selectors into the `RMLX-2` subset in the first place.
+
+**PT:** Esta seção não existia no primeiro commit deste censo (`0de859f`). O coordenador corrigiu: RCSS
+neste repositório mora em **três** lugares, não dois -- arquivos `.rcss`, blocos `<style>` dentro de
+`.rml` (os dois já cobertos pela seção 2), e **literais de string/raw-string de C++** em fixtures de
+teste/demo `.cpp`/`.hpp` e um arquivo de produção. Excluir a terceira origem foi uma decisão de escopo
+que este censo tomou explicitamente (a seção 6 do primeiro commit dizia isso), mas a exclusão teve um
+custo real, medido: 3 das próprias 15 instâncias de seletor comma-list do censo original só vivem na
+terceira origem (`glintfx/src/ua_stylesheet.hpp`), incluindo o exemplo mais importante sozinho -- a
+regra de 16 tags que é a **primeira regra do arquivo** e põe `display: block` em todo elemento
+estrutural de todo documento que a glintfx renderiza. Um censo que exclui esse arquivo não consegue
+reproduzir a evidência que justificou autorizar seletor comma-list no subconjunto da `RMLX-2` pra
+começo de conversa.
+
+### 5.1 Discovery method: structural, not filename guessing / Método de descoberta: estrutural, não chute de nome de arquivo
+
+**EN:** `tools/rcss_census.py`'s `find_cpp_embedded_rcss_files()` scans every git-tracked `.cpp`/`.hpp`
+(excluding the same two forbidden implementation paths as always) for at least one **self-contained,
+brace-balanced fragment** matching a known RCSS property name -- built from three layers, each added
+because a looser one produced a wrong answer first:
+
+1. **Adjacent C++ string literals separated only by whitespace are merged into one run** (`merge_adjacent_
+   literal_runs`) -- this is not a heuristic, it is C++'s own literal-concatenation rule (`"a" "b"` is
+   byte-identical to `"ab"`), so merging loses zero information. A run broken by real code (`<< some_var
+   <<`) stays broken, and is reported as a **gap**, not guessed.
+2. **Raw-string literals** (`R"delim(...)delim"`) are extracted whole, never merged with a neighbour
+   (already complete on their own).
+3. **Each run is fed to the SAME brace/string-aware block scanner section 1 already uses**
+   (`parse_stylesheet`) -- a run is only counted as a real, extractable block if the scanner finds a
+   **closed** `{...}` pair; an unclosed brace (because the run was truncated by interpolation, or
+   because a test deliberately never closes it -- see 5.3) is routed to `leftover`, never silently
+   treated as valid content. This required a real fix to the scanner itself: a first version accepted
+   `depth != 0` at end-of-text as if the block had closed, which would have **fabricated** content for
+   every truncated/malformed fixture in this section; fixed to route an unclosed brace to leftover,
+   tagged, before any of this section's files were parsed.
+
+**Classification (production vs test/demo) is by CMake registration, not filename pattern.** A file is
+"test/demo" if its path is under `glintfx/tests/`/`glintfx/demos/`, OR its basename is a source argument
+of an `add_executable(...)` call in some `glintfx/tests/**/CMakeLists.txt` -- checked by parsing that
+call's own argument list, not a substring search of the whole CMake file (a substring search would have
+misclassified `ua_stylesheet.hpp` as test/demo, because its basename appears inside a
+`target_compile_definitions(...)` string in `glintfx/tests/uix_style/CMakeLists.txt` -- a path handed to
+a test at runtime, not a source the test is built from). **A first version of this rule guessed by
+filename suffix** (`*_sanity.cpp`/`*_smoke.cpp`/etc.) and silently misclassified
+`glintfx/src/rml/dom_dump_spec_conformance.cpp` as production -- its own header doc-comment says
+"byte-exact oracle", plainly a test, but its name ends in `_conformance`, not one of the guessed
+suffixes; `grep -l dom_dump_spec_conformance glintfx/tests/CMakeLists.txt` finds it registered there
+directly, alongside its sibling `dom_dump_determinism_sanity.cpp`, even though both `.cpp` files live
+under `glintfx/src/rml/` by this repo's own convention (the RMLX-1 DOM-dump oracle tests are co-located
+with the implementation they test). The CMake-registration check replaced the filename guess before this
+section's numbers were produced.
+
+**PT:** O `find_cpp_embedded_rcss_files()` do `tools/rcss_census.py` varre todo `.cpp`/`.hpp` rastreado
+pelo git (excluindo os mesmos dois caminhos de implementação proibidos de sempre) atrás de pelo menos um
+**fragmento auto-contido, balanceado em chave** casando um nome de propriedade RCSS conhecido -- montado
+em três camadas, cada uma acrescentada porque uma mais frouxa deu resposta errada primeiro: ver os 3
+itens acima (bilíngue). **A classificação (produção vs teste/demo) é por registro no CMake, não padrão
+de nome de arquivo.** Ver parágrafo acima (bilíngue) -- uma primeira versão chutava por sufixo de nome e
+classificou em silêncio `glintfx/src/rml/dom_dump_spec_conformance.cpp` como produção; a checagem de
+registro no CMake substituiu o chute antes dos números desta seção serem produzidos.
+
+### 5.2 File inventory: 1 production + 15 test/demo / Inventário de arquivos: 1 produção + 15 teste/demo
+
+**EN:** Reproducible via `python3 tools/rcss_census.py --repo-root . --list-cpp-embedded`. "Blocks"/
+"declarations" are what the scanner **closed and extracted with full confidence**; "truncated runs" are
+runs the scanner refused to guess at (count and byte-length shown, never fabricated):
+
+| File | Category | Closed blocks | Declarations | Truncated runs |
+| :--- | :--- | ---: | ---: | ---: |
+| `glintfx/src/ua_stylesheet.hpp` | **production** | 9 | 13 | 1 (1 byte, trivial) |
+| `glintfx/src/rml/dom_dump_determinism_sanity.cpp` | test/demo | 4 | 4 | 4 |
+| `glintfx/src/rml/dom_dump_spec_conformance.cpp` | test/demo | 2 | 2 | 2 |
+| `glintfx/tests/app_draw2d_smoke.cpp` | test/demo | 1 | 3 | 1 |
+| `glintfx/tests/asset_decode_hostile_sanity.cpp` | test/demo | 2 | 6 | 3 |
+| `glintfx/tests/draw2d_ripple_coexist_sanity.cpp` | test/demo | 3 | 13 | 1 (1 byte, trivial) |
+| `glintfx/tests/draw2d_ui_coexist_sanity.cpp` | test/demo | 1 | 2 | 1 |
+| `glintfx/tests/uix/dom_tree_sanity.cpp` | test/demo | 2 | 2 | 2 |
+| `glintfx/tests/uix/dumper_determinism_sanity.cpp` | test/demo | 1 | 1 | 1 |
+| `glintfx/tests/uix/dumper_sanity.cpp` | test/demo | 2 | 2 | 2 |
+| `glintfx/tests/uix/lexer_tokens_sanity.cpp` | test/demo | 5 | 5 | 5 |
+| `glintfx/tests/uix/parser_hardening_sanity.cpp` | test/demo | 1 | 1 | 1 |
+| `glintfx/tests/uix/parser_tokens_sanity.cpp` | test/demo | 2 | 2 | 2 |
+| `glintfx/tests/uix/spec_conformance_sanity.cpp` | test/demo | 2 | 2 | 2 |
+| `glintfx/tests/uix_style/lexer_hardening_sanity.cpp` | test/demo | 4 | 6 | 8 |
+| `glintfx/tests/uix_style/lexer_tokens_sanity.cpp` | test/demo | 14 | 22 | 14 |
+| **Total** | **1 production + 15 test/demo = 16** | **55** | **85** | **50** |
+
+**PT:** Reproduzível via `python3 tools/rcss_census.py --repo-root . --list-cpp-embedded`. "Blocos"/
+"declarações" são o que o scanner **fechou e extraiu com confiança total**; "runs truncados" são trechos
+que o scanner recusou a chutar (contagem e tamanho em bytes mostrados, nunca fabricados): ver tabela
+acima (bilíngue).
+
+### 5.3 What did NOT get extracted, and why / O que NÃO foi extraído, e por quê
+
+**EN:** Per this task's own instruction ("declare not-extracted with reason instead of guessing"), three
+distinct reasons account for every truncated run, none silently padded with a guessed value:
+
+1. **Runtime interpolation (`<<`)** -- `app_draw2d_smoke.cpp`, `asset_decode_hostile_sanity.cpp`, and
+   `draw2d_ui_coexist_sanity.cpp` each build one rule (`#box { ... width: <<box_size<<px; ... }` or
+   `img { ... width: <<dp_size<<dp; ... }`) whose numeric value is a C++ **variable**, not a literal --
+   there is no static text that says what number ships at test time, so this census does not print one.
+   The surrounding **static** text (e.g. `app_draw2d_smoke.cpp`'s own `body { margin: 0; padding: 0;
+   background-color: #0a1428; }`, a complete, separate, self-closing rule with no interpolation inside
+   it) **is** extracted, because it is not truncated -- only the one interpolated rule per file is
+   skipped, not the whole file.
+2. **Deliberately malformed fixtures** -- `glintfx/tests/uix_style/lexer_hardening_sanity.cpp` embeds
+   `a { font-family: "never closed` (an intentionally unterminated string, testing the lexer's own
+   hardening against exactly this input) and `a{;;color:red;;}` (empty declarations between semicolons).
+   These are real embedded text, extracted where brace-balanced (`a{;;color:red;;}` closes and is
+   counted), left as truncated leftover where they do not (`"never closed` never closes, correctly never
+   counted as a valid declaration).
+3. **`glintfx/tests/uix_style/lexer_corpus_sanity.cpp` embeds no independent text at all** -- found by
+   the `R"rcss(` marker in this census's very first pass, its own header doc-comment says it "extracts
+   the RCSS payload embedded in `ua_stylesheet.hpp`'s own raw string" **at test runtime**, reading the
+   production file directly rather than duplicating its content -- the file's own raw-string literal is
+   a 5-character placeholder (`" ... "`), not real corpus text. Correctly excluded from the 16-file
+   inventory above (0 closed blocks, 0 truncated bytes -- it does not appear in section 5.2's table
+   because it produced neither).
+
+**PT:** Pela própria instrução desta tarefa ("declare não-extraído com o motivo em vez de adivinhar"),
+três motivos distintos respondem por todo run truncado, nenhum preenchido em silêncio com valor chutado:
+ver os 3 itens acima (bilíngue) -- interpolação em runtime (`<<`), fixture deliberadamente malformada, e
+o caso do `lexer_corpus_sanity.cpp` que não embute texto independente nenhum (lê `ua_stylesheet.hpp`
+direto em runtime, o próprio raw-string dele é só um placeholder de 5 caracteres).
+
+### 5.4 Validation: this section reproduces `rmlx-subset.md`'s own comma-list numbers exactly / Validação: esta seção reproduz exatos os próprios números de comma-list do `rmlx-subset.md`
+
+**EN:** `docs/rmlx-subset.md` section 6.1 already states, from the original (now-lost) census: **"15
+instâncias across 8 arquivos-fonte"** in the census's own prose, but **"15 rows, 13 unique paths"**
+counted by hand against that same report's own exhaustive table -- and names 3 of those 15 rows as
+living in `glintfx/src/ua_stylesheet.hpp`. Folding **only the production file** into this census (85
+files + `ua_stylesheet.hpp` = 86) reproduces **both** numbers exactly:
+
+```
+python3 tools/rcss_census.py --repo-root . --include-hpp glintfx/src/ua_stylesheet.hpp
+  -> comma_list_rules = 15
+  -> len(files_with_comma_list) = 13
+```
+
+This is the strongest cross-validation in this entire census: two independently-arrived-at headline
+numbers (rows and distinct files), from a report that no longer exists, reproduced byte-for-byte by a
+different tool measuring a different (but overlapping) file set. Folding in the **full** third origin
+(85 + all 16 C++-embedded files = 101) moves the number to **16** comma-list rules -- one more than the
+original census's own 15 -- because `glintfx/tests/uix_style/lexer_tokens_sanity.cpp` embeds a **verbatim
+copy** of `data_model_embed_scene.rcss`'s own comma-list selector (`#hpbox.wide, #namebox.wide,
+#flagwide.wide { display: block; }`, an existing `.rcss` fixture's rule reused as a lexer unit-test
+input) -- real text, correctly extracted, but **not new corpus evidence**, an echo of a rule this census
+already counted once in section 2. This is why production and test/demo are never summed into one
+number without the breakdown: production is new evidence, test/demo can include verbatim echoes of
+evidence counted elsewhere.
+
+**PT:** A seção 6.1 do `docs/rmlx-subset.md` já declara, do censo original (hoje perdido): **"15
+instâncias em 8 arquivos-fonte"** na prosa do próprio censo, mas **"15 linhas, 13 caminhos únicos"**
+contados à mão contra a tabela exaustiva do mesmo relatório -- e nomeia 3 dessas 15 linhas como vivendo
+em `glintfx/src/ua_stylesheet.hpp`. Incluir **só o arquivo de produção** neste censo (85 arquivos +
+`ua_stylesheet.hpp` = 86) reproduz **os dois** números exatos: ver comando acima (bilíngue) -- resultado
+`comma_list_rules = 15`, `13` arquivos distintos.
+
+É a validação cruzada mais forte deste censo inteiro: dois números-manchete chegados de forma
+independente (linhas e arquivos distintos), de um relatório que não existe mais, reproduzidos byte a
+byte por uma ferramenta diferente medindo um conjunto de arquivo diferente (mas sobreposto). Incluir a
+terceira origem **inteira** (85 + os 16 arquivos com C++ embutido = 101) move o número pra **16** regras
+comma-list -- uma a mais que as 15 próprias do censo original -- porque
+`glintfx/tests/uix_style/lexer_tokens_sanity.cpp` embute uma **cópia verbatim** do próprio seletor
+comma-list de `data_model_embed_scene.rcss` (`#hpbox.wide, #namebox.wide, #flagwide.wide { display:
+block; }`, a regra de uma fixture `.rcss` já existente reusada como entrada de teste unitário do lexer)
+-- texto real, extraído corretamente, mas **não é evidência nova de corpus**, é um eco de uma regra que
+este censo já contou uma vez na seção 2. É por isso que produção e teste/demo nunca são somados num
+número só sem a decomposição: produção é evidência nova, teste/demo pode incluir eco verbatim de
+evidência já contada em outro lugar.
+
+### 5.5 Side-by-side numbers, all three tiers / Números lado a lado, os três níveis
+
+**EN:** Reproducible: `--out primary.json` (no flag), `--include-hpp glintfx/src/ua_stylesheet.hpp`
+(+production), `--cpp-embedded` (+production +test/demo, full 101-file scope):
+
+| Metric | Primary (85 files) | +production (86 files) | +production+test/demo (101 files) | `rmlx-subset.md` §6 claim |
+| :--- | ---: | ---: | ---: | ---: |
+| Top-level style blocks | 850 | 859 | 905 | 866 |
+| Declarations | 3388 | 3401 | 3469 | 3424 |
+| Comma-list rules | 12 | **15** | 16 | **15** |
+| Distinct files with a comma-list rule | 12 | **13** | 14 | **13** |
+| `:hover` (composite, this repo's corpus) | 37 | 37 | 38 | 37 (`rmlx-subset.md` §6.2's own table) |
+| `dp` unit instances | 2231 | **2237** | 2248 | **2237** |
+| `px` unit instances | 330 | 330 | 338 | 334 |
+| `%` unit instances | 209 | 209 | 209 | 207 |
+| unitless numeric instances | 163 | 163 | 181 | 171 |
+
+**Reading this table:** the **+production** column (86 files) is the closest reconstruction of what the
+original, now-lost census actually measured -- it reproduces the comma-list headline numbers (15/13)
+exactly and the `dp` unit count (2237) exactly, strong evidence the original census's own file scope
+included `ua_stylesheet.hpp` even though it is not a `.rml`/`.rcss` file. The **+production+test/demo**
+column (101 files, the full third origin) is this census's own, more complete measurement -- useful for
+completeness, but includes at least one verbatim echo (section 5.4) and is not expected to match the
+original census's own numbers, because there is no evidence the original census's scope extended to test
+fixtures at all. `top_level_blocks`/`declarations` still fall short of `rmlx-subset.md`'s own 866/3424
+even at the full 101-file scope (859/3401 at +production, 905/3469 at full scope) -- a residual this
+census does not close, plausibly a fourth source this census's search did not find, or a different
+counting convention (e.g. whether a `@keyframes` step counts as its own "block"); left open rather than
+padded to match.
+
+**PT:** Reproduzível: `--out primary.json` (sem flag), `--include-hpp glintfx/src/ua_stylesheet.hpp`
+(+produção), `--cpp-embedded` (+produção +teste/demo, escopo completo de 101 arquivos): ver tabela acima
+(bilíngue).
+
+**Lendo esta tabela:** a coluna **+produção** (86 arquivos) é a reconstrução mais próxima do que o censo
+original, hoje perdido, de fato mediu -- reproduz os números-manchete de comma-list (15/13) exatos e a
+contagem de unidade `dp` (2237) exata, evidência forte de que o escopo de arquivo do censo original
+incluía `ua_stylesheet.hpp` mesmo não sendo um arquivo `.rml`/`.rcss`. A coluna **+produção+teste/demo**
+(101 arquivos, a terceira origem inteira) é a medição própria, mais completa, deste censo -- útil pra
+completude, mas inclui pelo menos um eco verbatim (seção 5.4) e não se espera que bata com os números
+próprios do censo original, porque não há evidência de que o escopo do censo original se estendesse a
+fixture de teste. `top_level_blocks`/`declarações` ainda ficam abaixo dos próprios 866/3424 do
+`rmlx-subset.md` mesmo no escopo completo de 101 arquivos (859/3401 em +produção, 905/3469 no escopo
+completo) -- um resíduo que este censo não fecha, plausivelmente uma quarta fonte que a busca deste
+censo não achou, ou uma convenção de contagem diferente (ex.: se um passo de `@keyframes` conta como
+"bloco" próprio); deixado em aberto em vez de forçado a bater.
+
+---
+
+## 6. Verdict summary / Resumo de veredito
 
 | # | Claim | Verdict |
 | :--- | :--- | :--- |
@@ -686,27 +1001,40 @@ on 1-value only).
 | 5-6 | Registry built exclusively from measured names | **MATCH** (methodology confirmed, `max-height`/`max-width`/`font-style`/`font-weight` all 0 as claimed) |
 | 7-8 | `max-height`/`max-width` zero-corpus, not shorthand-reachable | **MATCH** (zero confirmed; shorthand-reachability is a code fact, not independently re-derived here) |
 | 9-10 | 4 hex forms, corrects stale comment | **MATCH exact** |
-| 11-12 | Length range 0-3000, largest `-228dp` | **PARTIAL DIVERGE** (range holds; `-228dp` is not the actual max -- `999dp`/`-410dp` are larger) |
+| 11-12 | Length range 0-3000, largest `-228dp` | **PARTIAL DIVERGE, ✅ fixed** -- range holds; `-228dp` was not the actual max (`999dp`/`-410dp` larger); corrected in-place by `UIX-RCSS-ERRATA-2` (`bdf3f45`), citing this census's own numbers |
 | 13-14 | Angle: 24 instances, all `deg`, 0 `rad` | **MATCH exact** |
-| 15 | In-scope decorator function set | **DIVERGE** (`vertical-gradient`, 107 instances, the single most-used decorator function, is absent from §9.2's own table) |
-| 16-17 | 62 files / 866 blocks / 3424 declarations | **CLOSE** (85-file primary scope: 850/3388; 86-file scope incl. `ua_stylesheet.hpp`: 859/3401 -- neither matches exactly, but the `dp`-unit exact match in §3.8 is strong evidence the original scope included the `.hpp`) |
-| bonus | `box-shadow` spread omitted 124/135 | **DIVERGE (significant)** -- measured near-inverse: 127/128 single-layer declarations specify spread explicitly, only 1 omits it |
+| 15 | In-scope decorator function set | **DIVERGE, ✅ fixed** -- `vertical-gradient` (107 instances, single most-used decorator function) was absent from §9.2's own table; `UIX-RCSS-ERRATA-2` added the row, citing this census's number exactly, and named it "the single most consequential fix in this entire errata pass" |
+| 16-17 | 62 files / 866 blocks / 3424 declarations | **CLOSE** (85-file primary scope: 850/3388; +production, 86 files: 859/3401; +production+test/demo, 101 files: 905/3469 -- none matches exactly, but the `dp`-unit exact match at +production, and the comma-list 15/13 exact match at +production, are strong evidence the original scope included `ua_stylesheet.hpp` -- section 5) |
+| bonus | `box-shadow` spread omitted 124/135 | **DIVERGE (significant), ✅ fixed** -- measured near-inverse: 127/128 single-layer declarations specify spread explicitly, only 1 omits it; `UIX-RCSS-ERRATA-2` corrected the ratio (independently re-measured at 123/124, a small residual against this census's own 127/128, same direction/conclusion) |
 | bonus | shorthand value-count shapes | **MATCH** (6/6 shorthands, small residual on `margin`/`padding` 1-value row only) |
+| bonus | third origin: comma-list 15 rows/13 files (`rmlx-subset.md` §6.1) | **MATCH exact** at +production scope (86 files) -- section 5.4, the strongest cross-validation in this census |
+
+**3 of 8 primary citations (#11-15, plus the box-shadow bonus finding) were already corrected in the
+cited document by `UIX-RCSS-ERRATA-2` (`bdf3f45`, 2026-08-06) before this update to this census landed** --
+all three citing this census's own tooling (`tools/rcss_census.py`) or its own numbers by name, and all
+three independently re-verified by the `tech-lead` rather than trusted from this report alone. / **3 das
+8 citações primárias (#11-15, mais o achado bônus do box-shadow) já foram corrigidas no documento citado
+pela `UIX-RCSS-ERRATA-2` (`bdf3f45`, 2026-08-06) antes desta atualização deste censo chegar** -- as três
+citando a própria ferramentagem deste censo (`tools/rcss_census.py`) ou seus próprios números pelo nome,
+e as três reverificadas de forma independente pelo `tech-lead`, não confiadas só neste relatório.
 
 ---
 
-## 6. Known gaps / unreconciled residuals / Lacunas conhecidas / resíduos não reconciliados
+## 7. Known gaps / unreconciled residuals / Lacunas conhecidas / resíduos não reconciliados
 
 **EN:**
-- **Scope boundary, `.hpp`-embedded RCSS:** `glintfx/src/ua_stylesheet.hpp` (production, shipped) is
-  folded in only for the section 3.8/comma-list cross-checks against `rmlx-subset.md`, never for this
-  document's own primary numbers (section 2's table), per this task's explicit "62 `.rml` + 23 `.rcss`"
-  scope. `glintfx/tests/uix_style/lexer_corpus_sanity.cpp` (test fixture, adjacent to the
-  implementation this task excludes) is not read or folded in anywhere, on purpose.
+- **Scope boundary, `.hpp`-embedded RCSS -- CLOSED, section 5.** This was an open gap in this census's
+  first commit (`0de859f`); the coordinator's correction added the discovery+extraction machinery
+  (`--include-hpp`, `--cpp-embedded`, `--list-cpp-embedded`) and section 5 above presents the full
+  three-tier numbers. `glintfx/tests/uix_style/lexer_corpus_sanity.cpp` remains correctly excluded --
+  not by scope decision this time, but because it was measured (section 5.3) to embed no independent
+  text at all (it reads `ua_stylesheet.hpp` at test runtime; its own raw string is a 5-character
+  placeholder).
 - **Small unreconciled residuals** (all 1-5%, none investigated to zero): `px`/`%`/unitless/`auto` unit
-  counts (§3.8), `%` family-(a) subtotal (§3.2), `margin`/`padding` 1-value shorthand counts (§4.2).
-  Each is reported with its exact measured number rather than adjusted to match the doc, per this
-  task's own "report divergence, don't silently reconcile" instruction.
+  counts (§3.8), `%` family-(a) subtotal (§3.2), `margin`/`padding` 1-value shorthand counts (§4.2), and
+  the `top_level_blocks`/`declarations` gap against `rmlx-subset.md`'s own 866/3424 even at full
+  101-file scope (§5.5). Each is reported with its exact measured number rather than adjusted to match
+  the doc, per this task's own "report divergence, don't silently reconcile" instruction.
 - **This census does not verify:** anything inside `glintfx/src/uix/style/**` or
   `glintfx/src/rml/rcss_dump*` (excluded by brief, to protect the differential oracle's author
   independence), the shorthand-expansion source in RmlUi itself (out of this census's read scope), or
@@ -714,16 +1042,19 @@ on 1-value only).
   `rmlx-subset.md` §2, not accessible from here).
 
 **PT:**
-- **Fronteira de escopo, RCSS embutida em `.hpp`:** `glintfx/src/ua_stylesheet.hpp` (produção,
-  shippado) só entra nas checagens cruzadas da seção 3.8/comma-list contra o `rmlx-subset.md`, nunca nos
-  números primários deste documento (tabela da seção 2), pelo escopo explícito "62 `.rml` + 23 `.rcss`"
-  desta tarefa. `glintfx/tests/uix_style/lexer_corpus_sanity.cpp` (fixture de teste, adjacente à
-  implementação que esta tarefa exclui) não é lido nem incluído em lugar nenhum, de propósito.
+- **Fronteira de escopo, RCSS embutida em `.hpp` -- FECHADA, seção 5.** Era uma lacuna aberta no primeiro
+  commit deste censo (`0de859f`); a correção do coordenador acrescentou a maquinaria de
+  descoberta+extração (`--include-hpp`, `--cpp-embedded`, `--list-cpp-embedded`) e a seção 5 acima
+  apresenta os números completos em três níveis. `glintfx/tests/uix_style/lexer_corpus_sanity.cpp`
+  segue corretamente excluído -- não mais por decisão de escopo, mas porque foi medido (seção 5.3) que
+  não embute texto independente nenhum (lê `ua_stylesheet.hpp` em runtime de teste; o próprio raw string
+  dele é um placeholder de 5 caracteres).
 - **Pequenos resíduos não reconciliados** (todos 1-5%, nenhum investigado até zero): contagens de
   unidade `px`/`%`/sem-unidade/`auto` (§3.8), subtotal `%` da família (a) (§3.2), contagens de shorthand
-  1-valor de `margin`/`padding` (§4.2). Cada um reportado com seu número medido exato em vez de ajustado
-  pra bater com o documento, pela própria instrução desta tarefa de "reporte divergência, não reconcilie
-  em silêncio".
+  1-valor de `margin`/`padding` (§4.2), e a lacuna de `top_level_blocks`/`declarações` contra os próprios
+  866/3424 do `rmlx-subset.md` mesmo no escopo completo de 101 arquivos (§5.5). Cada um reportado com
+  seu número medido exato em vez de ajustado pra bater com o documento, pela própria instrução desta
+  tarefa de "reporte divergência, não reconcilie em silêncio".
 - **Este censo não verifica:** nada dentro de `glintfx/src/uix/style/**` ou `glintfx/src/rml/rcss_dump*`
   (excluído pelo brief, pra proteger a independência de autor do oráculo diferencial), o código-fonte de
   expansão de shorthand do próprio RmlUi (fora do escopo de leitura deste censo), nem o repositório

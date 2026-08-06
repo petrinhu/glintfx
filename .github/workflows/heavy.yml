@@ -22,10 +22,12 @@
 #     NO `container:` KEY, ON PURPOSE. The retired Forgejo recipe used
 #     `runs-on: docker` + `container: localhost/glintfx-ci:f42` because the runner lived
 #     on the host and spawned a container per job. Here the runner ITSELF is the
-#     container (tools/ci/Containerfile.runner, built on top of that same
-#     glintfx-ci:f42), so every build dependency is already present in the job's own
-#     filesystem. Adding `container:` would require docker-in-docker or a mounted docker
-#     socket -- more machinery and a way out of the sandbox, for no gain.
+#     container (tools/ci/Containerfile.runner, built on top of glintfx-ci:f44 --
+#     bumped from f42 on 2026-08-06, CI-DISTROMATRIX half A, tag and Containerfile name
+#     renamed together, see Containerfile.f44's own header), so every build dependency
+#     is already present in the job's own filesystem. Adding `container:` would require
+#     docker-in-docker or a mounted docker socket -- more machinery and a way out of the
+#     sandbox, for no gain.
 #
 #     `-j2` IS A LITERAL, NEVER `$(nproc)`. Inside the container nproc still reports the
 #     host's 16 cores, so `--build -j$(nproc)` (what the retired recipe used) would spawn
@@ -63,10 +65,12 @@
 #     SEM A CHAVE `container:`, DE PROPÓSITO. A receita Forgejo aposentada usava
 #     `runs-on: docker` + `container: localhost/glintfx-ci:f42` porque o runner morava no
 #     host e criava um container por job. Aqui o runner É o container
-#     (tools/ci/Containerfile.runner, buildado em cima daquela mesma glintfx-ci:f42),
-#     então toda dependência de build já está no filesystem do próprio job. Adicionar
-#     `container:` exigiria docker-in-docker ou um socket do docker montado -- mais
-#     maquinaria e uma saída do sandbox, sem ganho nenhum.
+#     (tools/ci/Containerfile.runner, buildado em cima da glintfx-ci:f44 -- subiu de f42
+#     em 2026-08-06, CI-DISTROMATRIX metade A, tag e nome do Containerfile renomeados
+#     juntos, ver o próprio cabeçalho do Containerfile.f44), então toda dependência de
+#     build já está no filesystem do próprio job. Adicionar `container:` exigiria
+#     docker-in-docker ou um socket do docker montado -- mais maquinaria e uma saída do
+#     sandbox, sem ganho nenhum.
 #
 #     `-j2` É LITERAL, NUNCA `$(nproc)`. Dentro do container o nproc continua reportando
 #     os 16 núcleos do host, então `--build -j$(nproc)` (o que a receita aposentada usava)
@@ -193,31 +197,40 @@ jobs:
           GLINTFX_CI_MEM_TIMEOUT_S: "2700"
           GLINTFX_CI_MEM_POLL_S: "15"
 
-      # EN: Cache key namespaced "selfhosted-f42" -- deliberately DIFFERENT from the
+      # EN: Cache key namespaced "selfhosted-f44" -- deliberately DIFFERENT from the
       #     ubuntu-latest jobs' "rmlui-${{ runner.os }}-..." keys. The cached path holds
       #     RmlUi's BUILT objects (FetchContent's _deps), so reusing an ubuntu entry here
       #     would risk linking ABI-mismatched objects from a different libc and compiler.
       #     Never unify these keys. On an ephemeral runner the cache is the only thing
       #     that survives between runs, which is exactly why it is worth keeping.
-      # PT: Chave de cache com namespace "selfhosted-f42" -- deliberadamente DIFERENTE das
+      #     Renamed "f42" -> "f44" together with the base image bump (CI-DISTROMATRIX
+      #     half A, 2026-08-06): a stale f42 key would have kept serving objects built
+      #     against Fedora 42's libc/libstdc++, silently defeating the whole point of the
+      #     bump. The first push after this change simply pays a fresh RmlUi build once.
+      # PT: Chave de cache com namespace "selfhosted-f44" -- deliberadamente DIFERENTE das
       #     chaves "rmlui-${{ runner.os }}-..." dos jobs ubuntu-latest. O path cacheado
       #     guarda os objetos JÁ BUILDADOS do RmlUi (_deps do FetchContent), então reusar
       #     uma entrada de ubuntu aqui arriscaria linkar objetos com ABI incompatível, de
       #     outra libc e outro compilador. Nunca unifique estas chaves. Num runner efêmero
       #     o cache é a única coisa que sobrevive entre execuções, que é justamente por
       #     que vale a pena mantê-lo.
+      #     Renomeada "f42" -> "f44" junto com o bump da imagem base (CI-DISTROMATRIX
+      #     metade A, 2026-08-06): uma chave f42 velha continuaria servindo objetos
+      #     buildados contra a libc/libstdc++ do Fedora 42, derrotando em silêncio o
+      #     propósito inteiro do bump. O primeiro push depois desta mudança só paga um
+      #     build de RmlUi do zero uma vez.
       - name: cache rmlui (fetchcontent)
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: glintfx/build-asan-${{ matrix.backend }}/_deps
-          key: rmlui-selfhosted-f42-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+          key: rmlui-selfhosted-f44-sanitize-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
 
       # EN: Every dep (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan) is
       #     baked into the runner image, so there is no install step at all. That is the
-      #     payoff of tools/ci/Containerfile.f42.
+      #     payoff of tools/ci/Containerfile.f44.
       # PT: Toda dep (cmake/git/glfw/freetype/mesa/xkbcommon/xvfb/libasan/libubsan) vem
       #     embutida na imagem do runner, então não existe passo de instalação nenhum. É o
-      #     ganho do tools/ci/Containerfile.f42.
+      #     ganho do tools/ci/Containerfile.f44.
       - name: configure (GLINTFX_SANITIZE=ON)
         run: |
           cmake -S glintfx -B glintfx/build-asan-${{ matrix.backend }} \
@@ -333,7 +346,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: glintfx/build-fonteng-${{ matrix.backend }}/_deps
-          key: rmlui-selfhosted-f42-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+          key: rmlui-selfhosted-f44-fonteng-glfw${{ matrix.backend }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
 
       - name: configure
         run: |

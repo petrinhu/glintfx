@@ -59,7 +59,7 @@
 set -euo pipefail
 
 repo_slug="${GLINTFX_RUNNER_REPO:-petrinhu/glintfx}"
-image="${GLINTFX_RUNNER_IMAGE:-localhost/glintfx-runner:f42}"
+image="${GLINTFX_RUNNER_IMAGE:-localhost/glintfx-runner:f44}"
 container="${GLINTFX_RUNNER_CONTAINER:-glintfx-heavy-runner}"
 labels="${GLINTFX_RUNNER_LABELS:-self-hosted,linux,x64,glintfx-heavy}"
 memory="${GLINTFX_RUNNER_MEMORY:-8g}"

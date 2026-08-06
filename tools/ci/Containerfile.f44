@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # EN: Local reproduction image for glintfx's heavy checks (ASan/LSan/UBSan and the
-#     own-font-engine build) on a Fedora 42 base. Build and use it BY HAND, with plain
+#     own-font-engine build) on a Fedora 44 base. Build and use it BY HAND, with plain
 #     docker -- there is no CI runner on this machine any more (the self-hosted
 #     `claudio` Forgejo runner was shut down on 2026-07-25 and `.forgejo/` was deleted
 #     from the repository):
 #
-#       tools/ci/build_image.sh                       # builds localhost/glintfx-ci:f42
-#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f42 bash -c '<cmd>'
+#       tools/ci/build_image.sh                       # builds localhost/glintfx-ci:f44
+#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f44 bash -c '<cmd>'
 #
 #     Why a pre-baked image instead of a stock distro image: every dep is already
 #     installed, so a ~5 min "dnf install" becomes a no-op against the local image
@@ -15,18 +15,20 @@
 #     inside a job container -- kept so this image stays drop-in usable if the heavy
 #     job is ever ported to a self-hosted GitHub runner (the pending item; the recipe
 #     to port lives at ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml).
-#     Base is fedora:42 deliberately, NOT ubuntu/act-latest: reproducing a
+#     Base is fedora:44 deliberately, NOT ubuntu/act-latest: reproducing a
 #     Fedora-specific failure is the entire point (missing libasan/libubsan and a
-#     clang-only SYS_futex gap were both found this way).
+#     clang-only SYS_futex gap were both found this way, on the fedora:42 base this
+#     image used before the CI-DISTROMATRIX bump to 44 -- see the tag-rename note at
+#     the bottom of this file for why the file itself was renamed, not just FROM).
 #
 # PT: Imagem de reprodução local dos checks pesados da glintfx (ASan/LSan/UBSan e o
-#     build do motor de fonte próprio) sobre uma base Fedora 42. Builde e use À MÃO,
+#     build do motor de fonte próprio) sobre uma base Fedora 44. Builde e use À MÃO,
 #     com docker comum -- não existe mais runner de CI nesta máquina (o runner
 #     self-hosted `claudio` do Forgejo foi desligado em 2026-07-25 e o `.forgejo/` foi
 #     apagado do repositório):
 #
-#       tools/ci/build_image.sh                       # builda localhost/glintfx-ci:f42
-#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f42 bash -c '<cmd>'
+#       tools/ci/build_image.sh                       # builda localhost/glintfx-ci:f44
+#       docker run --rm -v "$PWD":/src -w /src localhost/glintfx-ci:f44 bash -c '<cmd>'
 #
 #     Por que uma imagem pré-assada em vez de uma imagem de distro crua: toda dep já
 #     vem instalada, então um "dnf install" de ~5 min vira um no-op contra o cache
@@ -35,12 +37,14 @@
 #     de um runtime Node pra sequer rodar dentro de um container de job -- mantido pra
 #     esta imagem seguir usável de imediato caso o job pesado seja portado pra um
 #     runner self-hosted do GitHub (a pendência declarada; a receita a portar está em
-#     ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml). A base é fedora:42 de
+#     ~/.claude/receitas-ci/glintfx-heavy-claudio-forgejo.yml). A base é fedora:44 de
 #     propósito, NÃO ubuntu/act-latest: reproduzir falha específica do Fedora é o
 #     objetivo inteiro (libasan/libubsan faltando e um gap de SYS_futex só-do-clang
-#     foram os dois achados assim).
+#     foram os dois achados assim, na base fedora:42 que esta imagem usava antes do
+#     bump do CI-DISTROMATRIX pra 44 -- ver a nota de renomeio de tag no fim deste
+#     arquivo pro motivo do arquivo em si ter sido renomeado, não só o FROM).
 
-FROM fedora:42
+FROM fedora:44
 
 # EN: Single dnf transaction -- fewer layers, faster rebuild-from-cache when only the
 #     package list below changes (dnf metadata refresh is the slow part, not the
@@ -156,8 +160,8 @@ RUN dnf -y update && \
     && dnf clean all
 
 # EN: Sanity marker only (not consumed by any workflow) -- lets a human confirm the
-#     right image landed via `docker run --rm localhost/glintfx-ci:f42 cat /etc/glintfx-ci-image`.
+#     right image landed via `docker run --rm localhost/glintfx-ci:f44 cat /etc/glintfx-ci-image`.
 # PT: Apenas marcador de sanidade (não consumido por nenhum workflow) -- permite um
 #     humano confirmar que a imagem certa chegou via
-#     `docker run --rm localhost/glintfx-ci:f42 cat /etc/glintfx-ci-image`.
-RUN echo "glintfx-ci:f42 (fedora:42, local reproduction image for the heavy checks)" > /etc/glintfx-ci-image
+#     `docker run --rm localhost/glintfx-ci:f44 cat /etc/glintfx-ci-image`.
+RUN echo "glintfx-ci:f44 (fedora:44, local reproduction image for the heavy checks)" > /etc/glintfx-ci-image

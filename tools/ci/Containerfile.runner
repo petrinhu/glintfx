@@ -1,14 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # EN: The GitHub Actions self-hosted runner for glintfx's heavy checks, as a container
-#     image. Built ON TOP of localhost/glintfx-ci:f42 (tools/ci/Containerfile.f42), so
+#     image. Built ON TOP of localhost/glintfx-ci:f44 (tools/ci/Containerfile.f44), so
 #     every build dependency is already baked in and the workflow needs NO `container:`
 #     key: the runner process and the job steps share this one image. That is deliberate
 #     -- the alternative (runner on the host creating a job container) would need
 #     docker-in-docker or a mounted docker socket, which is both extra machinery and an
 #     escape hatch out of the container we do not want on a machine the lead works on.
 #
+#     Base bumped fedora:42 -> fedora:44 (CI-DISTROMATRIX half A, 2026-08-06) --
+#     tag and filename renamed together (glintfx-ci:f42 -> glintfx-ci:f44,
+#     Containerfile.f42 -> Containerfile.f44), not left pointing an old name at new
+#     content. See Containerfile.f44's own header for the base-image rationale.
+#
 #     How it is used (see tools/ci/runner_up.sh for the host side):
-#       tools/ci/build_runner_image.sh          # builds localhost/glintfx-runner:f42
+#       tools/ci/build_runner_image.sh          # builds localhost/glintfx-runner:f44
 #       tools/ci/runner_up.sh                   # mints a token and runs ONE ephemeral runner
 #     and, as a supervised service, tools/ci/glintfx-heavy-runner.service
 #     (`systemd --user`, Restart=always, because an --ephemeral runner exits after
@@ -31,16 +36,22 @@
 #     image is the single source of truth for which runner binary is in use.
 #
 # PT: O runner self-hosted do GitHub Actions para os checks pesados da glintfx, como
-#     imagem de container. Buildado EM CIMA da localhost/glintfx-ci:f42
-#     (tools/ci/Containerfile.f42), então toda dependência de build já vem embutida e o
+#     imagem de container. Buildado EM CIMA da localhost/glintfx-ci:f44
+#     (tools/ci/Containerfile.f44), então toda dependência de build já vem embutida e o
 #     workflow NÃO precisa da chave `container:`: o processo do runner e os passos do job
 #     compartilham esta mesma imagem. Isso é deliberado -- a alternativa (runner no host
 #     criando um container de job) exigiria docker-in-docker ou um socket do docker
 #     montado, que é maquinaria extra e uma porta de fuga do container que não queremos
 #     numa máquina em que o líder trabalha.
 #
+#     Base subiu fedora:42 -> fedora:44 (CI-DISTROMATRIX metade A, 2026-08-06) -- tag e
+#     nome de arquivo renomeados juntos (glintfx-ci:f42 -> glintfx-ci:f44,
+#     Containerfile.f42 -> Containerfile.f44), sem deixar um nome antigo apontando pra
+#     conteúdo novo. Ver o próprio cabeçalho do Containerfile.f44 pro racional da imagem
+#     base.
+#
 #     Como se usa (o lado do host está em tools/ci/runner_up.sh):
-#       tools/ci/build_runner_image.sh          # builda localhost/glintfx-runner:f42
+#       tools/ci/build_runner_image.sh          # builda localhost/glintfx-runner:f44
 #       tools/ci/runner_up.sh                   # minta um token e roda UM runner efêmero
 #     e, como serviço supervisionado, tools/ci/glintfx-heavy-runner.service
 #     (`systemd --user`, Restart=always, porque um runner `--ephemeral` sai depois de
@@ -63,7 +74,7 @@
 #     em tools/ci/runner_entrypoint.sh impede o runner de se auto-atualizar em silêncio,
 #     então a imagem é a fonte única de verdade sobre qual binário de runner está em uso.
 
-FROM localhost/glintfx-ci:f42
+FROM localhost/glintfx-ci:f44
 
 # EN: Pinned runner release + the SHA256 published by GitHub in that release's own body
 #     (`gh api repos/actions/runner/releases/latest --jq .body`, the
@@ -140,7 +151,7 @@ COPY --chown=runner:runner runner_entrypoint.sh /home/runner/runner_entrypoint.s
 # EN: Sanity marker, same convention as the base image.
 # PT: Marcador de sanidade, mesma convenção da imagem base.
 USER root
-RUN echo "glintfx-runner:f42 (actions/runner ${RUNNER_VERSION} on glintfx-ci:f42)" > /etc/glintfx-runner-image \
+RUN echo "glintfx-runner:f44 (actions/runner ${RUNNER_VERSION} on glintfx-ci:f44)" > /etc/glintfx-runner-image \
     && chmod 0755 /home/runner/runner_entrypoint.sh
 USER runner
 

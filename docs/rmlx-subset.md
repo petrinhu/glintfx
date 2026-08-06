@@ -1,7 +1,7 @@
 # RMLX subset spec (what the RmlUi-elimination arc may build)
 
-> **EN:** The frozen boundary for `RMLX-1..11` (`TODO.md`): exactly what RmlUi surface glintfx's own DOM/RCSS/layout/data-binding/effects/animation/widgets engine is allowed to reimplement, backed by two independent censuses (glintfx's own contact with RmlUi, and GusWorld's measured RCSS usage) plus the four value-type decisions the anticorruption layer already ships. Diátaxis type: **reference**. Audience: the implementer of any `RMLX-*` wave, and whoever reviews it. Owner: `software-architect`; written **2026-08-04** against `main` at `83b0649`, one wave (`RMLX-0`) fully delivered (`F1`-`F4`).
-> **PT:** A fronteira congelada para `RMLX-1..11` (`TODO.md`): exatamente qual superfície do RmlUi o motor próprio de DOM/RCSS/layout/data-binding/efeitos/animação/widgets da glintfx tem permissão de reimplementar, apoiada em dois censos independentes (o contato da própria glintfx com o RmlUi, e o uso de RCSS medido no GusWorld) mais as quatro decisões de tipo-valor que a camada anticorrupção já entrega. Tipo Diátaxis: **reference**. Audiência: quem implementa qualquer onda `RMLX-*`, e quem a revisa. Owner: `software-architect`; escrito em **2026-08-04** contra `main` em `83b0649`, com uma onda (`RMLX-0`) inteiramente entregue (`F1`-`F4`).
+> **EN:** The frozen boundary for `RMLX-1..11` (`TODO.md`): exactly what RmlUi surface glintfx's own DOM/RCSS/layout/data-binding/effects/animation/widgets engine is allowed to reimplement, backed by two independent censuses (glintfx's own contact with RmlUi, and GusWorld's measured RCSS usage) plus the four value-type decisions the anticorruption layer already ships. Diátaxis type: **reference**. Audience: the implementer of any `RMLX-*` wave, and whoever reviews it. Owner: `software-architect`; written **2026-08-04** against `main` at `83b0649`, one wave (`RMLX-0`) fully delivered (`F1`-`F4`). **Amended 2026-08-06 (§6, EN / §6, PT):** the líder's two `RMLX-2` decisions on comma-list selectors and unit parity, plus the selector-form census that closes this document's own naming gap -- see `TODO.md`'s `RMLX-2` entry ("TRÊS DECISÕES DO LÍDER 2026-08-06") for the source record.
+> **PT:** A fronteira congelada para `RMLX-1..11` (`TODO.md`): exatamente qual superfície do RmlUi o motor próprio de DOM/RCSS/layout/data-binding/efeitos/animação/widgets da glintfx tem permissão de reimplementar, apoiada em dois censos independentes (o contato da própria glintfx com o RmlUi, e o uso de RCSS medido no GusWorld) mais as quatro decisões de tipo-valor que a camada anticorrupção já entrega. Tipo Diátaxis: **reference**. Audiência: quem implementa qualquer onda `RMLX-*`, e quem a revisa. Owner: `software-architect`; escrito em **2026-08-04** contra `main` em `83b0649`, com uma onda (`RMLX-0`) inteiramente entregue (`F1`-`F4`). **Emendado em 2026-08-06 (§6 EN / §6 PT):** as duas decisões do líder na `RMLX-2` sobre seletor com lista de vírgula e paridade de unidades, mais o censo de formas de seletor que fecha a lacuna de nomeação do próprio documento -- ver o item `RMLX-2` do `TODO.md` ("TRÊS DECISÕES DO LÍDER 2026-08-06") pelo registro-fonte.
 
 ---
 
@@ -121,6 +121,71 @@ The gate's check (d) currently reports exactly these 4 files, all holding a forw
 
 **The 4 tests with a deliberate RmlUi include** (`domrw_sanity.cpp`, `focus_sanity.cpp`, `form_events_sanity.cpp`, `document_reload_leak.cpp`, section 4's frozen test whitelist) are, by the same reasoning, differential/oracle tests against the *real* RmlUi -- they retire at `RMLX-11` too, or are rewritten earlier as A/B oracles once the relevant wave (`RMLX-1` DOM, `RMLX-5` events, `RMLX-1` DOM-reload) has a native engine to compare against, at the discretion of that wave's implementer, subject to the same "edit this spec first" clause in the header.
 
+### 6. Amendment 2026-08-06 -- comma-list selectors, full unit parity, and the closed selector-form census
+
+**Decided by:** the líder, 2026-08-06, on the evidence of `UIX-RCSS-CENSUS` -- an independent measurement (`qa-engineer`, read-only, no repo writes) covering **62 source files**, **866 style blocks**, **3424 declarations**; report at `/var/tmp/censo-rcss-qa1/censo.md` (scratch, not checked into the repo -- the tables below are this section's durable copy of the parts that bind a `RMLX-*` wave). Recorded verbatim in `TODO.md`'s `RMLX-2` entry ("TRÊS DECISÕES DO LÍDER 2026-08-06"). This section is the diff the header clause requires before any `RMLX-2` slice may use either construct -- `docs/uix-rcss.md` (written the same day, before this amendment landed) already assumed both decisions and cited `TODO.md` directly for the selector scope this section now states as this document's own; going forward, cite this section instead.
+
+#### 6.1 Decision 1 -- comma-list selectors (`.a, .b { }`) are authorized
+
+Not a corner case: the census found **15 instances across 8 source files**, 3 of them in glintfx's own `glintfx/src/ua_stylesheet.hpp` -- including a **16-tag list in a single rule** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, lines 99-102) that is the **first rule in the file** and sets `display: block` on every structural element of every document glintfx renders. Without this selector form, the new engine cannot apply its own base stylesheet, and every document renders wrong from the first frame. The full 15, exhaustive:
+
+| # | File:line | Full selector |
+| :--- | :--- | :--- |
+| 1 | `glintfx/tests/data_model_embed_scene.rcss:81` | `#hpbox.wide, #namebox.wide, #flagwide.wide` |
+| 2 | `glintfx/tests/form_events_scene.rcss:26` | `div, span, input` |
+| 3 | `glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml:104` | `.apnum, .mananum` |
+| 4 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_carregar_dois_slots_ocupados.rml:62` | `#slmenu-list scrollbarvertical sliderarrowdec, #slmenu-list scrollbarvertical sliderarrowinc` |
+| 5 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_salvar_com_autosave.rml:61` | same pair, sibling screen-state fixture |
+| 6 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_salvar_todos_vazios.rml:61` | same pair |
+| 7 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_audio_sliders.rml:362` | `#ctrl-list scrollbarvertical sliderarrowdec, #ctrl-list scrollbarvertical sliderarrowinc` |
+| 8 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_categorias.rml:363` | same pair |
+| 9 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_controles_tabela.rml:363` | same pair |
+| 10 | `glintfx/src/uix/dom/test_fixtures/system_menu__confirmacao_menu_inicial.rml:363` | same pair |
+| 11 | `glintfx/src/uix/dom/test_fixtures/system_menu__pause_raiz.rml:362` | same pair |
+| 12 | `glintfx/tests/fonteng_colr_scene.rml:100` | `#two_layer, #two_layer_vs16, #fg_sentinel` |
+| 13 | `glintfx/src/ua_stylesheet.hpp:99-102` | 16-tag list (above) -- the UA-stylesheet base rule |
+| 14 | `glintfx/src/ua_stylesheet.hpp:120-121` | `scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc` |
+| 15 | `glintfx/src/ua_stylesheet.hpp:140-141` | `scrollbarhorizontal sliderarrowdec, scrollbarhorizontal sliderarrowinc` |
+
+**Correction on record, the orchestrator's own error:** an earlier pass reported **1** occurrence, wrong twice in opposite directions -- first counting a comment as a match, then requiring the comma and the `{` on the same source line (the UA-stylesheet's own rule wraps across 4 lines). The census number above is the one that governs (`TODO.md`'s `RMLX-2` entry; see also `feedback_controle_positivo_e_ciclo_do_bus` for the full account).
+
+**A second, smaller discrepancy found while writing this amendment, left on record rather than silently reconciled:** the census's own prose (its section 1.1) states "15 usos em 8 arquivos-fonte distintos," and `TODO.md`'s `RMLX-2` entry repeats "8 arquivos" verbatim -- but the census's own exhaustive table (its section 1.2, reproduced whole above) lists **13 distinct file paths**, not 8 (`data_model_embed_scene.rcss`, `form_events_scene.rcss`, `gusworld_battle_cockpit.rml`, 3 distinct `save_load_menu__*.rml` fixtures, 5 distinct `system_menu__*.rml` fixtures, `fonteng_colr_scene.rml`, and `ua_stylesheet.hpp` counted once despite holding 3 of the 15 rows). Counted by hand, twice, against the table above: 15 rows, 13 unique paths. This does not change decision 1 -- 13 files is, if anything, stronger evidence for authorizing the form than 8 -- but it means the "8" figure is the census's own summary undercounting its own table, not a fact this amendment re-derives. Whoever needs the precise file count in the future should count the table in 6.1 directly, the same discipline section 1.3 already applies to a different pair of numbers in this document.
+
+#### 6.2 Closing the gap decision 1 exposes -- every selector form this document authorizes, by count
+
+Section 2's real-zero cuts (`nth-child`, `:not(`, `z-index`) name individual pseudo-classes and one property, never a selector *form* -- so before this amendment, the header clause's own rule ("every selector this document does not name is out of scope by default") left **every** selector form out of scope by omission, including the ones already shipping in glintfx's own UA-stylesheet. This table closes that gap with `UIX-RCSS-CENSUS` section 1's full result -- **1073 selector instances across 319 distinct selectors, in 842 rules**, covering both zero and non-zero forms alike:
+
+| Form | Instances | Authorized | Example `file:line` |
+| :--- | ---: | :--- | :--- |
+| `.class` | 590 | **yes** | `glintfx/demos/showcase/showcase.rcss:40` -- `.section-dark` |
+| `#id` | 183 | **yes** | `glintfx/tests/app_process_event_scene.rcss:23` -- `#btn_a` |
+| descendant (space) | 131 | **yes** | `glintfx/tests/click_scene.rcss:12` -- `#panel span` |
+| tag | 110 | **yes** | `glintfx/demos/showcase/showcase.rcss:17` -- `body` |
+| pseudo-class, composite (`.foo:hover`/`#foo:hover`; `:hover` is the only pseudo-class found) | 37 | **yes**, `:hover` only | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
+| comma-list (multiple selectors, one rule) | 15 | **yes -- this amendment** | `glintfx/src/ua_stylesheet.hpp:99-102` |
+| compound, no combinator (`tag.class`/`tag#id`) | 5 | **yes** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
+| child (`>`) | 2 | **yes** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
+| universal (`*`) | **0** | **no -- fail-high** | -- |
+| attribute (`[x]`) | **0** | **no -- fail-high** | -- |
+| adjacent/general sibling (`+`/`~`) | **0** | **no -- fail-high** | -- |
+| `nth-child`, `:not(` | **0** (already named §2) | **no -- fail-high** | -- |
+
+Every measured selector instance in the census matches an authorized form -- the corpus does not already contain an unauthorized construct in real use. This is now `docs/rmlx-subset.md`'s own selector-form boundary; `docs/uix-rcss.md` section 11's own restatement of it should cite this section going forward, rather than `TODO.md`'s `RMLX-2` entry directly.
+
+⚠️ **Zero in this corpus is not an argument to ban.** glintfx's target is broad distribution, not GusWorld-plus-glintfx's-own-test-corpus -- "zero in these two repositories" is a statement about two repositories, never about the world (see `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). What stays out today stays out **under the fail-high policy** already canonized by `polygon()` and restated by `docs/uix-rcss.md` section 11: an unrecognized selector form fails the *whole rule* to register (never the whole stylesheet, never a partial/guessed match), logged naming the raw selector text and `file:line` -- never a silent break. Authorizing more selector forms later follows the header clause exactly as this amendment did: stop, edit this spec with a diff, get the líder's sign-off, then implement.
+
+#### 6.3 Decision 2 -- units: full parity with what the old engine accepts, not the measured minimum
+
+The census measured 8 units in real use (`dp` 2237, `px` 334, `%` 207, unitless 171, `auto` 33, `deg` 24, `s` 4, `em` 1 -- zero `rem`/`vw`/`vh`/`ms`). The líder chose **full clean-room parity with every unit RmlUi itself accepts**, not the 8-unit measured floor, trading the larger implementation effort for compatibility with whoever migrates a stylesheet glintfx has never seen. This is binding for `RMLX-2`'s parser and cascade regardless of which units this corpus happens to exercise today -- the measured 8 are the **evidence that informed weighing the decision**, not the resulting scope.
+
+🔴 **Independent of the unit list, this document records what the líder's decision text itself requires stated explicitly: `%` is three distinct semantics, not one.** A single generic `resolve_percent()` is wrong by construction, and two independent implementers (side A vs. side B of `RMLX-2`'s differential oracle, `docs/uix-rcss.md`) would diverge exactly there if this were left implicit:
+
+1. **Box-relative** (`width`/`height`/`left`/`top`, 103 of the corpus's 207 `%` instances) -- resolves against the containing block's own dimension, the standard CSS model; requires the container's box resolved **before** the child's `%`.
+2. **Gradient stop position** (`decorator: linear-gradient()`/`radial-gradient()`, the majority of the 104 `%` instances counted under `decorator`) -- `0%..100%` along the gradient's own axis, unrelated to the element's box.
+3. **Radial-gradient center coordinate** (`radial-gradient(circle at 35% 30%, ...)`) -- the two percentages are X/Y coordinates inside the decorator's own 2D box, a third semantics, neither the gradient axis nor layout's containing block.
+
+`docs/uix-rcss.md` section 5 already implements this three-way split in the dump format that ships `RMLX-2`'s oracle; this amendment is what makes that split a decision **this** document -- the one with sign-off authority under the header clause -- also records, not only an implementer's private inference from the dump spec alone.
+
 ---
 
 ## Português
@@ -230,3 +295,68 @@ O check (d) do gate reporta hoje exatamente estes 4 arquivos, todos carregando u
 **Por que os 4 quitam na `RMLX-11` (excisão) e não antes, nem sequer na `RMLX-10` (o flip):** o próprio escopo da `RMLX-10`, citando o `TODO.md`, é explicitamente modelado no flip **suave** do `ADR-0011` -- `GLINTFX_OWN_UI_ENGINE=ON` vira o *default*, "o RmlUi vira rollback selecionável em runtime, exatamente como o FreeType virou no ADR-0011". Um flip suave, pelo próprio precedente daquele ADR, mantém a dependência antiga **plenamente linkada e seus tipos vivos** como caminho de rollback; só o *default* muda. `Rml::Context`/`Rml::SystemInterface`/`Rml::RenderInterface` portanto seguem sendo tipos reais e vivos durante toda a `RMLX-10`, independente de qual motor está selecionado em runtime. Só podem de fato sumir dessas 4 assinaturas na `RMLX-11` -- "o RmlUi sai do repo" (`FetchContent` removido, patch removido, `NOTICE` atualizado) -- que é precisamente quando não existe mais rollback nenhum pra manter um tipo vivo. Atribuir uma onda anterior a qualquer um dos 4 exigiria chutar que uma onda específica para de precisar do ponteiro por coincidência enquanto o RmlUi ainda está linkado como fallback, o que não é evidência que este documento tem; a `RMLX-11` é a única onda cujo próprio escopo declarado garante isso estruturalmente.
 
 **Os 4 testes com include deliberado de RmlUi** (`domrw_sanity.cpp`, `focus_sanity.cpp`, `form_events_sanity.cpp`, `document_reload_leak.cpp`, a whitelist congelada de teste da seção 4) são, pela mesma lógica, testes de oráculo/diferencial contra o RmlUi *real* -- quitam na `RMLX-11` também, ou são reescritos antes como oráculos A/B assim que a onda relevante (`RMLX-1` DOM, `RMLX-5` eventos, `RMLX-1` DOM-reload) tiver um motor nativo pra comparar, a critério do implementer daquela onda, sujeito à mesma cláusula de "edite esta spec primeiro" do cabeçalho.
+
+### 6. Emenda 2026-08-06 -- seletor com lista de vírgula, paridade completa de unidades, e o censo de seletor que fecha a lacuna
+
+**Decidido por:** o líder, em 2026-08-06, com a evidência do `UIX-RCSS-CENSUS` -- medição independente (`qa-engineer`, só-leitura, zero escrita no repo) cobrindo **62 arquivos-fonte**, **866 blocos de estilo**, **3424 declarações**; relatório em `/var/tmp/censo-rcss-qa1/censo.md` (scratch, não versionado -- as tabelas abaixo são a cópia durável desta seção das partes que vinculam uma onda `RMLX-*`). Registrado ao pé da letra no item `RMLX-2` do `TODO.md` ("TRÊS DECISÕES DO LÍDER 2026-08-06"). Esta seção é o diff que a cláusula do cabeçalho exige antes de qualquer fatia da `RMLX-2` poder usar qualquer uma das duas construções -- o `docs/uix-rcss.md` (escrito no mesmo dia, antes desta emenda existir) já assumia as duas decisões e citava o `TODO.md` direto pro escopo de seletor que esta seção agora registra como próprio deste documento; daqui em diante, citar esta seção.
+
+#### 6.1 Decisão 1 -- seletor com lista de vírgula (`.a, .b { }`) está autorizado
+
+Não é caso de canto: o censo achou **15 ocorrências em 8 arquivos-fonte**, 3 delas na própria `glintfx/src/ua_stylesheet.hpp` -- incluindo uma **lista de 16 tags numa regra só** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, linhas 99-102) que é a **primeira regra do arquivo** e dá `display: block` a todo elemento estrutural de todo documento que a glintfx renderiza. Sem essa forma de seletor, o motor novo não aplica a própria folha base, e todo documento renderiza errado desde o primeiro frame. As 15, exaustivas:
+
+| # | Arquivo:linha | Seletor completo |
+| :--- | :--- | :--- |
+| 1 | `glintfx/tests/data_model_embed_scene.rcss:81` | `#hpbox.wide, #namebox.wide, #flagwide.wide` |
+| 2 | `glintfx/tests/form_events_scene.rcss:26` | `div, span, input` |
+| 3 | `glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml:104` | `.apnum, .mananum` |
+| 4 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_carregar_dois_slots_ocupados.rml:62` | `#slmenu-list scrollbarvertical sliderarrowdec, #slmenu-list scrollbarvertical sliderarrowinc` |
+| 5 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_salvar_com_autosave.rml:61` | mesmo par, fixture irmã de screen-state |
+| 6 | `glintfx/src/uix/dom/test_fixtures/save_load_menu__modo_salvar_todos_vazios.rml:61` | mesmo par |
+| 7 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_audio_sliders.rml:362` | `#ctrl-list scrollbarvertical sliderarrowdec, #ctrl-list scrollbarvertical sliderarrowinc` |
+| 8 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_categorias.rml:363` | mesmo par |
+| 9 | `glintfx/src/uix/dom/test_fixtures/system_menu__config_controles_tabela.rml:363` | mesmo par |
+| 10 | `glintfx/src/uix/dom/test_fixtures/system_menu__confirmacao_menu_inicial.rml:363` | mesmo par |
+| 11 | `glintfx/src/uix/dom/test_fixtures/system_menu__pause_raiz.rml:362` | mesmo par |
+| 12 | `glintfx/tests/fonteng_colr_scene.rml:100` | `#two_layer, #two_layer_vs16, #fg_sentinel` |
+| 13 | `glintfx/src/ua_stylesheet.hpp:99-102` | lista de 16 tags (acima) -- a regra base da UA-stylesheet |
+| 14 | `glintfx/src/ua_stylesheet.hpp:120-121` | `scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc` |
+| 15 | `glintfx/src/ua_stylesheet.hpp:140-141` | `scrollbarhorizontal sliderarrowdec, scrollbarhorizontal sliderarrowinc` |
+
+**Correção registrada, erro do próprio orquestrador:** uma passada anterior reportou **1** ocorrência, errando duas vezes em direções opostas -- primeiro contando um comentário como se batesse, depois exigindo a vírgula e o `{` na mesma linha-fonte (a própria regra da UA-stylesheet quebra em 4 linhas). O número do censo acima é o que vale (item `RMLX-2` do `TODO.md`; ver também `feedback_controle_positivo_e_ciclo_do_bus` pro relato completo).
+
+**Uma segunda divergência, menor, achada ao escrever esta emenda, registrada em vez de reconciliada em silêncio:** a própria prosa do censo (seção 1.1 dele) diz "15 usos em 8 arquivos-fonte distintos", e o item `RMLX-2` do `TODO.md` repete "8 arquivos" ao pé da letra -- mas a própria tabela exaustiva do censo (seção 1.2 dele, reproduzida inteira acima) lista **13 caminhos de arquivo distintos**, não 8 (`data_model_embed_scene.rcss`, `form_events_scene.rcss`, `gusworld_battle_cockpit.rml`, 3 fixtures `save_load_menu__*.rml` distintas, 5 fixtures `system_menu__*.rml` distintas, `fonteng_colr_scene.rml`, e `ua_stylesheet.hpp` contado uma vez apesar de carregar 3 das 15 linhas). Contado à mão, duas vezes, contra a tabela acima: 15 linhas, 13 caminhos únicos. Isso não muda a decisão 1 -- 13 arquivos é, se algo, evidência mais forte pra autorizar a forma do que 8 -- mas significa que a cifra "8" é o próprio resumo do censo subcontando a própria tabela dele, não um fato que esta emenda re-deriva. Quem precisar da contagem exata de arquivo no futuro deve contar a tabela da seção 6.1 diretamente, a mesma disciplina que a seção 1.3 já aplica a outro par de números deste documento.
+
+#### 6.2 Fechando a lacuna que a decisão 1 expõe -- toda forma de seletor que este documento autoriza, com contagem
+
+Os cortes de zero real da seção 2 (`nth-child`, `:not(`, `z-index`) nomeiam pseudo-classes individuais e uma propriedade, nunca uma *forma* de seletor -- então, antes desta emenda, a própria regra da cláusula do cabeçalho ("todo seletor que este documento não nomeia está fora de escopo por padrão") deixava **toda** forma de seletor fora de escopo por omissão, incluindo as que já rodam na própria UA-stylesheet da glintfx. Esta tabela fecha essa lacuna com o resultado completo da seção 1 do `UIX-RCSS-CENSUS` -- **1073 instâncias de seletor em 319 seletores distintos, dentro de 842 regras**, cobrindo formas com zero e com uso real igualmente:
+
+| Forma | Instâncias | Autorizada | Exemplo `arquivo:linha` |
+| :--- | ---: | :--- | :--- |
+| `.classe` | 590 | **sim** | `glintfx/demos/showcase/showcase.rcss:40` -- `.section-dark` |
+| `#id` | 183 | **sim** | `glintfx/tests/app_process_event_scene.rcss:23` -- `#btn_a` |
+| descendente (espaço) | 131 | **sim** | `glintfx/tests/click_scene.rcss:12` -- `#panel span` |
+| tag | 110 | **sim** | `glintfx/demos/showcase/showcase.rcss:17` -- `body` |
+| pseudo-classe, composto (`.foo:hover`/`#foo:hover`; `:hover` é a única pseudo-classe encontrada) | 37 | **sim**, só `:hover` | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
+| lista com vírgula (vários seletores, uma regra) | 15 | **sim -- esta emenda** | `glintfx/src/ua_stylesheet.hpp:99-102` |
+| composto, sem combinador (`tag.classe`/`tag#id`) | 5 | **sim** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
+| filho (`>`) | 2 | **sim** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
+| universal (`*`) | **0** | **não -- fail-high** | -- |
+| atributo (`[x]`) | **0** | **não -- fail-high** | -- |
+| irmão adjacente/geral (`+`/`~`) | **0** | **não -- fail-high** | -- |
+| `nth-child`, `:not(` | **0** (já nomeados na §2) | **não -- fail-high** | -- |
+
+Toda instância de seletor medida no censo casa com uma forma autorizada -- o corpus não contém, hoje, nenhuma construção não-autorizada já em uso real. Esta é agora a fronteira de forma-de-seletor do próprio `docs/rmlx-subset.md`; a seção 11 do `docs/uix-rcss.md`, ao restatar isso, deve citar esta seção daqui em diante, em vez do item `RMLX-2` do `TODO.md` direto.
+
+⚠️ **Zero neste corpus não é argumento para banir.** O alvo da glintfx é distribuição ampla, não GusWorld-mais-o-corpus-de-teste-da-própria-glintfx -- "zero nestes dois repositórios" é uma afirmação sobre dois repositórios, nunca sobre o mundo (ver `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). O que fica fora hoje fica fora **sob a política fail-high** já canonizada pelo `polygon()` e restatada pela seção 11 do `docs/uix-rcss.md`: uma forma de seletor não-reconhecida faz **a regra inteira** falhar ao registrar (nunca a folha inteira, nunca um casamento parcial/chutado), logada nomeando o texto cru do seletor e `arquivo:linha` -- nunca quebra em silêncio. Autorizar mais formas de seletor depois segue a cláusula do cabeçalho exatamente como esta emenda seguiu: parar, editar esta spec com um diff, pegar o aval do líder, só então implementar.
+
+#### 6.3 Decisão 2 -- unidades: paridade completa com o que o motor antigo aceita, não o mínimo medido
+
+O censo mediu 8 unidades em uso real (`dp` 2237, `px` 334, `%` 207, sem-unidade 171, `auto` 33, `deg` 24, `s` 4, `em` 1 -- zero `rem`/`vw`/`vh`/`ms`). O líder escolheu **paridade clean-room completa com toda unidade que o próprio RmlUi aceita**, não o piso de 8 unidades medidas, trocando o esforço maior de implementação pela compatibilidade de quem migra uma folha de estilo que a glintfx nunca viu. Isto é vinculante para o parser e a cascata da `RMLX-2` independentemente de quais unidades este corpus exercita hoje -- as 8 medidas são a **evidência que informou o peso da decisão**, não o escopo resultante.
+
+🔴 **Independente da lista de unidades, este documento registra o que o próprio texto da decisão do líder exige que fique explícito: `%` são três semânticas distintas, não uma.** Uma `resolve_percent()` genérica única é errada por construção, e dois implementadores independentes (lado A vs. lado B do oráculo diferencial da `RMLX-2`, `docs/uix-rcss.md`) divergiriam exatamente aí se isto ficasse implícito:
+
+1. **Relativo à caixa** (`width`/`height`/`left`/`top`, 103 das 207 instâncias de `%` no corpus) -- resolve contra a dimensão do próprio containing block, o modelo CSS padrão; exige a caixa do container resolvida **antes** do `%` do filho.
+2. **Posição de parada de gradiente** (`decorator: linear-gradient()`/`radial-gradient()`, a maioria das 104 instâncias de `%` contadas em `decorator`) -- `0%..100%` ao longo do próprio eixo do gradiente, sem relação com a caixa do elemento.
+3. **Coordenada do centro do gradiente radial** (`radial-gradient(circle at 35% 30%, ...)`) -- as duas porcentagens são coordenadas X/Y dentro da própria caixa 2D do decorator, uma terceira semântica, nem eixo de gradiente nem containing block de layout.
+
+O `docs/uix-rcss.md` seção 5 já implementa essa separação em três no formato de dump que serve o oráculo da `RMLX-2`; esta emenda é o que faz essa separação virar uma decisão que **este** documento -- o que tem autoridade de aval sob a cláusula do cabeçalho -- também registra, não só uma inferência privada do implementer a partir da spec de dump sozinha.

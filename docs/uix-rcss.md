@@ -124,6 +124,208 @@ seção 9.2.1, e as três ambiguidades reportadas por fatias anteriores da `RMLX
 
 ---
 
+## 🟠 Errata (`UIX-RCSS-ERRATA-2`, 2026-08-06) / Errata (`UIX-RCSS-ERRATA-2`, 2026-08-06)
+
+**EN:** An independent ambiguity audit (`UIX-RCSS-AMBIGUIDADE`, commit `4c5ce78`,
+`docs/uix-rcss-ambiguidades.md`) enumerated all 68 normative rules this document states and found 7
+**BLOQUEIA** (certain byte divergence against real upstream RmlUi), 3 **PROVÁVEL**, 1 **COSMÉTICO**,
+and 4 non-determinable-without-the-lost-census claims. Before applying any of it, the `tech-lead`
+**reverified every BLOQUEIA and PROVÁVEL finding directly against the upstream clone**
+(`examples/RmlUi/`, cited `file:line`, never trusted from the audit's own paraphrase) -- the same
+discipline this document's own header section demands of itself, applied one level up, to the audit
+that checks it. All 7 BLOQUEIA and all 3 PROVÁVEL findings confirmed exactly as reported; nothing was
+found to be a false positive; nothing required stopping short of application. **Two of the seven
+(Findings A and B) corrected an exemplo trabalhado this same document had already published as
+"byte-exact proof"** -- section 6.2's `UIX-RCSS-ERRATA-1` correction itself (Finding A) and section
+9.1's original worked line (Finding B) -- meaning a Side A/Side B pair built against the
+pre-errata-2 text would have silently agreed with each other on wrong bytes, exactly the failure mode
+this document's own header warns about.
+
+**What changed, section by section (all in this same pass):**
+- **§3** (new): explicit "textual, UTF-8" format-overview sentence, and the file's trailing-newline
+  terminator, previously only stated by the sibling `docs/uix-dom.md` and never inherited by name
+  here (`Finding D`).
+- **§4** (new): `STATE` block file order (`none` before `hover-all`) stated as a fixed, prose-declared
+  sequence, not governed by the byte-wise sort rule used elsewhere (`Finding E`).
+- **§6.2 / §11** (corrected): a rejected `FallThrough`/`RecursiveRepeat` shorthand does **not** revert
+  every targeted longhand -- only the longhand that never matched a token falls back; one that matched
+  before the loop's later failure keeps the source value, because upstream mutates the dictionary
+  in-place with no rollback (`Finding A`; also corrects `UIX-RCSS-ERRATA-1`'s own still-wrong
+  consequence text).
+- **§7 / §7.1** (corrected + new): `box-shadow` layer colors and gradient-stop colors are
+  **premultiplied**, not straight-alpha like every other color field -- a real behaviour difference
+  for `alpha<255` (`Finding B`, **see the flagged decision note below**); citation line fixed
+  `:69`→`:72` (`Finding K`); string-domain empty-value print convention and structural-identifier
+  non-escaping stated explicitly (inheritance sweep, see below); string values do not escape this
+  document's own `|`/`;`/`:` separators (`Finding H`).
+- **§8** (new): `quantize()` is undefined for non-finite input; treat as any other fail-high
+  computation error (`Finding J`).
+- **§9.1** (corrected + new): worked example's layer-2 color fixed to the premultiplied byte value;
+  a malformed single shadow layer aborts the whole property, not just that layer (`Finding I`).
+- **§9.2** (corrected): `filter`/`backdrop-filter` split their source function list on **space**, not
+  comma like `decorator`/`mask-image` -- a different parser class entirely (`Finding F`).
+- **§9.3** (new): a malformed single `<single-animation-value>` aborts the whole `animation` property
+  (`Finding I`).
+- **§11** (corrected): a malformed decorator/filter entry drops the **entire property**, not just that
+  entry -- the original text had this backwards (`Finding C`); an unrecognized selector in a
+  comma-list drops **only that selector**, not the whole rule -- the original text had this backwards
+  too, and it directly touches the corpus's own 16-tag UA-stylesheet rule (`Finding G`).
+- **§15.2** (corrected): worked example's `body/1` line fixed -- `border-top-color` does not revert.
+
+**Flagged for the líder's explicit attention, not silently decided:** Finding B (§7.1) names two
+readings -- print the stored premultiplied bytes as-is (changing this document's own straight-alpha
+contract for two fields), or un-premultiply before printing (keeping one uniform rule, at the cost of
+an undefined `alpha=0` case neither engine needs to invent otherwise). This errata **applies the
+first reading** and states why (§7.1), but the audit itself named this "a decision for the líder, not
+something either dumper author should pick independently" -- the `tech-lead` closed it with a rule,
+per this task's own instruction that an ambiguity must close, not merely be explained, but this one
+specific closure is a design choice, not a fact-correction, and is called out here so it can be
+overridden in one place if the líder disagrees.
+
+**Inheritance sweep, requested by the orquestrador mid-task:** every form decision `docs/uix-dom.md`
+§1-8 states was checked against whether this document inherited the equivalent. `SCOPE [herança do
+documento-irmão]: 17 decisões de forma enumeradas no uix-dom.md, 8 já fechadas no uix-rcss.md, 5
+lacunas fechadas por esta errata, 4 não-aplicáveis (com o motivo)`. The 5 gaps closed: UTF-8
+format-overview statement, trailing newline (`Finding D`, already counted above), `STATE`-block file
+order (`Finding E`, already counted above), structural-identifier (property-name) non-escaping, and
+the string-domain empty-computed-value print convention (§7). The 4 non-applicable, with reason: `HEAD`
+single-opaque-record (no equivalent concept -- this dump has no head/body split of that kind);
+whitespace/text-node existence filter + entity decoding (no text nodes or XML entities in a
+computed-value dump); tag-name lowercase-folding (property names in a `PROP` line are always
+dumper-selected from the closed §6.1 registry, never echoed from arbitrary source casing the way a
+tag name is, so casing is structurally moot here); the bare line-terminator byte (`\n` vs `\r\n`
+between records, distinct from the trailing-newline-at-EOF question) -- `docs/uix-dom.md` itself never
+states this either, so there is nothing to inherit; flagged as a shared gap in both siblings, out of
+this specific sweep's scope, not fixed here.
+
+**Addendum, mid-task, from a regenerated corpus census (`tools/rcss_census.py`,
+`docs/uix-rcss-censo.md`, replacing the scratch `/var/tmp/censo-rcss-qa1/censo.md` this document's
+older citations still point to -- re-sourcing every one of those older citations across the whole
+document is a separate, larger pass, out of this fatia's scope, flagged here rather than attempted):
+three more corrections, one of them the single most consequential fix in this entire errata pass.**
+(1) **`vertical-gradient` was entirely missing from §9.2's function table** -- 107 corpus occurrences
+across 16 files, the single most-used decorator function in the corpus, more than `polygon`. Combined
+with `Finding C`'s corrected consequence (a malformed/unknown decorator entry drops the whole
+property), the pre-fix table would have silently dropped `decorator`/`mask-image` to `none` on every
+one of those 107 declarations, and both oracle sides would have agreed on the same wrong empty
+output -- a green oracle for the wrong reason. Closed by full enumeration of the corpus's own
+decorator-function vocabulary, not a spot-check; see §9.2's own `SCOPE [funções de decorator]` line.
+(2) **§9.1's `box-shadow` spread-omission ratio was inverted** -- published as "124 of 135 omit
+`spread`", independently re-measured (script + the `tech-lead`'s own direct declaration-by-declaration
+walk) as roughly the opposite: 123 of 124 single-layer declarations *specify* `spread` explicitly,
+only 1 omits it. The rule itself (`spread` defaults to `0px` when omitted) is unaffected; only the
+*how common* corpus claim was backwards. (3) **§8's "largest length observed" example, `-228dp`, was
+not actually the largest** -- `999dp` (`border-radius`, the corpus's own "fully rounded" idiom) and
+`-410dp` (`margin-left`) are both larger in magnitude; cosmetic, the broader 0-3000-range conclusion
+is unaffected (`999dp` is still 3 digits before the point). All three verified directly by the
+`tech-lead`, not merely trusted from the report that raised them.
+
+**PT:** Uma auditoria independente de ambiguidade (`UIX-RCSS-AMBIGUIDADE`, commit `4c5ce78`,
+`docs/uix-rcss-ambiguidades.md`) enumerou as 68 regras normativas deste documento e achou 7
+**BLOQUEIA** (divergência de byte certa contra o RmlUi upstream real), 3 **PROVÁVEL**, 1
+**COSMÉTICO**, e 4 reivindicações não-determináveis sem o censo perdido. Antes de aplicar qualquer
+coisa, o `tech-lead` **reverificou todo achado BLOQUEIA e PROVÁVEL direto contra o clone upstream**
+(`examples/RmlUi/`, citado `arquivo:linha`, nunca confiado na própria paráfrase da auditoria) -- a
+mesma disciplina que a própria seção de cabeçalho deste documento exige de si mesmo, aplicada um nível
+acima, à auditoria que o verifica. Todos os 7 BLOQUEIA e os 3 PROVÁVEL confirmados exatamente como
+reportados; nenhum se revelou falso positivo; nenhum exigiu parar sem aplicar. **Dois dos sete
+(Achados A e B) corrigiram um exemplo trabalhado que este mesmo documento já publicava como "prova
+byte-exata"** -- a própria correção da seção 6.2 da `UIX-RCSS-ERRATA-1` (Achado A) e a linha
+trabalhada original da seção 9.1 (Achado B) -- significando que um par lado A/lado B construído
+contra o texto pré-errata-2 teria concordado em silêncio um com o outro sobre bytes errados,
+exatamente o modo de falha que a própria seção de cabeçalho deste documento avisa.
+
+**O que mudou, seção por seção (tudo nesta mesma passada):**
+- **§3** (novo): frase explícita de visão geral de formato "textual, UTF-8", e o terminador de
+  newline final do arquivo, antes só declarado pelo irmão `docs/uix-dom.md` e nunca herdado por nome
+  aqui (`Achado D`).
+- **§4** (novo): a ordem de arquivo dos blocos `STATE` (`none` antes de `hover-all`) declarada como
+  sequência fixa, prosa-declarada, não governada pela regra de ordenação byte-wise usada em outro
+  lugar (`Achado E`).
+- **§6.2 / §11** (corrigido): um shorthand `FallThrough`/`RecursiveRepeat` rejeitado **não** reverte
+  todo longhand alvejado -- só o longhand que nunca casou nenhum token cai pro fallback; um que casou
+  antes da falha posterior do laço mantém o valor da fonte, porque o upstream muta o dicionário in
+  place sem rollback (`Achado A`; também corrige o próprio texto de consequência da
+  `UIX-RCSS-ERRATA-1`, que ainda estava errado).
+- **§7 / §7.1** (corrigido + novo): cores de camada de `box-shadow` e de stop de gradiente são
+  **pré-multiplicadas**, não straight-alpha como todo outro campo de cor -- uma diferença de
+  comportamento real pra `alpha<255` (`Achado B`, **ver a nota de decisão sinalizada abaixo**);
+  citação de linha corrigida `:69`→`:72` (`Achado K`); convenção de impressão de valor-computado-vazio
+  do domínio string e não-escape de identificador estrutural declarados explicitamente (varredura de
+  herança, ver abaixo); valores string não escapam os separadores próprios `|`/`;`/`:` deste documento
+  (`Achado H`).
+- **§8** (novo): `quantize()` é indefinido pra entrada não-finita; tratar como qualquer outro erro de
+  computação fail-high (`Achado J`).
+- **§9.1** (corrigido + novo): cor da camada 2 do exemplo trabalhado corrigida pro valor de byte
+  pré-multiplicado; uma camada de shadow malformada única derruba a propriedade inteira, não só
+  aquela camada (`Achado I`).
+- **§9.2** (corrigido): `filter`/`backdrop-filter` dividem a própria lista de função da fonte por
+  **espaço**, não vírgula como `decorator`/`mask-image` -- uma classe de parser inteiramente separada
+  (`Achado F`).
+- **§9.3** (novo): um `<single-animation-value>` malformado único derruba a propriedade `animation`
+  inteira (`Achado I`).
+- **§11** (corrigido): uma entrada de decorator/filter malformada derruba a **propriedade inteira**,
+  não só aquela entrada -- o texto original tinha isso invertido (`Achado C`); um seletor
+  não-reconhecido numa lista-vírgula derruba **só aquele seletor**, não a regra inteira -- o texto
+  original tinha isso invertido também, e toca direto a própria regra de UA-stylesheet de 16-tags do
+  corpus (`Achado G`).
+- **§15.2** (corrigido): linha `body/1` do exemplo trabalhado corrigida -- `border-top-color` não
+  reverte.
+
+**Sinalizado pra atenção explícita do líder, não decidido em silêncio:** o Achado B (§7.1) nomeia
+duas leituras -- imprimir os bytes pré-multiplicados armazenados como estão (mudando o próprio
+contrato straight-alpha deste documento pra dois campos), ou despré-multiplicar antes de imprimir
+(mantendo uma regra uniforme única, ao custo de um caso `alpha=0` indefinido que nenhum motor
+precisaria inventar de outro jeito). Esta errata **aplica a primeira leitura** e declara por quê
+(§7.1), mas a própria auditoria nomeou isto "uma decisão do líder, não algo que qualquer autor de
+dumper deveria escolher sozinho" -- o `tech-lead` fechou com uma regra, pela própria instrução desta
+tarefa de que uma ambiguidade precisa fechar, não só ser explicada, mas este fechamento específico é
+uma escolha de design, não uma correção de fato, e está sinalizado aqui pra poder ser revertido num
+lugar só se o líder discordar.
+
+**Varredura de herança, pedida pelo orquestrador no meio da tarefa:** toda decisão de forma que a
+`docs/uix-dom.md` §1-8 declara foi checada quanto a se este documento herdou o equivalente. `SCOPE
+[herança do documento-irmão]: 17 decisões de forma enumeradas no uix-dom.md, 8 já fechadas no
+uix-rcss.md, 5 lacunas fechadas por esta errata, 4 não-aplicáveis (com o motivo)`. As 5 lacunas
+fechadas: declaração de visão geral de formato UTF-8, newline final (`Achado D`, já contado acima),
+ordem de arquivo dos blocos `STATE` (`Achado E`, já contado acima), não-escape de identificador
+estrutural (nome de propriedade), e a convenção de impressão de valor-computado-vazio do domínio
+string (§7). As 4 não-aplicáveis, com motivo: registro único opaco `HEAD` (sem conceito equivalente --
+este dump não tem divisão head/body desse tipo); filtro de existência de nó de texto + decodificação
+de entidade (sem nós de texto ou entidades XML num dump de valor computado); folding de caixa de nome
+de tag pra minúscula (nomes de propriedade numa linha `PROP` são sempre escolhidos pelo dumper a
+partir do registro fechado da seção 6.1, nunca ecoados de caixa arbitrária da fonte do jeito que um
+nome de tag é, então caixa é estruturalmente irrelevante aqui); o byte de terminador de linha em si
+(`\n` vs `\r\n` entre registros, distinto da questão de newline-final-no-EOF) -- o próprio
+`docs/uix-dom.md` nunca declara isso também, então não há nada pra herdar; sinalizado como lacuna
+compartilhada nos dois irmãos, fora do escopo desta varredura específica, não consertado aqui.
+
+**Adendo, no meio da tarefa, de um censo de corpus regenerado (`tools/rcss_census.py`,
+`docs/uix-rcss-censo.md`, substituindo o scratch `/var/tmp/censo-rcss-qa1/censo.md` pro qual as
+citações mais antigas deste documento ainda apontam -- re-referenciar cada uma dessas citações mais
+antigas no documento inteiro é uma passada separada e maior, fora do escopo desta fatia, sinalizada
+aqui em vez de tentada): três correções a mais, uma delas o conserto mais consequente de toda esta
+passada de errata.** (1) **`vertical-gradient` estava inteiramente ausente da tabela de funções da
+seção 9.2** -- 107 ocorrências de corpus em 16 arquivos, a função de decorator mais usada do corpus,
+mais que `polygon`. Combinado com a consequência corrigida do Achado C (uma entrada de decorator
+malformada/desconhecida derruba a propriedade inteira), a tabela pré-conserto teria derrubado
+`decorator`/`mask-image` pra `none` em silêncio em cada uma dessas 107 declarações, e os dois lados
+do oráculo teriam concordado na mesma saída vazia errada -- um oráculo verde pelo motivo errado.
+Fechado por enumeração completa do próprio vocabulário de função-de-decorator do corpus, não um
+spot-check; ver a própria linha `SCOPE [funções de decorator]` da seção 9.2. (2) **A taxa de omissão
+de `spread` do `box-shadow` da seção 9.1 estava invertida** -- publicada como "124 de 135 omitem
+`spread`", remedida de forma independente (script + a própria varredura declaração-por-declaração
+direta do `tech-lead`) como aproximadamente o oposto: 123 de 124 declarações single-layer
+*especificam* `spread` explicitamente, só 1 omite. A própria regra (`spread` tem default `0px`
+quando omitido) não é afetada; só a reivindicação de corpus de *quão comum* estava invertida. (3) **O
+exemplo de "maior comprimento observado" da seção 8, `-228dp`, não era de fato o maior** -- `999dp`
+(`border-radius`, o próprio idioma "totalmente arredondado" do corpus) e `-410dp` (`margin-left`) são
+os dois maiores em magnitude; cosmético, a conclusão mais ampla da faixa 0-3000 não é afetada
+(`999dp` ainda é 3 dígitos antes do ponto). Os três verificados diretamente pelo `tech-lead`, não só
+confiados do relatório que os levantou.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -167,6 +369,22 @@ this dump at all; there is no `PROP` block for it, and a conforming dumper must 
 invent a fact this format does not define).
 
 ### 3. File shape: `STATE` blocks, then per-node `PROP` enumeration
+
+**Format overview (`UIX-RCSS-ERRATA-2`, stated explicitly here for the first time -- the sibling
+`docs/uix-dom.md` §1 opens with this same sentence for its own format, this document never had the
+equivalent, and an audit found the gap):** textual, UTF-8, one fact per `PROP`/`PROPS`/`STATE` line.
+The byte-`==` comparator §8 defines is this format's own chosen comparison mechanism -- a deliberate
+departure from `docs/uix-dom.md`'s plain-string-`diff`, not an oversight; §8 already states why (the
+quantization step is where this format's "forgiveness" lives, so the comparator itself can stay a
+strict `==`).
+
+**File terminator (`UIX-RCSS-ERRATA-2`, closing a gap `docs/uix-dom.md` §1 already closed for its own
+format and this document had not yet inherited by name):** the dump file always ends with a single
+trailing newline after the very last `PROP` line of the very last `STATE` block -- same convention
+and same justification as `docs/uix-dom.md`'s own file-terminator clause (avoids a spurious "no
+newline at end of file" diff line, load-bearing for the byte-`==` comparator §8 defines: a dump
+missing this trailing byte and one that has it are *different files* even when every printed line is
+identical). No blank line between `STATE` blocks, none at the very start of the file.
 
 The dump has **N top-level `STATE` blocks** (section 4 below defines exactly which states, and
 why exactly that many, not more, not fewer), each a **complete, independent, full-tree property
@@ -220,6 +438,16 @@ space in full:
 | :--- | :--- | :--- |
 | `none` | No pseudo-class forced on any element (RmlUi/glintfx default: nothing hovered, focused, or active) | The baseline every fixture is authored against |
 | `hover-all` | `:hover` forced **true** on every element in the tree, simultaneously | 37-53 real uses, always composite, this wave's stated "produto principal" |
+
+**File order of `STATE` blocks (`UIX-RCSS-ERRATA-2`, found by an independent audit, `Finding E`):
+the table's own row order above, `none` first, is a fixed, prose-declared sequence -- it was
+previously only ever shown (this table, §15.1's worked example), never stated as a rule.** This is
+**not** resolved by the byte-wise sort rule §3/§6 use for property names and other tokens elsewhere
+in this document -- `"hover-all"` sorts before `"none"` byte-wise (`'h'` < `'n'`), which is the
+opposite order the table and every worked example already use, so that rule must **not** be assumed
+to also govern `STATE` order without this sentence saying so. A future `focus-all`/`active-all`
+addition appends to the end of this same fixed sequence, in the order the table above gains the new
+rows, never by re-sorting the existing ones.
 
 `:focus` and `:active` are **not** separate rows in this wave's matrix -- 3 and 2 measured uses
 respectively is real, non-zero usage (unlike `nth-child`/`:not`/`z-index`'s measured zero in
@@ -485,10 +713,10 @@ color-then-width order) gets claimed by item 1, leaving the item cursor exhauste
 token still unclaimed, and upstream's own post-loop guard (`value_index < property_values.size() &&
 property_index >= items.size()`) aborts the **entire shorthand** -- not a partial result. Concretely,
 for `border-top`: `1dp #7A5A2E` (width-then-color, the corpus's own 100%-measured order) succeeds;
-`#7A5A2E 1dp` (color-then-width) is `MalformedValue`, and the whole `border-top` declaration is
-dropped per section 11's fail-high policy (both `border-top-width` and `border-top-color` keep
-whatever the cascade's next-lower-specificity rule provides, or their registry initial value if
-none). **What "order-independent" IS true for:** which *domain* a token routes to is content-driven
+`#7A5A2E 1dp` (color-then-width) is `MalformedValue`, and `ParseShorthandDeclaration` returns
+`false` for the whole `border-top` declaration -- **but see the `UIX-RCSS-ERRATA-2` correction
+directly below the table before trusting what that `false` return implies about which longhands
+actually end up holding.** **What "order-independent" IS true for:** which *domain* a token routes to is content-driven
 (a token that looks like a length routes to `-width` regardless of which position it appears in) --
 that part of the original sentence was not wrong. **What it is not true for:** that an arbitrary
 token *order* always succeeds for a 2-item/2-token chain. It does not. Section 15.2 below gives the
@@ -497,6 +725,37 @@ byte-exact dump for both orders side by side. Proof, not merely asserted: pinned
 `test_border_top_fallthrough_order_is_load_bearing`, and already correctly stated in
 `glintfx/src/uix/style/shorthand.hpp:38`/`shorthand.cpp:30-35` before this document was corrected to
 match.
+
+**Second correction (`UIX-RCSS-ERRATA-2`, 2026-08-06): the paragraph above is itself half wrong about
+the *consequence* of that `false` return, found by an independent audit (`UIX-RCSS-AMBIGUIDADE`,
+`docs/uix-rcss-ambiguidades.md` Finding A) and reverified line-by-line by the `tech-lead` before this
+correction was written.** It is **not true** that "both `border-top-width` and `border-top-color`
+keep whatever the cascade's next-lower-specificity rule provides" for the reversed-order case.
+Upstream's `FallThrough`/`Box` loop (`PropertySpecification.cpp:433-472`) has **no staging buffer** --
+`dictionary.SetProperty(...)` (`:461`) fires **inside the loop, the moment any item's `ParseValue`
+succeeds**, before the post-loop guard (`:469-471`) ever runs. Tracing `#b { border-top: #7A5A2E 1dp;
+}` token by token: iteration 1, item 0 (`-width`) tries `"#7A5A2E"`, fails to parse as a length, and
+(being `FallThrough` with a next item available) `continue`s -- the `for`-loop's own increment
+advances `property_index` to 1, `value_index` stays `0` (a `continue` in C++ does not skip the
+`for`-header's own increment clause, it only skips the loop body's remaining statements).
+Iteration 2, item 1 (`-color`) tries the **same, still-unclaimed** `"#7A5A2E"`, succeeds, and
+`dictionary.SetProperty(BorderTopColor, ...)` fires **right there** -- `border-top-color` is set from
+the source token. Only *after* the loop does the post-loop guard see `value_index(1) <
+property_values.size()(2)` and `property_index(2) >= items.size()(2)`, and return `false`. Nothing
+downstream of that `false` undoes the `SetProperty` call that already happened --
+`StyleSheetParser::ReadProperties` (`StyleSheetParser.cpp:1023`) only logs a warning on `false`, and
+`PropertyDictionary::SetProperty` (`PropertyDictionary.cpp:8`) is a bare `properties[id] = property;`
+with no transactional layer to roll back. **The corrected consequence for `body/1` (`#b`):
+`border-top-color=#7a5a2eff` (set from the source token, item 1 matched before the failure surfaced)
+, `border-top-width=0.0000px` (item 0 never matched anything in this call, falls back to its §6.1
+registry initial) -- only `-width` reverts, `-color` does not.** Section 15.2 below is corrected to
+match. The same mechanism applies to `border`'s own `RecursiveRepeat` (see the table row above and
+the matching correction in section 11 below): each of the 4 side-shorthand sub-calls runs to
+completion independently (`result &= ParseShorthandDeclaration(...)`, `PropertySpecification.cpp:379`,
+no early exit across the loop at `:375-388`), so a reversed-order `border: #7A5A2E 1dp;` partial-writes
+all 4 `-color` longhands from the source token (each side's own `FallThrough` sub-call hits the same
+bug independently) while leaving all 4 `-width` longhands untouched, *before* the aggregate
+`result=false` makes the outer call return failure.
 
 ##### 6.3 The `Box` algorithm (verbatim from `PropertySpecification.cpp:336-370`, standard CSS box-model expansion)
 
@@ -528,6 +787,39 @@ property's domain in section 6.1's table:
 | `string` | The raw string content, escaped per §3's escaping rule, **no surrounding quotes** even if the RCSS source quoted it (quoting is source syntax, not part of the computed string value) |
 | composite (shadow-list / decorator-list / filter-list / transform-list / animation) | §9's own per-domain grammar |
 
+**String-domain, empty computed value (`UIX-RCSS-ERRATA-2`, closing a gap the sibling document
+`docs/uix-dom.md` §7 already closed for its own `ATTR data-if=` case but this document had not yet
+stated for its own analogous case):** `cursor` and `font-family` both register with `*(empty)*` as
+their §6.1 initial value. A `PROP` line for either, when the computed value is the empty string,
+still prints -- `<path> PROP cursor=` (nothing after `=`), never omitted -- the same convention
+`docs/uix-dom.md` §7 states by name for `ATTR data-if=` (present-with-empty-value and absent are
+different, both queryable, states; a `string`-domain `PROP` line always exists per §3's own "the
+whole registry, every node" rule, so "present with empty value" is the only reachable state here --
+there is no "absent" state to distinguish it from, unlike a DOM attribute).
+
+**String-domain values do not escape this document's own composite separators (`UIX-RCSS-ERRATA-2`,
+closing `Finding H`):** §3's four-rule escape table (`\`, `\n`, `\r`, `\t`, inherited from
+`docs/uix-dom.md` §2) is the **only** escaping a `string`-domain value gets. It does **not** cover
+`\|`, `;`, or `:` -- this document's own composite-list, argument, and stop separators (§9), chosen
+specifically so a *composite* dump line is never ambiguous about which comma-role a byte played in
+the source. A `font-family`, `cursor`, or `text-overflow` string value containing a literal `;` or
+`:` (both legal RCSS string content) prints byte-for-byte unescaped at the top level -- this is a
+deliberate scope limit, not an oversight: §9's "never ambiguous" goal was stated for *composite*-value
+grammar, and is not retroactively extended to a **plain, non-composite** `PROP` line's string value. A
+`PROP` line is therefore only safely re-splittable on `=` (once, at the first occurrence) plus
+whatever domain-specific grammar §9 defines for that specific property -- it is not a general-purpose
+delimited record.
+
+**Structural identifiers are never escaped (`UIX-RCSS-ERRATA-2`, mirroring `docs/uix-dom.md` §8's
+identical treatment of `<tag>`):** the `<property-name>` half of a `PROP` line's `name=value` pair is
+never escaped per §2's table, for the same reason `docs/uix-dom.md` §5 gives for `<tag>` -- it is
+always one of the 72 fixed, closed, ASCII kebab-case identifiers §6.1's own table names (chosen by
+the *dumper*, iterating its own registry, never echoed back from arbitrary source-authored casing or
+content the way an attribute value is), and none of those 72 strings can structurally contain any of
+the 4 escape characters (`\`, `\n`, `\r`, `\t`). Escaping is therefore never *reachable* for this
+field, and this document names that explicitly rather than leaving a second implementer to wonder
+whether it was forgotten.
+
 #### 7.1 Color: canonical form, and the exact scope authorized today
 
 **In scope, authorized by the census's own measured 4 hex forms** (`/var/tmp/censo-rcss-qa1/censo.md`
@@ -550,13 +842,41 @@ decision, which named units specifically, not color syntax. A conforming dumper 
 these must **fail-high** (§11), not silently support them by accident because the parser happened
 to be easy to extend.
 
-**Colors are dumped straight-alpha, not premultiplied.** `Style::ComputedValues`/`Property::Get<Colourb>`
-store straight alpha; premultiplication (`.ToPremultiplied()`) happens at the render-consuming call
-site (e.g. `box-shadow`'s own parser calls it immediately when building the `BoxShadow` struct, per
-`PropertyParserBoxShadow.cpp:69`, but that is a render-domain struct, not the cascade's own
-`ComputedValues`). This dump reports the cascade-domain value, so straight alpha is correct and
-consistent for every color-typed field, **including** colors nested inside a `box-shadow` layer or
-a gradient stop (§9.1/§9.2) -- none of those get premultiplied before printing either.
+**Colors are dumped straight-alpha for scalar color-typed properties -- `background-color`,
+`border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
+store straight alpha for these; there is no premultiply call anywhere in their parse path.
+
+**Corrected, `UIX-RCSS-ERRATA-2` (2026-08-06): `box-shadow` layer colors and every gradient-stop
+color are the exception, and are premultiplied, not straight -- found by an independent audit
+(`UIX-RCSS-AMBIGUIDADE`, Finding B) and reverified directly by the `tech-lead`.** The original text
+above claimed these two fields were straight-alpha "including" for `box-shadow`/gradient-stop colors
+-- **false**. `PropertyParserBoxShadow.cpp:72`: `shadow.color = prop.Get<Colourb>().ToPremultiplied();`
+(the citation drifted to `:69` in an earlier draft -- `:72` is the verified line in the checked-out
+upstream clone). `PropertyParserColorStopList.cpp:47` (the parser behind every gradient stop in
+`linear-gradient`/`radial-gradient`, both used by `decorator`/`mask-image`/`filter`/
+`backdrop-filter`): `color_stop.color = p_color.Get<Colourb>().ToPremultiplied();` -- same pattern.
+Both calls fire **at parse time**, before the value ever reaches `Style::ComputedValues`, and the
+**struct field's own type** is `ColourbPremultiplied` (`Include/RmlUi/Core/DecorationTypes.h:9`,
+`:22`), a type distinct from the straight `Colourb` every scalar color-typed field uses -- there is
+no straight-alpha representation of these two fields anywhere downstream of parsing, the type system
+enforces it structurally.
+
+**Decision (applied here, not left open): print the premultiplied bytes as-is.** This is not
+un-premultiplied back to straight before printing. Reasoning: (1) this dump's own governing
+principle (§1) is to report whatever the cascade/parse pipeline actually produced, never a
+re-derived value -- and for these two fields, `ColourbPremultiplied` **is** what was produced, the
+same way a resolved length is what `ComputeLength` produced even though the source wrote a different
+unit; (2) un-premultiplying (`straight = premultiplied * 255 / alpha`) is **undefined at `alpha=0`**
+(all color information is already lost -- `0/0`), so it would need an invented convention this
+document would have to state and a second implementer would have to guess without it, exactly the
+class of gap this document exists to close; printing the premultiplied bytes as-is has no such
+edge case, it is total for every input; (3) Side A walks real `Style::ComputedValues` and should stay
+a faithful, mechanical reader of what is actually stored -- asking it to un-premultiply is asking it
+to invent logic upstream never needed. **Consequence: a conforming Side A and Side B both print the
+stored `ColourbPremultiplied` bytes for `box-shadow` layer colors and gradient-stop colors, straight
+`Colourb` bytes for every other color-typed field -- this is a real behavior change for any fixture
+with `alpha<255` in these two composite domains, not a cosmetic rewording.** Section 9.1's own worked
+example below is corrected to match.
 
 ### 8. Numeric quantization: the rule, chosen and justified
 
@@ -590,10 +910,23 @@ Applied to **every** float-valued field this dump prints: resolved lengths (px),
 inside a composite value (§9). Colors are integers already (§7.1) and are exempt -- they need no
 quantization, only the canonical hex form.
 
+**`quantize()` is defined only for finite `x` (`UIX-RCSS-ERRATA-2`, closing `Finding J`):** a
+non-finite computed value (`NaN`, `+Inf`, `-Inf`) is treated the same as any other
+internally-detected computation error: it is never printed via this algorithm -- log it and fall back
+to the property's own §6.1 initial value (or its inherited value), the same consequence §11 already
+defines for a rejected declaration. This is this document's own general fail-high policy applied to a
+numeric *computation* result rather than a *parse* result -- named explicitly because this project's
+own review culture practises adversarial/mutation testing that manufactures inputs a corpus never
+would, and the algorithm above (`trunc`, `copysign`, fixed-point formatting) has no defined behaviour
+for a non-finite input otherwise.
+
 **Why 4 decimal digits, chosen and not merely defaulted to:** `float32` carries roughly 7 significant
-decimal digits. Every measured length in the corpus (`/var/tmp/censo-rcss-qa1/censo.md` section 5)
-sits in the 0-3000 range (the largest single value observed, `-228dp`, is 3 digits before the
-point); at that magnitude, 4 digits after the point is **more** precision than `float32` can even
+decimal digits. Every measured length in the corpus sits in the 0-3000 range (**corrected,
+`UIX-RCSS-ERRATA-2`, cosmetic -- the largest single value cited here was previously `-228dp`; a
+regenerated census (`tools/rcss_census.py`) measured `999dp` (`border-radius`, the "fully rounded"
+idiom used throughout the corpus) and `-410dp` (`margin-left`) as larger in magnitude; the corrected
+largest-observed example is `999dp`, still 3 digits before the point**); at that magnitude, 4 digits
+after the point is **more** precision than `float32` can even
 represent meaningfully (roughly 3-4 significant digits remain below the noise floor at that
 magnitude) -- so genuine ULP-level disagreement between two correct engines is rounded away by this
 step for the entire realistic value range, while any real bug (a wrong unit conversion is off by a
@@ -691,8 +1024,21 @@ number" rather than obviously flag as a parsing-order bug.
 
 **Layer grammar:** `<color>;<offset_x>;<offset_y>;<blur>;<spread>;<inset>` -- 6 fields **always**
 present (never fewer, regardless of how many the source actually wrote): `spread` defaults to
-`0.0000px` when the source omitted it (per the census, 124 of 135 single-layer declarations do), and
-`inset` is the literal string `true` or `false` (never omitted). `<color>` per §7.1, the four
+`0.0000px` when the source omits it. **Corrected, `UIX-RCSS-ERRATA-2` (2026-08-06): the omission
+ratio published here was inverted.** The original text claimed "124 of 135 single-layer declarations
+omit `spread`" -- a regenerated, versioned corpus census (`tools/rcss_census.py`, `docs/uix-rcss-censo.md`,
+replacing the scratch `/var/tmp/censo-rcss-qa1/censo.md` this document's earlier citations point to,
+which no longer exists on this machine) measured close to the **opposite**: of the corpus's
+single-layer `box-shadow` declarations, only **1 omits `spread`**, the other **123 specify all 4
+length fields explicitly** (independently re-derived by the `tech-lead`, walking every single-layer
+declaration directly rather than trusting either count at face value: 124 total single-layer
+declarations, 120 with 4 explicit length tokens, 3 more with 4 fields written as bare unitless `0`
+offsets that a naive unit-tagged count missed -- `123` in total -- and exactly `1` with only 3 length
+tokens, `gusworld_battle_cockpit.rml`'s `#22D3EE 0dp 0dp 8dp`). The **rule itself is unaffected** --
+`spread` still defaults to `0.0000px` on the rare declaration that omits it -- only the *how common is
+this* corpus statistic was backwards; a reader who took the original "124 of 135 omit" claim as
+license to skip testing the 4-field explicit form against a real fixture would have been testing the
+rare case and skipping the common one. `<color>` per §7.1, the four
 numeric fields per §7/§8 (resolved length, `px` suffix, quantized). Multiple layers join with `|`,
 **in source (author) order** -- unlike `class` tokens, box-shadow layers are an ordered rendering
 stack (later layers paint on top), not a set, so this dump does **not** sort them; sorting would
@@ -703,19 +1049,48 @@ Worked example: source `box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp
 (single `PROP` line, wrapped here only for readability -- the real line has no internal newline):
 
 ```
-box-shadow=#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|#22d3ee26;0.0000px;0.0000px;16.0000px;0.0000px;false
+box-shadow=#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|#051f2326;0.0000px;0.0000px;16.0000px;0.0000px;false
 ```
+
+**Corrected (`UIX-RCSS-ERRATA-2`, 2026-08-06): layer 2's color was published as `#22d3ee26`
+(straight, unchanged from source) -- wrong, per §7.1's own correction above.** `#22D3EE26` = R`0x22`
+(34) G`0xD3`(211) B`0xEE`(238) A`0x26`(38); premultiplied (`channel*38/255`, integer division,
+truncating): R=`5`(`0x05`), G=`31`(`0x1f`), B=`35`(`0x23`), A unchanged (`38`/`0x26`) ->
+`#051f2326`, the value now printed above. Layer 1's color (`#22D3EE`, implicit alpha `ff`=255)
+premultiplies to itself (`channel*255/255=channel`) -- `#22d3eeff` was already correct either way,
+which is why this bug did not show up in this worked example's first layer.
+
+**Malformed single shadow layer (`UIX-RCSS-ERRATA-2`, closing `Finding I`, reverified directly):** a
+malformed single layer inside a comma-separated `box-shadow` list aborts the **entire property**, not
+just that layer. `PropertyParserBoxShadow::ParseValue` (`PropertyParserBoxShadow.cpp:12-83`) `return
+false`s on the first invalid layer -- an empty argument list (`:39`), an unrecognized token that is
+neither a valid length, `inset`, nor a valid color (`:78`), or a layer with fewer than 2 length
+arguments (`:81`) -- and `property.value`/`property.unit` (`Unit::BOXSHADOWLIST`) are only ever
+assigned at the very end of the function, after every layer parsed successfully. There is no partial
+`BoxShadowList` a failure leaves behind; the whole `box-shadow` declaration reverts to its cascade/
+registry-initial value (`none`), the same consequence §11 states for `decorator`/`filter` below.
 
 #### 9.2 `decorator` / `mask-image` / `filter` / `backdrop-filter`
 
-All four share `Unit::DECORATOR` or `Unit::FILTER`'s identical comma-list-of-functions shape
-(`examples/RmlUi/Source/Core/PropertyParserDecorator.cpp:55`, `StringUtilities::ExpandString(...,
-',', '(', ')')` -- the same parenthesis-aware split `box-shadow` uses). Each function serializes as
-`name(<args>)`, args joined by `;`, multiple functions in the list joined by `|` in **source order**
-(decorators paint in list order, same "it's a stack, not a set" reasoning as §9.1).
+**Corrected (`UIX-RCSS-ERRATA-2`, 2026-08-06, `Finding F`, reverified directly): the four properties
+do NOT all split their source function-list on the same character.** `decorator`/`mask-image` split
+on **comma**, parenthesis-aware (`PropertyParserDecorator.cpp:55`:
+`StringUtilities::ExpandString(decorator_string_list, decorator_string_value, ',', '(', ')');`).
+`filter`/`backdrop-filter` are parsed by a **separate class**, `PropertyParserFilter`
+(`StyleSheetSpecification.cpp:407-408`), whose own `ParseValue` splits on **space**, parenthesis-aware
+(`PropertyParserFilter.cpp:32`: `StringUtilities::ExpandString(filter_string_list,
+filter_string_value, ' ', '(', ')', true);`) -- matching real CSS `filter` syntax (`filter: blur(4px)
+brightness(1.2);`), and the function's own preceding comment states this explicitly ("Filters are
+declared as `filter: <filter-value>[ <filter-value> ...]`"). A conforming Side B dispatcher must pick
+`,` vs. ` ` based on **which of the four properties it is parsing**, not assume one shape for all
+four. What the four properties **do** share, unchanged: each function serializes as `name(<args>)`,
+args joined by `;`, multiple functions in the list joined by `|` in **source order** in the printed
+dump (decorators paint in list order, same "it's a stack, not a set" reasoning as §9.1) -- only the
+*source-string* split character differs, never the *dump-format* output separators.
 
-**In-scope functions, per the census's own measured decorator sub-languages
-(`/var/tmp/censo-rcss-qa1/censo.md` section 9) and `docs/effects.md`'s own shipped grammar:**
+**In-scope functions, per the corpus's own measured decorator sub-languages and `docs/effects.md`'s
+own shipped grammar -- re-enumerated in full for this errata, not merely spot-checked (`UIX-RCSS-
+ERRATA-2`, see below for why):**
 
 | Function | Args (in order) | Notes |
 | :--- | :--- | :--- |
@@ -725,9 +1100,35 @@ All four share `Unit::DECORATOR` or `Unit::FILTER`'s identical comma-list-of-fun
 | `polygon(<sides>;<fill>;<rotation>)` | `sides` (integer, printed as a `number` per §8 with 4 zero decimals, e.g. `6.0000`), `fill` (either a `<color>` per §7.1, or a **nested** `linear-gradient(...)`/`radial-gradient(...)` using this same grammar recursively), `rotation` (degrees, §8.2) | Validation range `[3, 1024]` and fail-high behaviour already shipped, per `docs/effects.md` -- this dump reports the value **as validated**; an out-of-range `sides` means the decorator did not apply at all (§11), so there is no `polygon(...)` function in the list to print for that declaration |
 | `image-tint(<url>)` | `<url>` | The tint itself is 3 **separate** standalone properties (`image-tint-color`/`-mode`/`-threshold`, §6.1), not decorator arguments -- do not fold them into this function's args |
 | `ripple(<max-radius>)` | one number, px, §8 (default `0.0000` = auto) | The five `ripple-*` effect parameters are standalone properties, same non-folding rule as `image-tint` |
-| `horizontal-gradient(<color>;<color>)` | exactly 2 colors (`mask-image`'s own 2-stop shorthand form, per `docs/effects.md`) | -- |
+| `horizontal-gradient(<color>;<color>)` | exactly 2 colors (`mask-image`'s own 2-stop shorthand form, per `docs/effects.md`) | Registered by the same native `DecoratorStraightGradientInstancer` as `vertical-gradient` below, dispatched on the decorator's own `name` (`DecoratorGradient.cpp:186-221`) |
+| **`vertical-gradient(<color>;<color>)`** | exactly 2 colors, same grammar as `horizontal-gradient` immediately above | **Added, `UIX-RCSS-ERRATA-2` -- this row was entirely missing until this errata; see the correction note below the table.** Same `DecoratorStraightGradientInstancer`, same 2-color shorthand (`direction, start-color, stop-color`, `DecoratorGradient.cpp:191`), only `name == "vertical-gradient"` at `:203` picks the vertical axis instead of horizontal |
 | `blur(<radius>)` | one resolved length, px | Used by both `filter` and `backdrop-filter` |
 | `drop-shadow(<color>;<x>;<y>;<blur>)` | color first (matches `box-shadow`'s own color-first convention), then 3 resolved lengths -- **no spread, no inset**, unlike `box-shadow` | Used by `filter` only, per `docs/effects.md` |
+
+**`vertical-gradient` was missing (`UIX-RCSS-ERRATA-2`, 2026-08-06) -- found by a regenerated corpus
+census, and this is the single most consequential correction in this errata pass, worse than any of
+the seven findings above by volume.** `git grep -c "vertical-gradient" -- '*.rml' '*.rcss' '*.hpp'`
+against the corpus: **107 occurrences across 16 files** -- the single most-used decorator function in
+the entire corpus, ahead of `polygon` (47) and every gradient function. Combined with §11's own
+corrected fail-high rule (`Finding C`, above: a malformed/unrecognized decorator entry drops the
+**entire property**), an implementation built against the pre-errata-2 table would have silently
+dropped the `decorator`/`mask-image` property to `none` on **every one** of those 107 declarations,
+in 16 corpus files -- and because both Side A and Side B would independently hit the exact same
+"unknown function name" fail-high path, the oracle would have diffed two equally-empty outputs and
+reported **green**, for the wrong reason. This is exactly the shared-private-misreading failure mode
+this document's own header section names, except the miswritten shared assumption originates in the
+spec itself, not in two independent readings of it.
+
+**Full enumeration, not a spot-check (per the orquestrador's own instruction: search the closed set,
+don't search inside it for what you already suspect):** every distinct function name the corpus uses
+inside a `decorator`/`mask-image`/`filter`/`backdrop-filter` value was counted (`tools/rcss_census.py`'s
+own `decorator_func_counts`, which folds `transform`'s own function names into the same counter --
+`rotate` appears there twice, but that is `transform: rotate(...)` from §9.4, already in scope, not a
+decorator/filter function, and is excluded from the tally below). `SCOPE [funções de decorator]: 10
+distintas no corpus, 9 na tabela 9.2 (antes desta errata), 1 acrescentada por esta errata.` The 10:
+`vertical-gradient`(107), `polygon`(47), `drop-shadow`(23), `linear-gradient`(22), `radial-gradient`(21),
+`image-tint`(13), `horizontal-gradient`(6), `image`(6), `ripple`(2), `blur`(1) -- every one of the
+other 9 was already in the table above; `vertical-gradient` was the only gap, and it is now closed.
 
 ##### 9.2.1 Gradient stop grammar and the auto-spacing algorithm (§5's own resolved exception)
 
@@ -792,6 +1193,16 @@ is either a resolved integer or the literal string `infinite`. `<alternate>`/`<p
 `true`/`false`. Multiple simultaneous animations (a comma-list in the source) join with `|` in
 source order (same ordered-stack reasoning as §9.1/§9.2).
 
+**Malformed single-animation-value (`UIX-RCSS-ERRATA-2`, closing `Finding I`, reverified directly):**
+same consequence as a malformed `box-shadow` layer above -- a malformed
+`<single-animation-value>` inside a comma-separated `animation` list aborts the **entire property**.
+`PropertyParserAnimation::ParseAnimation` (`PropertyParserAnimation.cpp:111-206`) `return false`s
+immediately on validation failure for one instance (`animation.name.empty() ||
+animation.duration <= 0.0f || (animation.num_iterations < -1 || animation.num_iterations == 0)`,
+`:204`), and `property`'s own `AnimationList` value is only ever assigned after every instance in the
+list parses successfully. No partial list survives; the property reverts to its cascade/registry-
+initial (`none`).
+
 #### 9.4 `transform`
 
 **Scope, stated explicitly because this is the one composite this document intentionally leaves
@@ -847,15 +1258,32 @@ parse failure that poisons the rest of the stylesheet, never a silent guess. Con
   wave's own selector scope: `class`/`id`/descendant/child (`>`)/tag/compound/comma-list/`:hover`
   per the líder's decision 1, `TODO.md`'s `RMLX-2` entry -- `nth-child`, `:not(`, attribute
   selectors, sibling combinators, and every pseudo-class beyond `:hover`/`:focus`/`:active` are all
-  **out of subset**, matching `docs/rmlx-subset.md` section 2's own real-zero cuts): the whole rule
-  (not just one selector in a comma-list) fails to register, and is logged naming the raw selector
-  text and the file/line.
+  **out of subset**, matching `docs/rmlx-subset.md` section 2's own real-zero cuts): **corrected,
+  `UIX-RCSS-ERRATA-2` (`Finding G`, reverified directly) -- only the individual selector that fails
+  to register is dropped, not the whole rule.** `StyleSheetParser::ConstructNodes`
+  (`StyleSheetParser.cpp:947-967`) resolves each comma-separated selector independently
+  (`for (const String& selector : selector_list) { ... if (!leaf_node) Log::Message(...); else ...
+  leaf_nodes.push_back(...); }`) -- a failed selector logs a warning and the loop **continues**;
+  it never returns early, never discards `leaf_nodes` already collected, never touches the rule's own
+  property declarations. The rule's declarations apply to every selector that **did** resolve,
+  regardless of any sibling selector in the same comma-list that failed. "The whole rule fails" is
+  only true for a **non-comma-list** selector that is itself invalid (nothing else in the list to
+  fall back to). This directly touches the líder's own comma-list-selector evidence (15 corpus
+  instances, including the 16-tag UA-stylesheet base rule, `docs/rmlx-subset.md` §6.1) -- a single
+  typo'd tag name in that rule loses only that one tag under real RmlUi, not the whole rule.
 - **Unknown decorator/filter function name**, or a known function given the wrong argument shape:
-  that single decorator entry is dropped from its property's list (the *rest* of a comma-separated
-  decorator list, if any, still applies) -- mirrors `polygon()`'s existing "whole decorator ignored,
-  never a partial render" rule extended to "whole *entry*", since a decorator list is itself now a
-  first-class multi-entry construct this document defines (§9.2) that `polygon()`'s own
-  single-decorator-per-declaration precedent did not have to consider.
+  **corrected, `UIX-RCSS-ERRATA-2` (`Finding C`, reverified directly) -- the *entire property*
+  reverts, not just that one entry.** `PropertyParserDecorator::ParseValue`
+  (`PropertyParserDecorator.cpp:63-131`) and `PropertyParserFilter::ParseValue`
+  (`PropertyParserFilter.cpp:29-90`) both loop over their own split function-value list (§9.2 -- comma
+  for `decorator`/`mask-image`, space for `filter`/`backdrop-filter`) and, on the **first** invalid
+  keyword, unknown function name, or shorthand-parse failure inside one entry, `return false`
+  **immediately** -- `property.value`/`property.unit` are never assigned. The caller only calls
+  `dictionary.SetProperty` **after** a successful `ParseValue`, so on failure nothing is written at
+  all and the property falls back, in full, to its cascade/registry-initial value (`none`). There is
+  no partial list surviving -- **every** entry in that list is discarded, including the ones that
+  individually would have parsed fine. This is the **same** consequence already correctly stated
+  below for a malformed shorthand; the two bullets now use the same wording, not opposite ones.
 - **Out-of-range numeric value** for a property/argument with a declared range (`polygon()`'s
   `sides ∈ [3, 1024]`, `image-tint-threshold ∈ [0, 0.999]`, `opacity ∈ [0, 1]`): the value clamps to
   the nearest bound **only where §6.1/§9 states a clamp**; where no clamp is stated, the whole
@@ -864,16 +1292,22 @@ parse failure that poisons the rest of the stylesheet, never a silent guess. Con
 - **Malformed shorthand value** (a recognised shorthand name, §6.2, whose raw value's own token
   count or shape does not fit any of that shorthand's accepted forms -- e.g. `border-top`'s own
   2-token chain given in the reversed, color-then-width order, §6.2's own errata note): the same
-  consequence as an unknown property, uniformly -- the **entire shorthand declaration** is dropped,
-  every longhand it would have targeted keeps whatever the cascade's next-lower-specificity rule
-  provides, or its §6.1 registry initial value if none. For a shorthand whose own algorithm is
-  itself composed of sub-shorthands (`border`'s `RecursiveRepeat`, §6.2): if **any** of the 4
-  side-shorthand sub-expansions fails, the **whole** `border` declaration is dropped, not just the
-  failing side (matches upstream's own `result &= ...` across all 4,
-  `PropertySpecification.cpp:369-380`, already the behaviour `glintfx/src/uix/style/shorthand.cpp`'s
-  own `RecursiveRepeat` branch implements). This is not a new rule invented for this errata pass --
-  it is this section's own opening sentence ("an unrecognized or **invalid** construct is logged and
-  ignored") made explicit for the one shape of invalidity the original text left unnamed.
+  consequence as an unknown property, in the sense that `ParseShorthandDeclaration` **returns**
+  `false` and the declaration is logged as rejected -- but **corrected, `UIX-RCSS-ERRATA-2`
+  (`Finding A`, reverified directly): the return value does not mean every targeted longhand reverts.**
+  Upstream's `SetProperty` calls happen **inside** the parsing loop, in place, with no staging buffer
+  and no rollback on the loop's later failure (§6.2's own second correction has the full byte-by-byte
+  trace) -- whichever longhand had **already matched successfully before the loop's post-condition
+  failure fires** keeps that matched value from the source; only the longhand that was **never**
+  matched in that call falls back to cascade/registry-initial. For a shorthand whose own algorithm is
+  itself composed of sub-shorthands (`border`'s `RecursiveRepeat`, §6.2): each of the 4
+  side-shorthand sub-calls runs to completion independently (`result &= ...`,
+  `PropertySpecification.cpp:375-388`, no early exit across the loop) **before** the aggregate
+  `result=false` surfaces -- so each side's own partial-write (per the paragraph above) already
+  happened for all 4 sides by the time the outer call reports failure. The **logged, reported**
+  outcome is still "declaration rejected" for both cases -- what changed is which longhands the
+  dictionary actually ends up holding when that rejection is reported, which is the fact this dump's
+  own `PROP` lines make visible and byte-comparable.
 - **Logging format, minimum content:** the raw text of the rejected construct, and its file/line if
   available -- never a bare "invalid RCSS" with no locatable cause, the same standard
   `check_rml_whitelist.sh`'s own `file:line` reporting sets for this codebase (`docs/rmlx-subset.md`
@@ -1037,21 +1471,29 @@ side by side, `dp_ratio = 1.0`.
 ```
 body/0 PROP border-top-color=#7a5a2eff
 body/0 PROP border-top-width=1.0000px
-body/1 PROP border-top-color=#000000ff
+body/1 PROP border-top-color=#7a5a2eff
 body/1 PROP border-top-width=0.0000px
 ```
 
 - `body/0` (`#a`, width-then-color, the corpus's own 100%-measured real order) -- both longhands
   set from the declaration: `border-top-width=1.0000px` (`1dp` resolved through `dp_ratio=1.0`, `px`
   suffix per §8.1), `border-top-color=#7a5a2eff` (§7.1, alpha defaulted to `ff`).
-- `body/1` (`#b`, color-then-width, the reversed order) -- the **whole** `border-top` declaration is
-  `MalformedValue` per §6.2's corrected row and §11's new malformed-shorthand bullet, so **both**
-  longhands print their §6.1 registry initial value instead, exactly as if the declaration had never
-  been written at all: `border-top-color=#000000ff` (`black`, defaulted per §7.1's own `#rgb`/named
-  color handling, straight alpha `ff`), `border-top-width=0.0000px` (`0px`, quantized). **This is the
-  line a naive "order-independent" reading gets wrong two different ways at once:** it is not that
-  `#b` merely fails to parse `border-top-color` (leaving `-width` set) -- BOTH longhands revert,
-  because the shorthand aborts as a unit before either `SetProperty` call for it happens.
+- `body/1` (`#b`, color-then-width, the reversed order) -- **corrected, `UIX-RCSS-ERRATA-2`
+  (`Finding A`, reverified directly against upstream, byte-by-byte trace in §6.2's second
+  correction): only `border-top-width` reverts, `border-top-color` does not.**
+  `ParseShorthandDeclaration` still returns `false` and the declaration is still logged as rejected
+  per §11's corrected malformed-shorthand bullet -- but upstream's own loop already called
+  `dictionary.SetProperty(BorderTopColor, ...)` from the source token `"#7A5A2E"` (item 1, `-color`,
+  matched it) **before** the post-loop guard ever fires; item 0 (`-width`) never matched anything in
+  this call. Printed result: `border-top-color=#7a5a2eff` (**set from the source token, identical to
+  `body/0`'s own value** -- not reverted), `border-top-width=0.0000px` (`0px`, quantized, the §6.1
+  registry initial -- this one **did** revert). **This is the line a naive "whole declaration
+  reverts" reading gets wrong:** it is not that `#b`'s two longhands print identically to `body/0`'s
+  *or* both revert to black/`0px` -- one of each: the matched longhand keeps the source value, only
+  the never-matched one falls back. An earlier version of this worked example (before this errata)
+  published `border-top-color=#000000ff` for `body/1` -- that value was **wrong**, not a rounding
+  variant; a Side A/Side B pair built against the un-corrected text would have agreed with each other
+  on the wrong byte, exactly the failure mode this document's own header section warns about.
 
 #### 15.3 The three `%` families, side by side
 
@@ -1242,6 +1684,23 @@ nó de texto -- isso inventaria em silêncio um fato que este formato não defin
 
 ### 3. Forma do arquivo: blocos `STATE`, depois enumeração `PROP` por nó
 
+**Visão geral de formato (`UIX-RCSS-ERRATA-2`, declarada explicitamente aqui pela primeira vez -- o
+irmão `docs/uix-dom.md` §1 abre com esta mesma frase pro próprio formato, este documento nunca tinha
+o equivalente, e uma auditoria achou a lacuna):** textual, UTF-8, um fato por linha
+`PROP`/`PROPS`/`STATE`. O comparador byte-`==` que a seção 8 define é o próprio mecanismo de
+comparação escolhido por este formato -- um afastamento deliberado do `diff` de string cru do
+`docs/uix-dom.md`, não um esquecimento; a seção 8 já declara por quê (o passo de quantização é onde
+a "clemência" deste formato mora, então o próprio comparador pode ficar um `==` estrito).
+
+**Terminador de arquivo (`UIX-RCSS-ERRATA-2`, fechando uma lacuna que o `docs/uix-dom.md` §1 já
+fechava pro próprio formato e este documento não tinha herdado por nome):** o arquivo de dump sempre
+termina com uma newline final única depois da própria última linha `PROP` do próprio último bloco
+`STATE` -- mesma convenção e mesma justificativa da própria cláusula de terminador de arquivo do
+`docs/uix-dom.md` (evita uma linha de diff espúria de "sem newline no fim do arquivo", load-bearing
+pro comparador byte-`==` que a seção 8 define: um dump sem esse byte final e um que o tem são
+*arquivos diferentes* mesmo com toda linha impressa idêntica). Nenhuma linha em branco entre blocos
+`STATE`, nenhuma no exato início do arquivo.
+
 O dump tem **N blocos `STATE`** de topo (a seção 4 abaixo define exatamente quantos estados, e por
 que exatamente esse número, nem mais nem menos), cada um uma **enumeração de propriedade da árvore
 inteira, completa e independente**, um atrás do outro num arquivo só:
@@ -1294,6 +1753,17 @@ de estado pequeno, fechado, de 2 membros, por completo:
 | :--- | :--- | :--- |
 | `none` | Nenhuma pseudo-classe forçada em elemento nenhum (default RmlUi/glintfx: nada hovered, focused ou active) | O baseline contra o qual todo fixture é autorado |
 | `hover-all` | `:hover` forçado **verdadeiro** em todo elemento da árvore, simultaneamente | 37-53 usos reais, sempre composto, "produto principal" declarado desta onda |
+
+**Ordem de arquivo dos blocos `STATE` (`UIX-RCSS-ERRATA-2`, achado por auditoria independente,
+`Achado E`): a própria ordem de linha da tabela acima, `none` primeiro, é uma sequência fixa,
+prosa-declarada -- antes só era mostrada (esta tabela, o exemplo trabalhado da seção 15.1), nunca
+declarada como regra.** Isto **não** é resolvido pela regra de ordenação byte-wise que as seções 3/6
+usam pra nomes de propriedade e outros tokens em outro lugar deste documento --
+`"hover-all"` ordena antes de `"none"` byte-wise (`'h'` < `'n'`), que é a ordem oposta que a tabela e
+todo exemplo trabalhado já usam, então essa regra não pode ser assumida como governando também a
+ordem de `STATE` sem esta frase dizer isso. Uma futura adição `focus-all`/`active-all` se acrescenta
+ao fim desta mesma sequência fixa, na ordem em que a tabela acima ganha as novas linhas, nunca
+reordenando as existentes.
 
 `:focus` e `:active` **não** são linhas separadas na matriz desta onda -- 3 e 2 usos medidos
 respectivamente é uso real, não-zero (diferente do zero medido de `nth-child`/`:not`/`z-index` da
@@ -1484,10 +1954,10 @@ revertida, cor-depois-width) é reivindicado pelo item 1, deixando o cursor de i
 outro token ainda não-reivindicado, e a própria guarda pós-laço do upstream (`value_index <
 property_values.size() && property_index >= items.size()`) aborta o shorthand **inteiro** -- não um
 resultado parcial. Concretamente, pra `border-top`: `1dp #7A5A2E` (width-depois-color, a própria
-ordem 100%-medida do corpus) tem sucesso; `#7A5A2E 1dp` (color-depois-width) é `MalformedValue`, e a
-declaração `border-top` inteira é descartada pela política fail-high da seção 11 (tanto
-`border-top-width` quanto `border-top-color` ficam com o que a regra de próxima-especificidade-menor
-da cascata fornecer, ou o próprio valor inicial de registro se nenhuma). **O que "independente de
+ordem 100%-medida do corpus) tem sucesso; `#7A5A2E 1dp` (color-depois-width) é `MalformedValue`, e
+`ParseShorthandDeclaration` retorna `false` pra declaração `border-top` inteira -- **mas ver a
+correção da `UIX-RCSS-ERRATA-2` logo abaixo da tabela antes de confiar no que aquele `false` implica
+sobre quais longhands de fato ficam segurando o quê.** **O que "independente de
 ordem" É verdade:** qual *domínio* um token roteia é guiado por conteúdo (um token com forma de
 comprimento roteia pra `-width` independente da posição em que aparece) -- essa parte da frase
 original não estava errada. **O que não é verdade:** que uma *ordem* de token arbitrária sempre tem
@@ -1497,6 +1967,38 @@ duas ordens lado a lado. Prova, não só afirmação: pinado pelo próprio
 `glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`, e já declarado corretamente no próprio
 `glintfx/src/uix/style/shorthand.hpp:38`/`shorthand.cpp:30-35` antes deste documento ser corrigido
 pra bater.
+
+**Segunda correção (`UIX-RCSS-ERRATA-2`, 2026-08-06): o parágrafo acima está ele mesmo pela metade
+errado sobre a *consequência* daquele retorno `false`, achado por uma auditoria independente
+(`UIX-RCSS-AMBIGUIDADE`, `docs/uix-rcss-ambiguidades.md`, Achado A) e reverificado linha-por-linha
+pelo `tech-lead` antes desta correção ser escrita.** **Não é verdade** que "tanto
+`border-top-width` quanto `border-top-color` ficam com o que a regra de próxima-especificidade-menor
+da cascata fornecer" pro caso de ordem revertida. O laço `FallThrough`/`Box` do upstream
+(`PropertySpecification.cpp:433-472`) **não tem buffer de staging** -- `dictionary.SetProperty(...)`
+(`:461`) dispara **dentro do laço, no momento em que o `ParseValue` de qualquer item tem sucesso**,
+antes da guarda pós-laço (`:469-471`) sequer rodar. Rastreando `#b { border-top: #7A5A2E 1dp; }`
+token por token: iteração 1, item 0 (`-width`) tenta `"#7A5A2E"`, falha ao parsear como comprimento,
+e (sendo `FallThrough` com um próximo item disponível) dá `continue` -- o próprio incremento do
+cabeçalho do laço `for` avança `property_index` pra 1, `value_index` fica em `0` (um `continue` em
+C++ não pula a própria cláusula de incremento do cabeçalho `for`, só pula o resto das instruções do
+corpo do laço). Iteração 2, item 1 (`-color`) tenta o **mesmo `"#7A5A2E"` ainda não-reivindicado**,
+tem sucesso, e `dictionary.SetProperty(BorderTopColor, ...)` dispara **ali mesmo** --
+`border-top-color` é setado a partir do token da fonte. Só *depois* do laço a guarda pós-laço vê
+`value_index(1) < property_values.size()(2)` e `property_index(2) >= items.size()(2)`, e retorna
+`false`. Nada rio-abaixo daquele `false` desfaz a chamada `SetProperty` que já aconteceu --
+`StyleSheetParser::ReadProperties` (`StyleSheetParser.cpp:1023`) só loga um aviso no `false`, e
+`PropertyDictionary::SetProperty` (`PropertyDictionary.cpp:8`) é um `properties[id] = property;` cru,
+sem camada transacional pra desfazer. **A consequência corrigida pro `body/1` (`#b`):
+`border-top-color=#7a5a2eff` (setado a partir do token da fonte, item 1 casou antes da falha
+aparecer), `border-top-width=0.0000px` (item 0 nunca casou nada nesta chamada, cai pro próprio valor
+inicial de registro da seção 6.1) -- só `-width` reverte, `-color` não.** A seção 15.2 abaixo é
+corrigida pra bater. O mesmo mecanismo se aplica ao próprio `RecursiveRepeat` de `border` (ver a
+linha da tabela acima e a correção correspondente na seção 11 abaixo): cada uma das 4 sub-chamadas
+de side-shorthand roda até o fim de forma independente (`result &= ParseShorthandDeclaration(...)`,
+`PropertySpecification.cpp:379`, sem saída antecipada), então um `border: #7A5A2E 1dp;` revertido
+escreve parcialmente os 4 longhands `-color` a partir do token da fonte (cada sub-chamada
+`FallThrough` de cada lado bate no mesmo bug de forma independente) enquanto deixa os 4 longhands
+`-width` intocados, *antes* do `result=false` agregado fazer a chamada externa retornar falha.
 
 ##### 6.3 O algoritmo `Box` (verbatim de `PropertySpecification.cpp:336-370`, expansão de box-model CSS padrão)
 
@@ -1510,6 +2012,42 @@ exigido pelos casos medidos, não uma extensão especulativa.
 
 *(mesma tabela em inglês -- os nomes de domínio (`keyword`, `number`, `length`, etc.) são
 identificadores técnicos, não traduzidos.)*
+
+**Valor computado vazio no domínio string (`UIX-RCSS-ERRATA-2`, fechando uma lacuna que o documento
+irmão `docs/uix-dom.md` §7 já fechava pro próprio caso `ATTR data-if=` mas este documento ainda não
+tinha declarado pro caso análogo próprio):** `cursor` e `font-family` registram `*(vazio)*` como o
+próprio valor inicial da seção 6.1. Uma linha `PROP` pra qualquer uma das duas, quando o valor
+computado é a string vazia, ainda imprime -- `<caminho> PROP cursor=` (nada depois do `=`), nunca
+omitida -- a mesma convenção que o `docs/uix-dom.md` §7 declara por nome pro próprio `ATTR
+data-if=` (presente-com-valor-vazio e ausente são estados diferentes, os dois consultáveis; uma
+linha `PROP` de domínio `string` sempre existe pela própria regra "o registro inteiro, todo nó" da
+seção 3, então "presente com valor vazio" é o único estado alcançável aqui -- não existe estado
+"ausente" pra distinguir dele, diferente de um atributo do DOM).
+
+**Identificadores estruturais nunca são escapados (`UIX-RCSS-ERRATA-2`, espelhando o tratamento
+idêntico que o `docs/uix-dom.md` §8 dá pro próprio `<tag>`):** a metade `<nome-propriedade>` do par
+`nome=valor` de uma linha `PROP` nunca é escapada pela tabela da seção 2, pelo mesmo motivo que o
+`docs/uix-dom.md` §5 dá pro próprio `<tag>` -- é sempre um dos 72 identificadores fixos, fechados,
+ASCII kebab-case que a própria tabela da seção 6.1 nomeia (escolhido pelo *dumper*, iterando o
+próprio registro, nunca ecoado de volta de caixa ou conteúdo arbitrário autorado na fonte do jeito
+que um valor de atributo é), e nenhuma dessas 72 strings pode estruturalmente conter nenhum dos 4
+caracteres de escape (`\`, `\n`, `\r`, `\t`). Escapar é portanto nunca *alcançável* pra este campo, e
+este documento declara isso explicitamente em vez de deixar um segundo implementer imaginar se foi
+esquecido.
+
+**Valores de domínio string não escapam os próprios separadores compostos deste documento
+(`UIX-RCSS-ERRATA-2`, fechando o Achado H):** a tabela de 4 regras da seção 3 (`\`, `\n`, `\r`, `\t`,
+herdada do `docs/uix-dom.md` §2) é o **único** escape que um valor de domínio `string` recebe. Ela
+**não** cobre `\|`, `;`, ou `:` -- os próprios separadores de lista-composta, argumento e stop deste
+documento (seção 9), escolhidos especificamente pra que uma linha de dump *composta* nunca fique
+ambígua sobre qual papel-de-vírgula um byte tinha na fonte. Um valor string de `font-family`,
+`cursor`, ou `text-overflow` contendo um `;` ou `:` literal (os dois conteúdo string RCSS legal)
+imprime byte-por-byte não-escapado no nível superior -- isto é um limite de escopo deliberado, não um
+esquecimento: o objetivo "nunca ambíguo" da seção 9 foi declarado pra gramática de valor
+*composto*, e não é estendido retroativamente pro valor string de uma linha `PROP` **plana,
+não-composta**. Uma linha `PROP` é portanto só re-divisível com segurança em `=` (uma vez, na
+primeira ocorrência) mais a gramática específica-de-domínio que a seção 9 define pra aquela
+propriedade específica -- não é um registro delimitado de propósito geral.
 
 #### 7.1 Cor: forma canônica, e o escopo exato autorizado hoje
 
@@ -1534,14 +2072,44 @@ líder, que nomeou unidades, não sintaxe de cor. Um dumper conforme encontrando
 tem de **fail-high** (seção 11), não suportar em silêncio por acaso porque o parser era fácil de
 estender.
 
-**Cores são dumpadas straight-alpha, não pré-multiplicadas.** `Style::ComputedValues`/
-`Property::Get<Colourb>` guardam alpha straight; a pré-multiplicação (`.ToPremultiplied()`) acontece
-no call site que consome pra render (ex.: o próprio parser de `box-shadow` chama isso imediatamente
-ao construir o struct `BoxShadow`, por `PropertyParserBoxShadow.cpp:69`, mas isso é um struct de
-domínio-de-render, não o próprio `ComputedValues` da cascata). Este dump reporta o valor de
-domínio-de-cascata, então alpha straight é correto e consistente pra todo campo tipo-cor,
-**inclusive** cores aninhadas dentro de uma camada de `box-shadow` ou um stop de gradiente (seção
-9.1/9.2) -- nenhuma delas é pré-multiplicada antes de imprimir também.
+**Cores são dumpadas straight-alpha pra propriedades tipo-cor escalares -- `background-color`,
+`border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
+guardam alpha straight pra essas; não existe chamada de pré-multiplicação em lugar nenhum do próprio
+caminho de parse delas.
+
+**Corrigido, `UIX-RCSS-ERRATA-2` (2026-08-06): cores de camada de `box-shadow` e todo stop de
+gradiente são a exceção, e são pré-multiplicadas, não straight -- achado por uma auditoria
+independente (`UIX-RCSS-AMBIGUIDADE`, Achado B) e reverificado direto pelo `tech-lead`.** O texto
+original acima afirmava que esses dois campos eram straight-alpha "inclusive" pras cores de
+`box-shadow`/stop-de-gradiente -- **falso**. `PropertyParserBoxShadow.cpp:72`: `shadow.color =
+prop.Get<Colourb>().ToPremultiplied();` (a citação tinha deriva pra `:69` num rascunho anterior --
+`:72` é a linha verificada no clone upstream). `PropertyParserColorStopList.cpp:47` (o parser por
+trás de todo stop de gradiente em `linear-gradient`/`radial-gradient`, os dois usados por
+`decorator`/`mask-image`/`filter`/`backdrop-filter`): `color_stop.color =
+p_color.Get<Colourb>().ToPremultiplied();` -- mesmo padrão. As duas chamadas disparam **em tempo de
+parse**, antes do valor sequer chegar ao `Style::ComputedValues`, e o **próprio tipo do campo do
+struct** é `ColourbPremultiplied` (`Include/RmlUi/Core/DecorationTypes.h:9`, `:22`), um tipo distinto
+do `Colourb` straight que todo campo tipo-cor escalar usa -- não existe representação straight-alpha
+desses dois campos em lugar nenhum rio-abaixo do parse, o sistema de tipos garante isso
+estruturalmente.
+
+**Decisão (aplicada aqui, não deixada em aberto): imprimir os bytes pré-multiplicados como estão.**
+Isto não é despré-multiplicar de volta pra straight antes de imprimir. Raciocínio: (1) o próprio
+princípio-guia deste dump (seção 1) é reportar o que quer que o pipeline de cascata/parse de fato
+produziu, nunca um valor re-derivado -- e pra esses dois campos, `ColourbPremultiplied` **é** o que
+foi produzido, do mesmo jeito que um comprimento resolvido é o que o `ComputeLength` produziu mesmo
+que a fonte tenha escrito outra unidade; (2) despré-multiplicar (`straight = premultiplicado * 255 /
+alpha`) é **indefinido em `alpha=0`** (toda informação de cor já se perdeu -- `0/0`), então
+precisaria de uma convenção inventada que este documento teria de declarar e um segundo implementer
+teria de adivinhar sem ela, exatamente a classe de lacuna que este documento existe pra fechar;
+imprimir os bytes pré-multiplicados como estão não tem esse caso de borda, é total pra toda entrada;
+(3) o lado A percorre o `Style::ComputedValues` real e deveria seguir sendo um leitor fiel e mecânico
+do que está de fato armazenado -- pedir pra ele despré-multiplicar é pedir pra ele inventar lógica que
+o upstream nunca precisou. **Consequência: um par lado A/lado B conforme os dois imprimem os bytes
+`ColourbPremultiplied` armazenados pras cores de camada de `box-shadow` e cores de stop de gradiente,
+bytes `Colourb` straight pra todo outro campo tipo-cor -- isto é uma mudança real de comportamento
+pra qualquer fixture com `alpha<255` nesses dois domínios compostos, não uma reescrita cosmética.** O
+próprio exemplo trabalhado da seção 9.1 é corrigido pra bater.
 
 ### 8. Quantização numérica: a regra, escolhida e justificada
 
@@ -1576,10 +2144,23 @@ Aplicada a **todo** campo de valor float que este dump imprime: comprimentos res
 porcentagens simbólicas, e todo argumento numérico dentro de um valor composto (seção 9). Cores já
 são inteiros (seção 7.1) e são isentas -- não precisam de quantização, só da forma hex canônica.
 
+**`quantize()` é definido só pra `x` finito (`UIX-RCSS-ERRATA-2`, fechando o Achado J):** um valor
+computado não-finito (`NaN`, `+Inf`, `-Inf`) é tratado igual a qualquer outro erro de computação
+detectado internamente: nunca é impresso por este algoritmo -- loga e cai pro próprio valor inicial
+da propriedade (seção 6.1) ou seu valor herdado, a mesma consequência que a seção 11 já define pra
+uma declaração rejeitada. Isto é a própria política geral de fail-high deste documento aplicada a um
+resultado de *computação* numérica em vez de um resultado de *parse* -- nomeado explicitamente porque
+a própria cultura de revisão deste projeto pratica teste adversarial/de mutação que fabrica entradas
+que um corpus nunca produziria, e o algoritmo acima (`trunc`, `copysign`, formatação ponto-fixo) não
+tem comportamento definido pra entrada não-finita de outro jeito.
+
 **Por que 4 dígitos decimais, escolhidos e não apenas herdados por default:** `float32` carrega
-aproximadamente 7 dígitos decimais significativos. Todo comprimento medido no corpus
-(`/var/tmp/censo-rcss-qa1/censo.md` seção 5) fica na faixa 0-3000 (o maior valor único observado,
-`-228dp`, tem 3 dígitos antes do ponto); nessa magnitude, 4 dígitos depois do ponto é **mais**
+aproximadamente 7 dígitos decimais significativos. Todo comprimento medido no corpus fica na faixa
+0-3000 (**corrigido, `UIX-RCSS-ERRATA-2`, cosmético -- o maior valor único citado aqui era antes
+`-228dp`; um censo regenerado (`tools/rcss_census.py`) mediu `999dp` (`border-radius`, o idioma
+"totalmente arredondado" usado por todo o corpus) e `-410dp` (`margin-left`) como maiores em
+magnitude; o exemplo de maior-valor-observado corrigido é `999dp`, ainda 3 dígitos antes do ponto**);
+nessa magnitude, 4 dígitos depois do ponto é **mais**
 precisão do que `float32` sequer consegue representar de forma significativa (aproximadamente 3-4
 dígitos significativos restam abaixo do piso de ruído nessa magnitude) -- então discordância genuína
 de nível-ULP entre dois motores corretos é arredondada fora por este passo pra faixa de valor
@@ -1690,15 +2271,33 @@ Concretamente:
   lista-vírgula/`:hover` pela decisão 1 do líder, entrada `RMLX-2` do `TODO.md` -- `nth-child`,
   `:not(`, seletores de atributo, combinadores irmão, e toda pseudo-classe além de
   `:hover`/`:focus`/`:active` estão todos **fora de escopo**, batendo com os próprios cortes de zero
-  real da seção 2 do `docs/rmlx-subset.md`): a regra inteira (não só um seletor de uma lista-vírgula)
-  falha ao registrar, e é logada nomeando o texto cru do seletor e o arquivo/linha.
+  real da seção 2 do `docs/rmlx-subset.md`): **corrigido, `UIX-RCSS-ERRATA-2` (Achado G,
+  reverificado direto) -- só o seletor individual que falha ao registrar é descartado, não a regra
+  inteira.** `StyleSheetParser::ConstructNodes` (`StyleSheetParser.cpp:947-967`) resolve cada
+  seletor separado por vírgula de forma independente (`for (const String& selector : selector_list)
+  { ... if (!leaf_node) Log::Message(...); else ... leaf_nodes.push_back(...); }`) -- um seletor que
+  falha loga um aviso e o laço **continua**; nunca retorna cedo, nunca descarta os `leaf_nodes` já
+  coletados, nunca toca as próprias declarações de propriedade da regra. As declarações da regra se
+  aplicam a todo seletor que **de fato** resolveu, independente de qualquer seletor irmão da mesma
+  lista-vírgula que falhou. "A regra inteira falha" só é verdade pra um seletor **sem** lista-vírgula
+  que é ele mesmo inválido (nada mais na lista pra cair como fallback). Isto toca direto a própria
+  evidência de lista-vírgula do líder (15 instâncias de corpus, incluindo a regra base de 16-tags da
+  UA-stylesheet, `docs/rmlx-subset.md` §6.1) -- um único nome de tag com erro de digitação naquela
+  regra perde só aquela tag sob o RmlUi real, não a regra inteira.
 - **Nome de função de decorator/filter desconhecido**, ou uma função conhecida com a forma errada
-  de argumento: aquela entrada de decorator específica é descartada da própria lista da propriedade
-  (o *resto* de uma lista de decorator separada por vírgula, se houver, continua se aplicando) --
-  espelha a regra já existente de "decorator inteiro ignorado, nunca render parcial" do `polygon()`,
-  estendida pra "entrada inteira", já que uma lista de decorator agora é ela mesma uma construção
-  multi-entrada de primeira classe que este documento define (seção 9.2) que o precedente de
-  um-decorator-por-declaração do `polygon()` não tinha de considerar.
+  de argumento: **corrigido, `UIX-RCSS-ERRATA-2` (Achado C, reverificado direto) -- a *propriedade
+  inteira* reverte, não só aquela entrada.** `PropertyParserDecorator::ParseValue`
+  (`PropertyParserDecorator.cpp:63-131`) e `PropertyParserFilter::ParseValue`
+  (`PropertyParserFilter.cpp:29-90`) os dois iteram a própria lista de valor-de-função dividida
+  (seção 9.2 -- vírgula pra `decorator`/`mask-image`, espaço pra `filter`/`backdrop-filter`) e, na
+  **primeira** keyword inválida, nome de função desconhecido, ou falha de parse de shorthand dentro
+  de uma entrada, `return false` **imediatamente** -- `property.value`/`property.unit` nunca são
+  atribuídos. O chamador só chama `dictionary.SetProperty` **depois** de um `ParseValue`
+  bem-sucedido, então na falha nada é escrito e a propriedade cai, por completo, pro próprio valor
+  inicial de registro/cascata (`none`). Não sobra lista parcial nenhuma -- **toda** entrada daquela
+  lista é descartada, inclusive as que individualmente teriam parseado bem. Esta é a **mesma**
+  consequência já declarada corretamente abaixo pra um shorthand malformado; os dois bullets agora
+  usam a mesma redação, não redações opostas.
 - **Valor numérico fora de faixa** pra propriedade/argumento com faixa declarada (`sides ∈ [3,
   1024]` do `polygon()`, `image-tint-threshold ∈ [0, 0.999]`, `opacity ∈ [0, 1]`): o valor clampa
   pro limite mais próximo **só onde a seção 6.1/9 declara um clamp**; onde nenhum clamp é declarado,
@@ -1707,18 +2306,23 @@ Concretamente:
 - **Valor de shorthand malformado** (um nome de shorthand reconhecido, seção 6.2, cujo próprio valor
   cru tem contagem ou forma de token que não cabe em nenhuma das formas aceitas daquele shorthand --
   ex.: a própria cadeia de 2 tokens de `border-top` dada na ordem revertida, color-depois-width, per
-  a nota de errata da própria seção 6.2): a mesma consequência de uma propriedade desconhecida, de
-  forma uniforme -- a **declaração de shorthand inteira** é descartada, todo longhand que ela
-  alvejaria fica com o que a regra de próxima-especificidade-menor da cascata fornecer, ou o próprio
-  valor inicial de registro da seção 6.1 se nenhuma. Pra um shorthand cujo próprio algoritmo é ele
-  mesmo composto de sub-shorthands (o `RecursiveRepeat` de `border`, seção 6.2): se **qualquer** uma
-  das 4 sub-expansões de lado falhar, a declaração `border` **inteira** é descartada, não só o lado
-  que falhou (casa com o próprio `result &= ...` do upstream nos 4,
-  `PropertySpecification.cpp:369-380`, já o comportamento que o próprio ramo `RecursiveRepeat` do
-  `glintfx/src/uix/style/shorthand.cpp` implementa). Isto não é uma regra nova inventada pra esta
-  passada de errata -- é a própria frase de abertura desta seção ("uma construção não-reconhecida ou
-  **inválida** é logada e ignorada") tornada explícita pra uma forma de invalidez que o texto
-  original deixava sem nomear.
+  a nota de errata da própria seção 6.2): a mesma consequência de uma propriedade desconhecida, no
+  sentido de que `ParseShorthandDeclaration` **retorna** `false` e a declaração é logada como
+  rejeitada -- mas **corrigido, `UIX-RCSS-ERRATA-2` (Achado A, reverificado direto): o valor de
+  retorno não significa que todo longhand alvejado reverte.** As chamadas `SetProperty` do upstream
+  acontecem **dentro** do laço de parse, in place, sem buffer de staging e sem rollback na falha
+  posterior do laço (a própria segunda correção da seção 6.2 tem o rastro byte-por-byte completo) --
+  qualquer longhand que **já tinha casado com sucesso antes da falha da pós-condição do laço
+  disparar** mantém aquele valor casado da fonte; só o longhand que **nunca** casou naquela chamada
+  cai pro fallback de cascata/registro-inicial. Pra um shorthand cujo próprio algoritmo é ele mesmo
+  composto de sub-shorthands (o `RecursiveRepeat` de `border`, seção 6.2): cada uma das 4
+  sub-chamadas de side-shorthand roda até o fim de forma independente (`result &= ...`,
+  `PropertySpecification.cpp:375-388`, sem saída antecipada no laço) **antes** do `result=false`
+  agregado aparecer -- então a própria escrita-parcial de cada lado (pelo parágrafo acima) já
+  aconteceu pros 4 lados no momento em que a chamada externa reporta falha. O resultado **logado,
+  reportado** continua sendo "declaração rejeitada" pros dois casos -- o que mudou é quais longhands
+  o dicionário de fato termina segurando quando aquela rejeição é reportada, que é o fato que as
+  próprias linhas `PROP` deste dump tornam visível e byte-comparável.
 - **Formato de log, conteúdo mínimo:** o texto cru da construção rejeitada, e o arquivo/linha se
   disponível -- nunca um "RCSS inválido" nu sem causa localizável, o mesmo padrão que o próprio
   relatório `file:line` do `check_rml_whitelist.sh` fixa pra este código-base (seção 4 do

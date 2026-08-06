@@ -1150,6 +1150,36 @@ add_library(glintfx::core ALIAS glintfx_core)
 #     própria adição IMG-DECODE acima já declara: este módulo não tem gate desligável, e
 #     image_encode.cpp é o outro consumidor deste módulo do dir de include third_party/stb
 #     (stb_image_write.h desta vez, não stb_image.h) já setado PRIVATE abaixo.
+#
+# CI-ARCH-WERROR-STB (2026-08-06): the `arch-container` leg of `distro-matrix.yml` is the only
+#     one with `-DCMAKE_CXX_FLAGS=-Werror` (matrix.werror=true), and clang 22.1.8 (Arch rolling's
+#     current toolchain) turns `-Wmissing-field-initializers` into a build-breaking error over
+#     `stb_image_write.h`'s own `stbi__write_context s = { 0 };` idiom (8 occurrences, all
+#     third-party code we vendor, none of it ours). `-Wno-missing-field-initializers` is applied
+#     PER-FILE, to `src/stb_image_write_impl.cpp` ONLY -- not to the `glintfx_image` target below
+#     -- so `-Werror`/`-Wall`/`-Wextra` stay fully live for `image.cpp`/`image_encode.cpp` (our
+#     own code, same target) and for `src/stb_image_impl.cpp` (the decode-side sibling TU,
+#     MEASURED clean under clang 22 + `-Wall -Wextra -Werror` -- it has no aggregate `{0}` of a
+#     multi-member struct, only two array `{0}` inits that this warning does not fire on -- so it
+#     is deliberately left untouched rather than defensively silenced for a warning it does not
+#     produce). Only the one warning is disabled, only in the one TU that needs it; every other
+#     diagnostic in that same TU (and everywhere else) still promotes to error. See TODO.md.
+# PT: CI-ARCH-WERROR-STB (2026-08-06): a perna `arch-container` do `distro-matrix.yml` é a única
+#     com `-DCMAKE_CXX_FLAGS=-Werror` (matrix.werror=true), e o clang 22.1.8 (toolchain atual do
+#     Arch rolling) transforma `-Wmissing-field-initializers` em erro de build sobre o próprio
+#     idioma `stbi__write_context s = { 0 };` do `stb_image_write.h` (8 ocorrências, todas código
+#     de terceiro vendorizado, nenhuma nossa). `-Wno-missing-field-initializers` é aplicado
+#     POR-ARQUIVO, só em `src/stb_image_write_impl.cpp` -- não no alvo `glintfx_image` abaixo --
+#     então `-Werror`/`-Wall`/`-Wextra` seguem valendo integralmente pra `image.cpp`/
+#     `image_encode.cpp` (código nosso, mesmo alvo) e pra `src/stb_image_impl.cpp` (a TU irmã do
+#     lado decode, MEDIDA limpa sob clang 22 + `-Wall -Wextra -Werror` -- ela não tem `{0}`
+#     agregado de struct multi-membro, só dois `{0}` de array, sobre os quais este warning não
+#     dispara -- por isso fica deliberadamente intocada em vez de silenciada por precaução para um
+#     warning que ela não produz). Só o único warning é desligado, só na única TU que precisa;
+#     todo o resto do diagnóstico nesta mesma TU (e em qualquer outro lugar) continua promovendo
+#     a erro. Ver TODO.md.
+set_source_files_properties(src/stb_image_write_impl.cpp PROPERTIES
+  COMPILE_OPTIONS "-Wno-missing-field-initializers")
 add_library(glintfx_image OBJECT src/stb_image_impl.cpp src/image.cpp
   src/stb_image_write_impl.cpp src/image_encode.cpp)
 target_include_directories(glintfx_image PRIVATE

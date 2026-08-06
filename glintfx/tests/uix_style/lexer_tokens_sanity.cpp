@@ -29,13 +29,21 @@ namespace {
 
 int g_failures = 0;
 
-void check(bool cond, const char* what) {
-  if (!cond) {
-    std::fprintf(stderr, "FAIL: %s\n", what);
-    ++g_failures;
-  }
-}
-
+// EN: CI-ARCH-WERROR-STB domino sweep (2026-08-06): unlike the DOM sibling
+//     (tests/uix/lexer_tokens_sanity.cpp), every assertion in THIS file goes through check_eq()
+//     or expect_kind() -- no case here needed a raw boolean check(). The unused function was
+//     copied-as-boilerplate from that sibling and never called; clang 22.1.8 + -Werror (the
+//     arch-container CI leg) flags it as -Wunused-function. Removed rather than kept dead --
+//     Arch was the only leg strict enough to catch this, and it was masked until now by the
+//     unrelated stb_image_write.h -Werror build break this same task fixed (see CMakeLists.txt).
+// PT: Varredura dominó do CI-ARCH-WERROR-STB (2026-08-06): diferente do irmão DOM
+//     (tests/uix/lexer_tokens_sanity.cpp), toda asserção NESTE arquivo passa por check_eq() ou
+//     expect_kind() -- nenhum caso aqui precisou de um check() booleano cru. A função não-usada
+//     foi copiada como boilerplate daquele irmão e nunca chamada; o clang 22.1.8 + -Werror (a
+//     perna arch-container do CI) acusa como -Wunused-function. Removida em vez de mantida morta
+//     -- o Arch foi a única perna estrita o bastante pra pegar isto, e ficou mascarada até agora
+//     pela quebra de build não-relacionada do stb_image_write.h que esta mesma tarefa consertou
+//     (ver CMakeLists.txt).
 void check_eq(std::string_view got, std::string_view want, const char* what) {
   if (got != want) {
     std::fprintf(stderr, "FAIL: %s (got \"%.*s\", want \"%.*s\")\n", what,

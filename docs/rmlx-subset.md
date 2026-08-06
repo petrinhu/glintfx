@@ -127,7 +127,7 @@ The gate's check (d) currently reports exactly these 4 files, all holding a forw
 
 #### 6.1 Decision 1 -- comma-list selectors (`.a, .b { }`) are authorized
 
-Not a corner case: the census found **15 instances across 8 source files**, 3 of them in glintfx's own `glintfx/src/ua_stylesheet.hpp` -- including a **16-tag list in a single rule** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, lines 99-102) that is the **first rule in the file** and sets `display: block` on every structural element of every document glintfx renders. Without this selector form, the new engine cannot apply its own base stylesheet, and every document renders wrong from the first frame. The full 15, exhaustive:
+Not a corner case: the census found **15 instances across 13 source files** (the exhaustive table below is the authority; **13**, not the **8** the census's own prose claimed -- see the recorded discrepancy in this same amendment, and `tools/rcss_census.py --scope production`, which rederives **15/13** from the versioned corpus), 3 of them in glintfx's own `glintfx/src/ua_stylesheet.hpp` -- including a **16-tag list in a single rule** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, lines 99-102) that is the **first rule in the file** and sets `display: block` on every structural element of every document glintfx renders. Without this selector form, the new engine cannot apply its own base stylesheet, and every document renders wrong from the first frame. The full 15, exhaustive:
 
 | # | File:line | Full selector |
 | :--- | :--- | :--- |
@@ -302,7 +302,7 @@ O check (d) do gate reporta hoje exatamente estes 4 arquivos, todos carregando u
 
 #### 6.1 Decisão 1 -- seletor com lista de vírgula (`.a, .b { }`) está autorizado
 
-Não é caso de canto: o censo achou **15 ocorrências em 8 arquivos-fonte**, 3 delas na própria `glintfx/src/ua_stylesheet.hpp` -- incluindo uma **lista de 16 tags numa regra só** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, linhas 99-102) que é a **primeira regra do arquivo** e dá `display: block` a todo elemento estrutural de todo documento que a glintfx renderiza. Sem essa forma de seletor, o motor novo não aplica a própria folha base, e todo documento renderiza errado desde o primeiro frame. As 15, exaustivas:
+Não é caso de canto: o censo achou **15 ocorrências em 13 arquivos-fonte** (a tabela exaustiva abaixo é a autoridade; **13**, não os **8** que a prosa do próprio censo afirmava -- ver a divergência já registrada nesta mesma emenda, e `tools/rcss_census.py --scope production`, que rederiva **15/13** do corpus versionado), 3 delas na própria `glintfx/src/ua_stylesheet.hpp` -- incluindo uma **lista de 16 tags numa regra só** (`div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, article, header, footer, nav, main`, linhas 99-102) que é a **primeira regra do arquivo** e dá `display: block` a todo elemento estrutural de todo documento que a glintfx renderiza. Sem essa forma de seletor, o motor novo não aplica a própria folha base, e todo documento renderiza errado desde o primeiro frame. As 15, exaustivas:
 
 | # | Arquivo:linha | Seletor completo |
 | :--- | :--- | :--- |

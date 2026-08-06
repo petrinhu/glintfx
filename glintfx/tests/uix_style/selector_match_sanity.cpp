@@ -182,6 +182,153 @@ void test_selector_specificity_sums_chain() {
 }
 
 // ---------------------------------------------------------------------------
+// EN: PINNED AGAINST THE UPSTREAM LITERAL, NOT AGAINST THIS MODULE'S OWN CONSTANT (QA finding,
+//     2026-08-06 -- reproduced and closed here, cite UIX-SELECTOR-MATCH). Every check above this
+//     point compares `compound_specificity(...)`/`selector_specificity(...)` against
+//     `kSpecificityWeight*` -- the SAME named constant `selector_match.cpp` itself uses to compute
+//     the answer. That proves INTERNAL CONSISTENCY (the function really does add up the constants
+//     it claims to) but is a SELF-REFERENTIAL golden: sabotaging `kSpecificityWeightId` from
+//     `1'000'000` to `100'000` moves BOTH sides of every `== kSpecificityWeightId` check together,
+//     so none of them can ever go red -- proven live: the QA's own mutation on exactly that
+//     constant passed all 11 tests. The two checks below are the ONE thing this file did not yet
+//     have: an assertion whose RIGHT-HAND SIDE is the bare upstream number, immune to a mutation of
+//     the constant itself, because nothing here reads the constant to compute the expected value.
+//     Citation: `examples/RmlUi/Source/Core/StyleSheetSelector.h:13-21` -- the exact `enum` this
+//     module's own `kSpecificityWeightTag`/`kSpecificityWeightClassOrPseudo`/`kSpecificityWeightId`
+//     mirror (selector_match.hpp's own header comment, "The specificity algorithm").
+//
+//     ⚠️ KEEP BOTH KINDS OF ASSERTION, DO NOT "SIMPLIFY" ONE AWAY: the constant-vs-constant checks
+//     above (`compound_specificity(id_c) == kSpecificityWeightId`) still matter -- they are what
+//     proves the ARITHMETIC inside `compound_specificity`/`selector_specificity` is wired
+//     correctly (no dropped term, no wrong operator). The literal-vs-constant checks here are what
+//     proves the CONSTANT ITSELF still equals the number the upstream RE-study evidence says it
+//     must. Removing either half re-opens exactly one of the two gaps the other half does not
+//     cover -- a future reader "cleaning up the duplication" between this function and
+//     `test_compound_specificity_weights` above would silently reopen the mutation this section
+//     exists to close.
+// PT: ANCORADO NO LITERAL DO UPSTREAM, NÃO NA PRÓPRIA CONSTANTE DESTE MÓDULO (achado do QA,
+//     2026-08-06 -- reproduzido e fechado aqui, cita UIX-SELECTOR-MATCH). Toda checagem acima
+//     deste ponto compara `compound_specificity(...)`/`selector_specificity(...)` contra
+//     `kSpecificityWeight*` -- a MESMA constante nomeada que o próprio `selector_match.cpp` usa
+//     pra computar a resposta. Isso prova CONSISTÊNCIA INTERNA (a função de fato soma as
+//     constantes que afirma somar) mas é um golden AUTO-REFERENTE: sabotar
+//     `kSpecificityWeightId` de `1'000'000` pra `100'000` move OS DOIS LADOS de toda checagem
+//     `== kSpecificityWeightId` juntos, então nenhuma delas consegue algum dia ficar vermelha --
+//     provado ao vivo: a própria mutação do QA nessa constante exata passou nos 11 testes. As duas
+//     checagens abaixo são a ÚNICA coisa que este arquivo ainda não tinha: uma asserção cujo LADO
+//     DIREITO é o número cru do upstream, imune a uma mutação da própria constante, porque nada
+//     aqui lê a constante pra computar o valor esperado. Citação:
+//     `examples/RmlUi/Source/Core/StyleSheetSelector.h:13-21` -- o `enum` exato que os próprios
+//     `kSpecificityWeightTag`/`kSpecificityWeightClassOrPseudo`/`kSpecificityWeightId` deste
+//     módulo espelham (o próprio comentário de cabeçalho do selector_match.hpp, "O algoritmo de
+//     especificidade").
+//
+//     ⚠️ MANTENHA OS DOIS TIPOS DE ASSERÇÃO, NÃO "SIMPLIFIQUE" TIRANDO UM: as checagens
+//     constante-contra-constante acima (`compound_specificity(id_c) == kSpecificityWeightId`)
+//     ainda importam -- são o que prova que a ARITMÉTICA dentro de
+//     `compound_specificity`/`selector_specificity` está fiada corretamente (nenhum termo
+//     derrubado, nenhum operador errado). As checagens literal-contra-constante aqui são o que
+//     prova que a PRÓPRIA CONSTANTE ainda é igual ao número que a evidência de RE-estudo do
+//     upstream diz que precisa ser. Remover qualquer uma das metades reabre exatamente um dos dois
+//     buracos que a outra metade não cobre -- um leitor futuro "limpando a duplicação" entre esta
+//     função e a `test_compound_specificity_weights` acima reabriria em silêncio a mutação que
+//     esta seção existe pra fechar.
+// ---------------------------------------------------------------------------
+void test_specificity_pinned_against_upstream_literals_and_order() {
+  // EN: The bare upstream numbers, StyleSheetSelector.h:15/16/19 -- `Tag = 10'000`,
+  //     `Class = Attribute = PseudoClass = 100'000`, `ID = 1'000'000`. NOT re-expressed via the
+  //     kSpecificityWeight* constants on either side of `==` -- that is the whole point of this
+  //     check.
+  // PT: Os números crus do upstream, StyleSheetSelector.h:15/16/19 -- `Tag = 10'000`,
+  //     `Class = Attribute = PseudoClass = 100'000`, `ID = 1'000'000`. NÃO reexpressos via as
+  //     constantes kSpecificityWeight* de nenhum dos lados do `==` -- esse é o ponto inteiro desta
+  //     checagem.
+  check(kSpecificityWeightTag == 10'000,
+        "kSpecificityWeightTag pinned to the LITERAL upstream value 10'000 "
+        "(StyleSheetSelector.h:15), not to itself");
+  check(kSpecificityWeightClassOrPseudo == 100'000,
+        "kSpecificityWeightClassOrPseudo pinned to the LITERAL upstream value 100'000 "
+        "(StyleSheetSelector.h:16-18, Class==Attribute==PseudoClass), not to itself");
+  check(kSpecificityWeightId == 1'000'000,
+        "kSpecificityWeightId pinned to the LITERAL upstream value 1'000'000 "
+        "(StyleSheetSelector.h:19), not to itself -- this is the EXACT constant the QA's own "
+        "mutation (1'000'000 -> 100'000) sabotaged; this line is the one that must go red for it");
+
+  // EN: ORDER, the fact the whole cascade depends on: ID outranks class/pseudo outranks tag.
+  //     Compared as LITERAL inequalities, not derived from one constant times another, so a
+  //     mutation that made two weights EQUAL (not just wrong) still gets caught here even if it
+  //     somehow preserved every individual `== <literal>` check above (it would not, in this
+  //     module's own three constants, but the order check is a second, independent line of
+  //     defence, not a restatement of the same fact).
+  // PT: ORDEM, o fato de que a cascata inteira depende: ID vence classe/pseudo vence tag.
+  //     Comparado como desigualdade LITERAL, não derivado de uma constante vezes outra, então uma
+  //     mutação que igualasse dois pesos (não só errasse o valor) ainda seria pega aqui mesmo que
+  //     de algum jeito preservasse toda checagem individual `== <literal>` acima (não preservaria,
+  //     nas três constantes próprias deste módulo, mas a checagem de ordem é uma segunda linha de
+  //     defesa independente, não uma repetição do mesmo fato).
+  check(kSpecificityWeightId > kSpecificityWeightClassOrPseudo,
+        "ORDER: weight(ID) > weight(class/pseudo) -- an id ALWAYS outranks any number of classes "
+        "up to the margin checked below");
+  check(kSpecificityWeightClassOrPseudo > kSpecificityWeightTag,
+        "ORDER: weight(class/pseudo) > weight(tag)");
+
+  // EN: MARGIN, exact: the upstream ratio is precisely 10x at each step (1'000'000 / 100'000 ==
+  //     100'000 / 10'000 == 10) -- this is what STOPS a handful of classes from silently
+  //     outranking an id, or a handful of tags from outranking a class, on a real, multi-compound
+  //     selector chain. Checked as an exact `==`, not `>=`/a tolerance, because the upstream
+  //     algorithm's own ratio IS exact, not a "generous enough" approximation.
+  // PT: MARGEM, exata: a razão do upstream é precisamente 10x em cada degrau (1'000'000 / 100'000
+  //     == 100'000 / 10'000 == 10) -- isto é o que IMPEDE um punhado de classes de vencer em
+  //     silêncio um id, ou um punhado de tags de vencer uma classe, numa cadeia de seletor real,
+  //     multi-compound. Checado como `==` exato, não `>=`/uma tolerância, porque a própria razão
+  //     do algoritmo do upstream É exata, não uma aproximação "generosa o bastante".
+  check(kSpecificityWeightId == 10 * kSpecificityWeightClassOrPseudo,
+        "MARGIN: weight(ID) is EXACTLY 10x weight(class/pseudo) -- 1'000'000 / 100'000 == 10, "
+        "matching StyleSheetSelector.h's own ID/Class ratio");
+  check(kSpecificityWeightClassOrPseudo == 10 * kSpecificityWeightTag,
+        "MARGIN: weight(class/pseudo) is EXACTLY 10x weight(tag) -- 100'000 / 10'000 == 10, "
+        "matching StyleSheetSelector.h's own Class/Tag ratio");
+
+  // EN: The margin's own CONCRETE CONSEQUENCE at the compound level, not just an abstract ratio:
+  //     a compound with 9 classes is STILL outranked by a compound with a single id (one class
+  //     short of the tie, mirroring this file's own "near-miss" boundary discipline used
+  //     elsewhere), and a compound with EXACTLY 10 classes TIES a compound with a single id --
+  //     this is a real, unavoidable consequence of the upstream's own exact-10x ratio, not a bug
+  //     this module invented; stated explicitly here so nobody mistakes the tie for a defect
+  //     later. `docs/rmlx-subset.md`'s own corpus measured at most 2 classes in a real compound
+  //     (`compound, no combinator`, section 6.2), so this 9/10-class boundary is deliberately far
+  //     past anything the real corpus exercises -- it exists to pin the ALGORITHM's own arithmetic
+  //     fact, not to model a realistic selector.
+  // PT: A própria CONSEQUÊNCIA CONCRETA da margem no nível de compound, não só uma razão
+  //     abstrata: um compound com 9 classes AINDA perde pra um compound com um único id (uma
+  //     classe a menos que o empate, espelhando a mesma disciplina "quase-empate" que este
+  //     arquivo já usa em outro lugar), e um compound com EXATAMENTE 10 classes EMPATA com um
+  //     compound com um único id -- isto é uma consequência real, inevitável, da própria razão
+  //     exata-de-10x do upstream, não um bug que este módulo inventou; declarado explicitamente
+  //     aqui pra ninguém confundir o empate com um defeito depois. O próprio corpus do
+  //     `docs/rmlx-subset.md` mediu no máximo 2 classes num compound real (`composto, sem
+  //     combinador`, seção 6.2), então esta fronteira de 9/10 classes é deliberadamente muito além
+  //     do que o corpus real exercita -- existe pra ancorar o próprio fato aritmético do
+  //     ALGORITMO, não pra modelar um seletor realista.
+  CompoundSelector nine_classes;
+  for (int i = 0; i < 9; ++i) {
+    nine_classes.classes.push_back("c");
+  }
+  CompoundSelector ten_classes;
+  for (int i = 0; i < 10; ++i) {
+    ten_classes.classes.push_back("c");
+  }
+  CompoundSelector one_id = id_only("panel");
+
+  check(compound_specificity(nine_classes) < compound_specificity(one_id),
+        "MARGIN consequence: 9 classes (900'000) is STILL less than 1 id (1'000'000) -- one class "
+        "short of the exact tie point");
+  check(compound_specificity(ten_classes) == compound_specificity(one_id),
+        "MARGIN consequence: 10 classes (1'000'000) EXACTLY TIES 1 id (1'000'000) -- the real, "
+        "documented consequence of the upstream's own exact-10x ratio, not a defect");
+}
+
+// ---------------------------------------------------------------------------
 // Form 1/8: `.classe` -- positive/negative.
 // ---------------------------------------------------------------------------
 void test_form_class() {
@@ -475,6 +622,7 @@ void test_comma_list_forms() {
 int main() {
   test_compound_specificity_weights();
   test_selector_specificity_sums_chain();
+  test_specificity_pinned_against_upstream_literals_and_order();
   test_form_class();
   test_form_id();
   test_form_descendant();

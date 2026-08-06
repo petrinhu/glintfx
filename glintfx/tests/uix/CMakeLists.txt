@@ -151,3 +151,16 @@ target_compile_definitions(uix_dumper_corpus_sanity PRIVATE
   GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
   GLINTFX_UIX_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures")
 add_test(NAME uix_dumper_corpus_sanity COMMAND uix_dumper_corpus_sanity)
+
+# EN: `UIX-CONFORMIDADE-SPEC` -- S6b's half of the THIRD oracle type (alongside, never instead of,
+#     dom_dump_differential_oracle.cpp's S7 byte-diff): tests parse_document()+dump_document()
+#     against docs/uix-dom.md's own text, in isolation, never comparing against S6a's output. Same
+#     "own CMake, zero RmlUi/GLFW/GL" discipline as every test above.
+# PT: `UIX-CONFORMIDADE-SPEC` -- a metade da S6b do TERCEIRO tipo de oráculo (ao lado, nunca no
+#     lugar, do diff byte-a-byte S7 do dom_dump_differential_oracle.cpp): testa
+#     parse_document()+dump_document() contra o próprio texto do docs/uix-dom.md, isoladamente,
+#     nunca comparando contra a saída da S6a. Mesma disciplina "CMake próprio, zero RmlUi/GLFW/GL"
+#     de todo teste acima.
+add_executable(uix_spec_conformance_sanity spec_conformance_sanity.cpp)
+target_link_libraries(uix_spec_conformance_sanity PRIVATE glintfx::uix_dom)
+add_test(NAME uix_spec_conformance_sanity COMMAND uix_spec_conformance_sanity)

@@ -23,11 +23,13 @@
   ],
 
   "_comment_11": "RMLX-1/S7 (2026-08-05): dom_dump_differential_oracle.cpp somado pelo MESMO motivo exato do _comment_10, um caso adiante -- o harness do oraculo diferencial toca os DOIS lados (o dumper sobre o Rml::ElementDocument real E o dumper sobre a arvore propria), entao ele PRECISA de token Rml:: e portanto PRECISA morar em glintfx/src/rml/, a unica zona que o tools/check_rml_whitelist.sh permite. Sem esta entrada o guard o classificaria como producao (production_globs = glintfx/src/**) e bloquearia a escrita do proprio harness. Continua a disciplina de glob ESTREITO do _comment_10: mais um nome exato, nunca glintfx/src/rml/** inteiro.",
+  "_comment_12": "UIX-CONFORMIDADE-SPEC (2026-08-06): dom_dump_spec_conformance.cpp somado pelo MESMO motivo exato do _comment_10/_comment_11 -- o terceiro tipo de oraculo (conformidade contra docs/uix-dom.md, isolado, nao comparado com S6b) tambem precisa de Rml::ElementDocument/Rml::Context REAIS pra exercitar dom_dump_document(), entao mora em glintfx/src/rml/. Mesma disciplina de glob ESTREITO: mais um nome exato.",
   "test_globs": [
     "glintfx/tests/**",
     "glintfx/src/rml/dom_dump_corpus_sanity.cpp",
     "glintfx/src/rml/dom_dump_determinism_sanity.cpp",
-    "glintfx/src/rml/dom_dump_differential_oracle.cpp"
+    "glintfx/src/rml/dom_dump_differential_oracle.cpp",
+    "glintfx/src/rml/dom_dump_spec_conformance.cpp"
   ],
 
   "_comment_7": "Defensivo: production_globs ja e estreito o bastante para nao alcancar estes caminhos, mas declara-los deixa a intencao explicita e protege se os globs de producao forem alargados no futuro.",

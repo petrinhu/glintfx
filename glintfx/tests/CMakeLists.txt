@@ -3994,6 +3994,36 @@ add_test(NAME dom_dump_differential_oracle
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: `UIX-CONFORMIDADE-SPEC` -- dom_dump_spec_conformance: S6a's half of the THIRD oracle type,
+#     alongside (never instead of) dom_dump_differential_oracle.cpp's S7 byte-diff above. That
+#     oracle proves S6a/S6b AGREE with each other; this one proves S6a agrees with
+#     docs/uix-dom.md's own text, IN ISOLATION, never comparing against S6b's output (S6b's own
+#     half is glintfx/tests/uix/spec_conformance_sanity.cpp, a SEPARATE standalone-CMake
+#     executable, deliberately not sharing a rule table with this one -- same two-independent-
+#     authors wall the dumpers themselves are built under). Same "own .cpp in glintfx/src/rml/"
+#     reasoning as its three siblings immediately above (it references Rml::Context/
+#     Rml::ElementDocument directly via dom_dump_document()).
+# PT: `UIX-CONFORMIDADE-SPEC` -- dom_dump_spec_conformance: a metade S6a do TERCEIRO tipo de
+#     oráculo, ao lado (nunca no lugar) do diff byte-a-byte S7 do dom_dump_differential_oracle.cpp
+#     acima. Aquele oráculo prova que S6a/S6b CONCORDAM entre si; este prova que a S6a concorda com
+#     o PRÓPRIO texto do docs/uix-dom.md, ISOLADAMENTE, nunca comparando contra a saída da S6b (a
+#     própria metade da S6b é o glintfx/tests/uix/spec_conformance_sanity.cpp, um executável
+#     SEPARADO de CMake standalone, de propósito não compartilhando tabela de regra com este --
+#     mesma parede de dois-autores-independentes sob a qual os próprios dumpers são construídos).
+#     Mesmo racional "próprio .cpp em glintfx/src/rml/" dos três irmãos logo acima (referencia
+#     Rml::Context/Rml::ElementDocument direto via dom_dump_document()).
+# ---------------------------------------------------------------------------
+add_executable(dom_dump_spec_conformance
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump_spec_conformance.cpp)
+target_link_libraries(dom_dump_spec_conformance PRIVATE ${_embed_dep} RmlUi::Core)
+add_test(NAME dom_dump_spec_conformance
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dom_dump_spec_conformance>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
 #     "ripple()" decorator + its backdrop-capture machinery (both now inside the
 #     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated

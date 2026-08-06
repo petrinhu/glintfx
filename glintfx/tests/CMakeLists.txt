@@ -465,6 +465,31 @@ if(GLINTFX_BACKEND_GLFW)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
   # ---------------------------------------------------------------------------
+  # EN: app_snapshot_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06, auditoria-dominó
+  #     twin found via App::set_frame_callback's own documented GL-state gap) -- see the test
+  #     file's own top comment for the full rationale: App::snapshot() is a THIRD independent
+  #     implementation of the glReadPixels-into-an-exactly-sized-vector pattern
+  #     capture_framebuffer()/Engine::capture_frame() share, reachable via the host's OWN
+  #     frame_cb hook (not covered by GlStateGuard's own PACK/UNPACK blind spot). Same
+  #     linking/WORKING_DIRECTORY idiom as app_capture_frame_smoke above.
+  # PT: app_snapshot_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06, gêmeo de
+  #     auditoria-dominó achado via a própria lacuna de estado GL já documentada do
+  #     App::set_frame_callback) -- ver o próprio comentário de topo do arquivo de teste pro
+  #     racional completo: App::snapshot() é uma TERCEIRA implementação independente do padrão
+  #     glReadPixels-num-vetor-de-tamanho-exato que capture_framebuffer()/Engine::capture_frame()
+  #     compartilham, alcançável pelo PRÓPRIO hook frame_cb do host (não coberto pelo próprio
+  #     ponto cego de PACK/UNPACK do GlStateGuard). Mesmo idioma de link/WORKING_DIRECTORY do
+  #     app_capture_frame_smoke acima.
+  # ---------------------------------------------------------------------------
+  add_executable(app_snapshot_packskip_regression app_snapshot_packskip_regression.cpp)
+  target_link_libraries(app_snapshot_packskip_regression PRIVATE glintfx glloader)
+  add_test(NAME app_snapshot_packskip_regression
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:app_snapshot_packskip_regression>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+  # ---------------------------------------------------------------------------
   # EN: app_window_mode_smoke (A4-WINMODES, v0.16.0) -- ONE binary, parameterized by the
   #     GLINTFX_TEST_WINDOW_MODE environment variable, registered 6x below (App's N3 contract
   #     forbids 4+ App instances in one process, so per-config isolation happens at the ctest
@@ -3539,6 +3564,30 @@ if(GLINTFX_MODULE_DRAW2D)
       -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+  # EN: draw2d_unpack_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06, auditoria-dominó
+  #     twin of the PACK-side capture_framebuffer_packskip_regression above) -- see the test
+  #     file's own top comment for the full rationale: Draw2d::create_texture() (both
+  #     PixelFormat::Rgba8 and ::R8) must upload the CALLER'S exact pixel bytes even when
+  #     GL_UNPACK_ROW_LENGTH/GL_UNPACK_SKIP_PIXELS/GL_UNPACK_SKIP_ROWS are left dirty by a
+  #     cohabiting renderer -- content-correctness oracle (region-mean colour check), not a
+  #     survival check, because an out-of-bounds READ on a small buffer may succeed with wrong
+  #     bytes rather than crash.
+  # PT: draw2d_unpack_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06, gêmeo de
+  #     auditoria-dominó do capture_framebuffer_packskip_regression do lado PACK acima) -- ver o
+  #     próprio comentário de topo do arquivo de teste pro racional completo: Draw2d::
+  #     create_texture() (tanto PixelFormat::Rgba8 quanto ::R8) precisa enviar os bytes de pixel
+  #     EXATOS do chamador mesmo com GL_UNPACK_ROW_LENGTH/GL_UNPACK_SKIP_PIXELS/
+  #     GL_UNPACK_SKIP_ROWS deixados sujos por um renderer coabitante -- oráculo de correção de
+  #     CONTEÚDO (checagem de cor por média de região), não de sobrevivência, porque uma LEITURA
+  #     fora dos limites num buffer pequeno pode ter sucesso com bytes errados em vez de crashar.
+  add_executable(draw2d_unpack_packskip_regression draw2d_unpack_packskip_regression.cpp)
+  target_link_libraries(draw2d_unpack_packskip_regression PRIVATE ${_embed_dep} glloader)
+  add_test(NAME draw2d_unpack_packskip_regression
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:draw2d_unpack_packskip_regression>
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
   # EN: draw2d_primitives_render_sanity (D2D-3B, onda 5) -- pixel-readback proof for the
   #     primitives/layers/scissor/bbox surface this wave adds (D23-D29): filled rect region-mean
   #     equals the D8 premultiplied colour formula on the white texel; alpha-0.5 outline
@@ -4650,6 +4699,39 @@ add_test(NAME capture_framebuffer_state
     -DEXE=$<TARGET_FILE:capture_framebuffer_state>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: capture_framebuffer_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06) -- see the test
+#     file's own top comment for the full rationale (heap-corruption reproduction, process
+#     isolation per case, Mesa-only-measured caveat). ONE executable, FIVE `add_test()` cases
+#     (two dirty states this fix closes, three positive controls already guarded pre-fix), each
+#     forwarding a DIFFERENT `argv[1]` via run_xvfb.cmake's own `ARGS` parameter (added by this
+#     same fatia) so each case runs in its OWN `xvfb-run` process -- a corrupted heap in one case
+#     can never be misattributed to, or mask, another.
+# PT: capture_framebuffer_packskip_regression (CAPTURE-PACKSKIP, W28, 2026-08-06) -- ver o próprio
+#     comentário de topo do arquivo de teste pro racional completo (reprodução de corrupção de
+#     heap, isolamento de processo por caso, ressalva de só-medido-sob-Mesa). UM executável, CINCO
+#     casos de `add_test()` (dois estados sujos que este conserto fecha, três controles positivos
+#     já guardados antes do conserto), cada um repassando um `argv[1]` DIFERENTE via o próprio
+#     parâmetro `ARGS` de run_xvfb.cmake (somado por esta mesma fatia) pra que cada caso rode no
+#     PRÓPRIO processo `xvfb-run` -- um heap corrompido num caso nunca pode ser mal-atribuído a,
+#     ou mascarar, outro.
+# ---------------------------------------------------------------------------
+add_executable(capture_framebuffer_packskip_regression capture_framebuffer_packskip_regression.cpp)
+target_link_libraries(capture_framebuffer_packskip_regression PRIVATE ${_embed_dep} glloader)
+foreach(_packskip_mode IN ITEMS
+    skip_pixels
+    skip_rows
+    control_alignment
+    control_row_length
+    control_read_fbo)
+  add_test(NAME capture_framebuffer_packskip_regression_${_packskip_mode}
+    COMMAND ${CMAKE_COMMAND}
+      -DEXE=$<TARGET_FILE:capture_framebuffer_packskip_regression>
+      -DARGS=${_packskip_mode}
+      -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+endforeach()
 
 # ---------------------------------------------------------------------------
 # EN: capture_framebuffer_cold_boot_sanity (CAPTURE-FREE-LOADER, W27, 2026-08-04) -- proves

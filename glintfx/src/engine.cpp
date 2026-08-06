@@ -625,26 +625,58 @@ CapturedFramePixels Engine::capture_frame(int gl_x, int gl_y, int w, int h) cons
   if (!impl_->ok) return CapturedFramePixels{};
   if (w <= 0 || h <= 0) return CapturedFramePixels{};
 
+  // EN: CAPTURE-PACKSKIP (W28, 2026-08-06, CTO-directed) -- GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS
+  //     ADDED to the save-neutralize-restore block below, alongside the pre-existing 5 slots (now
+  //     7). Found by a consumer under Mesa/llvmpipe against the byte-for-byte-identical block in
+  //     `capture_framebuffer()` (`frame_capture.cpp`, CAPTURE-FREE) -- this method has the SAME
+  //     gap (it is that function's own documented algorithmic twin) and is the MORE-reached of the
+  //     two: both `App::capture_frame()` and `UiLayer::capture_frame()` delegate here
+  //     (FRAMEGRAB-EMBED), so this is the shared implementation behind the library's two primary
+  //     capture entry points, not a duplicate found and fixed independently. See
+  //     `frame_capture.cpp`'s own top-of-try comment for the full derivation (heap-buffer-overflow
+  //     WRITE mechanism, why only these two of the eight PACK pixel-store parameters were
+  //     unguarded, and the Mesa-only-measured caveat) -- not re-derived here to avoid drifting out
+  //     of sync with that account of it.
+  // PT: CAPTURE-PACKSKIP (W28, 2026-08-06, dirigido pelo CTO) -- GL_PACK_SKIP_PIXELS/
+  //     GL_PACK_SKIP_ROWS SOMADOS ao bloco de salvar-neutralizar-restaurar abaixo, ao lado dos 5
+  //     slots pré-existentes (agora 7). Achado por um consumidor sob Mesa/llvmpipe contra o bloco
+  //     idêntico byte-a-byte em `capture_framebuffer()` (`frame_capture.cpp`, CAPTURE-FREE) --
+  //     este método tem a MESMA lacuna (é o próprio gêmeo algorítmico documentado daquela função)
+  //     e é o MAIS ALCANÇADO dos dois: tanto `App::capture_frame()` quanto
+  //     `UiLayer::capture_frame()` delegam pra cá (FRAMEGRAB-EMBED), então esta é a implementação
+  //     compartilhada por trás dos dois pontos de entrada de captura primários da biblioteca, não
+  //     uma duplicata achada e consertada independentemente. Ver o próprio comentário de topo do
+  //     `try` de `frame_capture.cpp` pra derivação completa (mecanismo de escrita
+  //     heap-buffer-overflow, por que só estes dois dos oito parâmetros de pixel-store PACK
+  //     ficaram sem guarda, e a ressalva de só-medido-sob-Mesa) -- não re-derivado aqui pra não
+  //     desviar da própria explicação lá.
   try {
     GLint prev_read_fbo = 0, prev_read_buffer = 0;
     GLint prev_pack_alignment = 4, prev_pack_row_length = 0, prev_pack_pbo = 0;
+    GLint prev_pack_skip_pixels = 0, prev_pack_skip_rows = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
     glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
     glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
     glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
     glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &prev_pack_pbo);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &prev_pack_skip_pixels);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &prev_pack_skip_rows);
 
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadBuffer(GL_BACK);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_PACK_SKIP_ROWS, 0);
 
     std::vector<unsigned char> rgb(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
     glReadPixels(gl_x, gl_y, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
 
     glPixelStorei(GL_PACK_ALIGNMENT, prev_pack_alignment);
     glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, prev_pack_skip_pixels);
+    glPixelStorei(GL_PACK_SKIP_ROWS, prev_pack_skip_rows);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(prev_pack_pbo));
     glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
     glReadBuffer(static_cast<GLenum>(prev_read_buffer));

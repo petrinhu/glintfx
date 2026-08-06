@@ -511,12 +511,81 @@ bool App::snapshot(const char* ppm_path) {
   // PT: FBO 0 agora contém o frame composto completo. Lê antes do swap.
   glBindFramebuffer(0x8D40, 0); // GL_FRAMEBUFFER, 0 = window
   glReadBuffer(0x0402);         // GL_BACK
+  // EN: CAPTURE-PACKSKIP (W28, 2026-08-06, CTO-directed, auditoria-dominó find, NOT the primary
+  //     target of that fix) -- this function is a THIRD, independent, pre-FRAMEGRAB-EMBED
+  //     implementation of the exact same glReadPixels-into-an-exactly-sized-vector pattern
+  //     `capture_framebuffer()` (frame_capture.cpp) and `Engine::capture_frame()` (engine.cpp)
+  //     share -- and it is exposed to the SAME class of bug those two were just fixed for: any of
+  //     GL_PACK_ROW_LENGTH/GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS left non-zero by the HOST'S OWN
+  //     GL calls inside its `frame_cb` hook (App::set_frame_callback, run by the SAME render_frame()
+  //     call two lines above THIS read, and NOT covered by that hook's own GlStateGuard --
+  //     gl_state.hpp's own class-level doc comment lists what it saves, and none of the eight PACK
+  //     pixel-store parameters are among them) makes the glReadPixels call below write past the
+  //     end of `px` (exactly `w*h*3` bytes, no slack), the SAME heap-buffer-overflow WRITE
+  //     mechanism -- see frame_capture.cpp's own top-of-try comment for the full derivation.
+  //     FIXED HERE for the three ROW-ADDRESSING parameters that can cause that overflow
+  //     (ALIGNMENT/ROW_LENGTH/SKIP_PIXELS/SKIP_ROWS) -- ALIGNMENT's own restore is upgraded from a
+  //     HARDCODED "put back 4" (silently wrong for any caller whose own prior default was not 4)
+  //     to a genuine save/restore, same idiom as the other two functions.
+  //     DELIBERATELY NOT EXTENDED to the OTHER two classes of GL state those two sibling
+  //     functions also guard -- GL_PIXEL_PACK_BUFFER binding (a bound PBO redirects glReadPixels'
+  //     4th argument from a CPU pointer to a byte OFFSET into that buffer -- a data-redirection
+  //     bug, not an overflow) and GL_READ_FRAMEBUFFER_BINDING/GL_READ_BUFFER (this function
+  //     already forces BOTH the read AND draw targets to FBO 0 via GL_FRAMEBUFFER, a wider
+  //     rebind than its two siblings' GL_READ_FRAMEBUFFER-only one, pre-existing and unrelated to
+  //     CAPTURE-PACKSKIP) -- bringing THOSE up to the same parity as the other two functions is a
+  //     real, separate, pre-existing gap in this specific legacy function (not a regression, not
+  //     introduced here), declared not solved by this fix, flagged for a follow-up TODO item, not
+  //     invented here as scope creep on a ticket named for the two SKIP_* parameters specifically.
+  // PT: CAPTURE-PACKSKIP (W28, 2026-08-06, dirigido pelo CTO, achado da auditoria-dominó, NÃO o
+  //     alvo primário daquele conserto) -- esta função é uma TERCEIRA implementação,
+  //     independente, pré-FRAMEGRAB-EMBED, do exato mesmo padrão
+  //     glReadPixels-num-vetor-de-tamanho-exato que `capture_framebuffer()` (frame_capture.cpp) e
+  //     `Engine::capture_frame()` (engine.cpp) compartilham -- e está exposta à MESMA classe de
+  //     bug que aquelas duas acabaram de ser consertadas: qualquer um de GL_PACK_ROW_LENGTH/
+  //     GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS deixado não-zero pelas PRÓPRIAS chamadas GL do host
+  //     dentro do hook `frame_cb` (App::set_frame_callback, rodado pela MESMA chamada
+  //     render_frame() duas linhas acima desta leitura, e NÃO coberto pelo próprio GlStateGuard
+  //     daquele hook -- o próprio comentário de nível de classe de gl_state.hpp lista o que ele
+  //     salva, e nenhum dos oito parâmetros de pixel-store PACK está entre eles) faz a chamada
+  //     glReadPixels abaixo escrever além do fim de `px` (exatamente `w*h*3` bytes, sem folga), o
+  //     MESMO mecanismo de escrita heap-buffer-overflow -- ver o próprio comentário de topo do
+  //     `try` de frame_capture.cpp pra derivação completa.
+  //     CONSERTADO AQUI pros três parâmetros de ENDEREÇAMENTO-DE-LINHA que podem causar esse
+  //     overflow (ALIGNMENT/ROW_LENGTH/SKIP_PIXELS/SKIP_ROWS) -- a própria restauração do
+  //     ALIGNMENT é atualizada de um "devolve 4" CODIFICADO À MÃO (silenciosamente errado pra
+  //     qualquer chamador cujo próprio default anterior não fosse 4) pra um salvar/restaurar de
+  //     verdade, mesmo idioma das outras duas funções.
+  //     DELIBERADAMENTE NÃO ESTENDIDO às OUTRAS duas classes de estado GL que aquelas duas
+  //     funções irmãs também guardam -- o binding de GL_PIXEL_PACK_BUFFER (um PBO vinculado
+  //     redireciona o 4º argumento do glReadPixels de um ponteiro CPU pra um OFFSET de byte
+  //     naquele buffer -- um bug de REDIRECIONAMENTO de dado, não um overflow) e
+  //     GL_READ_FRAMEBUFFER_BINDING/GL_READ_BUFFER (esta função já força TANTO o alvo de leitura
+  //     QUANTO o de desenho pro FBO 0 via GL_FRAMEBUFFER, uma revinculação mais larga que a
+  //     só-GL_READ_FRAMEBUFFER das duas irmãs, pré-existente e sem relação com CAPTURE-PACKSKIP)
+  //     -- trazer AQUELES à mesma paridade das outras duas funções é uma lacuna real, separada,
+  //     pré-existente NESTA função legada específica (não uma regressão, não introduzida aqui),
+  //     declarada não resolvida por este conserto, sinalizada pra um item de TODO de
+  //     acompanhamento, não inventada aqui como scope creep numa ticket nomeada pros dois
+  //     parâmetros SKIP_* especificamente.
+  GLint prev_pack_alignment = 4, prev_pack_row_length = 0;
+  GLint prev_pack_skip_pixels = 0, prev_pack_skip_rows = 0;
+  glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
+  glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
+  glGetIntegerv(GL_PACK_SKIP_PIXELS, &prev_pack_skip_pixels);
+  glGetIntegerv(GL_PACK_SKIP_ROWS, &prev_pack_skip_rows);
   // EN: PACK_ALIGNMENT=1: pack rows with no padding so w*3 bytes/row matches vector size exactly.
   // PT: PACK_ALIGNMENT=1: empacota linhas sem padding para que w*3 bytes/linha bata exatamente.
   glPixelStorei(0x0D05, 1);     // GL_PACK_ALIGNMENT = 1
+  glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+  glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+  glPixelStorei(GL_PACK_SKIP_ROWS, 0);
   std::vector<unsigned char> px((size_t)w * h * 3);
   glReadPixels(0, 0, w, h, 0x1907, 0x1401, px.data()); // GL_RGB, GL_UNSIGNED_BYTE
-  glPixelStorei(0x0D05, 4);     // restore GL_PACK_ALIGNMENT = 4
+  glPixelStorei(0x0D05, prev_pack_alignment);          // restore GL_PACK_ALIGNMENT
+  glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+  glPixelStorei(GL_PACK_SKIP_PIXELS, prev_pack_skip_pixels);
+  glPixelStorei(GL_PACK_SKIP_ROWS, prev_pack_skip_rows);
   impl_->window.swap();
   FILE* f = fopen(ppm_path, "wb");
   if (!f) return false;

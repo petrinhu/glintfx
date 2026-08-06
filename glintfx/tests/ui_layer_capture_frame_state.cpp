@@ -94,14 +94,40 @@ int main() {
   // PT: Sentinelas não-default de alinhamento/comprimento-de-linha de pack.
   glPixelStorei(GL_PACK_ALIGNMENT, 2);
   glPixelStorei(GL_PACK_ROW_LENGTH, 37);
+  // EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- two MORE non-default sentinels (GL defaults for
+  //     both are 0), exercising Engine::capture_frame()'s (engine.cpp) OWN copy of the
+  //     save-neutralize-restore block via THIS public entry point (UiLayer::capture_frame()
+  //     delegates straight to it, FRAMEGRAB-EMBED) -- see engine.cpp's own CAPTURE-PACKSKIP
+  //     comment for why that method needed the identical fix
+  //     capture_framebuffer()/frame_capture.cpp got (the two are documented algorithmic twins,
+  //     not independently-discovered duplicates). Same caveat as
+  //     capture_framebuffer_state.cpp's own sibling addition: this is the state-HYGIENE half of
+  //     the proof, not the heap-corruption reproduction (a state-restore check cannot catch a
+  //     variable the pre-fix code never touched at all).
+  // PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- duas sentinelas A MAIS não-default (os defaults do
+  //     GL pros dois são 0), exercitando a PRÓPRIA cópia de Engine::capture_frame() (engine.cpp)
+  //     do bloco salvar-neutralizar-restaurar através DESTE ponto de entrada público
+  //     (UiLayer::capture_frame() delega direto pra ele, FRAMEGRAB-EMBED) -- ver o próprio
+  //     comentário CAPTURE-PACKSKIP de engine.cpp pro porquê daquele método precisar do conserto
+  //     idêntico que capture_framebuffer()/frame_capture.cpp recebeu (os dois são gêmeos
+  //     algorítmicos documentados, não duplicatas achadas independentemente). Mesma ressalva da
+  //     própria adição irmã de capture_framebuffer_state.cpp: esta é a metade de HIGIENE DE
+  //     ESTADO da prova, não a reprodução de corrupção de heap (uma checagem de restauração de
+  //     estado não consegue pegar uma variável que o código pré-conserto nunca tocava de jeito
+  //     nenhum).
+  glPixelStorei(GL_PACK_SKIP_PIXELS, 11);
+  glPixelStorei(GL_PACK_SKIP_ROWS, 13);
 
   GLint pre_read_fbo = 0, pre_read_buffer = 0;
   GLint pre_pack_alignment = 0, pre_pack_row_length = 0, pre_pack_pbo = 0;
+  GLint pre_pack_skip_pixels = 0, pre_pack_skip_rows = 0;
   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pre_read_fbo);
   glGetIntegerv(GL_READ_BUFFER, &pre_read_buffer);
   glGetIntegerv(GL_PACK_ALIGNMENT, &pre_pack_alignment);
   glGetIntegerv(GL_PACK_ROW_LENGTH, &pre_pack_row_length);
   glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pre_pack_pbo);
+  glGetIntegerv(GL_PACK_SKIP_PIXELS, &pre_pack_skip_pixels);
+  glGetIntegerv(GL_PACK_SKIP_ROWS, &pre_pack_skip_rows);
 
   // EN: The call under test -- must succeed despite the caller's pre-existing read-target
   //     mess (it forces GL_READ_FRAMEBUFFER=0/GL_BACK internally for the duration of the
@@ -113,11 +139,14 @@ int main() {
 
   GLint post_read_fbo = 0, post_read_buffer = 0;
   GLint post_pack_alignment = 0, post_pack_row_length = 0, post_pack_pbo = 0;
+  GLint post_pack_skip_pixels = 0, post_pack_skip_rows = 0;
   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &post_read_fbo);
   glGetIntegerv(GL_READ_BUFFER, &post_read_buffer);
   glGetIntegerv(GL_PACK_ALIGNMENT, &post_pack_alignment);
   glGetIntegerv(GL_PACK_ROW_LENGTH, &post_pack_row_length);
   glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &post_pack_pbo);
+  glGetIntegerv(GL_PACK_SKIP_PIXELS, &post_pack_skip_pixels);
+  glGetIntegerv(GL_PACK_SKIP_ROWS, &post_pack_skip_rows);
 
   bool pass = true;
 
@@ -140,6 +169,8 @@ int main() {
   CHK_I("GL_PACK_ALIGNMENT", pre_pack_alignment, post_pack_alignment);
   CHK_I("GL_PACK_ROW_LENGTH", pre_pack_row_length, post_pack_row_length);
   CHK_I("GL_PIXEL_PACK_BUFFER_BINDING", pre_pack_pbo, post_pack_pbo);
+  CHK_I("GL_PACK_SKIP_PIXELS", pre_pack_skip_pixels, post_pack_skip_pixels);
+  CHK_I("GL_PACK_SKIP_ROWS", pre_pack_skip_rows, post_pack_skip_rows);
 
 #undef CHK_I
 

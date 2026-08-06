@@ -126,7 +126,27 @@ endif()
 
 set(ENV{XDG_RUNTIME_DIR} "${_glintfx_fake_xdg_runtime}")
 
-execute_process(COMMAND xvfb-run -a ${EXE} RESULT_VARIABLE rc)
+# EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- optional ARGS, forwarded verbatim to ${EXE} after the
+#     existing zero-arg invocation every OTHER caller of this wrapper already relies on. ARGS is
+#     UNDEFINED (empty string) for every pre-existing `add_test()` call site in
+#     tests/CMakeLists.txt -- `${ARGS}` then expands to nothing, `xvfb-run -a ${EXE} ` behaves
+#     identically to `xvfb-run -a ${EXE}` (CMake collapses the trailing empty argument), so this
+#     is a purely additive, backward-compatible change. Added so
+#     capture_framebuffer_packskip_regression's own FIVE cases (one dirty/control GL_PACK_*
+#     state per case, see that file's own top comment for why each needs its OWN process) can
+#     share ONE source file/executable while still running each case in complete process
+#     isolation, `-DARGS=<mode>` per `add_test()`.
+# PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- ARGS opcional, repassado ao pé da letra pro ${EXE}
+#     depois da invocação sem argumento que todo OUTRO chamador deste wrapper já usa. ARGS fica
+#     INDEFINIDO (string vazia) em todo `add_test()` pré-existente de tests/CMakeLists.txt --
+#     `${ARGS}` então expande pra nada, `xvfb-run -a ${EXE} ` se comporta identicamente a
+#     `xvfb-run -a ${EXE}` (o CMake colapsa o argumento vazio final), então esta é uma mudança
+#     puramente aditiva, retrocompatível. Somado pra que os PRÓPRIOS cinco casos de
+#     capture_framebuffer_packskip_regression (um estado GL_PACK_* sujo/controle por caso, ver o
+#     próprio comentário de topo daquele arquivo pro porquê de cada um precisar do PRÓPRIO
+#     processo) possam compartilhar UM arquivo-fonte/executável só, mantendo cada caso rodando em
+#     isolamento de processo completo, `-DARGS=<mode>` por `add_test()`.
+execute_process(COMMAND xvfb-run -a ${EXE} ${ARGS} RESULT_VARIABLE rc)
 
 # EN: clean up the fake runtime dir regardless of pass/fail, then surface the
 #     test's own result -- REMOVE_RECURSE never itself fails the test.

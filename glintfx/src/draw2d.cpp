@@ -463,6 +463,40 @@ struct Draw2d::Impl {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- UNPACK twin of the PACK-side readback fix
+    //     (frame_capture.cpp/engine.cpp): GL_UNPACK_ROW_LENGTH/GL_UNPACK_SKIP_PIXELS/
+    //     GL_UNPACK_SKIP_ROWS left non-zero by a cohabiting renderer (RmlUi's own GL3 backend
+    //     shares this context, D9's own class-doc comment) make glTexImage2D below read `decoded
+    //     .rgba` (exactly `decoded.width*decoded.height*4` bytes, no slack) at a row/column
+    //     OFFSET past 0 -- an out-of-bounds READ of this module's own CPU buffer, the mirror-image
+    //     of the WRITE overflow CAPTURE-PACKSKIP fixed on the readback side. Neutralized to each
+    //     parameter's own GL default (0), D9-style (SET, do not save/restore -- this module's own
+    //     established contract, draw2d.hpp's own GL-STATE CONTRACT section). GL_UNPACK_ALIGNMENT
+    //     deliberately left untouched here (documented already, D2D-TEXPIXELS comment below):
+    //     RGBA8 rows are always 4-byte-aligned regardless of width, so the default alignment of 4
+    //     never pads a row. The GL_PIXEL_UNPACK_BUFFER binding is also unbound, D9-style: a bound
+    //     PBO there would silently redirect this call's LAST argument from a CPU pointer to a byte
+    //     OFFSET into that buffer instead.
+    // PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- gêmeo UNPACK do conserto de readback do lado PACK
+    //     (frame_capture.cpp/engine.cpp): GL_UNPACK_ROW_LENGTH/GL_UNPACK_SKIP_PIXELS/
+    //     GL_UNPACK_SKIP_ROWS deixados não-zero por um renderer coabitante (o próprio backend GL3
+    //     do RmlUi compartilha este contexto, o próprio comentário de classe do D9) fazem o
+    //     glTexImage2D abaixo ler `decoded.rgba` (exatamente `decoded.width*decoded.height*4`
+    //     bytes, sem folga) num OFFSET de linha/coluna além do 0 -- uma LEITURA fora dos limites
+    //     do próprio buffer CPU deste módulo, a imagem espelhada do overflow de ESCRITA que o
+    //     CAPTURE-PACKSKIP consertou do lado readback. Neutralizado pro próprio default do GL (0)
+    //     de cada parâmetro, ao estilo D9 (SETA, não salva/restaura -- o próprio contrato já
+    //     estabelecido deste módulo, seção CONTRATO DE ESTADO GL de draw2d.hpp).
+    //     GL_UNPACK_ALIGNMENT deliberadamente intocado aqui (já documentado, comentário
+    //     D2D-TEXPIXELS abaixo): linhas RGBA8 são sempre alinhadas a 4 bytes independente da
+    //     largura, então o alinhamento default de 4 nunca faz padding numa linha. O binding de
+    //     GL_PIXEL_UNPACK_BUFFER também é desvinculado, ao estilo D9: um PBO vinculado ali
+    //     redirecionaria silenciosamente o ÚLTIMO argumento desta chamada de um ponteiro CPU pra
+    //     um OFFSET de byte naquele buffer.
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, decoded.width, decoded.height, 0, GL_RGBA,
                  GL_UNSIGNED_BYTE, decoded.rgba.data());
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -718,6 +752,19 @@ struct Draw2d::Impl {
     //     4 corromperia sub-uploads de largura ímpar). Deixado em 1 depois, inofensivo (D9: este
     //     módulo seta o que precisa e não restaura; 1 é o empacotamento mais conservador).
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    // EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- same UNPACK-side out-of-bounds-READ class the
+    //     upload_gl_texture() comment above derives in full; not re-derived here. `zeros` below is
+    //     exactly `kAtlasPageDim*kAtlasPageDim` bytes, no slack -- a dirty ROW_LENGTH/SKIP_PIXELS/
+    //     SKIP_ROWS/bound-UNPACK-PBO left by a cohabiting renderer reads past its end otherwise.
+    // PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- mesma classe de LEITURA fora dos limites do lado
+    //     UNPACK que o comentário do upload_gl_texture() acima deriva por completo; não
+    //     re-derivado aqui. `zeros` abaixo tem exatamente `kAtlasPageDim*kAtlasPageDim` bytes, sem
+    //     folga -- um ROW_LENGTH/SKIP_PIXELS/SKIP_ROWS/PBO-UNPACK-vinculado sujo deixado por um
+    //     renderer coabitante lê além do próprio fim, senão.
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
     const std::vector<unsigned char> zeros(static_cast<std::size_t>(kAtlasPageDim) * kAtlasPageDim, 0);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, kAtlasPageDim, kAtlasPageDim, 0, GL_RED, GL_UNSIGNED_BYTE,
                  zeros.data());
@@ -852,6 +899,16 @@ struct Draw2d::Impl {
     const std::size_t pidx = static_cast<std::size_t>(page->texture_id) - 1;
     glBindTexture(GL_TEXTURE_2D, textures[pidx].gl_name);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    // EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- same UNPACK-side out-of-bounds-READ class the
+    //     upload_gl_texture() comment (above, this file) derives in full; not re-derived here.
+    //     `bitmap` below is exactly `gw*gh` bytes, no slack.
+    // PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- mesma classe de LEITURA fora dos limites do lado
+    //     UNPACK que o comentário do upload_gl_texture() (acima, este arquivo) deriva por
+    //     completo; não re-derivado aqui. `bitmap` abaixo tem exatamente `gw*gh` bytes, sem folga.
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
     glTexSubImage2D(GL_TEXTURE_2D, 0, px, py, gw, gh, GL_RED, GL_UNSIGNED_BYTE, bitmap.data());
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -2230,6 +2287,29 @@ GLuint upload_gl_texture_raw(const void* pixels, int w, int h, Draw2d::PixelForm
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  // EN: CAPTURE-PACKSKIP (W28, 2026-08-06) -- same UNPACK-side out-of-bounds-READ class the
+  //     upload_gl_texture() comment (above, this file) derives in full; not re-derived here.
+  //     `pixels` is the CALLER's own buffer (Draw2d::create_texture()'s own public contract:
+  //     exactly `w*h` bytes for R8, `w*h*4` for Rgba8, no slack) -- the MOST externally-reachable
+  //     of this file's four upload call sites (D2D-TEXPIXELS is the GENERAL, caller-supplied-
+  //     pixels path). Applied to BOTH branches (unlike GL_UNPACK_ALIGNMENT, deliberately left
+  //     untouched for Rgba8 -- documented above, D2D-TEXPIXELS comment: RGBA8 rows are always
+  //     4-byte-aligned regardless of width): ROW_LENGTH/SKIP_PIXELS/SKIP_ROWS/the UNPACK-PBO
+  //     binding matter for EITHER format.
+  // PT: CAPTURE-PACKSKIP (W28, 2026-08-06) -- mesma classe de LEITURA fora dos limites do lado
+  //     UNPACK que o comentário do upload_gl_texture() (acima, este arquivo) deriva por completo;
+  //     não re-derivado aqui. `pixels` é o próprio buffer do CHAMADOR (o próprio contrato público
+  //     de Draw2d::create_texture(): exatamente `w*h` bytes pro R8, `w*h*4` pro Rgba8, sem folga)
+  //     -- o MAIS alcançável externamente dos quatro pontos de upload deste arquivo (D2D-TEXPIXELS
+  //     é o caminho GERAL, de pixels fornecidos pelo chamador). Aplicado às DUAS ramificações
+  //     (diferente do GL_UNPACK_ALIGNMENT, deliberadamente intocado pro Rgba8 -- documentado
+  //     acima, comentário D2D-TEXPIXELS: linhas RGBA8 são sempre alinhadas a 4 bytes independente
+  //     da largura): ROW_LENGTH/SKIP_PIXELS/SKIP_ROWS/o binding do PBO UNPACK importam pros DOIS
+  //     formatos.
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+  glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+  glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
   if (format == Draw2d::PixelFormat::R8) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_RED);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);

@@ -362,14 +362,74 @@ CapturedFramebuffer capture_framebuffer(int gl_x, int gl_y, int w, int h) noexce
   //     deste conserto.
   if (glGetString(GL_VERSION) == nullptr) return CapturedFramebuffer{};
 
+  // EN: CAPTURE-PACKSKIP (W28, 2026-08-06, CTO-directed) -- GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS
+  //     ADDED to the save-neutralize-restore block below, alongside the pre-existing 5 slots (now
+  //     7). Found by a consumer under Mesa/llvmpipe: a caller with either state left non-zero in
+  //     the SAME GL context (e.g. from its own prior glReadPixels/glTexSubImage use) made
+  //     glReadPixels below start writing into `rgb` (below, exactly `w*h*3` bytes, no slack) at a
+  //     row/column OFFSET past 0 -- the driver still writes `h` full rows of `w*3` bytes each, so
+  //     that offset pushes the write past `rgb`'s own end, corrupting adjacent heap metadata
+  //     (measured: glibc's malloc abort, "free(): invalid next size (normal)", on a LATER free in
+  //     the SAME process -- not necessarily this function's own `rgb` destructor at the end of the
+  //     `try` block, whichever heap chunk happens to sit next). GL_PACK_SKIP_PIXELS/
+  //     GL_PACK_SKIP_ROWS were the only two of the eight pixel-store PACK parameters this function
+  //     had never read, neutralized, or restored -- everything else this readback depends on
+  //     (GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, the GL_PIXEL_PACK_BUFFER binding, plus the
+  //     GL_READ_FRAMEBUFFER binding and GL_READ_BUFFER this read also targets) was already
+  //     covered. Same idiom as those five: `glGetIntegerv` before, `glPixelStorei(..., 0)` to
+  //     neutralize for the read (0 is each one's own GL default), `glPixelStorei` back to the
+  //     caller's original value after -- not a new pattern invented for this fix.
+  //     ⚠️ ONLY MEASURED under Mesa/llvmpipe (Xvfb, this codebase's own CI/dev GL implementation):
+  //     the consumer's own report is explicit that a real-GPU driver was NOT tested. The failure
+  //     mode on a conformant real-GPU driver is expected to be the SAME heap-buffer-overflow WRITE
+  //     (the GL 3.3 spec defines GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS identically for every
+  //     conformant implementation -- this is not a Mesa quirk), but whether it happens to CRASH
+  //     (glibc/ASan catching the corruption) or SILENTLY CORRUPT (a heap chunk that goes unused
+  //     until much later, or never) is allocator- and heap-layout-dependent, not something this
+  //     fix or its regression test can observe on any one machine -- the fix itself does not
+  //     depend on which outcome a given run happens to hit, only on the write never going
+  //     out-of-bounds in the first place.
+  // PT: CAPTURE-PACKSKIP (W28, 2026-08-06, dirigido pelo CTO) -- GL_PACK_SKIP_PIXELS/
+  //     GL_PACK_SKIP_ROWS SOMADOS ao bloco de salvar-neutralizar-restaurar abaixo, ao lado dos 5
+  //     slots pré-existentes (agora 7). Achado por um consumidor sob Mesa/llvmpipe: um chamador
+  //     com qualquer um dos dois estados deixado não-zero no MESMO contexto GL (ex.: do próprio
+  //     uso anterior de glReadPixels/glTexSubImage) fazia o glReadPixels abaixo começar a escrever
+  //     em `rgb` (abaixo, exatamente `w*h*3` bytes, sem folga) num OFFSET de linha/coluna além do
+  //     0 -- o driver ainda escreve `h` linhas completas de `w*3` bytes cada, então esse offset
+  //     empurra a escrita além do próprio fim de `rgb`, corrompendo metadado de heap adjacente
+  //     (medido: abort do malloc do glibc, "free(): invalid next size (normal)", num free
+  //     POSTERIOR no MESMO processo -- não necessariamente o próprio destrutor de `rgb` desta
+  //     função no fim do bloco `try`, qualquer chunk de heap que por acaso esteja ao lado).
+  //     GL_PACK_SKIP_PIXELS/GL_PACK_SKIP_ROWS eram os únicos dois dos oito parâmetros de
+  //     pixel-store PACK que esta função nunca lia, neutralizava ou restaurava -- tudo mais de que
+  //     este readback depende (GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, o binding de
+  //     GL_PIXEL_PACK_BUFFER, mais o binding de GL_READ_FRAMEBUFFER e o GL_READ_BUFFER que esta
+  //     leitura também mira) já estava coberto. Mesmo idioma dos cinco: `glGetIntegerv` antes,
+  //     `glPixelStorei(..., 0)` pra neutralizar durante a leitura (0 é o próprio default do GL
+  //     pros dois), `glPixelStorei` de volta ao valor original do chamador depois -- não é um
+  //     padrão novo inventado pra este conserto.
+  //     ⚠️ SÓ MEDIDO sob Mesa/llvmpipe (Xvfb, a própria implementação GL de CI/dev deste
+  //     código-base): o próprio reporte do consumidor é explícito que um driver de GPU real NÃO
+  //     foi testado. O modo de falha num driver de GPU real conforme é esperado ser a MESMA
+  //     escrita de heap-buffer-overflow (a spec do GL 3.3 define GL_PACK_SKIP_PIXELS/
+  //     GL_PACK_SKIP_ROWS identicamente pra toda implementação conforme -- isto não é uma
+  //     peculiaridade do Mesa), mas se isso CRASHA (glibc/ASan pegando a corrupção) ou CORROMPE EM
+  //     SILÊNCIO (um chunk de heap que fica sem uso até bem depois, ou nunca) depende do alocador e
+  //     do layout de heap, não é algo que este conserto ou o próprio teste de regressão dele
+  //     consigam observar em qualquer máquina -- o próprio conserto não depende de qual desfecho
+  //     uma execução dada acabe batendo, só de a escrita nunca sair dos limites pra começo de
+  //     conversa.
   try {
     GLint prev_read_fbo = 0, prev_read_buffer = 0;
     GLint prev_pack_alignment = 4, prev_pack_row_length = 0, prev_pack_pbo = 0;
+    GLint prev_pack_skip_pixels = 0, prev_pack_skip_rows = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
     glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
     glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack_alignment);
     glGetIntegerv(GL_PACK_ROW_LENGTH, &prev_pack_row_length);
     glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &prev_pack_pbo);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &prev_pack_skip_pixels);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &prev_pack_skip_rows);
 
     // EN: GL_PACK_ALIGNMENT forced to 1 (tightly-packed rows, no padding) for this read -- the
     //     fix for the "width not a multiple of 4 corrupts rows" class of bug the default
@@ -388,12 +448,16 @@ CapturedFramebuffer capture_framebuffer(int gl_x, int gl_y, int w, int h) noexce
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_PACK_SKIP_ROWS, 0);
 
     std::vector<unsigned char> rgb(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
     glReadPixels(gl_x, gl_y, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
 
     glPixelStorei(GL_PACK_ALIGNMENT, prev_pack_alignment);
     glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, prev_pack_skip_pixels);
+    glPixelStorei(GL_PACK_SKIP_ROWS, prev_pack_skip_rows);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(prev_pack_pbo));
     glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
     glReadBuffer(static_cast<GLenum>(prev_read_buffer));

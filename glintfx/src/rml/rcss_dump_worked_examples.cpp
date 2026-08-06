@@ -291,6 +291,143 @@ void test_15_4_quantize_boundary() {
   check_eq(glintfx::rcss_quantize(-1.21874f), "-1.2187", "15.4 negative one-step-below stays at smaller magnitude (own float32-verified anchor)");
 }
 
+// ---------------------------------------------------------------------------
+// EN: 🔴 OWN-FINDING FOLLOW-UP, orchestrator relay: the exact same "golden doesn't reach the
+//     condition it claims to cover" defect this file already found in section 15.4's own
+//     literals also applied to THIS FILE'S OWN comment on section 15.3 -- every color in every
+//     golden this file had, before this test, used `alpha=0xff`. At `alpha=0xff`,
+//     `color_hex_premultiplied_as_is()` (rcss_dump.cpp) and a hypothetical un-premultiplying
+//     alternative print IDENTICAL bytes (`(x*255)/255 == x` exactly, both directions) -- so no
+//     existing test could tell the two implementations apart. This test closes that gap with
+//     non-opaque-alpha goldens in BOTH places RmlUi stores `ColourbPremultiplied`
+//     (`box-shadow`'s own `BoxShadowList`, a gradient `<stop>`'s own `ColorStopList` --
+//     `DecorationTypes.h:9`/`:22`), the math shown inline so a reader does not have to trust the
+//     assertion blind.
+//
+//     `#22D3EE80` (alpha=0x80=128): straight `#22d3ee80`. Premultiplied (integer TRUNCATING
+//     division, `Colour.h:76-82`): `r'=(0x22*128)/255=(34*128)/255=17=0x11`,
+//     `g'=(0xd3*128)/255=(211*128)/255=105=0x69`, `b'=(0xee*128)/255=(238*128)/255=119=0x77`,
+//     `a=128=0x80` unchanged -> `#11697780`. Visibly, structurally different from the straight
+//     value in every channel but alpha -- this is the golden that actually distinguishes "print
+//     the field as-is" from "un-premultiply first", the thing every PRIOR golden in this file
+//     could not do.
+//
+//     `#C9A24B40` (alpha=0x40=64): straight `#c9a24b40`. Premultiplied:
+//     `r'=(0xc9*64)/255=(201*64)/255=50=0x32`, `g'=(0xa2*64)/255=(162*64)/255=40=0x28`,
+//     `b'=(0x4b*64)/255=(75*64)/255=18=0x12`, `a=64=0x40` -> `#32281240`.
+//
+//     `#22D3EE00`/alpha=0: the STRONGEST case, per the orchestrator's own argument -- un-
+//     premultiplying divides by `alpha`, and `alpha=0` makes that division UNDEFINED (`Colour.h`'s
+//     own `ToNonPremultiplied()` special-cases it, `alpha > 0 ? (red*255)/alpha : 0` -- a
+//     hypothetical un-premultiplying implementation of THIS file's own color path would need the
+//     exact same special case, or it is not merely a different answer, it is UB/a crash). Straight
+//     would be `#22d3ee00`; premultiplied is `#00000000` regardless of the original RGB (every
+//     channel truncates to `(x*0)/255=0`) -- so this golden ALSO proves the two readings are not
+//     just numerically different, the "correct" one (this file's own, per the real RmlUi/
+//     Style::ComputedValues cascade-domain value) is well-defined where the alternative reading
+//     is not.
+//
+//     🔴 Audit of ALL FOUR worked examples, per the orchestrator's own instruction ("enumere...
+//     responda, um a um, se a entrada escolhida realmente alcança a condição declarada"):
+//       - 15.1 (hover): REACHES its own condition -- `color` differs between `STATE none`/
+//         `STATE hover-all` (`#223344ff` vs `#ff0000ff`), proving `:hover` forcing actually
+//         engages the matcher rather than being a no-op that happened to match by coincidence;
+//         `display`/`opacity`/`width` staying IDENTICAL in both states is the correct behaviour
+//         being exercised too (a `:hover` rule that does not touch them must not leak into them),
+//         not an inert assertion.
+//       - 15.2 (shorthand order): REACHES its own condition -- `body/0` (correct order) sets
+//         BOTH longhands from the declaration; `body/1` (reversed order) sets ONLY `-color` and
+//         drops `-width` to its registry default -- a real, structural DIFFERENCE between the two
+//         orders, not "both fail the same way" or "both succeed the same way", which is exactly
+//         what "order is load-bearing" needs to demonstrate.
+//       - 15.3 (three `%` families): REACHES its own condition for the auto-spacing algorithm
+//         specifically (the radial-gradient's own first stop, `#F0D98C`, has no explicit
+//         position and the golden asserts the COMPUTED `0.0000%`, not a value copied from source
+//         text -- the one line in that example that is not simply an echo). Weaker, DECLARED
+//         gap: the test does not independently prove families (b) and (c) are computed by
+//         DIFFERENT code paths at the byte level (both this test's family-(b) and family-(c)
+//         inputs are plain, already-percent-typed numbers here, so a hypothetical merged
+//         resolver could pass this SAME golden by coincidence for THIS input) -- the separation
+//         is real in this file's own source structure (`radial_position_percent()` vs
+//         `gradient_stops_tail()`, different function signatures, a merge would not compile as
+//         written), but this specific golden does not regression-prove it at the VALUE level.
+//         Not fixed here (would need a family-(c) input that only a correctly-separated resolver
+//         gets right, e.g. one that would silently break if fed through the auto-spacing
+//         algorithm) -- reported as a declared gap, not silently closed by inventing a claim this
+//         golden does not back.
+//       - 15.4 (quantization boundary): did NOT reach its own condition as originally written
+//         (see the `1.21875f`/`1.21874f` fix above and its own doc-comment) -- FIXED in this same
+//         file, own float32-verified anchor.
+// PT: 🔴 CONTINUAÇÃO DE ACHADO PRÓPRIO, repasse do orquestrador: o mesmíssimo defeito "golden não
+//     alcança a condição que afirma cobrir" que este arquivo já achou nos próprios literais da
+//     seção 15.4 também valia pro PRÓPRIO comentário deste arquivo na seção 15.3 -- toda cor de
+//     todo golden que este arquivo tinha, antes deste teste, usava `alpha=0xff`. Em `alpha=0xff`,
+//     `color_hex_premultiplied_as_is()` (rcss_dump.cpp) e uma hipotética alternativa
+//     des-premultiplicadora imprimem bytes IDÊNTICOS (`(x*255)/255 == x` exatamente, nos dois
+//     sentidos) -- então teste nenhum existente conseguia distinguir as duas implementações. Este
+//     teste fecha essa lacuna com goldens de alfa NÃO-opaco nos DOIS lugares em que o RmlUi guarda
+//     `ColourbPremultiplied` (o próprio `BoxShadowList` do `box-shadow`, o próprio `ColorStopList`
+//     de um `<stop>` de gradiente -- `DecorationTypes.h:9`/`:22`), a conta mostrada inline pra um
+//     leitor não precisar confiar na afirmação às cegas.
+//
+//     `#22D3EE80` (alfa=0x80=128): reto `#22d3ee80`. Premultiplicado (divisão inteira TRUNCANTE,
+//     `Colour.h:76-82`): `r'=(0x22*128)/255=(34*128)/255=17=0x11`,
+//     `g'=(0xd3*128)/255=(211*128)/255=105=0x69`, `b'=(0xee*128)/255=(238*128)/255=119=0x77`,
+//     `a=128=0x80` sem mudança -> `#11697780`. Visivelmente, estruturalmente diferente do valor
+//     reto em todo canal menos alfa -- este é o golden que de fato distingue "imprime o campo ao
+//     pé da letra" de "des-premultiplica primeiro", a coisa que golden NENHUM anterior deste
+//     arquivo conseguia.
+//
+//     `#C9A24B40` (alfa=0x40=64): reto `#c9a24b40`. Premultiplicado:
+//     `r'=(0xc9*64)/255=(201*64)/255=50=0x32`, `g'=(0xa2*64)/255=(162*64)/255=40=0x28`,
+//     `b'=(0x4b*64)/255=(75*64)/255=18=0x12`, `a=64=0x40` -> `#32281240`.
+//
+//     `#22D3EE00`/alfa=0: o caso MAIS FORTE, pelo próprio argumento do orquestrador --
+//     des-premultiplicar divide por `alpha`, e `alpha=0` torna essa divisão INDEFINIDA (o próprio
+//     `ToNonPremultiplied()` de `Colour.h` trata esse caso à parte,
+//     `alpha > 0 ? (red*255)/alpha : 0` -- uma hipotética implementação des-premultiplicadora do
+//     próprio caminho de cor deste arquivo precisaria do MESMO caso à parte, ou não é meramente
+//     uma resposta diferente, é UB/crash). Reto seria `#22d3ee00`; premultiplicado é `#00000000`
+//     independente do RGB original (todo canal trunca pra `(x*0)/255=0`) -- então este golden
+//     TAMBÉM prova que as duas leituras não são só numericamente diferentes, a "correta" (a deste
+//     próprio arquivo, pelo valor real de domínio-cascata `Style::ComputedValues`) é bem-definida
+//     onde a alternativa não é.
+//
+//     🔴 Auditoria dos QUATRO exemplos trabalhados, pela própria instrução do orquestrador
+//     ("enumere... responda, um a um, se a entrada escolhida realmente alcança a condição
+//     declarada"): ver o bloco EN acima -- 15.1 alcança, 15.2 alcança, 15.3 alcança parcialmente
+//     (lacuna declarada: não prova a separação b/c no nível de VALOR, só no de estrutura de
+//     código), 15.4 NÃO alcançava e foi CONSERTADO neste mesmo arquivo.
+// ---------------------------------------------------------------------------
+void test_own_finding_premultiplied_alpha_has_teeth(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#g { box-shadow: #22D3EE80 0dp 0dp 0dp; }\n"
+      "#h { box-shadow: #22D3EE00 0dp 0dp 0dp; }\n"
+      "#i { decorator: linear-gradient(90deg, #FF0000FF 0%, #C9A24B40 100%); }\n"
+      "#j { decorator: linear-gradient(90deg, #FF0000FF 0%, #22D3EE00 100%); }\n"
+      "</style></head><body>"
+      "<div id=\"g\"></div><div id=\"h\"></div><div id=\"i\"></div><div id=\"j\"></div>"
+      "</body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "premultiplied-alpha-teeth: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+
+  check_eq(extract_prop(dump, "STATE none\n", "body/0", "box-shadow"), "#11697780;0.0000px;0.0000px;0.0000px;0.0000px;false",
+           "own-finding box-shadow non-opaque alpha (#22D3EE80 -> premultiplied #11697780)");
+  check_eq(extract_prop(dump, "STATE none\n", "body/1", "box-shadow"), "#00000000;0.0000px;0.0000px;0.0000px;0.0000px;false",
+           "own-finding box-shadow alpha=0 (strongest case -- straight/undefined vs. premultiplied #00000000)");
+  check_eq(extract_prop(dump, "STATE none\n", "body/2", "decorator"), "linear-gradient(90.0000;#ff0000ff:0.0000%;#32281240:100.0000%)",
+           "own-finding gradient-stop non-opaque alpha (#C9A24B40 -> premultiplied #32281240)");
+  check_eq(extract_prop(dump, "STATE none\n", "body/3", "decorator"), "linear-gradient(90.0000;#ff0000ff:0.0000%;#00000000:100.0000%)",
+           "own-finding gradient-stop alpha=0 (strongest case -- premultiplied #00000000)");
+
+  doc->Close();
+  h.engine.update();
+}
+
 } // namespace
 
 int main() {
@@ -305,9 +442,12 @@ int main() {
   test_15_1_two_states_one_node_hover(h);
   test_15_2_shorthand_order_border_top(h);
   test_15_3_three_percent_families(h);
+  test_own_finding_premultiplied_alpha_has_teeth(h);
 
   if (g_failures == 0) {
-    std::puts("rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4)");
+    std::puts(
+        "rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4; plus own-finding "
+        "premultiplied-alpha-has-teeth)");
     return 0;
   }
   std::printf("rcss_dump_worked_examples: %d failure(s)\n", g_failures);

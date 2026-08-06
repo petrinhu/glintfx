@@ -53,3 +53,26 @@ add_test(NAME uix_style_property_registry_sanity COMMAND uix_style_property_regi
 add_executable(uix_style_shorthand_expansion_sanity shorthand_expansion_sanity.cpp)
 target_link_libraries(uix_style_shorthand_expansion_sanity PRIVATE glintfx::uix_style)
 add_test(NAME uix_style_shorthand_expansion_sanity COMMAND uix_style_shorthand_expansion_sanity)
+
+# EN: UIX-SHEET-PARSER -- recursive-descent parser (selector structuring, declaration expansion,
+#     at-rule structural records). Own executables, same "zero RmlUi/GLFW/GL" discipline as every
+#     executable above.
+# PT: UIX-SHEET-PARSER -- parser recursivo-descendente (estruturação de seletor, expansão de
+#     declaração, registros estruturais de at-rule). Executáveis próprios, mesma disciplina "zero
+#     RmlUi/GLFW/GL" de todo executável acima.
+add_executable(uix_style_parser_selector_sanity parser_selector_sanity.cpp)
+target_link_libraries(uix_style_parser_selector_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_parser_selector_sanity COMMAND uix_style_parser_selector_sanity)
+
+add_executable(uix_style_parser_atrule_sanity parser_atrule_sanity.cpp)
+target_link_libraries(uix_style_parser_atrule_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_parser_atrule_sanity COMMAND uix_style_parser_atrule_sanity)
+
+add_executable(uix_style_parser_corpus_sanity parser_corpus_sanity.cpp)
+target_link_libraries(uix_style_parser_corpus_sanity PRIVATE glintfx::uix_style)
+target_compile_definitions(uix_style_parser_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
+add_test(NAME uix_style_parser_corpus_sanity COMMAND uix_style_parser_corpus_sanity)

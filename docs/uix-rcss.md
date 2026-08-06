@@ -71,6 +71,59 @@ resolvida é o item mais valioso a reportar, não uma fraqueza a esconder.
 
 ---
 
+## 🟡 Errata (`UIX-RCSS-ERRATA-1`, 2026-08-06) / Errata (`UIX-RCSS-ERRATA-1`, 2026-08-06)
+
+**EN:** This document originally shipped (2026-08-06, `1173ae3`) with one **false statement**, found
+and fixed the same day by the `tech-lead`'s own pre-flight review before the two `RMLX-2` dumpers
+were dispatched -- exactly the failure mode section "Why this document exists" above warns about,
+caught before either independent author read it, not after. **What was wrong:** section 6.2's own
+table said the `FallThrough` algorithm for `border-top`/`-right`/`-bottom`/`-left` is *"order-
+independent between the two"* (width vs. color). **It is not**, for a 2-item/2-token chain --
+already proven by measurement in `UIX-PROP-REGISTRY` (`381624c`) before this errata: the reversed
+order (color first, e.g. `#7A5A2E 1dp`) leaves the item cursor exhausted with the second token still
+unclaimed, and upstream's own post-loop guard aborts the **whole shorthand**, not a partial result --
+traced iteration-by-iteration against `examples/RmlUi/Source/Core/PropertySpecification.cpp:429-471`
+(read directly, not paraphrased) and pinned by
+`glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`'s own
+`test_border_top_fallthrough_order_is_load_bearing`. The **code and the test were already correct**
+and already cited this false sentence as wrong (`glintfx/src/uix/style/shorthand.hpp:38`,
+`shorthand.cpp:30`) -- only this document had not been corrected to match. **What changed:** section
+6.2's table cell now states the real, order-sensitive rule; section 11 gained an explicit fail-high
+case for a malformed shorthand value (the reversed-order declaration is dropped whole, same as any
+other fail-high construct); section 15 gained a byte-exact worked example showing both the correct
+order and the reversed-order failure side by side. **Also closed in this same pass, per the
+`tech-lead`'s own brief:** the corpus-unjustified-but-intentional `max-height`/`max-width` registry
+entries (section 6.1), an explicit non-merge decision for percentage families (b)/(c) (section 5), a
+newly-found gap in the angle print form (section 8.2), a byte-count typo in section 9.2.1's own
+worked example, and the three ambiguities reported by earlier `RMLX-2` slices (section 16).
+
+**PT:** Este documento foi entregue originalmente (2026-08-06, `1173ae3`) com uma **afirmação
+falsa**, achada e corrigida no mesmo dia pela própria revisão pré-voo do `tech-lead` antes dos dois
+dumpers da `RMLX-2` serem despachados -- exatamente o modo de falha que a seção "Por que este
+documento existe" acima avisa, pego antes de qualquer autor independente ler, não depois. **O que
+estava errado:** a própria tabela da seção 6.2 dizia que o algoritmo `FallThrough` de
+`border-top`/`-right`/`-bottom`/`-left` é *"independente de ordem entre os dois"* (width vs. color).
+**Não é**, pra uma cadeia de 2-itens/2-tokens -- já provado por medição na `UIX-PROP-REGISTRY`
+(`381624c`) antes desta errata: a ordem revertida (cor primeiro, ex. `#7A5A2E 1dp`) deixa o cursor de
+item esgotado com o segundo token ainda não-reivindicado, e a própria guarda pós-laço do upstream
+aborta o shorthand **inteiro**, não um resultado parcial -- rastreada iteração-por-iteração contra o
+`examples/RmlUi/Source/Core/PropertySpecification.cpp:429-471` (lido direto, não parafraseado) e
+pinada pelo próprio `test_border_top_fallthrough_order_is_load_bearing` do
+`glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`. O **código e o teste já estavam corretos**
+e já citavam esta frase falsa como errada (`glintfx/src/uix/style/shorthand.hpp:38`,
+`shorthand.cpp:30`) -- só este documento não tinha sido corrigido pra bater. **O que mudou:** a
+célula da tabela da seção 6.2 agora declara a regra real, sensível-a-ordem; a seção 11 ganhou um caso
+fail-high explícito pra valor de shorthand malformado (a declaração de ordem revertida é descartada
+inteira, igual a qualquer outra construção fail-high); a seção 15 ganhou um exemplo trabalhado
+byte-exato mostrando a ordem correta e a falha de ordem revertida lado a lado. **Também fechado nesta
+mesma passada, per o próprio briefing do `tech-lead`:** as entradas de registro
+`max-height`/`max-width` sem justificativa de corpus mas intencionais (seção 6.1), uma decisão
+explícita de não-fusão pras famílias de porcentagem (b)/(c) (seção 5), uma lacuna nova achada na
+forma de impressão de ângulo (seção 8.2), um erro de contagem de byte num exemplo trabalhado da
+seção 9.2.1, e as três ambiguidades reportadas por fatias anteriores da `RMLX-2` (seção 16).
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -233,6 +286,32 @@ this document where a percentage that started symbolic in the source becomes a c
 number: the *distribution* is resolved (deterministic, geometry-free), the *base* it is a
 percentage *of* (the gradient axis, family (b)) is not.
 
+**Decision closing a reported ambiguity: families (b) and (c) are never merged, even though both
+print as a bare `<number>%` inside the same gradient functions.** `UIX-RCSS-SPEC`'s own delivery
+report flagged this as an open reading: "a second implementer reading fast could fuse (b) and (c)
+because they are syntactically similar" -- both are `%`, both appear only inside
+`linear-gradient(...)`/`radial-gradient(...)`, and nothing in the raw RCSS token stream marks one
+differently from the other (family (b)'s `<position%>` and family (c)'s `<x%> <y%>` are both just
+`Declaration`/`Prelude`-adjacent numeric-percent text by the time `UIX-RCSS-LEXER`'s own tokens reach
+a future parser). **Argument for merging into one "gradient `%`" family:** it is less code -- one
+resolver function, parameterized by "1D axis" vs. "2D local space", could serve both, and CSS itself
+does not name them as different *kinds* of percentage the way this document's table does. **Argument
+against, and the decision:** merging would be exactly the class of bug section 5's own opening
+paragraph names for conflating any two of the three families -- family (b) resolves against the
+gradient's own 1D axis (0% = first point, 100% = last, a **length along a line**), family (c)
+resolves against the gradient's own 2D local coordinate space (the inscribed circle / axis box, **an
+`(x, y)` pair, not a scalar offset**) -- these are not the same *quantity*, only the same *print
+form*, and a resolver written to "handle a gradient percentage" generically invites exactly the
+accidental cross-feed this document's families table exists to prevent (§5's own worked instance:
+feeding a gradient-stop percentage into the wrong resolver). **They stay two distinct families,
+never one.** This is not merely restated prose -- section 15.3 below gives the byte-exact worked
+form of all three families side by side, specifically so a second implementer cannot land on the
+merged reading even skimming fast: the two families never share an argument position within one
+function call (family (c) is always the first 1-2 arguments of `radial-gradient`, before its own
+`circle at` keyword is consumed; family (b) is always inside a `<stop>` entry, after the color), so
+a worked example that shows both in the same function call closes the ambiguity a prose-only rule
+cannot.
+
 ### 6. The property registry (the fixed, closed list every `PROPS` block enumerates)
 
 **Scope discipline, stated once so it needn't be repeated per row:** `TODO.md`'s own `RMLX-2` scope
@@ -352,6 +431,31 @@ this and it is out of this dump's own scope since it is a render-time compoundin
 cascade-time computed value -- the computed `opacity` value itself, which this dump reports, is
 exactly the CSS-inheritance-style single cascaded number, not the compounded product).
 
+**⚠️ `max-height`/`max-width`: the one registry entry with zero corpus justification, kept on
+purpose, not a bug to fix later.** `UIX-PROP-REGISTRY`'s own delivery closed the 64-vs-72 accounting
+(section 6 above) and found these two are the **only** 2 of the 72 longhand entries with **zero**
+measured occurrences anywhere in this document's own corpus (`/var/tmp/censo-rcss-qa1/censo.md`) --
+not written directly, and not reachable through any of the 13 shorthands section 6.2 defines (no
+shorthand expands into `max-height`/`max-width`; they are plain, unexpanded RmlUi native properties).
+Section 6's own scope discipline states this registry is built "exclusively" from measured names --
+by that rule alone these two do not belong. **They stay in the registry anyway**, for two reasons
+stated once here so a future reader does not re-litigate them fixture by fixture: (1) this document's
+own table (section 6.1 above) already listed them before the corpus-exclusivity discipline was
+written down, and the spec is the contract two independent dumper authors build against -- removing
+an already-published registry entry needs the same "stop, edit this spec with a diff, líder sign-off"
+discipline section 13 requires for *adding* an out-of-subset item, not a silent drop; (2) the more
+durable reason, restated from this project's own standing rule: the glintfx target is **broad
+distribution**, and "zero occurrences in this repo's two-project corpus" is a true statement about
+two repositories, never a true statement about the world -- a consumer this document has never seen
+may genuinely author `max-height: 200px;` tomorrow. **The teto this decision is bounded by:** these
+two entries are pinned exactly as they are today -- `keyword(none)` or length-percent (family a),
+same domain and print form as every other box-relative property in the table -- by
+`glintfx/tests/uix_style/property_registry_sanity.cpp`'s own
+`test_max_height_max_width_are_the_one_known_unexplained_gap`; a future census that measures a real
+use of either is a **confirmation**, not a discovery, and changes nothing about this decision; a
+future census that finds a *third* zero-corpus-but-listed entry is a **new** anomaly and must be
+reported the same way this one was, not silently folded into this same justification.
+
 #### 6.2 Shorthand-to-longhand expansion (no separate registry slot; feeds the longhand entries above)
 
 Evidence: `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp` `RegisterShorthand` calls +
@@ -363,12 +467,36 @@ Evidence: `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp` `RegisterShor
 | `padding` | `padding-top/-right/-bottom/-left` | **Box** | 1-value: 29, 2-value: 59, 4-value: 18 (3-value: 0 measured) |
 | `border-radius` | the 4 `border-*-radius` corners | **Box** | 100% 1-value (2/3/4-value: 0 measured, still valid per §6.3) |
 | `border-color` | the 4 `border-*-color` | **Box** | 100% 1-value |
-| `border-top`/`-right`/`-bottom`/`-left` | that side's `-width` + `-color` (no `-style` -- **RmlUi has no border-style property at all**, confirmed by its absence from every `Register(Shorthand\|Property)` call touching `border`) | **FallThrough** (first value that parses as length goes to `-width`, first that parses as color goes to `-color`; order-independent between the two) | -- |
+| `border-top`/`-right`/`-bottom`/`-left` | that side's `-width` + `-color` (no `-style` -- **RmlUi has no border-style property at all**, confirmed by its absence from every `Register(Shorthand\|Property)` call touching `border`) | **FallThrough** (each token routes to whichever of `-width`/`-color` its own shape matches first; **NOT** order-independent -- see the errata block above this document's header and the note directly below this table) | -- |
 | `border` | the 4 `border-top/-right/-bottom/-left` shorthands above | **RecursiveRepeat** (the same 2-token value string is fed to all 4 side-shorthands verbatim) | 100% 2-part (width + color, never a 3rd token) |
 | `background` | `background-color` only | **FallThrough**, 1 item | 100% solid-color value (§4.2 of the census: `docs/effects.md`'s own documented restriction -- gradients go through `decorator`, never `background`) |
 | `gap` | `row-gap` + `column-gap` | **Replicate** (1 value sets both; 2 values set each independently) | -- |
 | `overflow` | `overflow-x` + `overflow-y` | **Replicate** | -- |
 | `flex` | `flex-grow`, `flex-shrink`, `flex-basis` | **Flex** (special-cased: the bare keyword `none` expands to `0 0 auto`; otherwise omitted trailing values default to `1`/`1`/`0`, **not** each property's own normal initial value -- `PropertySpecification.cpp:311-334`, cited because this is exactly the kind of "an ordinary reader would guess wrong" default a second implementer could plausibly miss) | -- |
+
+**Correction to the `border-top`/`-right`/`-bottom`/`-left` row above, dated 2026-08-06 (see the
+errata block at this document's own header for the full account):** "order-independent between the
+two" was **false** for a 2-item/2-token `FallThrough` chain. The real rule, traced
+iteration-by-iteration against upstream's own real loop
+(`examples/RmlUi/Source/Core/PropertySpecification.cpp:429-471`, read directly): upstream always
+advances the **item** cursor every iteration (match or not), and only advances the **token** cursor
+on a match -- so a token that fails item 0's own domain and only matches item 1 (the reversed,
+color-then-width order) gets claimed by item 1, leaving the item cursor exhausted with the other
+token still unclaimed, and upstream's own post-loop guard (`value_index < property_values.size() &&
+property_index >= items.size()`) aborts the **entire shorthand** -- not a partial result. Concretely,
+for `border-top`: `1dp #7A5A2E` (width-then-color, the corpus's own 100%-measured order) succeeds;
+`#7A5A2E 1dp` (color-then-width) is `MalformedValue`, and the whole `border-top` declaration is
+dropped per section 11's fail-high policy (both `border-top-width` and `border-top-color` keep
+whatever the cascade's next-lower-specificity rule provides, or their registry initial value if
+none). **What "order-independent" IS true for:** which *domain* a token routes to is content-driven
+(a token that looks like a length routes to `-width` regardless of which position it appears in) --
+that part of the original sentence was not wrong. **What it is not true for:** that an arbitrary
+token *order* always succeeds for a 2-item/2-token chain. It does not. Section 15.2 below gives the
+byte-exact dump for both orders side by side. Proof, not merely asserted: pinned by
+`glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`'s own
+`test_border_top_fallthrough_order_is_load_bearing`, and already correctly stated in
+`glintfx/src/uix/style/shorthand.hpp:38`/`shorthand.cpp:30-35` before this document was corrected to
+match.
 
 ##### 6.3 The `Box` algorithm (verbatim from `PropertySpecification.cpp:336-370`, standard CSS box-model expansion)
 
@@ -511,6 +639,20 @@ authored in degrees, and `π`'s irrationality means converting a `deg` value to 
 introduces its own small rounding noise that converting the rarer `rad` input to `deg` avoids for
 the overwhelmingly common case.
 
+**Printed form, a gap this document did not previously state and closes here:** an angle prints as
+`quantize()`'s own bare output (section 8), **with no unit suffix** -- unlike `length`, which gets an
+explicit, additional `px` suffix layered on top of `quantize()` by section 8.1's own stated override.
+This section's own title only ever said angles are *canonicalized* to degrees (which unit the number
+means); it never said whether the printed string carries that unit's own name. Left unstated, a
+second implementer has two equally-plausible readings -- copy the `px`-suffix precedent and print
+`90.0000deg`, or trust `quantize()`'s own literal contract ("no exponent... no unit" is never
+overridden for angles the way it explicitly is for length) and print the bare `90.0000`. This
+document resolves it as the bare form, because that is what section 8's own algorithm already
+produces without any angle-specific override existing anywhere in this document -- `length` is the
+one domain given an explicit suffix rule; angle has none, so it falls through to `quantize()`'s own
+unmodified output. Section 15.3 below prints an angle inside a worked `linear-gradient(...)` example
+using this rule, so a second implementer has a byte-exact anchor rather than only this prose.
+
 ### 9. Composite value serialization grammar
 
 Every composite-domain property (§6.1: `box-shadow`, `decorator`, `mask-image`, `filter`,
@@ -612,8 +754,16 @@ Worked example (`npc_dialogue__no_com_3_escolhas.rml:56`, from the census):
 source `radial-gradient(circle at 35% 30%, #F0D98C, #C9A24B 55%, #7A5A2E 100%)` dumps as:
 
 ```
-decorator=radial-gradient(35.0000%;30.0000%;#f0d98cff:0.0000%;#c9a24bff:55.0000%;#7a5a2effff:100.0000%)
+decorator=radial-gradient(35.0000%;30.0000%;#f0d98cff:0.0000%;#c9a24bff:55.0000%;#7a5a2eff:100.0000%)
 ```
+
+**Byte-count fix (2026-08-06, part of the same errata pass as the header block above):** this line
+previously printed the last color as `#7a5a2effff` -- 10 hex digits, one channel too many. `#7A5A2E`
+is a 6-digit `#rrggbb` source form (three already-2-digit channels, R=`7a`, G=`5a`, B=`2e`); section
+7.1's own rule only *doubles* a single-digit channel (the `#rgb`/`#rgba` forms) and *defaults* a
+missing alpha channel to `ff` -- neither rule applies twice here. Correct output is 8 hex digits:
+`#7a5a2eff`. Left uncorrected, this line would have been a wrong golden value for whichever `RMLX-2`
+slice eventually turns this worked example into a literal test fixture.
 
 (the first stop, `#F0D98C`, has no explicit position in the source and is the *first* stop, so
 step 2 assigns it `0.0000%` -- this is the one line in this worked example where the printed value
@@ -711,6 +861,19 @@ parse failure that poisons the rest of the stylesheet, never a silent guess. Con
   the nearest bound **only where §6.1/§9 states a clamp**; where no clamp is stated, the whole
   declaration/decorator-entry is dropped per the two rules above, never silently clamped by
   invention.
+- **Malformed shorthand value** (a recognised shorthand name, §6.2, whose raw value's own token
+  count or shape does not fit any of that shorthand's accepted forms -- e.g. `border-top`'s own
+  2-token chain given in the reversed, color-then-width order, §6.2's own errata note): the same
+  consequence as an unknown property, uniformly -- the **entire shorthand declaration** is dropped,
+  every longhand it would have targeted keeps whatever the cascade's next-lower-specificity rule
+  provides, or its §6.1 registry initial value if none. For a shorthand whose own algorithm is
+  itself composed of sub-shorthands (`border`'s `RecursiveRepeat`, §6.2): if **any** of the 4
+  side-shorthand sub-expansions fails, the **whole** `border` declaration is dropped, not just the
+  failing side (matches upstream's own `result &= ...` across all 4,
+  `PropertySpecification.cpp:369-380`, already the behaviour `glintfx/src/uix/style/shorthand.cpp`'s
+  own `RecursiveRepeat` branch implements). This is not a new rule invented for this errata pass --
+  it is this section's own opening sentence ("an unrecognized or **invalid** construct is logged and
+  ignored") made explicit for the one shape of invalidity the original text left unnamed.
 - **Logging format, minimum content:** the raw text of the rejected construct, and its file/line if
   available -- never a bare "invalid RCSS" with no locatable cause, the same standard
   `check_rml_whitelist.sh`'s own `file:line` reporting sets for this codebase (`docs/rmlx-subset.md`
@@ -780,7 +943,15 @@ two documents drifting apart on what "class b" means.
 | :--- | :---: | :--- | :--- | :--- |
 | *(none yet -- this document predates any `RMLX-2` slice; the first row is written by whichever slice's implementer finds the first real divergence)* | | | | |
 
-### 15. Worked example (byte-exact, two states, one node)
+### 15. Worked examples (byte-exact)
+
+**Four independent examples below (15.1-15.4), each anchoring a place this document's own prose
+alone left room for two readers to land on different bytes -- per this section's own governing
+principle, restated from the header: two independent implementers can agree on the same
+wrong-sounding-correct reading of a rule in prose; they cannot both reproduce the same byte-exact
+worked answer while disagreeing about what it means.**
+
+#### 15.1 Two states, one node (`:hover`)
 
 Source fragment (`.btn` styled, `.btn:hover` overrides `color`; `dp_ratio = 1.0` for this example;
 only the fields relevant to the point are shown -- a real dump still emits all 72 `PROP` lines per
@@ -848,6 +1019,180 @@ Notes tying each line back to the sections above:
   printers to diverge on formatting rather than on the value itself.
 - `color=#223344ff` / `#ff0000ff`: both straight-alpha, alpha defaulted to `ff` per §7.1 since
   neither source value specified one.
+
+#### 15.2 Shorthand order is load-bearing (`border-top`)
+
+This is the errata's own worked anchor -- section 6.2's corrected table row, byte-exact, both orders
+side by side, `dp_ratio = 1.0`.
+
+```rcss
+#a { border-top: 1dp #7A5A2E; }
+#b { border-top: #7A5A2E 1dp; }
+```
+
+```rml
+<body><div id="a"></div><div id="b"></div></body>
+```
+
+```
+body/0 PROP border-top-color=#7a5a2eff
+body/0 PROP border-top-width=1.0000px
+body/1 PROP border-top-color=#000000ff
+body/1 PROP border-top-width=0.0000px
+```
+
+- `body/0` (`#a`, width-then-color, the corpus's own 100%-measured real order) -- both longhands
+  set from the declaration: `border-top-width=1.0000px` (`1dp` resolved through `dp_ratio=1.0`, `px`
+  suffix per §8.1), `border-top-color=#7a5a2eff` (§7.1, alpha defaulted to `ff`).
+- `body/1` (`#b`, color-then-width, the reversed order) -- the **whole** `border-top` declaration is
+  `MalformedValue` per §6.2's corrected row and §11's new malformed-shorthand bullet, so **both**
+  longhands print their §6.1 registry initial value instead, exactly as if the declaration had never
+  been written at all: `border-top-color=#000000ff` (`black`, defaulted per §7.1's own `#rgb`/named
+  color handling, straight alpha `ff`), `border-top-width=0.0000px` (`0px`, quantized). **This is the
+  line a naive "order-independent" reading gets wrong two different ways at once:** it is not that
+  `#b` merely fails to parse `border-top-color` (leaving `-width` set) -- BOTH longhands revert,
+  because the shorthand aborts as a unit before either `SetProperty` call for it happens.
+
+#### 15.3 The three `%` families, side by side
+
+One node, three properties, `dp_ratio = 1.0` -- chosen specifically so families (b) and (c) appear
+inside sibling arguments of gradient functions, closing §5's own reported merge risk with a byte
+anchor rather than only the prose decision above.
+
+```rcss
+#c {
+    width: 50%;
+    decorator: linear-gradient(90deg, #FF0000 20%, #00FF00 80%), radial-gradient(circle at 35% 30%, #F0D98C, #C9A24B 55%, #7A5A2E 100%);
+}
+```
+
+```rml
+<body><div id="c"></div></body>
+```
+
+```
+body/0 PROP decorator=linear-gradient(90.0000;#ff0000ff:20.0000%;#00ff00ff:80.0000%)|radial-gradient(35.0000%;30.0000%;#f0d98cff:0.0000%;#c9a24bff:55.0000%;#7a5a2eff:100.0000%)
+body/0 PROP width=50.0000%
+```
+
+- **Family (a)**, `width=50.0000%` -- box-relative, stays symbolic, unrelated to either gradient
+  function; the only one of the three families that is not even inside a `decorator` value.
+- **Family (b)**, the two `<position%>` tokens after `:` inside each `linear-gradient(...)` stop
+  (`20.0000%`, `80.0000%`) -- each resolves against **that gradient's own 1D axis** (a length along
+  the 90-degree line the angle argument describes), never against the element's box, never against
+  the radial gradient's own center. Note the angle argument itself, `90.0000` -- bare, no `deg`
+  suffix, per §8.2's newly-closed print-form rule.
+- **Family (c)**, the two `<x%> <y%>` arguments right after `radial-gradient(`'s own opening
+  (`35.0000%`, `30.0000%`) -- resolve against **that gradient's own 2D local coordinate space** (an
+  `(x, y)` pair, the inscribed circle's own center), never against the 1D axis family (b) uses one
+  function over. Syntactically both families are a bare `<number>%`; the fact that closes the
+  ambiguity is **argument position**: family (c) is always the first 1-2 arguments immediately after
+  `radial-gradient(`'s own `circle at` clause, consumed before any stop is read at all; family (b) is
+  always inside a `<stop>` entry, after that stop's own color and its own `:` separator. The two
+  never occupy the same slot in the same function call, in either gradient kind.
+- The radial-gradient's own first stop, `#F0D98C`, has no explicit position and is first, so
+  §9.2.1's auto-spacing algorithm assigns it `0.0000%` -- the one number on this line that is not
+  copied from the source text, same as the section 9.2.1 worked example this one reuses.
+
+#### 15.4 Quantization boundary: exact tie and one step outside
+
+Per this project's own house rule that testing a boundary's exact edge is not sufficient on its own
+(a widened tolerance still contains its own edge) -- these four abstract inputs to `quantize()` (§8)
+pin the exact rounding cut point, not merely that *some* rounding happens near it. All four apply
+`quantize()` directly (no property, no cascade -- this is the algorithm itself, in isolation):
+
+| Input `x` | `scaled = x * 10000` | Tie? | `quantize(x)` | What this proves |
+| :--- | :---: | :---: | :--- | :--- |
+| `1.234450` | `12344.50` | **exact tie** | `1.2345` | Rounds **away from zero** at the exact half -- not merely "rounds up" |
+| `1.234449` | `12344.49` | one step below | `1.2344` | Below the tie by one ULP-of-the-4th-digit rounds **toward zero**, not toward the tie's own outcome |
+| `-1.234450` | `-12344.50` | **exact tie**, negative | `-1.2345` | Proves "away from zero" is not a euphemism for "toward positive infinity" -- the negative tie also grows in magnitude |
+| `-1.234449` | `-12344.49` | one step below, negative | `-1.2344` | Mirrors the positive case: one step short of the tie stays at the smaller magnitude on both signs |
+
+**Why the tie alone would not have been enough:** an implementer whose rounding only fires for
+`scaled` *strictly greater than* the half-integer (a common off-by-one when translating "round half
+away from zero" into `>` instead of `>=`) produces the **same** output as the correct algorithm for
+every value that is not exactly a tie, and only diverges exactly at rows 1 and 3 above -- both of
+which sit precisely at a 4th-decimal-digit boundary a real computed length is unlikely to hit by
+accident, but a hostile or adversarial-review-generated input can hit deliberately. Rows 2 and 4
+exist for the opposite failure: an implementer whose rounding is unconditional (always rounds the
+4th digit up regardless of the 5th digit's own value, a plausible misreading of "round... away from
+zero" as "always round away from zero") would wrongly report `1.2345`/`-1.2345` for rows 2/4 instead
+of the correct `1.2344`/`-1.2344`. Only having all four -- tie and one-step-outside, both signs --
+distinguishes the correct algorithm from both wrong ones.
+
+### 16. Contract decisions closing ambiguities reported by earlier `RMLX-2` slices
+
+**Scope of this section, stated once:** `UIX-RCSS-LEXER`'s own header comment
+(`glintfx/src/uix/style/lexer.hpp`) reported two ambiguities it deliberately did not resolve alone,
+each affecting how a future parser slice built on top of that lexer's token stream must behave when
+producing the computed values this document's own dump format reports -- so, per this task's own
+instruction that an unresolved ambiguity is not this project's to leave open once found, they are
+closed here, with both sides argued, as this document's own contract decisions. (The third ambiguity
+this task named -- percentage families (b) and (c) -- is already closed in section 5 above; it is
+not repeated here, only cross-referenced, so the two documents that state it do not drift.)
+
+#### 16.1 Comments inside a mid-run token: diagnosable `Comment` token vs. upstream's own byte-splice
+
+**The lexer's own choice (already shipped, `UIX-RCSS-LEXER`):** `/* ... */` is its own `Comment`
+token, recognised only at a fresh-scan start -- immediately after a structural delimiter, immediately
+after a completed `Declaration`, or at the very start of a `Prelude`/`Comment` dispatch. Real upstream
+RmlUi elides comments at the *character* level, below every state machine, so a comment can *splice*
+two adjacent fragments with zero bytes between them (`wid/*x*/th` tokenizes as the identifier
+`"width"`) regardless of where it appears -- mid-identifier, mid-value, anywhere.
+
+**Argument for upstream's byte-splice behaviour:** it is what `Style::ComputedValues` (side A of the
+`RMLX-2` oracle) actually does, because side A *is* real RmlUi code -- matching it byte-for-byte
+closes a divergence source before it can ever appear. **Argument for the lexer's own, narrower
+choice (the decision):** a diagnosable `Comment` token is strictly more useful for every corpus
+fixture that exists today (comments only ever appear at fresh-scan-start positions in all 62 census
+files -- zero counter-examples), keeps this module's own error-reporting/hardening machinery uniform
+with the DOM sibling's identical `<!-- -->` design, and -- the reason this stays the contract instead
+of being reopened -- **every `Token`'s own `offset`/`length` fields are preserved exactly so a future
+parser slice can still reconstruct upstream's byte-spliced reading directly from the source buffer**,
+if a real fixture is ever found where it matters (section 1's own header clause: stop, diff, líder
+sign-off, only then implement). **Decision:** kept as shipped. **Consequence for this document's own
+divergence ledger (section 14):** a future fixture with a comment appearing *mid-run* (inside an
+already-started `Prelude`/name/value scan, not at a fresh-scan boundary) is **pre-registered here as
+class (b)** (expected RmlUi/glintfx normalization, not a bug) the moment it is found -- an
+implementer who hits it does not need to first debate whether it is class (a) or (b), this document
+already answers that.
+
+#### 16.2 At-rule-name-driven mode dispatch: lexer-level vs. deferred to a future parser slice
+
+**The lexer's own choice (already shipped):** the decision of whether a `{` opens a flat Declaration
+block or a second, nested Structural region (needed for exactly one case measured in the corpus,
+`@keyframes`) is made **inside the lexer itself**, keyed by the case-sensitive first word of the
+at-rule's own preceding `Prelude`. Every *other* semantic question this same lexer touches --
+selector matching, property-value validation, property registration -- is explicitly deferred to a
+future parser slice; `@keyframes` recognition is the one exception, and `UIX-RCSS-LEXER`'s own header
+flagged it as a real, structural, two-sided question rather than an obviously-settled one.
+
+**Argument for deferring to a future parser (the position taken everywhere else in this same
+lexer):** keeps the lexer a purely mechanical, context-free byte-to-token pass with zero knowledge of
+what any at-rule *means* -- the same boundary drawn for `.foo`/`#bar`/`:hover` (carried as raw,
+unparsed `Prelude` bytes) and for every property name/value (carried as raw `Declaration` text).
+Recognising the literal string `"keyframes"` is, on its face, exactly the kind of semantic knowledge
+this module's own header says repeatedly is "not this layer's job". **Argument for keeping it at the
+lexer level (the decision):** this is not a semantic-validity question, it is a **syntactic
+necessity for producing a correct token stream at all** -- a different category from every deferred
+case. Selector/property semantics being deferred costs nothing structural: an unparsed `Prelude`
+token is still a complete, correctly-bounded token whether or not anything downstream understands
+`:hover`. At-rule-name dispatch is not like that: without knowing the at-rule is `@keyframes`, the
+lexer cannot tell a nested `{`/`}` pair apart from a flat one, and gets the **brace balance itself
+wrong** -- proven, not asserted, by `lexer_hardening_sanity.cpp`'s own
+`test_keyframes_special_case_is_load_bearing`: without the special case, `@keyframes spin { from {
+transform: rotate(0deg); } to { transform: rotate(360deg); } }` desyncs, the first inner `}`
+prematurely ends the whole scan, and the outer `}` is left dangling -- not a wrong *interpretation* of
+otherwise-valid tokens, a **wrong token stream**, which no downstream parser slice could recover a
+correct tree from no matter how it is designed. Real upstream RmlUi's own tokenizer needs and makes
+this identical decision at the identical layer (`StyleSheetParser::Parse`'s own
+`State::AtRuleIdentifier` branch, `:786-789`) -- this is not a boundary this module invented, it is
+the one place upstream's own tokenizer-vs-parser split already draws the line the same way.
+**Decision:** stays lexer-level, permanently, not merely "for now" -- the teto is already declared
+(only the literal, case-sensitive `"keyframes"`; `docs/rmlx-subset.md` section 13's own real-zero
+exclusions for `@media`/`@import`/`@charset`/`@supports` get the ordinary Declaration-mode default,
+and a real fixture needing one of those is the same "stop, add a name to this table" move, never a
+silent default-widening).
 
 ---
 
@@ -1018,6 +1363,33 @@ porcentagem que começou simbólica na fonte vira um número concreto impresso: 
 resolvida (determinística, sem geometria), a *base* da qual ela é porcentagem (o eixo do gradiente,
 família (b)) não é.
 
+**Decisão que fecha uma ambiguidade reportada: as famílias (b) e (c) nunca se fundem, mesmo as duas
+imprimindo como um `<número>%` cru dentro das mesmas funções de gradiente.** O próprio relatório de
+entrega da `UIX-RCSS-SPEC` sinalizou isto como uma leitura em aberto: "um segundo implementer lendo
+rápido poderia fundir (b) e (c) por serem sintaticamente parecidas" -- as duas são `%`, as duas só
+aparecem dentro de `linear-gradient(...)`/`radial-gradient(...)`, e nada no fluxo de token RCSS cru
+marca uma diferente da outra (o `<posição%>` da família (b) e o `<x%> <y%>` da família (c) são só
+texto numérico-percentual `Declaration`/`Prelude`-adjacente pro próprio lexer da `UIX-RCSS-LEXER` até
+uma futura fatia de parser). **Argumento pra fundir numa família "% de gradiente" só:** é menos
+código -- um resolvedor só, parametrizado por "eixo 1D" vs. "espaço local 2D", poderia servir os
+dois, e o próprio CSS não os nomeia como *tipos* diferentes de porcentagem do jeito que a tabela
+deste documento faz. **Argumento contra, e a decisão:** fundir seria exatamente a classe de bug que
+o próprio parágrafo de abertura da seção 5 nomeia pra confundir quaisquer duas das três famílias -- a
+família (b) resolve contra o **próprio eixo 1D** do gradiente (0% = primeiro ponto, 100% = último,
+um **comprimento ao longo de uma linha**), a família (c) resolve contra o **próprio espaço de
+coordenada local 2D** do gradiente (um par `(x, y)`, não um offset escalar) -- não são a mesma
+*quantidade*, só a mesma *forma de impressão*, e um resolvedor escrito pra "tratar uma porcentagem de
+gradiente" de forma genérica convida exatamente o cross-feed acidental que a tabela de famílias deste
+documento existe pra prevenir (o próprio exemplo trabalhado da seção 5: alimentar uma porcentagem de
+stop de gradiente no resolvedor errado). **Ficam duas famílias distintas, nunca uma.** Isto não é só
+prosa restated -- a seção 15.3 dá a forma trabalhada byte-exata das três famílias lado a lado,
+especificamente pra um segundo implementer não conseguir chegar na leitura fundida nem passando o
+olho rápido: as duas famílias nunca compartilham posição de argumento dentro de uma mesma chamada de
+função (a família (c) é sempre o(s) primeiro(s) 1-2 argumento(s) de `radial-gradient`, antes da
+própria cláusula `circle at` ser consumida; a família (b) é sempre dentro de uma entrada `<stop>`,
+depois da cor) -- um exemplo trabalhado que mostra as duas na mesma chamada de função fecha a
+ambiguidade que uma regra só-em-prosa não consegue.
+
 ### 6. O registro de propriedades (a lista fixa e fechada que todo bloco `PROPS` enumera)
 
 **Disciplina de escopo, declarada uma vez pra não repetir por linha:** o próprio texto de escopo da
@@ -1069,9 +1441,62 @@ uma composição em tempo-de-render, não um valor computado em tempo-de-cascata
 computado de `opacity`, que este dump reporta, é exatamente o número único cascateado ao estilo de
 herança CSS, não o produto composto).
 
+**⚠️ `max-height`/`max-width`: a única entrada de registro com zero justificativa de corpus, mantida
+de propósito, não um bug pra consertar depois.** A própria entrega da `UIX-PROP-REGISTRY` fechou a
+conta 64-vs-72 (seção 6 acima) e achou que essas duas são as **únicas** 2 das 72 entradas longhand
+com **zero** ocorrência medida em lugar nenhum do corpus deste documento
+(`/var/tmp/censo-rcss-qa1/censo.md`) -- não escritas direto, e não alcançáveis por nenhum dos 13
+shorthands da seção 6.2 (nenhum shorthand expande em `max-height`/`max-width`; são propriedades
+nativas do RmlUi, planas, sem expansão). A própria disciplina de escopo da seção 6 declara que este
+registro é construído "exclusivamente" de nomes medidos -- por essa regra sozinha, essas duas não
+pertenceriam. **Ficam no registro mesmo assim**, por dois motivos declarados aqui uma vez pra um
+futuro leitor não reabrir a discussão fixture por fixture: (1) a própria tabela deste documento
+(seção 6.1 acima) já as listava antes da disciplina de exclusividade-de-corpus ser escrita -- e a
+spec é o contrato que os dois autores independentes de dumper constroem contra; remover uma entrada
+de registro já publicada exige a mesma disciplina "parar, editar esta spec com um diff, aval do
+líder" que a seção 13 exige pra *somar* um item fora-de-subconjunto, não um descarte silencioso; (2)
+o motivo mais duradouro, restated da própria regra permanente deste projeto: o alvo da glintfx é
+**distribuição ampla**, e "zero ocorrência no corpus de dois projetos" é uma afirmação verdadeira
+sobre dois repositórios, nunca uma afirmação verdadeira sobre o mundo -- um consumidor que este
+documento nunca viu pode genuinamente autorar `max-height: 200px;` amanhã. **O teto a que esta
+decisão fica limitada:** essas duas entradas ficam pinadas exatamente como estão hoje --
+`keyword(none)` ou length-percent (família a), mesmo domínio e forma de impressão que toda outra
+propriedade box-relativa da tabela -- pelo próprio
+`test_max_height_max_width_are_the_one_known_unexplained_gap` do
+`glintfx/tests/uix_style/property_registry_sanity.cpp`; um futuro censo que medir um uso real de
+qualquer uma delas é uma **confirmação**, não uma descoberta, e não muda nada nesta decisão; um
+futuro censo que achar uma **terceira** entrada zero-corpus-mas-listada é uma anomalia **nova** e
+precisa ser reportada do mesmo jeito que esta foi, não dobrada em silêncio nesta mesma justificativa.
+
 #### 6.2 Expansão shorthand-pra-longhand (sem slot próprio de registro; alimenta as entradas longhand acima)
 
-*(mesma tabela da seção 6.2 em inglês -- nomes de propriedade e algoritmos não traduzidos.)*
+*(mesma tabela da seção 6.2 em inglês -- nomes de propriedade e algoritmos não traduzidos. A linha de
+`border-top`/`-right`/`-bottom`/`-left` foi corrigida em 2026-08-06 -- ver a nota a seguir.)*
+
+**Correção à linha de `border-top`/`-right`/`-bottom`/`-left` da tabela acima, datada 2026-08-06 (ver
+o bloco de errata no cabeçalho deste documento pro relato completo):** "independente de ordem entre
+os dois" era **falso** pra uma cadeia `FallThrough` de 2-itens/2-tokens. A regra real, rastreada
+iteração-por-iteração contra o próprio laço real do upstream
+(`examples/RmlUi/Source/Core/PropertySpecification.cpp:429-471`, lido direto): o upstream sempre
+avança o cursor de **item** a cada iteração (casamento ou não), e só avança o cursor de **token** num
+casamento -- então um token que falha o próprio domínio do item 0 e só casa com o item 1 (a ordem
+revertida, cor-depois-width) é reivindicado pelo item 1, deixando o cursor de item esgotado com o
+outro token ainda não-reivindicado, e a própria guarda pós-laço do upstream (`value_index <
+property_values.size() && property_index >= items.size()`) aborta o shorthand **inteiro** -- não um
+resultado parcial. Concretamente, pra `border-top`: `1dp #7A5A2E` (width-depois-color, a própria
+ordem 100%-medida do corpus) tem sucesso; `#7A5A2E 1dp` (color-depois-width) é `MalformedValue`, e a
+declaração `border-top` inteira é descartada pela política fail-high da seção 11 (tanto
+`border-top-width` quanto `border-top-color` ficam com o que a regra de próxima-especificidade-menor
+da cascata fornecer, ou o próprio valor inicial de registro se nenhuma). **O que "independente de
+ordem" É verdade:** qual *domínio* um token roteia é guiado por conteúdo (um token com forma de
+comprimento roteia pra `-width` independente da posição em que aparece) -- essa parte da frase
+original não estava errada. **O que não é verdade:** que uma *ordem* de token arbitrária sempre tem
+sucesso pra uma cadeia de 2-itens/2-tokens. Não tem. A seção 15.2 abaixo dá o dump byte-exato das
+duas ordens lado a lado. Prova, não só afirmação: pinado pelo próprio
+`test_border_top_fallthrough_order_is_load_bearing` do
+`glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`, e já declarado corretamente no próprio
+`glintfx/src/uix/style/shorthand.hpp:38`/`shorthand.cpp:30-35` antes deste documento ser corrigido
+pra bater.
 
 ##### 6.3 O algoritmo `Box` (verbatim de `PropertySpecification.cpp:336-370`, expansão de box-model CSS padrão)
 
@@ -1204,6 +1629,22 @@ paridade completa de unidade); este dump sempre imprime o ângulo resolvido em *
 volta introduz seu próprio ruído pequeno de arredondamento que converter o mais raro `rad` de entrada
 pra `deg` evita pro caso esmagadoramente comum.
 
+**Forma de impressão, uma lacuna que este documento não declarava antes e fecha aqui:** um ângulo
+imprime como a própria saída crua do `quantize()` (seção 8), **sem sufixo de unidade** -- diferente
+de `length`, que ganha um sufixo `px` explícito, adicional, sobreposto ao `quantize()` pela própria
+regra da seção 8.1. O próprio título desta seção só dizia que ângulos são *canonicalizados* pra graus
+(qual unidade o número significa); nunca dizia se a string impressa carrega o próprio nome dessa
+unidade. Deixado sem declarar, um segundo implementer tem duas leituras igualmente plausíveis --
+copiar o precedente do sufixo `px` e imprimir `90.0000deg`, ou confiar no próprio contrato literal do
+`quantize()` ("sem expoente... sem unidade" nunca é sobreposto pra ângulos do jeito que é
+explicitamente pra length) e imprimir o número cru `90.0000`. Este documento resolve como a forma
+crua, porque é isso que o próprio algoritmo da seção 8 já produz sem nenhuma sobreposição específica
+de ângulo existindo em lugar nenhum deste documento -- `length` é o único domínio que ganha uma regra
+explícita de sufixo; ângulo não tem nenhuma, então cai na própria saída não-modificada do
+`quantize()`. A seção 15.3 abaixo imprime um ângulo dentro de um exemplo trabalhado de
+`linear-gradient(...)`, usando esta regra, pra um segundo implementer ter uma âncora byte-exata em
+vez de só esta prosa.
+
 ### 9. Gramática de serialização de valor composto
 
 *(seções 9.1-9.4, 9.2.1 -- mesmo conteúdo técnico, tabelas e exemplos trabalhados da versão em
@@ -1263,6 +1704,21 @@ Concretamente:
   pro limite mais próximo **só onde a seção 6.1/9 declara um clamp**; onde nenhum clamp é declarado,
   a declaração/entrada-de-decorator inteira é descartada pelas duas regras acima, nunca clampada em
   silêncio por invenção.
+- **Valor de shorthand malformado** (um nome de shorthand reconhecido, seção 6.2, cujo próprio valor
+  cru tem contagem ou forma de token que não cabe em nenhuma das formas aceitas daquele shorthand --
+  ex.: a própria cadeia de 2 tokens de `border-top` dada na ordem revertida, color-depois-width, per
+  a nota de errata da própria seção 6.2): a mesma consequência de uma propriedade desconhecida, de
+  forma uniforme -- a **declaração de shorthand inteira** é descartada, todo longhand que ela
+  alvejaria fica com o que a regra de próxima-especificidade-menor da cascata fornecer, ou o próprio
+  valor inicial de registro da seção 6.1 se nenhuma. Pra um shorthand cujo próprio algoritmo é ele
+  mesmo composto de sub-shorthands (o `RecursiveRepeat` de `border`, seção 6.2): se **qualquer** uma
+  das 4 sub-expansões de lado falhar, a declaração `border` **inteira** é descartada, não só o lado
+  que falhou (casa com o próprio `result &= ...` do upstream nos 4,
+  `PropertySpecification.cpp:369-380`, já o comportamento que o próprio ramo `RecursiveRepeat` do
+  `glintfx/src/uix/style/shorthand.cpp` implementa). Isto não é uma regra nova inventada pra esta
+  passada de errata -- é a própria frase de abertura desta seção ("uma construção não-reconhecida ou
+  **inválida** é logada e ignorada") tornada explícita pra uma forma de invalidez que o texto
+  original deixava sem nomear.
 - **Formato de log, conteúdo mínimo:** o texto cru da construção rejeitada, e o arquivo/linha se
   disponível -- nunca um "RCSS inválido" nu sem causa localizável, o mesmo padrão que o próprio
   relatório `file:line` do `check_rml_whitelist.sh` fixa pra este código-base (seção 4 do
@@ -1337,8 +1793,113 @@ texto por referência, não por duplicação, pra evitar os dois documentos dive
 | :--- | :---: | :--- | :--- | :--- |
 | *(nenhuma ainda -- este documento é anterior a qualquer fatia da `RMLX-2`; a primeira linha é escrita por quem implementar a primeira fatia a achar a primeira divergência real)* | | | | |
 
-### 15. Exemplo trabalhado (byte-exato, dois estados, um nó)
+### 15. Exemplos trabalhados (byte-exato)
+
+**Quatro exemplos independentes abaixo (15.1-15.4), cada um ancorando um ponto em que a própria
+prosa deste documento sozinha deixava espaço pra dois leitores caírem em bytes diferentes -- pelo
+próprio princípio-guia desta seção, restated do cabeçalho: dois implementers independentes podem
+concordar na mesma leitura que soa-correta-mas-é-errada de uma regra em prosa; não conseguem os dois
+reproduzir a mesma resposta trabalhada byte-exata discordando sobre o que ela significa.**
+
+#### 15.1 Dois estados, um nó (`:hover`)
 
 *(mesmo exemplo em inglês acima -- fonte RCSS/RML, linhas de dump e as notas técnicas que as amarram
 de volta às seções não são traduzidas; identificadores de campo, valores e nomes de arquivo são
 dados técnicos.)*
+
+#### 15.2 A ordem do shorthand é load-bearing (`border-top`)
+
+*(mesmo exemplo em inglês acima -- a própria âncora trabalhada da errata, seção 6.2, as duas ordens
+lado a lado; identificadores de campo, valores e nomes de arquivo são dados técnicos, não
+traduzidos.)*
+
+#### 15.3 As três famílias de `%`, lado a lado
+
+*(mesmo exemplo em inglês acima -- fonte RCSS/RML e linhas de dump não traduzidas; fecha a
+ambiguidade de fusão (b)/(c) da seção 5 com uma âncora byte-exata, não só a decisão em prosa.)*
+
+#### 15.4 Fronteira da quantização: empate exato e um passo pra fora
+
+*(mesma tabela em inglês acima -- os quatro inputs abstratos ao `quantize()` (empate exato + um passo
+pra fora, os dois sinais) não são traduzidos, são dados técnicos; ver a própria regra da casa citada
+no cabeçalho da tabela: testar só o limite exato não basta, um limite alargado ainda contém a própria
+borda.)*
+
+### 16. Decisões de contrato que fecham ambiguidades reportadas por fatias anteriores da `RMLX-2`
+
+**Escopo desta seção, declarado uma vez:** o próprio comentário de cabeçalho da `UIX-RCSS-LEXER`
+(`glintfx/src/uix/style/lexer.hpp`) reportou duas ambiguidades que deliberadamente não resolveu
+sozinha, cada uma afetando como uma futura fatia de parser construída sobre o fluxo de token daquele
+lexer precisa se comportar ao produzir os valores computados que o formato de dump deste documento
+reporta -- então, pela própria instrução desta tarefa de que uma ambiguidade não-resolvida não é
+deste projeto pra deixar em aberto uma vez achada, são fechadas aqui, com os dois lados argumentados,
+como decisões de contrato deste documento. (A terceira ambiguidade que esta tarefa nomeou -- as
+famílias de porcentagem (b) e (c) -- já está fechada na seção 5 acima; não é repetida aqui, só
+cross-referenciada, pra os dois documentos que a declaram não divergirem.)
+
+#### 16.1 Comentários no meio de um trecho: token `Comment` diagnosticável vs. emenda-por-byte do upstream
+
+**A própria escolha do lexer (já entregue, `UIX-RCSS-LEXER`):** `/* ... */` é o próprio token
+`Comment`, reconhecido só num início-de-scan fresco -- logo depois de um delimitador estrutural,
+logo depois de uma `Declaration` completa, ou bem no início de um dispatch de `Prelude`/`Comment`. O
+próprio RmlUi upstream real elide comentários no nível de *caractere*, abaixo de toda máquina de
+estado, então um comentário pode *emendar* dois trechos adjacentes com zero bytes entre eles
+(`wid/*x*/th` tokeniza como o identificador `"width"`) independente de onde aparece -- meio de
+identificador, meio de valor, em qualquer lugar.
+
+**Argumento pro comportamento de emenda-por-byte do upstream:** é o que `Style::ComputedValues` (o
+lado A do oráculo da `RMLX-2`) de fato faz, porque o lado A *é* código real do RmlUi -- casar
+byte-a-byte fecha uma fonte de divergência antes que ela possa aparecer. **Argumento pra própria
+escolha, mais estreita, do lexer (a decisão):** um token `Comment` diagnosticável é estritamente mais
+útil pra toda fixture do corpus que existe hoje (comentários só aparecem em posições de
+início-de-scan-fresco nos 62 arquivos do censo -- zero contra-exemplo), mantém a própria maquinaria
+de relato-de-erro/hardening deste módulo uniforme com o desenho idêntico `<!-- -->` do irmão DOM, e
+-- o motivo que mantém isto como contrato em vez de reabrir -- **os próprios campos `offset`/`length`
+de todo `Token` são preservados exatamente pra uma futura fatia de parser ainda conseguir
+reconstruir a própria leitura emendada-por-byte do upstream direto do buffer-fonte**, se uma fixture
+real algum dia for achada em que isso importa (a própria cláusula de cabeçalho da seção 1: parar,
+diff, aval do líder, só então implementar). **Decisão:** mantida como entregue. **Consequência pro
+próprio registro de divergências deste documento (seção 14):** uma futura fixture com um comentário
+aparecendo *no meio* de um trecho (dentro de um scan de `Prelude`/nome/valor já iniciado, não numa
+fronteira de início-de-scan-fresco) é **pré-registrada aqui como classe (b)** (normalização esperada
+RmlUi/glintfx, não um bug) no momento em que for achada -- um implementer que a encontrar não precisa
+primeiro debater se é classe (a) ou (b), este documento já responde isso.
+
+#### 16.2 Dispatch de modo guiado por nome-de-at-rule: nível-lexer vs. adiado pra uma futura fatia de parser
+
+**A própria escolha do lexer (já entregue):** a decisão de se um `{` abre um bloco Declaration plano
+ou uma segunda região Estrutural aninhada (precisa pra exatamente um caso medido no corpus,
+`@keyframes`) é tomada **dentro do próprio lexer**, chaveada pela primeira palavra, case-sensitive,
+do próprio `Prelude` que precede o at-rule. Toda *outra* questão semântica que este mesmo lexer toca
+-- casamento de seletor, validação de valor de propriedade, registro de propriedade -- é
+explicitamente adiada pra uma futura fatia de parser; o reconhecimento de `@keyframes` é a única
+exceção, e o próprio cabeçalho da `UIX-RCSS-LEXER` sinalizou isso como uma questão real, estrutural,
+de dois lados, em vez de obviamente-já-resolvida.
+
+**Argumento pra adiar pra um futuro parser (a posição tomada em todo o resto deste mesmo lexer):**
+mantém o lexer uma passada byte-pra-token puramente mecânica, livre-de-contexto, com zero
+conhecimento do que qualquer at-rule *significa* -- a mesma fronteira traçada pra `.foo`/`#bar`/
+`:hover` (carregados como bytes `Prelude` crus, não-parseados) e pra todo nome/valor de propriedade
+(carregados como texto `Declaration` cru). Reconhecer a string literal `"keyframes"` é, à primeira
+vista, exatamente o tipo de conhecimento semântico que o próprio cabeçalho deste módulo repete
+várias vezes "não é trabalho desta camada". **Argumento pra manter no nível do lexer (a decisão):**
+isto não é uma questão de validade-semântica, é uma **necessidade sintática pra sequer produzir um
+fluxo de token correto** -- uma categoria diferente de todo caso adiado. Semântica de
+seletor/propriedade sendo adiada não custa nada estrutural: um token `Prelude` não-parseado ainda é
+um token completo, corretamente delimitado, independente de algo rio-abaixo entender `:hover` ou
+não. Dispatch por nome-de-at-rule não é assim: sem saber que o at-rule é `@keyframes`, o lexer não
+consegue distinguir um par `{`/`}` aninhado de um plano, e erra o **próprio balanço de chave** --
+provado, não afirmado, pelo próprio `test_keyframes_special_case_is_load_bearing` do
+`lexer_hardening_sanity.cpp`: sem o caso especial, `@keyframes spin { from { transform: rotate(0deg);
+} to { transform: rotate(360deg); } } }` desincroniza, o primeiro `}` interno termina o scan inteiro
+prematuramente, e o `}` externo fica pendurado -- não uma *interpretação* errada de tokens por outro
+lado válidos, um **fluxo de token errado**, do qual nenhuma fatia de parser rio-abaixo conseguiria
+recuperar uma árvore correta não importa como for desenhada. O próprio tokenizador do RmlUi upstream
+real precisa e toma esta decisão idêntica na camada idêntica (o próprio ramo `State::AtRuleIdentifier`
+do `StyleSheetParser::Parse`, `:786-789`) -- esta não é uma fronteira que este módulo inventou, é o
+único lugar em que a própria divisão tokenizador-vs-parser do upstream já traça a linha do mesmo
+jeito. **Decisão:** fica no nível do lexer, permanentemente, não só "por enquanto" -- o teto já está
+declarado (só o literal, case-sensitive, `"keyframes"`; as próprias exclusões de zero-real da seção
+13 do `docs/rmlx-subset.md` pra `@media`/`@import`/`@charset`/`@supports` recebem o default comum de
+modo Declaration, e uma fixture real precisando de uma delas é o mesmo movimento "parar, somar um
+nome nesta tabela", nunca um alargamento silencioso do default).

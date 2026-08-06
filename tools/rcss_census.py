@@ -1144,14 +1144,31 @@ def to_jsonable(census: Census) -> dict:
     return d
 
 
+CANONICAL_PRODUCTION_HPP = "glintfx/src/ua_stylesheet.hpp"
+
+
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="RCSS corpus census -- see docs/uix-rcss-censo.md. "
+                     "Every table in that document declares its own exact command; "
+                     "--scope is the one to copy-paste, the others are lower-level building blocks.")
     ap.add_argument("--repo-root", default=".", type=Path)
+    ap.add_argument(
+        "--scope", choices=["rml-rcss", "production", "full"], default="rml-rcss",
+        help="THE FLAG TO USE. 'rml-rcss' (default): only git-tracked .rcss + <style> in .rml "
+             "(85 files at HEAD when this was written) -- markup-and-stylesheet corpus only. "
+             "'production': + glintfx/src/ua_stylesheet.hpp (86 files) -- THE CANONICAL SCOPE this "
+             "document's headline numbers cite; matches docs/rmlx-subset.md's own published comma-list "
+             "figures (15 rules, 13 files) exactly, because that is the file the líder's own comma-list "
+             "authorization decision was evidenced by. 'full': + all 15 test/demo files with embedded "
+             "RCSS too (101 files) -- informational only, may include verbatim echoes of corpus text "
+             "already counted once under 'production' (docs/uix-rcss-censo.md section 5.4) -- never cite "
+             "'full' numbers as the corpus census without saying so.")
     ap.add_argument("--include-hpp", nargs="*", default=[],
-                     help="extra .hpp/.cpp paths with R\"rcss(...)rcss\" raw strings to fold in, labeled separately (legacy, superseded by --cpp-embedded)")
+                     help="advanced/lower-level: fold arbitrary extra .hpp/.cpp raw-string paths in by hand "
+                          "(what --scope production does automatically for the one canonical path)")
     ap.add_argument("--cpp-embedded", action="store_true",
-                     help="also discover+extract the third origin (RCSS embedded in .cpp/.hpp string/raw-string "
-                          "literals, production and test/demo alike) and fold CLOSED blocks into the same census")
+                     help="advanced/lower-level: equivalent to --scope full, kept for scripts already using this flag")
     ap.add_argument("--list-cpp-embedded", action="store_true",
                      help="only print the third-origin discovery table (path, category, extracted/truncated "
                           "counts) and exit -- does not fold into the census or print the full JSON")
@@ -1171,8 +1188,21 @@ def main():
                 print(f"             not-extracted: {ex}")
         return
 
-    census = run(repo_root, args.include_hpp)
-    if args.cpp_embedded:
+    # --scope is sugar over the lower-level flags; an explicit --include-hpp/--cpp-embedded
+    # still works standalone (advanced use), and --scope wins if both are given at once.
+    include_hpp = list(args.include_hpp)
+    want_full = args.cpp_embedded
+    if args.scope == "production":
+        include_hpp = [CANONICAL_PRODUCTION_HPP]
+        want_full = False
+    elif args.scope == "full":
+        want_full = True
+        include_hpp = []
+    elif args.scope == "rml-rcss" and (args.include_hpp or args.cpp_embedded):
+        pass  # explicit lower-level flags override the rml-rcss default, as documented above
+
+    census = run(repo_root, include_hpp)
+    if want_full:
         fold_in_cpp_embedded(census, repo_root)
     payload = to_jsonable(census)
     text = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False)

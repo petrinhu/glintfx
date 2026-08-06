@@ -278,6 +278,60 @@ produção, só que fora das duas extensões que esta tarefa nomeou como o corpu
 abaixo quantifica exatamente o que incluí-lo muda (explica várias das pequenas lacunas numéricas contra
 os números já publicados no `docs/rmlx-subset.md`).
 
+### 2.1 The three scopes, and the exact command each one is / As três escopos, e o comando exato que cada um é
+
+⚠️ **Corrected here, coordinator's own finding:** an earlier version of this document told a reader to
+run one generic command (`python3 tools/rcss_census.py --repo-root .`) at the top and expect it to
+reproduce every table below -- it does not. That bare command only ever reproduces the **`rml-rcss`**
+scope (section 2's own table above); the comma-list/third-origin numbers section 5 publishes (**15**
+rules, **13** files) come from a **different** scope, and a reader who copy-pasted the top-of-document
+command and got **12**/**12** had every reason to conclude this census was wrong. It was the recipe that
+was wrong, not the number. Fixed: every table in this document that depends on which scope is in effect
+states its own exact command from now on (see section 5's own tables); this subsection is the map of
+which command produces which family of numbers.
+
+**EN:** Three scopes, one flag, `--scope {rml-rcss,production,full}` (`tools/rcss_census.py`, added by
+this same correction so the canonical scope has its own name instead of a multi-word `--include-hpp
+glintfx/src/ua_stylesheet.hpp` a reader has to copy exactly right):
+
+| `--scope` value | Command | Files | Comma-list rules | Distinct files with one | What question it answers |
+| :--- | :--- | ---: | ---: | ---: | :--- |
+| `rml-rcss` (**default**) | `python3 tools/rcss_census.py --repo-root .` | 85 | 12 | 12 | Markup-and-stylesheet corpus only -- section 2's own table, and most of section 3's numbers |
+| `production` | `python3 tools/rcss_census.py --repo-root . --scope production` | 86 | **15** | **13** | + `glintfx/src/ua_stylesheet.hpp` -- **the canonical scope this document cites**, see below |
+| `full` | `python3 tools/rcss_census.py --repo-root . --scope full` | 101+ (drifts, see note) | 19 (drifts) | 15 (drifts) | + every test/demo file with embedded RCSS -- informational, never the headline number |
+
+**Which scope is canonical, and why: `production`.** It is the scope this document's own headline
+claims cite (section 5.4's "MATCH exact" against `docs/rmlx-subset.md`'s own published 15/13), because
+`glintfx/src/ua_stylesheet.hpp` is the file the líder's comma-list-authorization decision was actually
+evidenced by -- real, shipped, production RCSS, just not inside the two file extensions (`.rcss`/`.rml`)
+this census's original task defined. `rml-rcss` (the default, no flags) is correct and useful on its own
+terms -- it is the pure markup-and-stylesheet corpus, and most of section 3's per-citation numbers
+(hex forms, angle units, color functions, property registry) come from it, unaffected by production or
+test/demo RCSS. `full` is **not** a citable corpus number by itself: it drifts every time a test/demo
+file gains or loses embedded RCSS (measured 16 files when section 5 was first written, 18 now, as other
+`RMLX-2` slices land their own test suites concurrently), and it can include verbatim echoes of corpus
+text already counted once under `production` (section 5.4's own finding) -- use it to see the full
+inventory (`--list-cpp-embedded`), never to cite "the" corpus size.
+
+**PT:** Três escopos, uma flag, `--scope {rml-rcss,production,full}` (`tools/rcss_census.py`, acrescentada
+por esta mesma correção pra o escopo canônico ter nome próprio em vez de um `--include-hpp
+glintfx/src/ua_stylesheet.hpp` de várias palavras que o leitor precisa copiar certinho): ver tabela acima
+(bilíngue).
+
+**Qual escopo é canônico, e por quê: `production`.** É o escopo que as próprias afirmações-manchete deste
+documento citam (o "MATCH exato" da seção 5.4 contra o 15/13 já publicado no `docs/rmlx-subset.md`),
+porque `glintfx/src/ua_stylesheet.hpp` é o arquivo que de fato evidenciou a decisão do líder de autorizar
+seletor comma-list -- RCSS real, shippada, de produção, só que fora das duas extensões de arquivo
+(`.rcss`/`.rml`) que a tarefa original deste censo definiu. `rml-rcss` (o padrão, sem flag nenhuma) é
+correto e útil nos próprios termos -- é o corpus puro de markup-e-folha-de-estilo, e a maioria dos
+números por-citação da seção 3 (formas hex, unidades de ângulo, funções de cor, registro de propriedade)
+vêm dele, não afetados por RCSS de produção ou teste/demo. `full` **não** é um número de corpus citável
+sozinho: apodrece toda vez que um arquivo de teste/demo ganha ou perde RCSS embutida (medido 16 arquivos
+quando a seção 5 foi escrita pela primeira vez, 18 agora, conforme outras fatias da `RMLX-2` pousam suas
+próprias suítes de teste em paralelo), e pode incluir eco verbatim de texto de corpus já contado uma vez
+sob `production` (o próprio achado da seção 5.4) -- use pra ver o inventário completo
+(`--list-cpp-embedded`), nunca pra citar "o" tamanho do corpus.
+
 ---
 
 ## 3. Per-citation verification / Verificação citação por citação
@@ -906,10 +960,13 @@ living in `glintfx/src/ua_stylesheet.hpp`. Folding **only the production file** 
 files + `ua_stylesheet.hpp` = 86) reproduces **both** numbers exactly:
 
 ```
-python3 tools/rcss_census.py --repo-root . --include-hpp glintfx/src/ua_stylesheet.hpp
+python3 tools/rcss_census.py --repo-root . --scope production
   -> comma_list_rules = 15
   -> len(files_with_comma_list) = 13
 ```
+
+(`--scope production` is sugar for `--include-hpp glintfx/src/ua_stylesheet.hpp`, section 2.1 -- the two
+are the identical command, `--scope production` is just the one to copy-paste.)
 
 This is the strongest cross-validation in this entire census: two independently-arrived-at headline
 numbers (rows and distinct files), from a report that no longer exists, reproduced byte-for-byte by a
@@ -945,8 +1002,13 @@ evidência já contada em outro lugar.
 
 ### 5.5 Side-by-side numbers, all three tiers / Números lado a lado, os três níveis
 
-**EN:** Reproducible: `--out primary.json` (no flag), `--include-hpp glintfx/src/ua_stylesheet.hpp`
-(+production), `--cpp-embedded` (+production +test/demo, full 101-file scope):
+**EN:** Reproducible with section 2.1's own three commands: `--scope rml-rcss` (default, no flag),
+`--scope production` (+production), `--scope full` (+production +test/demo -- **drifts**, see 2.1;
+the 101/16-file figures below are this section's own snapshot, `full` is now 18 files, not the citable
+number to trust). / **PT:** Reproduzível com os três comandos da própria seção 2.1: `--scope rml-rcss`
+(padrão, sem flag), `--scope production` (+produção), `--scope full` (+produção +teste/demo -- **apodrece**,
+ver 2.1; os números de 101/16 arquivos abaixo são o retrato desta seção, `full` já é 18 arquivos agora,
+não o número pra confiar):
 
 | Metric | Primary (85 files) | +production (86 files) | +production+test/demo (101 files) | `rmlx-subset.md` §6 claim |
 | :--- | ---: | ---: | ---: | ---: |

@@ -44,6 +44,12 @@
 //         module's own header comment makes ("two DIFFERENT (chain_specificity, rule_index) pairs
 //         can never stamp the SAME combined value below 10'000 rules") checked directly against the
 //         corpus's own measured rule count (866, `UIX-RCSS-CENSUS`) with a wide margin.
+//       - `test_cascade_tree_preorder_and_inheritance_integration`: the ONE case exercising
+//         `cascade_tree` itself, not `compute_element_style` called by hand per level -- pre-order
+//         sequence, a whitespace-only Text sibling contributing zero entries, and inheritance
+//         resolved through the ACTUAL recursive `cascade_visit` stack (two sibling subtrees
+//         declaring DIFFERENT colors so a grandchild's inherited value can only be explained by
+//         its own immediate parent, never by coincidentally matching the tree root too).
 // PT: UIX-CASCADE -- suíte unitária pro `glintfx::uix::style::compute_element_style`/
 //     `cascade_tree`. Constrói árvores `StyleSheet`/`Rule`/`Selector` À MÃO (os próprios tipos
 //     públicos deste módulo, não texto -- mesma disciplina que o selector_match_sanity.cpp já
@@ -93,6 +99,12 @@
 //         (especificidade_de_cadeia, rule_index) DIFERENTES nunca conseguem carimbar o MESMO valor
 //         combined abaixo de 10'000 regras") checada diretamente contra a própria contagem de regra
 //         medida do corpus (866, `UIX-RCSS-CENSUS`) com margem larga.
+//       - `test_cascade_tree_preorder_and_inheritance_integration`: o ÚNICO caso exercitando o
+//         próprio `cascade_tree`, não `compute_element_style` chamado à mão por nível -- sequência
+//         pré-ordem, um irmão Text só-whitespace contribuindo zero entradas, e herança resolvida
+//         através da PRÓPRIA pilha recursiva do `cascade_visit` (duas subárvores irmãs declarando
+//         cores DIFERENTES pra o valor herdado de um neto só poder ser explicado pelo PRÓPRIO pai
+//         imediato dele, nunca por coincidentemente também casar a raiz da árvore).
 // Copyright (c) 2026 Petrus Silva Costa
 #include "uix/style/cascade.hpp"
 
@@ -469,6 +481,92 @@ void test_precedence_tie_break_invariant_holds_for_corpus_scale() {
         "specificity's own multiple exactly, for the first sample pair");
 }
 
+// ---------------------------------------------------------------------------
+void test_cascade_tree_preorder_and_inheritance_integration() {
+  // EN: `cascade_tree` itself (not `compute_element_style` called by hand per level, like every
+  //     test above) -- the ONE test in this file exercising the actual recursive walk (pre-order,
+  //     text-node exclusion, parent-style threading through `cascade_visit`'s own stack frames).
+  //     Tree shape: root(.a) -> {child0(no class), child1(.b)} -> child1 has one grandchild(no
+  //     class). `.a` and `.b` declare DIFFERENT colors deliberately -- this is what lets
+  //     grandchild's own assertion below distinguish "inherits from its OWN immediate parent" from
+  //     "inherits from the tree ROOT" (both classes sharing one color would make the two
+  //     indistinguishable by coincidence, exactly the trap this file's own "golden que não alcança
+  //     a condição" discipline warns against). A stray whitespace-only Text node is appended as
+  //     root's OWN first child, before child0/child1 -- proves text nodes never get a `NodeStyle`
+  //     entry and never shift element indices (docs/uix-rcss.md section 2's own "only element
+  //     nodes carry PROP records").
+  // PT: O próprio `cascade_tree` (não `compute_element_style` chamado à mão por nível, como todo
+  //     teste acima) -- o ÚNICO teste deste arquivo exercitando a travessia recursiva de fato
+  //     (pré-ordem, exclusão de nó-texto, encadeamento de estilo-de-pai através dos próprios
+  //     frames de stack do `cascade_visit`). Forma de árvore: root(.a) -> {child0(sem classe),
+  //     child1(.b)} -> child1 tem um neto(sem classe). `.a` e `.b` declaram cores DIFERENTES
+  //     deliberadamente -- isto é o que deixa a própria asserção do neto abaixo distinguir "herda
+  //     do PRÓPRIO pai imediato" de "herda da RAIZ da árvore" (as duas classes compartilhando uma
+  //     cor tornaria os dois indistinguíveis por coincidência, exatamente a armadilha que a própria
+  //     disciplina "golden que não alcança a condição" deste arquivo avisa contra). Um nó Text
+  //     só-whitespace é somado como o PRÓPRIO primeiro filho da raiz, antes de child0/child1 --
+  //     prova que nós de texto nunca ganham entrada `NodeStyle` e nunca deslocam índice de
+  //     elemento (o próprio "só nós elemento carregam registros PROP" da seção 2 do
+  //     docs/uix-rcss.md).
+  Element root("div");
+  root.add_class("a");
+  auto whitespace_text = std::make_unique<glintfx::uix::Text>("   ");
+  auto append_result = root.append_child(std::move(whitespace_text));
+  (void)append_result; // filtered by dom_tree.hpp's own append_child, per that file's own contract.
+  Element* child0 = add_child(root, "span");
+  Element* child1 = add_child(root, "span");
+  child1->add_class("b");
+  Element* grandchild = add_child(*child1, "em");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(rule_with({chain1(class_only("a"))}, {{"color", "#0a0b0c"}}));
+  sheet.rules.push_back(rule_with({chain1(class_only("b"))}, {{"color", "#d0d1d2"}}));
+
+  MatchState state;
+  std::vector<glintfx::uix::style::NodeStyle> result =
+      glintfx::uix::style::cascade_tree(sheet, root, state);
+
+  check(result.size() == 4,
+        "cascade_tree: 4 element nodes visited (root, child0, child1, grandchild) -- the "
+        "whitespace-only Text sibling contributes ZERO entries");
+
+  bool order_ok = (result.size() == 4);
+  if (order_ok) {
+    order_ok = order_ok && result[0].element == &root;
+    order_ok = order_ok && result[1].element == child0;
+    order_ok = order_ok && result[2].element == child1;
+    order_ok = order_ok && result[3].element == grandchild;
+  }
+  check(order_ok,
+        "cascade_tree: pre-order depth-first sequence -- root, child0, child1, grandchild (NOT "
+        "root, child0, grandchild, child1, which a breadth-first or reversed-child-order bug "
+        "would produce instead)");
+
+  if (result.size() == 4) {
+    const std::string* root_color = find_value(result[0].style, "color");
+    const std::string* child0_color = find_value(result[1].style, "color");     // no class -- inherits root.
+    const std::string* child1_color = find_value(result[2].style, "color");     // .b -- declared, own.
+    const std::string* grandchild_color = find_value(result[3].style, "color"); // inherits child1.
+
+    check(root_color != nullptr && *root_color == "#0a0b0c",
+          "cascade_tree: root (.a) shows its own declared color");
+    check(child0_color != nullptr && *child0_color == "#0a0b0c",
+          "cascade_tree: child0 (no class, no rule matches) INHERITS color from ITS OWN parent "
+          "(root's declared #0a0b0c) -- color is inherited:true, so the absence of a matching "
+          "rule falls through to the parent's already-computed value, not straight to the "
+          "registry's own initial value");
+    check(child1_color != nullptr && *child1_color == "#d0d1d2",
+          "cascade_tree: child1 (.b) shows its OWN declared color (#d0d1d2), NOT root's (.a, "
+          "#0a0b0c) -- a matching declaration always wins over inheritance, even though child1 IS "
+          "root's own child");
+    check(grandchild_color != nullptr && *grandchild_color == "#d0d1d2",
+          "cascade_tree: grandchild (no class, no rule matches) INHERITS color from ITS OWN "
+          "immediate parent (child1's declared #d0d1d2), through cascade_tree's own real "
+          "recursive parent-style threading -- NOT root's #0a0b0c, which a bug inheriting from "
+          "the tree root instead of the immediate parent would wrongly produce");
+  }
+}
+
 } // namespace
 
 int main() {
@@ -480,6 +578,7 @@ int main() {
   test_determinism_repeated_computation();
   test_determinism_shuffled_noncoflicting_declaration_order();
   test_precedence_tie_break_invariant_holds_for_corpus_scale();
+  test_cascade_tree_preorder_and_inheritance_integration();
 
   std::printf(
       "SCOPE: 72 longhands resolvidas, 0 elementos de corpus (ver cascade_corpus_sanity), %d "

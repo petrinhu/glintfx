@@ -107,6 +107,7 @@ on:
       - "tools/**"
       - "Makefile"
       - ".github/workflows/core-ci.yml"
+  workflow_dispatch:
 
 jobs:
   build-and-test:

@@ -93,6 +93,7 @@ on:
       - "glintfx/third_party/miniaudio/**"
       - "glintfx/third_party/stb/**"
       - ".github/workflows/windows-atoms.yml"
+  workflow_dispatch:
 
 jobs:
   win-atoms:

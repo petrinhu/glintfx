@@ -401,6 +401,45 @@ CPPCHECK_COMMON_ARGS=(
   #     propriedade da forma de código de UMA função, não do isolamento do grafo de build do
   #     módulo -- não vale automaticamente pra arquivos que este módulo ganhar depois.
   --suppress='returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp'
+  # EN: `containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp` (UIX-PROP-REGISTRY,
+  #     2026-08-06) -- genuine cppcheck false positive, same "verified independent of
+  #     compile_commands.json presence" class as the `returnDanglingLifetime` entry above, not
+  #     the two-pass-isolation artifact the `unusedStructMember` entry is. Site: a lookup table
+  #     shaped `constexpr std::array<int, 4> kBoxIndexTable[5]` (5 rows, one per possible
+  #     `Box`-shorthand token count 0..4, each row itself a 4-element `std::array` -- the CSS
+  #     box-model expansion table docs/uix-rcss.md section 6.3 states), indexed by a value a
+  #     guard two lines above already proves is in `[1, 4]` (`tokens.empty() || tokens.size() >
+  #     4` returns early otherwise) -- well within the table's real 5 entries. cppcheck's own
+  #     value-flow analysis confuses the OUTER C-array size (5) with the INNER
+  #     `std::array<int, 4>` element type's own template argument (4), and reports the access as
+  #     out-of-bounds against the wrong bound. Verified by hand-tracing every index the guard
+  #     allows (0 is provably unreachable, 1-4 are all valid row indices into the 5-row table)
+  #     and by this module's own green test suite (`uix_style_shorthand_expansion_sanity`
+  #     exercises every one of the 4 reachable Box token counts, including the boundary `4`
+  #     cppcheck itself names as the disputed value). Scoped to this one file (not the whole
+  #     `glintfx/src/uix/style/*` directory) because this is a property of ONE table's own
+  #     shape, not of the module's build-graph isolation.
+  # PT: `containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp` (UIX-PROP-REGISTRY,
+  #     2026-08-06) -- falso positivo genuíno do cppcheck, mesma classe "verificado
+  #     independente de presença em compile_commands.json" da entrada `returnDanglingLifetime`
+  #     acima, não o artefato de isolamento-em-duas-passadas que a entrada `unusedStructMember`
+  #     é. Sítio: uma tabela de busca com forma `constexpr std::array<int, 4>
+  #     kBoxIndexTable[5]` (5 linhas, uma por contagem-de-token possível de shorthand `Box`
+  #     0..4, cada linha ela própria um `std::array` de 4 elementos -- a tabela de expansão de
+  #     box-model do CSS que a seção 6.3 do docs/uix-rcss.md declara), indexada por um valor que
+  #     uma guarda duas linhas acima já prova estar em `[1, 4]` (`tokens.empty() ||
+  #     tokens.size() > 4` retorna cedo caso contrário) -- bem dentro das 5 entradas reais da
+  #     tabela. A própria análise de value-flow do cppcheck confunde o tamanho EXTERNO do
+  #     C-array (5) com o próprio argumento de template do tipo-elemento INTERNO
+  #     `std::array<int, 4>` (4), e reporta o acesso como fora-dos-limites contra o limite
+  #     errado. Verificado rastreando à mão todo índice que a guarda permite (0 é
+  #     comprovadamente inalcançável, 1-4 são todos índices de linha válidos na tabela de 5
+  #     linhas) e pela própria suíte de teste verde deste módulo (`uix_style_shorthand_expansion_sanity`
+  #     exercita cada uma das 4 contagens de token Box alcançáveis, incluindo o limite `4` que o
+  #     próprio cppcheck nomeia como o valor contestado). Restrito a este único arquivo (não o
+  #     diretório `glintfx/src/uix/style/*` inteiro) porque isto é uma propriedade da FORMA de
+  #     UMA tabela, não do isolamento do grafo de build do módulo.
+  --suppress='containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp'
   --error-exitcode=1
 )
 

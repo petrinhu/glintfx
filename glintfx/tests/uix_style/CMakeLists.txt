@@ -41,3 +41,15 @@ target_compile_definitions(uix_style_lexer_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
 add_test(NAME uix_style_lexer_corpus_sanity COMMAND uix_style_lexer_corpus_sanity)
+
+# EN: UIX-PROP-REGISTRY -- property registry table + shorthand-to-longhand expansion. Own
+#     executables, same "zero RmlUi/GLFW/GL" discipline as the 3 lexer executables above.
+# PT: UIX-PROP-REGISTRY -- tabela de registro de propriedades + expansão shorthand-pra-longhand.
+#     Executáveis próprios, mesma disciplina "zero RmlUi/GLFW/GL" dos 3 executáveis de lexer acima.
+add_executable(uix_style_property_registry_sanity property_registry_sanity.cpp)
+target_link_libraries(uix_style_property_registry_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_property_registry_sanity COMMAND uix_style_property_registry_sanity)
+
+add_executable(uix_style_shorthand_expansion_sanity shorthand_expansion_sanity.cpp)
+target_link_libraries(uix_style_shorthand_expansion_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_shorthand_expansion_sanity COMMAND uix_style_shorthand_expansion_sanity)

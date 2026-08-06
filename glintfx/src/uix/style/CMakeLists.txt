@@ -66,7 +66,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-add_library(glintfx_uix_style STATIC lexer.cpp)
+add_library(glintfx_uix_style STATIC lexer.cpp property_registry.cpp shorthand.cpp)
 target_include_directories(glintfx_uix_style PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 # EN: -Wall -Wextra -Wpedantic, GCC/Clang only -- same portability guard shape as

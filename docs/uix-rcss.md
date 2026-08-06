@@ -542,6 +542,154 @@ discordância é a razão inteira de `float32` precisar de um teste de fronteira
 
 ---
 
+## 🔴 Errata (`UIX-RCSS-ERRATA-4`, 2026-08-06) / Errata (`UIX-RCSS-ERRATA-4`, 2026-08-06)
+
+**EN:** `UIX-RCSS-ERRATA-2`'s own §7.1 decision -- print `box-shadow` layer colors and gradient-stop
+colors as the **stored premultiplied bytes, as-is** -- is **reverted** here, decided today by the
+**líder himself**, with the correction and the new evidence below on the table, not closed
+unilaterally by the `tech-lead` the way `ERRATA-2` closed it. **Both fields go back to straight
+alpha**, matching every other color-typed field this document names (§7.1's own general rule),
+obtained by applying `ToNonPremultiplied()` to the value the parser actually stored -- not the
+premultiplied bytes echoed as-is.
+
+**`ERRATA-2`'s argument (b) is false, and this is measured, not asserted:** it justified printing
+the premultiplied bytes partly because "un-premultiplying is undefined at `alpha=0`". It is not.
+`examples/RmlUi/Include/RmlUi/Core/Colour.h:105-107`, `ToNonPremultiplied()`'s own body:
+`ColourType(alpha > 0 ? (red * 255) / alpha : 0)` (same guard on the green/blue channels) -- an
+explicit `alpha > 0` guard, total for every input, `0` for the fully-transparent case. There is no
+division by zero to avoid; the alternative `ERRATA-2` rejected as "undefined" is defined by the same
+upstream this whole document takes as its oracle.
+
+**New evidence `ERRATA-2` did not have: upstream's own answer to "what text represents this color"
+is straight alpha, for exactly these two fields.** When real RmlUi itself converts a `ColorStopList`
+or a `BoxShadowList` to `String` -- the same question this document's `PROP` line answers, just for
+a different consumer -- it un-premultiplies first:
+`examples/RmlUi/Source/Core/TypeConverter.cpp:223` (`ColorStopList` → `String`):
+`dest += ToString(stop.color.ToNonPremultiplied());`; `TypeConverter.cpp:256` (`BoxShadowList` →
+`String`): `dest += ToString(shadow.color.ToNonPremultiplied()) + temp;`. `ERRATA-2`'s own principle
+-- "report whatever the pipeline actually produced" (§7.1, reasoning (1)) -- is not overturned, it is
+**re-applied to a fact `ERRATA-2` did not have**: the pipeline's own textual serialization step
+un-premultiplies. Printing the premultiplied bytes as-is was not "staying mechanical", it was
+skipping a step upstream itself takes.
+
+**🔴 The point most likely to cause a byte divergence, and the one nobody had measured before now:
+the round trip is lossy, in both directions, and the printed value equals neither the value authored
+in the sheet nor the value stored after parsing.** `(channel * 255) / alpha` is integer division,
+truncating, same as the premultiply step's own `(channel * alpha) / 255` -- two truncations in
+series do not invert each other. Measured directly (`(channel*alpha)/255` then `(result*255)/alpha`,
+both truncating):
+
+| written in RCSS | stored (premultiplied) | printed (straight alpha) |
+| :--- | :--- | :--- |
+| `#22d3ee80` | `#11697780` | **`#21d1ed80`** |
+| `#c9a24b40` | `#32281240` | **`#c79f4740`** |
+| `#22d3ee00` | `#00000000` | **`#00000000`** |
+
+Three distinct values for `alpha<255`, not two. An implementer expecting the printed byte to equal
+the authored byte -- a reasonable expectation for every *other* color field this document defines --
+will diverge silently the first time a fixture uses `alpha<255` on `box-shadow`/gradient-stop. **The
+normative formula, stated explicitly so a second implementer does not have to reconstruct it: `printed
+= alpha > 0 ? (stored_channel * 255) / alpha : 0`, integer truncation, the exact guard and the exact
+arithmetic `ToNonPremultiplied()` uses (`Colour.h:105-107`) -- never `round()`, never a floating-point
+division.**
+
+**§9.1's worked example is corrected to match (below, in the English section) -- layer 2's printed
+color changes a *third* time across this document's history: `#22d3ee26` (`ERRATA-1`-era text,
+naively echoed the source literal) → `#051f2326` (`ERRATA-2`, premultiplied bytes as-is) →
+`#21d0ea26` (`ERRATA-4`, straight alpha via `ToNonPremultiplied()` -- and notably **not** the same
+byte as the original `#22d3ee26`, exactly the lossy round-trip measured above).** §9.1's own
+`ERRATA-3`-flagged inertness gap (the fixture's `inset`/color order is canonical, not
+position-independent; both layers specify `spread` explicitly, so its default path is never printed)
+is **untouched by this errata and remains open** -- closing it needs a corpus-verified fixture
+(`ERRATA-3` already names the candidate, `gusworld_battle_cockpit.rml`'s `#22D3EE 0dp 0dp 8dp`), which
+is `UIX-RCSS-DUMP-A`/census territory, not a claim this errata can verify without inventing a fixture
+of its own. Redeclared here rather than left to be rediscovered.
+
+**Reversibility: not zero-cost -- `UIX-RCSS-DUMP-A` already shipped against `ERRATA-2`'s reading, and
+this document's own header claim ("no `RMLX-2` dumper exists yet") is stale as of this errata.**
+`UIX-RCSS-DUMP-A`'s own `TODO.md` entry states it explicitly: color is printed "as está, sem
+despremultiplizar" -- exactly the decision this errata reverts. Reverting the *document* is two-way
+and free; the *code* now diverges from the spec it is supposed to implement, for every `alpha<255`
+`box-shadow`/gradient-stop fixture, until a follow-up patch applies `ToNonPremultiplied()` in
+`glintfx/src/rml/rcss_dump.{hpp,cpp}` (out of scope here -- forbidden path for this fatia). `Side B`
+(`UIX-RCSS-DUMP-B`, gated behind the still-in-progress `UIX-VALUE-COMPUTE`) has not shipped yet, so it
+costs nothing and needs no correction. Flagged in `TODO.md` as a follow-up so it is not lost.
+
+**PT:** A própria decisão da seção 7.1 da `UIX-RCSS-ERRATA-2` -- imprimir cores de camada de
+`box-shadow` e cores de stop de gradiente como os **bytes pré-multiplicados armazenados, como
+estão** -- é **revertida** aqui, decidida hoje pelo **próprio líder**, com a correção e a evidência
+nova abaixo na mesa, não fechada unilateralmente pelo `tech-lead` do jeito que a `ERRATA-2` fechou.
+**Os dois campos voltam pra alfa direto (straight alpha)**, batendo com todo outro campo tipo-cor que
+este documento nomeia (a própria regra geral da seção 7.1), obtido aplicando `ToNonPremultiplied()`
+ao valor que o parser de fato armazenou -- não os bytes pré-multiplicados ecoados como estão.
+
+**O argumento (b) da `ERRATA-2` é falso, e isto é medido, não afirmado:** ele justificava imprimir os
+bytes pré-multiplicados em parte porque "despré-multiplicar é indefinido em `alpha=0`". Não é.
+`examples/RmlUi/Include/RmlUi/Core/Colour.h:105-107`, o próprio corpo de `ToNonPremultiplied()`:
+`ColourType(alpha > 0 ? (red * 255) / alpha : 0)` (mesma guarda nos canais verde/azul) -- uma guarda
+explícita `alpha > 0`, total pra toda entrada, `0` pro caso totalmente transparente. Não há divisão
+por zero a evitar; a alternativa que a `ERRATA-2` rejeitou como "indefinida" é definida pelo mesmo
+upstream que este documento inteiro toma como oráculo.
+
+**Evidência nova que a `ERRATA-2` não tinha: a resposta do próprio upstream pra "que texto representa
+esta cor" é alfa direto, exatamente pra esses dois campos.** Quando o RmlUi real converte um
+`ColorStopList` ou um `BoxShadowList` pra `String` -- a mesma pergunta que a linha `PROP` deste
+documento responde, só que pra um consumidor diferente -- ele despré-multiplica primeiro:
+`examples/RmlUi/Source/Core/TypeConverter.cpp:223` (`ColorStopList` → `String`):
+`dest += ToString(stop.color.ToNonPremultiplied());`; `TypeConverter.cpp:256` (`BoxShadowList` →
+`String`): `dest += ToString(shadow.color.ToNonPremultiplied()) + temp;`. O próprio princípio da
+`ERRATA-2` -- "reportar o que quer que o pipeline de fato produziu" (seção 7.1, raciocínio (1)) -- não
+é derrubado, é **reaplicado a um fato que a `ERRATA-2` não tinha**: o próprio passo de serialização
+textual do pipeline despré-multiplica. Imprimir os bytes pré-multiplicados como estão não era "ficar
+mecânico", era pular um passo que o próprio upstream dá.
+
+**🔴 O ponto que mais provavelmente causaria divergência de byte, e que ninguém tinha medido até
+agora: o round trip é lossy, nos dois sentidos, e o valor impresso não é igual nem ao valor escrito na
+folha nem ao valor armazenado após o parse.** `(canal * 255) / alpha` é divisão inteira, truncante,
+igual ao próprio passo de pré-multiplicação `(canal * alpha) / 255` -- duas truncagens em série não se
+invertem uma à outra. Medido diretamente (`(canal*alpha)/255` depois `(resultado*255)/alpha`, as duas
+truncantes):
+
+| escrito no RCSS | guardado (pré-mult.) | impresso (alfa direto) |
+| :--- | :--- | :--- |
+| `#22d3ee80` | `#11697780` | **`#21d1ed80`** |
+| `#c9a24b40` | `#32281240` | **`#c79f4740`** |
+| `#22d3ee00` | `#00000000` | **`#00000000`** |
+
+Três valores distintos pra `alpha<255`, não dois. Um implementer esperando que o byte impresso seja
+igual ao byte autoral -- uma expectativa razoável pra todo *outro* campo de cor que este documento
+define -- vai divergir em silêncio na primeira fixture que usar `alpha<255` em
+`box-shadow`/stop-de-gradiente. **A fórmula normativa, declarada explicitamente pra um segundo
+implementer não ter de reconstruí-la: `impresso = alpha > 0 ? (canal_armazenado * 255) / alpha : 0`,
+truncamento inteiro, exatamente a guarda e a aritmética que `ToNonPremultiplied()` usa
+(`Colour.h:105-107`) -- nunca `round()`, nunca divisão de ponto flutuante.**
+
+**O exemplo trabalhado da seção 9.1 é corrigido pra bater (abaixo, na seção em inglês) -- a cor
+impressa da camada 2 muda uma *terceira* vez ao longo da história deste documento: `#22d3ee26` (texto
+da era `ERRATA-1`, ecoava o literal-fonte ingenuamente) → `#051f2326` (`ERRATA-2`, bytes
+pré-multiplicados como estão) → `#21d0ea26` (`ERRATA-4`, alfa direto via `ToNonPremultiplied()` -- e
+note que **não** é o mesmo byte do `#22d3ee26` original, exatamente o round-trip lossy medido acima).**
+A própria lacuna de inércia da seção 9.1 sinalizada pela `ERRATA-3` (a ordem `inset`/cor da fixture é
+canônica, não independente de posição; as duas camadas especificam `spread` explicitamente, então o
+caminho de default nunca é impresso) **permanece intocada por esta errata e continua aberta** --
+fechá-la precisa de uma fixture verificada por corpus (a `ERRATA-3` já nomeia a candidata,
+`#22D3EE 0dp 0dp 8dp` do `gusworld_battle_cockpit.rml`), que é território da
+`UIX-RCSS-DUMP-A`/censo, não uma afirmação que esta errata pode verificar sem inventar uma fixture
+própria. Redeclarada aqui em vez de deixada pra ser redescoberta.
+
+**Reversibilidade: não é custo zero -- a `UIX-RCSS-DUMP-A` já foi entregue contra a leitura da
+`ERRATA-2`, e a própria afirmação de cabeçalho deste documento ("nenhum dumper da `RMLX-2` existe
+ainda") está desatualizada a partir desta errata.** O próprio item da `UIX-RCSS-DUMP-A` no `TODO.md`
+declara isso explicitamente: a cor é impressa "como está, sem despremultiplizar" -- exatamente a
+decisão que esta errata reverte. Reverter o *documento* é two-way e grátis; o *código* passa a
+divergir da spec que deveria implementar, pra toda fixture `alpha<255` de `box-shadow`/stop-de-gradiente,
+até um patch de acompanhamento aplicar `ToNonPremultiplied()` em `glintfx/src/rml/rcss_dump.{hpp,cpp}`
+(fora de escopo aqui -- caminho proibido pra esta fatia). O `Lado B` (`UIX-RCSS-DUMP-B`, atrás da
+`UIX-VALUE-COMPUTE` ainda em andamento) não foi entregue ainda, então não custa nada e não precisa de
+correção. Sinalizado no `TODO.md` como acompanhamento pra não se perder.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -1077,22 +1225,30 @@ Both calls fire **at parse time**, before the value ever reaches `Style::Compute
 no straight-alpha representation of these two fields anywhere downstream of parsing, the type system
 enforces it structurally.
 
-**Decision (applied here, not left open): print the premultiplied bytes as-is.** This is not
-un-premultiplied back to straight before printing. Reasoning: (1) this dump's own governing
-principle (§1) is to report whatever the cascade/parse pipeline actually produced, never a
-re-derived value -- and for these two fields, `ColourbPremultiplied` **is** what was produced, the
-same way a resolved length is what `ComputeLength` produced even though the source wrote a different
-unit; (2) un-premultiplying (`straight = premultiplied * 255 / alpha`) is **undefined at `alpha=0`**
-(all color information is already lost -- `0/0`), so it would need an invented convention this
-document would have to state and a second implementer would have to guess without it, exactly the
-class of gap this document exists to close; printing the premultiplied bytes as-is has no such
-edge case, it is total for every input; (3) Side A walks real `Style::ComputedValues` and should stay
-a faithful, mechanical reader of what is actually stored -- asking it to un-premultiply is asking it
-to invent logic upstream never needed. **Consequence: a conforming Side A and Side B both print the
-stored `ColourbPremultiplied` bytes for `box-shadow` layer colors and gradient-stop colors, straight
-`Colourb` bytes for every other color-typed field -- this is a real behavior change for any fixture
-with `alpha<255` in these two composite domains, not a cosmetic rewording.** Section 9.1's own worked
-example below is corrected to match.
+**Decision superseded, `UIX-RCSS-ERRATA-4` (2026-08-06), reverted by the líder himself: print
+`ToNonPremultiplied()` of the stored bytes -- straight alpha, not the premultiplied bytes as-is.**
+`ERRATA-2`'s reasoning above is kept in place rather than deleted (this document's own house rule:
+a wrong decision that gets erased comes back), but two of its three legs do not hold. Reasoning (2)
+-- "un-premultiplying is undefined at `alpha=0`" -- is **false**, measured against
+`examples/RmlUi/Include/RmlUi/Core/Colour.h:105-107`: `ToNonPremultiplied()`'s own body is
+`ColourType(alpha > 0 ? (red * 255) / alpha : 0)` (same guard on green/blue), an explicit,
+total-for-every-input guard -- there is no undefined case to avoid. And there is evidence `ERRATA-2`
+did not have that undercuts reasoning (1) -- "report whatever the pipeline actually produced": when
+real RmlUi's own pipeline converts these exact two composite types to text, it un-premultiplies
+first, `TypeConverter.cpp:223` (`ColorStopList` → `String`) and `TypeConverter.cpp:256`
+(`BoxShadowList` → `String`), both calling `ToNonPremultiplied()`. Upstream's own answer to "what
+text represents this color" is straight alpha for these two fields, same as every other -- printing
+the raw premultiplied bytes was not staying mechanical, it was skipping a step upstream itself takes.
+Reasoning (3) survives in spirit but not in conclusion: Side A stays a faithful reader of what is
+stored, and *also* applies the one mechanical, upstream-defined transform (`ToNonPremultiplied()`)
+that upstream's own text-conversion path applies at exactly this boundary -- not an invented
+transform, a borrowed one. **Consequence: a conforming Side A and Side B both print straight
+`Colourb`-shaped bytes for every color-typed field without exception, `box-shadow`/gradient-stop
+included -- §7.1's general rule now covers these two fields too, no exception clause needed.
+🔴 This conversion is lossy in both directions (two truncating integer divisions in series do not
+invert each other) -- the printed byte equals neither the value authored in the source nor the value
+`Style::ComputedValues` stores after parsing; see `UIX-RCSS-ERRATA-4` above for the measured table and
+the normative formula.** Section 9.1's own worked example below is corrected to match, a third time.
 
 ### 8. Numeric quantization: the rule, chosen and justified
 
@@ -1265,16 +1421,30 @@ Worked example: source `box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp
 (single `PROP` line, wrapped here only for readability -- the real line has no internal newline):
 
 ```
-box-shadow=#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|#051f2326;0.0000px;0.0000px;16.0000px;0.0000px;false
+box-shadow=#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|#21d0ea26;0.0000px;0.0000px;16.0000px;0.0000px;false
 ```
 
 **Corrected (`UIX-RCSS-ERRATA-2`, 2026-08-06): layer 2's color was published as `#22d3ee26`
 (straight, unchanged from source) -- wrong, per §7.1's own correction above.** `#22D3EE26` = R`0x22`
 (34) G`0xD3`(211) B`0xEE`(238) A`0x26`(38); premultiplied (`channel*38/255`, integer division,
 truncating): R=`5`(`0x05`), G=`31`(`0x1f`), B=`35`(`0x23`), A unchanged (`38`/`0x26`) ->
-`#051f2326`, the value now printed above. Layer 1's color (`#22D3EE`, implicit alpha `ff`=255)
+`#051f2326`, the value printed by `ERRATA-2`. Layer 1's color (`#22D3EE`, implicit alpha `ff`=255)
 premultiplies to itself (`channel*255/255=channel`) -- `#22d3eeff` was already correct either way,
 which is why this bug did not show up in this worked example's first layer.
+
+**Reverted (`UIX-RCSS-ERRATA-4`, 2026-08-06): layer 2's printed color is `#21d0ea26`, a third,
+distinct value -- neither `ERRATA-1`'s naive `#22d3ee26` nor `ERRATA-2`'s premultiplied
+`#051f2326`.** §7.1's `ERRATA-4` decision prints `ToNonPremultiplied()` of the *stored* premultiplied
+bytes, not the original source literal echoed back. Applying the normative formula
+(`alpha > 0 ? (channel * 255) / alpha : 0`, truncating) to the stored `#051f2326`: R=`5*255/38=33`
+(`0x21`), G=`31*255/38=208` (`0xd0`), B=`35*255/38=234` (`0xea`), A unchanged (`38`/`0x26`) ->
+`#21d0ea26` -- the value now printed above, and **not** the same byte as the original `#22D3EE26`
+authored in the source. This is the lossy round trip §7.1/`ERRATA-4` measures generally, exercised
+concretely: `#22D3EE26` (authored) → `#051f2326` (stored, premultiply truncates) → `#21d0ea26`
+(printed, un-premultiply truncates again) -- three different byte sequences for one declared color,
+and a conforming dumper must reproduce the middle-then-last hop, not shortcut straight from authored
+to printed. Layer 1 stays `#22d3eeff` unaffected either way, `alpha=255` has no truncation to lose
+in either direction (`channel*255/255=channel` exactly, both ways).
 
 **Malformed single shadow layer (`UIX-RCSS-ERRATA-2`, closing `Finding I`, reverified directly):** a
 malformed single layer inside a comma-separated `box-shadow` list aborts the **entire property**, not
@@ -2328,23 +2498,31 @@ do `Colourb` straight que todo campo tipo-cor escalar usa -- não existe represe
 desses dois campos em lugar nenhum rio-abaixo do parse, o sistema de tipos garante isso
 estruturalmente.
 
-**Decisão (aplicada aqui, não deixada em aberto): imprimir os bytes pré-multiplicados como estão.**
-Isto não é despré-multiplicar de volta pra straight antes de imprimir. Raciocínio: (1) o próprio
-princípio-guia deste dump (seção 1) é reportar o que quer que o pipeline de cascata/parse de fato
-produziu, nunca um valor re-derivado -- e pra esses dois campos, `ColourbPremultiplied` **é** o que
-foi produzido, do mesmo jeito que um comprimento resolvido é o que o `ComputeLength` produziu mesmo
-que a fonte tenha escrito outra unidade; (2) despré-multiplicar (`straight = premultiplicado * 255 /
-alpha`) é **indefinido em `alpha=0`** (toda informação de cor já se perdeu -- `0/0`), então
-precisaria de uma convenção inventada que este documento teria de declarar e um segundo implementer
-teria de adivinhar sem ela, exatamente a classe de lacuna que este documento existe pra fechar;
-imprimir os bytes pré-multiplicados como estão não tem esse caso de borda, é total pra toda entrada;
-(3) o lado A percorre o `Style::ComputedValues` real e deveria seguir sendo um leitor fiel e mecânico
-do que está de fato armazenado -- pedir pra ele despré-multiplicar é pedir pra ele inventar lógica que
-o upstream nunca precisou. **Consequência: um par lado A/lado B conforme os dois imprimem os bytes
-`ColourbPremultiplied` armazenados pras cores de camada de `box-shadow` e cores de stop de gradiente,
-bytes `Colourb` straight pra todo outro campo tipo-cor -- isto é uma mudança real de comportamento
-pra qualquer fixture com `alpha<255` nesses dois domínios compostos, não uma reescrita cosmética.** O
-próprio exemplo trabalhado da seção 9.1 é corrigido pra bater.
+**Decisão revertida, `UIX-RCSS-ERRATA-4` (2026-08-06), pelo próprio líder: imprimir
+`ToNonPremultiplied()` do byte armazenado -- alfa direto, não os bytes pré-multiplicados como estão.**
+O raciocínio da `ERRATA-2` acima é mantido no lugar em vez de apagado (a própria regra da casa deste
+documento: decisão errada apagada volta), mas duas de suas três pernas não se sustentam. O raciocínio
+(2) -- "despré-multiplicar é indefinido em `alpha=0`" -- é **falso**, medido contra
+`examples/RmlUi/Include/RmlUi/Core/Colour.h:105-107`: o próprio corpo de `ToNonPremultiplied()` é
+`ColourType(alpha > 0 ? (red * 255) / alpha : 0)` (mesma guarda em verde/azul), uma guarda explícita,
+total pra toda entrada -- não há caso indefinido a evitar. E há evidência que a `ERRATA-2` não tinha e
+que mina o raciocínio (1) -- "reportar o que quer que o pipeline de fato produziu": quando o próprio
+pipeline do RmlUi real converte esses exatos dois tipos compostos pra texto, ele despré-multiplica
+primeiro, `TypeConverter.cpp:223` (`ColorStopList` → `String`) e `TypeConverter.cpp:256`
+(`BoxShadowList` → `String`), os dois chamando `ToNonPremultiplied()`. A resposta do próprio upstream
+pra "que texto representa esta cor" é alfa direto pra esses dois campos, igual a todo outro --
+imprimir os bytes pré-multiplicados crus não era ficar mecânico, era pular um passo que o próprio
+upstream dá. O raciocínio (3) sobrevive em espírito mas não na conclusão: o lado A segue sendo um
+leitor fiel do que está armazenado, e *também* aplica a única transformação mecânica, definida pelo
+upstream, que o próprio caminho de conversão-pra-texto do upstream aplica exatamente nesta fronteira
+-- não uma transformação inventada, uma emprestada. **Consequência: um par lado A/lado B conforme os
+dois imprimem bytes no formato `Colourb` straight pra todo campo tipo-cor sem exceção,
+`box-shadow`/stop-de-gradiente incluídos -- a regra geral da seção 7.1 agora cobre esses dois campos
+também, sem cláusula de exceção. 🔴 Esta conversão é lossy nos dois sentidos (duas divisões inteiras
+truncantes em série não se invertem uma à outra) -- o byte impresso não é igual nem ao valor escrito
+na fonte nem ao valor que o `Style::ComputedValues` armazena depois do parse; ver a `UIX-RCSS-ERRATA-4`
+acima pra tabela medida e fórmula normativa.** O próprio exemplo trabalhado da seção 9.1 é corrigido
+pra bater, pela terceira vez.
 
 ### 8. Quantização numérica: a regra, escolhida e justificada
 

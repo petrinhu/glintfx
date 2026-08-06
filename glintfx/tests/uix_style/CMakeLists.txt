@@ -76,3 +76,13 @@ target_compile_definitions(uix_style_parser_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
 add_test(NAME uix_style_parser_corpus_sanity COMMAND uix_style_parser_corpus_sanity)
+
+# EN: UIX-VALUE-COMPUTE -- pure value-computation functions (quantization, per-domain print
+#     forms, composite grammars). Own executable, same "zero RmlUi/GLFW/GL" discipline as every
+#     executable above.
+# PT: UIX-VALUE-COMPUTE -- funções puras de computação de valor (quantização, formas de impressão
+#     por-domínio, gramáticas compostas). Executável próprio, mesma disciplina "zero RmlUi/GLFW/GL"
+#     de todo executável acima.
+add_executable(uix_style_value_compute_sanity value_compute_sanity.cpp)
+target_link_libraries(uix_style_value_compute_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_value_compute_sanity COMMAND uix_style_value_compute_sanity)

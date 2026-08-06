@@ -4024,6 +4024,54 @@ add_test(NAME dom_dump_spec_conformance
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: `UIX-RCSS-DUMP-A` -- rcss_dump_worked_examples / rcss_dump_corpus_sanity: side A of the
+#     RMLX-2 computed-value differential oracle, over `docs/uix-rcss.md`. Same "own .cpp in
+#     glintfx/src/rml/" confinement reasoning as the four dom_dump_* targets immediately above
+#     (both new test files drive Rml::Context/Rml::ElementDocument directly via
+#     rcss_dump_document()). Both link rcss_dump.cpp + dom_dump.cpp (the latter only for its own
+#     public dom_dump_escape(), reused verbatim per docs/uix-rcss.md section 3's own escaping
+#     rule -- never reinvented) + ${_embed_dep} + RmlUi::Core, same precedent as every dom_dump_*
+#     target above. rcss_dump_corpus_sanity reuses the SAME GLINTFX_RML_TESTS_DIR/
+#     GLINTFX_RML_DEMOS_DIR absolute-source-tree-path discipline the dom_dump_corpus_sanity
+#     target already established (see that target's own comment above for the full rationale).
+# PT: `UIX-RCSS-DUMP-A` -- rcss_dump_worked_examples / rcss_dump_corpus_sanity: lado A do oráculo
+#     diferencial de valor-computado da RMLX-2, sobre o docs/uix-rcss.md. Mesmo racional de
+#     confinamento "próprio .cpp em glintfx/src/rml/" dos quatro alvos dom_dump_* logo acima (os
+#     dois arquivos de teste novos dirigem Rml::Context/Rml::ElementDocument direto via
+#     rcss_dump_document()). Os dois linkam rcss_dump.cpp + dom_dump.cpp (o último só pelo próprio
+#     dom_dump_escape() público dele, reusado verbatim pela própria regra de escape da seção 3 do
+#     docs/uix-rcss.md -- nunca reinventada) + ${_embed_dep} + RmlUi::Core, mesmo precedente de
+#     todo alvo dom_dump_* acima. rcss_dump_corpus_sanity reusa a MESMA disciplina de caminho
+#     absoluto-na-árvore-fonte GLINTFX_RML_TESTS_DIR/GLINTFX_RML_DEMOS_DIR que o próprio alvo
+#     dom_dump_corpus_sanity já estabeleceu (ver o próprio comentário daquele alvo acima pro
+#     racional completo).
+# ---------------------------------------------------------------------------
+add_executable(rcss_dump_worked_examples
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump_worked_examples.cpp)
+target_link_libraries(rcss_dump_worked_examples PRIVATE ${_embed_dep} RmlUi::Core)
+add_test(NAME rcss_dump_worked_examples
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:rcss_dump_worked_examples>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(rcss_dump_corpus_sanity
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump_corpus_sanity.cpp)
+target_link_libraries(rcss_dump_corpus_sanity PRIVATE ${_embed_dep} RmlUi::Core)
+target_compile_definitions(rcss_dump_corpus_sanity PRIVATE
+  GLINTFX_RML_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  GLINTFX_RML_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase")
+add_test(NAME rcss_dump_corpus_sanity
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:rcss_dump_corpus_sanity>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
 #     "ripple()" decorator + its backdrop-capture machinery (both now inside the
 #     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated

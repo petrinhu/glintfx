@@ -1,0 +1,488 @@
+# SPDX-License-Identifier: Apache-2.0
+# EN: distro-matrix -- glintfx build+test on Fedora 44 / Arch / Ubuntu, hosted-runner half
+#     of TODO.md CI-DISTROMATRIX (the lead's standing order: "CI sempre em fedora 44, arch,
+#     ubuntu e windows", reaffirmed 2026-08-06). CI-DISTROMATRIX has TWO halves: (A) bumping
+#     the SELF-HOSTED heavy runner from fedora:42 to 44 (tools/ci/Containerfile.runner,
+#     heavy.yml) -- NOT this file, a separate slice with its own push; (B) THIS file --
+#     GitHub has no hosted Fedora or Arch runner label, so the only way to add those two legs
+#     is `container:` on top of a `ubuntu-latest` host, one image per distro, each installing
+#     its own build deps with its own package manager (dnf/pacman/apt). Ubuntu itself already
+#     has a leg here too (`ubuntu:latest`, a rolling *container* image), deliberately DISTINCT
+#     from the existing `ubuntu-latest` *runner label* used by ci.yml/nightly.yml/core-ci.yml
+#     -- see the "why a 4th container instead of trusting ubuntu-latest" note below.
+#
+#     ADDITION, NOT SUBSTITUTION. ci.yml/nightly.yml/core-ci.yml/heavy.yml/windows-atoms.yml
+#     are all UNTOUCHED by this file. This job runs in parallel with them, on its own
+#     triggers, and its own read of "green".
+#
+#     SCOPE LINE (what covers what, so nobody has to reverse-engineer it from 5 files):
+#     the glintfx CI matrix, as of this file, is FOUR environments -- fedora44-container,
+#     arch-container, ubuntu-container (this file, "B", THREE legs, each running the FULL
+#     52-test suite under Xvfb/llvmpipe) + windows-msvc-build (ci.yml:908, TWO legs by GLFW
+#     backend, MSVC). Of those four, THREE run the actual test suite; Windows does NOT --
+#     ci.yml:908's own header comment states it in full ("GLINTFX_BUILD_TESTS=OFF... the
+#     entire point of this job is to reproduce the LIBRARY build the consumer hit, not to
+#     re-run the Linux-only Xvfb test suite with another compiler"), this comment just
+#     restates the number so it is visible from the file the lead's order actually names.
+#     Do not read "4 environments" as "4 test-suite runs" anywhere in this repo's docs --
+#     it is 3 suite runs + 1 library-only compile+link-smoke.
+#
+#     WHY EACH DISTRO IS A DIFFERENT dnf/pacman/apt BLOCK, NOT ONE SHARED SCRIPT: package
+#     names diverge (glfw-devel / glfw-x11 / libglfw3-dev; mesa-libGL-devel+mesa-libEGL-devel
+#     / mesa / libgl1-mesa-dev+libgl1-mesa-dri; xorg-x11-server-Xvfb / xorg-server-xvfb /
+#     xvfb). A single cross-distro dependency script would need the same case-statement this
+#     job already has, just hidden in a shell file instead of visible in the workflow.
+#
+#     WHY EACH IMAGE INSTALLS ITS OWN nodejs FIRST, BEFORE actions/checkout: actions/checkout
+#     (and actions/cache below it) are Node-based actions. Community reports on
+#     actions/checkout#2243 and GitHub's own container-jobs docs disagree on whether a
+#     hosted-runner `container:` job can rely on the runner bind-mounting its own Node
+#     externals into an arbitrary image, or whether the image must supply its own `node` in
+#     PATH -- I could not settle this from documentation alone, and settling it for real
+#     needs an actual `container:` run on GitHub's infrastructure, which this slice does not
+#     push. Installing nodejs ourselves in the "bootstrap" step below is the cheap, safe
+#     choice either way (verified locally, `docker run <image> <pkg-mgr> install nodejs` is a
+#     few seconds on all three images) -- see PROVEN LOCALLY / NOT PROVEN below for exactly
+#     what this claim rests on.
+#
+#     WHY A 4th CONTAINER INSTEAD OF TRUSTING `ubuntu-latest`'s OWN LTS TO BE "current
+#     Ubuntu": `ubuntu-latest` (the GitHub Actions *runner label* used by every other
+#     workflow in this repo) lags behind the newest Ubuntu LTS by GitHub's own rollout
+#     schedule, which this repo does not control. `ubuntu:latest` (the *container image* tag
+#     used here) already resolves to Ubuntu 26.04 with clang 21.1.8 at the time this file was
+#     written, while ci.yml's `ubuntu-latest` runner ships an older Ubuntu with clang 18.1.3
+#     -- two real, different toolchains under one distro name, exactly the kind of drift
+#     CI-DISTROMATRIX exists to catch (see the g++-vs-clang++ `[[deprecated]]` divergence
+#     that motivated the whole item, cited in TODO.md). `fedora:44` is instead PINNED to a
+#     literal version number, per the lead's own wording ("fedora 44", not "fedora atual") --
+#     unlike Arch and Ubuntu, where the lead said "atual" (current/rolling).
+#
+#     -Werror ON THE ARCH LEG ONLY -- PRE-REGISTERED POLICY (CTO recommendation, decided
+#     BEFORE the first run, per CI-DISTROMATRIX trap #2: "Arch is rolling, so a newer
+#     compiler can turn a brand-new warning into a red build with zero lines changed").
+#     Policy: KEEP -Werror on Arch. A toolchain warning that turns red is INFORMATION, not
+#     noise -- it becomes a visible fix, same doctrine as trap #3's render_sanity note below.
+#     If the Arch leg proves chronically flaky BECAUSE of this (not because of an actual
+#     bug), the policy change goes back to the lead -- it is never decided quietly inside a
+#     red run. Mechanism: `-DCMAKE_CXX_FLAGS=-Werror` passed only when matrix.werror is
+#     true. Known, UNRESOLVED risk with this exact mechanism, spelled out honestly because
+#     it was not possible to test without a heavy local build (out of scope for this slice,
+#     see restrictions in the commit this file ships with): CMAKE_CXX_FLAGS is a directory-
+#     wide variable, and RmlUi is FetchContent-populated INTO this same configure (not a
+#     separate ExternalProject) -- so -Werror may also apply to RmlUi's own third-party
+#     source, which this repo does not control and cannot silently patch away inside a CI
+#     YAML file. If the Arch leg's first run turns red from RmlUi's own code rather than
+#     glintfx's, that is a real, informative finding (about the dependency this repo is
+#     actively working to internalize/remove, see TODO.md WR0-11 / L1-INTERNALIZE) -- triage
+#     it, do not quietly narrow -Werror to glintfx's own targets from inside this file
+#     without the lead's sign-off (doing that safely would require target-scoped
+#     compile-options in glintfx/CMakeLists.txt, which is out of this slice's restricted
+#     path list).
+#
+#     TRAP #3 (Mesa/llvmpipe version drift across distros) -- NO CODE CHANGE HERE, ON
+#     PURPOSE. `render_sanity` is glintfx's own statistical pixel gate (glintfx/tests/
+#     CMakeLists.txt, "structural pixel-statistics check"), already tuned for the llvmpipe
+#     Mesa build shipped by ubuntu-latest. Fedora 44 / Arch / Ubuntu 26.04 each ship a
+#     DIFFERENT Mesa build. If one of them moves the statistic enough to flip the gate,
+#     that is the finding this whole item exists to surface -- the fix is triage (is the
+#     tolerance too tight, or did something actually regress?), never a silent tolerance
+#     widening inside this workflow file to make a leg go green.
+#
+#     TRAP #4 (disk) -- DOES NOT APPLY TO THIS FILE. All three legs run on GitHub-hosted,
+#     ephemeral `ubuntu-latest` VMs with a `container:` overlay -- the local machine's
+#     btrfs "Device unallocated" ceiling (measured 29.23 GiB free during this slice's local
+#     validation, unaffected by it) is irrelevant here; nothing in this workflow ever runs
+#     on this machine. The three `docker run`/`cmake configure` dry-runs used to validate
+#     the package lists below were `--rm` (no persisted layer beyond the base image pulls,
+#     already mostly cached locally before this slice started).
+#
+#     TRAP #1 (container jobs run as root; root ignores permission bits) -- NOT WORKED
+#     AROUND, DOCUMENTED INSTEAD. GitHub Actions `container:` jobs run as root by default;
+#     this file does not add a non-root user (doing so safely, with package installs still
+#     needing root, would need a prebuilt image with the user baked in -- more machinery
+#     than this YAML-only slice's scope covers, and this repo does not currently know
+#     whether any of its 52 tests are permission-sensitive at all, so building that
+#     machinery pre-emptively would be solving a problem not yet observed). The `id`
+#     diagnostic step below exists so that IF a leg fails here and passes on ubuntu-latest
+#     (which runs as a non-root user), that comparison is the first thing a human sees in
+#     the log, not something they have to remember from a cross-project memory note.
+#
+#     TRIGGER CHOICE, AND WHY IT DIFFERS FROM heavy.yml's pull_request BAN: heavy.yml's ban
+#     on pull_request exists because its runner is SELF-HOSTED and PERSISTENT -- a fork's PR
+#     workflow would execute arbitrary code on a machine this repo's owner actually controls.
+#     None of that applies here: every leg in this file runs on a GitHub-HOSTED, ephemeral
+#     `ubuntu-latest` VM (the `container:` key only changes which filesystem the job's steps
+#     see, not who owns or persists the VM) -- exactly as safe for a fork PR as ci.yml's own
+#     build-and-test job, which already runs on pull_request today. So: push to main
+#     (paths-filtered, mirrors ci.yml) + pull_request targeting main (paths-filtered, same
+#     reasoning as ci.yml -- catching a cross-distro divergence BEFORE merge is the entire
+#     point, see the g++-vs-clang++ incident in TODO.md CI-DISTROMATRIX) + workflow_dispatch
+#     for a manual re-run.
+#
+#     SINGLE BACKEND CONFIG PER DISTRO (GLFW=ON only), NOT THE FULL 2-CONFIG MATRIX ci.yml
+#     RUNS ON ubuntu-latest: this slice is about DISTRO coverage, not backend coverage --
+#     the GLFW=ON/OFF split is already exercised, per push, on ubuntu-latest by ci.yml's own
+#     build-and-test job. Tripling that split across 3 more distros (6 more jobs) is a
+#     proportionality call this slice did not make on its own; it stays a candidate for a
+#     future slice if the lead wants it.
+#
+#     PROVEN LOCALLY / NOT PROVEN -- read before trusting this file to "just work":
+#       PROVEN (docker run, this machine, 2026-08-06): `dnf install <list>` (fedora:44),
+#       `pacman -Sy --noconfirm <list>` (archlinux:latest), `apt-get install <list>`
+#       (ubuntu:latest) all exit 0; a REAL `cmake -S glintfx -B build -DGLINTFX_BUILD_TESTS=ON
+#       ...` configure (NOT just `--version` checks) succeeds on all three, including a live
+#       FetchContent clone of RmlUi over the network and Found OpenGL / Found Freetype lines.
+#       NOT PROVEN (would need an actual push+run on GitHub's own infrastructure, out of this
+#       slice's restrictions -- no push, no heavy local build):
+#         - whether `actions/checkout@v4` and `actions/cache@v4` actually run inside a
+#           GitHub-hosted `container:` job the way they do outside one (the nodejs-bootstrap
+#           step above is this file's answer to that uncertainty, not a settled fact);
+#         - whether the FULL `cmake --build` (not just configure) and the full 52-test ctest
+#           run actually pass on each distro -- this slice validated configure-time dependency
+#           resolution only, never a full compile (explicitly out of scope: "não rode build
+#           pesado local");
+#         - whether `-Werror` on the Arch leg turns red from glintfx's own code, from RmlUi's,
+#           or not at all -- see the -Werror note above;
+#         - whether `render_sanity` holds across the three distros' different Mesa/llvmpipe
+#           builds -- see TRAP #3 above.
+#
+# PT: distro-matrix -- build+test da glintfx em Fedora 44 / Arch / Ubuntu, a metade em
+#     runner hospedado do CI-DISTROMATRIX do TODO.md (ordem permanente do líder: "CI sempre
+#     em fedora 44, arch, ubuntu e windows", reafirmada 2026-08-06). O CI-DISTROMATRIX tem
+#     DUAS metades: (A) o bump do runner pesado self-hosted de fedora:42 pra 44
+#     (tools/ci/Containerfile.runner, heavy.yml) -- NÃO este arquivo, uma fatia separada com
+#     push próprio; (B) ESTE arquivo -- o GitHub não tem label de runner hospedado Fedora nem
+#     Arch, então o único jeito de somar essas duas pernas é `container:` sobre um host
+#     `ubuntu-latest`, uma imagem por distro, cada uma instalando as próprias deps de build
+#     com o próprio gerenciador de pacote (dnf/pacman/apt). O próprio Ubuntu também ganha uma
+#     perna aqui (`ubuntu:latest`, imagem de *container* rolling), deliberadamente DISTINTA
+#     do label de *runner* `ubuntu-latest` já usado por ci.yml/nightly.yml/core-ci.yml -- ver
+#     a nota "por que um 4º container em vez de confiar no ubuntu-latest" abaixo.
+#
+#     ADIÇÃO, NÃO SUBSTITUIÇÃO. ci.yml/nightly.yml/core-ci.yml/heavy.yml/windows-atoms.yml
+#     seguem INTOCADOS por este arquivo. Este job roda em paralelo com eles, com gatilhos
+#     próprios, e leitura própria de "verde".
+#
+#     LINHA DE ESCOPO (o que cobre o quê, pra ninguém precisar reconstruir isso a partir de
+#     5 arquivos): a matrix de CI da glintfx, a partir deste arquivo, é QUATRO ambientes --
+#     fedora44-container, arch-container, ubuntu-container (este arquivo, "B", TRÊS pernas,
+#     cada uma rodando a suíte COMPLETA de 52 testes sob Xvfb/llvmpipe) + windows-msvc-build
+#     (ci.yml:908, DUAS pernas por backend GLFW, MSVC). Desses quatro, TRÊS rodam a suíte de
+#     teste de fato; o Windows NÃO -- o próprio comentário de cabeçalho do ci.yml:908 já
+#     afirma isso por completo ("GLINTFX_BUILD_TESTS=OFF... o propósito inteiro deste job é
+#     reproduzir o build da BIBLIOTECA que o consumidor bateu, não rodar de novo a suíte de
+#     teste Linux-only sob Xvfb com outro compilador"), este comentário só repete o número
+#     pra ficar visível a partir do arquivo que a ordem do líder de fato nomeia. Não leia "4
+#     ambientes" como "4 rodadas de suíte" em nenhum doc deste repo -- são 3 rodadas de suíte
+#     + 1 compile+link-smoke só-de-biblioteca.
+#
+#     POR QUE CADA DISTRO É UM BLOCO dnf/pacman/apt DIFERENTE, NÃO UM SCRIPT COMPARTILHADO:
+#     nome de pacote diverge (glfw-devel / glfw-x11 / libglfw3-dev; mesa-libGL-devel+mesa-
+#     libEGL-devel / mesa / libgl1-mesa-dev+libgl1-mesa-dri; xorg-x11-server-Xvfb /
+#     xorg-server-xvfb / xvfb). Um script único cross-distro precisaria do mesmo case-
+#     statement que este job já tem, só escondido num arquivo shell em vez de visível no
+#     workflow.
+#
+#     POR QUE CADA IMAGEM INSTALA O PRÓPRIO nodejs PRIMEIRO, ANTES do actions/checkout:
+#     actions/checkout (e o actions/cache abaixo dele) são actions baseadas em Node. Relatos
+#     da comunidade no actions/checkout#2243 e a própria doc de container-jobs do GitHub
+#     divergem sobre se um job `container:` em runner hospedado consegue contar com o runner
+#     montando os PRÓPRIOS externals de Node numa imagem arbitrária, ou se a imagem precisa
+#     fornecer o próprio `node` no PATH -- não consegui resolver isso só com documentação, e
+#     resolver de verdade exige um run `container:` real na infra do GitHub, que esta fatia
+#     não empurra. Instalar o nodejs nós mesmos no passo "bootstrap" abaixo é a escolha
+#     barata e segura dos dois jeitos (verificado localmente, `docker run <imagem> <gerenciador
+#     de pacote> install nodejs` custa poucos segundos nas três imagens) -- ver PROVADO
+#     LOCALMENTE / NÃO PROVADO abaixo pro que exatamente esta afirmação se apoia.
+#
+#     POR QUE UM 4º CONTAINER EM VEZ DE CONFIAR NA LTS PRÓPRIA DO `ubuntu-latest` PRA "Ubuntu
+#     atual": o `ubuntu-latest` (o *label de runner* do GitHub Actions usado por todo outro
+#     workflow deste repo) atrasa em relação à LTS mais nova do Ubuntu pelo próprio
+#     cronograma de rollout do GitHub, que este repo não controla. O `ubuntu:latest` (a *tag
+#     de imagem de container* usada aqui) já resolve pro Ubuntu 26.04 com clang 21.1.8 no
+#     momento em que este arquivo foi escrito, enquanto o `ubuntu-latest` do ci.yml roda um
+#     Ubuntu mais velho com clang 18.1.3 -- duas toolchains reais e diferentes sob um mesmo
+#     nome de distro, exatamente o tipo de deriva que o CI-DISTROMATRIX existe pra pegar (ver
+#     a divergência g++-vs-clang++ do `[[deprecated]]` que motivou o item inteiro, citada no
+#     TODO.md). O `fedora:44` em vez disso é PINADO num número de versão literal, pela
+#     própria palavra do líder ("fedora 44", não "fedora atual") -- diferente de Arch e
+#     Ubuntu, onde o líder disse "atual" (corrente/rolling).
+#
+#     -Werror SÓ NA PERNA ARCH -- POLÍTICA PRÉ-REGISTRADA (recomendação do CTO, decidida
+#     ANTES do primeiro run, conforme a armadilha #2 do CI-DISTROMATRIX: "Arch é rolling,
+#     então um compilador mais novo pode virar um warning novo em build vermelho sem uma
+#     linha ter mudado"). Política: MANTER -Werror no Arch. Um warning de toolchain que vira
+#     vermelho é INFORMAÇÃO, não ruído -- vira correção visível, mesma doutrina da nota da
+#     armadilha #3 (render_sanity) abaixo. Se a perna Arch se provar cronicamente instável
+#     POR CAUSA disso (não por causa de um bug de verdade), a mudança de política volta ao
+#     líder -- nunca se decide em silêncio dentro de um vermelho. Mecanismo:
+#     `-DCMAKE_CXX_FLAGS=-Werror` passado só quando matrix.werror é true. Risco CONHECIDO e
+#     NÃO RESOLVIDO deste mecanismo exato, escrito honestamente porque não foi possível
+#     testar sem build pesado local (fora de escopo desta fatia, ver restrições no commit que
+#     acompanha este arquivo): CMAKE_CXX_FLAGS é uma variável de diretório inteiro, e o RmlUi
+#     é populado por FetchContent DENTRO deste mesmo configure (não um ExternalProject
+#     separado) -- então -Werror também pode se aplicar ao código de terceiro do próprio
+#     RmlUi, que este repo não controla e não pode remendar em silêncio de dentro de um
+#     arquivo YAML de CI. Se o primeiro run da perna Arch ficar vermelho por causa do código
+#     do PRÓPRIO RmlUi, e não da glintfx, isso é um achado real e informativo (sobre a
+#     dependência que este repo está trabalhando ativamente para internalizar/remover, ver
+#     TODO.md WR0-11 / L1-INTERNALIZE) -- faça a triagem, não estreite o -Werror pros alvos
+#     próprios da glintfx de dentro deste arquivo em silêncio, sem aval do líder (fazer isso
+#     com segurança exigiria compile-options escopadas por alvo no glintfx/CMakeLists.txt,
+#     fora da lista de caminhos restrita desta fatia).
+#
+#     ARMADILHA #3 (deriva de versão do Mesa/llvmpipe entre distros) -- NENHUMA MUDANÇA DE
+#     CÓDIGO AQUI, DE PROPÓSITO. O `render_sanity` é o próprio gate estatístico de pixel da
+#     glintfx (glintfx/tests/CMakeLists.txt, "structural pixel-statistics check"), já
+#     calibrado pro build Mesa/llvmpipe que o ubuntu-latest entrega. Fedora 44 / Arch /
+#     Ubuntu 26.04 cada um entrega um build de Mesa DIFERENTE. Se um deles mover a estatística
+#     o bastante pra virar o gate, esse é o achado que este item inteiro existe pra expor --
+#     o conserto é triagem (a tolerância está apertada demais, ou algo de fato regrediu?),
+#     nunca um alargamento silencioso de tolerância dentro deste arquivo de workflow pra
+#     forçar uma perna a ficar verde.
+#
+#     ARMADILHA #4 (disco) -- NÃO SE APLICA A ESTE ARQUIVO. As três pernas rodam em VMs
+#     `ubuntu-latest` hospedadas pelo GitHub, efêmeras, com overlay `container:` -- o teto de
+#     "Device unallocated" do btrfs desta máquina local (medido em 29,23 GiB livres durante a
+#     validação local desta fatia, intocado por ela) é irrelevante aqui; nada neste workflow
+#     roda nesta máquina. Os três dry-runs `docker run`/`cmake configure` usados pra validar
+#     as listas de deps abaixo foram `--rm` (nenhuma camada persistida além dos pulls de
+#     imagem-base, já majoritariamente em cache local antes desta fatia começar).
+#
+#     ARMADILHA #1 (job de container roda como root; root ignora bit de permissão) -- NÃO
+#     CONTORNADA, DOCUMENTADA EM VEZ DISSO. Jobs `container:` do GitHub Actions rodam como
+#     root por padrão; este arquivo não soma um usuário não-root (fazer isso com segurança,
+#     com instalação de pacote ainda precisando de root, exigiria uma imagem pré-buildada com
+#     o usuário já embutido -- mais maquinaria do que o escopo desta fatia só-de-YAML cobre, e
+#     este repo hoje não sabe se algum dos 52 testes é sensível a permissão, então construir
+#     essa maquinaria preventivamente seria resolver um problema ainda não observado). O passo
+#     de diagnóstico `id` abaixo existe pra que, SE uma perna falhar aqui e passar no
+#     ubuntu-latest (que roda como usuário não-root), essa comparação seja a primeira coisa
+#     que um humano vê no log, não algo que precise lembrar de uma nota de memória
+#     cross-project.
+#
+#     ESCOLHA DE GATILHO, E POR QUE DIFERE DO VETO A pull_request DO heavy.yml: o veto do
+#     heavy.yml a pull_request existe porque o runner dele é SELF-HOSTED e PERSISTENTE -- um
+#     PR de fork executaria código arbitrário numa máquina que o dono deste repo de fato
+#     controla. Nada disso se aplica aqui: toda perna deste arquivo roda numa VM
+#     `ubuntu-latest` HOSPEDADA PELO GITHUB, efêmera (a chave `container:` só muda qual
+#     filesystem os passos do job enxergam, não quem é dono ou persiste a VM) -- tão seguro
+#     pra um PR de fork quanto o próprio job build-and-test do ci.yml, que já roda em
+#     pull_request hoje. Então: push na main (filtrado por paths, espelha o ci.yml) +
+#     pull_request mirando a main (filtrado por paths, mesmo racional do ci.yml -- pegar uma
+#     divergência cross-distro ANTES do merge é o ponto inteiro, ver o incidente g++-vs-
+#     clang++ no TODO.md CI-DISTROMATRIX) + workflow_dispatch pra re-run manual.
+#
+#     UMA SÓ CONFIG DE BACKEND POR DISTRO (GLFW=ON apenas), NÃO A MATRIX COMPLETA DE 2
+#     CONFIGS QUE O ci.yml RODA NO ubuntu-latest: esta fatia é sobre cobertura de DISTRO, não
+#     cobertura de backend -- o split GLFW=ON/OFF já é exercitado, a cada push, no
+#     ubuntu-latest pelo próprio job build-and-test do ci.yml. Triplicar esse split em mais 3
+#     distros (mais 6 jobs) é uma decisão de proporcionalidade que esta fatia não tomou
+#     sozinha; fica candidata a uma fatia futura se o líder quiser.
+#
+#     PROVADO LOCALMENTE / NÃO PROVADO -- leia antes de confiar que este arquivo "só
+#     funciona":
+#       PROVADO (docker run, nesta máquina, 2026-08-06): `dnf install <lista>` (fedora:44),
+#       `pacman -Sy --noconfirm <lista>` (archlinux:latest), `apt-get install <lista>`
+#       (ubuntu:latest) saem todos com exit 0; um `cmake -S glintfx -B build
+#       -DGLINTFX_BUILD_TESTS=ON ...` configure DE VERDADE (não só checagem `--version`) tem
+#       sucesso nos três, incluindo um clone FetchContent ao vivo do RmlUi pela rede e linhas
+#       Found OpenGL / Found Freetype.
+#       NÃO PROVADO (precisaria de um push+run real na infra do próprio GitHub, fora das
+#       restrições desta fatia -- sem push, sem build pesado local):
+#         - se `actions/checkout@v4` e `actions/cache@v4` de fato rodam dentro de um job
+#           `container:` hospedado do jeito que rodam fora de um -- o passo de bootstrap do
+#           nodejs acima é a resposta deste arquivo pra essa incerteza, não um fato resolvido;
+#         - se o `cmake --build` COMPLETO (não só o configure) e a suíte inteira de 52 testes
+#           via ctest de fato passam em cada distro -- esta fatia validou só resolução de
+#           dependência em tempo de configure, nunca um compile completo (fora de escopo
+#           explícito: "não rode build pesado local");
+#         - se o `-Werror` na perna Arch vira vermelho pelo código próprio da glintfx, pelo do
+#           RmlUi, ou nenhum dos dois -- ver a nota de -Werror acima;
+#         - se o `render_sanity` se sustenta através dos três builds de Mesa/llvmpipe
+#           diferentes das três distros -- ver ARMADILHA #3 acima.
+name: distro-matrix
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "glintfx/**"
+      - ".github/workflows/distro-matrix.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "glintfx/**"
+      - ".github/workflows/distro-matrix.yml"
+  workflow_dispatch:
+
+jobs:
+  distro:
+    name: distro (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      # EN: Independent distros, independent failures -- one leg going red must not hide the
+      #     other two.
+      # PT: Distros independentes, falhas independentes -- uma perna ficar vermelha não pode
+      #     esconder as outras duas.
+      fail-fast: false
+      matrix:
+        include:
+          - name: fedora44-container
+            image: fedora:44
+            family: dnf
+            werror: false
+          - name: arch-container
+            image: archlinux:latest
+            family: pacman
+            werror: true
+          - name: ubuntu-container
+            image: ubuntu:latest
+            family: apt
+            werror: false
+    env:
+      # EN: Same SYS_futex / libstdc++-vs-clang workaround as ci.yml's build-and-test job --
+      #     see that job's own env: comment for the full rationale. Needed here too: every
+      #     leg in this matrix builds RmlUi from scratch with clang against glibc's/libstdc++'s
+      #     headers.
+      # PT: Mesmo workaround SYS_futex / libstdc++-vs-clang do job build-and-test do ci.yml --
+      #     ver o comentário env: daquele job pra racional completa. Necessário aqui também:
+      #     toda perna desta matrix builda o RmlUi do zero com clang contra os headers da
+      #     glibc/libstdc++.
+      CXXFLAGS: "-include sys/syscall.h"
+    steps:
+      # EN: Bootstrap nodejs + git BEFORE actions/checkout -- see the "why each image
+      #     installs its own nodejs first" note in this file's header comment. git is listed
+      #     explicitly too: actions/checkout falls back to the REST API without it, which is
+      #     slower and untested here; installing it up front keeps this leg's checkout
+      #     behaviour identical to every other job in this repo's workflows.
+      # PT: Bootstrap de nodejs + git ANTES do actions/checkout -- ver a nota "por que cada
+      #     imagem instala o próprio nodejs primeiro" no comentário de cabeçalho deste
+      #     arquivo. git também listado explicitamente: o actions/checkout cai pra API REST
+      #     sem ele, o que é mais lento e não testado aqui; instalá-lo de saída mantém o
+      #     comportamento de checkout desta perna idêntico ao de todo outro job dos workflows
+      #     deste repo.
+      - name: bootstrap (nodejs + git, ${{ matrix.family }})
+        run: |
+          case "${{ matrix.family }}" in
+            dnf)
+              dnf -y install nodejs git
+              ;;
+            pacman)
+              pacman -Sy --noconfirm nodejs git
+              ;;
+            apt)
+              apt-get update -q
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs git ca-certificates
+              ;;
+          esac
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # EN: TRAP #1 diagnostic -- print who this job's steps run as. See "TRAP #1" in this
+      #     file's header comment: not worked around, just made visible in every run's log so
+      #     a container-only failure gets checked against this FIRST, before it gets blamed
+      #     on the distro.
+      # PT: Diagnóstico da ARMADILHA #1 -- imprime como quem os passos deste job rodam. Ver
+      #     "ARMADILHA #1" no comentário de cabeçalho deste arquivo: não contornada, só feita
+      #     visível no log de todo run pra uma falha só-em-container ser checada contra isso
+      #     PRIMEIRO, antes de ser atribuída à distro.
+      - name: whoami (root-in-container caveat, see TRAP #1)
+        run: id
+
+      # EN: Cache the FetchContent clone of RmlUi -- mirrors ci.yml's own "cache rmlui"
+      #     step. Keyed on matrix.name (already unique per distro) + the CMakeLists.txt hash,
+      #     so a change to the pinned RmlUi commit or build config invalidates every distro's
+      #     cache independently.
+      # PT: Cache do clone FetchContent do RmlUi -- espelha o próprio passo "cache rmlui" do
+      #     ci.yml. Chaveado em matrix.name (já único por distro) + hash do CMakeLists.txt,
+      #     para uma mudança no commit pinado do RmlUi ou na config de build invalidar o cache
+      #     de cada distro independentemente.
+      - name: cache rmlui (fetchcontent)
+        uses: actions/cache@v4
+        with:
+          path: glintfx/build/_deps
+          key: rmlui-${{ matrix.name }}-${{ hashFiles('glintfx/CMakeLists.txt') }}
+
+      # EN: Per-distro build+runtime deps. Package names diverge across dnf/pacman/apt -- see
+      #     "why each distro is a different block" in this file's header comment. Verified
+      #     locally (2026-08-06) with a real `docker run` + `dnf`/`pacman -Sy`/`apt-get
+      #     install` against these exact three images, all exit 0 -- see PROVEN LOCALLY /
+      #     NOT PROVEN.
+      # PT: Deps de build+runtime por distro. Nome de pacote diverge entre dnf/pacman/apt --
+      #     ver "por que cada distro é um bloco diferente" no comentário de cabeçalho deste
+      #     arquivo. Verificado localmente (2026-08-06) com `docker run` +
+      #     `dnf`/`pacman -Sy`/`apt-get install` reais contra estas três imagens exatas, todos
+      #     saem com exit 0 -- ver PROVADO LOCALMENTE / NÃO PROVADO.
+      - name: install deps (${{ matrix.family }})
+        run: |
+          case "${{ matrix.family }}" in
+            dnf)
+              dnf -y install \
+                cmake make clang \
+                glfw-devel freetype-devel \
+                mesa-libGL-devel mesa-libEGL-devel mesa-dri-drivers \
+                libxkbcommon-devel xorg-x11-server-Xvfb
+              ;;
+            pacman)
+              pacman -Sy --noconfirm \
+                cmake make clang \
+                glfw-x11 freetype2 \
+                mesa \
+                libxkbcommon xorg-server-xvfb \
+                pkgconf
+              ;;
+            apt)
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                cmake make clang \
+                libglfw3-dev libfreetype-dev \
+                libgl1-mesa-dev libgl1-mesa-dri \
+                libxkbcommon-dev xvfb
+              ;;
+          esac
+
+      # EN: Single backend config (GLFW=ON, the fuller of ci.yml's two) -- see "single
+      #     backend config per distro" in this file's header comment for why this is not a
+      #     2-config matrix like ci.yml's own build-and-test job.
+      #     -Werror ONLY when matrix.werror is true (the Arch leg) -- see the -Werror note in
+      #     this file's header comment for the policy, the mechanism, and the known,
+      #     unresolved risk of it also reaching RmlUi's own third-party sources.
+      # PT: Config única de backend (GLFW=ON, a mais completa das duas do ci.yml) -- ver
+      #     "uma só config de backend por distro" no comentário de cabeçalho deste arquivo
+      #     pro motivo de não ser uma matrix de 2 configs como o próprio build-and-test do
+      #     ci.yml.
+      #     -Werror SÓ quando matrix.werror é true (a perna Arch) -- ver a nota de -Werror no
+      #     comentário de cabeçalho deste arquivo pra política, o mecanismo, e o risco
+      #     conhecido e não resolvido de também alcançar o código de terceiro do próprio
+      #     RmlUi.
+      - name: configure
+        run: |
+          EXTRA_CXX_FLAGS=""
+          if [ "${{ matrix.werror }}" = "true" ]; then
+            EXTRA_CXX_FLAGS="-DCMAKE_CXX_FLAGS=-Werror"
+          fi
+          cmake -S glintfx -B glintfx/build \
+            -DGLINTFX_BUILD_TESTS=ON \
+            -DGLINTFX_BUILD_DEMOS=OFF \
+            -DGLINTFX_BACKEND_GLFW=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            $EXTRA_CXX_FLAGS
+
+      - name: build
+        run: cmake --build glintfx/build -j$(nproc)
+
+      # EN: xvfb-run wraps ctest exactly like every other Linux job in this repo (ci.yml,
+      #     nightly.yml) -- llvmpipe (Mesa's software GL renderer) is what actually draws
+      #     under Xvfb here; see TRAP #3 in this file's header comment for what happens if a
+      #     distro's own Mesa build moves render_sanity's statistic.
+      # PT: xvfb-run envolve o ctest exatamente como todo outro job Linux deste repo (ci.yml,
+      #     nightly.yml) -- o llvmpipe (renderer GL software do Mesa) é quem de fato desenha
+      #     sob o Xvfb aqui; ver ARMADILHA #3 no comentário de cabeçalho deste arquivo pro que
+      #     acontece se o build de Mesa próprio de uma distro mover a estatística do
+      #     render_sanity.
+      - name: test
+        run: xvfb-run -a ctest --test-dir glintfx/build --output-on-failure

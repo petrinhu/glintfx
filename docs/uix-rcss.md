@@ -326,6 +326,222 @@ confiados do relatório que os levantou.
 
 ---
 
+## 🟢 Errata (`UIX-RCSS-ERRATA-3`, 2026-08-06) / Errata (`UIX-RCSS-ERRATA-3`, 2026-08-06)
+
+**EN:** Found by the implementer of oracle side A (`UIX-RCSS-DUMP-A`) while building the fixture
+§15.4's own table claims to anchor; reverified independently by the `tech-lead`, arithmetic below,
+before applying this correction -- and before treating the finding as settled, every OTHER worked
+example in this document (§9.1, §9.2.1, §15.1-§15.4, six total, the complete labelled set) was
+re-enumerated against the same question, per this task's own house rule ("enumerate the small space,
+don't search inside it," §4's own governing principle applied to this document about itself): *does
+the entry's chosen input actually reach the condition it claims to exercise?*
+
+**What was wrong:** §15.4's rows 1 and 3 (`1.234450`/`-1.234450`) claim an "exact tie" -- but the
+*decimal* literal `1.234450` is not the *binary32* value `quantize()` actually receives. Widened once
+to `double` (`quantize()`'s own first step), `1.234450f` is `1.2344499826431274`, so `scaled = x *
+10000` is `12344.499826431274` -- short of the half-integer `12344.5` by ~1.7e-4, not equal to it;
+`1.234449f` widens to `1.234449028968811` (`scaled = 12344.49028968811`), also not a tie (rows 2 and
+4, "one step below," were never wrong on their own terms -- a value below a boundary is still below a
+boundary even if the boundary itself was misdrawn, exactly why this bug hid through two prior errata
+passes: the wrong rows *looked* internally consistent with the correct ones). The cause is structural,
+not an unlucky pick: `N.5 / 10000` is representable in `float32` only when `x`'s own reduced fraction
+has a power-of-two denominator, and a literal built from 4-6 decimal digits (`10000 = 2^4 * 5^4`)
+essentially never reduces that way -- a value *chosen to look like a tie in decimal* is, almost
+always, not one in binary.
+
+**Why this is worse than merely imprecise:** the whole reason a byte-exact worked example exists in
+this document is that prose admits two readings and a golden does not (§15's own header). A golden
+that never reaches the condition it claims to pin fails silently in the one place independence is
+supposed to catch it: both oracle sides run the identical `quantize()` algorithm from §8 against an
+input that isn't the boundary, both print the same non-tie answer, both agree -- and the tie-breaking
+rule this table exists to prove is never exercised by either side. This already happened for real,
+isolated by construction: `UIX-RCSS-DUMP-A`'s author correctly detected the divergence while wiring
+the fixture, reported it faithfully in code rather than silently matching the spec's wrong printed
+value (`glintfx/tests/uix_style/value_compute_sanity.cpp`,
+`test_worked_example_15_4_row_1_and_3_do_not_reproduce_float32_representability`), and added a
+*separate*, hand-picked genuine tie (`1.21875f`) to actually prove the property elsewhere in the same
+file -- the correct response to a wrong gabarito, per this project's own house rule. But
+`UIX-RCSS-DUMP-B`'s author, who by this architecture's own non-cross-contamination rule may **only**
+read this spec, never `DUMP-A`'s source, would have hit the identical dead end with no such escape
+hatch visible to them -- the divergence `DUMP-A` quietly worked around stayed live in the one document
+a second, independent implementer is required to trust.
+
+**The fix:** rows 1/3 replaced with `1.21875`/`-1.21875` -- `1.21875 = 39/32`, reduced denominator
+`2^5`, a power of two, exactly representable in `float32` (`(double)(float)1.21875 == 1.21875`, no
+widening error at all), `scaled = 1.21875 * 10000 = 12187.5` exactly, a genuine tie. Rows 2/4 replaced
+with `1.21874`/`-1.21874` (kept in the same decimal neighborhood as the new tie, not left orphaned
+pointing at the old one) -- widens to `1.2187399864196777`, `scaled = 12187.399864196777`, below the
+half-integer, correctly rounds toward zero. The chosen tie value matches `UIX-RCSS-DUMP-A`'s own
+already-shipped `test_quantize_genuine_float32_exact_tie` literal exactly, closing the spec-vs-code
+divergence rather than introducing a third, unrelated pair.
+
+**Consequence for `UIX-RCSS-DUMP-A`, flagged not fixed here (out of this fatia's scope, this document
+only):** the existing test suite's rows-2/4 assertion (`quantize(1.234449f) == "1.2344"`) is still a
+true statement about `quantize()`, but is no longer anchored to a §15.4 table row once this correction
+lands -- a future pass of `UIX-RCSS-DUMP-A` (or its review) should add `quantize(1.21874f) ==
+"1.2187"` to stay byte-locked to the corrected table, the same discipline that test file's own header
+comment already states for itself.
+
+**Enumeration of the other five labelled worked examples in this document, same question applied to
+each (`SCOPE [exemplos trabalhados]: 6 enumerados, 3 exercitam de fato a condição declarada, 1 inerte
+(corrigido nesta errata, §15.4), 2 inertes (declarados, não corrigidos, motivo abaixo)`):**
+- **§15.1** (`:hover`, two states) -- exercises the claim: the state matrix is closed at 2 members
+  (`none`/`hover-all`, §4's own scoped table) and the example enumerates both in full; only `color`
+  (the one property `.btn:hover` touches) differs between them, proving override isolation, not
+  leaking into `width`/`opacity`. Not inert.
+- **§15.2** (`border-top` shorthand order) -- exercises the claim: both token orders are shown side by
+  side, `#a` (canonical) and `#b` (reversed), and the asymmetric fallback (`-color` matched and kept,
+  `-width` never matched and reverted) is exactly what a naive "whole declaration reverts" reading
+  would get wrong. Already reverified byte-by-byte against upstream by `UIX-RCSS-ERRATA-2`. Not inert.
+- **§15.3** (three `%` families) -- exercises the claim that families (b) and (c) do not merge: the
+  worked `radial-gradient(...)` puts family (c) (`35%`/`30%`, the `circle at` center) and family (b)
+  (`0%`/`55%`/`100%`, the stop positions) inside the **same** function call, different argument slots,
+  closing §5's own reported merge risk with a byte anchor rather than only the prose decision. Not
+  inert.
+- **§9.1** (`box-shadow`) -- **partially inert, flagged not fixed here.** The paragraph immediately
+  preceding the worked example states two non-trivial facts the example does not exercise: (1)
+  `inset`/color are assigned by length-parse-success order, not list position, demonstrated in prose
+  only by an abstract pair (`inset #ff0000 0 0 10px` vs. reversed) -- the real corpus fixture used for
+  the worked example places color first and `inset` last in **both** layers, the canonical order a
+  naive positional parser would also get right; (2) `spread` defaults to `0.0000px` when the source
+  omits it (the subject of this same errata pass's own corpus-ratio correction, `123 of 124 specify it
+  explicitly, only 1 omits it`) -- but both layers of the chosen fixture specify all 4 length fields
+  explicitly, so the default path is never printed. What the example does correctly exercise: the
+  premultiplied-alpha correction (`UIX-RCSS-ERRATA-2`, `Finding B` -- this is where that real bug was
+  actually found) and the `|`-joined, source-order multi-layer grammar. Not fixed in this pass:
+  constructing a new byte-exact anchor for the two untested facts needs a corpus fixture verified
+  against real RmlUi parsing behaviour (the one candidate the errata-2 corpus census already names,
+  `gusworld_battle_cockpit.rml`'s `#22D3EE 0dp 0dp 8dp`, for the spread-omission case) -- that is
+  `UIX-RCSS-DUMP-A`/census territory, not this fatia's.
+- **§9.2.1** (gradient auto-spacing algorithm) -- **partially inert, flagged not fixed here.** The
+  algorithm has three non-trivial rules beyond the trivial "explicit position kept": rule 2 (first
+  stop, unpositioned, → `0%`), rule 3 (last stop, unpositioned, → `100%`), rule 4 (a run of K≥1
+  consecutive unpositioned stops interpolated evenly between their neighbors). The worked example
+  (reused verbatim by §15.3) only has one unpositioned stop, the first one -- rule 2 fires, rules 3
+  and 4 never do. Rule 4, the only one with an actual formula (`P_before + i * (P_after - P_before) /
+  (K + 1)`), is the likeliest place for an off-by-one, and it is untested by this document's own
+  "byte-exact, not just prose" anchor. Same scoping reason as §9.1: a new fixture needs corpus
+  verification, out of this fatia.
+
+**Rule for reuse, stated once so it outlives this specific table:** when a literal exists to pin a
+floating-point rounding boundary, verify the value **is** the boundary in the type's own binary
+representation -- widen the literal to `double` and compare `scaled` to the nearest half-integer
+directly -- never that it *looks like* the boundary in decimal. Decimal and binary disagree exactly at
+the edges a boundary test exists to exercise; that disagreement is the whole reason `float32` needs a
+boundary test in the first place, and it is precisely what "eyeballing the decimal digits" cannot see.
+
+**PT:** Achado pelo implementador do lado A do oráculo (`UIX-RCSS-DUMP-A`) ao montar a fixture que a
+própria tabela da seção 15.4 diz ancorar; reverificado de forma independente pelo `tech-lead`,
+aritmética abaixo, antes de aplicar esta correção -- e antes de tratar o achado como resolvido, todo
+OUTRO exemplo trabalhado deste documento (§9.1, §9.2.1, §15.1-§15.4, seis no total, o conjunto
+rotulado completo) foi reenumerado contra a mesma pergunta, pela própria regra da casa desta tarefa
+("enumere o espaço pequeno, não busque dentro dele", o próprio princípio-guia da seção 4 aplicado a
+este documento sobre si mesmo): *a entrada escolhida por este exemplo realmente alcança a condição que
+ele afirma exercitar?*
+
+**O que estava errado:** as linhas 1 e 3 da seção 15.4 (`1.234450`/`-1.234450`) alegam "empate exato"
+-- mas o literal *decimal* `1.234450` não é o valor *binary32* que o `quantize()` de fato recebe.
+Ampliado uma vez pra `double` (o próprio primeiro passo do `quantize()`), `1.234450f` é
+`1.2344499826431274`, então `scaled = x * 10000` é `12344.499826431274` -- abaixo do meio-inteiro
+`12344.5` por ~1,7e-4, não igual a ele; `1.234449f` amplia pra `1.234449028968811` (`scaled =
+12344.49028968811`), também não é empate (as linhas 2 e 4, "um passo abaixo", nunca estavam erradas
+nos próprios termos -- um valor abaixo de uma fronteira continua abaixo mesmo se a própria fronteira
+foi mal-desenhada, e é exatamente por isso que este bug ficou escondido por duas passadas de errata
+anteriores: as linhas erradas *pareciam* internamente consistentes com as corretas). A causa é
+estrutural, não azar de escolha: `N.5 / 10000` só é representável em `float32` quando a fração
+reduzida de `x` já tem denominador potência de dois, e um literal construído com 4-6 casas decimais
+(`10000 = 2^4 * 5^4`) quase nunca reduz desse jeito -- um valor *escolhido pra parecer empate em
+decimal* quase sempre não é um em binário.
+
+**Por que isto é pior que mera imprecisão:** a razão inteira de um exemplo trabalhado byte-exato
+existir neste documento é que prosa admite duas leituras e um golden não (cabeçalho da própria seção
+15). Um golden que nunca alcança a condição que afirma fixar falha em silêncio bem no ponto em que a
+independência deveria pegá-lo: os dois lados do oráculo rodam o mesmo algoritmo `quantize()` da seção
+8 contra uma entrada que não é a fronteira, os dois imprimem a mesma resposta não-empate, os dois
+concordam -- e a regra de desempate que esta tabela existe para provar nunca é exercitada por nenhum
+dos dois lados. Isto já aconteceu de fato, isolado por construção: o autor da `UIX-RCSS-DUMP-A`
+detectou corretamente a divergência ao montar a fixture, reportou com fidelidade em código em vez de
+casar em silêncio com o valor errado impresso da spec (`glintfx/tests/uix_style/value_compute_sanity.cpp`,
+`test_worked_example_15_4_row_1_and_3_do_not_reproduce_float32_representability`), e acrescentou um
+empate genuíno *separado*, escolhido à mão (`1.21875f`), pra de fato provar a propriedade em outro
+lugar do mesmo arquivo -- a resposta correta pra um gabarito errado, pela própria regra da casa deste
+projeto. Mas o autor da `UIX-RCSS-DUMP-B`, que pela própria regra de não-contaminação-cruzada desta
+arquitetura só PODE ler esta spec, nunca o fonte da `DUMP-A`, teria batido no mesmo beco sem saída
+idêntico, sem essa saída de emergência visível pra ele -- a divergência que a `DUMP-A` contornou em
+silêncio continuava viva no único documento que um segundo implementador independente é obrigado a
+confiar.
+
+**O conserto:** linhas 1/3 substituídas por `1.21875`/`-1.21875` -- `1.21875 = 39/32`, denominador
+reduzido `2^5`, potência de dois, exatamente representável em `float32` (`(double)(float)1.21875 ==
+1.21875`, zero erro de ampliação), `scaled = 1.21875 * 10000 = 12187.5` exatamente, um empate genuíno.
+Linhas 2/4 substituídas por `1.21874`/`-1.21874` (mantidas na mesma vizinhança decimal do novo empate,
+não deixadas órfãs apontando pro empate antigo) -- amplia pra `1.2187399864196777`, `scaled =
+12187.399864196777`, abaixo do meio-inteiro, arredonda corretamente pra zero. O valor de empate
+escolhido bate exatamente com o literal já entregue do próprio `test_quantize_genuine_float32_exact_tie`
+da `UIX-RCSS-DUMP-A`, fechando a divergência spec-vs-código em vez de introduzir um terceiro par sem
+relação.
+
+**Consequência pra `UIX-RCSS-DUMP-A`, sinalizada e não consertada aqui (fora do escopo desta fatia, só
+este documento):** a asserção existente das linhas 2/4 da suíte de teste (`quantize(1.234449f) ==
+"1.2344"`) continua sendo uma afirmação verdadeira sobre `quantize()`, mas deixa de estar ancorada
+numa linha da tabela da 15.4 assim que esta correção entrar -- uma passada futura da `UIX-RCSS-DUMP-A`
+(ou sua revisão) deveria acrescentar `quantize(1.21874f) == "1.2187"` pra ficar byte-travada na tabela
+corrigida, a mesma disciplina que o próprio comentário de cabeçalho daquele arquivo de teste já declara
+pra si mesmo.
+
+**Enumeração dos outros cinco exemplos trabalhados rotulados deste documento, mesma pergunta aplicada
+a cada um (`SCOPE [exemplos trabalhados]: 6 enumerados, 3 exercitam de fato a condição declarada, 1
+inerte (corrigido nesta errata, §15.4), 2 inertes (declarados, não corrigidos, motivo abaixo)`):**
+- **§15.1** (`:hover`, dois estados) -- exercita a afirmação: a matriz de estado é fechada em 2
+  membros (`none`/`hover-all`, a própria tabela de escopo da seção 4) e o exemplo enumera os dois por
+  completo; só `color` (a única propriedade que `.btn:hover` toca) difere entre eles, provando
+  isolamento de override, sem vazar pra `width`/`opacity`. Não inerte.
+- **§15.2** (ordem do shorthand `border-top`) -- exercita a afirmação: as duas ordens de token são
+  mostradas lado a lado, `#a` (canônica) e `#b` (revertida), e o fallback assimétrico (`-color` casou
+  e ficou, `-width` nunca casou e reverteu) é exatamente o que uma leitura ingênua "a declaração
+  inteira reverte" erraria. Já reverificado byte a byte contra o upstream pela `UIX-RCSS-ERRATA-2`.
+  Não inerte.
+- **§15.3** (três famílias de `%`) -- exercita a afirmação de que as famílias (b) e (c) não se fundem:
+  o `radial-gradient(...)` trabalhado coloca a família (c) (`35%`/`30%`, o centro do `circle at`) e a
+  família (b) (`0%`/`55%`/`100%`, as posições de stop) dentro da MESMA chamada de função, em slots de
+  argumento diferentes, fechando o risco de fusão da própria seção 5 com uma âncora de byte, não só a
+  decisão em prosa. Não inerte.
+- **§9.1** (`box-shadow`) -- **parcialmente inerte, sinalizado e não consertado aqui.** O parágrafo
+  logo antes do exemplo trabalhado declara dois fatos não-triviais que o exemplo não exercita: (1)
+  `inset`/cor são atribuídos por ordem de sucesso-de-parse-de-comprimento, não posição na lista,
+  demonstrado em prosa só por um par abstrato (`inset #ff0000 0 0 10px` vs. revertido) -- a fixture
+  real de corpus usada no exemplo trabalhado coloca a cor primeiro e o `inset` por último nas DUAS
+  camadas, a ordem canônica que um parser posicional ingênuo também acertaria; (2) `spread` tem
+  default `0.0000px` quando a fonte omite -- assunto da própria correção de razão de corpus desta
+  mesma passada de errata (`123 de 124 especificam explicitamente, só 1 omite`) -- mas as duas camadas
+  da fixture escolhida especificam os 4 campos de comprimento explicitamente, então o caminho de
+  default nunca é impresso. O que o exemplo exercita corretamente: a correção de alfa pré-multiplicado
+  (`UIX-RCSS-ERRATA-2`, Achado B -- é onde aquele bug real foi de fato achado) e a gramática de
+  múltiplas camadas unidas por `|` em ordem de fonte. Não consertado nesta passada: construir uma nova
+  âncora byte-exata pros dois fatos não-testados precisa de uma fixture de corpus verificada contra o
+  comportamento real de parse do RmlUi (o candidato que o próprio censo da errata-2 já nomeia,
+  `#22D3EE 0dp 0dp 8dp` do `gusworld_battle_cockpit.rml`, pro caso de omissão de spread) -- é
+  território da `UIX-RCSS-DUMP-A`/censo, não desta fatia.
+- **§9.2.1** (algoritmo de auto-espaçamento de gradiente) -- **parcialmente inerte, sinalizado e não
+  consertado aqui.** O algoritmo tem três regras não-triviais além do trivial "posição explícita
+  fica": regra 2 (primeiro stop, sem posição, → `0%`), regra 3 (último stop, sem posição, → `100%`),
+  regra 4 (uma sequência de K≥1 stops consecutivos sem posição interpolados uniformemente entre os
+  vizinhos). O exemplo trabalhado (reusado literalmente pela §15.3) só tem um stop sem posição, o
+  primeiro -- a regra 2 dispara, as regras 3 e 4 nunca. A regra 4, a única com fórmula de fato
+  (`P_before + i * (P_after - P_before) / (K + 1)`), é o lugar mais provável de um off-by-one, e não é
+  testada pela própria âncora "byte-exata, não só prosa" deste documento. Mesmo motivo de escopo do
+  §9.1: uma fixture nova precisa de verificação de corpus, fora desta fatia.
+
+**Regra pra reuso, declarada uma vez pra sobreviver a esta tabela específica:** ao escolher um literal
+pra fixar uma fronteira de arredondamento de ponto flutuante, verifique que o valor É a fronteira na
+própria representação binária do tipo -- amplie o literal pra `double` e compare `scaled` com o
+meio-inteiro mais próximo diretamente -- nunca que ele PARECE a fronteira em decimal. Decimal e
+binário discordam exatamente nas bordas que um teste de fronteira existe para exercitar; essa
+discordância é a razão inteira de `float32` precisar de um teste de fronteira, e é exatamente o que
+"olhar os dígitos decimais" não consegue enxergar.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -1538,17 +1754,29 @@ body/0 PROP width=50.0000%
 
 #### 15.4 Quantization boundary: exact tie and one step outside
 
+**Corrected (`UIX-RCSS-ERRATA-3`, 2026-08-06): the original four literals below never reached the
+boundary they exist to pin -- see the errata block at the top of this document for the full finding,
+why it stayed inert through two prior errata passes, and the consequence for `UIX-RCSS-DUMP-A`'s own
+test suite. Short version, arithmetic inline in the table below:** `1.234450f`/`1.234449f` (and their
+negations) widen to `1.2344499826431274`/`1.234449028968811` in `double` -- neither is an exact `N.5`
+once scaled by `10000`, so no row of the original table actually reached a tie. The replacement pair,
+`1.21875f`/`1.21874f`, is chosen because `1.21875 = 39/32` has a power-of-two reduced denominator
+(`2^5`) and is therefore *exactly* representable in `float32` -- the structural condition a decimal
+literal must meet to land on a real binary tie at all (§8's own `quantize()` scales by `10000 = 2^4 *
+5^4`; a tie needs `x`'s own fraction to already be a power of two, or the multiplication cannot
+produce an exact `.5`).
+
 Per this project's own house rule that testing a boundary's exact edge is not sufficient on its own
 (a widened tolerance still contains its own edge) -- these four abstract inputs to `quantize()` (§8)
 pin the exact rounding cut point, not merely that *some* rounding happens near it. All four apply
 `quantize()` directly (no property, no cascade -- this is the algorithm itself, in isolation):
 
-| Input `x` | `scaled = x * 10000` | Tie? | `quantize(x)` | What this proves |
-| :--- | :---: | :---: | :--- | :--- |
-| `1.234450` | `12344.50` | **exact tie** | `1.2345` | Rounds **away from zero** at the exact half -- not merely "rounds up" |
-| `1.234449` | `12344.49` | one step below | `1.2344` | Below the tie by one ULP-of-the-4th-digit rounds **toward zero**, not toward the tie's own outcome |
-| `-1.234450` | `-12344.50` | **exact tie**, negative | `-1.2345` | Proves "away from zero" is not a euphemism for "toward positive infinity" -- the negative tie also grows in magnitude |
-| `-1.234449` | `-12344.49` | one step below, negative | `-1.2344` | Mirrors the positive case: one step short of the tie stays at the smaller magnitude on both signs |
+| Input `x` | `x` widened `float32`→`double` | `scaled = x * 10000` | Tie? | `quantize(x)` | What this proves |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `1.21875` | `1.21875` (exact -- `39/32`, power-of-two denominator, no widening error) | `12187.5` | **exact tie** | `1.2188` | Rounds **away from zero** at the exact half -- not merely "rounds up" |
+| `1.21874` | `1.2187399864196777` | `12187.399864196777` | one step below | `1.2187` | Below the tie, rounds **toward zero**, not toward the tie's own outcome |
+| `-1.21875` | `-1.21875` (exact) | `-12187.5` | **exact tie**, negative | `-1.2188` | Proves "away from zero" is not a euphemism for "toward positive infinity" -- the negative tie also grows in magnitude |
+| `-1.21874` | `-1.2187399864196777` | `-12187.399864196777` | one step below, negative | `-1.2187` | Mirrors the positive case: one step short of the tie stays at the smaller magnitude on both signs |
 
 **Why the tie alone would not have been enough:** an implementer whose rounding only fires for
 `scaled` *strictly greater than* the half-integer (a common off-by-one when translating "round half
@@ -1558,9 +1786,16 @@ which sit precisely at a 4th-decimal-digit boundary a real computed length is un
 accident, but a hostile or adversarial-review-generated input can hit deliberately. Rows 2 and 4
 exist for the opposite failure: an implementer whose rounding is unconditional (always rounds the
 4th digit up regardless of the 5th digit's own value, a plausible misreading of "round... away from
-zero" as "always round away from zero") would wrongly report `1.2345`/`-1.2345` for rows 2/4 instead
-of the correct `1.2344`/`-1.2344`. Only having all four -- tie and one-step-outside, both signs --
+zero" as "always round away from zero") would wrongly report `1.2188`/`-1.2188` for rows 2/4 instead
+of the correct `1.2187`/`-1.2187`. Only having all four -- tie and one-step-outside, both signs --
 distinguishes the correct algorithm from both wrong ones.
+
+**The rule this near-miss teaches, for reuse beyond this one table:** when choosing a literal to pin
+a floating-point rounding boundary, verify that the value **is** the boundary in the type's own
+binary representation, not that it *looks like* the boundary in decimal -- widen the literal to
+`double` and compare `scaled` to the nearest half-integer directly (as done in the table above), never
+by eyeballing the decimal digits, which is exactly how the original pair passed a decimal read while
+failing the binary test it existed to enforce.
 
 ### 16. Contract decisions closing ambiguities reported by earlier `RMLX-2` slices
 

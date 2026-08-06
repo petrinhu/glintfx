@@ -1151,24 +1151,41 @@ add_library(glintfx::core ALIAS glintfx_core)
 #     image_encode.cpp é o outro consumidor deste módulo do dir de include third_party/stb
 #     (stb_image_write.h desta vez, não stb_image.h) já setado PRIVATE abaixo.
 #
-# CI-ARCH-WERROR-STB (2026-08-06): the `arch-container` leg of `distro-matrix.yml` is the only
-#     one with `-DCMAKE_CXX_FLAGS=-Werror` (matrix.werror=true), and clang 22.1.8 (Arch rolling's
-#     current toolchain) turns `-Wmissing-field-initializers` into a build-breaking error over
-#     `stb_image_write.h`'s own `stbi__write_context s = { 0 };` idiom (8 occurrences, all
-#     third-party code we vendor, none of it ours). `-Wno-missing-field-initializers` is applied
-#     PER-FILE, to `src/stb_image_write_impl.cpp` ONLY -- not to the `glintfx_image` target below
-#     -- so `-Werror`/`-Wall`/`-Wextra` stay fully live for `image.cpp`/`image_encode.cpp` (our
-#     own code, same target) and for `src/stb_image_impl.cpp` (the decode-side sibling TU,
-#     MEASURED clean under clang 22 + `-Wall -Wextra -Werror` -- it has no aggregate `{0}` of a
-#     multi-member struct, only two array `{0}` inits that this warning does not fire on -- so it
-#     is deliberately left untouched rather than defensively silenced for a warning it does not
-#     produce). Only the one warning is disabled, only in the one TU that needs it; every other
-#     diagnostic in that same TU (and everywhere else) still promotes to error. See TODO.md.
-# PT: CI-ARCH-WERROR-STB (2026-08-06): a perna `arch-container` do `distro-matrix.yml` é a única
-#     com `-DCMAKE_CXX_FLAGS=-Werror` (matrix.werror=true), e o clang 22.1.8 (toolchain atual do
-#     Arch rolling) transforma `-Wmissing-field-initializers` em erro de build sobre o próprio
-#     idioma `stbi__write_context s = { 0 };` do `stb_image_write.h` (8 ocorrências, todas código
-#     de terceiro vendorizado, nenhuma nossa). `-Wno-missing-field-initializers` é aplicado
+# CI-ARCH-WERROR-STB (2026-08-06, amended CI-VERMELHO-2X 2026-08-06): the `arch-container` leg
+#     of `distro-matrix.yml` is the only one with `-DCMAKE_CXX_FLAGS=-Werror` (matrix.werror=true),
+#     and clang 22.1.8 (Arch rolling's current toolchain) turns `-Wmissing-field-initializers` into
+#     a build-breaking error over `stb_image_write.h`'s own `stbi__write_context s = { 0 };` idiom
+#     (8 occurrences, all third-party code we vendor, none of it ours). `-Wno-missing-field-
+#     initializers` is applied PER-FILE, to `src/stb_image_write_impl.cpp` ONLY -- not to the
+#     `glintfx_image` target below -- so `-Werror`/`-Wall`/`-Wextra` stay fully live for
+#     `image.cpp`/`image_encode.cpp` (our own code, same target) and for `src/stb_image_impl.cpp`
+#     (the decode-side sibling TU, MEASURED clean under clang 22 + `-Wall -Wextra -Werror` -- it
+#     has no aggregate `{0}` of a multi-member struct, only two array `{0}` inits that this warning
+#     does not fire on -- so it is deliberately left untouched rather than defensively silenced for
+#     a warning it does not produce). Only the one warning is disabled, only in the one TU that
+#     needs it; every other diagnostic in that same TU (and everywhere else) still promotes to
+#     error. See TODO.md.
+#     MSVC GUARD (CI-VERMELHO-2X, regression caught in the `75ad1ba` CI run, both `windows msvc
+#     build` legs): the original commit (5eef51a) applied `-Wno-missing-field-initializers`
+#     unconditionally. cl.exe DOES accept single-dash GCC-style spellings for many switches
+#     (confirmed empirically in the same failing run: `-w` on `src/miniaudio_impl.c`, 30 lines
+#     below, compiles clean under MSVC with no guard -- it maps to the real `/w` switch, "disable
+#     all warnings"), but `-Wno-missing-field-initializers` has no such mapping: cl.exe parses `/W`
+#     expecting a numeric level (`/W0`..`/W4`, `/Wall`, `/WX`) or the bare `/w`, and
+#     "no-missing-field-initializers" is neither, hence `error D8021: invalid numeric argument`.
+#     Wrapped in the same `$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:...>` generator-expression guard used
+#     by every `target_compile_options()` call in this file (9 call sites, e.g. line ~1105) --
+#     CMake's source-file COMPILE_OPTIONS property has supported generator expressions since
+#     3.11, well within this file's cmake_minimum_required(3.16). MSVC's own `/Wall` above already
+#     never touches this file (it is a target-wide flag this file does not set for MSVC at all),
+#     so the net effect on MSVC is unchanged: no warning suppression, no error, matching every
+#     other guarded flag's "no-op on MSVC" contract.
+# PT: CI-ARCH-WERROR-STB (2026-08-06, emendado por CI-VERMELHO-2X 2026-08-06): a perna
+#     `arch-container` do `distro-matrix.yml` é a única com `-DCMAKE_CXX_FLAGS=-Werror`
+#     (matrix.werror=true), e o clang 22.1.8 (toolchain atual do Arch rolling) transforma
+#     `-Wmissing-field-initializers` em erro de build sobre o próprio idioma
+#     `stbi__write_context s = { 0 };` do `stb_image_write.h` (8 ocorrências, todas código de
+#     terceiro vendorizado, nenhuma nossa). `-Wno-missing-field-initializers` é aplicado
 #     POR-ARQUIVO, só em `src/stb_image_write_impl.cpp` -- não no alvo `glintfx_image` abaixo --
 #     então `-Werror`/`-Wall`/`-Wextra` seguem valendo integralmente pra `image.cpp`/
 #     `image_encode.cpp` (código nosso, mesmo alvo) e pra `src/stb_image_impl.cpp` (a TU irmã do
@@ -1178,8 +1195,24 @@ add_library(glintfx::core ALIAS glintfx_core)
 #     warning que ela não produz). Só o único warning é desligado, só na única TU que precisa;
 #     todo o resto do diagnóstico nesta mesma TU (e em qualquer outro lugar) continua promovendo
 #     a erro. Ver TODO.md.
+#     GUARDA DE MSVC (CI-VERMELHO-2X, regressão pega no run de CI do `75ad1ba`, as duas pernas
+#     `windows msvc build`): o commit original (5eef51a) aplicou `-Wno-missing-field-initializers`
+#     incondicionalmente. O cl.exe ACEITA grafias estilo-GCC de dash único para várias flags
+#     (confirmado empiricamente no mesmo run que falhou: `-w` em `src/miniaudio_impl.c`, 30 linhas
+#     abaixo, compila limpo sob MSVC sem guarda nenhuma -- mapeia pra flag real `/w`, "desliga
+#     todos os warnings"), mas `-Wno-missing-field-initializers` não tem esse mapeamento: o cl.exe
+#     interpreta `/W` esperando um nível numérico (`/W0`..`/W4`, `/Wall`, `/WX`) ou o `/w` nu, e
+#     "no-missing-field-initializers" não é nenhum dos dois, daí `error D8021: invalid numeric
+#     argument`. Envolvido na MESMA guarda de generator expression `$<$<NOT:$<CXX_COMPILER_ID:
+#     MSVC>>:...>` usada por toda chamada target_compile_options() deste arquivo (9 pontos, ex.
+#     linha ~1105) -- a property COMPILE_OPTIONS de source-file do CMake suporta generator
+#     expressions desde a 3.11, bem dentro do cmake_minimum_required(3.16) deste arquivo. O
+#     `/Wall` do próprio MSVC acima já nunca toca este arquivo (é uma flag de escopo de alvo que
+#     este arquivo não define pra MSVC de jeito nenhum), então o efeito líquido no MSVC continua
+#     inalterado: nenhuma supressão de warning, nenhum erro, igual ao contrato "no-op no MSVC" de
+#     toda outra flag guardada.
 set_source_files_properties(src/stb_image_write_impl.cpp PROPERTIES
-  COMPILE_OPTIONS "-Wno-missing-field-initializers")
+  COMPILE_OPTIONS "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wno-missing-field-initializers>")
 add_library(glintfx_image OBJECT src/stb_image_impl.cpp src/image.cpp
   src/stb_image_write_impl.cpp src/image_encode.cpp)
 target_include_directories(glintfx_image PRIVATE

@@ -5269,6 +5269,17 @@ endif()
 #     invocation of its own to receive flags). Every OTHER target type this directory defines
 #     (EXECUTABLE, STATIC_LIBRARY, and glloader's own INTERFACE_LIBRARY) legally accepts
 #     target_compile_options() and keeps getting it, unchanged from before this exclusion.
+#     MSVC GUARD (CI-VERMELHO-2X, 2026-08-06, domino sweep -- latent, not yet CI-triggering):
+#     this call was bare `-Wall -Wextra`, the EXACT same MSVC-hostile spelling that AUDIO-F2/
+#     S3-CI already fixed at 9 other call sites in glintfx/CMakeLists.txt (see the
+#     "windows-msvc-build" job header comment in .github/workflows/ci.yml: cl.exe rejects
+#     `-Wextra` with "D8021: invalid numeric argument '/Wextra'", the identical class of error
+#     this same sweep found and fixed for `-Wno-missing-field-initializers`). NOT currently
+#     reached by CI -- the `windows msvc build` job configures with GLINTFX_BUILD_TESTS=OFF
+#     (glintfx/CMakeLists.txt is never told to add_subdirectory(tests), so this file's own
+#     targets never enter an MSVC build) -- but the guard is applied anyway, matching every
+#     other target_compile_options() call in this codebase, so the day GLINTFX_BUILD_TESTS=ON
+#     is ever tried under MSVC this file does not reopen the exact bug this sweep just closed.
 # PT: -Wall -Wextra em todo alvo autoral de teste/demo-helper deste diretório
 #     (AUD-L1-QUALITY Onda 2). BUILDSYSTEM_TARGETS (CMake 3.7+) pega todos os alvos
 #     acima + qualquer futuro, então um teste novo nunca escapa do gate em silêncio.
@@ -5282,11 +5293,23 @@ endif()
 #     este diretório define (EXECUTABLE, STATIC_LIBRARY, e a própria INTERFACE_LIBRARY do
 #     glloader) continua aceitando target_compile_options() legalmente e continua recebendo,
 #     sem mudança em relação a antes desta exclusão.
+#     GUARDA DE MSVC (CI-VERMELHO-2X, 2026-08-06, varredura dominó -- latente, ainda não
+#     dispara CI): esta chamada estava com `-Wall -Wextra` nu, a MESMA grafia hostil ao MSVC
+#     que o AUDIO-F2/S3-CI já consertou em 9 outros pontos do glintfx/CMakeLists.txt (ver o
+#     comentário de cabeçalho do job "windows-msvc-build" em .github/workflows/ci.yml: o cl.exe
+#     rejeita `-Wextra` com "D8021: invalid numeric argument '/Wextra'", a MESMA classe de erro
+#     que esta mesma varredura achou e consertou pro `-Wno-missing-field-initializers`). NÃO
+#     alcançado pelo CI hoje -- o job `windows msvc build` configura com
+#     GLINTFX_BUILD_TESTS=OFF (o glintfx/CMakeLists.txt nunca manda add_subdirectory(tests),
+#     então os alvos deste arquivo nunca entram num build MSVC) -- mas a guarda é aplicada
+#     mesmo assim, igualando toda outra chamada target_compile_options() deste código-base, pra
+#     que no dia em que GLINTFX_BUILD_TESTS=ON for tentado sob MSVC este arquivo não reabra o
+#     mesmo bug que esta varredura acabou de fechar.
 get_property(_glintfx_test_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
              PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _glintfx_test_targets)
   get_target_property(_glintfx_wall_target_type ${_t} TYPE)
   if(NOT _glintfx_wall_target_type STREQUAL "UTILITY")
-    target_compile_options(${_t} PRIVATE -Wall -Wextra)
+    target_compile_options(${_t} PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>)
   endif()
 endforeach()

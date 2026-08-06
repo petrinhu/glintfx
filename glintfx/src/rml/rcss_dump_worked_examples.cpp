@@ -292,40 +292,40 @@ void test_15_4_quantize_boundary() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: 🔴 OWN-FINDING FOLLOW-UP, orchestrator relay: the exact same "golden doesn't reach the
-//     condition it claims to cover" defect this file already found in section 15.4's own
-//     literals also applied to THIS FILE'S OWN comment on section 15.3 -- every color in every
-//     golden this file had, before this test, used `alpha=0xff`. At `alpha=0xff`,
-//     `color_hex_premultiplied_as_is()` (rcss_dump.cpp) and a hypothetical un-premultiplying
-//     alternative print IDENTICAL bytes (`(x*255)/255 == x` exactly, both directions) -- so no
-//     existing test could tell the two implementations apart. This test closes that gap with
-//     non-opaque-alpha goldens in BOTH places RmlUi stores `ColourbPremultiplied`
-//     (`box-shadow`'s own `BoxShadowList`, a gradient `<stop>`'s own `ColorStopList` --
-//     `DecorationTypes.h:9`/`:22`), the math shown inline so a reader does not have to trust the
-//     assertion blind.
+// EN: 🔴 OWN-FINDING FOLLOW-UP, second pass -- the líder REVERSED the premultiplied-as-is
+//     decision (rcss_dump.cpp's own header comment, "SPEC-VS-UPSTREAM DIVERGENCE" note, has the
+//     full argument: real upstream un-premultiplies at the exact point it serializes these two
+//     fields to text, `TypeConverter.cpp:223`/`:256`). This file's own gap-finding still holds
+//     unchanged -- every color in every golden this file had, before this test, used
+//     `alpha=0xff`, where straight and premultiplied print IDENTICAL bytes
+//     (`(x*255)/255 == x` exactly, both directions) -- only the CORRECT expected value for the
+//     non-opaque cases flips. The math below is written against the NOW-correct
+//     `color_hex_straight_from_premultiplied()` (un-premultiplies, `rcss_dump.cpp`).
 //
-//     `#22D3EE80` (alpha=0x80=128): straight `#22d3ee80`. Premultiplied (integer TRUNCATING
-//     division, `Colour.h:76-82`): `r'=(0x22*128)/255=(34*128)/255=17=0x11`,
-//     `g'=(0xd3*128)/255=(211*128)/255=105=0x69`, `b'=(0xee*128)/255=(238*128)/255=119=0x77`,
-//     `a=128=0x80` unchanged -> `#11697780`. Visibly, structurally different from the straight
-//     value in every channel but alpha -- this is the golden that actually distinguishes "print
-//     the field as-is" from "un-premultiply first", the thing every PRIOR golden in this file
-//     could not do.
+//     🔴 The printed value is NOT the author's own written value -- measured, not asserted. The
+//     stored `ColourbPremultiplied` already lost information at PARSE time (truncating integer
+//     division, `Colour.h:76-82`); un-premultiplying (`ToNonPremultiplied()`, also truncating)
+//     does not recover it:
 //
-//     `#C9A24B40` (alpha=0x40=64): straight `#c9a24b40`. Premultiplied:
-//     `r'=(0xc9*64)/255=(201*64)/255=50=0x32`, `g'=(0xa2*64)/255=(162*64)/255=40=0x28`,
-//     `b'=(0x4b*64)/255=(75*64)/255=18=0x12`, `a=64=0x40` -> `#32281240`.
+//     `#22D3EE80` (alpha=0x80=128) is stored premultiplied as `#11697780`
+//     (`r'=(0x22*128)/255=17`, `g'=(0xd3*128)/255=105`, `b'=(0xee*128)/255=119`); un-premultiplying
+//     THAT gives `r=(0x11*255)/128=(17*255)/128=33=0x21`, `g=(0x69*255)/128=(105*255)/128=209=0xd1`,
+//     `b=(0x77*255)/128=(119*255)/128=237=0xed`, `a=128=0x80` -> **`#21d1ed80`**, NOT the author's
+//     own `#22d3ee80`. This is the golden that distinguishes "un-premultiply" from "print as
+//     stored" -- the thing every PRIOR golden in this file could not do.
 //
-//     `#22D3EE00`/alpha=0: the STRONGEST case, per the orchestrator's own argument -- un-
-//     premultiplying divides by `alpha`, and `alpha=0` makes that division UNDEFINED (`Colour.h`'s
-//     own `ToNonPremultiplied()` special-cases it, `alpha > 0 ? (red*255)/alpha : 0` -- a
-//     hypothetical un-premultiplying implementation of THIS file's own color path would need the
-//     exact same special case, or it is not merely a different answer, it is UB/a crash). Straight
-//     would be `#22d3ee00`; premultiplied is `#00000000` regardless of the original RGB (every
-//     channel truncates to `(x*0)/255=0`) -- so this golden ALSO proves the two readings are not
-//     just numerically different, the "correct" one (this file's own, per the real RmlUi/
-//     Style::ComputedValues cascade-domain value) is well-defined where the alternative reading
-//     is not.
+//     `#C9A24B40` (alpha=0x40=64) is stored as `#32281240`; un-premultiplying gives
+//     `r=(0x32*255)/64=(50*255)/64=199=0xc7`, `g=(0x28*255)/64=(40*255)/64=159=0x9f`,
+//     `b=(0x12*255)/64=(18*255)/64=71=0x47`, `a=64=0x40` -> **`#c79f4740`**.
+//
+//     `#22D3EE00`/alpha=0: stored premultiplied as `#00000000` (every channel truncates to
+//     `(x*0)/255=0` regardless of the original RGB). Un-premultiplying it: `ToNonPremultiplied()`'s
+//     own guard is `alpha > 0 ? (red*255)/alpha : 0` -- for `alpha=0` this returns `0` for every
+//     channel too, so the two readings COINCIDE at `#00000000` for this one input. This is the
+//     ONE case this test cannot use to tell the two implementations apart by byte output; kept
+//     anyway because it is still the strongest CONCEPTUAL anchor (a division-by-zero guard exists
+//     and is exercised, proving the real implementation handles the edge case explicitly rather
+//     than by accident of the byte math above happening to also land on zero).
 //
 //     🔴 Audit of ALL FOUR worked examples, per the orchestrator's own instruction ("enumere...
 //     responda, um a um, se a entrada escolhida realmente alcança a condição declarada"):
@@ -358,40 +358,43 @@ void test_15_4_quantize_boundary() {
 //       - 15.4 (quantization boundary): did NOT reach its own condition as originally written
 //         (see the `1.21875f`/`1.21874f` fix above and its own doc-comment) -- FIXED in this same
 //         file, own float32-verified anchor.
-// PT: 🔴 CONTINUAÇÃO DE ACHADO PRÓPRIO, repasse do orquestrador: o mesmíssimo defeito "golden não
-//     alcança a condição que afirma cobrir" que este arquivo já achou nos próprios literais da
-//     seção 15.4 também valia pro PRÓPRIO comentário deste arquivo na seção 15.3 -- toda cor de
-//     todo golden que este arquivo tinha, antes deste teste, usava `alpha=0xff`. Em `alpha=0xff`,
-//     `color_hex_premultiplied_as_is()` (rcss_dump.cpp) e uma hipotética alternativa
-//     des-premultiplicadora imprimem bytes IDÊNTICOS (`(x*255)/255 == x` exatamente, nos dois
-//     sentidos) -- então teste nenhum existente conseguia distinguir as duas implementações. Este
-//     teste fecha essa lacuna com goldens de alfa NÃO-opaco nos DOIS lugares em que o RmlUi guarda
-//     `ColourbPremultiplied` (o próprio `BoxShadowList` do `box-shadow`, o próprio `ColorStopList`
-//     de um `<stop>` de gradiente -- `DecorationTypes.h:9`/`:22`), a conta mostrada inline pra um
-//     leitor não precisar confiar na afirmação às cegas.
+// PT: 🔴 CONTINUAÇÃO DE ACHADO PRÓPRIO, segunda passada -- o líder REVERTEU a decisão
+//     premultiplicado-como-está (o próprio comentário de cabeçalho do rcss_dump.cpp, nota
+//     "DIVERGÊNCIA SPEC-VS-UPSTREAM", tem o argumento completo: o próprio upstream real
+//     des-premultiplica no exato ponto em que serializa estes dois campos pra texto,
+//     `TypeConverter.cpp:223`/`:256`). O achado-de-lacuna deste arquivo continua valendo sem
+//     mudança -- toda cor de todo golden que este arquivo tinha, antes deste teste, usava
+//     `alpha=0xff`, onde reto e premultiplicado imprimem bytes IDÊNTICOS (`(x*255)/255 == x`
+//     exatamente, nos dois sentidos) -- só o valor esperado CORRETO pros casos não-opacos vira.
+//     A conta abaixo é escrita contra o `color_hex_straight_from_premultiplied()`
+//     (des-premultiplica, `rcss_dump.cpp`) AGORA correto.
 //
-//     `#22D3EE80` (alfa=0x80=128): reto `#22d3ee80`. Premultiplicado (divisão inteira TRUNCANTE,
-//     `Colour.h:76-82`): `r'=(0x22*128)/255=(34*128)/255=17=0x11`,
-//     `g'=(0xd3*128)/255=(211*128)/255=105=0x69`, `b'=(0xee*128)/255=(238*128)/255=119=0x77`,
-//     `a=128=0x80` sem mudança -> `#11697780`. Visivelmente, estruturalmente diferente do valor
-//     reto em todo canal menos alfa -- este é o golden que de fato distingue "imprime o campo ao
-//     pé da letra" de "des-premultiplica primeiro", a coisa que golden NENHUM anterior deste
-//     arquivo conseguia.
+//     🔴 O valor impresso NÃO é o valor escrito pelo autor -- medido, não afirmado. O
+//     `ColourbPremultiplied` guardado já perdeu informação em tempo de PARSE (divisão inteira
+//     truncante, `Colour.h:76-82`); des-premultiplicar (`ToNonPremultiplied()`, também truncante)
+//     não a recupera:
 //
-//     `#C9A24B40` (alfa=0x40=64): reto `#c9a24b40`. Premultiplicado:
-//     `r'=(0xc9*64)/255=(201*64)/255=50=0x32`, `g'=(0xa2*64)/255=(162*64)/255=40=0x28`,
-//     `b'=(0x4b*64)/255=(75*64)/255=18=0x12`, `a=64=0x40` -> `#32281240`.
+//     `#22D3EE80` (alfa=0x80=128) é guardado premultiplicado como `#11697780`
+//     (`r'=(0x22*128)/255=17`, `g'=(0xd3*128)/255=105`, `b'=(0xee*128)/255=119`);
+//     des-premultiplicar ISSO dá `r=(0x11*255)/128=(17*255)/128=33=0x21`,
+//     `g=(0x69*255)/128=(105*255)/128=209=0xd1`, `b=(0x77*255)/128=(119*255)/128=237=0xed`,
+//     `a=128=0x80` -> **`#21d1ed80`**, NÃO o `#22d3ee80` do próprio autor. Este é o golden que
+//     distingue "des-premultiplica" de "imprime como guardado" -- a coisa que golden NENHUM
+//     anterior deste arquivo conseguia.
 //
-//     `#22D3EE00`/alfa=0: o caso MAIS FORTE, pelo próprio argumento do orquestrador --
-//     des-premultiplicar divide por `alpha`, e `alpha=0` torna essa divisão INDEFINIDA (o próprio
-//     `ToNonPremultiplied()` de `Colour.h` trata esse caso à parte,
-//     `alpha > 0 ? (red*255)/alpha : 0` -- uma hipotética implementação des-premultiplicadora do
-//     próprio caminho de cor deste arquivo precisaria do MESMO caso à parte, ou não é meramente
-//     uma resposta diferente, é UB/crash). Reto seria `#22d3ee00`; premultiplicado é `#00000000`
-//     independente do RGB original (todo canal trunca pra `(x*0)/255=0`) -- então este golden
-//     TAMBÉM prova que as duas leituras não são só numericamente diferentes, a "correta" (a deste
-//     próprio arquivo, pelo valor real de domínio-cascata `Style::ComputedValues`) é bem-definida
-//     onde a alternativa não é.
+//     `#C9A24B40` (alfa=0x40=64) é guardado como `#32281240`; des-premultiplicar dá
+//     `r=(0x32*255)/64=(50*255)/64=199=0xc7`, `g=(0x28*255)/64=(40*255)/64=159=0x9f`,
+//     `b=(0x12*255)/64=(18*255)/64=71=0x47`, `a=64=0x40` -> **`#c79f4740`**.
+//
+//     `#22D3EE00`/alfa=0: guardado premultiplicado como `#00000000` (todo canal trunca pra
+//     `(x*0)/255=0` independente do RGB original). Des-premultiplicando: a própria guarda do
+//     `ToNonPremultiplied()` é `alpha > 0 ? (red*255)/alpha : 0` -- pra `alpha=0` isso devolve `0`
+//     em todo canal também, então as duas leituras COINCIDEM em `#00000000` pra esta entrada. Este
+//     é o ÚNICO caso que este teste não consegue usar pra distinguir as duas implementações só
+//     pelo byte de saída; mantido mesmo assim porque continua sendo a âncora CONCEITUAL mais
+//     forte (uma guarda de divisão-por-zero existe e é exercitada, provando que a implementação
+//     real trata o caso de borda explicitamente, não por acaso da conta de byte acima também
+//     cair em zero).
 //
 //     🔴 Auditoria dos QUATRO exemplos trabalhados, pela própria instrução do orquestrador
 //     ("enumere... responda, um a um, se a entrada escolhida realmente alcança a condição
@@ -415,14 +418,14 @@ void test_own_finding_premultiplied_alpha_has_teeth(Harness& h) {
 
   const std::string dump = glintfx::rcss_dump_document(doc);
 
-  check_eq(extract_prop(dump, "STATE none\n", "body/0", "box-shadow"), "#11697780;0.0000px;0.0000px;0.0000px;0.0000px;false",
-           "own-finding box-shadow non-opaque alpha (#22D3EE80 -> premultiplied #11697780)");
+  check_eq(extract_prop(dump, "STATE none\n", "body/0", "box-shadow"), "#21d1ed80;0.0000px;0.0000px;0.0000px;0.0000px;false",
+           "own-finding box-shadow non-opaque alpha (#22D3EE80 stored #11697780 -> un-premultiplied #21d1ed80)");
   check_eq(extract_prop(dump, "STATE none\n", "body/1", "box-shadow"), "#00000000;0.0000px;0.0000px;0.0000px;0.0000px;false",
-           "own-finding box-shadow alpha=0 (strongest case -- straight/undefined vs. premultiplied #00000000)");
-  check_eq(extract_prop(dump, "STATE none\n", "body/2", "decorator"), "linear-gradient(90.0000;#ff0000ff:0.0000%;#32281240:100.0000%)",
-           "own-finding gradient-stop non-opaque alpha (#C9A24B40 -> premultiplied #32281240)");
+           "own-finding box-shadow alpha=0 (does not distinguish the two readings by byte -- see comment above)");
+  check_eq(extract_prop(dump, "STATE none\n", "body/2", "decorator"), "linear-gradient(90.0000;#ff0000ff:0.0000%;#c79f4740:100.0000%)",
+           "own-finding gradient-stop non-opaque alpha (#C9A24B40 stored #32281240 -> un-premultiplied #c79f4740)");
   check_eq(extract_prop(dump, "STATE none\n", "body/3", "decorator"), "linear-gradient(90.0000;#ff0000ff:0.0000%;#00000000:100.0000%)",
-           "own-finding gradient-stop alpha=0 (strongest case -- premultiplied #00000000)");
+           "own-finding gradient-stop alpha=0 (does not distinguish the two readings by byte -- see comment above)");
 
   doc->Close();
   h.engine.update();

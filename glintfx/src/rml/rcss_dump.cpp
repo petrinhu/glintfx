@@ -30,36 +30,44 @@
 //         (which has no public accessor for e.g. a gradient's own stop list) -- confirmed by
 //         reading `DecoratorGradient.cpp`/`PropertyParserDecorator.cpp` directly, not assumed.
 //
-//     🔴 SPEC-VS-UPSTREAM DIVERGENCE, RESOLVED IN FAVOR OF UPSTREAM (per the orchestrator's
-//     live-audit correction, cross-confirmed by this file's own independent research below --
-//     two different reading paths landed on the same fact): `docs/uix-rcss.md` section 7.1
-//     claims box-shadow/gradient-`<stop>` colors are dumped straight-alpha, never premultiplied.
-//     They are not. `DecorationTypes.h:9`/`:22` declare `ColourbPremultiplied color;` on BOTH
-//     `ColorStop` and `BoxShadow` BY TYPE -- there is no straight-alpha value anywhere in the
-//     Property this file reads for these two composites to recover, premultiplied is the ONLY
-//     form that ever exists at the cascade-domain level for them (confirmed independently by
-//     reading `PropertyParserBoxShadow.cpp:72`/`PropertyParserColorStopList.cpp:47`, both call
-//     `.ToPremultiplied()` unconditionally at PARSE time, before this file's read point). This
-//     file's own FIRST draft tried to reverse that with `ToNonPremultiplied()`
-//     (`Colour.h:98-104`) to match section 7.1's straight-alpha text -- WRONG twice over: (1) it
-//     is not the real computed value (real RmlUi's own `Style::ComputedValues`/`Property` genuinely
-//     stores premultiplied for these two fields; printing an un-premultiplied guess is printing a
-//     fact the engine itself does not hold), and (2) the round-trip is provably LOSSY for
-//     non-`0xff` alpha (integer truncating division both directions, `Colour.h:76-82`/`:98-104`)
-//     -- measured by hand for `#22D3EE26` (this document's own section 9.1 worked-example color,
-//     alpha=0x26=38): premultiply gives `(0x22*38)/255=5`,`(0xd3*38)/255=31`,`(0xee*38)/255=35`
-//     -> `#051f2326`; un-premultiplying THAT back gives `#21d0ea26`, matching NEITHER the
-//     original straight value NOR the real premultiplied one. **Fix applied: this file now
-//     prints the `ColourbPremultiplied` fields AS-IS, no conversion in either direction** -- the
-//     lossy round-trip disappears entirely because there is no round-trip anymore, and the
-//     printed value is exactly what `Style::ComputedValues` actually holds, matching a real
-//     RmlUi-driven oracle by construction. Per this task's own "where spec and code disagree, the
-//     code manda" rule: `#22D3EE26` at `dp_ratio=1.0` now dumps as `color=#051f2326`, NOT the
-//     spec text's own `#22d3eeff`/`#22d3ee26` -- the corrected `docs/uix-rcss.md` (in flight, per
-//     the orchestrator) is expected to state this same fact once its own errata pass lands; this
-//     file does not wait for that edit to land before matching the real engine, per this same
-//     task's explicit instruction not to force this file's own correct-by-construction output to
-//     agree with spec text already known wrong.
+//     🔴 SPEC-VS-UPSTREAM DIVERGENCE -- SETTLED, SECOND PASS, BY THE LÍDER, IN FAVOR OF STRAIGHT
+//     ALPHA (reversing this file's own first correction). `docs/uix-rcss.md` section 7.1 claims
+//     box-shadow/gradient-`<stop>` colors are dumped straight-alpha. `DecorationTypes.h:9`/`:22`
+//     declare `ColourbPremultiplied color;` on both `ColorStop`/`BoxShadow` BY TYPE, so a naive
+//     "print the cascade-domain field verbatim" reading (this file's own FIRST attempt at fixing
+//     the spec-vs-code mismatch) concluded premultiplied-as-is was the only fact the engine
+//     actually holds. That attempt was itself refuted, in TWO independent steps, by the
+//     orchestrator's own live audit: (1) the "printing straight would be UB, `alpha=0` divides by
+//     zero" argument that justified premultiplied-as-is does not hold -- `Colour.h:105-107`'s own
+//     `ToNonPremultiplied()` guards `alpha > 0 ? (red*255)/alpha : 0`, well-defined for every
+//     input, no division by zero anywhere; (2) real upstream RmlUi ITSELF un-premultiplies at the
+//     exact moment it serializes these two composites to text --
+//     `TypeConverter.cpp:223`/`:256` call `ToString(stop.color.ToNonPremultiplied())`/
+//     `ToString(shadow.color.ToNonPremultiplied())` respectively. This dump IS a textual
+//     serialization of a computed value -- the real engine's own answer to "what text represents
+//     this color?" is the straight-alpha one, not the premultiplied storage representation this
+//     file's first fix mistook for the canonical fact. **Decision, argued on SCOPE, not
+//     aesthetics:** requiring the clean-room engine (`glintfx/src/uix/style/`, the "other side"
+//     this dumper's own independence rule forbids reading) to reproduce upstream's internal
+//     premultiplied STORAGE representation -- rather than the value upstream itself prints when
+//     asked for text -- would be exactly the kind of RmlUi-internal-detail leak `RMLX-2`'s own
+//     internalization goal exists to avoid.
+//
+//     🔴 THE LOSSY STEP IS REAL AND IRREVERSIBLE -- MEASURED, NOT MERELY ASSERTED (the single
+//     most likely source of a byte divergence, per the orchestrator's own audit): the printed
+//     value is NOT the author's own written value. Truncating-integer-division premultiply at
+//     PARSE time (`Colour.h:76-82`) already discarded information before this file's read point;
+//     un-premultiplying (`ToNonPremultiplied()`, also truncating) does not recover it. Three
+//     measured anchors: `#22D3EE80` (alpha=0x80=128) is stored as `#11697780`
+//     (`r'=(0x22*128)/255=17`, `g'=(0xd3*128)/255=105`, `b'=(0xee*128)/255=119`) and this file now
+//     prints `#21d1ed80` (`r=(0x11*255)/128=33`, `g=(0x69*255)/128=209`, `b=(0x77*255)/128=237`)
+//     -- NOT the author's own `#22d3ee80`; `#C9A24B40` (alpha=0x40=64) is stored as `#32281240`
+//     and this file now prints `#c79f4740`; `#22D3EE00` (alpha=0) is stored as `#00000000`
+//     (every channel truncates to `(x*0)/255=0` regardless of the original RGB) and prints
+//     `#00000000` -- both readings coincide here (`ToNonPremultiplied()`'s own `alpha > 0` guard
+//     also returns `0`), the ONE case where the two implementations cannot be told apart by byte
+//     output alone. `rcss_dump_worked_examples.cpp`'s own goldens carry this same table, so a
+//     second implementer reading only the golden values (not this comment) still has the anchor.
 //
 //     Two SIBLING findings the orchestrator's live audit reported, confirmed here as ALREADY
 //     harmless to this file by construction, not requiring a code change (recorded so a future
@@ -116,39 +124,47 @@
 //         confirmado lendo `DecoratorGradient.cpp`/`PropertyParserDecorator.cpp` direto, não
 //         suposto.
 //
-//     🔴 DIVERGÊNCIA SPEC-VS-UPSTREAM, RESOLVIDA A FAVOR DO UPSTREAM (pela correção ao vivo do
-//     orquestrador durante uma auditoria em curso, cruzada com a pesquisa PRÓPRIA e independente
-//     deste arquivo abaixo -- dois caminhos de leitura diferentes chegaram no mesmo fato): a
-//     seção 7.1 do docs/uix-rcss.md afirma que cor de box-shadow/`<stop>` de gradiente é dumpada
-//     reta, nunca premultiplicada. Não é. `DecorationTypes.h:9`/`:22` declaram
-//     `ColourbPremultiplied color;` em `ColorStop` E `BoxShadow` POR TIPO -- não existe valor reto
-//     nenhum, em lugar nenhum, na Property que este arquivo lê pra estes dois compostos pra
-//     recuperar; premultiplicado é a ÚNICA forma que existe no nível cascata-domínio pra eles
-//     (confirmado de forma independente lendo
-//     `PropertyParserBoxShadow.cpp:72`/`PropertyParserColorStopList.cpp:47`, os dois chamam
-//     `.ToPremultiplied()` sem condição em tempo de PARSE, antes do ponto de leitura deste
-//     arquivo). O PRIMEIRO rascunho deste arquivo tentava reverter isso com
-//     `ToNonPremultiplied()` (`Colour.h:98-104`) pra bater com o texto reto-alfa da seção 7.1 --
-//     ERRADO duas vezes: (1) não é o valor computado real (o próprio `Style::ComputedValues`/
-//     `Property` real do RmlUi guarda genuinamente premultiplicado pra estes dois campos; imprimir
-//     um chute des-premultiplicado é imprimir um fato que o próprio motor não guarda), e (2) o
-//     round-trip é provadamente COM PERDA pra alfa não-`0xff` (divisão inteira truncante nos dois
-//     sentidos, `Colour.h:76-82`/`:98-104`) -- medido à mão pro `#22D3EE26` (a própria cor do
-//     exemplo trabalhado da seção 9.1 deste documento, alfa=0x26=38): premultiplicar dá
-//     `(0x22*38)/255=5`,`(0xd3*38)/255=31`,`(0xee*38)/255=35` -> `#051f2326`; des-premultiplicar
-//     ISSO de volta dá `#21d0ea26`, batendo NEM com o valor reto original NEM com o real
-//     premultiplicado. **Conserto aplicado: este arquivo agora imprime os campos
-//     `ColourbPremultiplied` AO PÉ DA LETRA, sem conversão em direção nenhuma** -- o round-trip
-//     com perda desaparece por inteiro porque não existe round-trip mais nenhum, e o valor
-//     impresso é exatamente o que `Style::ComputedValues` de fato guarda, batendo com um oráculo
-//     movido-a-RmlUi-real por construção. Pela própria regra desta tarefa "onde spec e código
-//     discordam, quem manda é o código": `#22D3EE26` em `dp_ratio=1.0` agora dumpa como
-//     `color=#051f2326`, NÃO o `#22d3eeff`/`#22d3ee26` do próprio texto da spec -- o
-//     `docs/uix-rcss.md` corrigido (em voo, per o orquestrador) deve declarar este mesmo fato
-//     assim que a própria passada de errata pousar; este arquivo não espera aquela edição pousar
-//     antes de bater com o motor real, pela própria instrução explícita desta tarefa de não forçar
-//     a saída já-correta-por-construção deste arquivo a concordar com texto de spec já sabido
-//     errado.
+//     🔴 DIVERGÊNCIA SPEC-VS-UPSTREAM -- FECHADA, SEGUNDA PASSADA, PELO LÍDER, A FAVOR DE ALFA
+//     RETO (revertendo a primeira correção deste próprio arquivo). A seção 7.1 do docs/uix-rcss.md
+//     afirma que cor de box-shadow/`<stop>` de gradiente é dumpada reta. `DecorationTypes.h:9`/
+//     `:22` declaram `ColourbPremultiplied color;` em `ColorStop`/`BoxShadow` POR TIPO, então uma
+//     leitura ingênua "imprime o campo de domínio-cascata ao pé da letra" (a PRIMEIRA tentativa
+//     deste arquivo de consertar a discrepância spec-vs-código) concluiu que
+//     premultiplicado-como-está era o único fato que o motor de fato guarda. Aquela tentativa foi
+//     ela mesma refutada, em DOIS passos independentes, pela própria auditoria ao vivo do
+//     orquestrador: (1) o argumento "imprimir reto seria UB, `alpha=0` divide por zero" que
+//     justificava premultiplicado-como-está não se sustenta -- o próprio `ToNonPremultiplied()`
+//     de `Colour.h:105-107` guarda `alpha > 0 ? (red*255)/alpha : 0`, bem-definido pra toda
+//     entrada, divisão por zero nenhuma em lugar nenhum; (2) o próprio RmlUi upstream real
+//     des-premultiplica no EXATO momento em que serializa estes dois compostos pra texto --
+//     `TypeConverter.cpp:223`/`:256` chamam
+//     `ToString(stop.color.ToNonPremultiplied())`/`ToString(shadow.color.ToNonPremultiplied())`
+//     respectivamente. Este dump É uma serialização textual de valor computado -- a própria
+//     resposta do motor real pra "que texto representa esta cor?" é a reta, não a representação
+//     de ARMAZENAMENTO premultiplicado que o primeiro conserto deste arquivo confundiu com o fato
+//     canônico. **Decisão, argumentada por ESCOPO, não estética:** exigir do motor clean-room
+//     (`glintfx/src/uix/style/`, o "outro lado" que a própria regra de independência deste dumper
+//     proíbe ler) reproduzir a representação de ARMAZENAMENTO interna premultiplicada do upstream
+//     -- em vez do valor que o próprio upstream imprime quando perguntado por texto -- seria
+//     exatamente o tipo de vazamento de detalhe-interno-do-RmlUi que o próprio objetivo de
+//     internalização da `RMLX-2` existe pra evitar.
+//
+//     🔴 O PASSO COM PERDA É REAL E IRREVERSÍVEL -- MEDIDO, NÃO MERAMENTE AFIRMADO (a fonte mais
+//     provável de uma divergência de byte, pela própria auditoria do orquestrador): o valor
+//     impresso NÃO é o valor escrito pelo autor. A divisão inteira truncante de premultiplicar em
+//     tempo de PARSE (`Colour.h:76-82`) já descartou informação antes do ponto de leitura deste
+//     arquivo; des-premultiplicar (`ToNonPremultiplied()`, também truncante) não a recupera. Três
+//     âncoras medidas: `#22D3EE80` (alfa=0x80=128) é guardado como `#11697780`
+//     (`r'=(0x22*128)/255=17`, `g'=(0xd3*128)/255=105`, `b'=(0xee*128)/255=119`) e este arquivo
+//     agora imprime `#21d1ed80` (`r=(0x11*255)/128=33`, `g=(0x69*255)/128=209`,
+//     `b=(0x77*255)/128=237`) -- NÃO o `#22d3ee80` do próprio autor; `#C9A24B40` (alfa=0x40=64) é
+//     guardado como `#32281240` e este arquivo agora imprime `#c79f4740`; `#22D3EE00` (alfa=0) é
+//     guardado como `#00000000` (todo canal trunca pra `(x*0)/255=0` independente do RGB
+//     original) e imprime `#00000000` -- as duas leituras coincidem aqui (a própria guarda
+//     `alpha > 0` do `ToNonPremultiplied()` também devolve `0`), o ÚNICO caso em que as duas
+//     implementações não podem ser distinguidas só pelo byte de saída. Os próprios goldens do
+//     `rcss_dump_worked_examples.cpp` carregam esta mesma tabela, então um segundo implementer
+//     lendo só os valores-golden (não este comentário) ainda tem a âncora.
 //
 //     Dois achados IRMÃOS que a auditoria ao vivo do orquestrador reportou, confirmados aqui como
 //     JÁ inofensivos a este arquivo por construção, sem exigir mudança de código (registrado pra
@@ -270,26 +286,25 @@ std::string color_hex(const Rml::Colourb& c) {
   return rcss_color_hex(c.red, c.green, c.blue, c.alpha);
 }
 
-// EN: `box-shadow`/gradient-`<stop>` colors -- printed AS-IS, no premultiply/un-premultiply
-//     conversion in either direction. See this file's own header comment (the "SPEC-VS-UPSTREAM
-//     DIVERGENCE" note) for why: `Style::ComputedValues`/`Property` genuinely stores these two
-//     fields premultiplied (`ColourbPremultiplied` BY TYPE, `DecorationTypes.h:9`/`:22`) -- there
-//     is no straight-alpha value anywhere in this file's own read path to recover, so printing
-//     the field verbatim is the only choice that matches the real engine (docs/uix-rcss.md
-//     section 7.1's own "always straight alpha" text is wrong for these two fields specifically,
-//     confirmed independently against upstream source, not merely asserted).
-// PT: Cor de `box-shadow`/`<stop>` de gradiente -- impressa AO PÉ DA LETRA, sem conversão de
-//     premultiplicar/des-premultiplicar em direção nenhuma. Ver o próprio comentário de cabeçalho
-//     deste arquivo (a nota "DIVERGÊNCIA SPEC-VS-UPSTREAM") pro motivo: o próprio
-//     `Style::ComputedValues`/`Property` guarda genuinamente estes dois campos premultiplicados
-//     (`ColourbPremultiplied` POR TIPO, `DecorationTypes.h:9`/`:22`) -- não existe valor
-//     reto-alfa nenhum, em lugar nenhum, no próprio caminho de leitura deste arquivo pra
-//     recuperar, então imprimir o campo ao pé da letra é a única escolha que bate com o motor
-//     real (o próprio texto "sempre alfa reto" da seção 7.1 do docs/uix-rcss.md está errado pra
-//     estes dois campos especificamente, confirmado de forma independente contra o fonte
-//     upstream, não meramente afirmado).
-std::string color_hex_premultiplied_as_is(const Rml::ColourbPremultiplied& p) {
-  return rcss_color_hex(p.red, p.green, p.blue, p.alpha);
+// EN: `box-shadow`/gradient-`<stop>` colors -- UN-PREMULTIPLIED before printing. See this file's
+//     own header comment (the "SPEC-VS-UPSTREAM DIVERGENCE" note) for the full reasoning: real
+//     upstream RmlUi un-premultiplies these exact two fields at the moment it serializes them to
+//     text (`TypeConverter.cpp:223`/`:256`), so straight alpha IS the real engine's own answer to
+//     "what text represents this color?", not the premultiplied storage representation this
+//     file's own first attempt printed. The conversion is LOSSY and IRREVERSIBLE (see the header
+//     comment's own measured anchors) -- the printed byte is genuinely not the author's own
+//     written value for non-`0xff` alpha, and this file does not pretend otherwise.
+// PT: Cor de `box-shadow`/`<stop>` de gradiente -- DES-PREMULTIPLICADA antes de imprimir. Ver o
+//     próprio comentário de cabeçalho deste arquivo (a nota "DIVERGÊNCIA SPEC-VS-UPSTREAM") pro
+//     raciocínio completo: o próprio RmlUi upstream real des-premultiplica exatamente estes dois
+//     campos no momento em que os serializa pra texto (`TypeConverter.cpp:223`/`:256`), então
+//     alfa reto É a própria resposta do motor real pra "que texto representa esta cor?", não a
+//     representação de armazenamento premultiplicado que a primeira tentativa deste arquivo
+//     imprimia. A conversão é COM PERDA e IRREVERSÍVEL (ver as próprias âncoras medidas do
+//     comentário de cabeçalho) -- o byte impresso genuinamente não é o valor escrito pelo autor
+//     pra alfa não-`0xff`, e este arquivo não finge o contrário.
+std::string color_hex_straight_from_premultiplied(const Rml::ColourbPremultiplied& p) {
+  return color_hex(p.ToNonPremultiplied());
 }
 
 std::string angle_bare_degrees(const Rml::NumericValue& nv) {
@@ -455,7 +470,7 @@ std::string box_shadow_value(Rml::Element* el) {
   for (std::size_t i = 0; i < list.size(); ++i) {
     const Rml::BoxShadow& s = list[i];
     if (i) out += "|";
-    out += color_hex_premultiplied_as_is(s.color);
+    out += color_hex_straight_from_premultiplied(s.color);
     out += ";";
     out += resolve_length_px(el, s.offset_x);
     out += ";";
@@ -560,7 +575,7 @@ std::string gradient_stops_tail(const Rml::ColorStopList& stops) {
   std::string out;
   for (std::size_t i = 0; i < stops.size(); ++i) {
     if (i) out += ";";
-    out += color_hex_premultiplied_as_is(stops[i].color);
+    out += color_hex_straight_from_premultiplied(stops[i].color);
     out += ":";
     out += quantize_percent(resolved[i]);
   }

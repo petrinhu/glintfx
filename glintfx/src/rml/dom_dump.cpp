@@ -86,15 +86,44 @@ std::size_t ifind(const std::string& hay, const char* needle, std::size_t from) 
 //     (`static_cast<unsigned char>(c1) < static_cast<unsigned char>(c2)`) -- ou seja, exatamente
 //     a ordem byte-a-byte "estilo strcmp, sem locale" que a seção 7 do docs/uix-dom.md pede, sem
 //     código extra nenhum pra chegar lá.
+// EN: docs/uix-dom.md section 7's class-split algorithm, revised 2026-08-05
+//     (UIX-CLASS-SPLIT-SPEC): cut `raw` on LITERAL SPACE (`' '`, 0x20) only -- not `is_ws()`
+//     above, which stays the 4-char set for section 6/escaping/self-closing-tag purposes and is
+//     deliberately NOT reused here, this is the one place in this file where that would be
+//     wrong. Within each space-delimited segment, trim a leading/trailing run of the OTHER 3
+//     whitespace bytes (`\t`, `\n`, `\r`); an embedded one (surrounded by real content on both
+//     sides) survives verbatim. Matches `StringUtilities::ExpandString(raw, ' ')`
+//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`) for this case; see section 7's own
+//     text for the one documented, deliberate non-replication (repeated/leading/trailing space
+//     producing an empty-string class entry in live RmlUi -- not reproduced here, ledger row
+//     dated 2026-08-05).
+// PT: Algoritmo de split de classe da seção 7 do docs/uix-dom.md, revisado em 2026-08-05
+//     (UIX-CLASS-SPLIT-SPEC): corta `raw` só por ESPAÇO LITERAL (`' '`, 0x20) -- não pelo
+//     `is_ws()` acima, que continua o conjunto de 4 chars pros propósitos de seção 6/escape/
+//     espaço-final de tag auto-fechada e de propósito NÃO é reaproveitado aqui, este é o único
+//     lugar deste arquivo onde isso seria errado. Dentro de cada segmento delimitado por
+//     espaço, apara um run no início/fim dos outros 3 bytes de whitespace (`\t`, `\n`, `\r`); um
+//     embutido (cercado de conteúdo real dos dois lados) sobrevive verbatim. Bate com
+//     `StringUtilities::ExpandString(raw, ' ')`
+//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`) pra este caso; ver o próprio texto
+//     da seção 7 pra única não-replicação documentada e deliberada (espaço repetido/no
+//     início/fim produzindo uma entrada de classe string-vazia no RmlUi ao vivo -- não
+//     reproduzida aqui, linha do ledger datada de 2026-08-05).
 std::set<std::string> split_dedup_sorted(const std::string& raw) {
+  auto is_other_ws = [](char c) { return c == '\t' || c == '\n' || c == '\r'; };
   std::set<std::string> out;
-  std::size_t i = 0;
   const std::size_t n = raw.size();
-  while (i < n) {
-    while (i < n && is_ws(raw[i])) ++i;
-    const std::size_t start = i;
-    while (i < n && !is_ws(raw[i])) ++i;
-    if (i > start) out.insert(raw.substr(start, i - start));
+  std::size_t pos = 0;
+  while (pos <= n) {
+    const std::size_t next_space = raw.find(' ', pos);
+    const std::size_t end = (next_space == std::string::npos) ? n : next_space;
+    std::size_t start = pos;
+    while (start < end && is_other_ws(raw[start])) ++start;
+    std::size_t trimmed_end = end;
+    while (trimmed_end > start && is_other_ws(raw[trimmed_end - 1])) --trimmed_end;
+    if (trimmed_end > start) out.insert(raw.substr(start, trimmed_end - start));
+    if (next_space == std::string::npos) break;
+    pos = next_space + 1;
   }
   return out;
 }
@@ -282,10 +311,10 @@ void emit_element_header(const Rml::Element* el, const std::string& path, std::s
     out += "\n";
   }
 
-  // EN: Raw `class` attribute value -- see dom_dump.hpp's "SPEC ADDENDUM" for why this is
-  //     GetAttribute(), never GetClassNames().
-  // PT: Valor cru do atributo `class` -- ver o "ADENDO DE SPEC" de dom_dump.hpp pro motivo
-  //     disto ser GetAttribute(), nunca GetClassNames().
+  // EN: Raw `class` attribute value -- see dom_dump.hpp's "TECHNICAL NOTE" (and docs/uix-dom.md
+  //     section 7) for why this is GetAttribute(), never GetClassNames().
+  // PT: Valor cru do atributo `class` -- ver a "NOTA TÉCNICA" de dom_dump.hpp (e a seção 7 do
+  //     docs/uix-dom.md) pro motivo disto ser GetAttribute(), nunca GetClassNames().
   const std::string raw_class = el->GetAttribute<Rml::String>("class", Rml::String());
   const std::set<std::string> classes = split_dedup_sorted(raw_class);
   if (!classes.empty()) {

@@ -247,11 +247,17 @@ int main() {
 
   // -- F2: CLASS/ATTR sorting+dedup via a real element (section 7). ------------------------
   //    Raw class value has a TAB (&#9;) and repeated/extra-space tokens -- proves this dumper
-  //    splits on the FULL 4-char whitespace set (section 6) from the RAW attribute value, not
-  //    on Rml::Element::GetClassNames()'s own reconstruction (ElementStyle::SetClassNames only
-  //    splits on literal ' ' -- see this wave's finding, docs/uix-dom.md addendum). "id"/"class"
-  //    must not reappear in the generic ATTR block; a present-but-empty attribute (data-if="")
-  //    still gets its own ATTR line.
+  //    splits on LITERAL SPACE ONLY (docs/uix-dom.md section 7, revised 2026-08-05,
+  //    UIX-CLASS-SPLIT-SPEC), matching upstream RmlUi's ElementStyle::SetClassNames
+  //    (ExpandString(raw, ' ')), NOT the 4-char whitespace set section 6 defines. The raw value
+  //    is "\tb a\ta " (TAB,b, SPACE, a,TAB,a, SPACE): the leading tab before "b" has no real
+  //    content to its left within its space-delimited segment, so it is trimmed away (segment
+  //    "\tb" -> token "b"); the tab embedded between the two 'a's sits BETWEEN two real bytes
+  //    already inside that segment's span, so it survives verbatim (segment "a\ta" -> token
+  //    "a\ta", tab included) -- see section 7's own step-by-step algorithm and its worked
+  //    "\tb"/"a\ta" example. Sorted byte-wise, "a\ta" (0x61 0x09 0x61) sorts before "b" (0x62).
+  //    "id"/"class" must not reappear in the generic ATTR block; a present-but-empty attribute
+  //    (data-if="") still gets its own ATTR line.
   {
     const std::string source =
         "<rml><body>"
@@ -263,7 +269,7 @@ int main() {
         "body CHILDREN 1\n"
         "body/0 ELEM div\n"
         "body/0 ID w\n"
-        "body/0 CLASS a b\n"
+        "body/0 CLASS a\\ta b\n"
         "body/0 ATTR data-a=2\n"
         "body/0 ATTR data-if=\n"
         "body/0 ATTR data-z=1\n"
@@ -272,8 +278,9 @@ int main() {
     check(doc != nullptr, "F2: LoadDocumentFromMemory(class/attr sorting fixture) succeeded");
     if (doc) {
       check_eq(glintfx::dom_dump_document(doc, source), expected,
-               "F2: CLASS split on the 4-char whitespace set + dedup + byte-sort, ATTR sorted "
-               "by name with id/class excluded, empty-value ATTR still emitted");
+               "F2: CLASS split on literal space only (leading tab trimmed, embedded tab "
+               "glued/kept, per section 7) + dedup + byte-sort, ATTR sorted by name with "
+               "id/class excluded, empty-value ATTR still emitted");
     }
     close_doc(doc);
   }

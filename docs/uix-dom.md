@@ -278,13 +278,57 @@ spellings that look interchangeable to a human author and are not.
 **Classes are a set, not a list -- `docs/rmlx-subset.md`'s own framing.** The source `class="wide
 highlighted"` and `class="highlighted wide"` describe the identical set of two classes; if this
 format dumped them in source order, two semantically identical nodes would produce different dump
-lines and the oracle would report a divergence that is not one. **Decision:** split the `class`
-attribute's raw value on runs of the same 4 whitespace characters as section 6 (space, `\t`, `\n`,
-`\r`), drop empty tokens, **deduplicate** (repeated tokens collapse to one -- it is a set), then
-**sort ascending, byte-wise** (`std::string::operator<` / `strcmp` over the raw UTF-8 bytes -- no
-locale, no Unicode collation table, no case-folding beyond what this section already states).
-Empty result (no `class` attribute, or a `class` attribute with only whitespace) omits the `CLASS`
-line entirely (section 5).
+lines and the oracle would report a divergence that is not one.
+
+**Decision, revised 2026-08-05 (`UIX-CLASS-SPLIT-SPEC`, decided by the CTO, approved by the
+líder):** split the `class` attribute's raw value on **literal space (`' '`, 0x20) only** -- NOT
+the 4-character whitespace set section 6 defines (that set is unchanged for 6a/6b; it is section
+7's own class-split rule, specifically, that now narrows to one character). This mirrors upstream
+RmlUi's actual class-token computation, `ElementStyle::SetClassNames`
+(`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`), which calls
+`StringUtilities::ExpandString(classes, class_names, ' ')`: literal space is the ONLY byte RmlUi
+treats as a class-list delimiter, and this is not a documentation nicety -- it is the exact
+delimiter that determines which nodes a `.foo` CSS class selector matches at runtime. **Why this
+changed:** while the differential oracle is the ruler, RmlUi is the standard -- `RMLX-10`'s flip
+from this repo's own DOM (`S6b`/`dom_tree.cpp`) to a clean-room replacement of RmlUi itself must be
+behaviour-preserving, and a consumer with `class="a<TAB>b"` would silently change style on flip day
+if this document defined a different split than the engine it is replacing. Generalizing to the
+HTML5 whitespace-class rule (4 characters, same set as section 6) is deliberately **out of scope
+for this wave** -- it is its own future item, not a free extension of this change.
+
+Concretely, given the raw attribute value `raw`:
+
+1. Cut `raw` on literal space (`' '`) as the sole delimiter, producing zero or more segments (two
+   adjacent spaces, or a leading/trailing space, produce an **empty segment** at that position --
+   see point 4 below for why this document still drops it).
+2. Within each segment, trim any **leading and/or trailing** run of the three OTHER whitespace
+   characters (`\t`, `\n`, `\r`) -- this mirrors `ExpandString`'s own token-boundary behaviour byte
+   for byte: those three bytes never anchor its internal scan pointers unless they sit *between*
+   two bytes the scan already captured, so a segment like `\tb` becomes `b` (the leading tab
+   disappears, it never "belonged" to a token), while `a\ta` is untouched (the embedded tab sits
+   between two already-captured bytes and survives verbatim, because the emitted token is a span
+   over the ORIGINAL bytes, not a filtered copy).
+3. Drop segments that are empty after step 2.
+4. **Deduplicate** (repeated tokens collapse to one -- it is a set), then **sort ascending,
+   byte-wise** (`std::string::operator<` / `strcmp` over the raw UTF-8 bytes -- no locale, no
+   Unicode collation table, no case-folding beyond what this section already states), unchanged
+   from before.
+
+🔴 **Known, measured, deliberately NOT replicated divergence (see section 9's ledger -- row added
+the same day as this revision):** live RmlUi's `ExpandString` call uses
+`ignore_repeated_delimiters = false` (`SetClassNames`'s own default, unchanged,
+`StringUtilities.cpp:242-288`), which means a genuinely REPEATED delimiter -- two consecutive
+literal spaces, or a leading/trailing literal space -- inserts a literal **empty string** into
+RmlUi's own internal class list (e.g. `class="a  b"`, two spaces, computes internally to `["a", "",
+"b"]`). Step 3 above drops that empty segment instead of keeping it: this document keeps section
+7's original "classes are a set, empty tokens are dropped, an empty result omits the `CLASS` line"
+framing rather than teaching both dumpers to emit a `CLASS` line containing a literal empty token,
+which no known consumer relies on and no fixture in the corpus (the built-in `glintfx/tests/` set
+or the GusWorld copy) exercises. This is exactly the class-(b) case section 9 now requires a row
+for regardless of corpus coverage, not a case this document silently glosses over.
+
+Empty result (no `class` attribute, or a `class` attribute with only whitespace/empty-after-trim
+segments) omits the `CLASS` line entirely (section 5), unchanged from before.
 
 **Other attributes are sorted by name, byte-wise, same rule, for the same reason** -- an
 implementer typing attributes in whatever order feels natural in the markup must not create a
@@ -340,18 +384,34 @@ assumes editing the ledger is free to also quietly change the format it is measu
 - **(b) RmlUi normalization** -- whitespace handling, entity decoding, an injected node, `<head>`
   treatment, or any other upstream behaviour this document did not anticipate. **Expected, not a
   bug** -- the pre-parse markup and the post-parse tree are never byte-identical for any real HTML/
-  XML-like format, RmlUi included. Action: if the corpus actually exercises it, add a **named**
-  ledger row with the fixture that proves it, and both dumpers replicate the behaviour (updating
-  section 1-8 of this document too, if the behaviour was not already covered here -- this is
-  covered by the "routine" carve-out above, not the sign-off clause, because it documents a fact
-  about RmlUi, it does not change what this format is trying to represent).
+  XML-like format, RmlUi included. **Action (revised 2026-08-05, `UIX-CLASS-SPLIT-SPEC`
+  finding):** add a named ledger row the moment the divergence is **measured against actual
+  upstream RmlUi behaviour** -- a cited function/line (in the style of `ElementStyle.cpp:580-583`)
+  or a live differential run against the real engine -- **regardless of whether any corpus fixture
+  (built-in or the GusWorld copy) yet exercises it.** "The corpus doesn't exercise it" is
+  permission to defer the FIX, never permission to skip the ROW: corpus silence is a fact about
+  which two repositories this wave happened to compare against each other, not a fact about
+  whether the divergence exists in the world. Two sub-cases, logged the same way, distinguished
+  only by the Fixture column:
+  - **Corpus exercises it:** the row names the fixture, and both dumpers replicate the behaviour
+    (updating sections 1-8 of this document too, under the same "routine" carve-out above).
+  - **Corpus does not (yet) exercise it:** the Fixture column says so explicitly (`none in corpus
+    -- <how it was found>`, e.g. a source-reading finding) and the divergence stays unimplemented
+    until a real caller needs it -- but it is now **visible** in a document both dumpers' authors
+    read, not a private fact only the implementer who found it carries in their head. This closes
+    the exact failure mode `UIX-CLASS-SPLIT-SPEC` was opened to fix: a resolution that used to live
+    in `dom_dump.hpp`'s own header comment, discoverable only by one dumper's author reading the
+    other dumper's source -- which is precisely the shared-context contamination sections 1-8's own
+    "why this document exists" section warns the two-independent-dumper design cannot tolerate.
 - **(c) Out-of-subset feature.** The divergence traces to a selector/property/markup construct
   `docs/rmlx-subset.md` does not name. **STOP.** This is that document's own clause: edit the spec
   with a diff, get the líder's sign-off, only then implement. Never implement first.
 
 ⚠️ **Escalation signal, to be read literally, not rhetorically:** if the ledger's class-(b) rows
 pass roughly **10 entries**, treat that as evidence this format document itself is wrong somewhere
--- not as a growing list of quirks to keep patching around. A healthy ledger has a handful of named,
+-- not as a growing list of quirks to keep patching around. Rows for a divergence the corpus does
+NOT yet exercise still count toward this threshold -- they are evidence of real RmlUi complexity
+the same as exercised ones, not a lesser category. A healthy ledger has a handful of named,
 understood RmlUi normalizations (whitespace-only filtering already priced in at section 6, entity
 decoding already priced in, `<head>`'s opacity already priced in); a ledger that keeps growing past
 that means some *other* systemic gap in sections 1-8 is being rediscovered fixture by fixture
@@ -359,14 +419,15 @@ instead of fixed once at the source. Stop adding rows, re-read sections 1-8 agai
 that produced the last several rows, and revise the format -- the same failure mode section 6's
 whitespace rule exists specifically to have pre-empted.
 
-**Ledger table.** Empty at the time this document is written (`RMLX-1`'s slices do not exist yet --
-see [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md)). Columns:
-date found, class (a/b/c), one-line description, fixture that proves it (path, relative to
-`glintfx/tests/` or the GusWorld corpus copy), resolution (commit or cross-ref).
+**Ledger table.** Columns: date found, class (a/b/c), one-line description, fixture that proves it
+(path, relative to `glintfx/tests/` or the GusWorld corpus copy -- or `none in corpus -- <how
+found>` per the class-(b) policy above), resolution (commit, cross-ref, or "not implemented,
+deferred").
 
 | Date | Class | Description | Fixture | Resolution |
 | :--- | :---: | :--- | :--- | :--- |
-| *(none yet)* | | | | |
+| 2026-08-05 | b | `class` split narrowed from the 4-character whitespace set to literal space only, matching `ElementStyle::SetClassNames`/`ExpandString(raw, ' ')` (`ElementStyle.cpp:580-583`); leading/trailing `\t`/`\n`/`\r` at each space-delimited segment's edge is trimmed, an embedded one survives -- section 7. | `glintfx/src/rml/dom_dump_determinism_sanity.cpp` F2 (`&#9;`-separated class list) | `docs/uix-dom.md` section 7 (this revision) + `dom_dump.cpp`'s `split_dedup_sorted()` |
+| 2026-08-05 | b | Repeated/leading/trailing literal-space delimiters: live RmlUi's `ExpandString(raw, ' ')` (default `ignore_repeated_delimiters=false`) inserts a literal empty-string entry into its internal class list (e.g. `class="a  b"` -> `["a", "", "b"]`); this format keeps dropping empty tokens (section 7) instead, so a `CLASS` line never carries an empty token the live engine's own class set would technically contain. | none in corpus (built-in or GusWorld) -- found reading `StringUtilities::ExpandString` (`examples/RmlUi/Source/Core/StringUtilities.cpp:242-288`) while implementing `UIX-CLASS-SPLIT-SPEC`'s literal-space split | Not implemented -- deferred until a real caller's markup exercises it (section 9's own policy for unexercised class-(b) rows) |
 
 ### 10. Out of the dump this wave / not this document's job
 
@@ -693,12 +754,58 @@ humano e não são.
 fonte `class="wide highlighted"` e `class="highlighted wide"` descrevem o mesmo conjunto idêntico
 de duas classes; se este formato dumpasse na ordem da fonte, dois nós semanticamente idênticos
 produziriam linhas de dump diferentes e o oráculo reportaria uma divergência que não é uma.
-**Decisão:** dividir o valor cru do atributo `class` em runs dos mesmos 4 caracteres de whitespace
-da seção 6 (espaço, `\t`, `\n`, `\r`), descartar tokens vazios, **deduplicar** (tokens repetidos
-colapsam pra um só -- é um conjunto), depois **ordenar ascendente, byte-a-byte**
-(`std::string::operator<` / `strcmp` sobre os bytes UTF-8 crus -- sem locale, sem tabela de
-colação Unicode, sem case-folding além do que esta seção já declara). Resultado vazio (sem
-atributo `class`, ou um `class` só com whitespace) omite a linha `CLASS` inteira (seção 5).
+
+**Decisão, revisada em 2026-08-05 (`UIX-CLASS-SPLIT-SPEC`, decidida pelo CTO, aprovada pelo
+líder):** dividir o valor cru do atributo `class` só por **espaço literal (`' '`, 0x20)** -- NÃO
+pelo conjunto de 4 caracteres de whitespace que a seção 6 define (esse conjunto continua o mesmo
+pra 6a/6b; é a própria regra de split de classe da seção 7, especificamente, que agora estreita pra
+um único caractere). Isto espelha o próprio cálculo de token-de-classe do RmlUi upstream,
+`ElementStyle::SetClassNames` (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`), que chama
+`StringUtilities::ExpandString(classes, class_names, ' ')`: espaço literal é o ÚNICO byte que o
+RmlUi trata como delimitador de lista-de-classe, e isto não é um capricho de documentação -- é o
+delimitador exato que determina quais nós um seletor CSS `.foo` casa em tempo de execução. **Por
+que mudou:** enquanto o oráculo diferencial for a régua, o RmlUi é o padrão -- o flip da `RMLX-10`,
+da árvore própria deste repo (`S6b`/`dom_tree.cpp`) pra uma substituição clean-room do próprio
+RmlUi, tem de ser comportamento-preservante, e um consumidor com `class="a<TAB>b"` mudaria de
+estilo em silêncio no dia do flip se este documento definisse um split diferente do motor que está
+substituindo. Generalizar pra regra de classe-whitespace do HTML5 (4 caracteres, o mesmo conjunto
+da seção 6) é deliberadamente **fora de escopo desta onda** -- é um item futuro próprio, não uma
+extensão de graça desta mudança.
+
+Concretamente, dado o valor cru do atributo `raw`:
+
+1. Cortar `raw` por espaço literal (`' '`) como único delimitador, produzindo zero ou mais
+   segmentos (dois espaços adjacentes, ou um espaço no início/fim, produzem um **segmento vazio**
+   naquela posição -- ver o ponto 4 abaixo pro motivo deste documento ainda assim descartá-lo).
+2. Dentro de cada segmento, aparar qualquer run **no início e/ou no fim** dos três OUTROS
+   caracteres de whitespace (`\t`, `\n`, `\r`) -- isto espelha byte a byte o próprio comportamento
+   de fronteira-de-token do `ExpandString`: esses três bytes nunca ancoram os ponteiros internos de
+   varredura dele a menos que estejam *entre* dois bytes que a varredura já capturou, então um
+   segmento como `\tb` vira `b` (o tab do início desaparece, ele nunca "pertenceu" a um token),
+   enquanto `a\ta` fica intocado (o tab embutido está entre dois bytes já capturados e sobrevive
+   verbatim, porque o token emitido é um span sobre os bytes ORIGINAIS, não uma cópia filtrada).
+3. Descartar segmentos vazios depois do passo 2.
+4. **Deduplicar** (tokens repetidos colapsam pra um só -- é um conjunto), depois **ordenar
+   ascendente, byte-a-byte** (`std::string::operator<` / `strcmp` sobre os bytes UTF-8 crus -- sem
+   locale, sem tabela de colação Unicode, sem case-folding além do que esta seção já declara),
+   sem mudança em relação a antes.
+
+🔴 **Divergência conhecida, medida, deliberadamente NÃO replicada (ver o ledger da seção 9 -- linha
+somada no mesmo dia desta revisão):** a chamada real de `ExpandString` do RmlUi usa
+`ignore_repeated_delimiters = false` (o próprio default do `SetClassNames`, inalterado,
+`StringUtilities.cpp:242-288`), o que significa que um delimitador genuinamente REPETIDO -- dois
+espaços literais consecutivos, ou um espaço literal no início/fim -- insere uma **string vazia**
+literal na lista de classe interna do próprio RmlUi (ex.: `class="a  b"`, dois espaços, computa
+internamente pra `["a", "", "b"]`). O passo 3 acima descarta esse segmento vazio em vez de mantê-lo:
+este documento mantém a formulação original da seção 7 ("classes são um conjunto, tokens vazios são
+descartados, um resultado vazio omite a linha `CLASS`") em vez de ensinar os dois dumpers a emitir
+uma linha `CLASS` contendo um token vazio literal, coisa que nenhum consumidor conhecido depende e
+nenhuma fixture do corpus (o conjunto embutido de `glintfx/tests/` ou a cópia do GusWorld) exercita.
+Este é exatamente o caso classe-(b) que a seção 9 agora exige uma linha para, independente de
+cobertura de corpus -- não um caso que este documento varre pra debaixo do tapete em silêncio.
+
+Resultado vazio (sem atributo `class`, ou um `class` só com whitespace/segmentos vazios após
+aparar) omite a linha `CLASS` inteira (seção 5), sem mudança em relação a antes.
 
 **Outros atributos são ordenados por nome, byte-a-byte, mesma regra, pelo mesmo motivo** -- um
 implementer digitando atributos em qualquer ordem que pareça natural no markup não pode criar uma
@@ -756,12 +863,26 @@ também mudar em silêncio o formato que ele está medindo.
 - **(b) Normalização do RmlUi** -- tratamento de whitespace, decodificação de entidade, um nó
   injetado, tratamento de `<head>`, ou qualquer outro comportamento upstream que este documento não
   antecipou. **Esperado, não é bug** -- o markup pré-parse e a árvore pós-parse nunca são
-  byte-idênticos pra formato real nenhum estilo HTML/XML, RmlUi incluído. Ação: se o corpus de fato
-  exercita, somar uma linha **nomeada** no ledger com o fixture que prova, e os dois dumpers
-  replicam o comportamento (atualizando as seções 1-8 deste documento também, se o comportamento
-  ainda não estava coberto aqui -- isso está coberto pelo carve-out de "rotina" acima, não pela
-  cláusula de aval, porque documenta um fato sobre o RmlUi, não muda o que este formato está
-  tentando representar).
+  byte-idênticos pra formato real nenhum estilo HTML/XML, RmlUi incluído. **Ação (revisada em
+  2026-08-05, achado da `UIX-CLASS-SPLIT-SPEC`):** somar uma linha nomeada no ledger no momento em
+  que a divergência é **medida contra o comportamento real do RmlUi upstream** -- uma função/linha
+  citada (no estilo `ElementStyle.cpp:580-583`) ou uma rodada diferencial ao vivo contra o motor
+  real -- **independente de alguma fixture do corpus (embutida ou a cópia do GusWorld) já
+  exercitar.** "O corpus não exercita" é permissão pra adiar o CONSERTO, nunca permissão pra pular
+  a LINHA: o silêncio do corpus é um fato sobre quais dois repositórios esta onda por acaso
+  comparou entre si, não um fato sobre se a divergência existe no mundo. Dois subcasos, registrados
+  do mesmo jeito, distinguidos só pela coluna Fixture:
+  - **O corpus exercita:** a linha nomeia o fixture, e os dois dumpers replicam o comportamento
+    (atualizando as seções 1-8 deste documento também, sob o mesmo carve-out de "rotina" acima).
+  - **O corpus ainda NÃO exercita:** a coluna Fixture diz isso explicitamente (`nenhuma no corpus
+    -- <como foi achado>`, ex.: um achado de leitura de fonte) e a divergência fica não-implementada
+    até um chamador real precisar dela -- mas agora está **visível** num documento que os autores
+    dos dois dumpers leem, não um fato privado que só quem achou carrega na cabeça. Isto fecha
+    exatamente o modo de falha que a `UIX-CLASS-SPLIT-SPEC` foi aberta pra consertar: uma resolução
+    que costumava morar no próprio comentário de cabeçalho do `dom_dump.hpp`, descobrível só se o
+    autor de um dumper lesse o fonte do outro -- exatamente a contaminação de contexto compartilhado
+    que a própria seção "Por que este documento existe" avisa que o desenho de dois-dumpers-
+    independentes não tolera.
 - **(c) Recurso fora do subconjunto.** A divergência remonta a um seletor/propriedade/construção de
   markup que o `docs/rmlx-subset.md` não nomeia. **PARAR.** Esta é a própria cláusula daquele
   documento: editar a spec com um diff, pegar o aval do líder, só então implementar. Nunca
@@ -770,22 +891,25 @@ também mudar em silêncio o formato que ele está medindo.
 ⚠️ **Sinal de escalonamento, pra ser lido literalmente, não retoricamente:** se as linhas classe-(b)
 do ledger passarem de aproximadamente **10 entradas**, tratar isso como evidência de que este
 próprio documento de formato está errado em algum lugar -- não como uma lista crescente de
-peculiaridades pra ficar remendando. Um ledger saudável tem um punhado de normalizações do RmlUi
-nomeadas e entendidas (filtro só-whitespace já precificado na seção 6, decodificação de entidade já
-precificada, opacidade do `<head>` já precificada); um ledger que continua crescendo além disso
-significa que alguma *outra* lacuna sistêmica nas seções 1-8 está sendo redescoberta fixture por
-fixture em vez de consertada uma vez na fonte. Parar de somar linhas, reler as seções 1-8 contra os
-fixtures que produziram as últimas entradas, e revisar o formato -- o mesmo modo de falha que a
-regra de whitespace da seção 6 existe especificamente pra ter prevenido.
+peculiaridades pra ficar remendando. Linhas pra uma divergência que o corpus AINDA não exercita
+contam pra esse limite também -- são evidência de complexidade real do RmlUi, não uma categoria
+menor. Um ledger saudável tem um punhado de normalizações do RmlUi nomeadas e entendidas (filtro
+só-whitespace já precificado na seção 6, decodificação de entidade já precificada, opacidade do
+`<head>` já precificada); um ledger que continua crescendo além disso significa que alguma *outra*
+lacuna sistêmica nas seções 1-8 está sendo redescoberta fixture por fixture em vez de consertada uma
+vez na fonte. Parar de somar linhas, reler as seções 1-8 contra os fixtures que produziram as
+últimas entradas, e revisar o formato -- o mesmo modo de falha que a regra de whitespace da seção 6
+existe especificamente pra ter prevenido.
 
-**Tabela do ledger.** Vazia no momento em que este documento é escrito (as fatias da `RMLX-1`
-ainda não existem -- ver [`docs/rmlx1-mapa-fatias.md`](rmlx1-mapa-fatias.md)).
-Colunas: data do achado, classe (a/b/c), descrição de uma linha, fixture que prova (caminho,
-relativo a `glintfx/tests/` ou à cópia do corpus GusWorld), resolução (commit ou cross-ref).
+**Tabela do ledger.** Colunas: data do achado, classe (a/b/c), descrição de uma linha, fixture que
+prova (caminho, relativo a `glintfx/tests/` ou à cópia do corpus GusWorld -- ou `nenhuma no corpus
+-- <como foi achado>` pela política classe-(b) acima), resolução (commit, cross-ref, ou "não
+implementado, adiado").
 
 | Data | Classe | Descrição | Fixture | Resolução |
 | :--- | :---: | :--- | :--- | :--- |
-| *(nenhuma ainda)* | | | | |
+| 2026-08-05 | b | Split de `class` estreitado do conjunto de 4 caracteres de whitespace pra só espaço literal, batendo com `ElementStyle::SetClassNames`/`ExpandString(raw, ' ')` (`ElementStyle.cpp:580-583`); `\t`/`\n`/`\r` no início/fim de cada segmento delimitado por espaço é aparado, um embutido sobrevive -- seção 7. | `glintfx/src/rml/dom_dump_determinism_sanity.cpp` F2 (lista de classe separada por `&#9;`) | `docs/uix-dom.md` seção 7 (esta revisão) + `split_dedup_sorted()` do `dom_dump.cpp` |
+| 2026-08-05 | b | Delimitadores de espaço literal repetidos/no início/fim: o `ExpandString(raw, ' ')` real do RmlUi (default `ignore_repeated_delimiters=false`) insere uma entrada string-vazia literal na lista de classe interna dele (ex.: `class="a  b"` -> `["a", "", "b"]`); este formato continua descartando tokens vazios (seção 7) em vez disso, então uma linha `CLASS` nunca carrega um token vazio que o conjunto de classe do próprio motor ao vivo tecnicamente teria. | nenhuma no corpus (embutido ou GusWorld) -- achado lendo `StringUtilities::ExpandString` (`examples/RmlUi/Source/Core/StringUtilities.cpp:242-288`) ao implementar o split de espaço literal da `UIX-CLASS-SPLIT-SPEC` | Não implementado -- adiado até um markup de chamador real exercitar (política própria da seção 9 pra linhas classe-(b) não exercitadas) |
 
 ### 10. Fora do dump nesta onda / não é trabalho deste documento
 

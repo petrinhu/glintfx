@@ -28,24 +28,18 @@
 //     single biggest structural asymmetry between the two dumpers and is worth naming loudly so
 //     nobody "ports" a whitespace filter into this file by habit.
 //
-//     🔴 SPEC ADDENDUM (2026-08-05, S6a finding, added HERE and cross-referenced from
-//     docs/uix-dom.md section 7 -- not a private workaround): section 7 says to split the
-//     `class` attribute's "raw value". This dumper reads that raw value via
+//     🔴 TECHNICAL NOTE, not a resolution (the resolution lives in `docs/uix-dom.md` section 7 --
+//     edit THAT document, never this comment, if the class-split rule ever needs to change
+//     again): this dumper reads the `class` attribute's raw value via
 //     `Element::GetAttribute<Rml::String>("class", "")` -- the verbatim, entity-decoded
 //     attribute text as stored in the element's own attribute dictionary -- and NEVER via
-//     `Element::GetClassNames()`. The two are NOT interchangeable: RmlUi's own
-//     `ElementStyle::SetClassNames` (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`)
-//     splits ONLY on a literal `' '` (`StringUtilities::ExpandString(classes, class_names,
-//     ' ')`), not on the 4-character whitespace set section 6/7 define -- so a class attribute
-//     using a tab or newline as a separator would be tokenized DIFFERENTLY by
-//     `GetClassNames()`'s own reconstruction (tab/newline stay glued to the neighbouring
-//     token) than by section 7's own definition (tab/newline ARE separators). No fixture in
-//     this wave's corpus exercises this (all real corpus `class=` values use plain space), so
-//     this is not a divergence-ledger row (docs/uix-dom.md section 9's own "if the corpus
-//     doesn't exercise it" carve-out) -- it is a spec-faithfulness decision, pinned by
-//     dom_dump_determinism_sanity.cpp's F2 case (a `&#9;`-separated class list), documented here
-//     so `S6b`'s author reads the SAME resolution without needing to re-derive it from RmlUi
-//     source independently.
+//     `Element::GetClassNames()`. The two are NOT interchangeable: `GetClassNames()` round-trips
+//     through RmlUi's OWN internal `classes` vector (`ElementStyle::SetClassNames`/
+//     `GetClassNames`, `examples/RmlUi/Source/Core/ElementStyle.cpp:566-593`), itself computed by
+//     splitting on literal space per the algorithm docs/uix-dom.md section 7 now spells out in
+//     full -- reading the raw attribute directly and splitting it per section 7 keeps this
+//     dumper's output independent of RmlUi's own internal representation, the same "read the
+//     source, not the derived state" discipline the rest of this file follows.
 // PT: RMLX-1/S6a -- dumper sobre a árvore REAL Rml::ElementDocument, emitindo o formato
 //     definido em `docs/uix-dom.md` (o ÚNICO contrato que este arquivo implementa; não somar
 //     comportamento nenhum que não esteja escrito lá sem editar aquele documento primeiro). É
@@ -76,25 +70,19 @@
 //     árvore real". Esta é a maior assimetria estrutural entre os dois dumpers e vale nomear em
 //     voz alta pra ninguém "portar" um filtro de whitespace pra este arquivo por hábito.
 //
-//     🔴 ADENDO DE SPEC (2026-08-05, achado da S6a, somado AQUI e referenciado pela seção 7 do
-//     docs/uix-dom.md -- não um contorno privado): a seção 7 manda dividir o "valor cru" do
-//     atributo `class`. Este dumper lê esse valor cru via
+//     🔴 NOTA TÉCNICA, não uma resolução (a resolução mora na seção 7 do `docs/uix-dom.md` --
+//     editar AQUELE documento, nunca este comentário, se a regra de split de classe precisar
+//     mudar de novo): este dumper lê o valor cru do atributo `class` via
 //     `Element::GetAttribute<Rml::String>("class", "")` -- o texto de atributo verbatim,
 //     entity-decodificado, como guardado no próprio dicionário de atributos do elemento -- e
-//     NUNCA via `Element::GetClassNames()`. Os dois NÃO são intercambiáveis: o próprio
-//     `ElementStyle::SetClassNames` do RmlUi
-//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`) divide SÓ num `' '` literal
-//     (`StringUtilities::ExpandString(classes, class_names, ' ')`), não no conjunto de 4
-//     caracteres de whitespace que as seções 6/7 definem -- então um atributo class usando tab
-//     ou newline como separador seria tokenizado DIFERENTE pela reconstrução do próprio
-//     `GetClassNames()` (tab/newline ficam colados ao token vizinho) do que pela própria
-//     definição da seção 7 (tab/newline SÃO separadores). Nenhuma fixture do corpus desta onda
-//     exercita isto (todo `class=` real do corpus usa espaço simples), então não é uma linha do
-//     divergence-ledger (o próprio carve-out "se o corpus não exercita" da seção 9 do
-//     docs/uix-dom.md) -- é uma decisão de fidelidade-à-spec, presa pelo caso F2 do
-//     dom_dump_determinism_sanity.cpp (uma lista de classes separada por `&#9;`), documentada
-//     aqui pra o autor da `S6b` ler a MESMA resolução sem precisar rederivar do fonte do RmlUi
-//     de forma independente.
+//     NUNCA via `Element::GetClassNames()`. Os dois NÃO são intercambiáveis: `GetClassNames()`
+//     faz round-trip pelo próprio vetor `classes` interno do RmlUi (`ElementStyle::SetClassNames`/
+//     `GetClassNames`, `examples/RmlUi/Source/Core/ElementStyle.cpp:566-593`), ele mesmo
+//     calculado dividindo por espaço literal conforme o algoritmo que a seção 7 do
+//     docs/uix-dom.md agora soletra por completo -- ler o atributo cru diretamente e dividi-lo
+//     conforme a seção 7 mantém a saída deste dumper independente da representação interna
+//     própria do RmlUi, a mesma disciplina "ler a fonte, não o estado derivado" que o resto deste
+//     arquivo segue.
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 

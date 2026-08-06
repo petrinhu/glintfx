@@ -4253,6 +4253,7 @@ add_library(glintfx_uix_style_gate STATIC
   ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/selector_match.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/cascade.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/dumper.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/dom/dom_tree.cpp)
 target_include_directories(glintfx_uix_style_gate PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -4358,6 +4359,20 @@ target_compile_definitions(uix_style_cascade_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
 add_test(NAME uix_style_cascade_corpus_sanity COMMAND uix_style_cascade_corpus_sanity)
+
+# EN: UIX-RCSS-DUMP-B -- mirrors glintfx/tests/uix_style/CMakeLists.txt's own uix_style_dumper_sanity
+#     (see that file's own header comment for why it links dom lexer.cpp/parser.cpp despite being
+#     named "_sanity", not "_corpus_sanity").
+# PT: UIX-RCSS-DUMP-B -- espelha o próprio uix_style_dumper_sanity do
+#     glintfx/tests/uix_style/CMakeLists.txt (ver o próprio comentário de cabeçalho daquele arquivo
+#     pro porquê de linkar lexer.cpp/parser.cpp do dom apesar de ser nomeado "_sanity", não
+#     "_corpus_sanity").
+add_executable(uix_style_dumper_sanity
+  uix_style/dumper_sanity.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_dumper_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_dumper_sanity COMMAND uix_style_dumper_sanity)
 
 # ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED

@@ -151,3 +151,25 @@ target_compile_definitions(uix_style_cascade_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
 add_test(NAME uix_style_cascade_corpus_sanity COMMAND uix_style_cascade_corpus_sanity)
+
+# EN: UIX-RCSS-DUMP-B -- dumper.cpp is this module's THIRD source to depend on the DOM sibling
+#     module, no NEW cross-module dependency (dumper.hpp only includes dom_tree.hpp/cascade.hpp/
+#     parser.hpp, all already wired into this library). dumper_sanity.cpp ALSO needs the DOM's own
+#     lexer.cpp/parser.cpp DIRECTLY (mirrors cascade_corpus_sanity.cpp's own reasoning immediately
+#     above) -- its worked-example tests call glintfx::uix::parse_document on real RCSS/RML text,
+#     not hand-built trees, per this task's own "prove the worked example reaches the condition it
+#     claims" discipline (see the test file's own header for why).
+# PT: UIX-RCSS-DUMP-B -- o dumper.cpp é a TERCEIRA fonte deste módulo a depender do módulo irmão DOM,
+#     nenhuma dependência cross-módulo NOVA (o dumper.hpp só inclui dom_tree.hpp/cascade.hpp/
+#     parser.hpp, os três já amarrados nesta biblioteca). O dumper_sanity.cpp TAMBÉM precisa do
+#     próprio lexer.cpp/parser.cpp do DOM DIRETAMENTE (espelha o próprio raciocínio do
+#     cascade_corpus_sanity.cpp logo acima) -- os próprios testes de exemplo-trabalhado dele chamam
+#     glintfx::uix::parse_document sobre texto RCSS/RML real, não árvores construídas à mão, pela
+#     própria disciplina "prove que o exemplo trabalhado alcança a condição que afirma" desta
+#     tarefa (ver o próprio cabeçalho do arquivo de teste pro porquê).
+add_executable(uix_style_dumper_sanity
+  dumper_sanity.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/lexer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_dumper_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_dumper_sanity COMMAND uix_style_dumper_sanity)

@@ -3917,6 +3917,83 @@ add_test(NAME dom_dump_determinism_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: RMLX-1/S7 -- dom_dump_differential_oracle: the harness that diffs the TWO independently
+#     written dumpers (S6a over the real Rml::ElementDocument, S6b over glintfx's own DOM) over
+#     the whole RMLX-1 corpus, byte for byte. Its .cpp lives in glintfx/src/rml/ for the SAME
+#     frozen-whitelist reason as its two siblings immediately above (it references
+#     Rml::Context/Rml::ElementDocument directly -- half the oracle IS the real RmlUi tree -- and
+#     tools/check_rml_whitelist.sh's checks (b)/(c) forbid that in a NEW file physically located
+#     under glintfx/tests/); registering it here does not reopen that hole, because a
+#     CMakeLists.txt is never scanned by the gate whatever source path it names.
+#
+#     This target is the ONLY one in this file that compiles BOTH halves of the oracle into one
+#     executable: the four glintfx_uix_dom sources (lexer/dom_tree/parser/dumper) are listed
+#     DIRECTLY rather than pulled in via add_subdirectory(../src/uix/dom) on purpose -- that
+#     directory is a STANDALONE CMake project with its own project() call and its own
+#     enable_testing()/tests subtree (see its own header comment for why it deliberately stays out
+#     of glintfx/CMakeLists.txt's graph, which triggers FetchContent(RmlUi) unconditionally).
+#     add_subdirectory() would drag that whole second test tree into this build and register its
+#     ~12 tests a second time under different names; a four-entry source list has none of those
+#     side effects and keeps the standalone module's "zero RmlUi/GLFW/GL" property intact where it
+#     matters (in ITS OWN build, which is untouched by this target existing).
+#     dom_api.cpp is NOT in the list: the oracle only parses and dumps, it never mutates the tree
+#     by id, so linking the DOM read/write API would add a translation unit no symbol here needs.
+#
+#     GLINTFX_RMLX1_CORPUS_DIR = glintfx/src/uix/dom/test_fixtures/, the THIRD corpus directory
+#     (the 16 verbatim GusWorld screens), by absolute SOURCE-tree path resolved at CONFIGURE time
+#     -- the same directory glintfx/tests/uix/CMakeLists.txt already passes to the S3/S6b tests as
+#     GLINTFX_UIX_S3_FIXTURES_DIR, and the same absolute-path discipline the two targets above
+#     use, so BOTH sides of the diff read the very same bytes off disk (see the .cpp's own header
+#     comment for why a build-dir copy would silently make this harness measure the copy step).
+# PT: RMLX-1/S7 -- dom_dump_differential_oracle: o harness que diffa os DOIS dumpers escritos de
+#     forma independente (S6a sobre o Rml::ElementDocument real, S6b sobre o DOM próprio da
+#     glintfx) sobre o corpus inteiro da RMLX-1, byte a byte. O .cpp dele mora em glintfx/src/rml/
+#     pelo MESMO motivo de whitelist congelada dos dois irmãos logo acima (referencia
+#     Rml::Context/Rml::ElementDocument diretamente -- metade do oráculo É a árvore real do RmlUi
+#     -- e os checks (b)/(c) do tools/check_rml_whitelist.sh proíbem isso num arquivo NOVO
+#     fisicamente localizado sob glintfx/tests/); registrá-lo aqui não reabre aquele furo, porque
+#     um CMakeLists.txt nunca é varrido pelo gate, seja qual for o caminho-fonte que ele nomeia.
+#
+#     Este alvo é o ÚNICO deste arquivo que compila as DUAS metades do oráculo num executável só:
+#     os quatro fontes do glintfx_uix_dom (lexer/dom_tree/parser/dumper) são listados DIRETAMENTE
+#     em vez de puxados por add_subdirectory(../src/uix/dom) de propósito -- aquele diretório é um
+#     projeto CMake STANDALONE, com project() próprio e enable_testing()/subárvore de testes
+#     própria (ver o comentário de cabeçalho dele pro motivo de ficar deliberadamente fora do grafo
+#     do glintfx/CMakeLists.txt, que dispara FetchContent(RmlUi) incondicionalmente).
+#     add_subdirectory() arrastaria aquela segunda árvore de testes inteira pra dentro deste build
+#     e registraria os ~12 testes dela uma segunda vez com outros nomes; uma lista de quatro fontes
+#     não tem nenhum desses efeitos colaterais e mantém intacta a propriedade "zero RmlUi/GLFW/GL"
+#     do módulo standalone onde ela importa (no build DELE, que não é tocado pela existência deste
+#     alvo). dom_api.cpp NÃO está na lista: o oráculo só parseia e dumpa, nunca muta a árvore por
+#     id, então linkar a API de leitura/escrita do DOM somaria uma unidade de tradução de que
+#     nenhum símbolo daqui precisa.
+#
+#     GLINTFX_RMLX1_CORPUS_DIR = glintfx/src/uix/dom/test_fixtures/, o TERCEIRO diretório de corpus
+#     (as 16 telas verbatim do GusWorld), por caminho absoluto NA ÁRVORE-FONTE resolvido em tempo
+#     de CONFIGURE -- o mesmo diretório que o glintfx/tests/uix/CMakeLists.txt já passa aos testes
+#     da S3/S6b como GLINTFX_UIX_S3_FIXTURES_DIR, e a mesma disciplina de caminho absoluto dos dois
+#     alvos acima, pra que os DOIS lados do diff leiam exatamente os mesmos bytes do disco (ver o
+#     próprio comentário de cabeçalho do .cpp pro motivo de uma cópia no dir de build fazer este
+#     harness medir, em silêncio, o passo de cópia).
+# ---------------------------------------------------------------------------
+add_executable(dom_dump_differential_oracle
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump_differential_oracle.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/dom_tree.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/parser.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/dumper.cpp)
+target_include_directories(dom_dump_differential_oracle PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(dom_dump_differential_oracle PRIVATE ${_embed_dep} RmlUi::Core)
+target_compile_definitions(dom_dump_differential_oracle PRIVATE
+  GLINTFX_RMLX1_CORPUS_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures")
+add_test(NAME dom_dump_differential_oracle
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:dom_dump_differential_oracle>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
 #     "ripple()" decorator + its backdrop-capture machinery (both now inside the
 #     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated

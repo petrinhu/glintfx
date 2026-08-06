@@ -96,11 +96,24 @@ bool Element::has_class(std::string_view cls) const {
 }
 
 bool Element::add_class(std::string_view cls) {
+  // EN: UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05) -- see dom_tree.hpp's own doc-comment on
+  //     `add_class` for the full derivation of the 3 rejection cases and why an EMBEDDED
+  //     `\t`/`\n`/`\r` is now accepted (space is the sole RmlUi delimiter; the old any-of-4-chars
+  //     check rejected a legitimate RmlUi class token this tree has no business rejecting).
+  // PT: UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05) -- ver o próprio doc-comment do `add_class` no
+  //     dom_tree.hpp pra derivação completa dos 3 casos de rejeição e por que um `\t`/`\n`/`\r`
+  //     EMBUTIDO agora é aceito (espaço é o único delimitador do RmlUi; a checagem antiga
+  //     any-of-4-chars rejeitava um token de classe legítimo do RmlUi que esta árvore não tinha
+  //     motivo pra rejeitar).
   if (cls.empty()) {
-    return false;
+    return false; // (1) empty token
   }
-  if (std::any_of(cls.begin(), cls.end(), is_whitespace_char)) {
-    return false; // not a single already-split token -- see dom_tree.hpp header
+  if (cls.find(' ') != std::string_view::npos) {
+    return false; // (2) literal space anywhere -- space is the delimiter, this is a caller bug
+  }
+  if (std::all_of(cls.begin(), cls.end(), is_whitespace_char)) {
+    return false; // (3) entirely made of \t/\n/\r (no space, per (2), and nothing else) -- never
+                  // a real token upstream's ExpandString captures, see dom_tree.hpp header
   }
   return classes_.emplace(cls).second; // false if cls was already present -- caller-observable
                                        // dedup signal, per the test asserting a repeat add_class

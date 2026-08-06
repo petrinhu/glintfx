@@ -175,29 +175,81 @@ std::string to_ascii_lower(std::string_view s) {
   return out;
 }
 
-// EN: Splits `s` on runs of the 4-char whitespace set, dropping empty tokens -- uix-dom.md
-//     section 7's own class-token split, applied here at PARSE time (the tree just receives
-//     already-split tokens via `Element::add_class`, see dom_tree.hpp's own header comment,
-//     point on `add_class`'s single-token precondition).
-// PT: Divide `s` em runs do conjunto de 4 caracteres de whitespace, descartando tokens vazios --
-//     o próprio split de token de classe da seção 7 do uix-dom.md, aplicado aqui em tempo de
-//     PARSE (a árvore só recebe tokens já separados via `Element::add_class`, ver o próprio
-//     comentário de cabeçalho do dom_tree.hpp, ponto sobre a pré-condição de token-único do
-//     `add_class`).
-std::vector<std::string_view> split_whitespace(std::string_view s) {
+// EN: UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05) -- uix-dom.md section 7's REVISED class-token split
+//     (`UIX-CLASS-SPLIT-SPEC`), applied here at PARSE time (the tree just receives already-split
+//     tokens via `Element::add_class`, see dom_tree.hpp's own header comment, point on
+//     `add_class`'s single-token precondition). Cuts `s` on LITERAL SPACE (`' '`, 0x20) ONLY --
+//     deliberately NOT `is_whitespace_char` above, which stays the 4-char set reserved for
+//     section 6's text-existence filter and has no business here, this is the one call site in
+//     this file where reusing it would be exactly wrong (mirrors `dom_dump.cpp`'s own
+//     `split_dedup_sorted()`, `glintfx/src/rml/dom_dump.cpp:76-129`, the SAME algorithm
+//     independently required on the RmlUi-linked oracle's side of the `S6a`/`S6b` differential --
+//     this function's shape is not a coincidence, it is the two dumpers' shared contract, see
+//     that file's own header comment for the identical warning stated from its side). Within each
+//     space-delimited segment, trims a leading/trailing run of the OTHER 3 whitespace bytes
+//     (`\t`, `\n`, `\r`); an EMBEDDED one (surrounded by non-whitespace content on both sides)
+//     survives verbatim inside the token -- `Element::add_class` (dom_tree.hpp,
+//     `UIX-CLASS-SPLIT-2`) now accepts that. Matches `StringUtilities::ExpandString(raw, ' ')`
+//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`) for this case; the one documented,
+//     deliberate non-replication -- a repeated/leading/trailing literal space producing a literal
+//     empty-string class entry in live RmlUi -- is dropped here exactly like `dom_dump.cpp`'s own
+//     `split_dedup_sorted()` drops it (uix-dom.md section 9's ledger, row dated 2026-08-05, "not
+//     implemented -- deferred"; this function does not re-decide that, it just agrees). Returns
+//     tokens in SOURCE order, not deduplicated/sorted -- unlike `split_dedup_sorted()`'s
+//     `std::set<std::string>` return, that final dedup+sort is not this function's job: the
+//     caller feeds every token to `Element::add_class` one at a time, and `Element::classes()`
+//     (a `std::set<std::string, std::less<>>`, `dom_tree.hpp`) already dedups and sorts by
+//     construction -- doing it twice here would be redundant work, not extra safety.
+// PT: UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05) -- o split de token de classe REVISADO da seção 7 do
+//     uix-dom.md (`UIX-CLASS-SPLIT-SPEC`), aplicado aqui em tempo de PARSE (a árvore só recebe
+//     tokens já separados via `Element::add_class`, ver o próprio comentário de cabeçalho do
+//     dom_tree.hpp, ponto sobre a pré-condição de token-único do `add_class`). Corta `s` só por
+//     ESPAÇO LITERAL (`' '`, 0x20) -- deliberadamente NÃO pelo `is_whitespace_char` acima, que
+//     continua o conjunto de 4 caracteres reservado pro filtro de existência de texto da seção 6 e
+//     não tem nada a ver aqui, este é o único ponto de chamada deste arquivo onde reaproveitá-lo
+//     seria exatamente errado (espelha o próprio `split_dedup_sorted()` do `dom_dump.cpp`,
+//     `glintfx/src/rml/dom_dump.cpp:76-129`, o MESMO algoritmo exigido de forma independente do
+//     lado do oráculo linkado ao RmlUi do diferencial `S6a`/`S6b` -- a forma desta função não é
+//     coincidência, é o contrato compartilhado dos dois dumpers, ver o próprio comentário de
+//     cabeçalho daquele arquivo pro mesmo aviso dito do lado dele). Dentro de cada segmento
+//     delimitado por espaço, apara um run no início/fim dos outros 3 bytes de whitespace (`\t`,
+//     `\n`, `\r`); um EMBUTIDO (cercado de conteúdo não-whitespace dos dois lados) sobrevive
+//     verbatim dentro do token -- o `Element::add_class` (dom_tree.hpp, `UIX-CLASS-SPLIT-2`) agora
+//     aceita isso. Bate com `StringUtilities::ExpandString(raw, ' ')`
+//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`) pra este caso; a única
+//     não-replicação documentada e deliberada -- um espaço literal repetido/no início/fim
+//     produzindo uma entrada de classe string-vazia no RmlUi ao vivo -- é descartada aqui
+//     exatamente como o próprio `split_dedup_sorted()` do `dom_dump.cpp` descarta (linha do
+//     ledger da seção 9 do uix-dom.md, datada de 2026-08-05, "não implementado -- adiado"; esta
+//     função não re-decide isso, só concorda). Devolve tokens em ordem-FONTE, não deduplicados/
+//     ordenados -- diferente do retorno `std::set<std::string>` do `split_dedup_sorted()`, esse
+//     dedup+sort final não é trabalho desta função: quem chama alimenta cada token no
+//     `Element::add_class` um de cada vez, e `Element::classes()` (um
+//     `std::set<std::string, std::less<>>`, `dom_tree.hpp`) já deduplica e ordena por construção
+//     -- fazer isso duas vezes aqui seria trabalho redundante, não segurança extra.
+std::vector<std::string_view> split_class_tokens(std::string_view s) {
+  auto is_other_ws = [](char c) { return c == '\t' || c == '\n' || c == '\r'; };
   std::vector<std::string_view> out;
-  std::size_t i = 0;
-  while (i < s.size()) {
-    while (i < s.size() && is_whitespace_char(s[i])) {
-      ++i;
+  const std::size_t n = s.size();
+  std::size_t pos = 0;
+  while (pos <= n) {
+    const std::size_t next_space = s.find(' ', pos);
+    const std::size_t end = (next_space == std::string_view::npos) ? n : next_space;
+    std::size_t start = pos;
+    while (start < end && is_other_ws(s[start])) {
+      ++start;
     }
-    std::size_t start = i;
-    while (i < s.size() && !is_whitespace_char(s[i])) {
-      ++i;
+    std::size_t trimmed_end = end;
+    while (trimmed_end > start && is_other_ws(s[trimmed_end - 1])) {
+      --trimmed_end;
     }
-    if (i > start) {
-      out.push_back(s.substr(start, i - start));
+    if (trimmed_end > start) {
+      out.push_back(s.substr(start, trimmed_end - start));
     }
+    if (next_space == std::string_view::npos) {
+      break;
+    }
+    pos = next_space + 1;
   }
   return out;
 }
@@ -859,7 +911,7 @@ private:
       element.set_id(id_attr->value);
     }
     if (class_attr != nullptr) {
-      for (std::string_view token : split_whitespace(class_attr->value)) {
+      for (std::string_view token : split_class_tokens(class_attr->value)) {
         element.add_class(token);
       }
     }

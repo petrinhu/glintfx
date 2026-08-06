@@ -16,6 +16,8 @@
 #include <string>
 #include <string_view>
 
+#include "uix/dom/dumper.hpp"
+
 namespace {
 
 int g_failures = 0;
@@ -329,6 +331,85 @@ void test_duplicate_id_class_last_wins() {
         "occurrence are gone, not merged");
 }
 
+// ---------------------------------------------------------------------------
+// EN: Case 12 -- UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05): `class` splits on LITERAL SPACE ONLY
+//     (uix-dom.md section 7, revised `UIX-CLASS-SPLIT-SPEC`), not the 4-char whitespace set --
+//     end-to-end, text through the dump. Two sub-cases:
+//       (a) `class="a<TAB>b"` (no space at all) -- ONE class, the tab embedded and preserved.
+//       (b) `class="<TAB>b a<TAB>a "` -- the EXACT fixture the RmlUi-linked oracle
+//           (`glintfx/src/rml/dom_dump_determinism_sanity.cpp`'s F2 case) uses, reproduced here on
+//           this module's OWN parser+tree+dumper to prove parity: leading tab in the first
+//           space-delimited segment is trimmed ("<TAB>b" -> "b"), the tab embedded between the
+//           two 'a's survives ("a<TAB>a" stays "a\ta"), trailing space produces no extra token.
+//           Expected CLASS line is byte-identical to F2's: "a\ta b" (sorted ascending byte-wise,
+//           0x61 0x09 0x61 < 0x62).
+// PT: Caso 12 -- UIX-CLASS-SPLIT-2 (RMLX-1, 2026-08-05): `class` separa por ESPAÇO LITERAL
+//     APENAS (seção 7 do uix-dom.md, revisada pela `UIX-CLASS-SPLIT-SPEC`), não o conjunto de 4
+//     caracteres de whitespace -- ponta a ponta, do texto até o dump. Dois subcasos:
+//       (a) `class="a<TAB>b"` (sem espaço nenhum) -- UMA classe, o tab embutido preservado.
+//       (b) `class="<TAB>b a<TAB>a "` -- a fixture EXATA que o oráculo linkado ao RmlUi (o caso
+//           F2 do `glintfx/src/rml/dom_dump_determinism_sanity.cpp`) usa, reproduzida aqui no
+//           parser+árvore+dumper PRÓPRIOS deste módulo pra provar paridade: o tab líder no
+//           primeiro segmento delimitado por espaço é aparado ("<TAB>b" -> "b"), o tab embutido
+//           entre os dois 'a' sobrevive ("a<TAB>a" continua "a\ta"), o espaço final não produz
+//           token extra. A linha CLASS esperada é byte-idêntica à do F2: "a\ta b" (ordenada
+//           ascendente byte-a-byte, 0x61 0x09 0x61 < 0x62).
+// ---------------------------------------------------------------------------
+void test_class_split_literal_space_only() {
+  using glintfx::uix::dump_document;
+
+  // (a) No literal space at all -- one class, tab embedded and preserved.
+  {
+    ParseResult r = parse_document("<rml><body><div class=\"a\tb\"></div></body></rml>");
+    if (!expect_ok(r, "class-split(a): parse ok")) return;
+    Element& body = r.document->body();
+    check(body.child_count() == 1, "class-split(a): body has 1 child");
+    if (body.child_count() != 1) return;
+    auto* div = glintfx::uix::as_element(body.children()[0].get());
+    check(div != nullptr, "class-split(a): child is Element");
+    if (div == nullptr) return;
+
+    check(div->classes().size() == 1,
+          "class-split(a): exactly ONE class -- no literal space means no split point");
+    check(div->has_class("a\tb"),
+          "class-split(a): the class is 'a\\tb' with the tab embedded, not split into 'a'+'b'");
+
+    const std::string dump = dump_document(*r.document);
+    check(dump.find("body/0 CLASS a\\tb\n") != std::string::npos,
+          "class-split(a): dump CLASS line has the escaped embedded tab, 'a\\tb'");
+  }
+
+  // (b) F2 parity fixture: "\tb a\ta " -- leading tab trimmed, embedded tab kept, trailing space
+  //     produces no extra token. Same source dom_dump_determinism_sanity.cpp's F2 exercises
+  //     against the REAL RmlUi-linked oracle; reproduced here against this module's own
+  //     parser+tree+dumper for cross-module parity.
+  {
+    ParseResult r = parse_document(
+        "<rml><body><div id=\"w\" class=\"\tb a\ta \"></div></body></rml>");
+    if (!expect_ok(r, "class-split(b): parse ok")) return;
+    Element& body = r.document->body();
+    if (body.child_count() != 1) {
+      check(false, "class-split(b): body has 1 child");
+      return;
+    }
+    auto* div = glintfx::uix::as_element(body.children()[0].get());
+    check(div != nullptr, "class-split(b): child is Element");
+    if (div == nullptr) return;
+
+    check(div->classes().size() == 2,
+          "class-split(b): exactly 2 classes -- 'a\\ta' and 'b' (leading tab trimmed, trailing "
+          "space produces no 3rd empty token)");
+    check(div->has_class("a\ta"),
+          "class-split(b): 'a\\ta' present with the embedded tab preserved");
+    check(div->has_class("b"), "class-split(b): 'b' present, its leading tab trimmed away");
+
+    const std::string dump = dump_document(*r.document);
+    check(dump.find("body/0 CLASS a\\ta b\n") != std::string::npos,
+          "class-split(b): dump CLASS line 'a\\ta b' -- byte-identical to F2's oracle output "
+          "(dom_dump_determinism_sanity.cpp)");
+  }
+}
+
 } // namespace
 
 int main() {
@@ -343,6 +424,7 @@ int main() {
   test_self_closed_head();
   test_tag_case_folding();
   test_duplicate_id_class_last_wins();
+  test_class_split_literal_space_only();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "parser_tokens_sanity: %d assertion(s) FAILED\n", g_failures);

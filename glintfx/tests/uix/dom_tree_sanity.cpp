@@ -204,14 +204,25 @@ void test_element_id_empty_equals_absent() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: Case 6 -- classes are a canonical set: sorted ascending byte-wise, deduplicated, and a
-//     multi-whitespace token is rejected (single-token invariant, not the raw split -- S3's job).
-//     Mirrors uix-dom.md section 7's own worked example: source "wide highlighted" dumps as
-//     "highlighted wide" ('h' 0x68 sorts before 'w' 0x77).
+// EN: Case 6 -- classes are a canonical set: sorted ascending byte-wise, deduplicated, and the
+//     single-token invariant (not the raw split -- S3's job) is checked against uix-dom.md
+//     section 7's REVISED (2026-08-05, `UIX-CLASS-SPLIT-2`) rule: reject a literal SPACE anywhere
+//     (the sole RmlUi delimiter) and a token made ENTIRELY of the other 3 whitespace bytes, but
+//     ACCEPT `\t`/`\n`/`\r` EMBEDDED between real content -- `"a\tb"` is a legitimate single RmlUi
+//     class token (`StringUtilities::ExpandString(raw, ' ')` captures it verbatim, see
+//     dom_tree.hpp's own header comment on `add_class`). Mirrors uix-dom.md section 7's own worked
+//     example: source "wide highlighted" dumps as "highlighted wide" ('h' 0x68 sorts before 'w'
+//     0x77).
 // PT: Caso 6 -- classes são um conjunto canônico: ordenado ascendente byte-a-byte, deduplicado, e
-//     um token com whitespace embutido é rejeitado (invariante de token-único, não a separação
-//     crua -- trabalho da S3). Espelha o próprio exemplo trabalhado da seção 7 do uix-dom.md:
-//     fonte "wide highlighted" dumpa como "highlighted wide" ('h' 0x68 ordena antes de 'w' 0x77).
+//     o invariante de token-único (não a separação crua -- trabalho da S3) é checado contra a
+//     regra REVISADA (2026-08-05, `UIX-CLASS-SPLIT-2`) da seção 7 do uix-dom.md: rejeita um
+//     ESPAÇO literal em qualquer posição (o único delimitador do RmlUi) e um token feito
+//     INTEIRAMENTE dos outros 3 bytes de whitespace, mas ACEITA `\t`/`\n`/`\r` EMBUTIDO entre
+//     conteúdo real -- `"a\tb"` é um token de classe único legítimo do RmlUi
+//     (`StringUtilities::ExpandString(raw, ' ')` captura ele verbatim, ver o próprio comentário de
+//     cabeçalho do `add_class` no dom_tree.hpp). Espelha o próprio exemplo trabalhado da seção 7
+//     do uix-dom.md: fonte "wide highlighted" dumpa como "highlighted wide" ('h' 0x68 ordena antes
+//     de 'w' 0x77).
 // ---------------------------------------------------------------------------
 void test_element_classes_sorted_deduped_single_token() {
   Element el("div");
@@ -219,13 +230,29 @@ void test_element_classes_sorted_deduped_single_token() {
   check(el.add_class("highlighted"), "add_class('highlighted'): accepted");
   check(!el.add_class("wide"), "add_class('wide') again: duplicate token rejected");
   check(!el.add_class(""), "add_class(''): empty token rejected");
-  check(!el.add_class("two words"), "add_class('two words'): embedded whitespace rejected");
+  check(!el.add_class("two words"),
+        "add_class('two words'): literal space anywhere rejected -- space is the RmlUi "
+        "class-list delimiter, UIX-CLASS-SPLIT-2");
+  check(el.add_class("a\tb"),
+        "add_class('a\\tb'): EMBEDDED tab accepted -- upstream ExpandString(raw, ' ') captures "
+        "it verbatim, UIX-CLASS-SPLIT-2");
+  check(el.has_class("a\tb"), "has_class('a\\tb'): the embedded-tab token round-trips");
+  check(!el.add_class("\t"),
+        "add_class('\\t'): a token made ENTIRELY of the other 3 whitespace bytes is still "
+        "rejected -- ExpandString never captures a run of only those as a token");
+  check(!el.add_class("\n\r"),
+        "add_class('\\n\\r'): same rejection for a multi-byte all-whitespace (non-space) run");
 
-  check(el.classes().size() == 2, "classes(): exactly 2 distinct tokens (dedup worked)");
+  check(el.classes().size() == 3,
+        "classes(): exactly 3 distinct tokens ('wide', 'highlighted', "
+        "'a\\tb' -- dedup worked, the 2 rejected calls added nothing)");
   auto it = el.classes().begin();
-  check_eq(*it, "highlighted", "classes() iteration order [0]: 'highlighted' (byte-wise 'h'<'w')");
+  check_eq(*it, "a\tb", "classes() iteration order [0]: 'a\\tb' (byte-wise 'a'=0x61 sorts first)");
   ++it;
-  check_eq(*it, "wide", "classes() iteration order [1]: 'wide'");
+  check_eq(*it, "highlighted",
+           "classes() iteration order [1]: 'highlighted' (byte-wise 'h'<'w')");
+  ++it;
+  check_eq(*it, "wide", "classes() iteration order [2]: 'wide'");
 
   check(el.has_class("wide"), "has_class('wide'): true");
   check(!el.has_class("absent"), "has_class('absent'): false");

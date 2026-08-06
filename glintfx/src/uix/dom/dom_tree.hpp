@@ -516,21 +516,70 @@ public:
   bool has_id() const;
   void set_id(std::string new_id);
 
-  // EN: `cls` must be a single, already-split token (no embedded whitespace) -- returns `false`
-  //     (no-op) for an empty token or one containing any of the 4 whitespace characters uix-dom.md
-  //     section 7 splits on; the CALLER (`S3`) is the one that splits a raw `class="a b"` attribute
-  //     value into individual tokens before calling this, mirroring lexer.hpp's own "the corpus
-  //     decides, don't guess a transform this layer was not asked to do" discipline -- see this
-  //     file's header comment for why this single check is a tree-structure invariant, not a
-  //     grammar re-validation.
-  // PT: `cls` precisa ser um único token já-separado (sem whitespace embutido) -- retorna `false`
-  //     (no-op) pra um token vazio ou que contenha qualquer um dos 4 caracteres de whitespace em
-  //     que a seção 7 do uix-dom.md separa; QUEM CHAMA (a `S3`) é quem separa um valor de atributo
-  //     `class="a b"` cru em tokens individuais antes de chamar isto, espelhando a mesma
-  //     disciplina "o corpus decide, não chute uma transformação que esta camada não foi pedida
-  //     pra fazer" do próprio lexer.hpp -- ver o comentário de cabeçalho deste arquivo pra por que
-  //     esta única checagem é um invariante de estrutura-de-árvore, não uma revalidação de
-  //     gramática.
+  // EN: `cls` must be a single, already-split token -- returns `false` (no-op) for:
+  //       (1) an EMPTY token (`cls.empty()`) -- there is no such thing as "the empty class".
+  //       (2) a token containing a literal SPACE (`' '`, 0x20) ANYWHERE -- space is upstream
+  //           RmlUi's sole class-list delimiter (`ElementStyle::SetClassNames`'s
+  //           `StringUtilities::ExpandString(classes, class_names, ' ')`,
+  //           `examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`; see uix-dom.md section 7,
+  //           revised 2026-08-05, `UIX-CLASS-SPLIT-SPEC`). A token that still contains a space
+  //           means the CALLER (`S3`) failed to split on it -- a caller bug this invariant
+  //           catches, not a legitimate RmlUi class name.
+  //       (3) a token made ENTIRELY of the other 3 whitespace bytes (`\t`/`\n`/`\r`, no space
+  //           per (2), and nothing else) -- upstream's `ExpandString` never actually captures a
+  //           run of ONLY those 3 bytes as a token: its scan only advances `start_ptr`/`end_ptr`
+  //           on a NON-whitespace byte, so a segment with nothing else degenerates to "no token
+  //           captured there" (an empty/skipped delimiter run upstream, per uix-dom.md section
+  //           7's ledger row dated 2026-08-05) -- never a real single-token class this tree
+  //           should hold. Equivalent to `std::all_of(cls.begin(), cls.end(),
+  //           is_whitespace_char)` reusing the SAME 4-char predicate as (2)/section 6, since (2)
+  //           already ruled out the space case, only `\t`/`\n`/`\r` are left to be "entirely".
+  //     Accepted (unlike the pre-`UIX-CLASS-SPLIT-2` version of this check): a token with
+  //     `\t`/`\n`/`\r` EMBEDDED between two non-whitespace bytes, e.g. `"a\tb"` -- upstream's
+  //     `ExpandString` DOES capture that whole span verbatim (the tab sits between two bytes its
+  //     scan already captured, so the emitted token is a contiguous slice of the original string
+  //     including the tab -- see uix-dom.md section 7's own "`a\ta` survives, `\tb` becomes `b`"
+  //     worked distinction). Rejecting `"a\tb"` would have been THIS tree's own divergence from
+  //     RmlUi, not a rule RmlUi itself enforces -- `UIX-CLASS-SPLIT-2` (RMLX-1, 2026-08-05) closed
+  //     that gap. The CALLER (`S3`) is still the one that cuts a raw `class="a b"` attribute value
+  //     into individual segments before calling this (parser.cpp's own `split_class_tokens`,
+  //     replicating `ExpandString(raw, ' ')` byte for byte) -- this single check remains a
+  //     TREE-STRUCTURE invariant ("every member of this element's class SET is a single,
+  //     already-split token"), not a grammar re-validation; see this file's header comment for why
+  //     that distinction matters.
+  // PT: `cls` precisa ser um único token já-separado -- retorna `false` (no-op) pra:
+  //       (1) um token VAZIO (`cls.empty()`) -- não existe "a classe vazia".
+  //       (2) um token contendo um ESPAÇO literal (`' '`, 0x20) EM QUALQUER POSIÇÃO -- espaço é o
+  //           único delimitador de lista-de-classe do RmlUi upstream
+  //           (`ElementStyle::SetClassNames`'s `StringUtilities::ExpandString(classes,
+  //           class_names, ' ')`, `examples/RmlUi/Source/Core/ElementStyle.cpp:580-583`; ver
+  //           seção 7 do uix-dom.md, revisada 2026-08-05, `UIX-CLASS-SPLIT-SPEC`). Um token que
+  //           ainda contém espaço significa que QUEM CHAMA (a `S3`) falhou em separar por ele --
+  //           um bug de chamador que este invariante pega, não um nome de classe legítimo do
+  //           RmlUi.
+  //       (3) um token feito INTEIRAMENTE dos outros 3 bytes de whitespace (`\t`/`\n`/`\r`, sem
+  //           espaço pelo item (2), e nada mais) -- o `ExpandString` upstream nunca captura de
+  //           fato um run de SÓ esses 3 bytes como token: o scan dele só avança
+  //           `start_ptr`/`end_ptr` num byte NÃO-whitespace, então um segmento sem mais nada
+  //           degenera pra "nenhum token capturado ali" (um run de delimitador vazio/pulado
+  //           upstream, pela própria linha do ledger da seção 7 do uix-dom.md datada de
+  //           2026-08-05) -- nunca uma classe de token-único de verdade que esta árvore deveria
+  //           guardar. Equivalente a `std::all_of(cls.begin(), cls.end(), is_whitespace_char)`
+  //           reaproveitando o MESMO predicado de 4 caracteres do item (2)/seção 6, já que o item
+  //           (2) já descartou o caso de espaço, só sobram `\t`/`\n`/`\r` pra serem "inteiramente".
+  //     Aceito (diferente da versão pré-`UIX-CLASS-SPLIT-2` desta checagem): um token com
+  //     `\t`/`\n`/`\r` EMBUTIDO entre dois bytes não-whitespace, ex.: `"a\tb"` -- o `ExpandString`
+  //     upstream CAPTURA esse span inteiro verbatim (o tab fica entre dois bytes que o scan já
+  //     capturou, então o token emitido é uma fatia contígua da string original incluindo o tab --
+  //     ver a própria distinção trabalhada "`a\ta` sobrevive, `\tb` vira `b`" da seção 7 do
+  //     uix-dom.md). Rejeitar `"a\tb"` teria sido uma divergência DESTA árvore em relação ao
+  //     RmlUi, não uma regra que o próprio RmlUi impõe -- a `UIX-CLASS-SPLIT-2` (RMLX-1,
+  //     2026-08-05) fechou essa lacuna. QUEM CHAMA (a `S3`) continua sendo quem corta um valor de
+  //     atributo `class="a b"` cru em segmentos individuais antes de chamar isto (o próprio
+  //     `split_class_tokens` do parser.cpp, replicando `ExpandString(raw, ' ')` byte a byte) --
+  //     esta única checagem continua sendo um invariante de ESTRUTURA-DE-ÁRVORE ("todo membro do
+  //     conjunto de classe deste elemento é um token único, já separado"), não uma revalidação de
+  //     gramática; ver o comentário de cabeçalho deste arquivo pra por que essa distinção importa.
   bool has_class(std::string_view cls) const;
   bool add_class(std::string_view cls);
   bool remove_class(std::string_view cls);

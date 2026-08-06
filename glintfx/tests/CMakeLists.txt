@@ -4121,6 +4121,170 @@ add_test(NAME rcss_dump_corpus_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: `UIX-STYLE-FORA-DO-GATE` -- wires the glintfx::uix::style module (glintfx/src/uix/style/,
+#     lexer/property_registry/shorthand/parser/value_compute) and its own 9 test executables
+#     (glintfx/tests/uix_style/) into THIS suite -- the one tools/preci.sh and .github/workflows/
+#     ci.yml actually run. Before this block the module was reachable ONLY by configuring
+#     glintfx/src/uix/style/ as its own standalone CMake project by hand; nothing here compiled
+#     it, so a broken module (a CMakeLists.txt referencing an untracked .cpp, a syntax error, a
+#     failing test) could sit on `main` behind an all-green CI run indefinitely -- measured, not
+#     hypothetical: glintfx/src/uix/style/CMakeLists.txt referenced value_compute.cpp while it was
+#     still untracked (resolved by UIX-VALUE-COMPUTE's own commit), and neither this file nor
+#     tools/preci.sh nor ci.yml noticed, because none of them built that module.
+#
+#     Mirrors dom_dump_differential_oracle's own precedent immediately above in this same file
+#     (RMLX-1/S7's comment block): list the module's OWN .cpp sources DIRECTLY in an add_library()
+#     here, rather than add_subdirectory(../src/uix/style) -- that directory is a STANDALONE CMake
+#     project with its own project() call and its own enable_testing()/tests subtree (see its own
+#     header comment for why it deliberately stays out of glintfx/CMakeLists.txt's graph, which
+#     triggers FetchContent(RmlUi) unconditionally); add_subdirectory() would drag that whole
+#     second project (a second `project()` call, a duplicate `glintfx_uix_style` target name, its
+#     own ~9 tests under DIFFERENT ctest names) into this build, none of which this slice wants.
+#     A direct source list has none of those side effects and keeps the standalone module's own
+#     "configures in a fraction of a second, zero RmlUi/GLFW/GL" property intact where it matters
+#     (its OWN build, untouched by this block existing).
+#
+#     ONE static library, `glintfx_uix_style_gate`, compiles the 5 module sources ONCE; all 9 test
+#     executables below link it instead of each relisting the 5 sources (which dom_dump_
+#     differential_oracle's own single-executable precedent didn't need to solve, since it is only
+#     one executable) -- keeps the added translation-unit count to 5 (library) + 9 (one small
+#     test .cpp each) = 14 small, RmlUi/GLFW/GL-free TUs on a from-scratch configure, not 5*9=45.
+#     `target_include_directories(... PUBLIC ${CMAKE_SOURCE_DIR}/src)` matches
+#     glintfx/src/uix/style/CMakeLists.txt's own `${CMAKE_CURRENT_SOURCE_DIR}/../..` (both resolve
+#     to glintfx/src/ as the include root), so every `#include "uix/style/lexer.hpp"` line in the
+#     module and its tests needs ZERO changes to compile here.
+#
+#     The symbol-collision risk this module's own header comment (glintfx/src/uix/style/
+#     CMakeLists.txt) flags is about a FUTURE RMLX-10/11 wave that links BOTH glintfx::uix::style
+#     and glintfx::uix (the flat DOM namespace) into the SAME final `glintfx` static target --
+#     `Lexer`/`Token`/`TokenKind` exist in both namespaces today. That collision does not apply
+#     here: `glintfx_uix_style_gate` links into 9 test-only executables, none of which also links
+#     `glintfx_uix_dom`'s sources (the DOM sources in this file are folded into
+#     dom_dump_differential_oracle ALONE, a completely different executable) -- verified, not
+#     assumed, per this slice's own acceptance criteria.
+#
+#     Test names are UNCHANGED from glintfx/tests/uix_style/CMakeLists.txt (uix_style_lexer_
+#     tokens_sanity, etc.) -- same .cpp files, reused verbatim (byte-identical, not forked), just
+#     reached by a second build graph now. GLINTFX_UIX_STYLE_TESTS_DIR/_DEMOS_DIR/_S3_FIXTURES_DIR/
+#     _UA_STYLESHEET compile definitions mirror the exact same absolute SOURCE-tree paths the
+#     standalone module's own CMakeLists.txt resolves (glintfx/tests, glintfx/demos/showcase,
+#     glintfx/src/uix/dom/test_fixtures, glintfx/src/ua_stylesheet.hpp respectively) -- just spelled
+#     from THIS file's own ${CMAKE_CURRENT_SOURCE_DIR}(=glintfx/tests)/${CMAKE_SOURCE_DIR}(=glintfx)
+#     instead of the standalone file's own ${CMAKE_CURRENT_SOURCE_DIR}(=glintfx/tests/uix_style).
+#     No `run_xvfb.cmake` wrapper: this module links zero GL/GLFW/RmlUi, so (like every
+#     uix_style_* test in the standalone build) there is no display to fake.
+# PT: `UIX-STYLE-FORA-DO-GATE` -- amarra o módulo glintfx::uix::style (glintfx/src/uix/style/,
+#     lexer/property_registry/shorthand/parser/value_compute) e os 9 executáveis de teste PRÓPRIOS
+#     dele (glintfx/tests/uix_style/) nesta suíte -- a que o tools/preci.sh e o .github/workflows/
+#     ci.yml de fato rodam. Antes deste bloco o módulo só era alcançável configurando
+#     glintfx/src/uix/style/ como projeto CMake standalone à mão; nada aqui o compilava, então um
+#     módulo quebrado (um CMakeLists.txt referenciando um .cpp não rastreado, um erro de sintaxe,
+#     um teste falhando) podia ficar no `main` atrás de um CI inteiramente verde indefinidamente --
+#     medido, não hipotético: o glintfx/src/uix/style/CMakeLists.txt referenciou o
+#     value_compute.cpp enquanto ele ainda estava não-rastreado (resolvido pelo próprio commit da
+#     UIX-VALUE-COMPUTE), e nem este arquivo, nem o tools/preci.sh, nem o ci.yml perceberam, porque
+#     nenhum dos três compilava aquele módulo.
+#
+#     Espelha o próprio precedente do dom_dump_differential_oracle logo acima neste mesmo arquivo
+#     (o bloco de comentário da RMLX-1/S7): listar os PRÓPRIOS fontes .cpp do módulo DIRETAMENTE
+#     num add_library() aqui, em vez de add_subdirectory(../src/uix/style) -- aquele diretório é um
+#     projeto CMake STANDALONE, com project() próprio e enable_testing()/subárvore de testes
+#     própria (ver o comentário de cabeçalho dele pro motivo de ficar deliberadamente fora do grafo
+#     do glintfx/CMakeLists.txt, que dispara FetchContent(RmlUi) incondicionalmente);
+#     add_subdirectory() arrastaria aquele segundo projeto inteiro (uma segunda chamada
+#     project(), um nome de alvo `glintfx_uix_style` duplicado, os ~9 testes PRÓPRIOS dele sob
+#     nomes ctest DIFERENTES) pra dentro deste build, nada disso desejado por esta fatia. Uma lista
+#     direta de fontes não tem nenhum desses efeitos colaterais e mantém intacta a própria
+#     propriedade "configura numa fração de segundo, zero RmlUi/GLFW/GL" do módulo standalone onde
+#     ela importa (no build DELE, não tocado pela existência deste bloco).
+#
+#     UMA biblioteca estática, `glintfx_uix_style_gate`, compila os 5 fontes do módulo UMA VEZ;
+#     os 9 executáveis de teste abaixo linkam ela em vez de cada um relistar os 5 fontes (algo que
+#     o próprio precedente de executável-único do dom_dump_differential_oracle não precisou
+#     resolver, já que é só um executável) -- mantém a contagem de unidades-de-tradução somadas em
+#     5 (biblioteca) + 9 (um .cpp de teste pequeno cada) = 14 TUs pequenas, livres de
+#     RmlUi/GLFW/GL, numa configuração do zero, não 5*9=45.
+#     `target_include_directories(... PUBLIC ${CMAKE_SOURCE_DIR}/src)` casa com o próprio
+#     `${CMAKE_CURRENT_SOURCE_DIR}/../..` do glintfx/src/uix/style/CMakeLists.txt (os dois resolvem
+#     pra glintfx/src/ como raiz de include), então toda linha `#include "uix/style/lexer.hpp"` do
+#     módulo e dos testes dele precisa de ZERO mudança pra compilar aqui.
+#
+#     O risco de colisão de símbolo que o próprio comentário de cabeçalho deste módulo
+#     (glintfx/src/uix/style/CMakeLists.txt) sinaliza é sobre uma FUTURA onda RMLX-10/11 que linka
+#     TANTO glintfx::uix::style QUANTO glintfx::uix (o namespace plano do DOM) no MESMO alvo static
+#     `glintfx` final -- `Lexer`/`Token`/`TokenKind` existem nos dois namespaces hoje. Essa colisão
+#     NÃO se aplica aqui: `glintfx_uix_style_gate` linka em 9 executáveis só-de-teste, nenhum dos
+#     quais também linka os fontes do `glintfx_uix_dom` (os fontes do DOM neste arquivo são
+#     dobrados no dom_dump_differential_oracle SOZINHO, um executável completamente diferente) --
+#     verificado, não presumido, conforme o próprio critério de aceite desta fatia.
+#
+#     Nomes de teste INALTERADOS em relação ao glintfx/tests/uix_style/CMakeLists.txt
+#     (uix_style_lexer_tokens_sanity etc.) -- os MESMOS .cpp, reusados verbatim (byte-idênticos,
+#     não forkados), só alcançados por um segundo grafo de build agora. As definições de compilação
+#     GLINTFX_UIX_STYLE_TESTS_DIR/_DEMOS_DIR/_S3_FIXTURES_DIR/_UA_STYLESHEET espelham os MESMOS
+#     caminhos absolutos NA ÁRVORE-FONTE que o próprio CMakeLists.txt do módulo standalone resolve
+#     (glintfx/tests, glintfx/demos/showcase, glintfx/src/uix/dom/test_fixtures,
+#     glintfx/src/ua_stylesheet.hpp respectivamente) -- só escritos a partir do PRÓPRIO
+#     ${CMAKE_CURRENT_SOURCE_DIR}(=glintfx/tests)/${CMAKE_SOURCE_DIR}(=glintfx) deste arquivo em vez
+#     do ${CMAKE_CURRENT_SOURCE_DIR}(=glintfx/tests/uix_style) do arquivo standalone.
+#     Sem wrapper `run_xvfb.cmake`: este módulo linka zero GL/GLFW/RmlUi, então (como todo teste
+#     uix_style_* no build standalone) não há display nenhum pra fingir.
+# ---------------------------------------------------------------------------
+add_library(glintfx_uix_style_gate STATIC
+  ${CMAKE_SOURCE_DIR}/src/uix/style/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/property_registry.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/shorthand.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/parser.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp)
+target_include_directories(glintfx_uix_style_gate PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(uix_style_lexer_tokens_sanity uix_style/lexer_tokens_sanity.cpp)
+target_link_libraries(uix_style_lexer_tokens_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_lexer_tokens_sanity COMMAND uix_style_lexer_tokens_sanity)
+
+add_executable(uix_style_lexer_hardening_sanity uix_style/lexer_hardening_sanity.cpp)
+target_link_libraries(uix_style_lexer_hardening_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_lexer_hardening_sanity COMMAND uix_style_lexer_hardening_sanity)
+
+add_executable(uix_style_lexer_corpus_sanity uix_style/lexer_corpus_sanity.cpp)
+target_link_libraries(uix_style_lexer_corpus_sanity PRIVATE glintfx_uix_style_gate)
+target_compile_definitions(uix_style_lexer_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+add_test(NAME uix_style_lexer_corpus_sanity COMMAND uix_style_lexer_corpus_sanity)
+
+add_executable(uix_style_property_registry_sanity uix_style/property_registry_sanity.cpp)
+target_link_libraries(uix_style_property_registry_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_property_registry_sanity COMMAND uix_style_property_registry_sanity)
+
+add_executable(uix_style_shorthand_expansion_sanity uix_style/shorthand_expansion_sanity.cpp)
+target_link_libraries(uix_style_shorthand_expansion_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_shorthand_expansion_sanity COMMAND uix_style_shorthand_expansion_sanity)
+
+add_executable(uix_style_parser_selector_sanity uix_style/parser_selector_sanity.cpp)
+target_link_libraries(uix_style_parser_selector_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_parser_selector_sanity COMMAND uix_style_parser_selector_sanity)
+
+add_executable(uix_style_parser_atrule_sanity uix_style/parser_atrule_sanity.cpp)
+target_link_libraries(uix_style_parser_atrule_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_parser_atrule_sanity COMMAND uix_style_parser_atrule_sanity)
+
+add_executable(uix_style_parser_corpus_sanity uix_style/parser_corpus_sanity.cpp)
+target_link_libraries(uix_style_parser_corpus_sanity PRIVATE glintfx_uix_style_gate)
+target_compile_definitions(uix_style_parser_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+add_test(NAME uix_style_parser_corpus_sanity COMMAND uix_style_parser_corpus_sanity)
+
+add_executable(uix_style_value_compute_sanity uix_style/value_compute_sanity.cpp)
+target_link_libraries(uix_style_value_compute_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_value_compute_sanity COMMAND uix_style_value_compute_sanity)
+
+# ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED
 #     "ripple()" decorator + its backdrop-capture machinery (both now inside the
 #     GLINTFX_MODULE_FX-gated glintfx_fx OBJECT library, src/fx/effects_gl3.cpp) -- gated

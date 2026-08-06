@@ -386,6 +386,117 @@ void test_mismatched_close_name_not_validated() {
   expect_kind(lex, TokenKind::EndOfFile, "mismatched-close: EndOfFile");
 }
 
+// ---------------------------------------------------------------------------
+// EN: Case 10 -- `UIX-LEXER-OPACO`: `<style>`'s content is CDATA-like at THIS tokenizer, mirroring
+//     upstream RmlUi (`Factory.cpp:255-257` registers "script"/"style" as persistent CDATA tags;
+//     `BaseXMLParser.cpp:243-262` calls `ReadCDATA` right at the tokenizer layer, not a caller
+//     above it) -- see lexer.hpp's own header comment, "RESOLVED (UIX-LEXER-OPACO)" paragraph, for
+//     the full argument and declared teto. Source is the EXACT real-world byte sequence measured
+//     at offset 5428/line 85 of glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml
+//     ("~128dp << 228dp", pt-br prose meaning "much less than", inside an RCSS comment): a bare
+//     '<' immediately followed by another '<' is malformed markup ANYWHERE else in this grammar
+//     (see lexer_hardening_sanity.cpp's own malformed-input cases), but inside `<style>`'s content
+//     it is now just bytes, exactly like real upstream RmlUi already treats it.
+// PT: Caso 10 -- `UIX-LEXER-OPACO`: o conteúdo de `<style>` é tipo-CDATA NESTE tokenizador,
+//     espelhando o RmlUi upstream (`Factory.cpp:255-257` registra "script"/"style" como tags CDATA
+//     persistentes; `BaseXMLParser.cpp:243-262` chama `ReadCDATA` bem na camada de tokenizador, não
+//     um chamador acima dela) -- ver o próprio comentário de cabeçalho do lexer.hpp, parágrafo
+//     "RESOLVED (UIX-LEXER-OPACO)", pro argumento completo e o teto declarado. A fonte é a sequência
+//     de bytes EXATA do mundo real medida no offset 5428/linha 85 de
+//     glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml ("~128dp << 228dp", prosa pt-br
+//     significando "muito menor que", dentro de um comentário RCSS): um '<' cru seguido
+//     imediatamente de outro '<' é markup malformado em QUALQUER OUTRO lugar desta gramática (ver
+//     os próprios casos de input malformado do lexer_hardening_sanity.cpp), mas dentro do conteúdo
+//     de `<style>` agora são só bytes, exatamente como o RmlUi upstream real já trata.
+// ---------------------------------------------------------------------------
+void test_style_content_is_cdata_like() {
+  Lexer lex(
+      "<rml><head><style>#x { width: 110dp; } /* 128dp << 228dp */</style></head>"
+      "<body>ok</body></rml>");
+
+  expect_kind(lex, TokenKind::TagOpenStart, "style-cdata: <rml");
+  expect_kind(lex, TokenKind::TagOpenEnd, "style-cdata: rml >");
+  expect_kind(lex, TokenKind::TagOpenStart, "style-cdata: <head");
+  expect_kind(lex, TokenKind::TagOpenEnd, "style-cdata: head >");
+
+  Token style_open = expect_kind(lex, TokenKind::TagOpenStart, "style-cdata: <style");
+  check_eq(style_open.text, "style", "style-cdata: tag name");
+  expect_kind(lex, TokenKind::TagOpenEnd, "style-cdata: style >");
+
+  Token css = expect_kind(lex, TokenKind::Text,
+                          "style-cdata: the WHOLE body -- including the stray '<<' -- comes back "
+                          "as ONE Text token, never an Error");
+  check_eq(css.text, "#x { width: 110dp; } /* 128dp << 228dp */",
+           "style-cdata: content preserved byte-verbatim, including the literal '<<'");
+
+  Token style_close = expect_kind(lex, TokenKind::TagClose,
+                                  "style-cdata: </style> tokenized normally by the ordinary "
+                                  "scan_tag_close() once raw mode hands control back");
+  check_eq(style_close.text, "style", "style-cdata: close tag name");
+
+  expect_kind(lex, TokenKind::TagClose, "style-cdata: </head>");
+  expect_kind(lex, TokenKind::TagOpenStart, "style-cdata: <body");
+  expect_kind(lex, TokenKind::TagOpenEnd, "style-cdata: body >");
+  Token body_text = expect_kind(lex, TokenKind::Text, "style-cdata: body text");
+  check_eq(body_text.text, "ok", "style-cdata: body text content");
+  expect_kind(lex, TokenKind::TagClose, "style-cdata: </body>");
+  expect_kind(lex, TokenKind::TagClose, "style-cdata: </rml>");
+  expect_kind(lex, TokenKind::EndOfFile, "style-cdata: EndOfFile");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 11 -- `<script>` gets the identical treatment as `<style>` (both, and ONLY both, are
+//     upstream's own persistent-CDATA-tag list, `Factory.cpp:255-257`) -- case-folded tag-name
+//     match (`<SCRIPT>` qualifies too, mirroring upstream's own `StringUtilities::ToLower` fold
+//     before its `IsCDATATag` lookup, `BaseXMLParser.cpp:246-248`, and this repo's OWN
+//     `parser.cpp`'s existing `to_ascii_lower` fold for "head"/"body").
+// PT: Caso 11 -- `<script>` recebe o tratamento IDÊNTICO ao de `<style>` (os dois, e SÓ os dois,
+//     são a própria lista de tag-CDATA-persistente do upstream, `Factory.cpp:255-257`) --
+//     casamento de nome-de-tag com dobra de caixa (`<SCRIPT>` também qualifica, espelhando a
+//     própria dobra `StringUtilities::ToLower` do upstream antes do lookup `IsCDATATag`,
+//     `BaseXMLParser.cpp:246-248`, e a dobra `to_ascii_lower` já existente do PRÓPRIO
+//     `parser.cpp` deste repo pra "head"/"body").
+// ---------------------------------------------------------------------------
+void test_script_content_is_cdata_like_case_folded() {
+  Lexer lex("<SCRIPT>if (a < b && b < c) { }</SCRIPT>");
+
+  Token open = expect_kind(lex, TokenKind::TagOpenStart, "script-cdata: <SCRIPT");
+  check_eq(open.text, "SCRIPT",
+           "script-cdata: tag name preserves SOURCE case (case-fold is only "
+           "for the internal CDATA-tag-name comparison, not the token payload)");
+  expect_kind(lex, TokenKind::TagOpenEnd, "script-cdata: SCRIPT >");
+
+  Token js = expect_kind(lex, TokenKind::Text,
+                         "script-cdata: two stray '<' inside 'a < b && b < c' never error out");
+  check_eq(js.text, "if (a < b && b < c) { }", "script-cdata: JS-like content preserved verbatim");
+
+  Token close = expect_kind(lex, TokenKind::TagClose, "script-cdata: </SCRIPT>");
+  check_eq(close.text, "SCRIPT", "script-cdata: close tag name");
+  expect_kind(lex, TokenKind::EndOfFile, "script-cdata: EndOfFile");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 12 -- unterminated `<style>` content (no `</style` anywhere before EOF) is an honest,
+//     diagnosable `Error` -- fail-high, same discipline as `scan_comment()`'s own unterminated-
+//     comment case (lexer_hardening_sanity.cpp's `test_malformed_inputs_reject`), never a silent
+//     "ran off the end and produced EndOfFile anyway".
+// PT: Caso 12 -- conteúdo `<style>` não-terminado (nenhum `</style` em lugar nenhum antes do EOF) é
+//     um `Error` honesto e diagnosticável -- fail-high, mesma disciplina do próprio caso de
+//     comentário não-terminado do scan_comment() (test_malformed_inputs_reject do
+//     lexer_hardening_sanity.cpp), nunca um "correu até o fim e produziu EndOfFile mesmo assim"
+//     silencioso.
+// ---------------------------------------------------------------------------
+void test_style_content_unterminated_is_error() {
+  Lexer lex("<style>body{color:red}");
+  expect_kind(lex, TokenKind::TagOpenStart, "unterminated-style: TagOpenStart");
+  expect_kind(lex, TokenKind::TagOpenEnd, "unterminated-style: TagOpenEnd");
+  Token err = expect_kind(lex, TokenKind::Error,
+                          "unterminated-style: no '</style' before EOF -- Error, not EndOfFile");
+  Token again = lex.next();
+  check(again.kind == TokenKind::Error && again.text == err.text && again.offset == err.offset,
+        "unterminated-style: Error is sticky, same contract as every other Error in this lexer");
+}
+
 } // namespace
 
 int main() {
@@ -398,6 +509,9 @@ int main() {
   test_head_is_not_special_cased();
   test_tag_name_trailing_digit();
   test_mismatched_close_name_not_validated();
+  test_style_content_is_cdata_like();
+  test_script_content_is_cdata_like_case_folded();
+  test_style_content_unterminated_is_error();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "lexer_tokens_sanity: %d assertion(s) FAILED\n", g_failures);

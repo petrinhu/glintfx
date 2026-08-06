@@ -52,8 +52,11 @@
 //         `<link/>`/`<title>` as ordinary nested tags. The decision of WHETHER to consume this
 //         lexer's normal token stream inside `<head>`, or instead bypass it and slice the raw
 //         source directly (which is what uix-dom.md's `HEAD PRESENT` payload actually needs) is
-//         S3's to make -- this is the single biggest open point this slice hands to S3/S6b, see
-//         "Open point for S2/S3" at the bottom of this file.
+//         S3's to make -- `parser.cpp`'s `handle_head()`/`find_head_close()` took route (b) (see
+//         parser.hpp's own header comment), UNCHANGED by the paragraph below. Do not confuse this
+//         (head-BLOB opacity, still not this lexer's concern) with `<style>`/`<script>`-CONTENT
+//         opacity, which this lexer DOES now own -- see "RESOLVED (UIX-LEXER-OPACO)" further down
+//         this file for that narrower, tag-name-scoped, orthogonal decision.
 //       - DOCTYPE / XML declaration (`<?xml ... ?>`) / CDATA (`<![CDATA[ ... ]]>`). Zero
 //         occurrences in the corpus (`grep -l '<!\[CDATA\|<!DOCTYPE\|<?xml' glintfx/tests/*.rml
 //         glintfx/demos/**/*.rml` => no matches). Encountering `<!` NOT followed by `--`, or `<?`,
@@ -148,17 +151,96 @@
 //     whitespace byte was skipped since the last significant token) -- deliberately not added
 //     pre-emptively, per this file's own "the corpus decides" discipline.
 //
-//     OPEN POINT FOR S2/S3 (flagged here so both waves hit it deliberately, not by surprise):
-//     `<head>` opacity (uix-dom.md section 4) needs RAW, UN-TOKENIZED byte access from just after
-//     `<head>`'s `>` to just before `</head>`'s `<`. This lexer's public surface is a plain
-//     `next()` token stream with no such "give me the raw span instead" escape hatch -- S3, on
-//     seeing a `TagOpenStart{text="head"}` token, will need EITHER (a) a new `Lexer` method this
-//     slice does not add (e.g. `raw_until(std::string_view closing_tag)`), OR (b) to construct a
-//     SEPARATE, throwaway substring scan over the original source buffer using this token's own
-//     `offset`/`length` fields as a starting point, bypassing this `Lexer` instance entirely for
-//     that one span. This header exposes `offset`/`length` on every `Token` specifically so route
-//     (b) is possible without modifying this file -- but which route S3 actually takes is S3's
-//     decision to make, not pre-empted here.
+//     HEAD-BLOB OPEN POINT, RESOLVED BY S3 (kept for history): `<head>` opacity (uix-dom.md
+//     section 4) needs RAW, UN-TOKENIZED byte access from just after `<head>`'s `>` to just before
+//     `</head>`'s `<`. This lexer's public surface is a plain `next()` token stream with no such
+//     "give me the raw span instead" escape hatch -- S3 took route (b) below: `parser.cpp`'s
+//     `handle_head()` constructs a SEPARATE, throwaway substring scan (`find_head_close()`) over
+//     the original source buffer using the `TagOpenStart{text="head"}` token's own `offset`/
+//     `length` fields as a starting point, bypassing this `Lexer` instance entirely for that one
+//     span, then REBUILDS a fresh `Lexer` over the substring past `</head>`'s `>` (see parser.hpp's
+//     own header comment). This header exposes `offset`/`length` on every `Token` specifically so
+//     that route stays possible without modifying this file.
+//
+//     RESOLVED (UIX-LEXER-OPACO): `<style>`/`<script>` ARE CDATA-LIKE AT THIS TOKENIZER, MIRRORING
+//     UPSTREAM -- a DIFFERENT, narrower, orthogonal decision from the head-BLOB one just above (do
+//     not conflate the two: this one is tag-name-scoped and fires WHEREVER `<style>`/`<script>`
+//     appears, inside `<head>` or not; the one above is `<head>`-scoped and knows nothing about
+//     tag names inside it). The question this item was raised to settle -- "whose responsibility:
+//     a tolerant lexer, or a parser that assumes an opaque scan?" -- has a third, simpler answer,
+//     found by reading real upstream RmlUi instead of picking between the two framed options:
+//     upstream's OWN tokenizer decides this, not a caller reaching in above it. `Factory.cpp:255-
+//     257` registers exactly two tag names, "script" and "style", as persistent CDATA tags
+//     (`XMLParser::RegisterPersistentCDATATag`); `BaseXMLParser.cpp`'s own tokenizer
+//     (`ReadElement`, :243-262) checks `IsCDATATag` right after the opening tag's `>` and, if it
+//     matches, calls `ReadCDATA` (:349-390) instead of resuming ordinary tag scanning -- the SAME
+//     layer that recognises `<`/`>` delimiters in the first place switches its OWN mode, on a
+//     specific tag name, without any escape hatch or bypass mechanism needed on its public
+//     surface. This lexer now does the identical thing: `scan_in_tag()`'s `TagOpenEnd` branch
+//     checks whether the tag name captured at the matching `TagOpenStart` (`pending_tag_name_`)
+//     ASCII-case-folds to "style" or "script"; if so, `state_` becomes `RawCData` (not `Text`),
+//     and the NEXT `next()` call runs `scan_raw_cdata()`: a byte-wise forward scan (same shape as
+//     `scan_comment()`'s own `while (!starts_with_at(...))` loop, same `kMaxTokenBytes` ceiling
+//     applied to the accumulated span) that treats every byte as literal content until it finds
+//     the case-folded literal `"</style"`/`"</script"`, then hands control BACK to the ordinary
+//     tokenizer at that exact byte (`state_ = State::Text`) -- the closing tag itself is then
+//     tokenized completely normally by the EXISTING, UNMODIFIED `scan_tag_close()` (whitespace and
+//     `>` still validated, still fail-high on a malformed closer). This fix touches nothing about
+//     HOW a tag is recognised; it only changes WHEN raw bytes are handed out as one `Text` token
+//     instead of being re-entered as tag grammar.
+//
+//     Why the LEXER and not a caller-side raw scan (the shape this repo's own twin fix,
+//     `glintfx/src/rml/dom_dump.cpp`'s `locate_head_tag_span()`, and this repo's own
+//     `parser.cpp`'s `handle_head()`/`find_head_close()`, both use): `<style>`/`<script>` opacity
+//     is not scoped to `<head>` at all -- upstream's CDATA-tag registration is UNCONDITIONAL,
+//     wherever either tag appears -- so a lexer that only tolerated it inside `<head>` would still
+//     choke on a hypothetical (today, zero-occurrence at the top level) `<style>` inside `<body>`.
+//     Putting the mode switch at the layer that already owns `<`/`>` recognition needs no new
+//     escape hatch on this class's public surface (no `raw_until()` method, contra the OLD "Open
+//     point for S2/S3" text this paragraph replaces) and composes for free with every EXISTING
+//     caller of this `Lexer` -- including `parser.cpp`'s own post-`</head>` lexer rebuild, which
+//     re-enters ordinary `State::Text` scanning on a substring that could itself contain a
+//     `<style>`/`<script>` tag at the top level.
+//
+//     DECLARED, DELIBERATE SCOPE TETO (mirrors `dom_dump.cpp`'s own `locate_head_tag_span()`
+//     header comment's teto for the identical upstream mechanism -- kept coherent with that
+//     already-shipped precedent in this same repo, not re-derived independently):
+//       - Exactly two tag names enter raw mode, "style" and "script" -- the exact two, and ONLY
+//         those two, upstream's own `Factory.cpp:255-257` registers. A third name needs its own
+//         corpus-measured justification, the same "the corpus decides" discipline this header
+//         already applies to the entity table, the void-element list, and the namespace grammar.
+//       - The tag-NAME match that decides whether to enter raw mode is ASCII case-folded
+//         (`<STYLE>`/`<Script>` also qualify) -- matching upstream's own
+//         `StringUtilities::ToLower(tag_name)` before its `IsCDATATag` lookup
+//         (`BaseXMLParser.cpp:246-248`), and matching this repo's OWN `parser.cpp`'s existing
+//         `to_ascii_lower` fold for "head"/"body" tag-name comparisons.
+//       - The CLOSING search is a PLAIN, LITERAL, case-folded substring search for
+//         `"</style"`/`"</script"` -- NOT the tag-name-VERIFIED re-scan upstream's own `ReadCDATA`
+//         performs (`BaseXMLParser.cpp:365-388`: a `<...>` sequence found inside CDATA content is
+//         only accepted as the terminator if its OWN tag name, after stripping a leading `/`,
+//         lowercases to the registered CDATA tag name; anything else -- including an unrelated
+//         closing tag that happens to start with the same 7/8 bytes, e.g. a hypothetical
+//         `</styleFoo>` -- is folded back into the accumulated data and scanning continues). This
+//         is the EXACT SAME simplification `dom_dump.cpp`'s `locate_head_tag_span()` already
+//         declared for the identical upstream mechanism -- converged on for consistency with an
+//         already-shipped precedent in this same repo, not re-derived independently. Zero corpus
+//         fixture (60 measured 2026-08-06, see lexer_corpus_sanity.cpp) exercises the divergence
+//         this simplification would mis-handle.
+//       - `<![CDATA[ ... ]]>` sections remain OUT of this grammar entirely (unchanged -- see the
+//         DOCTYPE/XML-decl/CDATA bullet above), same "zero corpus occurrences, the frozen subset
+//         does not name it either" reasoning `dom_dump.cpp`'s own teto already gives for the
+//         identical exclusion.
+//       - A self-closed `<style/>`/`<script/>` (`TagSelfClose`, not `TagOpenEnd`) never enters raw
+//         mode -- there is no body to protect, mirroring upstream's own `ReadElement` only calling
+//         `ReadCDATA` when `section_opened` is true (`BaseXMLParser.cpp:200-208` vs. `:243-262`).
+//       - `<head>`-BLOB opacity (the paragraph above this one) is UNCHANGED -- this fix is
+//         narrower and orthogonal, protecting `<style>`/`<script>` content WHEREVER either tag
+//         appears, without this lexer ever becoming aware of the tag name `head`. `parser.cpp`'s
+//         `handle_head()` continues to bypass this Lexer's normal token stream entirely for
+//         `<head>`'s interior via its own `find_head_close()` raw scan, UNTOUCHED by this fix, and
+//         the dump format this repo's differential oracle checks byte-for-byte is likewise
+//         unchanged by it (`ctest -R differential` proven green both before and after, same SCOPE
+//         line: 16 fixtures compared, 0 divergent).
 // PT: RMLX-1/S1 -- tokenizador (lexer) para o subconjunto de RML congelado pelo
 //     docs/rmlx-subset.md. Este é o PRIMEIRO tijolo do DOM próprio da glintfx: uma passada
 //     mecânica de fluxo-de-bytes pra fluxo-de-tokens, SEM árvore, SEM semântica de atributo/id/
@@ -216,9 +298,13 @@
 //         qualquer outro elemento, recursando em `<style>`/`<link/>`/`<title>` como tags aninhadas
 //         comuns. A decisão de SE consumir o fluxo de tokens normal deste lexer dentro de
 //         `<head>`, ou em vez disso contornar e fatiar a fonte crua direto (que é o que o payload
-//         `HEAD PRESENT` do uix-dom.md de fato precisa) é da S3 tomar -- este é o maior ponto
-//         aberto único que esta fatia entrega pra S3/S6b, ver "Ponto aberto pra S2/S3" no final
-//         deste arquivo.
+//         `HEAD PRESENT` do uix-dom.md de fato precisa) é da S3 tomar -- o `handle_head()`/
+//         `find_head_close()` do `parser.cpp` tomou a rota (b) (ver o próprio comentário de
+//         cabeçalho do parser.hpp), INALTERADO pelo parágrafo abaixo. Não confundir isto
+//         (opacidade de BLOB de `<head>`, ainda não é preocupação deste lexer) com a opacidade de
+//         CONTEÚDO de `<style>`/`<script>`, que este lexer AGORA sim possui -- ver "RESOLVED
+//         (UIX-LEXER-OPACO)" mais adiante neste arquivo pra essa decisão mais estreita, escopada
+//         por nome-de-tag, ortogonal.
 //       - DOCTYPE / declaração XML (`<?xml ... ?>`) / CDATA (`<![CDATA[ ... ]]>`). Zero
 //         ocorrências no corpus (`grep -l '<!\[CDATA\|<!DOCTYPE\|<?xml' glintfx/tests/*.rml
 //         glintfx/demos/**/*.rml` => nenhum casamento). Encontrar `<!` NÃO seguido de `--`, ou
@@ -319,18 +405,103 @@
 //     significativo) -- deliberadamente não somada preventivamente, pela própria disciplina "o
 //     corpus decide" deste arquivo.
 //
-//     PONTO ABERTO PRA S2/S3 (sinalizado aqui pra as duas ondas baterem nele de propósito, não por
-//     surpresa): a opacidade de `<head>` (uix-dom.md seção 4) precisa de acesso a bytes CRUS,
-//     NÃO-TOKENIZADOS, desde logo após o `>` de `<head>` até logo antes do `<` de `</head>`. A
-//     superfície pública deste lexer é um fluxo de tokens `next()` simples, sem escotilha "me dê o
-//     trecho cru em vez disso" nenhuma -- a S3, ao ver um token `TagOpenStart{text="head"}`, vai
-//     precisar OU (a) de um método novo do `Lexer` que esta fatia não soma (ex.:
-//     `raw_until(std::string_view closing_tag)`), OU (b) de construir um scan de substring
-//     SEPARADO e descartável sobre o buffer-fonte original usando os próprios campos
-//     `offset`/`length` deste token como ponto de partida, contornando esta instância de `Lexer`
-//     por inteiro pra aquele trecho. Este header expõe `offset`/`length` em todo `Token`
-//     especificamente pra a rota (b) ser possível sem modificar este arquivo -- mas qual rota a
-//     S3 de fato toma é decisão da S3, não pré-decidida aqui.
+//     PONTO ABERTO DE BLOB-DE-HEAD, RESOLVIDO PELA S3 (mantido por histórico): a opacidade de
+//     `<head>` (uix-dom.md seção 4) precisa de acesso a bytes CRUS, NÃO-TOKENIZADOS, desde logo
+//     após o `>` de `<head>` até logo antes do `<` de `</head>`. A superfície pública deste lexer é
+//     um fluxo de tokens `next()` simples, sem escotilha "me dê o trecho cru em vez disso" nenhuma
+//     -- a S3 tomou a rota (b) abaixo: o `handle_head()` do `parser.cpp` constrói um scan de
+//     substring SEPARADO e descartável (`find_head_close()`) sobre o buffer-fonte original usando
+//     os próprios campos `offset`/`length` do token `TagOpenStart{text="head"}` como ponto de
+//     partida, contornando esta instância de `Lexer` por inteiro pra aquele trecho, e depois
+//     RECONSTRÓI um `Lexer` novo sobre a substring depois do `>` de `</head>` (ver o próprio
+//     comentário de cabeçalho do parser.hpp). Este header expõe `offset`/`length` em todo `Token`
+//     especificamente pra essa rota continuar possível sem modificar este arquivo.
+//
+//     RESOLVED (UIX-LEXER-OPACO): `<style>`/`<script>` SÃO TIPO-CDATA NESTE TOKENIZADOR,
+//     ESPELHANDO O UPSTREAM -- uma decisão DIFERENTE, mais estreita e ortogonal à de blob-de-`<head>`
+//     logo acima (não confundir as duas: esta é escopada por nome-de-tag e dispara ONDE QUER que
+//     `<style>`/`<script>` apareça, dentro de `<head>` ou não; a de cima é escopada por `<head>` e
+//     não sabe nada sobre nomes de tag dentro dele). A pergunta que este item foi levantado pra
+//     resolver -- "de quem é a responsabilidade: um lexer tolerante, ou um parser que assume um
+//     scan opaco?" -- tem uma terceira resposta, mais simples, achada lendo o RmlUi upstream real
+//     em vez de escolher entre as duas opções enquadradas: o PRÓPRIO tokenizador do upstream decide
+//     isto, não um chamador contornando por cima dele. `Factory.cpp:255-257` registra exatamente
+//     dois nomes de tag, "script" e "style", como tags CDATA persistentes
+//     (`XMLParser::RegisterPersistentCDATATag`); o próprio tokenizador do `BaseXMLParser.cpp`
+//     (`ReadElement`, :243-262) checa `IsCDATATag` logo após o `>` da tag de abertura e, se casar,
+//     chama `ReadCDATA` (:349-390) em vez de retomar o scan de tag comum -- a MESMA camada que
+//     reconhece delimitadores `<`/`>` em primeiro lugar troca o PRÓPRIO modo, num nome de tag
+//     específico, sem escotilha ou mecanismo de contorno nenhum precisar existir na superfície
+//     pública dela. Este lexer agora faz a coisa idêntica: o ramo `TagOpenEnd` do `scan_in_tag()`
+//     checa se o nome de tag capturado no `TagOpenStart` que casa (`pending_tag_name_`) dobra por
+//     ASCII pra "style" ou "script"; se sim, `state_` vira `RawCData` (não `Text`), e a PRÓXIMA
+//     chamada de `next()` roda `scan_raw_cdata()`: um scan pra frente byte-a-byte (mesma forma do
+//     próprio laço `while (!starts_with_at(...))` do `scan_comment()`, mesmo teto `kMaxTokenBytes`
+//     aplicado ao trecho acumulado) que trata todo byte como conteúdo literal até achar o literal
+//     dobrado-por-caixa `"</style"`/`"</script"`, e então devolve o controle AO tokenizador comum
+//     naquele byte exato (`state_ = State::Text`) -- a própria tag de fechamento é então tokenizada
+//     completamente normal pelo `scan_tag_close()` EXISTENTE, NÃO-MODIFICADO (whitespace e `>`
+//     ainda validados, ainda fail-high num fechamento malformado). Este conserto não toca em nada
+//     sobre COMO uma tag é reconhecida; só muda QUANDO bytes crus são entregues como um único token
+//     `Text` em vez de serem re-entrados como gramática de tag.
+//
+//     Por que o LEXER e não um scan cru do lado do chamador (a forma que o próprio conserto gêmeo
+//     deste repo, o `locate_head_tag_span()` do `glintfx/src/rml/dom_dump.cpp`, e o próprio
+//     `handle_head()`/`find_head_close()` do `parser.cpp` deste repo, os dois usam): a opacidade de
+//     `<style>`/`<script>` não é escopada a `<head>` nenhuma -- o registro de tag-CDATA do upstream
+//     é INCONDICIONAL, onde quer que qualquer uma das duas tags apareça -- então um lexer que só
+//     tolerasse isso dentro de `<head>` ainda engasgaria num `<style>` hipotético (hoje, zero
+//     ocorrências no nível de topo) dentro de `<body>`. Pôr a troca de modo na camada que já possui
+//     o reconhecimento de `<`/`>` não precisa de escotilha nova na superfície pública desta classe
+//     (nenhum método `raw_until()`, contra o texto ANTIGO "Ponto aberto pra S2/S3" que este
+//     parágrafo substitui) e compõe de graça com todo chamador EXISTENTE deste `Lexer` -- inclusive
+//     a própria reconstrução de lexer pós-`</head>` do `parser.cpp`, que reentra em scan comum de
+//     `State::Text` sobre uma substring que poderia ela mesma conter uma tag `<style>`/`<script>`
+//     no nível de topo.
+//
+//     TETO DE ESCOPO DECLARADO, DELIBERADO (espelha o próprio teto do comentário de cabeçalho do
+//     `locate_head_tag_span()` do `dom_dump.cpp` pro mecanismo upstream idêntico -- mantido
+//     coerente com esse precedente já-entregue neste mesmo repo, não re-derivado
+//     independentemente):
+//       - Exatamente dois nomes de tag entram em modo cru, "style" e "script" -- os exatos dois, e
+//         SÓ esses dois, que o próprio `Factory.cpp:255-257` do upstream registra. Um terceiro nome
+//         precisa da própria justificativa medida-por-corpus, a mesma disciplina "o corpus decide"
+//         que este cabeçalho já aplica à tabela de entidade, à lista de elemento-vazio, e à
+//         gramática de namespace.
+//       - O casamento de NOME-de-tag que decide se entra em modo cru é dobrado por ASCII
+//         (`<STYLE>`/`<Script>` também qualificam) -- casando com o próprio
+//         `StringUtilities::ToLower(tag_name)` do upstream antes do lookup `IsCDATATag`
+//         (`BaseXMLParser.cpp:246-248`), e casando com a dobra `to_ascii_lower` já existente do
+//         PRÓPRIO `parser.cpp` deste repo pras comparações de nome-de-tag "head"/"body".
+//       - A busca de FECHAMENTO é uma busca de substring PLANA, LITERAL, dobrada-por-caixa por
+//         `"</style"`/`"</script"` -- NÃO o re-scan com VERIFICAÇÃO-de-nome que o próprio
+//         `ReadCDATA` do upstream faz (`BaseXMLParser.cpp:365-388`: uma sequência `<...>` achada
+//         dentro do conteúdo CDATA só é aceita como terminador se o PRÓPRIO nome de tag dela,
+//         depois de tirar uma `/` inicial, minusculizar pra o nome de tag CDATA registrado;
+//         qualquer outra coisa -- inclusive uma tag de fechamento não-relacionada que por acaso
+//         começa com os mesmos 7/8 bytes, ex. um `</styleFoo>` hipotético -- é dobrada de volta pro
+//         dado acumulado e o scan continua). Esta é a MESMA simplificação exata que o
+//         `locate_head_tag_span()` do `dom_dump.cpp` já declarou pro mecanismo upstream idêntico --
+//         convergida por consistência com um precedente já-entregue neste mesmo repo, não
+//         re-derivada independentemente. Zero fixture de corpus (60 medidas 2026-08-06, ver
+//         lexer_corpus_sanity.cpp) exercita a divergência que esta simplificação trataria mal.
+//       - Seções `<![CDATA[ ... ]]>` seguem FORA desta gramática por inteiro (inalterado -- ver o
+//         item DOCTYPE/decl-XML/CDATA acima), mesmo raciocínio "zero ocorrências no corpus, o
+//         subconjunto congelado também não nomeia" que o próprio teto do `dom_dump.cpp` já dá pra
+//         exclusão idêntica.
+//       - Uma `<style/>`/`<script/>` auto-fechada (`TagSelfClose`, não `TagOpenEnd`) nunca entra em
+//         modo cru -- não há corpo pra proteger, espelhando o próprio `ReadElement` do upstream só
+//         chamar `ReadCDATA` quando `section_opened` é verdadeiro (`BaseXMLParser.cpp:200-208` vs.
+//         `:243-262`).
+//       - A opacidade de BLOB de `<head>` (o parágrafo logo acima deste) é INALTERADA -- este
+//         conserto é mais estreito e ortogonal, protegendo conteúdo de `<style>`/`<script>` ONDE
+//         QUER que qualquer uma das duas tags apareça, sem este lexer nunca ficar ciente do nome de
+//         tag `head`. O `handle_head()` do `parser.cpp` continua contornando o fluxo de tokens
+//         normal deste Lexer por inteiro pro interior de `<head>` via o próprio scan cru
+//         `find_head_close()`, INTOCADO por este conserto, e o formato de dump que o oráculo
+//         diferencial deste repo confere byte-a-byte também é inalterado por ele (`ctest -R
+//         differential` provado verde antes E depois, mesma linha SCOPE: 16 fixtures comparadas, 0
+//         divergentes).
 // Copyright (c) 2026 Petrus Silva Costa
 #pragma once
 
@@ -408,21 +579,44 @@ public:
   Token next();
 
 private:
+  // EN: `RawCData` -- see this file's header comment, "RESOLVED (UIX-LEXER-OPACO)" paragraph.
+  //     Entered by `scan_in_tag()`'s `TagOpenEnd` branch when the just-closed opening tag's name
+  //     (case-folded) is "style"/"script"; left by `scan_raw_cdata()` the moment it locates the
+  //     literal closer, handing control back to ordinary `State::Text` scanning.
+  // PT: `RawCData` -- ver o parágrafo "RESOLVED (UIX-LEXER-OPACO)" do comentário de cabeçalho
+  //     deste arquivo. Entrado pelo ramo `TagOpenEnd` do `scan_in_tag()` quando o nome da tag de
+  //     abertura recém-fechada (dobrado por caixa) é "style"/"script"; deixado pelo
+  //     `scan_raw_cdata()` no momento em que localiza o fechamento literal, devolvendo o controle
+  //     ao scan comum de `State::Text`.
   enum class State { Text,
                      InTag,
+                     RawCData,
                      Done };
+
+  // EN: Which literal closer `scan_raw_cdata()` is hunting for -- set by `scan_in_tag()`'s
+  //     `TagOpenEnd` branch alongside `state_ = State::RawCData`, consumed (and reset to `None`)
+  //     by `scan_raw_cdata()` itself.
+  // PT: Qual fechamento literal o `scan_raw_cdata()` está caçando -- setado pelo ramo `TagOpenEnd`
+  //     do `scan_in_tag()` junto de `state_ = State::RawCData`, consumido (e resetado pra `None`)
+  //     pelo próprio `scan_raw_cdata()`.
+  enum class CDataKind { None,
+                         Style,
+                         Script };
 
   Token make_error(std::size_t offset, std::string_view message);
   Token scan_text();
   Token scan_comment();
   Token scan_tag_open_start();
   Token scan_tag_close();
-  Token scan_in_tag(); // consumes exactly one of: Attr, TagOpenEnd, TagSelfClose, Error
+  Token scan_in_tag();    // consumes exactly one of: Attr, TagOpenEnd, TagSelfClose, Error
+  Token scan_raw_cdata(); // consumes the CDATA-like body of a <style>/<script> tag, see State::RawCData
 
   std::string_view source_;
   std::size_t pos_ = 0;
   State state_ = State::Text;
-  Token sticky_{}; // valid only once state_ == Done (Error or natural EOF reached)
+  Token sticky_{};                       // valid only once state_ == Done (Error or natural EOF reached)
+  std::string_view pending_tag_name_;    // the most recent TagOpenStart's name, see scan_tag_open_start()
+  CDataKind raw_kind_ = CDataKind::None; // valid only while state_ == State::RawCData
 };
 
 } // namespace glintfx::uix

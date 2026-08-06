@@ -363,66 +363,72 @@ void test_depth_ceiling() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: 🔴 KNOWN GAP, PINNED EXPLICITLY, NEVER SILENT -- glintfx::uix::Lexer, run STANDALONE over
-//     a whole document (exactly what lexer_corpus_sanity.cpp does), cannot tokenize `<style>`
-//     content containing a literal, un-escaped run of two or more '<' (e.g. real GusWorld RCSS
-//     prose, "~128dp << 228dp", pt-br for "much less than"). Real upstream RmlUi tolerates this:
-//     `script`/`style` are registered, at the TOKENIZER layer, as CDATA tags
-//     (`Factory.cpp:256-257`, `XMLParser::RegisterPersistentCDATATag("style")`), scanned by
-//     `BaseXMLParser::ReadCDATA` -- a dedicated raw scan where `<` is only markup when
-//     immediately followed by `/` + the terminator tag's own name; every OTHER `<` (a stray `<<`
-//     included) is literal content. This project's `Lexer` (lexer.cpp) has NO tag-name awareness
-//     by design (lexer.hpp's own header: "does NOT special-case the tag name `head`" -- nor,
-//     by the identical reasoning, `script`/`style`), so it cannot replicate that tolerance.
+// EN: 🔴 `UIX-LEXER-OPACO` -- FORMERLY A KNOWN GAP, NOW FIXED AT THE LEXER LAYER. THIS TEST USED
+//     TO BE `test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt`, and its own comment
+//     said: "if this ever starts PASSING, the gap was fixed and this pin's own comment/report is
+//     stale, go update them" -- IT STARTED PASSING (2026-08-06). This is that update, not a
+//     silent deletion: the OLD gap (glintfx::uix::Lexer, run STANDALONE over a whole document,
+//     could not tokenize `<style>`/`<script>` content containing a literal, un-escaped '<' -- real
+//     GusWorld RCSS prose, "~128dp << 228dp", pt-br for "much less than") is CLOSED. See
+//     glintfx/src/uix/dom/lexer.hpp's own header comment, "RESOLVED (UIX-LEXER-OPACO)" paragraph,
+//     for the fix's full argument, upstream citations (`Factory.cpp:255-257`,
+//     `BaseXMLParser.cpp:243-262,349-390`), and declared scope teto (exactly "style"/"script",
+//     ASCII case-folded tag-name match, literal non-tag-name-verified closing search -- converged
+//     with `dom_dump.cpp`'s own `locate_head_tag_span()` teto for the identical upstream
+//     mechanism).
 //
-//     THIS TEST PROVES BOTH HALVES SIDE BY SIDE, SO NEITHER CAN GO UNNOTICED:
-//       (1) the bare Lexer genuinely rejects it (an honest, expected `Error` -- NOT a crash, NOT
-//           silently wrong tokenization);
-//       (2) THIS parser (`parse_document`) is IMMUNE when the same content sits inside `<head>`
-//           (its universal real-world position -- 100% of the corpus), because parser.cpp's own
-//           `<head>`-opacity raw-byte-scan (see parser.hpp header) never runs the Lexer over
-//           `<head>`'s interior AT ALL.
-//     Fixing the Lexer itself (giving it a CDATA-tag concept for `script`/`style`, matching
-//     upstream) is a `lexer.cpp` change -- OUT OF THIS SLICE'S FILE OWNERSHIP
-//     (`parser.{hpp,cpp}`/`parser_*.cpp` only) -- and is reported to the orchestrator/líder as a
-//     follow-up item, not fixed here. This is WHY the real fixture that exercises this
-//     (glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml) lives in its OWN directory,
-//     not one lexer_corpus_sanity.cpp (S1's file, not this file's to edit) already scans: keeping
-//     it there would make S1's own standalone-lexer suite red for a gap this slice cannot fix
-//     without touching lexer.cpp; this test is the explicit, named, always-run pin that keeps the
-//     finding visible instead.
-// PT: 🔴 LACUNA CONHECIDA, PRESA EXPLICITAMENTE, NUNCA SILENCIOSA -- o glintfx::uix::Lexer,
-//     rodando STANDALONE sobre um documento inteiro (exatamente o que o lexer_corpus_sanity.cpp
-//     faz), não consegue tokenizar conteúdo de `<style>` contendo um trecho literal,
-//     não-escapado, de dois ou mais '<' (ex.: prosa RCSS real do GusWorld, "~128dp << 228dp",
-//     pt-br pra "muito menor que"). O RmlUi upstream real tolera isto: `script`/`style` são
-//     registradas, na camada de TOKENIZADOR, como tags CDATA (`Factory.cpp:256-257`,
-//     `XMLParser::RegisterPersistentCDATATag("style")`), escaneadas pelo
-//     `BaseXMLParser::ReadCDATA` -- um scan cru dedicado onde `<` só é markup quando
-//     imediatamente seguido de `/` + o próprio nome da tag terminadora; todo OUTRO `<` (um `<<`
-//     perdido incluso) é conteúdo literal. O `Lexer` deste projeto (lexer.cpp) NÃO TEM
-//     consciência de nome-de-tag nenhuma por desenho (o próprio cabeçalho do lexer.hpp: "NÃO
-//     trata especialmente o nome de tag `head`" -- nem, pelo raciocínio idêntico, `script`/
-//     `style`), então não consegue replicar essa tolerância.
+//     THIS TEST NOW PROVES BOTH HALVES ARE GREEN FOR THE SAME REASON, SIDE BY SIDE, SO NEITHER
+//     REGRESSION CAN GO UNNOTICED:
+//       (1) the bare Lexer, run standalone start to finish (exactly what
+//           lexer_corpus_sanity.cpp does, which as of this same fix sweeps this arc's own third
+//           fixture directory too -- see that file's own header comment), now tokenizes the
+//           `<<` cleanly to EndOfFile -- the CDATA-mode fix in lexer.cpp, not a change to this
+//           parser;
+//       (2) THIS parser (`parse_document`) was ALWAYS immune when the same content sits inside
+//           `<head>` (its universal real-world position -- 100% of the corpus) -- parser.cpp's
+//           own `<head>`-opacity raw-byte-scan (see parser.hpp header) never ran the Lexer over
+//           `<head>`'s interior AT ALL, before or after this fix, and the dump format this
+//           repo's differential oracle checks byte-for-byte is UNCHANGED by it (see this fix's
+//           own commit message for the measured `ctest -R differential` SCOPE line, green both
+//           before and after).
+//     Kept as its own dedicated test (not folded into another) for the same reason the ORIGINAL
+//     pin was dedicated: a reader should be able to find "does the corpus's `<<` case work" as
+//     ONE named thing, without reconstructing it from a general corpus sweep.
+// PT: 🔴 `UIX-LEXER-OPACO` -- ANTES UMA LACUNA CONHECIDA, AGORA CONSERTADA NA CAMADA DO LEXER.
+//     Este teste costumava se chamar
+//     `test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt`, e o próprio comentário dele
+//     dizia: "se isto algum dia começar a PASSAR, a lacuna foi consertada e este pin's próprio
+//     comentário/relato ficou velho, vá atualizá-los" -- COMEÇOU A PASSAR (2026-08-06). Esta é
+//     essa atualização, não uma deleção silenciosa: a lacuna ANTIGA (glintfx::uix::Lexer, rodando
+//     STANDALONE sobre um documento inteiro, não conseguia tokenizar conteúdo de
+//     `<style>`/`<script>` contendo um '<' literal, não-escapado -- prosa RCSS real do GusWorld,
+//     "~128dp << 228dp", pt-br pra "muito menor que") está FECHADA. Ver o próprio comentário de
+//     cabeçalho do glintfx/src/uix/dom/lexer.hpp, parágrafo "RESOLVED (UIX-LEXER-OPACO)", pro
+//     argumento completo do conserto, citações do upstream (`Factory.cpp:255-257`,
+//     `BaseXMLParser.cpp:243-262,349-390`), e o teto de escopo declarado (exatamente
+//     "style"/"script", casamento de nome-de-tag dobrado por ASCII, busca de fechamento literal
+//     sem verificação-de-nome -- convergida com o próprio teto do locate_head_tag_span() do
+//     dom_dump.cpp pro mecanismo upstream idêntico).
 //
-//     ESTE TESTE PROVA AS DUAS METADES LADO A LADO, PRA NENHUMA PASSAR DESPERCEBIDA:
-//       (1) o Lexer cru genuinamente rejeita (um `Error` honesto e esperado -- NÃO um crash, NÃO
-//           uma tokenização errada em silêncio);
-//       (2) ESTE parser (`parse_document`) é IMUNE quando o mesmo conteúdo está dentro de
-//           `<head>` (a posição universal dele no mundo real -- 100% do corpus), porque o
-//           próprio scan cru de byte de opacidade de `<head>` do parser.cpp (ver cabeçalho do
-//           parser.hpp) nunca roda o Lexer sobre o interior de `<head>` NENHUMA VEZ.
-//     Consertar o próprio Lexer (dar a ele um conceito de tag-CDATA pra `script`/`style`,
-//     batendo com o upstream) é mudança de `lexer.cpp` -- FORA DA POSSE DE ARQUIVO DESTA FATIA
-//     (`parser.{hpp,cpp}`/`parser_*.cpp` só) -- e é relatado ao orquestrador/líder como item de
-//     acompanhamento, não consertado aqui. É POR ISSO que a fixture real que exercita isto
-//     (glintfx/src/uix/dom/test_fixtures/gusworld_battle_cockpit.rml) mora no PRÓPRIO diretório
-//     dela, não num dos que o lexer_corpus_sanity.cpp (arquivo da S1, não deste arquivo pra
-//     editar) já varre: deixá-la lá deixaria a própria suíte standalone-do-lexer da S1 vermelha
-//     por uma lacuna que esta fatia não pode consertar sem tocar lexer.cpp; este teste é o pin
-//     explícito, nomeado, sempre-rodado que mantém o achado visível em vez disso.
+//     ESTE TESTE AGORA PROVA AS DUAS METADES VERDES PELO MESMO MOTIVO, LADO A LADO, PRA NENHUMA
+//     REGRESSÃO PASSAR DESPERCEBIDA:
+//       (1) o Lexer cru, rodando standalone do início ao fim (exatamente o que o
+//           lexer_corpus_sanity.cpp faz, que a partir deste mesmo conserto também varre o próprio
+//           terceiro diretório de fixture desta fatia -- ver o próprio comentário de cabeçalho
+//           daquele arquivo), agora tokeniza o `<<` limpo até EndOfFile -- o conserto de modo-CDATA
+//           no lexer.cpp, não uma mudança neste parser;
+//       (2) ESTE parser (`parse_document`) SEMPRE foi imune quando o mesmo conteúdo está dentro de
+//           `<head>` (a posição universal dele no mundo real -- 100% do corpus) -- o próprio scan
+//           cru de byte de opacidade de `<head>` do parser.cpp (ver cabeçalho do parser.hpp) nunca
+//           rodou o Lexer sobre o interior de `<head>` NENHUMA VEZ, antes ou depois deste conserto,
+//           e o formato de dump que o oráculo diferencial deste repo confere byte-a-byte é
+//           INALTERADO por ele (ver a própria mensagem de commit deste conserto pra linha SCOPE
+//           medida do `ctest -R differential`, verde antes E depois).
+//     Mantido como teste próprio dedicado (não dobrado em outro) pelo mesmo motivo do pin
+//     ORIGINAL ser dedicado: um leitor deve conseguir achar "o caso `<<` do corpus funciona" como
+//     UMA coisa nomeada, sem reconstruir isso a partir de uma varredura geral de corpus.
 // ---------------------------------------------------------------------------
-void test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt() {
+void test_style_stray_lt_tokenizes_and_parses_cleanly() {
   using glintfx::uix::Lexer;
   using glintfx::uix::Token;
   using glintfx::uix::TokenKind;
@@ -431,32 +437,31 @@ void test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt() {
       "<rml><head><style>#x { width: 110dp; } /* 128dp << 228dp */</style></head>"
       "<body>ok</body></rml>";
 
-  // (1) The bare Lexer, tokenizing generically start to finish, hits the stray '<' inside
-  //     <style> and emits an honest Error -- this is the documented, expected boundary, not a
-  //     surprise.
+  // (1) The bare Lexer, tokenizing generically start to finish, now reaches a clean EndOfFile --
+  //     the `<<` inside <style> is CDATA-like content (UIX-LEXER-OPACO), never re-entered as tag
+  //     grammar.
   Lexer lex(kStyleWithStrayLt);
   Token tok;
   bool saw_error = false;
-  for (int i = 0; i < 1000; ++i) {
+  int drained = 0;
+  do {
     tok = lex.next();
-    if (tok.kind == TokenKind::Error) {
-      saw_error = true;
-      break;
-    }
-    if (tok.kind == TokenKind::EndOfFile) {
-      break;
-    }
-  }
-  check(saw_error,
-        "known-gap: bare Lexer standalone genuinely rejects '<<' inside <style> content (pins "
-        "the documented gap -- if this ever starts PASSING, the gap was fixed and this pin's "
-        "own comment/report is stale, go update them)");
+    ++drained;
+  } while (tok.kind != TokenKind::EndOfFile && tok.kind != TokenKind::Error && drained < 1000);
+  saw_error = (tok.kind == TokenKind::Error);
+  check(!saw_error,
+        "UIX-LEXER-OPACO: bare Lexer standalone now tokenizes '<<' inside <style> content "
+        "cleanly to EndOfFile, no Error -- the fixed gap");
+  check(tok.kind == TokenKind::EndOfFile,
+        "UIX-LEXER-OPACO: bare Lexer reaches a clean EndOfFile, not stuck mid-stream");
 
-  // (2) THIS parser is immune -- the exact same bytes, inside <head>, parse cleanly, because
-  //     handle_head()'s raw-byte-scan never re-tokenizes <head>'s interior with the Lexer.
+  // (2) THIS parser remains immune -- the exact same bytes, inside <head>, parse cleanly, because
+  //     handle_head()'s raw-byte-scan never re-tokenizes <head>'s interior with the Lexer. This
+  //     half was ALREADY true before UIX-LEXER-OPACO; kept here so a reader sees both halves
+  //     agree for the SAME construction, not just "the parser happens to also pass".
   expect_ok(kStyleWithStrayLt,
-            "known-gap: THIS parser is immune -- '<<' inside <head>'s opaque <style> payload "
-            "never reaches any tokenizer at all");
+            "UIX-LEXER-OPACO: THIS parser remains immune -- '<<' inside <head>'s opaque <style> "
+            "payload never reached any tokenizer at all, before or after this fix");
 }
 
 } // namespace
@@ -476,7 +481,7 @@ int main() {
   test_lexer_error_propagates();
   test_entity_tolerance();
   test_depth_ceiling();
-  test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt();
+  test_style_stray_lt_tokenizes_and_parses_cleanly();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "parser_hardening_sanity: %d assertion(s) FAILED\n", g_failures);

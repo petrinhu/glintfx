@@ -59,6 +59,41 @@ constexpr bool starts_with_at(std::string_view s, std::size_t at, std::string_vi
   return s.substr(at, lit.size()) == lit;
 }
 
+// EN: ASCII-only lowercase fold -- see lexer.hpp header, "RESOLVED (UIX-LEXER-OPACO)" paragraph,
+//     bullet on case-folding: mirrors upstream's `StringUtilities::ToLower` (before its
+//     `IsCDATATag` lookup) and this repo's own `parser.cpp`'s `to_ascii_lower` (used for "head"/
+//     "body" tag-name comparisons) -- same fold, independent copy, same reasoning parser.cpp's own
+//     header gives for why it is redeclared per-TU rather than shared via a common header.
+// PT: Dobra minúscula só-ASCII -- ver o cabeçalho do lexer.hpp, parágrafo "RESOLVED
+//     (UIX-LEXER-OPACO)", item de dobra-de-caixa: espelha o `StringUtilities::ToLower` do upstream
+//     (antes do lookup `IsCDATATag`) e o `to_ascii_lower` do PRÓPRIO `parser.cpp` deste repo
+//     (usado pras comparações de nome-de-tag "head"/"body") -- mesma dobra, cópia independente,
+//     mesmo raciocínio que o próprio cabeçalho do parser.cpp dá pro motivo dele ser redeclarado
+//     por-TU em vez de compartilhado via header comum.
+constexpr char to_lower_ascii(char c) {
+  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+// EN: ASCII case-insensitive equality -- used ONLY to decide whether a just-closed opening tag's
+//     name is "style"/"script" (see cdata_kind_for below). `a`/`b` are both already bounded views
+//     (tag names are already length-capped by kMaxTokenBytes via is_name_char's own scan loop), so
+//     no additional bounds risk here.
+// PT: Igualdade insensível-a-caixa só-ASCII -- usada SÓ pra decidir se o nome de uma tag de
+//     abertura recém-fechada é "style"/"script" (ver cdata_kind_for abaixo). `a`/`b` são as duas
+//     views já limitadas (nomes de tag já são limitados em tamanho por kMaxTokenBytes via o
+//     próprio laço de scan do is_name_char), então nenhum risco adicional de limite aqui.
+constexpr bool ascii_ieq(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (to_lower_ascii(a[i]) != to_lower_ascii(b[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 Lexer::Lexer(std::string_view source) : source_(source) {
@@ -79,6 +114,9 @@ Token Lexer::next() {
   }
   if (state_ == State::InTag) {
     return scan_in_tag();
+  }
+  if (state_ == State::RawCData) {
+    return scan_raw_cdata();
   }
 
   // state_ == State::Text
@@ -172,6 +210,21 @@ Token Lexer::scan_tag_open_start() {
   }
   const std::string_view name = source_.substr(name_start, pos_ - name_start);
   state_ = State::InTag;
+  // EN: Remembered for scan_in_tag()'s TagOpenEnd branch -- see lexer.hpp header, "RESOLVED
+  //     (UIX-LEXER-OPACO)" paragraph. Zero-copy (a view into source_, same as `name` above); safe
+  //     to overwrite on every TagOpenStart because it is only ever read back by the VERY NEXT
+  //     TagOpenEnd/TagSelfClose, before another TagOpenStart could occur (this lexer has no
+  //     concept of nesting/a stack -- S2/S3's job, see this header's own "Deliberately NOT this
+  //     module's job" list -- so there is exactly one "most recently opened tag name" at a time
+  //     from this lexer's own point of view).
+  // PT: Lembrado pro ramo TagOpenEnd do scan_in_tag() -- ver o cabeçalho do lexer.hpp, parágrafo
+  //     "RESOLVED (UIX-LEXER-OPACO)". Zero-cópia (uma view sobre source_, igual ao `name` acima);
+  //     seguro sobrescrever a cada TagOpenStart porque só é lido de volta pelo PRÓXIMO
+  //     TagOpenEnd/TagSelfClose imediato, antes de outro TagOpenStart poder ocorrer (este lexer não
+  //     tem conceito nenhum de aninhamento/pilha -- trabalho da S2/S3, ver a própria lista
+  //     "Deliberadamente NÃO é trabalho deste módulo" deste cabeçalho -- então existe exatamente um
+  //     "nome de tag mais recentemente aberto" por vez do próprio ponto de vista deste lexer).
+  pending_tag_name_ = name;
   return Token{TokenKind::TagOpenStart, name, {}, start, pos_ - start};
 }
 
@@ -215,7 +268,25 @@ Token Lexer::scan_in_tag() {
   if (source_[pos_] == '>') {
     const std::size_t start = pos_;
     ++pos_;
-    state_ = State::Text;
+    // EN: See lexer.hpp header, "RESOLVED (UIX-LEXER-OPACO)" paragraph -- the mode switch. A
+    //     TagOpenEnd closing a <style>/<script> opening tag hands the NEXT next() call to
+    //     scan_raw_cdata() instead of ordinary State::Text scanning; every other tag name (the
+    //     overwhelming majority) is completely unaffected, same State::Text transition as before
+    //     this fix.
+    // PT: Ver o cabeçalho do lexer.hpp, parágrafo "RESOLVED (UIX-LEXER-OPACO)" -- a troca de modo.
+    //     Um TagOpenEnd fechando uma tag de abertura <style>/<script> entrega a PRÓXIMA chamada de
+    //     next() ao scan_raw_cdata() em vez do scan comum de State::Text; todo outro nome de tag (a
+    //     imensa maioria) fica completamente inalterado, mesma transição State::Text de antes deste
+    //     conserto.
+    if (ascii_ieq(pending_tag_name_, "style")) {
+      raw_kind_ = CDataKind::Style;
+      state_ = State::RawCData;
+    } else if (ascii_ieq(pending_tag_name_, "script")) {
+      raw_kind_ = CDataKind::Script;
+      state_ = State::RawCData;
+    } else {
+      state_ = State::Text;
+    }
     return Token{TokenKind::TagOpenEnd, {}, {}, start, 1};
   }
 
@@ -293,6 +364,77 @@ Token Lexer::scan_in_tag() {
   ++pos_; // consume closing quote
 
   return Token{TokenKind::Attr, name, value, start, pos_ - start};
+}
+
+// EN: See lexer.hpp header, "RESOLVED (UIX-LEXER-OPACO)" paragraph. Only ever entered right after
+//     a TagOpenEnd closed a <style>/<script> opening tag (state_ == State::RawCData, raw_kind_ !=
+//     CDataKind::None). Scans forward byte-wise, same shape as scan_comment()'s own
+//     `while (!starts_with_at(...))` loop, treating every byte as literal content until it finds
+//     the case-folded literal closer -- NOT a tag-name-verified re-scan, see this function's own
+//     "declared scope teto" citation in lexer.hpp for why that simplification was chosen
+//     (converged with dom_dump.cpp's locate_head_tag_span(), not re-derived).
+// PT: Ver o cabeçalho do lexer.hpp, parágrafo "RESOLVED (UIX-LEXER-OPACO)". Só é entrado logo após
+//     um TagOpenEnd fechar uma tag de abertura <style>/<script> (state_ == State::RawCData,
+//     raw_kind_ != CDataKind::None). Faz scan pra frente byte-a-byte, mesma forma do próprio laço
+//     `while (!starts_with_at(...))` do scan_comment(), tratando todo byte como conteúdo literal
+//     até achar o fechamento literal dobrado-por-caixa -- NÃO um re-scan com verificação-de-nome,
+//     ver a própria citação "teto de escopo declarado" desta função no lexer.hpp pro motivo desta
+//     simplificação ter sido escolhida (convergida com o locate_head_tag_span() do dom_dump.cpp,
+//     não re-derivada).
+Token Lexer::scan_raw_cdata() {
+  const std::size_t start = pos_;
+  const std::string_view closer =
+      (raw_kind_ == CDataKind::Style) ? std::string_view("</style") : std::string_view("</script");
+
+  auto starts_with_closer_ci = [&](std::size_t at) {
+    if (at > source_.size() || closer.size() > source_.size() - at) {
+      return false;
+    }
+    for (std::size_t i = 0; i < closer.size(); ++i) {
+      if (to_lower_ascii(source_[at + i]) != closer[i]) { // closer's own literal is already lowercase
+        return false;
+      }
+    }
+    return true;
+  };
+
+  while (!starts_with_closer_ci(pos_)) {
+    if (pos_ >= source_.size()) {
+      return make_error(start,
+                        "unterminated <style>/<script> content: no matching closing tag before "
+                        "end of input -- see lexer.hpp header, 'RESOLVED (UIX-LEXER-OPACO)' "
+                        "paragraph");
+    }
+    ++pos_;
+    if (pos_ - start > kMaxTokenBytes) {
+      return make_error(start,
+                        "<style>/<script> content exceeds kMaxTokenBytes (64 KiB) ceiling -- see "
+                        "lexer.hpp header, 'Hardening' paragraph");
+    }
+  }
+
+  // EN: Found the closer. Hand control BACK to the ordinary tokenizer BEFORE deciding what to
+  //     return -- state_/raw_kind_ must already reflect "done with raw mode" whether this call
+  //     emits a Text token itself or (the zero-length case, `<style></style>`) recurses into
+  //     next() to let the ordinary State::Text dispatch produce the </style> TagClose token
+  //     instead (mirrors how scan_text() is never called when pos_ is already at '<' -- see
+  //     next()'s own dispatch -- so this function never emits a zero-length Text token either).
+  // PT: Achou o fechamento. Devolve o controle AO tokenizador comum ANTES de decidir o que
+  //     retornar -- state_/raw_kind_ já precisam refletir "acabou o modo cru" tanto se esta
+  //     chamada emite um token Text ela mesma quanto (o caso de comprimento-zero,
+  //     `<style></style>`) recursa em next() pra deixar o dispatch comum de State::Text produzir o
+  //     token TagClose de </style> em vez disso (espelha como scan_text() nunca é chamado quando
+  //     pos_ já está em '<' -- ver o próprio dispatch do next() -- então esta função também nunca
+  //     emite um token Text de comprimento zero).
+  state_ = State::Text;
+  raw_kind_ = CDataKind::None;
+
+  if (pos_ == start) {
+    return next();
+  }
+
+  const std::size_t len = pos_ - start;
+  return Token{TokenKind::Text, source_.substr(start, len), {}, start, len};
 }
 
 } // namespace glintfx::uix

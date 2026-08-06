@@ -11,30 +11,28 @@
 //     around inside this test.
 //
 //     🔴 WHY THE GUSWORLD FIXTURE LIVES OUTSIDE glintfx/tests/ -- A DELIBERATE, DOCUMENTED
-//     PLACEMENT, NOT AN ACCIDENT: `glintfx/src/uix/dom/test_fixtures/` is a THIRD directory, not
-//     one of the two `lexer_corpus_sanity.cpp` (S1's own test, not this file's to edit) already
-//     scans. The GusWorld fixture's real `<style>` block contains a literal `<<` (pt-br prose
-//     inside an RCSS comment, "~128dp << 228dp", meaning "much less than") -- this parser handles
-//     it correctly (its own `<head>`-opacity raw-byte-scan, see parser.hpp's header comment, never
-//     tokenizes INSIDE `<head>` at all, so the `<<` is never seen as markup), but the BARE
-//     `Lexer`, run standalone over the WHOLE document (exactly what `lexer_corpus_sanity.cpp`
-//     does), chokes on it: real upstream RmlUi tolerates this because `script`/`style` are
-//     registered, at the TOKENIZER layer, as CDATA tags (`Factory.cpp:256-257`,
-//     `XMLParser::RegisterPersistentCDATATag("style")`) whose content is scanned by
-//     `BaseXMLParser::ReadCDATA` -- a dedicated raw scan that only treats `<` as markup when
-//     immediately followed by `/` + the terminating tag's own name, treating every OTHER `<`
-//     (including a stray `<<`) as literal content. This project's own `Lexer` (`lexer.cpp`) was
-//     deliberately built with NO tag-name awareness at all (`lexer.hpp`'s own header: "This lexer
-//     does NOT special-case the tag name `head`" -- and by the same reasoning, none of `script`/
-//     `style` either), so it has no CDATA-tag concept and cannot replicate this upstream
-//     tolerance on its own. Fixing that is a `lexer.cpp` change -- OUT OF THIS SLICE'S FILE
-//     OWNERSHIP (`parser.{hpp,cpp}`, `parser_*.cpp` only) -- flagged to the orchestrator/líder as
-//     a follow-up item, not silently patched around here. Placing the fixture in a directory
-//     `lexer_corpus_sanity.cpp` never scans keeps THAT already-green, unrelated test green without
-//     touching a single byte of S1's files, while this test (parse_document, which IS immune to
-//     the gap by construction) still exercises the fixture in full. See
-//     `parser_hardening_sanity.cpp`'s own dedicated case for the explicit, non-silent pin of this
-//     exact finding (both the Lexer-level reject AND this parser's own immunity, side by side).
+//     PLACEMENT, HISTORICAL BUT NO LONGER A LEXER-LEVEL WORKAROUND: `glintfx/src/uix/dom/
+//     test_fixtures/` is a THIRD directory, originally NOT one of the two
+//     `lexer_corpus_sanity.cpp` (S1's own test, not this file's to edit) scanned. The GusWorld
+//     fixture's real `<style>` block contains a literal `<<` (pt-br prose inside an RCSS comment,
+//     "~128dp << 228dp", meaning "much less than") -- this parser has ALWAYS handled it correctly
+//     (its own `<head>`-opacity raw-byte-scan, see parser.hpp's header comment, never tokenizes
+//     INSIDE `<head>` at all, so the `<<` is never seen as markup). The BARE `Lexer`, run
+//     standalone over the WHOLE document (exactly what `lexer_corpus_sanity.cpp` does), USED TO
+//     choke on it -- `UIX-LEXER-OPACO` (2026-08-06) fixed that at the TOKENIZER layer, giving
+//     `lexer.cpp` the same "script"/"style" persistent-CDATA-tag concept real upstream RmlUi has
+//     (`Factory.cpp:255-257`, `BaseXMLParser::ReadCDATA`); see lexer.hpp's own header comment,
+//     "RESOLVED (UIX-LEXER-OPACO)" paragraph, for the full argument and declared scope teto. As of
+//     that same fix, `lexer_corpus_sanity.cpp` SWEEPS this directory too (see that file's own
+//     header comment) -- the original reason to keep this fixture out of its scan is gone. The
+//     directory split itself stays (this file's own file-discovery/count assertions below still
+//     depend on it, and `dumper_corpus_sanity.cpp`/`dumper_determinism_sanity.cpp` reuse the same
+//     `GLINTFX_UIX_S3_FIXTURES_DIR` define), it is simply no longer hiding a lexer-level gap. See
+//     `parser_hardening_sanity.cpp`'s own dedicated case
+//     (`test_style_stray_lt_tokenizes_and_parses_cleanly`, formerly
+//     `test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt`) for the always-run proof
+//     that both halves -- the (now-fixed) Lexer-level tokenization AND this parser's own
+//     always-true immunity -- stay green side by side.
 // PT: RMLX-1/S3 -- oráculo de regressão: este parser precisa construir um Document de TODA
 //     fixture `.rml` real deste repo (glintfx/tests/ + glintfx/demos/, os MESMOS dois diretórios
 //     que o lexer_corpus_sanity.cpp já enumera) MAIS a própria fixture "tela representativa" do
@@ -47,32 +45,30 @@
 //     deste teste.
 //
 //     🔴 POR QUE A FIXTURE DO GUSWORLD MORA FORA DE glintfx/tests/ -- UM POSICIONAMENTO
-//     DELIBERADO E DOCUMENTADO, NÃO UM ACIDENTE: `glintfx/src/uix/dom/test_fixtures/` é um
-//     TERCEIRO diretório, não um dos dois que o lexer_corpus_sanity.cpp (teste da própria S1, não
-//     deste arquivo pra editar) já varre. O bloco `<style>` real da fixture do GusWorld contém um
-//     `<<` literal (prosa pt-br dentro de um comentário RCSS, "~128dp << 228dp", significando
-//     "muito menor que") -- este parser trata corretamente (o próprio scan cru de byte de
-//     opacidade de `<head>`, ver o comentário de cabeçalho do parser.hpp, nunca tokeniza DENTRO
-//     de `<head>` nenhuma vez, então o `<<` nunca é visto como markup), mas o `Lexer` CRU,
-//     rodando standalone sobre o documento INTEIRO (exatamente o que o lexer_corpus_sanity.cpp
-//     faz), engasga: o RmlUi upstream real tolera isto porque `script`/`style` são registradas,
-//     na camada de TOKENIZADOR, como tags CDATA (`Factory.cpp:256-257`,
-//     `XMLParser::RegisterPersistentCDATATag("style")`), cujo conteúdo é escaneado pelo
-//     `BaseXMLParser::ReadCDATA` -- um scan cru dedicado que só trata `<` como markup quando
-//     imediatamente seguido de `/` + o próprio nome da tag terminadora, tratando todo OUTRO `<`
-//     (inclusive um `<<` perdido) como conteúdo literal. O próprio `Lexer` deste projeto
-//     (`lexer.cpp`) foi construído deliberadamente SEM consciência nenhuma de nome-de-tag (o
-//     próprio cabeçalho do lexer.hpp: "Este lexer NÃO trata especialmente o nome de tag `head`" --
-//     e pelo mesmo raciocínio, nem `script`/`style` tampouco), então não tem conceito de tag-CDATA
-//     nenhum e não consegue replicar essa tolerância upstream sozinho. Consertar isso é mudança de
-//     `lexer.cpp` -- FORA DA POSSE DE ARQUIVO DESTA FATIA (`parser.{hpp,cpp}`, `parser_*.cpp` só)
-//     -- sinalizado ao orquestrador/líder como item de acompanhamento, não remendado em silêncio
-//     aqui. Colocar a fixture num diretório que o lexer_corpus_sanity.cpp nunca varre mantém
-//     AQUELE teste já-verde e não-relacionado verde sem tocar um byte sequer dos arquivos da S1,
-//     enquanto este teste (parse_document, que É imune à lacuna por construção) segue exercitando
-//     a fixture por completo. Ver o próprio caso dedicado do `parser_hardening_sanity.cpp` pro
-//     pin explícito, não-silencioso, deste achado exato (tanto a rejeição em nível de Lexer QUANTO
-//     a imunidade deste parser, lado a lado).
+//     DELIBERADO E DOCUMENTADO, HISTÓRICO MAS NÃO MAIS UM CONTORNO EM NÍVEL DE LEXER:
+//     `glintfx/src/uix/dom/test_fixtures/` é um TERCEIRO diretório, originalmente NÃO um dos dois
+//     que o lexer_corpus_sanity.cpp (teste da própria S1, não deste arquivo pra editar) varria. O
+//     bloco `<style>` real da fixture do GusWorld contém um `<<` literal (prosa pt-br dentro de um
+//     comentário RCSS, "~128dp << 228dp", significando "muito menor que") -- este parser SEMPRE
+//     tratou corretamente (o próprio scan cru de byte de opacidade de `<head>`, ver o comentário
+//     de cabeçalho do parser.hpp, nunca tokeniza DENTRO de `<head>` nenhuma vez, então o `<<`
+//     nunca é visto como markup). O `Lexer` CRU, rodando standalone sobre o documento INTEIRO
+//     (exatamente o que o lexer_corpus_sanity.cpp faz), COSTUMAVA engasgar nisso --
+//     `UIX-LEXER-OPACO` (2026-08-06) consertou isso na camada de TOKENIZADOR, dando ao
+//     `lexer.cpp` o mesmo conceito de tag-CDATA-persistente "script"/"style" que o RmlUi upstream
+//     real tem (`Factory.cpp:255-257`, `BaseXMLParser::ReadCDATA`); ver o próprio comentário de
+//     cabeçalho do lexer.hpp, parágrafo "RESOLVED (UIX-LEXER-OPACO)", pro argumento completo e o
+//     teto de escopo declarado. A partir desse mesmo conserto, o lexer_corpus_sanity.cpp VARRE
+//     este diretório também (ver o próprio comentário de cabeçalho daquele arquivo) -- o motivo
+//     original de manter esta fixture fora do escopo dele sumiu. A divisão de diretório em si
+//     fica (as próprias afirmações de descoberta/contagem de arquivo deste arquivo abaixo ainda
+//     dependem dela, e o dumper_corpus_sanity.cpp/dumper_determinism_sanity.cpp reaproveitam o
+//     mesmo define `GLINTFX_UIX_S3_FIXTURES_DIR`), ela simplesmente não esconde mais uma lacuna em
+//     nível de lexer. Ver o próprio caso dedicado do `parser_hardening_sanity.cpp`
+//     (`test_style_stray_lt_tokenizes_and_parses_cleanly`, antes
+//     `test_known_gap_lexer_cannot_tokenize_head_style_with_stray_lt`) pra prova sempre-rodada de
+//     que as duas metades -- a tokenização em nível de Lexer (agora consertada) E a imunidade
+//     sempre-verdadeira deste parser -- ficam verdes lado a lado.
 //
 //     🔴 RMLX1-CORPUS (TODO.md, 2026-08-05) -- 15 MORE real GusWorld screens joined
 //     `gusworld_battle_cockpit.rml` in that same third directory (16 files total now), all
@@ -81,7 +77,9 @@
 //     `<style>` comment prose the standalone Lexer cannot tokenize) at a DIFFERENT byte offset
 //     (a stray "delta < 0.01px" in prose, not the "<<" this comment names above) -- same
 //     mechanism, same reason they live here and not in one of lexer_corpus_sanity.cpp's two
-//     directories, this parser immune to all of them for the identical reason.
+//     directories, this parser immune to all of them for the identical reason. `UIX-LEXER-OPACO`
+//     (2026-08-06) closed this class of gap for all 5 (and the original `<<`) at once, since the
+//     fix is tag-name-scoped, not per-occurrence -- see this file's own header comment above.
 // PT: 🔴 RMLX1-CORPUS (TODO.md, 2026-08-05) -- mais 15 telas reais do GusWorld se juntaram à
 //     `gusworld_battle_cockpit.rml` nesse mesmo terceiro diretório (16 arquivos agora), todas
 //     capturadas em runtime, nunca retipadas à mão (ver o próprio cabeçalho de proveniência de
@@ -90,7 +88,9 @@
 //     consegue tokenizar) num offset de byte DIFERENTE (um "delta < 0.01px" perdido em prosa, não
 //     o "<<" que este comentário nomeia acima) -- mesmo mecanismo, mesmo motivo de morarem aqui e
 //     não num dos dois diretórios do lexer_corpus_sanity.cpp, este parser imune a todas elas pelo
-//     mesmo motivo.
+//     mesmo motivo. `UIX-LEXER-OPACO` (2026-08-06) fechou esta classe de lacuna pras 5 (e o `<<`
+//     original) de uma vez só, já que o conserto é escopado por nome-de-tag, não por-ocorrência --
+//     ver o próprio comentário de cabeçalho deste arquivo acima.
 //
 //     Enumerated at RUNTIME via std::filesystem, same reason lexer_corpus_sanity.cpp gives: a
 //     FUTURE fixture is picked up automatically, nobody has to remember to update this list.

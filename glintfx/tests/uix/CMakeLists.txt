@@ -56,18 +56,26 @@ target_link_libraries(uix_parser_hardening_sanity PRIVATE glintfx::uix_dom)
 add_test(NAME uix_parser_hardening_sanity COMMAND uix_parser_hardening_sanity)
 
 # EN: GLINTFX_UIX_S3_FIXTURES_DIR: a THIRD corpus directory, this slice's own
-#     (glintfx/src/uix/dom/test_fixtures/), deliberately NOT one of the two
+#     (glintfx/src/uix/dom/test_fixtures/). Originally NOT one of the two
 #     GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR directories the S1 lexer_corpus_sanity target
-#     below also scans -- see parser_corpus_sanity.cpp's own header comment for the full
-#     rationale (the one fixture there exercises a real Lexer-level gap, pinned explicitly by
-#     parser_hardening_sanity.cpp, that this slice's file ownership cannot fix in lexer.cpp).
+#     below scans -- see parser_corpus_sanity.cpp's own header comment for the full history (the
+#     fixtures there used to exercise a real Lexer-level gap, pinned explicitly by
+#     parser_hardening_sanity.cpp). `UIX-LEXER-OPACO` (2026-08-06) fixed that gap in lexer.cpp
+#     itself, so lexer_corpus_sanity's own target FURTHER DOWN this file now ALSO defines this
+#     same variable and sweeps this directory -- the directory split stays (this target and
+#     dumper_corpus_sanity/dumper_determinism_sanity below still need their own Rml::-linked
+#     fixture discovery), it just no longer means "the standalone Lexer can't handle these".
 # PT: GLINTFX_UIX_S3_FIXTURES_DIR: um TERCEIRO diretório de corpus, próprio desta fatia
-#     (glintfx/src/uix/dom/test_fixtures/), deliberadamente NÃO um dos dois diretórios
-#     GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR que o alvo S1 lexer_corpus_sanity abaixo também
-#     varre -- ver o próprio comentário de cabeçalho do parser_corpus_sanity.cpp pro racional
-#     completo (a única fixture lá exercita uma lacuna real de nível-Lexer, presa explicitamente
-#     pelo parser_hardening_sanity.cpp, que a posse de arquivo desta fatia não pode consertar em
-#     lexer.cpp).
+#     (glintfx/src/uix/dom/test_fixtures/). Originalmente NÃO um dos dois diretórios
+#     GLINTFX_UIX_TESTS_DIR/GLINTFX_UIX_DEMOS_DIR que o alvo S1 lexer_corpus_sanity abaixo varre --
+#     ver o próprio comentário de cabeçalho do parser_corpus_sanity.cpp pro histórico completo (as
+#     fixtures lá costumavam exercitar uma lacuna real de nível-Lexer, presa explicitamente pelo
+#     parser_hardening_sanity.cpp). `UIX-LEXER-OPACO` (2026-08-06) consertou essa lacuna no próprio
+#     lexer.cpp, então o alvo próprio do lexer_corpus_sanity MAIS ADIANTE neste arquivo agora
+#     TAMBÉM define esta mesma variável e varre este diretório -- a divisão de diretório fica (este
+#     alvo e o dumper_corpus_sanity/dumper_determinism_sanity abaixo ainda precisam da própria
+#     descoberta de fixture linkada a Rml::), só não significa mais "o Lexer standalone não
+#     consegue tratar estas".
 add_executable(uix_parser_corpus_sanity parser_corpus_sanity.cpp)
 target_link_libraries(uix_parser_corpus_sanity PRIVATE glintfx::uix_dom)
 target_compile_definitions(uix_parser_corpus_sanity PRIVATE
@@ -88,11 +96,19 @@ add_test(NAME uix_parser_corpus_sanity COMMAND uix_parser_corpus_sanity)
 #     WORKING_DIRECTORY). GLINTFX_UIX_DEMOS_DIR aponta pro demos/showcase especificamente (o único
 #     diretório de demo com `.rml` hoje; um futuro diretório de demo com `.rml` próprio precisaria
 #     de seu próprio define aqui, não um alargamento silencioso de glob deste).
+# EN: `UIX-LEXER-OPACO` (2026-08-06) -- this target now ALSO defines GLINTFX_UIX_S3_FIXTURES_DIR
+#     and sweeps it (see lexer_corpus_sanity.cpp's own header comment for why): the standalone
+#     Lexer no longer chokes on the `<style>` stray-'<' content that directory's fixtures exercise.
+# PT: `UIX-LEXER-OPACO` (2026-08-06) -- este alvo agora TAMBÉM define GLINTFX_UIX_S3_FIXTURES_DIR
+#     e o varre (ver o próprio comentário de cabeçalho do lexer_corpus_sanity.cpp pro porquê): o
+#     Lexer standalone não engasga mais no conteúdo `<style>` com '<' perdido que as fixtures
+#     daquele diretório exercitam.
 add_executable(uix_lexer_corpus_sanity lexer_corpus_sanity.cpp)
 target_link_libraries(uix_lexer_corpus_sanity PRIVATE glintfx::uix_dom)
 target_compile_definitions(uix_lexer_corpus_sanity PRIVATE
   GLINTFX_UIX_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
-  GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase")
+  GLINTFX_UIX_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures")
 add_test(NAME uix_lexer_corpus_sanity COMMAND uix_lexer_corpus_sanity)
 
 # EN: RMLX-1/S6b -- glintfx::uix::dump_document (glintfx/src/uix/dom/dumper.{hpp,cpp}), the

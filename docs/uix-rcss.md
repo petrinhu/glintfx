@@ -690,6 +690,75 @@ correção. Sinalizado no `TODO.md` como acompanhamento pra não se perder.
 
 ---
 
+## 🔵 Errata (`UIX-RCSS-ERRATA-5`, 2026-08-06) / Errata (`UIX-RCSS-ERRATA-5`, 2026-08-06)
+
+**EN:** Two líder decisions, made the same day on two unrelated `RMLX-2` findings, both land in this
+same document -- one author, to avoid two agents colliding on the same file.
+
+**Decision 1 -- the reversed-order `border-top` shorthand (`UIX-SHORTHAND-PARCIAL`/`UIX-RCSS-DUMP-B`,
+`TODO.md`): our own engine's atomic-discard behaviour is correct and STAYS**; upstream's own
+in-loop, no-rollback partial write (`ERRATA-2`'s own second correction, §6.2 above) is confirmed as
+a real upstream quirk that **Side A alone** reproduces (because Side A *is* upstream code) and
+**Side B deliberately does not** -- the líder judged upstream's own behaviour here a
+dictionary-mutation artifact (no staging buffer, no rollback), not an intentional CSS semantic worth
+bug-for-bug replicating in a clean-room engine. **§6.2's own two corrections above, and §11's own
+malformed-shorthand bullet, describe upstream/Side A's own real behaviour and are UNCHANGED and still
+correct as a trace of what upstream does** -- what changes is that they no longer describe Side B by
+implication. §15.2's worked example is split below into a Side A line and a Side B line, no longer a
+single shared answer. This is the **first entry** of a brand-new section, §14.1 below,
+**"Deliberate divergences"** -- a permanent, by-design Side A ≠ Side B byte mismatch for one named
+input, tracked separately from §14's own divergence ledger (whose three classes all assume the two
+sides are *expected to eventually agree*; this is the opposite kind of fact, and conflating the two
+would corrupt §14's own escalation-threshold signal).
+
+**Decision 2 -- unrecognized keyword value, the sixth fail-high case (`UIX-RCSS-DUMP-B`, `TODO.md`):**
+§11's original five fail-high cases never named "a well-formed identifier that is not a legal member
+of *this* property's own accepted keyword set" (`display: blocc;` being the reported example) --
+`value_compute.hpp` offers no such check today, so Side B currently prints the raw text verbatim
+instead of reverting, a genuine fail-high gap, correctly self-reported rather than silently patched
+with an invented table. **Closed here:** a sixth §11 bullet, and §6.1's own registry table gains the
+enumerated legal keyword set for the 11 rows that, until this errata, carried the bare word
+"keyword" with no member list (the other 18 keyword-domain rows already had theirs named inline).
+Unlike Decision 1, **this is not a Side A/Side B divergence** -- both sides reject the same bad token
+the same way, so it needed no §14.1 entry, only a completed rule.
+
+**PT:** Duas decisões do líder, tomadas no mesmo dia sobre dois achados não-relacionados da `RMLX-2`,
+as duas pousam neste mesmo documento -- um autor só, pra evitar dois agentes colidindo no mesmo
+arquivo.
+
+**Decisão 1 -- o shorthand `border-top` de ordem revertida (`UIX-SHORTHAND-PARCIAL`/
+`UIX-RCSS-DUMP-B`, `TODO.md`): o comportamento de descarte atômico do nosso próprio motor está
+correto e FICA**; a própria escrita parcial do upstream, dentro do laço, sem rollback (a própria
+segunda correção da `ERRATA-2`, seção 6.2 acima) é confirmada como uma peculiaridade real do
+upstream que **só o lado A** reproduz (porque o lado A *é* código upstream) e **o lado B
+deliberadamente não reproduz** -- o líder julgou esse comportamento do upstream um artefato de
+mutação de dicionário (sem buffer de staging, sem rollback), não uma semântica CSS intencional que
+valha a pena replicar bug-por-bug num motor clean-room. **As duas correções da seção 6.2 acima, e o
+próprio bullet de shorthand malformado da seção 11, descrevem o comportamento real do
+upstream/lado A e continuam INALTERADAS e corretas como rastro do que o upstream faz** -- o que muda
+é que elas não descrevem mais o lado B por implicação. O exemplo trabalhado da seção 15.2 é dividido
+abaixo numa linha do lado A e numa linha do lado B, não mais uma resposta compartilhada única. Esta
+é a **primeira entrada** de uma seção inteiramente nova, a seção 14.1 abaixo,
+**"Divergências deliberadas"** -- uma discrepância de byte lado A ≠ lado B permanente, por design,
+pra uma entrada nomeada, rastreada separadamente do próprio registro de divergências da seção 14
+(cujas três classes assumem todas que os dois lados **devem eventualmente concordar**; isto é o fato
+oposto, e misturar os dois corromperia o próprio sinal de limiar de escalonamento da seção 14).
+
+**Decisão 2 -- valor de palavra-chave não-reconhecido, o sexto caso fail-high
+(`UIX-RCSS-DUMP-B`, `TODO.md`):** os cinco casos fail-high originais da seção 11 nunca nomeavam
+"um identificador bem-formado que não é membro legal do próprio conjunto de palavras-chave aceitas
+*daquela* propriedade" (`display: blocc;` sendo o exemplo reportado) -- o `value_compute.hpp` não
+oferece essa checagem hoje, então o lado B atualmente imprime o texto cru verbatim em vez de
+reverter, uma lacuna fail-high genuína, corretamente auto-reportada em vez de remendada em silêncio
+com uma tabela inventada. **Fechado aqui:** um sexto bullet na seção 11, e a própria tabela de
+registro da seção 6.1 ganha o conjunto de palavras-chave legal enumerado pras 11 linhas que, até esta
+errata, carregavam a palavra nua "keyword" sem lista de membros (as outras 18 linhas de domínio
+palavra-chave já tinham a própria lista nomeada inline). Diferente da Decisão 1, **esta NÃO é uma
+divergência lado A/lado B** -- os dois lados rejeitam o mesmo token ruim do mesmo jeito, então não
+precisou de entrada na seção 14.1, só de uma regra completada.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -938,7 +1007,7 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 
 | Property | Initial value | Inherited | Value domain (section 7) |
 | :--- | :--- | :---: | :--- |
-| `align-items` | `stretch` | no | keyword |
+| `align-items` | `stretch` | no | keyword(`flex-start`,`flex-end`,`center`,`baseline`,`stretch`) |
 | `animation` | `none` | no | composite (§9.3) |
 | `backdrop-filter` | *(empty)* | no | composite filter-list (§9.2) |
 | `background-color` | `transparent` | no | color |
@@ -956,12 +1025,12 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 | `border-top-width` | `0px` | no | length |
 | `bottom` | `auto` | no | keyword(`auto`) or length-percent (§5, family a) |
 | `box-shadow` | `none` | no | composite shadow-list (§9.1) |
-| `box-sizing` | `content-box` | no | keyword |
+| `box-sizing` | `content-box` | no | keyword(`content-box`,`border-box`) |
 | `color` | `white` | **yes** | color |
 | `column-gap` | `0px` | no | length |
 | `cursor` | *(empty)* | **yes** | string |
 | `decorator` | *(empty)* | no | composite decorator-list (§9.2) |
-| `display` | `inline` | no | keyword |
+| `display` | `inline` | no | keyword(`none`,`block`,`inline`,`inline-block`,`flow-root`,`flex`,`inline-flex`,`table`,`inline-table`,`table-row`,`table-row-group`,`table-column`,`table-column-group`,`table-cell`) |
 | `filter` | *(empty)* | no | composite filter-list (§9.2) |
 | `flex-basis` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `flex-grow` | `0` | no | number |
@@ -973,7 +1042,7 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 | `image-tint-color` | `white` | no | color |
 | `image-tint-mode` | `none` | no | keyword(`none`,`multiply`,`luminance-multiply`,`screen`) |
 | `image-tint-threshold` | `0.55` | no | number, clamped `[0, 0.999]` |
-| `justify-content` | `flex-start` | no | keyword |
+| `justify-content` | `flex-start` | no | keyword(`flex-start`,`flex-end`,`center`,`space-between`,`space-around`,`space-evenly`) |
 | `left` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `letter-spacing` | `normal` | **yes** | keyword(`normal`) or length |
 | `line-height` | `1.2` | **yes** | number or length-percent (relative to `font-size`) |
@@ -987,13 +1056,13 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 | `min-height` | `0px` | no | length-percent (family a) |
 | `min-width` | `0px` | no | length-percent (family a) |
 | `opacity` | `1` | **yes** ⚠️ | number, clamped `[0, 1]` |
-| `overflow-x` | `visible` | no | keyword |
-| `overflow-y` | `visible` | no | keyword |
+| `overflow-x` | `visible` | no | keyword(`visible`,`hidden`,`auto`,`scroll`) |
+| `overflow-y` | `visible` | no | keyword(`visible`,`hidden`,`auto`,`scroll`) |
 | `padding-bottom` | `0px` | no | length-percent (family a) |
 | `padding-left` | `0px` | no | length-percent (family a) |
 | `padding-right` | `0px` | no | length-percent (family a) |
 | `padding-top` | `0px` | no | length-percent (family a) |
-| `position` | `static` | no | keyword |
+| `position` | `static` | no | keyword(`static`,`relative`,`absolute`,`fixed`) |
 | `right` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `ripple-origin-x` | `0` | no | number (px, custom glintfx) |
 | `ripple-origin-y` | `0` | no | number (px, custom glintfx) |
@@ -1002,13 +1071,13 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 | `ripple-width` | `48` | no | number (px, custom glintfx) |
 | `row-gap` | `0px` | no | length |
 | `tab-index` | `none` | no | keyword(`none`,`auto`) |
-| `text-align` | `left` | **yes** | keyword |
+| `text-align` | `left` | **yes** | keyword(`left`,`right`,`center`,`justify`) |
 | `text-overflow` | `clip` | no | keyword(`clip`,`ellipsis`) or string |
-| `text-transform` | `none` | **yes** | keyword |
+| `text-transform` | `none` | **yes** | keyword(`none`,`capitalize`,`uppercase`,`lowercase`) |
 | `top` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `transform` | `none` | no | composite transform-list (§9.4) |
-| `vertical-align` | `baseline` | no | keyword or length-percent (relative to `line-height`) |
-| `white-space` | `normal` | **yes** | keyword |
+| `vertical-align` | `baseline` | no | keyword(`baseline`,`middle`,`sub`,`super`,`text-top`,`text-bottom`,`top`,`center`,`bottom`) or length-percent (relative to `line-height`) |
+| `white-space` | `normal` | **yes** | keyword(`normal`,`pre`,`nowrap`,`pre-wrap`,`pre-line`) |
 | `width` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 
 **⚠️ Two entries that read as surprising and are correct as measured, flagged so nobody "fixes"
@@ -1047,6 +1116,47 @@ same domain and print form as every other box-relative property in the table -- 
 use of either is a **confirmation**, not a discovery, and changes nothing about this decision; a
 future census that finds a *third* zero-corpus-but-listed entry is a **new** anomaly and must be
 reported the same way this one was, not silently folded into this same justification.
+
+**🔵 Enumerated keyword sets, added by `UIX-RCSS-ERRATA-5`, 2026-08-06 -- 29 of these 72 rows are
+`Keyword` domain (either the sole domain, or the primary domain of a two-domain row); zero rows have
+`Keyword` only as the *alternate* domain. Of the 29, 18 already carried their own legal member set
+named inline before this errata** (`bottom`, `flex-basis`, `focus`, `height`, `image-tint-mode`,
+`left`, `letter-spacing`, `margin-bottom`, `margin-left`, `margin-right`, `margin-top`, `max-height`,
+`max-width`, `right`, `tab-index`, `text-overflow`, `top`, `width` -- each a single word, `auto`/
+`none`, or a short enumerated pair/quad) -- **the remaining 11 carried only the bare word "keyword",
+with no member list, until this errata: `align-items`, `box-sizing`, `display`, `justify-content`,
+`overflow-x`, `overflow-y`, `position`, `text-align`, `text-transform`, `vertical-align`,
+`white-space`.** All 11 are closed above, in the table's own cells, the same convention the other 18
+already used -- this table remains the single source of truth for every Keyword-domain property's
+own legal set; a future implementer does not consult a second document or the upstream source
+directly for this list, only cite it here.
+
+**Source and a judgment call, named so it can be overridden in one place:** all 11 sets are the
+**full upstream RmlUi enumeration**, verbatim from each property's own `RegisterProperty(...)
+.AddParser("keyword", "...")` call site (`examples/RmlUi/Source/Core/StyleSheetSpecification.cpp`):
+`align-items` `:417`, `box-sizing` `:318`, `display` `:306-307`, `justify-content` `:426`,
+`overflow-x`/`overflow-y` `:335-336`, `position` `:308`, `text-align` `:361`, `text-transform` `:363`,
+`vertical-align` `:331-333`, `white-space` `:364` -- `image-tint-mode`'s own 4-member set is
+glintfx-authored, not upstream, already correctly enumerated before this errata
+(`glintfx/src/rml/decorator_image_tint.cpp:409-411`), unaffected by this pass, restated here only for
+the denominator's own completeness. **Why full upstream, not a corpus-narrowed subset** (the same
+"real zero is a real cut" discipline section 13 below applies to *unmeasured properties and value
+syntax forms*): accepting a keyword string is a zero-cost set-membership check, not new
+parser/serializer machinery the way accepting a functional color form (`rgb()`, section 13) or a new
+property (`transition`, section 13) would be -- there is nothing here analogous to "implementing a
+feature nobody asked for". This dump's own scope is computed **values**, never layout (§12); printing
+`display=table-row` as a legal computed value commits this project to nothing about ever laying out a
+table, exactly as printing an out-of-viewport length commits it to nothing about ever rendering
+off-screen. The closest existing precedent is section 6.3's own `Box`-algorithm 3-value row: real,
+unmeasured, upstream, cheap to include faithfully, kept **because** it costs nothing beyond honestly
+implementing an algorithm this table already requires for the measured cases. **Flagged for the
+líder's attention regardless, not silently decided** (the same courtesy `ERRATA-2`'s premultiply
+call and `ERRATA-4`'s reversal of it both extended): `display`'s own 14-member upstream list is the
+one most likely to deserve a second look, since several of its members name layout modes
+(`table-row`, `flow-root`, ...) this codebase has no plan to ever lay out -- if the líder judges that
+a corpus-narrowed `display` set (measured: `none`, `block`, `inline-block`, plus `flex` per
+`docs/rmlx-subset.md` section 2's own consumer census, 10 instances) is the right call instead, that
+is a one-cell edit here, not a design change anywhere else in this document.
 
 #### 6.2 Shorthand-to-longhand expansion (no separate registry slot; feeds the longhand entries above)
 
@@ -1120,6 +1230,17 @@ no early exit across the loop at `:375-388`), so a reversed-order `border: #7A5A
 all 4 `-color` longhands from the source token (each side's own `FallThrough` sub-call hits the same
 bug independently) while leaving all 4 `-width` longhands untouched, *before* the aggregate
 `result=false` makes the outer call return failure.
+
+**🔵 Scope of the paragraph above, narrowed by `UIX-RCSS-ERRATA-5`, 2026-08-06: this is a trace of
+upstream's own real behaviour, true of Side A (which *is* upstream code) and, unless a fixture proves
+otherwise, of `border`'s own `RecursiveRepeat` case too -- it is no longer, by the líder's own
+decision, a description of Side B.** Side B's own clean-room engine (`shorthand.cpp`/`parser.cpp`)
+discards a `FallThrough`/`RecursiveRepeat` declaration **atomically** on the same reversed-order
+input -- no longhand keeps a partial match, every one of them falls back to its own §6.1 registry
+initial (or inherited value) -- and that atomic-discard behaviour is the one that **stays**, kept
+deliberately rather than bug-for-bug matched to upstream's own no-rollback dictionary mutation. See
+§14.1 below, "Deliberate divergences", for the full account, the byte-exact pair, and the fixture
+obligation this decision carries. §15.2's own worked example is split accordingly.
 
 ##### 6.3 The `Box` algorithm (verbatim from `PropertySpecification.cpp:336-370`, standard CSS box-model expansion)
 
@@ -1693,7 +1814,40 @@ parse failure that poisons the rest of the stylesheet, never a silent guess. Con
   happened for all 4 sides by the time the outer call reports failure. The **logged, reported**
   outcome is still "declaration rejected" for both cases -- what changed is which longhands the
   dictionary actually ends up holding when that rejection is reported, which is the fact this dump's
-  own `PROP` lines make visible and byte-comparable.
+  own `PROP` lines make visible and byte-comparable. **🔵 Scope, narrowed by `UIX-RCSS-ERRATA-5`,
+  2026-08-06: the partial-write consequence above is Side A's own (real upstream code) and is no
+  longer, by the líder's own decision, Side B's -- Side B discards the whole declaration atomically
+  instead. See §14.1, "Deliberate divergences", for the byte-exact pair and the fixture obligation
+  this permanent Side A ≠ Side B mismatch carries.**
+- **Unrecognized keyword value** for a property whose value domain (§6.1, either the sole domain or
+  a two-domain row's own keyword alternative) is `Keyword` -- a syntactically well-formed identifier
+  token that is not a member of *that specific property's own* accepted set (`display: blocc;`, one
+  character off `block`, is the reported example): **added, `UIX-RCSS-ERRATA-5`, 2026-08-06, closing
+  a gap the original five cases above never named.** The declaration is dropped in full -- the same
+  consequence already stated for an unknown property name, the first bullet above -- **not** a
+  variant of the malformed-shorthand partial-write case two bullets above, because it is a different
+  upstream code path entirely, with no in-loop mutation to guard against:
+  `PropertyParserKeyword::ParseValue`
+  (`examples/RmlUi/Source/Core/PropertyParserKeyword.cpp:9-19`) returns `false` on a
+  lookup miss against its own `ParameterMap`; `PropertyDefinition::ParseValue`
+  (`PropertyDefinition.cpp:75-89`) loops every parser registered for that property (the keyword
+  parser, plus, for a two-domain row, the length-percent/length/string parser) and only returns
+  `false` once **none** of them accept the token; the single-property caller,
+  `PropertySpecification::ParsePropertyDeclaration` (`PropertySpecification.cpp:255-282` -- the
+  *non*-shorthand path, contrast `ParseShorthandDeclaration`'s own loop the bullet above describes),
+  calls `dictionary.SetProperty` **only after** a successful `ParseValue` (`:277-280`) -- on failure,
+  `SetProperty` is never reached, so there is no partial dictionary mutation to reason about here.
+  The property computes to its inherited value (if `inherited: true` and an ancestor provides one) or
+  its §6.1 registry initial value -- the same outcome this section's own closing paragraph already
+  states for every fail-high case; this is the sixth trigger for it, not a seventh new consequence.
+  **Where the accepted set comes from:** §6.1's own registry table is the single source of truth for
+  every `Keyword`-domain property's own legal member set, named inline in that table's own "Value
+  domain" cell (`keyword(`a`,`b`,...)`) -- the convention already used, before this errata, for the
+  18 rows whose keyword alternative was a single word or a short enumerated set; this errata only
+  extends that same convention to the 11 rows that had carried the bare word "keyword" with no member
+  list (§6.1's own new paragraph above names all 11 and their upstream citation). **This case is
+  Side-A/Side-B-symmetric, unlike the bullet above** -- both dumpers reject the same unrecognized
+  token the same way, so §14.1's own ledger gets no entry for it.
 - **Logging format, minimum content:** the raw text of the rejected construct, and its file/line if
   available -- never a bare "invalid RCSS" with no locatable cause, the same standard
   `check_rml_whitelist.sh`'s own `file:line` reporting sets for this codebase (`docs/rmlx-subset.md`
@@ -1762,6 +1916,86 @@ two documents drifting apart on what "class b" means.
 | Date | Class | Description | Fixture | Resolution |
 | :--- | :---: | :--- | :--- | :--- |
 | *(none yet -- this document predates any `RMLX-2` slice; the first row is written by whichever slice's implementer finds the first real divergence)* | | | | |
+
+#### 14.1 🔵 Deliberate divergences (Side A ≠ Side B, permanent, by líder decision -- added `UIX-RCSS-ERRATA-5`, 2026-08-06)
+
+**What this section is, and why it is not the ledger above.** Section 14's own three classes (a/b/c)
+all share one assumption: Side A and Side B are *expected to eventually agree* on every fixture --
+class (a) is fixed by patching the dumper that is wrong, class (b) is fixed by teaching both sides the
+same real-upstream normalization, class (c) stops implementation until scope is settled, precisely
+because agreement is still the goal once the líder signs off. **This section tracks the opposite
+kind of fact: a byte-level mismatch the líder has decided to KEEP, permanently, for a named input --
+Side B is not wrong, Side A is not wrong, they are correctly implementing two different rules on
+purpose.** Filing an entry like this into section 14's own ledger would corrupt that ledger's own
+escalation signal (the "~10 class-(b) rows means something is systemically wrong" threshold, §14
+above) -- a permanent, intended mismatch is evidence of nothing going wrong, and must not count
+toward a signal that exists to detect exactly that.
+
+**Deliberate divergences: 1.** (Count kept at the top of this section, in both languages, precisely
+so growth here is visible and uncomfortable -- see the next paragraph for why that discomfort is the
+point.)
+
+**⚠️ Why this list must stay short, and why every row is dangerous by construction.** Until today,
+this document's own working rule was simple: any Side A/Side B byte difference is a defect,
+somewhere, full stop. The líder's own decision on `border-top` (§6.2, §11, §15.2) opens the first
+exception to that rule -- and an exception list that grows without discipline **eats the oracle's own
+value whole**: every future implementer who hits a real, undecided divergence now has a tempting
+third option beyond "fix Side A" or "fix Side B" -- "add a row here and call it deliberate" -- and if
+that door opens without friction, the oracle stops meaning anything. The four requirements below are
+the friction, and all four are mandatory, not aspirational:
+
+1. **Single source, read not embedded.** This table is the *only* place a Side A/Side B exception is
+   declared, for the entire `RMLX-2` oracle. **Normative requirement for the future
+   `UIX-RCSS-ORACULO` fatia (not yet a `TODO.md` table item as of this errata):** the differential
+   harness that diffs Side A's dump against Side B's dump MUST, for every byte-level mismatch at a
+   given `(node path, property, STATE)` triple, look that triple up against this table's own rows
+   *before* reporting a failure -- a mismatch matching a row here is expected and MUST NOT fail the
+   harness; a mismatch matching no row here MUST fail the harness. **The harness owns zero exception
+   logic of its own** -- no `if` statement inside the harness naming `border-top` or any other
+   property, no hardcoded skip-list, no comment saying "known difference, ignore". An exception
+   embedded in the harness's own code is indistinguishable from a bug the harness happens not to
+   catch; an exception that requires editing *this* document (with the same "stop, diff, líder
+   sign-off" discipline every other contract change in this document already carries, per this
+   document's own header) is auditable the same way every other rule here is.
+2. **Four required fields per row**, no row may omit any of them: **(a)** the exact case that
+   diverges (source RCSS + which node/state, precise enough that a second implementer can reconstruct
+   the exact fixture without guessing); **(b)** the exact byte Side A prints; **(c)** the exact byte
+   Side B prints; **(d)** why the two sides deliberately disagree, **dated and attributed to the
+   líder by name of decision date** -- never "the tech-lead decided" for a Side A/Side B behavioral
+   split, because that is a call this document's own header reserves for the líder, the same
+   authority line every other design judgment call in this document (the premultiply flag in
+   `ERRATA-2`, its own reversal in `ERRATA-4`) already follows.
+3. **🔴 Every exception MUST be exercised by at least one fixture, and the oracle MUST fail if any
+   exception is never exercised.** This is not paperwork. `TODO.md`'s own `SEED-GOLDEN-INERTE`
+   finding, the same day this errata was written, measured **three** golden fixtures in this same
+   `RMLX-2` wave that did not reach the condition they claimed to cover -- a golden that never
+   exercises what it says it exercises is worse than no golden at all, because green looks like proof
+   and is not. An unexercised *exception* is the identical failure mode one level up: it would let a
+   real regression hide behind a row that no longer describes any code path anyone runs. Concretely,
+   for the oracle harness's own test suite (`UIX-RCSS-ORACULO`, when that fatia is opened): (i) every
+   row in this table needs a named fixture, in the Fixture column below, that feeds the row's own
+   exact case through both dumpers; (ii) the harness's own meta-test suite needs a mutation-testing
+   pass per row -- neutralize this table's own lookup for that one row (so the harness would, for that
+   row alone, fall back to plain byte comparison) and assert the fixture's own test **goes red** --
+   proving the fixture actually lands on the code path this row excuses, not merely that the fixture
+   exists; a row whose neutralization does not turn its own fixture red is a build error for that
+   fatia, not a silent pass, the identical mutation-testing discipline this repo's own house rule
+   already applies to every other guard (`feedback_mutante_em_arquivo_nao_commitado`,
+   `SEED-GOLDEN-INERTE`, both `TODO.md`).
+4. **This section's own count line, above, is not decorative** -- it is the visible cost of adding a
+   row. A future implementer proposing a second entry should feel the same friction section 14's own
+   escalation-threshold paragraph describes for class-(b) rows: if this table ever approaches even a
+   handful of entries, that is a signal the líder-decision process itself, not this document's
+   format, needs re-examining -- a long list of "the two engines just disagree here, permanently" is
+   not a healthy end state for an oracle whose entire purpose is proving the two engines agree.
+
+**Ledger table.** Same column discipline as section 14's own table above (Fixture is a path relative
+to `glintfx/tests/`, or `none yet -- <how/when a fixture will exist>` until the fatia that owns it
+ships), plus the two byte columns unique to this table.
+
+| Date | Case | Side A byte | Side B byte | Why (líder decision) | Fixture |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-08-06 | `#b { border-top: #7A5A2E 1dp; }` (reversed-order `border-top` shorthand, `FallThrough`, §6.2) -- `body/1 PROP border-top-color`, `STATE none` | `border-top-color=#7a5a2eff` (upstream's own in-loop, no-rollback partial `SetProperty`, §6.2's second correction) | `border-top-color=#000000ff` (Side B's own atomic-discard: the whole declaration is dropped, both longhands fall back to the §6.1 registry initial, `black`, straight-alpha default `ff` per §7.1) | Decided 2026-08-06, líder: Side B's atomic-discard is judged the *correct* behaviour and stays; upstream's own partial write is a no-rollback dictionary-mutation artifact, not an intentional CSS semantic worth bug-for-bug replication in a clean-room engine. Origin: `UIX-SHORTHAND-PARCIAL`/`UIX-RCSS-DUMP-B` (`TODO.md`). `border-top-width` is **not** part of this exception -- both sides print `border-top-width=0.0000px` for `body/1`, in agreement, for unrelated reasons on each side (§15.2). | `none yet -- Side B (`UIX-RCSS-DUMP-B`) has shipped; Side A (`UIX-RCSS-DUMP-A`) has shipped; `UIX-RCSS-ORACULO` (the harness itself) has not been opened as a `TODO.md` item yet, so no fixture exercises this row through the actual differential harness today -- §15.2's own worked example is the byte-exact proof pending that fatia |
 
 ### 15. Worked examples (byte-exact)
 
@@ -1840,10 +2074,13 @@ Notes tying each line back to the sections above:
 - `color=#223344ff` / `#ff0000ff`: both straight-alpha, alpha defaulted to `ff` per §7.1 since
   neither source value specified one.
 
-#### 15.2 Shorthand order is load-bearing (`border-top`)
+#### 15.2 Shorthand order is load-bearing (`border-top`), and Side A/Side B permanently disagree on `#b`
 
-This is the errata's own worked anchor -- section 6.2's corrected table row, byte-exact, both orders
-side by side, `dp_ratio = 1.0`.
+This is the errata's own worked anchor -- section 6.2's corrected table row, byte-exact. `body/0`
+(the canonical, width-then-color order) is identical on both sides and shown once. `body/1` (the
+reversed, color-then-width order) is **not** identical on both sides as of `UIX-RCSS-ERRATA-5`,
+2026-08-06 -- shown as two separate blocks, Side A then Side B, this worked example's own
+`§14.1`-tracked deliberate divergence. `dp_ratio = 1.0` throughout.
 
 ```rcss
 #a { border-top: 1dp #7A5A2E; }
@@ -1854,32 +2091,57 @@ side by side, `dp_ratio = 1.0`.
 <body><div id="a"></div><div id="b"></div></body>
 ```
 
+`body/0` (`#a`, width-then-color, the corpus's own 100%-measured real order) -- both longhands set
+from the declaration, identical on both sides:
+
 ```
 body/0 PROP border-top-color=#7a5a2eff
 body/0 PROP border-top-width=1.0000px
-body/1 PROP border-top-color=#7a5a2eff
+```
+
+`border-top-width=1.0000px` (`1dp` resolved through `dp_ratio=1.0`, `px` suffix per §8.1),
+`border-top-color=#7a5a2eff` (§7.1, alpha defaulted to `ff`).
+
+`body/1` (`#b`, color-then-width, the reversed order) -- **Side A** (real upstream RmlUi,
+`UIX-RCSS-ERRATA-2`'s own `Finding A`, byte-by-byte trace in §6.2's second correction): only
+`border-top-width` reverts, `border-top-color` does not.
+
+```
+body/1 PROP border-top-color=#7a5a2eff    # Side A only
 body/1 PROP border-top-width=0.0000px
 ```
 
-- `body/0` (`#a`, width-then-color, the corpus's own 100%-measured real order) -- both longhands
-  set from the declaration: `border-top-width=1.0000px` (`1dp` resolved through `dp_ratio=1.0`, `px`
-  suffix per §8.1), `border-top-color=#7a5a2eff` (§7.1, alpha defaulted to `ff`).
-- `body/1` (`#b`, color-then-width, the reversed order) -- **corrected, `UIX-RCSS-ERRATA-2`
-  (`Finding A`, reverified directly against upstream, byte-by-byte trace in §6.2's second
-  correction): only `border-top-width` reverts, `border-top-color` does not.**
-  `ParseShorthandDeclaration` still returns `false` and the declaration is still logged as rejected
-  per §11's corrected malformed-shorthand bullet -- but upstream's own loop already called
-  `dictionary.SetProperty(BorderTopColor, ...)` from the source token `"#7A5A2E"` (item 1, `-color`,
-  matched it) **before** the post-loop guard ever fires; item 0 (`-width`) never matched anything in
-  this call. Printed result: `border-top-color=#7a5a2eff` (**set from the source token, identical to
-  `body/0`'s own value** -- not reverted), `border-top-width=0.0000px` (`0px`, quantized, the §6.1
-  registry initial -- this one **did** revert). **This is the line a naive "whole declaration
-  reverts" reading gets wrong:** it is not that `#b`'s two longhands print identically to `body/0`'s
-  *or* both revert to black/`0px` -- one of each: the matched longhand keeps the source value, only
-  the never-matched one falls back. An earlier version of this worked example (before this errata)
-  published `border-top-color=#000000ff` for `body/1` -- that value was **wrong**, not a rounding
-  variant; a Side A/Side B pair built against the un-corrected text would have agreed with each other
-  on the wrong byte, exactly the failure mode this document's own header section warns about.
+`ParseShorthandDeclaration` still returns `false` and the declaration is still logged as rejected
+per §11's corrected malformed-shorthand bullet -- but upstream's own loop already called
+`dictionary.SetProperty(BorderTopColor, ...)` from the source token `"#7A5A2E"` (item 1, `-color`,
+matched it) **before** the post-loop guard ever fires; item 0 (`-width`) never matched anything in
+this call. Printed result: `border-top-color=#7a5a2eff` (**set from the source token, identical to
+`body/0`'s own value** -- not reverted), `border-top-width=0.0000px` (`0px`, quantized, the §6.1
+registry initial -- this one **did** revert). This is the line a naive "whole declaration reverts"
+reading gets wrong **for Side A**: it is not that `#b`'s two longhands print identically to
+`body/0`'s *or* both revert to black/`0px` -- one of each: the matched longhand keeps the source
+value, only the never-matched one falls back.
+
+`body/1` -- **Side B** (`UIX-RCSS-ERRATA-5`, 2026-08-06, the líder's own decision, §14.1's own first
+ledger entry): the **entire** declaration is discarded atomically, no partial match survives, both
+longhands fall back to their own §6.1 registry initial:
+
+```
+body/1 PROP border-top-color=#000000ff    # Side B only
+body/1 PROP border-top-width=0.0000px
+```
+
+`border-top-color=#000000ff` (`black`, the §6.1 registry initial, straight-alpha default `ff` per
+§7.1 -- **not** `#7a5a2eff`), `border-top-width=0.0000px` (same initial value as Side A prints for
+this longhand, by coincidence of both longhands sharing the same fallback here, not because the two
+sides agree on the mechanism). **This byte pair -- Side A's `border-top-color=#7a5a2eff` against
+Side B's `border-top-color=#000000ff`, both for the identical `#b` input -- is a real, permanent,
+by-design oracle mismatch, not a bug in either dumper.** An oracle harness comparing the two blindly
+byte-for-byte on this fixture reports a false failure unless it consults §14.1 first. An earlier
+version of this worked example (before `UIX-RCSS-ERRATA-2`) published `border-top-color=#000000ff`
+for a single, shared `body/1` line covering both sides -- that was wrong *for what was then a
+shared answer*; it is coincidentally the correct Side B byte today, for an unrelated reason (Side B
+no longer claims to match Side A on this input at all).
 
 #### 15.3 The three `%` families, side by side
 
@@ -2343,6 +2605,52 @@ qualquer uma delas é uma **confirmação**, não uma descoberta, e não muda na
 futuro censo que achar uma **terceira** entrada zero-corpus-mas-listada é uma anomalia **nova** e
 precisa ser reportada do mesmo jeito que esta foi, não dobrada em silêncio nesta mesma justificativa.
 
+**🔵 Conjuntos de palavras-chave enumerados, acrescentados pela `UIX-RCSS-ERRATA-5`, 2026-08-06 -- 29
+destas 72 linhas são de domínio `Keyword` (o domínio único, ou o domínio primário de uma linha de
+dois domínios); zero linhas têm `Keyword` só como domínio *alternativo*. Das 29, 18 já carregavam o
+próprio conjunto de membros legal nomeado inline antes desta errata** (`bottom`, `flex-basis`,
+`focus`, `height`, `image-tint-mode`, `left`, `letter-spacing`, `margin-bottom`, `margin-left`,
+`margin-right`, `margin-top`, `max-height`, `max-width`, `right`, `tab-index`, `text-overflow`,
+`top`, `width` -- cada uma uma palavra só, `auto`/`none`, ou um par/quádrupla curto enumerado) --
+**as 11 restantes carregavam só a palavra nua "keyword", sem lista de membros, até esta errata:
+`align-items`, `box-sizing`, `display`, `justify-content`, `overflow-x`, `overflow-y`, `position`,
+`text-align`, `text-transform`, `vertical-align`, `white-space`.** As 11 são fechadas acima, nas
+próprias células da tabela, a mesma convenção que as outras 18 já usavam -- esta tabela permanece a
+fonte única de verdade pro próprio conjunto legal de toda propriedade de domínio palavra-chave; um
+futuro implementer não consulta um segundo documento nem o próprio fonte upstream direto pra esta
+lista, só cita aqui.
+
+**Fonte e uma decisão de julgamento, nomeada pra poder ser revertida num lugar só:** os 11 conjuntos
+são a **enumeração upstream RmlUi completa**, verbatim do próprio call site
+`RegisterProperty(...).AddParser("keyword", "...")` de cada propriedade
+(`examples/RmlUi/Source/Core/StyleSheetSpecification.cpp`): `align-items` `:417`, `box-sizing`
+`:318`, `display` `:306-307`, `justify-content` `:426`, `overflow-x`/`overflow-y` `:335-336`,
+`position` `:308`, `text-align` `:361`, `text-transform` `:363`, `vertical-align` `:331-333`,
+`white-space` `:364` -- o próprio conjunto de 4 membros de `image-tint-mode` é autorado pela glintfx,
+não upstream, já corretamente enumerado antes desta errata
+(`glintfx/src/rml/decorator_image_tint.cpp:409-411`), não afetado por esta passada, restatado aqui só
+pela completude do próprio denominador. **Por que upstream completo, não um subconjunto
+corpus-estreitado** (a mesma disciplina "zero real é corte real" que a seção 13 abaixo aplica a
+*propriedades e formas de sintaxe de valor não-medidas*): aceitar uma string de palavra-chave é uma
+checagem de pertencimento-a-conjunto de custo zero, não maquinaria nova de parser/serializador do
+jeito que aceitar uma forma funcional de cor (`rgb()`, seção 13) ou uma propriedade nova
+(`transition`, seção 13) seria -- não há nada aqui análogo a "implementar uma feature que ninguém
+pediu". O próprio escopo deste dump é valores **computados**, nunca layout (§12); imprimir
+`display=table-row` como um valor computado legal não compromete este projeto a nada sobre algum dia
+fazer layout de tabela, exatamente como imprimir um comprimento fora-do-viewport não compromete a
+nada sobre algum dia renderizar fora-da-tela. O precedente existente mais próximo é a própria linha
+de 3 valores do algoritmo `Box` da seção 6.3: real, não-medida, upstream, barata de incluir
+fielmente, mantida **porque** não custa nada além de implementar honestamente um algoritmo que esta
+tabela já exige pros casos medidos. **Sinalizado pra atenção do líder de qualquer jeito, não decidido
+em silêncio** (a mesma cortesia que a própria chamada de pré-multiplicação da `ERRATA-2` e a própria
+reversão dela pela `ERRATA-4` estenderam): a própria lista de 14 membros upstream do `display` é a
+que mais provavelmente merece um segundo olhar, já que vários dos próprios membros nomeiam modos de
+layout (`table-row`, `flow-root`, ...) que este código-base não tem plano nenhum de algum dia
+fazer layout. Se o líder julgar que um conjunto `display` corpus-estreitado (medido: `none`, `block`,
+`inline-block`, mais `flex` pelo próprio censo do consumidor da seção 2 do
+`docs/rmlx-subset.md`, 10 instâncias) é a decisão certa em vez disso, isso é uma edição de célula
+aqui, não uma mudança de design em lugar nenhum mais deste documento.
+
 #### 6.2 Expansão shorthand-pra-longhand (sem slot próprio de registro; alimenta as entradas longhand acima)
 
 *(mesma tabela da seção 6.2 em inglês -- nomes de propriedade e algoritmos não traduzidos. A linha de
@@ -2404,6 +2712,18 @@ de side-shorthand roda até o fim de forma independente (`result &= ParseShortha
 escreve parcialmente os 4 longhands `-color` a partir do token da fonte (cada sub-chamada
 `FallThrough` de cada lado bate no mesmo bug de forma independente) enquanto deixa os 4 longhands
 `-width` intocados, *antes* do `result=false` agregado fazer a chamada externa retornar falha.
+
+**🔵 Escopo do parágrafo acima, estreitado pela `UIX-RCSS-ERRATA-5`, 2026-08-06: isto é um rastro do
+próprio comportamento real do upstream, verdadeiro pro lado A (que *é* código upstream) e, a menos
+que uma fixture prove o contrário, pro próprio caso `RecursiveRepeat` do `border` também -- não é
+mais, pela própria decisão do líder, uma descrição do lado B.** O próprio motor clean-room do lado B
+(`shorthand.cpp`/`parser.cpp`) descarta uma declaração `FallThrough`/`RecursiveRepeat`
+**atomicamente** na mesma entrada de ordem revertida -- nenhum longhand segura um casamento parcial,
+cada um deles cai pro próprio valor inicial de registro da seção 6.1 (ou valor herdado) -- e esse
+comportamento de descarte atômico é o que **fica**, mantido deliberadamente em vez de casado
+bug-por-bug com a própria mutação de dicionário sem rollback do upstream. Ver a seção 14.1 abaixo,
+"Divergências deliberadas", pro relato completo, o par byte-exato, e a obrigação de fixture que esta
+decisão carrega. O próprio exemplo trabalhado da seção 15.2 é dividido de acordo.
 
 ##### 6.3 O algoritmo `Box` (verbatim de `PropertySpecification.cpp:336-370`, expansão de box-model CSS padrão)
 
@@ -2735,7 +3055,45 @@ Concretamente:
   aconteceu pros 4 lados no momento em que a chamada externa reporta falha. O resultado **logado,
   reportado** continua sendo "declaração rejeitada" pros dois casos -- o que mudou é quais longhands
   o dicionário de fato termina segurando quando aquela rejeição é reportada, que é o fato que as
-  próprias linhas `PROP` deste dump tornam visível e byte-comparável.
+  próprias linhas `PROP` deste dump tornam visível e byte-comparável. **🔵 Escopo, estreitado pela
+  `UIX-RCSS-ERRATA-5`, 2026-08-06: a consequência de escrita-parcial acima é do próprio lado A
+  (código upstream real) e não é mais, pela própria decisão do líder, do lado B -- o lado B descarta
+  a declaração inteira, atomicamente, em vez disso. Ver a seção 14.1, "Divergências deliberadas",
+  pro par byte-exato e a obrigação de fixture que esta discrepância permanente lado A ≠ lado B
+  carrega.**
+- **Valor de palavra-chave não-reconhecido** pra uma propriedade cujo domínio de valor (seção 6.1, o
+  domínio único ou a própria alternativa palavra-chave de uma linha de dois domínios) é `Keyword` --
+  um token identificador bem-formado sintaticamente que não é membro do conjunto aceito *daquela
+  propriedade específica* (`display: blocc;`, um caractere de diferença de `block`, é o exemplo
+  reportado): **acrescentado, `UIX-RCSS-ERRATA-5`, 2026-08-06, fechando uma lacuna que os cinco casos
+  originais acima nunca nomearam.** A declaração é descartada por completo -- a mesma consequência já
+  declarada pra um nome de propriedade desconhecido, o primeiro bullet acima -- **não** uma variante
+  do caso de escrita-parcial de shorthand malformado dois bullets acima, porque é um caminho de
+  código upstream inteiramente diferente, sem mutação dentro de laço nenhuma pra se preocupar:
+  `PropertyParserKeyword::ParseValue`
+  (`examples/RmlUi/Source/Core/PropertyParserKeyword.cpp:9-19`) retorna `false` num miss de busca
+  contra o próprio `ParameterMap`; `PropertyDefinition::ParseValue` (`PropertyDefinition.cpp:75-89`)
+  itera todo parser registrado pra aquela propriedade (o parser de keyword, mais, pra uma linha de
+  dois domínios, o parser de length-percent/length/string) e só retorna `false` quando **nenhum**
+  deles aceita o token; o chamador de propriedade única,
+  `PropertySpecification::ParsePropertyDeclaration`
+  (`PropertySpecification.cpp:255-282` -- o caminho *não*-shorthand,
+  contraste com o próprio laço de `ParseShorthandDeclaration` que o bullet acima descreve), chama
+  `dictionary.SetProperty` **só depois** de um `ParseValue` bem-sucedido (`:277-280`) -- na falha,
+  `SetProperty` nunca é alcançado, então não há mutação parcial de dicionário nenhuma a considerar
+  aqui. A propriedade computa pro próprio valor herdado (se `inherited: true` e um ancestral fornecer
+  um) ou pro próprio valor inicial de registro da seção 6.1 -- o mesmo resultado que o próprio
+  parágrafo de fechamento desta seção já declara pra todo caso fail-high; este é o sexto gatilho pra
+  isso, não uma sétima consequência nova. **De onde vem o conjunto aceito:** a própria tabela de
+  registro da seção 6.1 é a fonte única de verdade pro próprio conjunto de membros legal de toda
+  propriedade de domínio `Keyword`, nomeado inline na própria célula "Value domain" daquela tabela
+  (`keyword(`a`,`b`,...)`) -- a convenção já usada, antes desta errata, pras 18 linhas cuja
+  alternativa palavra-chave era uma palavra só ou um conjunto curto enumerado; esta errata só estende
+  essa mesma convenção pras 11 linhas que carregavam a palavra nua "keyword" sem lista de membros (o
+  próprio parágrafo novo da seção 6.1 acima nomeia as 11 e a própria citação upstream). **Este caso é
+  simétrico lado-A/lado-B, diferente do bullet acima** -- os dois dumpers rejeitam o mesmo token
+  não-reconhecido do mesmo jeito, então o próprio ledger da seção 14.1 não ganha entrada nenhuma por
+  causa dele.
 - **Formato de log, conteúdo mínimo:** o texto cru da construção rejeitada, e o arquivo/linha se
   disponível -- nunca um "RCSS inválido" nu sem causa localizável, o mesmo padrão que o próprio
   relatório `file:line` do `check_rml_whitelist.sh` fixa pra este código-base (seção 4 do
@@ -2810,6 +3168,92 @@ texto por referência, não por duplicação, pra evitar os dois documentos dive
 | :--- | :---: | :--- | :--- | :--- |
 | *(nenhuma ainda -- este documento é anterior a qualquer fatia da `RMLX-2`; a primeira linha é escrita por quem implementar a primeira fatia a achar a primeira divergência real)* | | | | |
 
+#### 14.1 🔵 Divergências deliberadas (lado A ≠ lado B, permanente, por decisão do líder -- acrescentada pela `UIX-RCSS-ERRATA-5`, 2026-08-06)
+
+**O que esta seção é, e por que não é o ledger acima.** As próprias três classes (a/b/c) da seção 14
+compartilham uma suposição: espera-se que o lado A e o lado B **eventualmente concordem** em toda
+fixture -- a classe (a) é consertada corrigindo o dumper errado, a classe (b) é consertada ensinando
+aos dois lados a mesma normalização real-do-upstream, a classe (c) para a implementação até o escopo
+ser resolvido, precisamente porque concordância continua sendo o objetivo assim que o líder dá aval.
+**Esta seção rastreia o fato oposto: uma discrepância de byte que o líder decidiu MANTER,
+permanentemente, pra uma entrada nomeada -- o lado B não está errado, o lado A não está errado, os
+dois estão implementando corretamente duas regras diferentes de propósito.** Registrar uma entrada
+dessas no próprio ledger da seção 14 corromperia o próprio sinal de escalonamento daquele ledger (o
+limiar "~10 linhas classe-(b) significa que algo está sistemicamente errado", seção 14 acima) -- uma
+discrepância permanente e intencional é evidência de que nada está dando errado, e não pode contar
+pra um sinal que existe pra detectar exatamente isso.
+
+**Divergências deliberadas: 1.** (Contagem mantida no topo desta seção, nas duas línguas,
+precisamente pra que o crescimento aqui seja visível e incômodo -- ver o próximo parágrafo pro
+porquê desse incômodo ser o ponto.)
+
+**⚠️ Por que esta lista precisa ficar curta, e por que toda linha é perigosa por construção.** Até
+hoje, a própria regra de trabalho deste documento era simples: qualquer diferença de byte lado
+A/lado B é um defeito, em algum lugar, ponto final. A própria decisão do líder sobre `border-top`
+(§6.2, §11, §15.2) abre a primeira exceção a essa regra -- e uma lista de exceção que cresce sem
+disciplina **engole o próprio valor do oráculo inteiro**: todo futuro implementer que bater numa
+divergência real e não-decidida agora tem uma terceira opção tentadora além de "consertar o lado A"
+ou "consertar o lado B" -- "somar uma linha aqui e chamar de deliberada" -- e se essa porta abrir sem
+atrito, o oráculo para de significar qualquer coisa. Os quatro requisitos abaixo são o atrito, e os
+quatro são obrigatórios, não aspiracionais:
+
+1. **Fonte única, lida, não embutida.** Esta tabela é o *único* lugar onde uma exceção lado A/lado B
+   é declarada, pro oráculo inteiro da `RMLX-2`. **Requisito normativo pra futura fatia
+   `UIX-RCSS-ORACULO` (ainda não é um item de tabela do `TODO.md` nesta errata):** o harness
+   diferencial que faz o diff do dump do lado A contra o dump do lado B DEVE, pra toda discrepância de
+   byte numa tripla `(caminho de nó, propriedade, STATE)` dada, consultar essa tripla contra as
+   próprias linhas desta tabela *antes* de reportar uma falha -- uma discrepância que casa com uma
+   linha aqui é esperada e NÃO DEVE falhar o harness; uma discrepância que não casa com linha nenhuma
+   aqui DEVE falhar o harness. **O harness não é dono de lógica de exceção nenhuma própria** --
+   nenhum `if` dentro do harness nomeando `border-top` ou qualquer outra propriedade, nenhuma
+   skip-list hardcoded, nenhum comentário dizendo "diferença conhecida, ignorar". Uma exceção
+   embutida no próprio código do harness é indistinguível de um bug que o harness por acaso não
+   pega; uma exceção que exige editar *este* documento (com a mesma disciplina "parar, diff, aval do
+   líder" que toda outra mudança de contrato deste documento já carrega, pela própria cláusula de
+   cabeçalho deste documento) é auditável do mesmo jeito que toda outra regra aqui é.
+2. **Quatro campos obrigatórios por linha**, nenhuma linha pode omitir nenhum deles: **(a)** o caso
+   exato que diverge (RCSS-fonte + qual nó/estado, preciso o bastante pra um segundo implementer
+   reconstruir a fixture exata sem chutar); **(b)** o byte exato que o lado A imprime; **(c)** o byte
+   exato que o lado B imprime; **(d)** por que os dois lados deliberadamente discordam, **datado e
+   atribuído ao líder por nome de data de decisão** -- nunca "o tech-lead decidiu" pra uma cisão de
+   comportamento lado A/lado B, porque essa é uma chamada que o próprio cabeçalho deste documento
+   reserva pro líder, a mesma linha de autoridade que toda outra decisão de julgamento de design
+   deste documento (a sinalização de pré-multiplicação da `ERRATA-2`, a própria reversão dela na
+   `ERRATA-4`) já segue.
+3. **🔴 Toda exceção DEVE ser exercitada por pelo menos uma fixture, e o oráculo DEVE falhar se
+   alguma exceção nunca for exercitada.** Isto não é burocracia. O próprio achado `SEED-GOLDEN-INERTE`
+   do `TODO.md`, no mesmo dia em que esta errata foi escrita, mediu **três** fixtures golden nesta
+   mesma onda `RMLX-2` que não alcançavam a condição que afirmavam cobrir -- um golden que nunca
+   exercita o que diz exercitar é pior que golden nenhum, porque verde parece prova e não é. Uma
+   *exceção* não-exercitada é o mesmo modo de falha um nível acima: deixaria uma regressão real se
+   esconder atrás de uma linha que não descreve mais nenhum caminho de código que alguém roda.
+   Concretamente, pra própria suíte de teste do harness do oráculo (`UIX-RCSS-ORACULO`, quando essa
+   fatia for aberta): (i) toda linha desta tabela precisa de uma fixture nomeada, na coluna Fixture
+   abaixo, que alimenta o caso exato daquela linha pelos dois dumpers; (ii) a própria suíte de
+   meta-teste do harness precisa de uma passada de mutation testing por linha -- neutralizar a
+   própria busca desta tabela pra aquela linha (de modo que o harness, só pra aquela linha, caia pra
+   comparação de byte simples) e assertar que o próprio teste da fixture **fica vermelho** -- provando
+   que a fixture de fato alcança o caminho de código que aquela linha desculpa, não só que a fixture
+   existe; uma linha cuja neutralização não vira o próprio vermelho da fixture é um erro de build
+   pra aquela fatia, não uma passagem silenciosa, a mesma disciplina de mutation testing que a própria
+   regra da casa já aplica a todo outro guarda (`feedback_mutante_em_arquivo_nao_commitado`,
+   `SEED-GOLDEN-INERTE`, os dois no `TODO.md`).
+4. **A própria linha de contagem desta seção, acima, não é decorativa** -- é o custo visível de somar
+   uma linha. Um futuro implementer propondo uma segunda entrada deveria sentir o mesmo atrito que o
+   próprio parágrafo de limiar-de-escalonamento da seção 14 descreve pras linhas classe-(b): se esta
+   tabela algum dia se aproximar até de um punhado de entradas, isso é um sinal de que o próprio
+   processo de decisão-do-líder, não o formato deste documento, precisa de reexame -- uma lista longa
+   de "os dois motores só discordam aqui, permanentemente" não é um estado final saudável pra um
+   oráculo cujo propósito inteiro é provar que os dois motores concordam.
+
+**Tabela do ledger.** Mesma disciplina de coluna da própria tabela da seção 14 acima (Fixture é um
+caminho relativo a `glintfx/tests/`, ou `nenhuma ainda -- <como/quando uma fixture vai existir>` até
+a fatia dona dela ser entregue), mais as duas colunas de byte próprias desta tabela.
+
+| Data | Caso | Byte lado A | Byte lado B | Por quê (decisão do líder) | Fixture |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-08-06 | `#b { border-top: #7A5A2E 1dp; }` (shorthand `border-top` de ordem revertida, `FallThrough`, §6.2) -- `body/1 PROP border-top-color`, `STATE none` | `border-top-color=#7a5a2eff` (a própria escrita parcial do upstream, dentro do laço, sem rollback, segunda correção da §6.2) | `border-top-color=#000000ff` (o próprio descarte atômico do lado B: a declaração inteira é derrubada, os dois longhands caem pro próprio valor inicial de registro da seção 6.1, `black`, default straight-alpha `ff` pela seção 7.1) | Decidido em 2026-08-06, líder: o descarte atômico do lado B é julgado o comportamento *correto* e fica; a própria escrita parcial do upstream é um artefato de mutação de dicionário sem rollback, não uma semântica CSS intencional que valha a pena replicar bug-por-bug num motor clean-room. Origem: `UIX-SHORTHAND-PARCIAL`/`UIX-RCSS-DUMP-B` (`TODO.md`). `border-top-width` **não** faz parte desta exceção -- os dois lados imprimem `border-top-width=0.0000px` pro `body/1`, em concordância, por motivos não-relacionados de cada lado (§15.2). | `nenhuma ainda -- o lado B (`UIX-RCSS-DUMP-B`) foi entregue; o lado A (`UIX-RCSS-DUMP-A`) foi entregue; a `UIX-RCSS-ORACULO` (o próprio harness) ainda não foi aberta como item do `TODO.md`, então nenhuma fixture exercita esta linha pelo harness diferencial de fato hoje -- o próprio exemplo trabalhado da seção 15.2 é a prova byte-exata pendente daquela fatia |
+
 ### 15. Exemplos trabalhados (byte-exato)
 
 **Quatro exemplos independentes abaixo (15.1-15.4), cada um ancorando um ponto em que a própria
@@ -2824,11 +3268,15 @@ reproduzir a mesma resposta trabalhada byte-exata discordando sobre o que ela si
 de volta às seções não são traduzidas; identificadores de campo, valores e nomes de arquivo são
 dados técnicos.)*
 
-#### 15.2 A ordem do shorthand é load-bearing (`border-top`)
+#### 15.2 A ordem do shorthand é load-bearing (`border-top`), e lado A/lado B discordam permanentemente em `#b`
 
 *(mesmo exemplo em inglês acima -- a própria âncora trabalhada da errata, seção 6.2, as duas ordens
 lado a lado; identificadores de campo, valores e nomes de arquivo são dados técnicos, não
-traduzidos.)*
+traduzidos.)* **🔵 Atualizado pela `UIX-RCSS-ERRATA-5`, 2026-08-06: a linha `body/1` deixou de ser
+uma resposta única compartilhada entre os dois lados do oráculo -- ver a versão em inglês acima pro
+par byte-exato completo, lado A (`border-top-color=#7a5a2eff`) contra lado B
+(`border-top-color=#000000ff`), e a própria seção 14.1 abaixo pro registro normativo desta
+divergência deliberada.**
 
 #### 15.3 As três famílias de `%`, lado a lado
 

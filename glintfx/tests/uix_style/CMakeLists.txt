@@ -125,3 +125,29 @@ target_compile_definitions(uix_style_selector_match_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
 add_test(NAME uix_style_selector_match_corpus_sanity COMMAND uix_style_selector_match_corpus_sanity)
+
+# EN: UIX-CASCADE -- cascade.cpp is this module's SECOND source to depend on the DOM sibling module
+#     (already pulled in by selector_match.cpp above, `glintfx::uix::Element`) -- no NEW
+#     cross-module dependency, cascade.hpp itself includes selector_match.hpp and dom_tree.hpp, both
+#     already wired into this library. Own executables, same "zero RmlUi/GLFW/GL" discipline as
+#     every executable above.
+# PT: UIX-CASCADE -- o cascade.cpp é a SEGUNDA fonte deste módulo a depender do módulo irmão DOM (já
+#     trazido pelo selector_match.cpp acima, `glintfx::uix::Element`) -- nenhuma dependência
+#     cross-módulo NOVA, o próprio cascade.hpp inclui selector_match.hpp e dom_tree.hpp, os dois já
+#     amarrados nesta biblioteca. Executáveis próprios, mesma disciplina "zero RmlUi/GLFW/GL" de todo
+#     executável acima.
+add_executable(uix_style_cascade_sanity cascade_sanity.cpp)
+target_link_libraries(uix_style_cascade_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_cascade_sanity COMMAND uix_style_cascade_sanity)
+
+add_executable(uix_style_cascade_corpus_sanity
+  cascade_corpus_sanity.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/lexer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_cascade_corpus_sanity PRIVATE glintfx::uix_style)
+target_compile_definitions(uix_style_cascade_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
+add_test(NAME uix_style_cascade_corpus_sanity COMMAND uix_style_cascade_corpus_sanity)

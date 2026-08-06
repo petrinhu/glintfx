@@ -4252,6 +4252,7 @@ add_library(glintfx_uix_style_gate STATIC
   ${CMAKE_SOURCE_DIR}/src/uix/style/parser.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/selector_match.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/cascade.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/dom/dom_tree.cpp)
 target_include_directories(glintfx_uix_style_gate PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -4329,6 +4330,34 @@ target_compile_definitions(uix_style_selector_match_corpus_sanity PRIVATE
   GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
   GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
 add_test(NAME uix_style_selector_match_corpus_sanity COMMAND uix_style_selector_match_corpus_sanity)
+
+# EN: UIX-CASCADE -- mirrors glintfx/tests/uix_style/CMakeLists.txt's own two executables
+#     (uix_style_cascade_sanity, hand-built unit cases; uix_style_cascade_corpus_sanity, real
+#     corpus RCSS+DOM cascaded together). The corpus executable needs lexer.cpp/parser.cpp from
+#     ${CMAKE_SOURCE_DIR}/src/uix/dom/ in ADDITION to glintfx_uix_style_gate (which already carries
+#     dom_tree.cpp AND cascade.cpp, added above) -- same "not dom_tree.cpp again, would
+#     duplicate-symbol" reasoning as every corpus executable above.
+# PT: UIX-CASCADE -- espelha os dois próprios executáveis do glintfx/tests/uix_style/CMakeLists.txt
+#     (uix_style_cascade_sanity, casos unitários construídos-à-mão; uix_style_cascade_corpus_sanity,
+#     RCSS+DOM de corpus real cascateados juntos). O executável de corpus precisa de
+#     lexer.cpp/parser.cpp de ${CMAKE_SOURCE_DIR}/src/uix/dom/ ALÉM do glintfx_uix_style_gate (que
+#     já carrega dom_tree.cpp E cascade.cpp, somados acima) -- mesmo raciocínio "não dom_tree.cpp de
+#     novo, duplicaria símbolo" de todo executável de corpus acima.
+add_executable(uix_style_cascade_sanity uix_style/cascade_sanity.cpp)
+target_link_libraries(uix_style_cascade_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_cascade_sanity COMMAND uix_style_cascade_sanity)
+
+add_executable(uix_style_cascade_corpus_sanity
+  uix_style/cascade_corpus_sanity.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_cascade_corpus_sanity PRIVATE glintfx_uix_style_gate)
+target_compile_definitions(uix_style_cascade_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_SOURCE_DIR}/tests"
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+add_test(NAME uix_style_cascade_corpus_sanity COMMAND uix_style_cascade_corpus_sanity)
 
 # ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED

@@ -90,8 +90,15 @@ endif()
 #     fontes de dois módulos standalone). Só dom_tree.cpp (não lexer/parser/dumper.cpp): este módulo
 #     só consome uma árvore `Element` JÁ CONSTRUÍDA (via o próprio parâmetro `const Element&` do
 #     match_selector), nunca parseia texto RML ele próprio.
+# EN: UIX-CASCADE -- cascade.cpp added here (2026-08-06), no new source dependency (it only
+#     includes selector_match.hpp/parser.hpp/dom_tree.hpp, all three already compiled into this
+#     library above).
+# PT: UIX-CASCADE -- cascade.cpp somado aqui (2026-08-06), nenhuma dependência de fonte nova (só
+#     inclui selector_match.hpp/parser.hpp/dom_tree.hpp, os três já compilados nesta biblioteca
+#     acima).
 add_library(glintfx_uix_style STATIC
   lexer.cpp property_registry.cpp shorthand.cpp parser.cpp value_compute.cpp selector_match.cpp
+  cascade.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../dom/dom_tree.cpp)
 target_include_directories(glintfx_uix_style PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 

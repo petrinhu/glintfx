@@ -62,42 +62,22 @@ bool set_text(Document& doc, std::string_view id, std::string text) {
     return false;
   }
 
-  // EN: Shape (a) -- zero existing children. See dom_api.hpp's own doc-comment, shape (a), for the
-  //     full rationale, including why an empty/whitespace-only `text` does not need a special-case
-  //     branch here: `append_child`'s own existence filter already produces the correct "zero
-  //     children, success" outcome for that input, matching upstream exactly.
-  // PT: Forma (a) -- zero filhos existentes. Ver o próprio doc-comment do dom_api.hpp, forma (a),
-  //     pro racional completo, incluindo por que um `text` vazio/só-whitespace não precisa de
-  //     ramo de caso especial aqui: o próprio filtro de existência do `append_child` já produz o
-  //     resultado correto "zero filhos, sucesso" pra esse input, batendo exatamente com o upstream.
-  if (el->child_count() == 0) {
-    AppendResult result = el->append_child(std::make_unique<Text>(std::move(text)));
-    return result.outcome != AppendOutcome::RejectedDepthCeiling;
-  }
+  // EN: UIX-REMOVE-CHILD -- unconditional clear FIRST, exactly mirroring `Rml::
+  //     Element::SetInnerRML`'s own order (clear every existing child regardless of what was
+  //     there or whether the new text is empty, THEN try to instance the new text). See
+  //     dom_api.hpp's own set_text doc-comment for the full before/after this replaces (the old
+  //     three-shape special-casing) and the one new RejectedDepthCeiling edge this ordering
+  //     introduces (a no-risk edge -- see that doc-comment's own "⚠️" paragraph).
+  // PT: UIX-REMOVE-CHILD -- clear incondicional PRIMEIRO, espelhando exatamente a própria ordem do
+  //     `Rml::Element::SetInnerRML` (limpa todo filho existente independente do que havia ou de o
+  //     texto novo ser vazio, DEPOIS tenta instanciar o texto novo). Ver o próprio doc-comment do
+  //     set_text no dom_api.hpp pro antes/depois completo que isto substitui (a antiga divisão em
+  //     três formas) e a nova borda RejectedDepthCeiling que esta ordem introduz (uma borda sem
+  //     risco -- ver o próprio parágrafo "⚠️" daquele doc-comment).
+  el->clear_children();
 
-  // EN: Shape (b) -- exactly one existing child, and it is a Text node: mutate it in place via
-  //     `Text::set_content`, preserving object identity. `children().front().get()` yields a
-  //     mutable `Node*` even though `children()` itself returns a `const` reference -- see
-  //     dom_api.hpp's own doc-comment, shape (b), for why that is well-defined (constness does not
-  //     propagate through `unique_ptr::get()`), not a `const_cast`.
-  // PT: Forma (b) -- exatamente um filho existente, e ele é um nó Text: muta ele no lugar via
-  //     `Text::set_content`, preservando identidade de objeto. `children().front().get()` rende um
-  //     `Node*` mutável mesmo `children()` em si retornando uma referência `const` -- ver o próprio
-  //     doc-comment do dom_api.hpp, forma (b), pra por que isto é bem-definido (constância não se
-  //     propaga por `unique_ptr::get()`), não um `const_cast`.
-  if (el->child_count() == 1) {
-    Text* only = as_text(el->children().front().get());
-    if (only != nullptr) {
-      only->set_content(std::move(text));
-      return true;
-    }
-  }
-
-  // EN: Shape (c) -- 🔴 the load-bearing gap. See dom_api.hpp's own doc-comment, shape (c), for the
-  //     full argument for why this refuses rather than fakes a workaround.
-  // PT: Forma (c) -- 🔴 a lacuna que carrega peso. Ver o próprio doc-comment do dom_api.hpp, forma
-  //     (c), pro argumento completo de por que isto recusa em vez de forjar um contorno.
-  return false;
+  AppendResult result = el->append_child(std::make_unique<Text>(std::move(text)));
+  return result.outcome != AppendOutcome::RejectedDepthCeiling;
 }
 
 bool add_class(Document& doc, std::string_view id, std::string_view cls) {

@@ -180,6 +180,28 @@ AppendResult Element::append_child(std::unique_ptr<Node> child) {
   return AppendResult{raw, AppendOutcome::Appended};
 }
 
+// EN: UIX-REMOVE-CHILD -- see dom_tree.hpp's own doc-comment for the full contract/rationale.
+// PT: UIX-REMOVE-CHILD -- ver o próprio doc-comment do dom_tree.hpp pro contrato/racional
+//     completos.
+bool Element::remove_child(const Node* child) {
+  if (child == nullptr) {
+    return false;
+  }
+  for (auto it = children_.begin(); it != children_.end(); ++it) {
+    if (it->get() == child) {
+      children_.erase(it); // destroys child (and, recursively, its own descendants)
+      return true;
+    }
+  }
+  return false;
+}
+
+std::size_t Element::clear_children() {
+  const std::size_t removed = children_.size();
+  children_.clear(); // destroys every child (and, recursively, their own descendants)
+  return removed;
+}
+
 const std::vector<std::unique_ptr<Node>>& Element::children() const {
   return children_;
 }

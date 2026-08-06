@@ -346,6 +346,91 @@ void test_as_element_as_text_helpers() {
   check(as_text(null_node) == nullptr, "as_text(nullptr): nullptr, no crash");
 }
 
+// ---------------------------------------------------------------------------
+// EN: Case 10 -- UIX-REMOVE-CHILD: Element::remove_child removes a direct child by pointer
+//     identity, returns true; false (no-op) for nullptr, an already-removed child, and a
+//     grandchild (child of a DIFFERENT element) -- see dom_tree.hpp's own doc-comment for why this
+//     stays a plain bool, unlike append_child's richer AppendResult.
+// PT: Caso 10 -- UIX-REMOVE-CHILD: Element::remove_child remove um filho direto por identidade de
+//     ponteiro, retorna true; false (no-op) pra nullptr, um filho já removido, e um neto (filho de
+//     um elemento DIFERENTE) -- ver o próprio doc-comment do dom_tree.hpp pra por que isto continua
+//     um bool simples, diferente do AppendResult mais rico do append_child.
+// ---------------------------------------------------------------------------
+void test_remove_child_direct_only_by_identity() {
+  Document doc;
+  Element& body = doc.body();
+
+  auto div = std::make_unique<Element>("div");
+  Element* div_raw = div.get();
+  body.append_child(std::move(div));
+
+  auto span = std::make_unique<Element>("span");
+  Element* span_raw = span.get();
+  div_raw->append_child(std::move(span));
+
+  auto p = std::make_unique<Element>("p");
+  Element* p_raw = p.get();
+  body.append_child(std::move(p));
+
+  check(body.child_count() == 2, "precondition: body has 2 children (div, p)");
+
+  // EN: nullptr is a no-op, tree untouched.
+  // PT: nullptr é no-op, árvore intocada.
+  check(!body.remove_child(nullptr), "remove_child(nullptr): false, no-op");
+  check(body.child_count() == 2, "remove_child(nullptr): body still has 2 children");
+
+  // EN: span is a GRANDCHILD of body (child of div), not a direct child -- body.remove_child must
+  //     NOT find it.
+  // PT: span é NETO do body (filho do div), não filho direto -- body.remove_child NÃO pode achá-lo.
+  check(!body.remove_child(span_raw), "remove_child(grandchild): false, not a direct child");
+  check(body.child_count() == 2, "remove_child(grandchild): body still has 2 children");
+  check(div_raw->child_count() == 1, "remove_child(grandchild): div's own child untouched");
+
+  // EN: div.remove_child(span) DOES find it -- span is div's direct child.
+  // PT: div.remove_child(span) ACHA -- span é filho direto do div.
+  check(div_raw->remove_child(span_raw), "div.remove_child(span): true, span is div's direct child");
+  check(div_raw->child_count() == 0, "after remove: div has zero children");
+
+  // EN: removing div from body: found, removed. A repeat attempt afterward is the "already
+  //     removed" no-op case.
+  // PT: remover div do body: achou, removeu. Uma segunda tentativa depois é o caso de no-op
+  //     "já removido".
+  check(body.remove_child(div_raw), "body.remove_child(div): true, div is body's direct child");
+  check(body.child_count() == 1, "after remove: body has 1 child (p)");
+  check(body.children()[0].get() == p_raw, "after remove: body's remaining child is p");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Case 11 -- UIX-REMOVE-CHILD: Element::clear_children removes every direct child and returns
+//     the count removed; idempotent in both directions (clearing an already-empty element returns
+//     0, not an error; clearing twice in a row is safe).
+// PT: Caso 11 -- UIX-REMOVE-CHILD: Element::clear_children remove todo filho direto e retorna a
+//     contagem removida; idempotente nas duas direções (limpar um elemento já vazio retorna 0, não
+//     é erro; limpar duas vezes seguidas é seguro).
+// ---------------------------------------------------------------------------
+void test_clear_children_removes_all_and_reports_count() {
+  Document doc;
+  Element& body = doc.body();
+
+  // EN: clearing an already-empty element: 0 removed, no crash.
+  // PT: limpar um elemento já vazio: 0 removido, sem crash.
+  check(body.clear_children() == 0, "clear_children() on empty body: returns 0");
+  check(body.child_count() == 0, "clear_children() on empty body: stays empty");
+
+  body.append_child(std::make_unique<Element>("div"));
+  body.append_child(std::make_unique<Element>("p"));
+  body.append_child(std::make_unique<Text>("hello"));
+  check(body.child_count() == 3, "precondition: body has 3 children (div, p, Text)");
+
+  std::size_t removed = body.clear_children();
+  check(removed == 3, "clear_children(): returns 3, matching the prior child_count()");
+  check(body.child_count() == 0, "after clear_children(): body has zero children");
+
+  // EN: clearing again, now that it is already empty: 0 removed, idempotent.
+  // PT: limpar de novo, já vazio: 0 removido, idempotente.
+  check(body.clear_children() == 0, "clear_children() called again on now-empty body: returns 0");
+}
+
 } // namespace
 
 int main() {
@@ -358,6 +443,8 @@ int main() {
   test_element_attributes_reserved_names_and_empty_value_asymmetry();
   test_find_by_id_preorder_first_match();
   test_as_element_as_text_helpers();
+  test_remove_child_direct_only_by_identity();
+  test_clear_children_removes_all_and_reports_count();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "dom_tree_sanity: %d assertion(s) FAILED\n", g_failures);

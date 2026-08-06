@@ -38,11 +38,13 @@
 //           pre-order match wins" (dom_tree.hpp's "Lookup policy" paragraph) applies unchanged to
 //           all three operations here, since all three resolve `id` through that exact function.
 //           See `set_text`'s own doc-comment for the fixture-backed test that pins this.
-//       (2) `set_text` on an element that already has children is where this slice's real
-//           boundary sits -- see `set_text`'s own doc-comment, "THE LOAD-BEARING GAP" paragraph,
-//           for the full argument and the concrete `dom_tree.hpp` primitive a future wave needs to
-//           close it. This is NOT a guess papered over; it is a documented, tested boundary this
-//           slice's own brief explicitly asked to be surfaced rather than worked around.
+//       (2) 🟢 `set_text` on an element that already has children -- ONCE this slice's real
+//           boundary, CLOSED by UIX-REMOVE-CHILD (RMLX-1, 2026-08-05): `dom_tree.hpp`'s `Element`
+//           now has `remove_child`/`clear_children`, so `set_text` clears ALL existing children
+//           unconditionally before writing, exactly matching `Rml::Element::SetInnerRML`. See
+//           `set_text`'s own doc-comment for the full before/after and the ONE deliberate new
+//           behaviour change this closure introduces (object identity of an overwritten sole Text
+//           child is no longer preserved -- see that doc-comment's own note on this).
 //       (3) `add_class`/`remove_class` return `true` whenever `id` resolves AND `cls` is a
 //           structurally valid single token -- REGARDLESS of whether the class set actually
 //           changed (already-present add, already-absent remove are both idempotent NO-OPs that
@@ -95,12 +97,14 @@
 //           dom_tree.hpp) vale sem mudança pras três operações aqui, já que as três resolvem `id`
 //           através dessa mesma função. Ver o próprio doc-comment do `set_text` pro teste guiado
 //           por fixture que fixa isto.
-//       (2) `set_text` num elemento que já tem filhos é onde a fronteira real desta fatia mora --
-//           ver o próprio doc-comment do `set_text`, parágrafo "A LACUNA QUE CARREGA PESO", pro
-//           argumento completo e o primitivo concreto do `dom_tree.hpp` que uma onda futura
-//           precisa pra fechar isto. Isto NÃO é um chute disfarçado; é uma fronteira documentada e
-//           testada que o próprio briefing desta fatia pediu explicitamente pra ser exposta em vez
-//           de contornada.
+//       (2) 🟢 `set_text` num elemento que já tem filhos -- UMA VEZ a fronteira real desta fatia,
+//           FECHADA pela UIX-REMOVE-CHILD (RMLX-1, 2026-08-05): o `Element` do `dom_tree.hpp`
+//           agora tem `remove_child`/`clear_children`, então `set_text` limpa TODOS os filhos
+//           existentes incondicionalmente antes de escrever, batendo exatamente com o
+//           `Rml::Element::SetInnerRML`. Ver o próprio doc-comment do `set_text` pro antes/depois
+//           completo e a ÚNICA mudança de comportamento deliberada nova que este fechamento
+//           introduz (a identidade de objeto de um filho Text único sobrescrito não é mais
+//           preservada -- ver a própria nota do doc-comment sobre isto).
 //       (3) `add_class`/`remove_class` retornam `true` sempre que `id` resolve E `cls` é um token
 //           único estruturalmente válido -- INDEPENDENTE de o conjunto de classe realmente ter
 //           mudado (add já-presente, remove já-ausente são os dois NO-OPs idempotentes que ainda
@@ -120,195 +124,153 @@
 
 namespace glintfx::uix {
 
-// EN: Replace an element's text content by id. `text` is stored byte-verbatim (no escaping, no
-//     entity handling -- this layer has no notion of markup injection risk; that hardening, per
-//     `ui_layer.hpp` lines 886-895, is the RmlUi-backed facade's own job when it eventually wraps
-//     this call, not this DOM-only layer's).
+// EN: Replace an element's text content by id -- REPLICATES `Rml::Element::SetInnerRML` exactly
+//     (`examples/RmlUi/Source/Core/Element.cpp:1166-1176`): unconditionally
+//     `Element::clear_children()` (dom_tree.hpp, UIX-REMOVE-CHILD) FIRST, regardless of what was
+//     there or whether the new `text` is empty, THEN `Element::append_child` a single new `Text`
+//     node -- whose own existence filter already produces the correct "zero children" outcome for
+//     an empty/whitespace-only `text`, matching `Factory::InstanceElementText`'s own
+//     `only_white_space` filter exactly (`examples/RmlUi/Source/Core/Factory.cpp:330-341`). `text`
+//     is stored byte-verbatim (no escaping, no entity handling -- this layer has no notion of
+//     markup injection risk; that hardening, per `ui_layer.hpp` lines 886-895, is the RmlUi-backed
+//     facade's own job when it eventually wraps this call, not this DOM-only layer's).
+//
+//     🟢 THIS REPLACES THE ORIGINAL S4 IMPLEMENTATION (`f15f1f8`), WHICH SPECIAL-CASED THREE
+//     SHAPES (zero children / exactly one Text child / anything else) BECAUSE `dom_tree.hpp` HAD
+//     NO REMOVAL PRIMITIVE. UIX-REMOVE-CHILD (RMLX-1, 2026-08-05) closed that gap by adding
+//     `Element::remove_child`/`Element::clear_children`; this function now has exactly ONE code
+//     path, for every shape the old three-way split had to distinguish:
+//       - zero children before: `clear_children()` removes nothing (`0`), behaviourally identical
+//         to the old shape (a).
+//       - a sole `Text` child (the "overwrite" case): `clear_children()` DESTROYS that `Text`
+//         object; the append that follows constructs a genuinely NEW one. 🔴 **This is a
+//         deliberate, documented BEHAVIOUR CHANGE from the old contract**: the old shape (b)
+//         guaranteed "SAME `Node`/`Text` object identity... preserved across the call" (mutation
+//         in place via `Text::set_content`); that guarantee is GONE. This matches upstream exactly
+//         (`RemoveChild` destroys the old node, `Factory::InstanceElementText` constructs a new
+//         one) and no caller in this codebase today holds a `Text*`/`Node*` observer pointer
+//         across a `set_text` call (`grep -rn set_text glintfx/tests` -- every call site either
+//         discards the return or re-resolves by id afterward), so this is a safe closure, not a
+//         silent regression -- but it IS new, and is called out here rather than left implicit.
+//       - 2+ children of any kind, or a sole non-`Text` child (the old shape (c), 🔴 "the
+//         load-bearing gap"): previously REFUSED (`false`, tree untouched). Now SUCCEEDS, exactly
+//         like upstream -- every existing child is destroyed, the new `Text` (if any survives the
+//         whitespace filter) is the ONLY child afterward. `test_set_text_element_with_non_text_or_
+//         multiple_children_refused` (the test that PINNED the refusal) is REPLACED by
+//         `test_set_text_element_with_non_text_or_multiple_children_replaces_all` -- see that
+//         test's own comment in `dom_api_sanity.cpp` for why the old name is gone, not just its
+//         body.
+//       - `set_text(doc, id, "")` on an element that already holds a sole `Text` child: previously
+//         left an EMPTY `Text` RESIDUAL (`child_count()` stayed `1`) -- the ONE divergence from
+//         upstream this slice's own prior doc-comment named explicitly, pinned by
+//         `test_set_text_whitespace_on_existing_text_child_leaves_empty_residual`. That test is
+//         REPLACED (not silently dropped) by `test_set_text_repeated_empty_reverts_to_zero_
+//         children`, asserting the CORRECT, upstream-matching outcome: `child_count()` reverts to
+//         `0`, identical to calling `set_text(doc, id, "")` on a childless element, because
+//         `SetInnerRML` clears UNCONDITIONALLY before ever inspecting whether the new `rml` is
+//         empty -- there is no longer a "residual" case, and no longer a divergence to document.
 //
 //     RETURNS `false` when: `id` does not resolve (empty id, or no element with that id anywhere
 //     in `doc.body()`'s subtree -- `find_by_id`'s own empty-id-always-misses rule, dom_tree.hpp,
-//     applies unchanged); OR the target element's existing children are not in the ONE SHAPE this
-//     slice can safely rewrite (see "THE LOAD-BEARING GAP" below). Returns `true` in every other
-//     case, INCLUDING when `text` is empty or whitespace-only (see "WHITESPACE INPUT" below).
+//     applies unchanged); OR `Element::append_child` rejects the new `Text` with
+//     `AppendOutcome::RejectedDepthCeiling` (the target element is already at `kMaxElementDepth` --
+//     dom_tree.hpp's own existing, independent hardening ceiling, unrelated to this closure).
+//     Returns `true` in every other case, INCLUDING when `text` is empty or whitespace-only.
+//
+//     ⚠️ ON THE `RejectedDepthCeiling` CASE SPECIFICALLY, AND WHY IT IS NOT A DATA-LOSS RISK
+//     DESPITE THE CLEAR-THEN-APPEND ORDER: `RejectedDepthCeiling` can only happen when the TARGET
+//     element's own `depth()` already equals `kMaxElementDepth` -- but `append_child`'s depth
+//     check (`depth_ + 1 > kMaxElementDepth`) is a function of the PARENT's depth alone, applied
+//     identically to EVERY child that parent has ever been offered. An element sitting exactly at
+//     the ceiling can therefore never have successfully adopted so much as a first child (the very
+//     first append attempt would already have hit `depth_ + 1 > kMaxElementDepth`) -- so
+//     `clear_children()` on such an element is GUARANTEED to be a no-op (`0` removed) before the
+//     doomed append is even attempted. There is no scenario where real content is destroyed and
+//     then not replaced; a `RejectedDepthCeiling` target is, and always was, childless. Pinned by
+//     `test_set_text_depth_ceiling_rejection_on_always_childless_element`.
 //
 //     DUPLICATE IDS: same policy as `Element::find_by_id` (dom_tree.hpp's own "Lookup policy"
 //     paragraph, corpus-measured, e.g. `id="ctrl_ascii"` x4) -- the FIRST element in pre-order
 //     (self, then children in source order, depth-first) is the one mutated; every other element
 //     sharing that `id` is untouched. Pinned by `test_duplicate_id_first_preorder_wins_for_all_
 //     three_ops` in `dom_api_sanity.cpp`.
-//
-//     THE THREE SHAPES THIS FUNCTION HANDLES, AND WHY EACH IS THE RIGHT CHOICE GIVEN WHAT S2's
-//     `dom_tree.hpp` ACTUALLY EXPOSES (no `remove_child`/`clear_children`/`replace_child` exists
-//     anywhere in that header -- its own header comment says so explicitly: "S3 ... never needs
-//     anything but `append_child`; ... left for S4 to add in the shape it actually turns out to
-//     need, not guessed at here". This function is that "actually turns out to need" moment, and
-//     what it turns out to need is a REMOVAL primitive S2 does not have):
-//
-//       (a) ZERO existing children -- the common case (every real caller in this codebase today,
-//           `grep -rn set_text glintfx/tests`, targets a freshly-parsed, still-empty element:
-//           `"text-target"`, `"txt"`, `"grower"`). `text` is appended as a single new `Text` child
-//           via `Element::append_child` -- which ITSELF filters an empty/whitespace-only `text`
-//           down to zero children (dom_tree.hpp's own existence-filter invariant), so this
-//           function does not special-case that up front; it just tries the append and reads back
-//           `AppendResult::outcome`. `AppendOutcome::RejectedDepthCeiling` (a genuinely-failing
-//           append, `RMLX-1/S2`'s own fail-high hardening) is the ONE way this shape can return
-//           `false`; `Appended` and `FilteredWhitespaceText` both mean "the write happened exactly
-//           as requested" and return `true`.
-//
-//       (b) EXACTLY ONE existing child, and it is a `Text` node -- the "overwrite" case a caller
-//           gets by calling `set_text` twice on the same id (`domrw_sanity.cpp`'s own
-//           happy-path/nullptr/malicious-text chain against the RmlUi-backed engine is the exact
-//           usage shape this mirrors). `dom_tree.hpp` gives NO way to detach that existing `Text`
-//           node from `children()` (the accessor is `const`-returning, and there is no
-//           `remove_child`), but it DOES give a way to MUTATE it in place: `Text::set_content`.
-//           `Element::children()` returns a `const vector<unique_ptr<Node>>&`, but
-//           `unique_ptr<T>::get() const` itself returns `T*` (NOT `const T*` -- constness does not
-//           propagate through a `unique_ptr`'s pointee, only through the `unique_ptr` object
-//           itself), so `as_text(el->children().front().get())` legitimately yields a mutable
-//           `Text*` without any `const_cast` -- this function relies on that standard-library fact,
-//           not on casting anything away. The SAME `Node`/`Text` object identity is preserved
-//           across the call (pinned by `test_set_text_overwrites_existing_sole_text_child`'s own
-//           pointer-identity check) -- this is a real in-place mutation, not a
-//           destroy-and-reappend, which matters because a caller holding an observer pointer into
-//           this tree (mirroring `AppendResult::node`'s own contract) must not have it silently
-//           invalidated by an ordinary overwrite.
-//
-//       (c) ANYTHING ELSE (two or more children of any kind, or a single child that is an
-//           `Element` rather than a `Text`) -- 🔴 **THE LOAD-BEARING GAP.** Upstream, `Rml::
-//           Element::SetInnerRML` unconditionally removes EVERY existing child before instancing
-//           the new text (`examples/RmlUi/Source/Core/Element.cpp:1170-1172`, `while ((int)
-//           children.size() > num_non_dom_children) RemoveChild(children.front().get());`) --
-//           i.e. `set_text` upstream ALWAYS succeeds and ALWAYS fully replaces the subtree,
-//           regardless of what was there before. This function CANNOT replicate that: `dom_tree.
-//           hpp`'s `Element` has no removal/replacement primitive at all (`append_child` is
-//           documented as the ONLY mutator S2 built, deliberately, per its own header comment).
-//           Rather than fake a workaround that would silently diverge from upstream in a way
-//           nobody would notice until `S7`'s dump-parity work (e.g. appending a SECOND `Text`
-//           child next to the old one, which would neither match "replace" nor "append" semantics
-//           cleanly, and would corrupt shape (a)/(b)'s own invariant that a `set_text`-managed
-//           element carries AT MOST one `Text` child), this function REFUSES (`false`) and leaves
-//           the tree byte-for-byte untouched -- fail-high, this project's own "AUD-TEC-5"
-//           discipline, applied to a case S2's surface genuinely cannot serve rather than to
-//           invalid input. **This is reported to the líder as the single most load-bearing finding
-//           of this slice**: closing it needs ONE new `dom_tree.hpp` primitive in a future wave
-//           (a `remove_child`/`clear_children`, or a `replace_children` shaped for exactly this
-//           call site) -- deliberately not added here, since S4's own brief says "não toque em
-//           dom_tree.{hpp,cpp} ... reporte" and dom_tree.hpp itself already earmarked this exact
-//           decision for "S4 to add in the shape it actually turns out to need". Pinned by
-//           `test_set_text_element_with_non_text_or_multiple_children_refused`.
-//
-//     WHITESPACE INPUT (the aceite's explicit question: "o que deve acontecer" when `text` is
-//     whitespace-only): shape (a) answers it "for free" via `append_child`'s own existence
-//     filter -- `set_text(doc, "empty-span", "   ")` returns `true` and leaves the element with
-//     ZERO children, matching upstream EXACTLY (`Factory::InstanceElementText`,
-//     `examples/RmlUi/Source/Core/Factory.cpp:338-341`: "If this text node only contains
-//     white-space we don't want to construct it" -- `only_white_space` -> `return true` with no
-//     child instanced, the identical "success, zero children" outcome). Shape (b) does NOT have
-//     this luxury (see (b) above -- `Text::set_content` has no filter, unlike `append_child`): a
-//     REPEATED `set_text(doc, id, "")` on an element that already holds a sole `Text` child leaves
-//     that child PRESENT with EMPTY content (`child_count()` stays `1`) rather than reverting to
-//     zero children like the empty-element case does -- a second, narrower instance of the same
-//     load-bearing gap in (c), since reverting to zero children there WOULD require the same
-//     missing removal primitive. Pinned (both directions) by
-//     `test_set_text_whitespace_only_on_empty_element_filtered` and
-//     `test_set_text_whitespace_on_existing_text_child_leaves_empty_residual`.
-// PT: Substitui o conteúdo de texto de um elemento por id. `text` é guardado byte-verbatim (sem
+// PT: Substitui o conteúdo de texto de um elemento por id -- REPLICA o
+//     `Rml::Element::SetInnerRML` exatamente (`examples/RmlUi/Source/Core/Element.cpp:1166-1176`):
+//     `Element::clear_children()` incondicional PRIMEIRO (dom_tree.hpp, UIX-REMOVE-CHILD),
+//     independente do que havia antes ou de o `text` novo ser vazio, DEPOIS `Element::append_child`
+//     soma um único `Text` novo -- que ELE MESMO já produz o resultado correto "zero filhos" pra um
+//     `text` vazio/só-whitespace via seu próprio filtro de existência, batendo exatamente com o
+//     próprio filtro `only_white_space` do `Factory::InstanceElementText`
+//     (`examples/RmlUi/Source/Core/Factory.cpp:330-341`). `text` é guardado byte-verbatim (sem
 //     escape, sem tratamento de entidade -- esta camada não tem noção nenhuma de risco de injeção
 //     de markup; esse hardening, pela `ui_layer.hpp` linhas 886-895, é trabalho da PRÓPRIA fachada
 //     com base em RmlUi quando ela eventualmente envolver esta chamada, não desta camada
 //     só-de-DOM).
 //
-//     RETORNA `false` quando: `id` não resolve (id vazio, ou nenhum elemento com esse id em
-//     lugar nenhum da subárvore de `doc.body()` -- a própria regra "id vazio sempre erra" do
-//     `find_by_id`, dom_tree.hpp, vale sem mudança); OU os filhos existentes do elemento-alvo não
-//     estão numa das FORMAS que esta fatia consegue reescrever com segurança (ver "A LACUNA QUE
-//     CARREGA PESO" abaixo). Retorna `true` em todo outro caso, INCLUINDO quando `text` é vazio ou
-//     só-whitespace (ver "INPUT DE WHITESPACE" abaixo).
+//     🟢 ISTO SUBSTITUI A IMPLEMENTAÇÃO ORIGINAL DA S4 (`f15f1f8`), QUE TRATAVA TRÊS FORMAS
+//     ESPECIAIS (zero filhos / exatamente um filho Text / qualquer outra coisa) PORQUE O
+//     `dom_tree.hpp` NÃO TINHA PRIMITIVO DE REMOÇÃO NENHUM. A UIX-REMOVE-CHILD (RMLX-1,
+//     2026-08-05) fechou essa lacuna somando `Element::remove_child`/`Element::clear_children`;
+//     esta função agora tem exatamente UM caminho de código, pra toda forma que a antiga divisão em
+//     três tinha que distinguir:
+//       - zero filhos antes: `clear_children()` não remove nada (`0`), comportamentalmente idêntico
+//         à antiga forma (a).
+//       - um único filho `Text` (o caso "sobrescrever"): `clear_children()` DESTRÓI aquele objeto
+//         `Text`; o append que segue constrói um genuinamente NOVO. 🔴 **Isto é uma MUDANÇA DE
+//         COMPORTAMENTO deliberada e documentada em relação ao contrato antigo**: a antiga forma
+//         (b) garantia "a MESMA identidade de objeto Node/Text... preservada através da chamada"
+//         (mutação no lugar via `Text::set_content`); essa garantia SUMIU. Isto bate exatamente com
+//         o upstream (`RemoveChild` destrói o nó antigo, `Factory::InstanceElementText` constrói um
+//         novo) e nenhum chamador deste codebase hoje segura um ponteiro observador
+//         `Text*`/`Node*` através de uma chamada `set_text` (`grep -rn set_text glintfx/tests` --
+//         todo ponto de chamada ou descarta o retorno ou re-resolve por id depois), então isto é um
+//         fechamento seguro, não uma regressão silenciosa -- mas É novo, e está anunciado aqui em
+//         vez de deixado implícito.
+//       - 2+ filhos de qualquer tipo, ou um único filho não-`Text` (a antiga forma (c), 🔴 "a
+//         lacuna que carrega peso"): antes RECUSAVA (`false`, árvore intocada). Agora TEM SUCESSO,
+//         exatamente como o upstream -- todo filho existente é destruído, o `Text` novo (se
+//         sobreviver ao filtro de whitespace) é o ÚNICO filho depois. O
+//         `test_set_text_element_with_non_text_or_multiple_children_refused` (o teste que FIXAVA a
+//         recusa) é SUBSTITUÍDO por
+//         `test_set_text_element_with_non_text_or_multiple_children_replaces_all` -- ver o próprio
+//         comentário deste teste no `dom_api_sanity.cpp` pra por que o nome antigo sumiu, não só o
+//         corpo dele.
+//       - `set_text(doc, id, "")` num elemento que já guarda um único filho `Text`: antes deixava
+//         um RESIDUAL `Text` VAZIO (`child_count()` continuava `1`) -- a ÚNICA divergência do
+//         upstream que o próprio doc-comment anterior desta fatia nomeava explicitamente, fixada
+//         por `test_set_text_whitespace_on_existing_text_child_leaves_empty_residual`. Esse teste é
+//         SUBSTITUÍDO (não silenciosamente apagado) por
+//         `test_set_text_repeated_empty_reverts_to_zero_children`, afirmando o resultado CORRETO,
+//         batendo com o upstream: `child_count()` reverte pra `0`, idêntico a chamar
+//         `set_text(doc, id, "")` num elemento sem filhos, porque o `SetInnerRML` limpa
+//         INCONDICIONALMENTE antes mesmo de inspecionar se o `rml` novo é vazio -- não existe mais
+//         caso "residual", e não existe mais divergência pra documentar.
+//
+//     RETORNA `false` quando: `id` não resolve (id vazio, ou nenhum elemento com esse id em lugar
+//     nenhum da subárvore de `doc.body()` -- a própria regra "id vazio sempre erra" do
+//     `find_by_id`, dom_tree.hpp, vale sem mudança); OU `Element::append_child` rejeita o `Text`
+//     novo com `AppendOutcome::RejectedDepthCeiling` (o elemento-alvo já está em
+//     `kMaxElementDepth` -- o próprio teto de hardening já existente e independente do
+//     dom_tree.hpp, sem relação com este fechamento). Retorna `true` em todo outro caso, INCLUINDO
+//     quando `text` é vazio ou só-whitespace.
+//
+//     ⚠️ SOBRE O CASO `RejectedDepthCeiling` ESPECIFICAMENTE, E POR QUE NÃO É RISCO DE PERDA DE
+//     DADO APESAR DA ORDEM CLEAR-DEPOIS-APPEND: `RejectedDepthCeiling` só consegue acontecer quando
+//     a própria `depth()` do elemento-alvo já é igual a `kMaxElementDepth` -- mas a checagem de
+//     profundidade do `append_child` (`depth_ + 1 > kMaxElementDepth`) é função só da profundidade
+//     do PAI, aplicada de forma idêntica a TODO filho que aquele pai algum dia recebeu. Um elemento
+//     sentado exatamente no teto portanto NUNCA conseguiu adotar sequer um primeiro filho (a
+//     própria primeira tentativa de append já teria batido em `depth_ + 1 > kMaxElementDepth`) --
+//     então `clear_children()` num elemento desses é GARANTIDAMENTE um no-op (`0` removido) antes
+//     mesmo do append fadado ser tentado. Não existe cenário em que conteúdo real é destruído e
+//     depois não substituído; um alvo `RejectedDepthCeiling` é, e sempre foi, sem filhos. Fixado
+//     por `test_set_text_depth_ceiling_rejection_on_always_childless_element`.
 //
 //     IDS DUPLICADOS: mesma política do `Element::find_by_id` (o próprio parágrafo "Lookup
 //     policy" do dom_tree.hpp, medido no corpus, ex. `id="ctrl_ascii"` x4) -- o PRIMEIRO elemento
 //     em pré-ordem (o próprio nó, depois filhos em ordem-fonte, profundidade primeiro) é o que é
 //     mutado; todo outro elemento compartilhando aquele `id` fica intocado. Fixado por
 //     `test_duplicate_id_first_preorder_wins_for_all_three_ops` no `dom_api_sanity.cpp`.
-//
-//     AS TRÊS FORMAS QUE ESTA FUNÇÃO TRATA, E POR QUE CADA UMA É A ESCOLHA CERTA DADO O QUE O
-//     `dom_tree.hpp` DA S2 REALMENTE EXPÕE (nenhum `remove_child`/`clear_children`/
-//     `replace_child` existe em lugar nenhum daquele header -- o próprio comentário de cabeçalho
-//     dele diz isso explicitamente: "a S3 ... nunca precisa de nada além de `append_child`; ...
-//     fica pra S4 somar na forma que ela realmente precisar, não chutado aqui". Esta função é esse
-//     momento de "realmente precisar", e o que ela realmente precisa é um primitivo de REMOÇÃO que
-//     a S2 não tem):
-//
-//       (a) ZERO filhos existentes -- o caso comum (todo chamador real neste codebase hoje, `grep
-//           -rn set_text glintfx/tests`, mira um elemento recém-parseado, ainda vazio:
-//           `"text-target"`, `"txt"`, `"grower"`). `text` é somado como um único `Text` novo via
-//           `Element::append_child` -- que ELA MESMA filtra `text` vazio/só-whitespace até zero
-//           filhos (o próprio invariante de filtro-de-existência do dom_tree.hpp), então esta
-//           função não trata isso como caso especial antecipado; só tenta o append e lê de volta
-//           `AppendResult::outcome`. `AppendOutcome::RejectedDepthCeiling` (um append genuinamente
-//           falho, o próprio hardening fail-high da `RMLX-1/S2`) é a ÚNICA forma desta forma
-//           retornar `false`; `Appended` e `FilteredWhitespaceText` os dois significam "a escrita
-//           aconteceu exatamente como pedido" e retornam `true`.
-//
-//       (b) EXATAMENTE UM filho existente, e ele é um nó `Text` -- o caso "sobrescrever" que um
-//           chamador obtém ao chamar `set_text` duas vezes no mesmo id (a própria cadeia
-//           happy-path/nullptr/texto-malicioso do `domrw_sanity.cpp` contra o engine com base em
-//           RmlUi é exatamente a forma de uso que isto espelha). O `dom_tree.hpp` NÃO dá jeito
-//           nenhum de desanexar aquele `Text` existente de `children()` (o acessador retorna
-//           `const`, e não existe `remove_child`), mas DÁ um jeito de MUTÁ-LO no lugar:
-//           `Text::set_content`. `Element::children()` retorna um `const vector<unique_ptr<Node>>&`,
-//           mas o próprio `unique_ptr<T>::get() const` retorna `T*` (NÃO `const T*` --
-//           constância não se propaga pelo apontado de um `unique_ptr`, só pelo próprio objeto
-//           `unique_ptr`), então `as_text(el->children().front().get())` legitimamente rende um
-//           `Text*` mutável sem `const_cast` nenhum -- esta função conta com esse fato padrão da
-//           biblioteca, não com tirar constância de nada. A MESMA identidade de objeto
-//           `Node`/`Text` é preservada através da chamada (fixada pela própria checagem de
-//           identidade-de-ponteiro do `test_set_text_overwrites_existing_sole_text_child`) -- isto
-//           é mutação-no-lugar de verdade, não destruir-e-re-somar, o que importa porque um
-//           chamador segurando um ponteiro observador nesta árvore (espelhando o próprio contrato
-//           de `AppendResult::node`) não pode tê-lo invalidado em silêncio por uma sobrescrita
-//           comum.
-//
-//       (c) QUALQUER OUTRA COISA (dois ou mais filhos de qualquer tipo, ou um único filho que é um
-//           `Element` em vez de `Text`) -- 🔴 **A LACUNA QUE CARREGA PESO.** No upstream, o próprio
-//           `Rml::Element::SetInnerRML` remove INCONDICIONALMENTE todo filho existente antes de
-//           instanciar o texto novo (`examples/RmlUi/Source/Core/Element.cpp:1170-1172`, `while
-//           ((int)children.size() > num_non_dom_children) RemoveChild(children.front().get());`)
-//           -- ou seja, o `set_text` upstream SEMPRE tem sucesso e SEMPRE substitui a subárvore
-//           por completo, independente do que havia antes. Esta função NÃO CONSEGUE replicar isso:
-//           o `Element` do `dom_tree.hpp` não tem primitivo nenhum de remoção/substituição
-//           (`append_child` é documentado como o ÚNICO mutador que a S2 construiu, deliberadamente,
-//           pelo próprio comentário de cabeçalho dela). Em vez de forjar um contorno que
-//           divergiria do upstream em silêncio de um jeito que ninguém notaria até o trabalho de
-//           paridade-de-dump da `S7` (ex.: somar um SEGUNDO `Text` filho ao lado do antigo, que não
-//           casaria nem com semântica de "substituir" nem de "somar" de forma limpa, e corromperia
-//           o próprio invariante das formas (a)/(b) de que um elemento gerido por `set_text` carrega
-//           NO MÁXIMO um filho `Text`), esta função RECUSA (`false`) e deixa a árvore intocada
-//           byte-por-byte -- fail-high, a própria disciplina "AUD-TEC-5" deste projeto, aplicada a
-//           um caso que a superfície da S2 genuinamente não consegue servir, não a input inválido.
-//           **Isto é reportado ao líder como o achado mais carregado-de-peso desta fatia**: fechar
-//           isto precisa de UM novo primitivo no `dom_tree.hpp` numa onda futura (um
-//           `remove_child`/`clear_children`, ou um `replace_children` desenhado exatamente pra este
-//           ponto de chamada) -- deliberadamente não somado aqui, já que o próprio briefing da S4
-//           diz "não toque em dom_tree.{hpp,cpp} ... reporte" e o próprio dom_tree.hpp já reservou
-//           exatamente esta decisão pra "S4 somar na forma que ela realmente precisar". Fixado por
-//           `test_set_text_element_with_non_text_or_multiple_children_refused`.
-//
-//     INPUT DE WHITESPACE (a pergunta explícita do aceite: "o que deve acontecer" quando `text` é
-//     só-whitespace): a forma (a) responde "de graça" via o próprio filtro de existência do
-//     `append_child` -- `set_text(doc, "empty-span", "   ")` retorna `true` e deixa o elemento com
-//     ZERO filhos, batendo EXATAMENTE com o upstream (`Factory::InstanceElementText`,
-//     `examples/RmlUi/Source/Core/Factory.cpp:338-341`: "If this text node only contains
-//     white-space we don't want to construct it" -- `only_white_space` -> `return true` sem filho
-//     nenhum instanciado, o MESMO resultado "sucesso, zero filhos"). A forma (b) NÃO tem esse luxo
-//     (ver (b) acima -- `Text::set_content` não tem filtro, diferente de `append_child`): um
-//     `set_text(doc, id, "")` REPETIDO num elemento que já guarda um único filho `Text` deixa
-//     aquele filho PRESENTE com conteúdo VAZIO (`child_count()` continua `1`) em vez de reverter
-//     pra zero filhos como o caso de elemento-vazio faz -- uma segunda instância, mais estreita, da
-//     mesma lacuna carregada-de-peso do (c), já que reverter pra zero filhos ali TAMBÉM precisaria
-//     do mesmo primitivo de remoção que falta. Fixado (nas duas direções) por
-//     `test_set_text_whitespace_only_on_empty_element_filtered` e
-//     `test_set_text_whitespace_on_existing_text_child_leaves_empty_residual`.
 bool set_text(Document& doc, std::string_view id, std::string text);
 
 // EN: Add a single CSS class token to an element by id -- delegates to `Element::add_class`

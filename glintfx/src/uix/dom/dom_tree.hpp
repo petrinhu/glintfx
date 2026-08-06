@@ -43,11 +43,21 @@
 //       - Building a tree FROM RML source text at all (S3's recursive-descent parser). This module
 //         has no notion of "source bytes", `offset`/`length`, or the lexer's `Token` type.
 //       - The public, ergonomic DOM read/write API glintfx's facade (`App`/`UiLayer`) will
-//         eventually expose (S4) -- e.g. `remove_child`, insert-at-position, or any mutation
-//         beyond append. S3 (an append-only, top-down, stack-driven builder) never needs anything
-//         but `append_child`; this slice's own brief lists "operações de classe (add/remove/has)"
-//         as in-scope but says nothing about generic child removal/reordering, so that is left for
-//         S4 to add in the shape it actually turns out to need, not guessed at here.
+//         eventually expose (S4) beyond the two primitives added below. S3 (an append-only,
+//         top-down, stack-driven builder) never needs anything but `append_child`; this slice's
+//         own brief lists "operações de classe (add/remove/has)" as in-scope but said nothing
+//         about generic child removal, so `remove_child`/`clear_children` were deliberately left
+//         OUT of the original S2 slice -- until S4 (`dom_api.cpp`'s `set_text`, `f15f1f8`) hit
+//         exactly the wall this bullet predicted: `Rml::Element::SetInnerRML` clears every
+//         existing child unconditionally before writing, and there was no way to replicate that.
+//         UIX-REMOVE-CHILD (RMLX-1, 2026-08-05) closes that gap HERE, in `Element` -- child-list
+//         mutation is `Element`'s own concern, exactly like `append_child` already is, not
+//         `dom_api.cpp`'s (see `remove_child`/`clear_children`'s own doc-comments below for the
+//         two primitives added and why their return types differ). What is STILL genuinely out of
+//         scope, because nothing has needed it yet: insert-AT-POSITION (as opposed to
+//         append-at-end or remove-by-identity), and a single combinator that both replaces content
+//         AND validates/normalizes markup in one call (that is `RMLX-2`+ territory, once
+//         RCSS/attributes interact with child replacement in ways this plain tree does not model).
 //       - Any validation of tag/attribute-NAME grammar (`[A-Za-z_][A-Za-z0-9_-]*`, no `:`, etc.).
 //         That grammar is S1's border (`is_name_start`/`is_name_char` in lexer.cpp) -- by the time
 //         a `tag`/attribute `name` string reaches this module via `S3`, it has already passed
@@ -209,12 +219,23 @@
 //         S3). Este módulo não tem noção nenhuma de "bytes-fonte", `offset`/`length`, nem do tipo
 //         `Token` do lexer.
 //       - A API pública de leitura/escrita de DOM que a fachada da glintfx (`App`/`UiLayer`)
-//         eventualmente vai expor (S4) -- ex.: `remove_child`, inserção em posição, ou qualquer
-//         mutação além de append. A S3 (um construtor append-only, de cima pra baixo, dirigido por
-//         pilha) nunca precisa de nada além de `append_child`; o próprio briefing desta fatia lista
-//         "operações de classe (add/remove/has)" como no escopo mas não diz nada sobre remoção/
-//         reordenação genérica de filho, então isso fica pra S4 somar na forma que ela realmente
-//         precisar, não chutado aqui.
+//         eventualmente vai expor (S4) além dos dois primitivos somados abaixo. A S3 (um
+//         construtor append-only, de cima pra baixo, dirigido por pilha) nunca precisa de nada
+//         além de `append_child`; o próprio briefing desta fatia lista "operações de classe
+//         (add/remove/has)" como no escopo mas não dizia nada sobre remoção genérica de filho,
+//         então `remove_child`/`clear_children` ficaram deliberadamente DE FORA da fatia S2
+//         original -- até a S4 (`set_text` do `dom_api.cpp`, `f15f1f8`) bater exatamente na parede
+//         que este item já previa: o próprio `Rml::Element::SetInnerRML` limpa todo filho
+//         existente incondicionalmente antes de escrever, e não havia jeito de replicar isso. A
+//         UIX-REMOVE-CHILD (RMLX-1, 2026-08-05) fecha essa lacuna AQUI, no `Element` -- mutação de
+//         lista de filho é preocupação do próprio `Element`, exatamente como `append_child` já é,
+//         não do `dom_api.cpp` (ver os próprios doc-comments de `remove_child`/`clear_children`
+//         abaixo pros dois primitivos somados e por que os tipos de retorno deles diferem). O que
+//         AINDA está genuinamente fora do escopo, porque nada precisou disso ainda: inserção EM
+//         POSIÇÃO (diferente de somar-no-fim ou remover-por-identidade), e um único combinador que
+//         tanto substitui conteúdo QUANTO valida/normaliza markup numa única chamada (isso é
+//         território da `RMLX-2`+, quando RCSS/atributo interagirem com substituição de filho de
+//         um jeito que esta árvore simples não modela).
 //       - Validação nenhuma da gramática de NOME de tag/atributo (`[A-Za-z_][A-Za-z0-9_-]*`, sem
 //         `:`, etc.). Essa gramática é fronteira da S1 (`is_name_start`/`is_name_char` no
 //         lexer.cpp) -- no momento em que uma string `tag`/nome de atributo chega neste módulo via
@@ -552,6 +573,70 @@ public:
   //     arquivo pra por que checagem de gramática/nulo nesta profundidade é a camada errada), não
   //     input diagnosticável contra o qual esta classe se defende.
   AppendResult append_child(std::unique_ptr<Node> child);
+
+  // EN: UIX-REMOVE-CHILD (RMLX-1, 2026-08-05). Removes `child` from this element's children,
+  //     destroying it (the `unique_ptr` owning it is erased from `children_`, running `child`'s
+  //     destructor -- including any of ITS OWN descendants, recursively, exactly like the rest of
+  //     this tree's ownership model). Returns `true` iff `child` was found (by pointer identity,
+  //     among THIS element's DIRECT children only -- not a recursive search) and removed; `false`
+  //     for `child == nullptr` or a `child` that is not a direct child of `this` (a grandchild, a
+  //     child of a DIFFERENT element, or already removed) -- a no-op, tree untouched.
+  //
+  //     WHY `bool`, NOT AN `AppendResult`-SHAPED STRUCT: matches this class's own existing
+  //     "found it/didn't find it" convention for `remove_class`/`remove_attribute` above, not
+  //     `append_child`'s richer `AppendResult` -- unlike `append_child`, there is no MEANINGFUL
+  //     distinction to report beyond "removed" vs. "nothing to remove". Removal has no analogue to
+  //     `FilteredWhitespaceText` (nothing here decides "should this count as a child", that
+  //     question was already answered when the child was appended) nor to `RejectedDepthCeiling`
+  //     (removing a node can only ever REDUCE the depth other nodes sit at, never grow it, so
+  //     there is no ceiling to hit on the way out). `bool` says everything a caller needs; a struct
+  //     would be ceremony without content.
+  // PT: UIX-REMOVE-CHILD (RMLX-1, 2026-08-05). Remove `child` dos filhos deste elemento,
+  //     destruindo-o (o `unique_ptr` que o possui é apagado de `children_`, rodando o destrutor de
+  //     `child` -- incluindo os PRÓPRIOS descendentes dele, recursivamente, exatamente como o
+  //     resto do modelo de posse desta árvore). Retorna `true` sse `child` foi achado (por
+  //     identidade de ponteiro, só entre os filhos DIRETOS deste elemento -- não é busca
+  //     recursiva) e removido; `false` pra `child == nullptr` ou um `child` que não é filho direto
+  //     de `this` (um neto, um filho de um elemento DIFERENTE, ou já removido) -- um no-op, árvore
+  //     intocada.
+  //
+  //     POR QUE `bool`, NÃO UMA STRUCT NO MOLDE DO `AppendResult`: bate com a própria convenção já
+  //     existente desta classe "achou/não achou" de `remove_class`/`remove_attribute` acima, não
+  //     com o `AppendResult` mais rico do `append_child` -- diferente do `append_child`, não existe
+  //     distinção SIGNIFICATIVA pra reportar além de "removeu" vs. "nada pra remover". Remoção não
+  //     tem análogo a `FilteredWhitespaceText` (nada aqui decide "isto deveria contar como filho",
+  //     essa pergunta já foi respondida quando o filho foi somado) nem a `RejectedDepthCeiling`
+  //     (remover um nó só consegue REDUZIR a profundidade em que outros nós estão, nunca aumentar,
+  //     então não há teto pra bater na saída). `bool` diz tudo que um chamador precisa; uma struct
+  //     seria cerimônia sem conteúdo.
+  bool remove_child(const Node* child);
+
+  // EN: UIX-REMOVE-CHILD (RMLX-1, 2026-08-05). Removes ALL of this element's children
+  //     unconditionally, destroying each one (same recursive-destructor discipline as
+  //     `remove_child` above). Returns the NUMBER of children removed (`0` if already childless --
+  //     idempotent in both directions: calling this on an empty element is a safe no-op that
+  //     reports exactly that, `0`, not an error).
+  //
+  //     WHY `std::size_t`, NOT `bool` (unlike `remove_child` above): the richer signal is
+  //     essentially free here -- `children_.size()` is already known before the clear -- and
+  //     genuinely useful to a caller doing a bulk replace. `dom_api.cpp`'s `set_text` (the exact
+  //     call site this primitive was added for) uses it only for its side effect and discards the
+  //     count, but a future caller diffing "did I just destroy N nodes" should not have to
+  //     re-derive `N` from a `child_count()` captured separately before the call.
+  // PT: UIX-REMOVE-CHILD (RMLX-1, 2026-08-05). Remove TODOS os filhos deste elemento
+  //     incondicionalmente, destruindo cada um (mesma disciplina de destrutor recursivo do
+  //     `remove_child` acima). Retorna o NÚMERO de filhos removidos (`0` se já sem filhos --
+  //     idempotente nas duas direções: chamar isto num elemento vazio é um no-op seguro que
+  //     reporta exatamente isso, `0`, não um erro).
+  //
+  //     POR QUE `std::size_t`, NÃO `bool` (diferente do `remove_child` acima): o sinal mais rico é
+  //     essencialmente de graça aqui -- `children_.size()` já é conhecido antes do clear -- e
+  //     genuinamente útil pra um chamador fazendo uma substituição em massa. O `set_text` do
+  //     `dom_api.cpp` (o próprio ponto de chamada pro qual este primitivo foi somado) usa só pelo
+  //     efeito colateral e descarta a contagem, mas um chamador futuro comparando "acabei de
+  //     destruir N nós" não deveria ter que re-derivar `N` de um `child_count()` capturado à parte
+  //     antes da chamada.
+  std::size_t clear_children();
 
   const std::vector<std::unique_ptr<Node>>& children() const;
   std::size_t child_count() const;

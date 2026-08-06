@@ -66,7 +66,33 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-add_library(glintfx_uix_style STATIC lexer.cpp property_registry.cpp shorthand.cpp parser.cpp value_compute.cpp)
+# EN: UIX-SELECTOR-MATCH -- selector_match.cpp is this module's FIRST source to depend on the DOM
+#     sibling module (glintfx::uix::Element, glintfx/src/uix/dom/dom_tree.hpp) -- a new, deliberate,
+#     one-directional dependency (style -> dom, never the reverse), per selector_match.hpp's own
+#     header comment. `../dom/dom_tree.cpp` is listed DIRECTLY here (not add_subdirectory(../dom),
+#     for the identical "own standalone CMake project, would drag a second test tree in" reasoning
+#     this file's own header comment already states for staying out of glintfx/CMakeLists.txt's
+#     graph) -- mirrors the exact "list sources directly" discipline
+#     glintfx/tests/CMakeLists.txt's own dom_dump_differential_oracle target already established
+#     for the identical situation (one executable needing sources from two standalone modules).
+#     dom_tree.cpp alone (not lexer/parser/dumper.cpp): this module only ever consumes a
+#     already-built `Element` tree (via match_selector's own `const Element&` parameter), it never
+#     parses RML text itself.
+# PT: UIX-SELECTOR-MATCH -- o selector_match.cpp é a PRIMEIRA fonte deste módulo a depender do
+#     módulo irmão DOM (glintfx::uix::Element, glintfx/src/uix/dom/dom_tree.hpp) -- uma dependência
+#     nova, deliberada, de mão única (style -> dom, nunca o contrário), pelo próprio comentário de
+#     cabeçalho do selector_match.hpp. `../dom/dom_tree.cpp` é listado DIRETAMENTE aqui (não
+#     add_subdirectory(../dom), pelo raciocínio idêntico "próprio projeto CMake standalone,
+#     arrastaria uma segunda árvore de teste" que o próprio comentário de cabeçalho deste arquivo já
+#     declara pra ficar fora do grafo do glintfx/CMakeLists.txt) -- espelha exatamente a disciplina
+#     "lista fontes diretamente" que o próprio alvo dom_dump_differential_oracle do
+#     glintfx/tests/CMakeLists.txt já estabeleceu pra situação idêntica (um executável precisando de
+#     fontes de dois módulos standalone). Só dom_tree.cpp (não lexer/parser/dumper.cpp): este módulo
+#     só consome uma árvore `Element` JÁ CONSTRUÍDA (via o próprio parâmetro `const Element&` do
+#     match_selector), nunca parseia texto RML ele próprio.
+add_library(glintfx_uix_style STATIC
+  lexer.cpp property_registry.cpp shorthand.cpp parser.cpp value_compute.cpp selector_match.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../dom/dom_tree.cpp)
 target_include_directories(glintfx_uix_style PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 # EN: -Wall -Wextra -Wpedantic, GCC/Clang only -- same portability guard shape as

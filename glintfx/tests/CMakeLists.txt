@@ -4230,12 +4230,29 @@ add_test(NAME rcss_dump_corpus_sanity
 #     Sem wrapper `run_xvfb.cmake`: este módulo linka zero GL/GLFW/RmlUi, então (como todo teste
 #     uix_style_* no build standalone) não há display nenhum pra fingir.
 # ---------------------------------------------------------------------------
+# EN: UIX-SELECTOR-MATCH -- selector_match.cpp added here (2026-08-06), pulling in
+#     ../dom/dom_tree.cpp as an extra source, mirroring EXACTLY the standalone module's own
+#     glintfx/src/uix/style/CMakeLists.txt addition made the same day (see that file's own header
+#     comment for the full "style -> dom, one-directional" reasoning, not re-derived here). No
+#     symbol-collision risk with dom_dump_differential_oracle's own directly-listed dom_tree.cpp a
+#     few hundred lines above: that is a SEPARATE executable's own object file, never linked into
+#     the same final binary as this library.
+# PT: UIX-SELECTOR-MATCH -- selector_match.cpp somado aqui (2026-08-06), trazendo
+#     ../dom/dom_tree.cpp como fonte extra, espelhando EXATAMENTE a soma do próprio
+#     glintfx/src/uix/style/CMakeLists.txt do módulo standalone feita no mesmo dia (ver o próprio
+#     comentário de cabeçalho daquele arquivo pro raciocínio completo "style -> dom, mão única",
+#     não re-derivado aqui). Sem risco de colisão de símbolo com o próprio dom_tree.cpp listado
+#     diretamente pelo dom_dump_differential_oracle algumas centenas de linhas acima: aquele é o
+#     próprio objeto de um executável SEPARADO, nunca linkado no mesmo binário final desta
+#     biblioteca.
 add_library(glintfx_uix_style_gate STATIC
   ${CMAKE_SOURCE_DIR}/src/uix/style/lexer.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/property_registry.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/shorthand.cpp
   ${CMAKE_SOURCE_DIR}/src/uix/style/parser.cpp
-  ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp)
+  ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/selector_match.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/dom_tree.cpp)
 target_include_directories(glintfx_uix_style_gate PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 add_executable(uix_style_lexer_tokens_sanity uix_style/lexer_tokens_sanity.cpp)
@@ -4283,6 +4300,35 @@ add_test(NAME uix_style_parser_corpus_sanity COMMAND uix_style_parser_corpus_san
 add_executable(uix_style_value_compute_sanity uix_style/value_compute_sanity.cpp)
 target_link_libraries(uix_style_value_compute_sanity PRIVATE glintfx_uix_style_gate)
 add_test(NAME uix_style_value_compute_sanity COMMAND uix_style_value_compute_sanity)
+
+# EN: UIX-SELECTOR-MATCH -- mirrors glintfx/tests/uix_style/CMakeLists.txt's own two executables
+#     (uix_style_selector_match_sanity, hand-built unit cases; uix_style_selector_match_corpus_sanity,
+#     real corpus RCSS-vs-DOM). The corpus executable needs lexer.cpp/parser.cpp from
+#     ${CMAKE_SOURCE_DIR}/src/uix/dom/ in ADDITION to glintfx_uix_style_gate (which already carries
+#     dom_tree.cpp, added above) -- same "not dom_tree.cpp again, would duplicate-symbol" reasoning
+#     as the standalone module's own glintfx/tests/uix_style/CMakeLists.txt.
+# PT: UIX-SELECTOR-MATCH -- espelha os dois próprios executáveis do
+#     glintfx/tests/uix_style/CMakeLists.txt (uix_style_selector_match_sanity, casos unitários
+#     construídos-à-mão; uix_style_selector_match_corpus_sanity, RCSS-vs-DOM de corpus real). O
+#     executável de corpus precisa de lexer.cpp/parser.cpp de ${CMAKE_SOURCE_DIR}/src/uix/dom/ ALÉM
+#     do glintfx_uix_style_gate (que já carrega dom_tree.cpp, somado acima) -- mesmo raciocínio "não
+#     dom_tree.cpp de novo, duplicaria símbolo" do próprio glintfx/tests/uix_style/CMakeLists.txt do
+#     módulo standalone.
+add_executable(uix_style_selector_match_sanity uix_style/selector_match_sanity.cpp)
+target_link_libraries(uix_style_selector_match_sanity PRIVATE glintfx_uix_style_gate)
+add_test(NAME uix_style_selector_match_sanity COMMAND uix_style_selector_match_sanity)
+
+add_executable(uix_style_selector_match_corpus_sanity
+  uix_style/selector_match_corpus_sanity.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_selector_match_corpus_sanity PRIVATE glintfx_uix_style_gate)
+target_compile_definitions(uix_style_selector_match_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_SOURCE_DIR}/tests"
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+add_test(NAME uix_style_selector_match_corpus_sanity COMMAND uix_style_selector_match_corpus_sanity)
 
 # ---------------------------------------------------------------------------
 # EN: FX-CARVE-1 -- ripple_sanity/ripple_stress_sanity exercise the glintfx-AUTHORED

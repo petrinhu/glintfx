@@ -86,3 +86,42 @@ add_test(NAME uix_style_parser_corpus_sanity COMMAND uix_style_parser_corpus_san
 add_executable(uix_style_value_compute_sanity value_compute_sanity.cpp)
 target_link_libraries(uix_style_value_compute_sanity PRIVATE glintfx::uix_style)
 add_test(NAME uix_style_value_compute_sanity COMMAND uix_style_value_compute_sanity)
+
+# EN: UIX-SELECTOR-MATCH -- selector matcher against glintfx's own DOM (Element/dom_tree.hpp).
+#     Links glintfx::uix_style (which now also compiles ../dom/dom_tree.cpp, a new, deliberate,
+#     one-directional dependency -- see selector_match.hpp's own header comment and this module's
+#     own CMakeLists.txt for why).
+# PT: UIX-SELECTOR-MATCH -- casador de seletor contra o DOM próprio da glintfx
+#     (Element/dom_tree.hpp). Linka glintfx::uix_style (que agora também compila
+#     ../dom/dom_tree.cpp, uma dependência nova, deliberada, de mão única -- ver o próprio
+#     comentário de cabeçalho do selector_match.hpp e o próprio CMakeLists.txt deste módulo pro
+#     porquê).
+add_executable(uix_style_selector_match_sanity selector_match_sanity.cpp)
+target_link_libraries(uix_style_selector_match_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_selector_match_sanity COMMAND uix_style_selector_match_sanity)
+
+# EN: UIX-SELECTOR-MATCH -- corpus oracle: real selectors from this repo's own versioned RCSS
+#     against real DOM trees parsed from those same files' own markup (glintfx::uix::parse_document,
+#     the DOM module's own S3). Needs lexer.cpp/parser.cpp from ../dom/ in ADDITION to what
+#     glintfx::uix_style already links (dom_tree.cpp) -- deliberately NOT dom_tree.cpp again here
+#     (already compiled into glintfx_uix_style, a second copy in this executable would be a
+#     duplicate-symbol link error); deliberately NOT dumper.cpp either (this test only PARSES and
+#     WALKS the tree, it never dumps it).
+# PT: UIX-SELECTOR-MATCH -- oráculo de corpus: seletores reais dos próprios RCSS versionados deste
+#     repo contra árvores DOM reais parseadas do próprio markup desses mesmos arquivos
+#     (glintfx::uix::parse_document, a própria S3 do módulo DOM). Precisa de lexer.cpp/parser.cpp
+#     de ../dom/ ALÉM do que o glintfx::uix_style já linka (dom_tree.cpp) -- deliberadamente SEM
+#     dom_tree.cpp de novo aqui (já compilado no glintfx_uix_style, uma segunda cópia neste
+#     executável seria erro de link de símbolo duplicado); deliberadamente SEM dumper.cpp também
+#     (este teste só PARSEIA e PERCORRE a árvore, nunca a dumpa).
+add_executable(uix_style_selector_match_corpus_sanity
+  selector_match_corpus_sanity.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/lexer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/parser.cpp)
+target_link_libraries(uix_style_selector_match_corpus_sanity PRIVATE glintfx::uix_style)
+target_compile_definitions(uix_style_selector_match_corpus_sanity PRIVATE
+  GLINTFX_UIX_STYLE_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  GLINTFX_UIX_STYLE_DEMOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../demos/showcase"
+  GLINTFX_UIX_STYLE_S3_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/uix/dom/test_fixtures"
+  GLINTFX_UIX_STYLE_UA_STYLESHEET="${CMAKE_CURRENT_SOURCE_DIR}/../../src/ua_stylesheet.hpp")
+add_test(NAME uix_style_selector_match_corpus_sanity COMMAND uix_style_selector_match_corpus_sanity)

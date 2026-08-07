@@ -598,10 +598,17 @@ jobs:
       #     landed ONLY in precommit.sh's own CPPCHECK_COMMON_ARGS, on the false premise that
       #     this --project mode "PERMANENTLY" never looks at glintfx/src/uix/ -- both findings
       #     were later resolved by CODE fixes instead, see CHANGELOG/TODO.md item
-      #     CI-CPPCHECK-DIVERGENCIA for the full story). See that file's own header comment for
-      #     the per-entry rationale (image_encode.cpp's `constParameterCallback`, etc.) and for
-      #     why the LOCAL-only fallback suppressions (`unusedStructMember`, `missingInclude`)
-      #     deliberately stay OUT of this shared file.
+      #     CI-CPPCHECK-DIVERGENCIA for the full story). ⚠️ **The `.txt` itself carries ZERO
+      #     prose, DATA-ONLY, on purpose**: cppcheck 2.13.0 (this runner's own apt package,
+      #     confirmed live in a ubuntu:noble container) FAILS HARD (`error: Failed to add
+      #     suppression. No id.`, exit 1) on any `#`-led comment line inside a
+      #     `--suppressions-list` file -- 2.21.1 (a dev machine's newer package) silently
+      #     accepts the same comments, which is exactly what let a comment-laden version of
+      #     this file pass locally and break this very step one commit after the original
+      #     divergence was fixed. All prose (per-entry rationale, why the LOCAL-only fallback
+      #     suppressions stay OUT of this file) lives in the sibling doc,
+      #     tools/cppcheck-suppressions.md -- read THAT, never re-add a `#` comment to the
+      #     `.txt` itself.
       # PT: As supressões vêm de tools/cppcheck-suppressions.txt (CI-CPPCHECK-DIVERGENCIA,
       #     2026-08-07) -- o MESMO arquivo que o próprio ramo de modo --project do
       #     tools/precommit.sh lê, via `--suppressions-list`, pra este passo e o gate local de
@@ -611,11 +618,17 @@ jobs:
       #     precommit.sh, sob a premissa falsa de que este modo --project "PERMANENTEMENTE"
       #     nunca olha pra glintfx/src/uix/ -- os dois achados depois foram resolvidos por
       #     conserto de CÓDIGO em vez de supressão, ver o item CI-CPPCHECK-DIVERGENCIA do
-      #     CHANGELOG/TODO.md pra história completa). Ver o próprio comentário de cabeçalho
-      #     daquele arquivo pro racional de cada entrada (o `constParameterCallback` do
-      #     image_encode.cpp etc.) e pra por que as supressões SÓ-LOCAIS de fallback
-      #     (`unusedStructMember`, `missingInclude`) ficam de propósito FORA deste arquivo
-      #     compartilhado.
+      #     CHANGELOG/TODO.md pra história completa). ⚠️ **O `.txt` em si carrega ZERO prosa,
+      #     SÓ-DADO, de propósito**: o cppcheck 2.13.0 (o próprio pacote apt deste runner,
+      #     confirmado ao vivo num container ubuntu:noble) FALHA DURO (`error: Failed to add
+      #     suppression. No id.`, exit 1) em qualquer linha de comentário `#` dentro de um
+      #     arquivo `--suppressions-list` -- o 2.21.1 (pacote mais novo de uma máquina de dev)
+      #     aceita os mesmos comentários em silêncio, o que foi exatamente o que deixou uma
+      #     versão deste arquivo carregada de comentário passar localmente e quebrar este
+      #     próprio passo um commit depois da divergência original ter sido consertada. Toda
+      #     prosa (racional por entrada, por que as supressões SÓ-LOCAIS de fallback ficam
+      #     FORA deste arquivo) mora no doc irmão, tools/cppcheck-suppressions.md -- leia
+      #     AQUELE, nunca volte a somar comentário `#` no `.txt` em si.
       - name: TST-L1-STATIC -- cppcheck
         run: |
           cppcheck --enable=warning,style,performance,portability \

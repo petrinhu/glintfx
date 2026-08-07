@@ -276,32 +276,44 @@ fi
 # -----------------------------------------------------------------------------
 # EN: 1) cppcheck on staged glintfx/src/*.cpp|*.hpp -- same flags as CI's
 #     TST-L1-STATIC (3/3), INCLUDING its common suppressions, which now live in ONE
-#     shared file (`tools/cppcheck-suppressions.txt`, read via `--suppressions-list`)
-#     instead of two hand-written `--suppress=` lists -- see that file's own header
-#     comment for the full rationale and CI-CPPCHECK-DIVERGENCIA (2026-08-07, TODO.md):
-#     the two lists silently drifted for 8 CI runs straight after two file-scoped
-#     suppressions landed ONLY here, on the FALSE premise (corrected below, and in
-#     `.github/workflows/ci.yml`'s own cppcheck step comment) that CI's --project mode
-#     "PERMANENTLY" never looks at glintfx/src/uix/ -- it does (those files are wired
-#     into `glintfx/build-lint/compile_commands.json` via `glintfx/tests/CMakeLists.txt`
-#     test targets that list their sources directly), and both findings this drift hid
-#     were resolved by fixing the CODE, not by suppressing (see dom_tree.cpp's own
-#     `Element::append_child` and shorthand.cpp's own `kBoxIndexTable`).
+#     shared, DATA-ONLY file (`tools/cppcheck-suppressions.txt`, read via
+#     `--suppressions-list`) instead of two hand-written `--suppress=` lists -- see the
+#     sibling doc `tools/cppcheck-suppressions.md` for the full rationale (per-entry, and
+#     CI-CPPCHECK-DIVERGENCIA, 2026-08-07, TODO.md): the two lists silently drifted for 8
+#     CI runs straight after two file-scoped suppressions landed ONLY here, on the FALSE
+#     premise (corrected below, and in `.github/workflows/ci.yml`'s own cppcheck step
+#     comment) that CI's --project mode "PERMANENTLY" never looks at glintfx/src/uix/ --
+#     it does (those files are wired into `glintfx/build-lint/compile_commands.json` via
+#     `glintfx/tests/CMakeLists.txt` test targets that list their sources directly), and
+#     both findings this drift hid were resolved by fixing the CODE, not by suppressing
+#     (see dom_tree.cpp's own `Element::append_child` and shorthand.cpp's own
+#     `kBoxIndexTable`). ⚠️ **`tools/cppcheck-suppressions.txt` itself carries ZERO `#`
+#     comments, on purpose, since a SECOND CI break (same day): cppcheck 2.13.0 (CI's own
+#     ubuntu-latest apt package) FAILS HARD on any comment line inside a
+#     `--suppressions-list` file (`error: Failed to add suppression. No id.`, exit 1);
+#     2.21.1 (a dev machine's newer package) silently accepts the same comments -- do NOT
+#     re-add prose to the `.txt`, it belongs in the `.md` sibling only.**
 # PT: 1) cppcheck nos glintfx/src/*.cpp|*.hpp staged -- mesmas flags do
 #     TST-L1-STATIC (3/3) do CI, INCLUINDO as supressões comuns dele, que agora moram
-#     num ÚNICO arquivo compartilhado (`tools/cppcheck-suppressions.txt`, lido via
-#     `--suppressions-list`) em vez de duas listas `--suppress=` escritas à mão -- ver o
-#     próprio comentário de cabeçalho daquele arquivo pro racional completo e o
-#     CI-CPPCHECK-DIVERGENCIA (2026-08-07, TODO.md): as duas listas divergiram em
-#     silêncio por 8 execuções seguidas do CI depois que duas supressões restritas a
-#     arquivo caíram SÓ aqui, sob a premissa FALSA (corrigida abaixo, e no próprio
-#     comentário do passo cppcheck do `.github/workflows/ci.yml`) de que o modo
-#     --project do CI "PERMANENTEMENTE" nunca olha pra glintfx/src/uix/ -- ele olha
-#     (esses arquivos estão amarrados em `glintfx/build-lint/compile_commands.json` via
-#     alvos de teste do `glintfx/tests/CMakeLists.txt` que listam os fontes deles
-#     diretamente), e os dois achados que essa divergência escondia foram resolvidos
-#     consertando o CÓDIGO, não suprimindo (ver o próprio `Element::append_child` do
-#     dom_tree.cpp e o próprio `kBoxIndexTable` do shorthand.cpp).
+#     num ÚNICO arquivo compartilhado e SÓ-DADO (`tools/cppcheck-suppressions.txt`, lido
+#     via `--suppressions-list`) em vez de duas listas `--suppress=` escritas à mão -- ver
+#     o doc irmão `tools/cppcheck-suppressions.md` pro racional completo (por entrada, e o
+#     CI-CPPCHECK-DIVERGENCIA, 2026-08-07, TODO.md): as duas listas divergiram em silêncio
+#     por 8 execuções seguidas do CI depois que duas supressões restritas a arquivo
+#     caíram SÓ aqui, sob a premissa FALSA (corrigida abaixo, e no próprio comentário do
+#     passo cppcheck do `.github/workflows/ci.yml`) de que o modo --project do CI
+#     "PERMANENTEMENTE" nunca olha pra glintfx/src/uix/ -- ele olha (esses arquivos estão
+#     amarrados em `glintfx/build-lint/compile_commands.json` via alvos de teste do
+#     `glintfx/tests/CMakeLists.txt` que listam os fontes deles diretamente), e os dois
+#     achados que essa divergência escondia foram resolvidos consertando o CÓDIGO, não
+#     suprimindo (ver o próprio `Element::append_child` do dom_tree.cpp e o próprio
+#     `kBoxIndexTable` do shorthand.cpp). ⚠️ **O próprio `tools/cppcheck-suppressions.txt`
+#     carrega ZERO comentário `#`, de propósito, depois de uma SEGUNDA quebra do CI (mesmo
+#     dia): o cppcheck 2.13.0 (o próprio pacote apt ubuntu-latest do CI) FALHA DURO em
+#     qualquer linha de comentário dentro de um arquivo `--suppressions-list` (`error:
+#     Failed to add suppression. No id.`, exit 1); o 2.21.1 (pacote mais novo de uma
+#     máquina de dev) aceita os mesmos comentários em silêncio -- NÃO volte a somar prosa
+#     ao `.txt`, ela mora só no `.md` irmão.**
 # -----------------------------------------------------------------------------
 CPPCHECK_COMMON_ARGS=(
   --enable=warning,style,performance,portability
@@ -312,7 +324,7 @@ CPPCHECK_COMMON_ARGS=(
 
 # EN: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- this repo's OWN
 #     LOCAL-ONLY fallback suppression, deliberately NOT in the shared
-#     `tools/cppcheck-suppressions.txt` (see that file's own header comment for why):
+#     `tools/cppcheck-suppressions.txt` (see the sibling `tools/cppcheck-suppressions.md` for why):
 #     it only matters for precommit.sh's own flag-less, per-file FALLBACK invocation
 #     (the `not_in_db` branch below, used when a staged file has no
 #     `compile_commands.json` entry of its own yet -- a brand-new header/TU nothing
@@ -351,8 +363,8 @@ CPPCHECK_COMMON_ARGS=(
 #     alike.
 # PT: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- a PRÓPRIA
 #     supressão SÓ-LOCAL deste repo, de propósito FORA do
-#     `tools/cppcheck-suppressions.txt` compartilhado (ver o próprio comentário de
-#     cabeçalho daquele arquivo pro porquê): ela só importa pra própria invocação de
+#     `tools/cppcheck-suppressions.txt` compartilhado (ver o `tools/cppcheck-suppressions.md`
+#     irmão pro porquê): ela só importa pra própria invocação de
 #     FALLBACK sem flags, por-arquivo, do precommit.sh (o ramo `not_in_db` abaixo,
 #     usado quando um arquivo staged ainda não tem entrada própria em
 #     `compile_commands.json` -- um header/TU novinho que nada faz #include ainda).

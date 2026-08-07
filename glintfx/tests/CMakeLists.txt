@@ -4121,6 +4121,70 @@ add_test(NAME rcss_dump_corpus_sanity
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
+# EN: `UIX-RCSS-ORACULO` -- rcss_dump_differential_oracle: the RMLX-2 sibling of RMLX-1/S7's own
+#     dom_dump_differential_oracle above -- diffs the TWO independently-written computed-value
+#     dumpers (side A over the real Rml::ElementDocument, side B over glintfx's own RCSS engine)
+#     byte for byte, over a corpus assembled from FOUR directories. Same "compile the module's OWN
+#     .cpp sources DIRECTLY into this one executable, never add_subdirectory()" reasoning as
+#     dom_dump_differential_oracle's own comment block above (glintfx/src/uix/style/ is a STANDALONE
+#     CMake project with its own project()/enable_testing(), same as glintfx/src/uix/dom/) -- this
+#     target needs BOTH the uix/dom sources (lexer/dom_tree/parser, for side B's own DOM tree via
+#     parse_document -- NOT dumper.cpp, this harness never calls glintfx::uix::dump_document) AND
+#     the full uix/style module (lexer/property_registry/shorthand/parser/value_compute/
+#     selector_match/cascade/dumper -- dump_style() cascades internally, so every stage the
+#     glintfx_uix_style_gate library below bundles is needed here too; listed directly rather than
+#     linking that library, since it is defined LATER in this same file and this block deliberately
+#     stays where its two rcss_dump_* siblings already are). Same rcss_dump.cpp + dom_dump.cpp (the
+#     latter only for its own dom_dump_escape(), per the rcss_dump_worked_examples/rcss_dump_
+#     corpus_sanity comment above) as side A's own two existing targets.
+# PT: `UIX-RCSS-ORACULO` -- rcss_dump_differential_oracle: o irmão da RMLX-2 do próprio dom_dump_
+#     differential_oracle da RMLX-1/S7 acima -- diffa OS DOIS dumpers de valor-computado escritos
+#     de forma independente (lado A sobre o Rml::ElementDocument real, lado B sobre o motor RCSS
+#     próprio da glintfx) byte a byte, sobre um corpus montado de QUATRO diretórios. Mesmo racional
+#     "compila os PRÓPRIOS fontes .cpp do módulo DIRETAMENTE neste executável só, nunca
+#     add_subdirectory()" do próprio bloco de comentário do dom_dump_differential_oracle acima
+#     (glintfx/src/uix/style/ é um projeto CMake STANDALONE, com project()/enable_testing() próprios,
+#     igual glintfx/src/uix/dom/) -- este alvo precisa TANTO dos fontes do uix/dom
+#     (lexer/dom_tree/parser, pra própria árvore DOM do lado B via parse_document -- NÃO
+#     dumper.cpp, este harness nunca chama glintfx::uix::dump_document) QUANTO do módulo uix/style
+#     inteiro (lexer/property_registry/shorthand/parser/value_compute/selector_match/cascade/dumper
+#     -- o dump_style() cascateia internamente, então todo estágio que a biblioteca glintfx_uix_
+#     style_gate abaixo empacota é necessário aqui também; listado direto em vez de linkar aquela
+#     biblioteca, já que ela é definida DEPOIS neste mesmo arquivo e este bloco fica deliberadamente
+#     onde os dois irmãos rcss_dump_* dele já estão). Mesmo rcss_dump.cpp + dom_dump.cpp (o último
+#     só pelo próprio dom_dump_escape() dele, per o comentário do rcss_dump_worked_examples/rcss_
+#     dump_corpus_sanity acima) que os dois próprios alvos existentes do lado A.
+# ---------------------------------------------------------------------------
+add_executable(rcss_dump_differential_oracle
+  ${CMAKE_SOURCE_DIR}/src/rml/dom_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump.cpp
+  ${CMAKE_SOURCE_DIR}/src/rml/rcss_dump_differential_oracle.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/dom_tree.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/dom/parser.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/lexer.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/property_registry.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/shorthand.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/parser.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/value_compute.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/selector_match.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/cascade.cpp
+  ${CMAKE_SOURCE_DIR}/src/uix/style/dumper.cpp)
+target_include_directories(rcss_dump_differential_oracle PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(rcss_dump_differential_oracle PRIVATE ${_embed_dep} RmlUi::Core)
+target_compile_definitions(rcss_dump_differential_oracle PRIVATE
+  GLINTFX_RCSS2_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  GLINTFX_RCSS2_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
+  GLINTFX_RCSS2_DOM_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
+  GLINTFX_RCSS2_ORACLE_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/rml/rcss_dump_test_fixtures"
+  GLINTFX_RCSS2_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+add_test(NAME rcss_dump_differential_oracle
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:rcss_dump_differential_oracle>
+    -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
 # EN: `UIX-STYLE-FORA-DO-GATE` -- wires the glintfx::uix::style module (glintfx/src/uix/style/,
 #     lexer/property_registry/shorthand/parser/value_compute) and its own 9 test executables
 #     (glintfx/tests/uix_style/) into THIS suite -- the one tools/preci.sh and .github/workflows/

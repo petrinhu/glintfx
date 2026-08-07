@@ -26,6 +26,7 @@
   "_comment_11": "RMLX-1/S7 (2026-08-05): dom_dump_differential_oracle.cpp somado pelo MESMO motivo exato do _comment_10, um caso adiante -- o harness do oraculo diferencial toca os DOIS lados (o dumper sobre o Rml::ElementDocument real E o dumper sobre a arvore propria), entao ele PRECISA de token Rml:: e portanto PRECISA morar em glintfx/src/rml/, a unica zona que o tools/check_rml_whitelist.sh permite. Sem esta entrada o guard o classificaria como producao (production_globs = glintfx/src/**) e bloquearia a escrita do proprio harness. Continua a disciplina de glob ESTREITO do _comment_10: mais um nome exato, nunca glintfx/src/rml/** inteiro.",
   "_comment_12": "UIX-CONFORMIDADE-SPEC (2026-08-06): dom_dump_spec_conformance.cpp somado pelo MESMO motivo exato do _comment_10/_comment_11 -- o terceiro tipo de oraculo (conformidade contra docs/uix-dom.md, isolado, nao comparado com S6b) tambem precisa de Rml::ElementDocument/Rml::Context REAIS pra exercitar dom_dump_document(), entao mora em glintfx/src/rml/. Mesma disciplina de glob ESTREITO: mais um nome exato.",
   "_comment_14": "UIX-RCSS-DUMP-A (2026-08-06): rcss_dump_worked_examples.cpp/rcss_dump_corpus_sanity.cpp somados pelo MESMO motivo exato do _comment_10 -- o lado A da RMLX-2 (docs/uix-rcss.md) tambem precisa de Rml::ElementDocument/Rml::Context REAIS, entao mora em glintfx/src/rml/. rcss_dump.hpp/rcss_dump.cpp (o proprio dumper, producao real) NAO entram aqui -- so os dois executaveis de teste, mesma disciplina de glob ESTREITO dos irmaos acima.",
+  "_comment_15": "UIX-RCSS-ORACULO (2026-08-06): rcss_dump_differential_oracle.cpp -- mesmo motivo exato do _comment_11 (irmao S7 da RMLX-1), um oitavo caso -- este harness toca os DOIS lados da RMLX-2 (o dumper sobre o Rml::ElementDocument real E o dumper sobre a arvore/StyleSheet proprios), entao PRECISA de token Rml:: e portanto PRECISA morar em glintfx/src/rml/. rcss_dump_test_fixtures/** e dado NAO-codigo (arquivos .rml de fixture consumidos por este harness, nunca compilados) -- sem esta entrada production_globs=glintfx/src/** os classificaria como producao C++ por engano, so por morarem sob src/.",
   "test_globs": [
     "glintfx/tests/**",
     "glintfx/src/rml/dom_dump_corpus_sanity.cpp",
@@ -33,7 +34,9 @@
     "glintfx/src/rml/dom_dump_differential_oracle.cpp",
     "glintfx/src/rml/dom_dump_spec_conformance.cpp",
     "glintfx/src/rml/rcss_dump_worked_examples.cpp",
-    "glintfx/src/rml/rcss_dump_corpus_sanity.cpp"
+    "glintfx/src/rml/rcss_dump_corpus_sanity.cpp",
+    "glintfx/src/rml/rcss_dump_differential_oracle.cpp",
+    "glintfx/src/rml/rcss_dump_test_fixtures/**"
   ],
 
   "_comment_7": "Defensivo: production_globs ja e estreito o bastante para nao alcancar estes caminhos, mas declara-los deixa a intencao explicita e protege se os globs de producao forem alargados no futuro.",

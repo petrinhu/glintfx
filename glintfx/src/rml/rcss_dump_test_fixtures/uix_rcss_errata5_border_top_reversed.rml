@@ -1,0 +1,4 @@
+<rml><head><style>
+#a { border-top: 1dp #7A5A2E; }
+#b { border-top: #7A5A2E 1dp; }
+</style></head><body><div id="a"></div><div id="b"></div></body></rml>

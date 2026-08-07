@@ -198,8 +198,26 @@ int main() {
   //     done ("N fixtures, M estados, K nós, 0 erros internos").
   // PT: A linha de escopo -- impressa mesmo quando uma contagem é zero, pela própria
   //     definição-de-pronto desta tarefa ("N fixtures, M estados, K nós, 0 erros internos").
-  std::printf("rcss_dump_corpus_sanity: %zu fixtures, %zu estados, %zu nós, %d erros internos\n", fixtures.size(), g_states_seen, g_nodes_seen,
-              g_internal_errors);
+  //
+  // EN: CI-TIDY-CRASH-2 (2026-08-06): the word "nós" (UTF-8) was inline in the format
+  //     literal below and crashed clang-tidy 18's modernize-use-std-print check with a
+  //     SIGSEGV -- its FormatStringConverter reads the UTF-8 continuation byte as a
+  //     negative signed char, which passes the `< 32` control-char test and then
+  //     indexes llvm::hexdigit() out of bounds (llvm/llvm-project#169198, fixed by
+  //     #169215). Moved the word out to a %s argument so the parser never scans a
+  //     non-ASCII byte from inside the format string. Printed text is byte-identical.
+  //     Safe to move back inline once CI's clang-tidy carries the #169215 fix.
+  // PT: CI-TIDY-CRASH-2 (2026-08-06): a palavra "nós" (UTF-8) estava dentro do literal
+  //     de formatação abaixo e derrubava o check modernize-use-std-print do clang-tidy
+  //     18 com SIGSEGV -- o FormatStringConverter dele lê o byte de continuação UTF-8
+  //     como char assinado negativo, que passa no teste `< 32` de caractere-de-controle
+  //     e então indexa llvm::hexdigit() fora dos limites (llvm/llvm-project#169198,
+  //     corrigido pelo #169215). Movi a palavra para um argumento %s pra o parser nunca
+  //     escanear byte não-ASCII de dentro do format-string. Texto impresso é
+  //     byte-idêntico. Pode voltar pro literal quando o CI usar clang-tidy com o
+  //     #169215.
+  std::printf("rcss_dump_corpus_sanity: %zu fixtures, %zu estados, %zu %s, %d erros internos\n", fixtures.size(), g_states_seen, g_nodes_seen,
+              "nós", g_internal_errors);
 
   if (g_failures == 0) {
     std::puts("rcss_dump_corpus_sanity OK");

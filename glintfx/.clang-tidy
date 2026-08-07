@@ -8,9 +8,16 @@
 #        break the "sempre-verde" contract for this CI-now gate without any code fix
 #        in scope (see TODO.md TST-L1-STATIC). They stay visible in the CI log for
 #        drive-by cleanup; escalate to WarningsAsErrors once the backlog is cleared.
-#     HeaderFilterRegex empty -- restricts diagnostics to the primary .cpp file being
-#     analyzed (glintfx/src/*.cpp), excluding RmlUi/gl3w/stb third-party headers pulled
-#     in transitively (they are out of our authorship and out of scope for this gate).
+#     HeaderFilterRegex is left empty ON PURPOSE, but NOT because it excludes
+#     third-party headers -- CORRECTION (CI-TIDY-CRASH-2, 2026-08-06): the previous
+#     comment here was WRONG and was disproved by measurement (an impossible-to-match
+#     regex was tried and the third-party diagnostic still fired identically).
+#     HeaderFilterRegex has NO EFFECT AT ALL on clang-analyzer-* diagnostics -- it only
+#     scopes AST-matcher based checks (modernize-*, cppcoreguidelines-*). It stays empty
+#     here simply because no header-scoped modernize-*/cppcoreguidelines-* filtering is
+#     needed today, not as a shield against vendored/third-party findings. See the
+#     clang-analyzer-security.ArrayBound exemption below for how third-party findings
+#     are actually handled.
 # PT: Config do clang-tidy para o TST-L1-STATIC (ver TESTES.md "Camada 1"). Dois níveis:
 #     1) clang-analyzer-* (detecção real de bug/UB) -- gate DURO, WarningsAsErrors abaixo.
 #     2) modernize-*/cppcoreguidelines-* (estilo/boa-prática) -- reportado, NÃO gateado.
@@ -20,14 +27,45 @@
 #        contrato "sempre-verde" deste gate CI-now sem nenhuma correção de código no
 #        escopo (ver TODO.md TST-L1-STATIC). Ficam visíveis no log do CI para limpeza
 #        oportunista; escalar para WarningsAsErrors quando o backlog for zerado.
-#     HeaderFilterRegex vazio -- restringe diagnósticos ao .cpp principal sendo
-#     analisado (glintfx/src/*.cpp), excluindo headers de terceiro (RmlUi/gl3w/stb)
-#     incluídos transitivamente (fora da nossa autoria e fora do escopo deste gate).
+#     HeaderFilterRegex fica vazio DE PROPÓSITO, mas NÃO porque exclui headers de
+#     terceiro -- CORREÇÃO (CI-TIDY-CRASH-2, 2026-08-06): o comentário anterior aqui
+#     estava ERRADO e foi refutado por medição (uma regex impossível de casar foi
+#     testada e o diagnóstico de terceiro apareceu do mesmo jeito, idêntico).
+#     HeaderFilterRegex NÃO TEM EFEITO NENHUM sobre diagnósticos clang-analyzer-* --
+#     ele só escopa checks baseados em AST-matcher (modernize-*, cppcoreguidelines-*).
+#     Fica vazio aqui simplesmente porque nenhum filtro de header para
+#     modernize-*/cppcoreguidelines-* é necessário hoje, não como escudo contra achados
+#     de vendored/terceiro. Ver a isenção de clang-analyzer-security.ArrayBound abaixo
+#     para como achados de terceiro são de fato tratados.
 Checks: >
   -*,
   modernize-*,
   cppcoreguidelines-*,
   clang-analyzer-*
-WarningsAsErrors: 'clang-analyzer-*'
+# EN: CI-TIDY-CRASH-2 (2026-08-06, expires with RMLX-* removing RmlUi from the tree):
+#     clang-analyzer-security.ArrayBound fires on TypeConverter.inl:386 of the
+#     vendored RmlUi (TypeConverterVectorString::Convert, the classic "treat struct
+#     fields as a vector" trick) -- third-party code we cannot fix, not ours. Affects
+#     5 files as of this date: bootstrap.cpp, decorator_image_tint.cpp,
+#     decorator_polygon.cpp, dom_dump.cpp, rcss_dump.cpp. Excluded from
+#     WarningsAsErrors ONLY for this one specific check -- every other clang-analyzer-*
+#     diagnostic still fails the build. This exemption has NO expiry date mechanism
+#     other than RmlUi's own removal: once the RMLX-* roadmap (TODO.md) finishes
+#     replacing RmlUi with the clean-room UI engine, delete this line, and if the
+#     5-file list above has grown, that growth was silent scope creep and should have
+#     been caught earlier -- check it.
+# PT: CI-TIDY-CRASH-2 (2026-08-06, expira junto com o RMLX-* tirando o RmlUi da árvore):
+#     clang-analyzer-security.ArrayBound dispara em TypeConverter.inl:386 do RmlUi
+#     vendorizado (TypeConverterVectorString::Convert, o truque clássico de "tratar
+#     campos de struct como vetor") -- código de terceiro que não podemos consertar,
+#     não é nosso. Afeta 5 arquivos nesta data: bootstrap.cpp, decorator_image_tint.cpp,
+#     decorator_polygon.cpp, dom_dump.cpp, rcss_dump.cpp. Excluído do WarningsAsErrors
+#     SÓ para este check específico -- todo outro diagnóstico clang-analyzer-* continua
+#     reprovando o build. Esta isenção NÃO tem mecanismo de prazo além da própria
+#     remoção do RmlUi: quando o roteiro RMLX-* (TODO.md) terminar de substituir o
+#     RmlUi pelo motor de UI clean-room, apague esta linha, e se a lista de 5 arquivos
+#     acima tiver crescido, esse crescimento foi scope creep silencioso e devia ter
+#     sido pego antes -- confira.
+WarningsAsErrors: 'clang-analyzer-*,-clang-analyzer-security.ArrayBound'
 HeaderFilterRegex: ''
 FormatStyle: none

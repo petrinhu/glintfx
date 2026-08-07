@@ -229,6 +229,7 @@ Design detail: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md`]
 - **Embed integration:** [`docs/embed-integration.md`](docs/embed-integration.md), the contract for hosts that own their window and GL context (`glintfx::UiLayer`).
 - **Packaging:** [`docs/packaging.md`](docs/packaging.md), the `cmake --install` + `find_package(glintfx)` flow for consuming a pre-built tree.
 - **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md), the most likely integration errors and their fixes.
+- **CI / GitHub Actions:** [`docs/github-actions.md`](docs/github-actions.md), how this project's 6 workflows actually use GitHub Actions -- tied to real incidents measured on this repo, not a generic tutorial.
 - **API reference:** the public headers under [`glintfx/include/glintfx/`](glintfx/include/glintfx/) are fully doc-commented (bilingual, EN then PT) -- treat them as the authoritative, always-current API reference; a generated (Doxygen) reference is not yet published.
 - **Architecture / rationale:** the [ADRs](docs/adr/README.md) and the [design spec](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
 - **Versioning policy:** [`CONTRIBUTING.md#versioning`](CONTRIBUTING.md#versioning) -- what counts as a minor vs. a patch release while glintfx is pre-1.0.
@@ -514,6 +515,7 @@ Detalhe de design: [`docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.
 - **Integração embed:** [`docs/embed-integration.md`](docs/embed-integration.md), o contrato para hosts donos da própria janela e contexto GL (`glintfx::UiLayer`).
 - **Packaging:** [`docs/packaging.md`](docs/packaging.md), o fluxo `cmake --install` + `find_package(glintfx)` para consumir uma árvore pré-buildada.
 - **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md), os erros de integração mais prováveis e suas correções.
+- **CI / GitHub Actions:** [`docs/github-actions.md`](docs/github-actions.md), como os 6 fluxos deste projeto de fato usam GitHub Actions -- amarrado a incidentes reais medidos neste repo, não tutorial genérico.
 - **API reference:** os headers públicos em [`glintfx/include/glintfx/`](glintfx/include/glintfx/) são totalmente doc-commented (bilíngue, EN depois PT) -- trate-os como a referência de API autoritativa e sempre atual; uma referência gerada (Doxygen) ainda não está publicada.
 - **Arquitetura / racional:** os [ADRs](docs/adr/README.md) e a [spec de design](docs/superpowers/specs/2026-06-28-camada1-rmlui-gl3-design.md).
 - **Política de versionamento:** [`CONTRIBUTING.md#versionamento`](CONTRIBUTING.md#versionamento) -- o que conta como release minor vs. patch enquanto o glintfx está pré-1.0.

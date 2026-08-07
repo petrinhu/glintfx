@@ -78,7 +78,7 @@ What this means in practice:
 
 ### CI policy: where each check runs
 
-**All CI runs on GitHub. `.github/workflows/` is the only CI that exists.** (Lead's decision, 2026-07-25.)
+**All CI runs on GitHub. `.github/workflows/` is the only CI that exists.** (Lead's decision, 2026-07-25.) For how this project actually uses GitHub Actions -- our 6 workflows, the 7 lessons measured from the 2026-08-06 outage, and the accepted self-hosted-runner-on-public-repo deviation from GitHub's own recommendation -- see [`docs/github-actions.md`](docs/github-actions.md), not a generic tutorial.
 
 - **`.github/workflows/ci.yml`** (`ubuntu-latest`) is the **gate**. Runs on push to `main`, on tags, and on PRs; matrix over `GLINTFX_BACKEND_GLFW` (ON/OFF). A green run here is what authorises a merge or a tag.
 - **`.github/workflows/nightly.yml`** (GitHub cron) is the nightly ASan **safety net**, independent of the PR/tag gate.
@@ -302,7 +302,7 @@ O que isso significa na prática:
 
 ### Política de CI: o que roda onde
 
-**Todo CI roda no GitHub. O `.github/workflows/` é o único CI que existe.** (Decisão do líder, 2026-07-25.)
+**Todo CI roda no GitHub. O `.github/workflows/` é o único CI que existe.** (Decisão do líder, 2026-07-25.) Para como este projeto de fato usa GitHub Actions -- os nossos 6 fluxos, as 7 lições medidas da pane de 2026-08-06, e o desvio aceito de runner self-hosted em repo público em relação à recomendação oficial do GitHub -- ver [`docs/github-actions.md`](docs/github-actions.md), não um tutorial genérico.
 
 - **`.github/workflows/ci.yml`** (`ubuntu-latest`) é o **gate**. Roda em push para `main`, em tags e em PRs; matriz sobre `GLINTFX_BACKEND_GLFW` (ON/OFF). Um run verde aqui é o que autoriza merge ou tag.
 - **`.github/workflows/nightly.yml`** (cron do GitHub) é a **rede de segurança** noturna de ASan, independente do gate de PR/tag.

@@ -1260,26 +1260,39 @@ in either engine -- an internal enum's numeric order is an implementation detail
 have to replicate identically, exactly the shared-private-assumption risk `docs/uix-dom.md`'s own
 "why this document exists" section warns against.
 
-#### 6.1 Registry table (72 longhand entries, alphabetical -- the dump's own required order)
+#### 6.1 Registry table (107 longhand entries, alphabetical -- the dump's own required order)
 
-**72 is today's count, not the parity target.** `docs/rmlx-subset.md` §7 (2026-08-07) authorizes
-every property the pinned RmlUi build registers; `TODO.md`'s `ESC-1` (wave `WR2R`) is the owning
-slice that raises this table to **107** (72 + 35, `RegisterDefaultProperties`,
-`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, plus glintfx's own
-8: `ripple` ×5, `image-tint` ×3). **Verified while writing this note (`ESC-0`): unlike §14.1/§14.2's
-own divergence counts, this 72 is not read at runtime by `GLINTFX_RCSS2_SPEC_DOC` -- that mechanism
-only parses this document's own two divergence-count declaration lines, one per §14 subsection
+**`ESC-1` (wave `WR2R`) landed this table at 107 rows, 2026-08-07.** `docs/rmlx-subset.md` §7's
+"if the engine being replaced accepts it, ours accepts it" rule authorized every property the
+pinned RmlUi build registers, and `ESC-1` delivered all of them:
+`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`'s own
+`RegisterDefaultProperties` registers exactly **99** properties (`awk 'NR>=248 && NR<=436' ... |
+grep -c 'RegisterProperty('`, verified directly against the pin, not assumed), plus glintfx's own
+**8** (`ripple` ×5, `image-tint` ×3, already present since before this slice) = **107**. The
+pre-`ESC-1` 72 already held all 8 of glintfx's own custom rows plus 64 of the 99 upstream ones
+(the ones this table's own census-coverage accounting below measured directly or reached via a
+measured shorthand); `ESC-1` added the remaining 99 − 64 = **35** upstream rows this table had
+never listed. **Verified while writing this note (`ESC-0`, restated after `ESC-1`'s own landing):
+unlike §14.1/§14.2's own divergence counts, this 107 is not read at runtime by
+`GLINTFX_RCSS2_SPEC_DOC`** -- that mechanism only parses this document's own two divergence-count
+declaration lines, one per §14 subsection
 (`glintfx/src/rml/rcss_dump_differential_oracle.cpp:1160-1217`); this table's own row count has no
-automated doc-vs-code cross-check today.** That is a separate gap, not something `ESC-0` was asked
-to close -- flagged here only so a future reader does not assume a guard exists that does not. (This
-note deliberately does not quote either declaration line's own literal text: `parse_declared_count()`
-matches on that exact bold-prefixed string, and quoting it here a second time would make the count
-"appear twice" and fail the parse -- confirmed by breaking it that way once while drafting this note,
-then rewording to fix it.)
+automated doc-vs-code cross-check today, closed instead by
+`glintfx/tests/uix_style/property_registry_sanity.cpp`'s own `table.size() == 107` assertion (a
+test-level guard, not a doc-vs-code one). That gap is a separate one, not something `ESC-1` was
+asked to close -- flagged here only so a future reader does not assume a guard exists that does
+not. (This note deliberately does not quote either declaration line's own literal text:
+`parse_declared_count()` matches on that exact bold-prefixed string, and quoting it here a second
+time would make the count "appear twice" and fail the parse -- confirmed by breaking it that way
+once while drafting the original note, then rewording to fix it.)
 
 | Property | Initial value | Inherited | Value domain (section 7) |
 | :--- | :--- | :---: | :--- |
+| `-rmlui-direction` | `auto` | **yes** | keyword(`auto`,`ltr`,`rtl`) |
+| `-rmlui-language` | *(empty)* | **yes** | string |
+| `align-content` | `stretch` | no | keyword(`flex-start`,`flex-end`,`center`,`space-between`,`space-around`,`space-evenly`,`stretch`) |
 | `align-items` | `stretch` | no | keyword(`flex-start`,`flex-end`,`center`,`baseline`,`stretch`) |
+| `align-self` | `auto` | no | keyword(`auto`,`flex-start`,`flex-end`,`center`,`baseline`,`stretch`) |
 | `animation` | `none` | no | composite (§9.3) |
 | `backdrop-filter` | *(empty)* | no | composite filter-list (§9.2) |
 | `background-color` | `transparent` | no | color |
@@ -1298,19 +1311,32 @@ then rewording to fix it.)
 | `bottom` | `auto` | no | keyword(`auto`) or length-percent (§5, family a) |
 | `box-shadow` | `none` | no | composite shadow-list (§9.1) |
 | `box-sizing` | `content-box` | no | keyword(`content-box`,`border-box`) |
+| `caret-color` | `auto` | **yes** | keyword(`auto`) or color |
+| `clear` | `none` | no | keyword(`none`,`left`,`right`,`both`) |
+| `clip` | `auto` | no | keyword(`auto`,`none`,`always`) or number |
 | `color` | `white` | **yes** | color |
 | `column-gap` | `0px` | no | length |
 | `cursor` | *(empty)* | **yes** | string |
 | `decorator` | *(empty)* | no | composite decorator-list (§9.2) |
 | `display` | `inline` | no | keyword(`none`,`block`,`inline`,`inline-block`,`flow-root`,`flex`,`inline-flex`,`table`,`inline-table`,`table-row`,`table-row-group`,`table-column`,`table-column-group`,`table-cell`) |
+| `drag` | `none` | no | keyword(`none`,`drag`,`drag-drop`,`block`,`clone`) |
+| `fill-image` | *(empty)* | no | string |
 | `filter` | *(empty)* | no | composite filter-list (§9.2) |
 | `flex-basis` | `auto` | no | keyword(`auto`) or length-percent (family a) |
+| `flex-direction` | `row` | no | keyword(`row`,`row-reverse`,`column`,`column-reverse`) |
 | `flex-grow` | `0` | no | number |
 | `flex-shrink` | `1` | no | number |
+| `flex-wrap` | `nowrap` | no | keyword(`nowrap`,`wrap`,`wrap-reverse`) |
+| `float` | `none` | no | keyword(`none`,`left`,`right`) |
 | `focus` | `auto` | **yes** ⚠️ | keyword(`none`,`auto`) |
+| `font-effect` | *(empty)* | **yes** | composite (§9 grammar: none yet -- empty-list echo only, owner `ESC-24`) |
 | `font-family` | *(empty)* | **yes** | string |
+| `font-kerning` | `auto` | **yes** | keyword(`auto`,`normal`,`none`) |
 | `font-size` | `12px` | **yes** | length (relative to itself is disallowed; resolves via §8 `em`/`rem` rules) |
+| `font-style` | `normal` | **yes** | keyword(`normal`,`italic`) |
+| `font-weight` | `normal` | **yes** | keyword(`normal`,`bold`) or number (the `normal`=400/`bold`=700 mapping is parser-side, not this table's concern -- rendering owner `ESC-16`) |
 | `height` | `auto` | no | keyword(`auto`) or length-percent (family a) |
+| `image-color` | `white` | no | color |
 | `image-tint-color` | `white` | no | color |
 | `image-tint-mode` | `none` | no | keyword(`none`,`multiply`,`luminance-multiply`,`screen`) |
 | `image-tint-threshold` | `0.55` | no | number, clamped `[0, 0.999]` |
@@ -1327,13 +1353,22 @@ then rewording to fix it.)
 | `max-width` | `none` | no | keyword(`none`) or length-percent (family a) |
 | `min-height` | `0px` | no | length-percent (family a) |
 | `min-width` | `0px` | no | length-percent (family a) |
+| `nav-down` | `none` | no | keyword(`none`,`auto`,`horizontal`,`vertical`,`tree-order`) or string |
+| `nav-left` | `none` | no | keyword(`none`,`auto`,`horizontal`,`vertical`,`tree-order`) or string |
+| `nav-right` | `none` | no | keyword(`none`,`auto`,`horizontal`,`vertical`,`tree-order`) or string |
+| `nav-up` | `none` | no | keyword(`none`,`auto`,`horizontal`,`vertical`,`tree-order`) or string |
 | `opacity` | `1` | **yes** ⚠️ | number, clamped `[0, 1]` |
 | `overflow-x` | `visible` | no | keyword(`visible`,`hidden`,`auto`,`scroll`) |
 | `overflow-y` | `visible` | no | keyword(`visible`,`hidden`,`auto`,`scroll`) |
+| `overscroll-behavior` | `auto` | no | keyword(`auto`,`contain`) |
 | `padding-bottom` | `0px` | no | length-percent (family a) |
 | `padding-left` | `0px` | no | length-percent (family a) |
 | `padding-right` | `0px` | no | length-percent (family a) |
 | `padding-top` | `0px` | no | length-percent (family a) |
+| `perspective` | `none` | no | keyword(`none`) or length |
+| `perspective-origin-x` | `50%` | no | keyword(`left`,`center`,`right`) or length-percent (family not assigned upstream -- see note below the table) |
+| `perspective-origin-y` | `50%` | no | keyword(`top`,`center`,`bottom`) or length-percent (family not assigned upstream -- see note below the table) |
+| `pointer-events` | `auto` | **yes** | keyword(`none`,`auto`) |
 | `position` | `static` | no | keyword(`static`,`relative`,`absolute`,`fixed`) |
 | `right` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `ripple-origin-x` | `0` | no | number (px, custom glintfx) |
@@ -1342,17 +1377,26 @@ then rewording to fix it.)
 | `ripple-strength` | `0` | no | number (px, custom glintfx) |
 | `ripple-width` | `48` | no | number (px, custom glintfx) |
 | `row-gap` | `0px` | no | length |
+| `scrollbar-margin` | `0` | no | length |
 | `tab-index` | `none` | no | keyword(`none`,`auto`) |
 | `text-align` | `left` | **yes** | keyword(`left`,`right`,`center`,`justify`) |
+| `text-decoration` | `none` | **yes** ⚠️ | keyword(`none`,`underline`,`overline`,`line-through`) |
 | `text-overflow` | `clip` | no | keyword(`clip`,`ellipsis`) or string |
 | `text-transform` | `none` | **yes** | keyword(`none`,`capitalize`,`uppercase`,`lowercase`) |
 | `top` | `auto` | no | keyword(`auto`) or length-percent (family a) |
 | `transform` | `none` | no | composite transform-list (§9.4) |
+| `transform-origin-x` | `50%` | no | keyword(`left`,`center`,`right`) or length-percent (family not assigned upstream -- see note below the table) |
+| `transform-origin-y` | `50%` | no | keyword(`top`,`center`,`bottom`) or length-percent (family not assigned upstream -- see note below the table) |
+| `transform-origin-z` | `0` | no | length |
+| `transition` | `none` | no | composite (§9 grammar: none yet -- empty-list echo only, owner `ESC-23`) |
 | `vertical-align` | `baseline` | no | keyword(`baseline`,`middle`,`sub`,`super`,`text-top`,`text-bottom`,`top`,`center`,`bottom`) or length-percent (relative to `line-height`) |
+| `visibility` | `visible` | no | keyword(`visible`,`hidden`) |
 | `white-space` | `normal` | **yes** | keyword(`normal`,`pre`,`nowrap`,`pre-wrap`,`pre-line`) |
 | `width` | `auto` | no | keyword(`auto`) or length-percent (family a) |
+| `word-break` | `normal` | **yes** | keyword(`normal`,`break-all`,`break-word`) |
+| `z-index` | `auto` | no | keyword(`auto`) or number |
 
-**⚠️ Two entries that read as surprising and are correct as measured, flagged so nobody "fixes"
+**⚠️ Three entries that read as surprising and are correct as measured, flagged so nobody "fixes"
 them later:** `focus` is `inherited: true` in upstream RmlUi despite controlling something
 (whether `Element::Focus()` can succeed) that has no intuitive notion of "inheriting" -- confirmed
 directly at the registration call site, not inferred. `opacity` is also `inherited: true`, which is
@@ -1362,32 +1406,64 @@ descendant's own opacity, if unset, cascades from its ancestor's *value*, and Rm
 **multiplies** opacities down the render tree at draw time, `docs/embed-integration.md` is silent on
 this and it is out of this dump's own scope since it is a render-time compounding, not a
 cascade-time computed value -- the computed `opacity` value itself, which this dump reports, is
-exactly the CSS-inheritance-style single cascaded number, not the compounded product).
+exactly the CSS-inheritance-style single cascaded number, not the compounded product). **`ESC-1`
+adds a third, `text-decoration`, also `inherited: true`, confirmed directly at its own call site
+(`StyleSheetSpecification.cpp:362`)** -- real CSS's own formal cascade declares `text-decoration`
+`Inherited: no` (initial `none`); browsers still *paint* decoration lines continuing across
+descendant text runs, but that is a separate, rendering-level propagation rule, not the
+`inherited`-flag cascade mechanism this table's own column names. RmlUi's own `inherited: true`
+genuinely diverges from the CSS spec's own cascade classification, the same class of surprise
+`focus`/`opacity` above already carry -- not guessed, read directly at the call site. (By contrast,
+`caret-color`'s own `inherited: true`, also new in `ESC-1`, is **not** a divergence: real CSS
+`caret-color` is itself an inherited property, so RmlUi's flag here agrees with the spec rather than
+surprising against it -- no ⚠️ for that one.)
 
-**⚠️ `max-height`/`max-width`: the one registry entry with zero corpus justification, kept on
-purpose, not a bug to fix later.** `UIX-PROP-REGISTRY`'s own delivery closed the 64-vs-72 accounting
-(section 6 above) and found these two are the **only** 2 of the 72 longhand entries with **zero**
-measured occurrences anywhere in this document's own corpus (`/var/tmp/censo-rcss-qa1/censo.md`) --
-not written directly, and not reachable through any of the 13 shorthands section 6.2 defines (no
-shorthand expands into `max-height`/`max-width`; they are plain, unexpanded RmlUi native properties).
-Section 6's own scope discipline states this registry is built "exclusively" from measured names --
-by that rule alone these two do not belong. **They stay in the registry anyway**, for two reasons
-stated once here so a future reader does not re-litigate them fixture by fixture: (1) this document's
-own table (section 6.1 above) already listed them before the corpus-exclusivity discipline was
-written down, and the spec is the contract two independent dumper authors build against -- removing
-an already-published registry entry needs the same "stop, edit this spec with a diff, líder sign-off"
-discipline section 13 requires for *adding* an out-of-subset item, not a silent drop; (2) the more
-durable reason, restated from this project's own standing rule: the glintfx target is **broad
-distribution**, and "zero occurrences in this repo's two-project corpus" is a true statement about
-two repositories, never a true statement about the world -- a consumer this document has never seen
-may genuinely author `max-height: 200px;` tomorrow. **The teto this decision is bounded by:** these
-two entries are pinned exactly as they are today -- `keyword(none)` or length-percent (family a),
-same domain and print form as every other box-relative property in the table -- by
+**Family not assigned upstream, `ESC-1` (`perspective-origin-x/y`, `transform-origin-x/y`):** these
+four new `length-percent`-domain rows do **not** carry a "(family a)" tag the way every other
+`length-percent` row in this table does. Verified directly at the pinned call sites
+(`StyleSheetSpecification.cpp:390-391` for the `perspective-origin-*` pair, `:394-395` for the
+`transform-origin-*` pair): unlike every other `length_percent`-parsed property in
+`RegisterDefaultProperties` (which chains a `.SetRelativeTarget(RelativeTarget::...)` call
+identifying which of section 5's three `%`-families it resolves against), these four chain no
+`SetRelativeTarget` call at all. Section 5's own family assignment for these four is therefore
+genuinely unresolved upstream, not an omission of this note -- assigning one is `ESC-24`'s own job
+(the slice that also owns `perspective`/`transform-origin-z`, section 13), not invented here.
+`transform-origin-z`, `scrollbar-margin`, and `perspective` (the other three new length-domain rows)
+carry no `(family a)` tag either, but for an unrelated, simpler reason: they are plain `length`
+domain, not `length-percent` at all, so section 5's family question does not apply to them in the
+first place.
+
+**⚠️ `max-height`/`max-width`: the first two registry entries with zero corpus justification, now the
+precedent for a general rule, not a one-off exception.** `UIX-PROP-REGISTRY`'s own delivery closed
+the 64-vs-72 accounting (section 6 above) and found these two were, at the time, the **only** 2 of
+the table's then-72 longhand entries with **zero** measured occurrences anywhere in this document's
+own corpus (`/var/tmp/censo-rcss-qa1/censo.md`) -- not written directly, and not reachable through
+any of the 13 shorthands section 6.2 defines (no shorthand expands into `max-height`/`max-width`;
+they are plain, unexpanded RmlUi native properties). Section 6's own scope discipline used to state
+this registry was built "exclusively" from measured names -- by that rule alone these two did not
+belong. **They stayed in the registry anyway**, for two reasons stated once here so a future reader
+does not re-litigate them fixture by fixture: (1) this document's own table (section 6.1 above)
+already listed them before the corpus-exclusivity discipline was written down, and the spec is the
+contract two independent dumper authors build against -- removing an already-published registry
+entry needs the same "stop, edit this spec with a diff, líder sign-off" discipline section 13
+requires for *adding* an out-of-subset item, not a silent drop; (2) the more durable reason: the
+glintfx target is **broad distribution**, and "zero occurrences in this repo's two-project corpus"
+is a true statement about two repositories, never a true statement about the world -- a consumer
+this document has never seen may genuinely author `max-height: 200px;` tomorrow. **`ESC-1`
+generalizes reason (2) into `docs/adr/0022-paridade-total-com-o-motor-substituido.md` and
+`docs/rmlx-subset.md` §7's own rule ("if the engine being replaced accepts it, ours accepts it"):**
+all 35 of `ESC-1`'s own new rows are zero-corpus **by design**, not by anomaly -- `max-height`/
+`max-width` are no longer "the one registry entry with zero corpus justification", they are the
+**precedent** the general rule generalizes from. **The teto this decision is bounded by:** these two
+entries are pinned exactly as they were before -- `keyword(none)` or length-percent (family a), same
+domain and print form as every other box-relative property in the table -- by
 `glintfx/tests/uix_style/property_registry_sanity.cpp`'s own
 `test_max_height_max_width_are_the_one_known_unexplained_gap`; a future census that measures a real
-use of either is a **confirmation**, not a discovery, and changes nothing about this decision; a
-future census that finds a *third* zero-corpus-but-listed entry is a **new** anomaly and must be
-reported the same way this one was, not silently folded into this same justification.
+use of either is a **confirmation**, not a discovery, and changes nothing about this decision. A
+future census finding a zero-corpus-but-listed entry among any of `ESC-1`'s own 35 (or any later
+parity-authorized row) is **expected, not an anomaly**, per the rule above -- it is only genuinely
+new drift, requiring the same report-not-silently-fold treatment this paragraph itself models, for a
+row that is **not** authorized by either the census or the pinned RmlUi build's own parity.
 
 **🔵 Enumerated keyword sets, added by `UIX-RCSS-ERRATA-5`, 2026-08-06 -- 29 of these 72 rows are
 `Keyword` domain (either the sole domain, or the primary domain of a two-domain row); zero rows have
@@ -1402,6 +1478,22 @@ with no member list, until this errata: `align-items`, `box-sizing`, `display`, 
 already used -- this table remains the single source of truth for every Keyword-domain property's
 own legal set; a future implementer does not consult a second document or the upstream source
 directly for this list, only cite it here.
+
+**🔵 Addendum, `ESC-1`, 2026-08-07 -- 28 of the 35 new rows are `Keyword` domain (sole or primary),
+raising the errata's own running count from 29 of 72 to 57 of 107** (the 28: `-rmlui-direction`,
+`align-content`, `align-self`, `caret-color`, `clear`, `clip`, `drag`, `flex-direction`,
+`flex-wrap`, `float`, `font-kerning`, `font-style`, `font-weight`, `nav-down`, `nav-left`,
+`nav-right`, `nav-up`, `overscroll-behavior`, `perspective`, `perspective-origin-x`,
+`perspective-origin-y`, `pointer-events`, `text-decoration`, `transform-origin-x`,
+`transform-origin-y`, `visibility`, `word-break`, `z-index` -- the other 7 of the 35,
+`-rmlui-language`/`fill-image` (string), `font-effect`/`transition` (composite), `image-color`
+(color), `scrollbar-margin`/`transform-origin-z` (length), are not). **"Zero rows have `Keyword`
+only as the alternate domain" stays true**: every new `two(...)` row's own alternate domain is
+`Color` (`caret-color`), `Number` (`clip`, `font-weight`, `z-index`), `String` (`nav-*`), `Length`
+(`perspective`), or `LengthPercent` (`perspective-origin-*`, `transform-origin-*`) -- never
+`Keyword` on the alternate side. Every one of the 28's own legal keyword set is enumerated in
+section 6.1's own table above, same convention, sourced from the same pinned call sites this
+addendum's own sibling note cites (section 13).
 
 **Source and a judgment call, named so it can be overridden in one place:** all 11 sets are the
 **full upstream RmlUi enumeration**, verbatim from each property's own `RegisterProperty(...)
@@ -1441,7 +1533,7 @@ doesn't use it".
 4), not the parity target.** `docs/rmlx-subset.md` §7 authorizes every shorthand the pinned RmlUi
 build registers; `TODO.md`'s `ESC-2` (wave `WR2R`) is the owning slice that raises this to **20**
 (+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
-`transform-origin`). Like §6.1's 72, this count has no automated doc-vs-code cross-check today --
+`transform-origin`). Like §6.1's 107, this count has no automated doc-vs-code cross-check today --
 only §14.1/§14.2's own divergence counts are runtime-verified against this document (`ESC-0`
 verified this while writing the note above; not repeated in full here).
 
@@ -1555,7 +1647,7 @@ property's domain in section 6.1's table:
 | `length-percent` (family a) | **Either** the resolved-length form above **or** `<quantized-number>%` (§5's symbolic form) -- never both; whichever the cascade's winning declaration specified |
 | `color` | 8-digit lowercase hex `#rrggbbaa`, straight (non-premultiplied) alpha -- §7.1 |
 | `string` | The raw string content, escaped per §3's escaping rule, **no surrounding quotes** even if the RCSS source quoted it (quoting is source syntax, not part of the computed string value) |
-| composite (shadow-list / decorator-list / filter-list / transform-list / animation) | §9's own per-domain grammar |
+| composite (shadow-list / decorator-list / filter-list / transform-list / animation / transition / font-effect-list) | §9's own per-domain grammar |
 
 **String-domain, empty computed value (`UIX-RCSS-ERRATA-2`, closing a gap the sibling document
 `docs/uix-dom.md` §7 already closed for its own `ATTR data-if=` case but this document had not yet
@@ -1583,9 +1675,9 @@ delimited record.
 **Structural identifiers are never escaped (`UIX-RCSS-ERRATA-2`, mirroring `docs/uix-dom.md` §8's
 identical treatment of `<tag>`):** the `<property-name>` half of a `PROP` line's `name=value` pair is
 never escaped per §2's table, for the same reason `docs/uix-dom.md` §5 gives for `<tag>` -- it is
-always one of the 72 fixed, closed, ASCII kebab-case identifiers §6.1's own table names (chosen by
+always one of the 107 fixed, closed, ASCII kebab-case identifiers §6.1's own table names (chosen by
 the *dumper*, iterating its own registry, never echoed back from arbitrary source-authored casing or
-content the way an attribute value is), and none of those 72 strings can structurally contain any of
+content the way an attribute value is), and none of those 107 strings can structurally contain any of
 the 4 escape characters (`\`, `\n`, `\r`, `\t`). Escaping is therefore never *reachable* for this
 field, and this document names that explicitly rather than leaving a second implementer to wonder
 whether it was forgotten.
@@ -2204,9 +2296,12 @@ the first place; every bullet below **was**, and that framing is what this rewri
   `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file `:178-193`,
   conversions `:64-115`) -- owned by `ESC-6`.
 - **`transition`, `font-effect`:** both real, registered RmlUi properties
-  (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` owned by `ESC-23` (the same
-  pin-with-named-owner-and-automatic-expiry mechanism §14.2 already uses for `animation`);
-  `font-effect` owned by `ESC-24`.
+  (`StyleSheetSpecification.cpp:399`, `:405`). **The registry row landed via `ESC-1`** (§6.1's
+  table now lists both, `ValueDomain::Composite`, dumped through the same empty-list echo
+  `animation` already uses, §14.2's own precedent -- a real value still prints the registry's own
+  `"none"` initial, not yet a genuine §9.3 grammar) -- `transition`'s own grammar is owned by
+  `ESC-23` (the same pin-with-named-owner-and-automatic-expiry mechanism §14.2 already uses for
+  `animation`); `font-effect`'s own grammar is owned by `ESC-24`.
 - **Selector forms:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; attribute selectors
   with the 7 operators `=`/`~=`/`|=`/`^=`/`$=`/`*=`/bare (`StyleSheetSelector.h:39-46`,
   `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; sibling combinators (`+`/`~`,
@@ -2231,10 +2326,12 @@ the first place; every bullet below **was**, and that framing is what this rewri
   `StyleSheetParser.cpp:569-663,786-798`); this document's own dump format handles 2
   (`@font-face`/`@keyframes`, §10). `@media` is owned by `ESC-13`; `@decorator`/`@spritesheet` by
   `ESC-14`.
-- **Unmeasured RmlUi native properties beyond §6.1's current 72:** `ESC-1` (the 72 → 107 registry
-  slice, §6.1's own new note above) names every one of these by its exact upstream call site, so
-  they are not re-listed here to avoid a second, driftable copy of that enumeration. Several need
-  more than a registry row to actually work end to end, and have their own owning slice for that:
+- **RmlUi native properties `ESC-1` registered, beyond §6.1's pre-`ESC-1` 72:** `ESC-1` (the 72 →
+  107 registry slice, §6.1's own new note above) delivered a registry row -- name, initial value,
+  `inherited` flag, `ValueDomain` -- for every one of these; they are not re-listed here to avoid a
+  second, driftable copy of that enumeration (§6.1's own table is the one place that lists them by
+  name). The registry row alone is not the same as working end to end, though: several still need
+  more than that row, and have their own owning slice for the rest:
   `font-style`/`font-weight` rendering (face selection, not just the registry entry) -- `ESC-16`;
   `text-decoration` rendering -- `ESC-17`; `float`/`clear` cascade computation -- `ESC-18`;
   `word-break` -- `ESC-19`; `z-index` computed (stacking-context application stays `RMLX-4`) --
@@ -2402,7 +2499,7 @@ worked answer while disagreeing about what it means.**
 #### 15.1 Two states, one node (`:hover`)
 
 Source fragment (`.btn` styled, `.btn:hover` overrides `color`; `dp_ratio = 1.0` for this example;
-only the fields relevant to the point are shown -- a real dump still emits all 72 `PROP` lines per
+only the fields relevant to the point are shown -- a real dump still emits all 107 `PROP` lines per
 node per §3, elided here with `...` where a line is identical to its own registry initial value and
 does not illustrate anything new):
 
@@ -2423,12 +2520,12 @@ does not illustrate anything new):
 ```
 
 Relevant lines from the full dump (node path `body/0/0` is the `<button>`; `...` elides the
-remaining ~68 unaffected `PROP` lines each state block still emits in full per §3):
+remaining ~103 unaffected `PROP` lines each state block still emits in full per §3):
 
 ```
 STATE none
 ...
-body/0/0 PROPS 72
+body/0/0 PROPS 107
 body/0/0 PROP color=#223344ff
 ...
 body/0/0 PROP display=block
@@ -2439,7 +2536,7 @@ body/0/0 PROP width=50.0000%
 ...
 STATE hover-all
 ...
-body/0/0 PROPS 72
+body/0/0 PROPS 107
 body/0/0 PROP color=#ff0000ff
 ...
 body/0/0 PROP display=block
@@ -2968,29 +3065,38 @@ implementação que nenhum dos dois lados deveria ter de replicar identicamente,
 suposição-privada-compartilhada que a própria seção "por que este documento existe" do
 `docs/uix-dom.md` avisa.
 
-#### 6.1 Tabela de registro (72 entradas longhand, alfabética -- a própria ordem exigida do dump)
+#### 6.1 Tabela de registro (107 entradas longhand, alfabética -- a própria ordem exigida do dump)
 
-**72 é a contagem de hoje, não o alvo de paridade.** A §7 do `docs/rmlx-subset.md` (2026-08-07)
-autoriza toda propriedade que o build fixado do RmlUi registra; a `ESC-1` do `TODO.md` (onda
-`WR2R`) é a fatia dona que eleva esta tabela pra **107** (72 + 35, `RegisterDefaultProperties`,
-`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, mais 8 próprias da
-glintfx: `ripple` ×5, `image-tint` ×3). **Verificado ao escrever esta nota (`ESC-0`): diferente das
-próprias contagens de divergência da §14.1/§14.2, este 72 não é lido em tempo de execução pelo
+**A `ESC-1` (onda `WR2R`) aterrissou esta tabela em 107 linhas, 2026-08-07.** A regra da §7 do
+`docs/rmlx-subset.md` ("se o motor que está sendo substituído aceita, o nosso aceita") autorizou
+toda propriedade que o build fixado do RmlUi registra, e a `ESC-1` entregou todas elas: o próprio
+`RegisterDefaultProperties` de
+`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436` registra exatamente
+**99** propriedades (`awk 'NR>=248 && NR<=436' ... | grep -c 'RegisterProperty('`, verificado
+direto contra o pin, não suposto), mais **8** próprias da glintfx (`ripple` ×5, `image-tint` ×3, já
+presentes desde antes desta fatia) = **107**. A tabela pré-`ESC-1`, de 72 linhas, já tinha as 8
+próprias mais 64 das 99 upstream (as que a própria contagem de cobertura de censo desta tabela,
+abaixo, media direto ou alcançava por shorthand medido); a `ESC-1` somou as 99 − 64 = **35**
+linhas upstream restantes que esta tabela nunca tinha listado. **Verificado ao escrever esta nota
+(`ESC-0`, restatada depois do próprio pouso da `ESC-1`): diferente das próprias contagens de
+divergência da §14.1/§14.2, este 107 não é lido em tempo de execução pelo
 `GLINTFX_RCSS2_SPEC_DOC`** -- esse mecanismo só faz parse das duas próprias linhas de declaração de
 contagem de divergência deste documento, uma por subseção da §14
 (`glintfx/src/rml/rcss_dump_differential_oracle.cpp:1160-1217`); a contagem de linha desta tabela
-não tem checagem automática doc-vs-código hoje. Essa é uma lacuna separada, não algo que a `ESC-0`
-foi pedida pra fechar -- sinalizada aqui só pra um leitor futuro não supor que existe uma guarda que
-não existe. (Esta nota deliberadamente não cita o texto literal de nenhuma das duas linhas de
+não tem checagem automática doc-vs-código hoje, fechada em vez disso pela própria asserção
+`table.size() == 107` do `glintfx/tests/uix_style/property_registry_sanity.cpp` (uma guarda em
+nível de teste, não doc-vs-código). Essa é uma lacuna separada, não algo que a `ESC-1` foi pedida
+pra fechar -- sinalizada aqui só pra um leitor futuro não supor que existe uma guarda que não
+existe. (Esta nota deliberadamente não cita o texto literal de nenhuma das duas linhas de
 declaração: o `parse_declared_count()` casa por aquela string exata com prefixo em negrito, e
 citá-la aqui de novo faria a contagem "aparecer duas vezes" e falhar o parse -- confirmado ao
-quebrar assim uma vez enquanto esta nota era escrita, depois reformulado pra consertar.)
+quebrar assim uma vez enquanto a nota original era escrita, depois reformulado pra consertar.)
 
 *(mesma tabela da seção 6.1 em inglês acima -- valores, nomes de propriedade, e domínios de valor
 não são traduzidos, são identificadores de código en-intl por convenção do próprio `CLAUDE.md` do
 projeto.)*
 
-**⚠️ Duas entradas que soam surpreendentes e estão corretas como medidas, sinalizadas pra ninguém
+**⚠️ Três entradas que soam surpreendentes e estão corretas como medidas, sinalizadas pra ninguém
 "consertar" depois:** `focus` é `inherited: true` no RmlUi upstream apesar de controlar algo (se
 `Element::Focus()` pode ter sucesso) que não tem noção intuitiva de "herdar" -- confirmado direto no
 call site de registro, não inferido. `opacity` também é `inherited: true`, o que **não** é como o
@@ -3001,34 +3107,67 @@ ancestral, e o RmlUi adicionalmente **multiplica** opacidades pela árvore de re
 desenho, algo que `docs/embed-integration.md` não menciona e está fora do escopo deste dump por ser
 uma composição em tempo-de-render, não um valor computado em tempo-de-cascata -- o próprio valor
 computado de `opacity`, que este dump reporta, é exatamente o número único cascateado ao estilo de
-herança CSS, não o produto composto).
+herança CSS, não o produto composto). **A `ESC-1` soma uma terceira, `text-decoration`, também
+`inherited: true`, confirmada direto no próprio call site (`StyleSheetSpecification.cpp:362`)** --
+a própria cascata formal do CSS real declara `text-decoration` `Inherited: no` (inicial `none`);
+navegadores ainda *pintam* linhas de decoração continuando através de trechos de texto
+descendentes, mas isso é uma regra de propagação em nível de renderização, separada, não o próprio
+mecanismo de cascata da flag `inherited` que esta coluna da tabela nomeia. O `inherited: true` do
+RmlUi diverge genuinamente da própria classificação de cascata da spec CSS, a mesma classe de
+surpresa que `focus`/`opacity` acima já carregam -- não chutada, lida direto no call site. (Em
+contraste, o `inherited: true` do próprio `caret-color`, também novo na `ESC-1`, **não** é
+divergência: o `caret-color` do CSS real já é ele mesmo uma propriedade herdada, então a flag do
+RmlUi aqui concorda com a spec em vez de surpreender contra ela -- sem ⚠️ pra essa.)
 
-**⚠️ `max-height`/`max-width`: a única entrada de registro com zero justificativa de corpus, mantida
-de propósito, não um bug pra consertar depois.** A própria entrega da `UIX-PROP-REGISTRY` fechou a
-conta 64-vs-72 (seção 6 acima) e achou que essas duas são as **únicas** 2 das 72 entradas longhand
-com **zero** ocorrência medida em lugar nenhum do corpus deste documento
-(`/var/tmp/censo-rcss-qa1/censo.md`) -- não escritas direto, e não alcançáveis por nenhum dos 13
-shorthands da seção 6.2 (nenhum shorthand expande em `max-height`/`max-width`; são propriedades
-nativas do RmlUi, planas, sem expansão). A própria disciplina de escopo da seção 6 declara que este
-registro é construído "exclusivamente" de nomes medidos -- por essa regra sozinha, essas duas não
-pertenceriam. **Ficam no registro mesmo assim**, por dois motivos declarados aqui uma vez pra um
-futuro leitor não reabrir a discussão fixture por fixture: (1) a própria tabela deste documento
-(seção 6.1 acima) já as listava antes da disciplina de exclusividade-de-corpus ser escrita -- e a
-spec é o contrato que os dois autores independentes de dumper constroem contra; remover uma entrada
-de registro já publicada exige a mesma disciplina "parar, editar esta spec com um diff, aval do
-líder" que a seção 13 exige pra *somar* um item fora-de-subconjunto, não um descarte silencioso; (2)
-o motivo mais duradouro, restated da própria regra permanente deste projeto: o alvo da glintfx é
-**distribuição ampla**, e "zero ocorrência no corpus de dois projetos" é uma afirmação verdadeira
-sobre dois repositórios, nunca uma afirmação verdadeira sobre o mundo -- um consumidor que este
-documento nunca viu pode genuinamente autorar `max-height: 200px;` amanhã. **O teto a que esta
-decisão fica limitada:** essas duas entradas ficam pinadas exatamente como estão hoje --
-`keyword(none)` ou length-percent (família a), mesmo domínio e forma de impressão que toda outra
-propriedade box-relativa da tabela -- pelo próprio
-`test_max_height_max_width_are_the_one_known_unexplained_gap` do
+**Família não atribuída upstream, `ESC-1` (`perspective-origin-x/y`, `transform-origin-x/y`):**
+estas quatro linhas novas de domínio `length-percent` NÃO carregam a marca "(família a)" que toda
+outra linha `length-percent` desta tabela carrega. Verificado direto nos próprios call sites
+fixados (`StyleSheetSpecification.cpp:390-391` pro par `perspective-origin-*`, `:394-395` pro par
+`transform-origin-*`): diferente de toda outra propriedade parseada como `length_percent` no
+`RegisterDefaultProperties` (que encadeia uma chamada `.SetRelativeTarget(RelativeTarget::...)`
+identificando a qual das três famílias de `%` da seção 5 ela resolve), estas quatro não encadeiam
+`SetRelativeTarget` nenhum. A própria atribuição de família da seção 5 pra estas quatro está
+portanto genuinamente não-resolvida upstream, não um esquecimento desta nota -- atribuir uma é
+trabalho da própria `ESC-24` (a fatia que também é dona de `perspective`/`transform-origin-z`,
+seção 13), não inventada aqui. `transform-origin-z`, `scrollbar-margin` e `perspective` (as outras
+três linhas novas de domínio length) também não carregam marca `(família a)`, mas por um motivo
+diferente e mais simples: são domínio `length` puro, não `length-percent` nenhum, então a própria
+pergunta de família da seção 5 nem se aplica a elas.
+
+**⚠️ `max-height`/`max-width`: as primeiras duas entradas de registro com zero justificativa de
+corpus, agora o precedente de uma regra geral, não mais uma exceção isolada.** A própria entrega
+da `UIX-PROP-REGISTRY` fechou a conta 64-vs-72 (seção 6 acima) e achou que essas duas eram, à
+época, as **únicas** 2 das então-72 entradas longhand da tabela com **zero** ocorrência medida em
+lugar nenhum do corpus deste documento (`/var/tmp/censo-rcss-qa1/censo.md`) -- não escritas
+direto, e não alcançáveis por nenhum dos 13 shorthands da seção 6.2 (nenhum shorthand expande em
+`max-height`/`max-width`; são propriedades nativas do RmlUi, planas, sem expansão). A própria
+disciplina de escopo da seção 6 costumava declarar que este registro era construído
+"exclusivamente" de nomes medidos -- por essa regra sozinha, essas duas não pertenceriam.
+**Ficaram no registro mesmo assim**, por dois motivos declarados aqui uma vez pra um futuro leitor
+não reabrir a discussão fixture por fixture: (1) a própria tabela deste documento (seção 6.1 acima)
+já as listava antes da disciplina de exclusividade-de-corpus ser escrita -- e a spec é o contrato
+que os dois autores independentes de dumper constroem contra; remover uma entrada de registro já
+publicada exige a mesma disciplina "parar, editar esta spec com um diff, aval do líder" que a seção
+13 exige pra *somar* um item fora-de-subconjunto, não um descarte silencioso; (2) o motivo mais
+duradouro: o alvo da glintfx é **distribuição ampla**, e "zero ocorrência no corpus de dois
+projetos" é uma afirmação verdadeira sobre dois repositórios, nunca uma afirmação verdadeira sobre
+o mundo -- um consumidor que este documento nunca viu pode genuinamente autorar
+`max-height: 200px;` amanhã. **A `ESC-1` generaliza o motivo (2) no
+`docs/adr/0022-paridade-total-com-o-motor-substituido.md` e na própria regra da §7 do
+`docs/rmlx-subset.md` ("se o motor que está sendo substituído aceita, o nosso aceita"):** as 35
+linhas novas da `ESC-1`, todas, são zero-corpus **por desenho**, não por anomalia -- `max-height`/
+`max-width` deixam de ser "a única entrada de registro com zero justificativa de corpus", viram o
+**precedente** de que a regra geral generaliza. **O teto a que esta decisão fica limitada:** essas
+duas entradas ficam pinadas exatamente como estavam antes -- `keyword(none)` ou length-percent
+(família a), mesmo domínio e forma de impressão que toda outra propriedade box-relativa da tabela
+-- pelo próprio `test_max_height_max_width_are_the_one_known_unexplained_gap` do
 `glintfx/tests/uix_style/property_registry_sanity.cpp`; um futuro censo que medir um uso real de
-qualquer uma delas é uma **confirmação**, não uma descoberta, e não muda nada nesta decisão; um
-futuro censo que achar uma **terceira** entrada zero-corpus-mas-listada é uma anomalia **nova** e
-precisa ser reportada do mesmo jeito que esta foi, não dobrada em silêncio nesta mesma justificativa.
+qualquer uma delas é uma **confirmação**, não uma descoberta, e não muda nada nesta decisão. Um
+futuro censo achando uma entrada zero-corpus-mas-listada entre quaisquer das 35 da `ESC-1` (ou de
+qualquer linha futura autorizada por paridade) é **esperado, não uma anomalia**, pela própria regra
+acima -- só é drift genuinamente novo, exigindo o mesmo tratamento reportar-não-dobrar-em-silêncio
+que este parágrafo modela, pra uma linha que **não** é autorizada nem pelo censo nem pela própria
+paridade do build fixado do RmlUi.
 
 **🔵 Conjuntos de palavras-chave enumerados, acrescentados pela `UIX-RCSS-ERRATA-5`, 2026-08-06 -- 29
 destas 72 linhas são de domínio `Keyword` (o domínio único, ou o domínio primário de uma linha de
@@ -3044,6 +3183,22 @@ próprias células da tabela, a mesma convenção que as outras 18 já usavam --
 fonte única de verdade pro próprio conjunto legal de toda propriedade de domínio palavra-chave; um
 futuro implementer não consulta um segundo documento nem o próprio fonte upstream direto pra esta
 lista, só cita aqui.
+
+**🔵 Adendo, `ESC-1`, 2026-08-07 -- 28 das 35 linhas novas são de domínio `Keyword` (única ou
+primária), elevando a própria contagem corrente da errata de 29 de 72 pra 57 de 107** (as 28:
+`-rmlui-direction`, `align-content`, `align-self`, `caret-color`, `clear`, `clip`, `drag`,
+`flex-direction`, `flex-wrap`, `float`, `font-kerning`, `font-style`, `font-weight`, `nav-down`,
+`nav-left`, `nav-right`, `nav-up`, `overscroll-behavior`, `perspective`, `perspective-origin-x`,
+`perspective-origin-y`, `pointer-events`, `text-decoration`, `transform-origin-x`,
+`transform-origin-y`, `visibility`, `word-break`, `z-index` -- as outras 7 das 35,
+`-rmlui-language`/`fill-image` (string), `font-effect`/`transition` (composite), `image-color`
+(color), `scrollbar-margin`/`transform-origin-z` (length), não são). **"Zero linhas têm `Keyword`
+só como domínio alternativo" segue verdadeiro**: o próprio domínio alternativo de toda linha
+`two(...)` nova é `Color` (`caret-color`), `Number` (`clip`, `font-weight`, `z-index`), `String`
+(`nav-*`), `Length` (`perspective`), ou `LengthPercent` (`perspective-origin-*`,
+`transform-origin-*`) -- nunca `Keyword` do lado alternativo. O próprio conjunto legal de
+palavra-chave de cada uma das 28 é enumerado na própria tabela da seção 6.1 acima, mesma
+convenção, oriundo dos mesmos call sites fixados que a nota irmã deste adendo cita (seção 13).
 
 **Fonte e uma decisão de julgamento, nomeada pra poder ser revertida num lugar só:** os 11 conjuntos
 são a **enumeração upstream RmlUi completa**, verbatim do próprio call site
@@ -3086,7 +3241,7 @@ diferente de "o corpus do consumidor não usa".
 contados como 4), não o alvo de paridade.** A §7 do `docs/rmlx-subset.md` autoriza todo atalho que
 o build fixado do RmlUi registra; a `ESC-2` do `TODO.md` (onda `WR2R`) é a fatia dona que eleva
 isso pra **20** (+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
-`transform-origin`). Como o 72 da seção 6.1, esta contagem não tem checagem automática
+`transform-origin`). Como o 107 da seção 6.1, esta contagem não tem checagem automática
 doc-vs-código hoje -- só as próprias contagens de divergência da §14.1/§14.2 são verificadas em
 tempo de execução contra este documento (a `ESC-0` verificou isso ao escrever a nota acima; não
 repetido aqui na íntegra).
@@ -3190,10 +3345,10 @@ seção 3, então "presente com valor vazio" é o único estado alcançável aqu
 **Identificadores estruturais nunca são escapados (`UIX-RCSS-ERRATA-2`, espelhando o tratamento
 idêntico que o `docs/uix-dom.md` §8 dá pro próprio `<tag>`):** a metade `<nome-propriedade>` do par
 `nome=valor` de uma linha `PROP` nunca é escapada pela tabela da seção 2, pelo mesmo motivo que o
-`docs/uix-dom.md` §5 dá pro próprio `<tag>` -- é sempre um dos 72 identificadores fixos, fechados,
+`docs/uix-dom.md` §5 dá pro próprio `<tag>` -- é sempre um dos 107 identificadores fixos, fechados,
 ASCII kebab-case que a própria tabela da seção 6.1 nomeia (escolhido pelo *dumper*, iterando o
 próprio registro, nunca ecoado de volta de caixa ou conteúdo arbitrário autorado na fonte do jeito
-que um valor de atributo é), e nenhuma dessas 72 strings pode estruturalmente conter nenhum dos 4
+que um valor de atributo é), e nenhuma dessas 107 strings pode estruturalmente conter nenhum dos 4
 caracteres de escape (`\`, `\n`, `\r`, `\t`). Escapar é portanto nunca *alcançável* pra este campo, e
 este documento declara isso explicitamente em vez de deixar um segundo implementer imaginar se foi
 esquecido.
@@ -3599,9 +3754,13 @@ bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
   `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, mesmo arquivo `:178-193`,
   conversões `:64-115`) -- dona é a `ESC-6`.
 - **`transition`, `font-effect`:** as duas são propriedades reais e registradas do RmlUi
-  (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` tem dona `ESC-23` (o mesmo mecanismo
-  de pin-com-dona-nomeada-e-expiração-automática que a §14.2 já usa pra `animation`); `font-effect`
-  tem dona `ESC-24`.
+  (`StyleSheetSpecification.cpp:399`, `:405`). **A própria linha de registro aterrissou via
+  `ESC-1`** (a tabela da §6.1 agora lista as duas, `ValueDomain::Composite`, dumpadas pelo mesmo
+  eco de lista-vazia que o `animation` já usa, precedente da própria §14.2 -- um valor real ainda
+  imprime o próprio `"none"` inicial do registro, ainda não uma gramática §9.3 de verdade) -- a
+  própria gramática do `transition` tem dona `ESC-23` (o mesmo mecanismo de
+  pin-com-dona-nomeada-e-expiração-automática que a §14.2 já usa pra `animation`); a própria
+  gramática do `font-effect` tem dona `ESC-24`.
 - **Formas de seletor:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; seletores de
   atributo com os 7 operadores `=`/`~=`/`|=`/`^=`/`$=`/`*=`/nu (`StyleSheetSelector.h:39-46`,
   `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; combinadores irmão (`+`/`~`,
@@ -3626,11 +3785,13 @@ bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
   `StyleSheetParser.cpp:569-663,786-798`); o próprio formato de dump deste documento trata 2
   (`@font-face`/`@keyframes`, seção 10). `@media` tem dona `ESC-13`; `@decorator`/`@spritesheet`
   têm dona `ESC-14`.
-- **Propriedades nativas do RmlUi não-medidas além das 72 atuais da seção 6.1:** a `ESC-1` (a fatia
-  72 → 107 do registro, própria nota nova da seção 6.1 acima) nomeia cada uma pelo call site
-  upstream exato, então não são re-listadas aqui pra evitar uma segunda cópia dessa enumeração que
-  poderia divergir. Várias precisam de mais que uma linha de registro pra funcionar ponta a ponta,
-  e têm fatia dona própria pra isso: renderização de `font-style`/`font-weight` (seleção de face,
+- **Propriedades nativas do RmlUi que a `ESC-1` registrou, além das 72 pré-`ESC-1` da seção 6.1:**
+  a `ESC-1` (a fatia 72 → 107 do registro, própria nota nova da seção 6.1 acima) entregou uma
+  linha de registro -- nome, valor inicial, flag `inherited`, `ValueDomain` -- pra cada uma delas;
+  não são re-listadas aqui pra evitar uma segunda cópia, divergente, dessa enumeração (a própria
+  tabela da seção 6.1 é o único lugar que as lista por nome). A linha de registro sozinha não é o
+  mesmo que funcionar ponta a ponta, porém: várias ainda precisam de mais que essa linha, e têm
+  fatia dona própria pro resto: renderização de `font-style`/`font-weight` (seleção de face,
   não só a entrada de registro) -- `ESC-16`; renderização de `text-decoration` -- `ESC-17`;
   computação de `float`/`clear` na cascata -- `ESC-18`; `word-break` -- `ESC-19`; `z-index`
   computado (aplicação de contexto de empilhamento continua na `RMLX-4`) -- `ESC-20`;

@@ -20,31 +20,57 @@
 //     exposed via shorthand.hpp), so it re-derives the identical narrow-classifier SHAPE rather
 //     than reinventing a different one.
 //
-//     THE FOUR PAIRS THIS CLASSIFIER HANDLES, EXHAUSTIVELY, BY CONSTRUCTION -- verified against
-//     `property_registry.cpp`'s own `kTable` (read directly, not guessed): every `two(...)` row in
-//     that table uses exactly one of these four `(domain, alternate_domain)` shapes today. A FIFTH
-//     shape appearing in a future registry change is NOT silently guessed here -- the fallback
-//     branch below defaults to the PRIMARY domain and this file's own `dumper_sanity.cpp` test
-//     suite documents that this is the complete, closed enumeration as of this writing (this
-//     item's own "enumerate the small space, don't search inside it" discipline, cited by the
-//     brief that dispatched this item, applied to a classifier's own domain space):
+//     THE FOUR PAIRS THIS CLASSIFIER ACTIVELY DISCRIMINATES, BY CONSTRUCTION -- verified against
+//     `property_registry.cpp`'s own `kTable` (read directly, not guessed): these four `(domain,
+//     alternate_domain)` shapes are the ones this function routes by RAW TEXT SHAPE, unchanged by
+//     `ESC-1` (this file's own "the alternate-domain classifier is NOT extended for the new pairs"
+//     boundary, stated in full right after this list):
 //       (1) `(Keyword, LengthPercent)` -- the majority: `bottom`/`flex-basis`/`height`/`left`/
-//           `margin-*`/`max-height`/`max-width`/`right`/`top`/`vertical-align`/`width`. A raw text
-//           that LOOKS numeric (leading digit, `-`, or `.`) is `LengthPercent`; anything else
-//           (`auto`, `none`, `baseline`, ...) is `Keyword`.
-//       (2) `(Keyword, Length)` -- `letter-spacing` alone. Same numeric-leading test routes to
-//           `Length` instead of `LengthPercent` (this property has no `%` reading at all, spec
-//           section 6.1's own cell: "keyword(normal) or length").
+//           `margin-*`/`max-height`/`max-width`/`right`/`top`/`vertical-align`/`width`/
+//           `perspective-origin-x`/`perspective-origin-y`/`transform-origin-x`/`transform-origin-y`
+//           (the last four landed via `ESC-1`, same shape, no new branch needed). A raw text that
+//           LOOKS numeric (leading digit, `-`, or `.`) is `LengthPercent`; anything else (`auto`,
+//           `none`, `baseline`, ...) is `Keyword`.
+//       (2) `(Keyword, Length)` -- `letter-spacing`, plus `ESC-1`'s own `perspective` (same shape,
+//           no new branch needed). Same numeric-leading test routes to `Length` instead of
+//           `LengthPercent` (these properties have no `%` reading at all, spec section 6.1's own
+//           cell: "keyword(normal) or length" for `letter-spacing`, "keyword(none) or length" for
+//           `perspective`).
 //       (3) `(Number, LengthPercent)` -- `line-height` alone. BOTH sides of this pair start with a
 //           digit (`"1.2"` is `Number`, `"150%"`/`"20px"` are `LengthPercent`) -- the
 //           numeric-leading test alone cannot distinguish them, so this branch instead checks for
 //           a `%` suffix OR a recognised length-unit suffix (`px`/`dp`) FIRST; only a bare number
 //           with neither falls through to `Number`.
-//       (4) `(Keyword, String)` -- `text-overflow` alone. Neither side "looks like" a shape a
-//           numeric-leading test could route -- this branch instead checks against the CLOSED,
-//           2-member keyword enumeration spec section 6.1's own cell actually names
-//           ("keyword(clip,ellipsis) or string"): exactly `"clip"`/`"ellipsis"` route to `Keyword`,
-//           anything else (a custom truncation string an author wrote) routes to `String`.
+//       (4) `(Keyword, String)` -- `text-overflow`, plus `ESC-1`'s own `nav-up`/`nav-right`/
+//           `nav-down`/`nav-left` (same shape, no new branch needed). Neither side "looks like" a
+//           shape a numeric-leading test could route -- this branch instead checks against the
+//           CLOSED, 2-member keyword enumeration spec section 6.1's own cell actually names for
+//           `text-overflow` ("keyword(clip,ellipsis) or string"): exactly `"clip"`/`"ellipsis"`
+//           route to `Keyword`, anything else (a custom truncation string an author wrote, OR any
+//           `nav-*` value that is not one of its own 5 keywords -- a custom navigation target
+//           string an author wrote) routes to `String`.
+//
+//     TWO NEW PAIR SHAPES `ESC-1` ADDED, DELIBERATELY NOT GIVEN A BRANCH HERE (this item's own
+//     plan, section 6b, stated explicitly: "NÃO estenda o classificador"): `caret-color`'s own
+//     `(Keyword, Color)` and `clip`/`font-weight`/`z-index`'s own `(Keyword, Number)` are two
+//     GENUINELY NEW shapes -- verified against `property_registry.cpp`'s own `kTable`, no pair
+//     this narrow, syntactic classifier already routes by "raw text shape" covers either (a
+//     `Color` value's raw shape, `#rrggbb`/named colour, and a plain `Number`'s raw shape overlap
+//     with nothing this function's own four existing branches test for). Deciding which of the two
+//     a given raw text is for THESE four properties is explicitly left to the branch's own
+//     fallback below (returns the PRIMARY domain, `Keyword`) -- routing raw text between two
+//     domains for a property that does not YET fully "work" (its own render/compute/select-face
+//     behaviour) is the owning slice's job (`ESC-16` for `font-weight`, `ESC-20` for `z-index`,
+//     `ESC-21` for `clip`, `ESC-22` for `caret-color`, per this item's own plan), not this
+//     registry-adjacent print layer's. This is SAFE today specifically because every one of these
+//     four properties' own registry `initial_value` (`"auto"`/`"auto"`/`"normal"`/`"auto"`) is
+//     legal `Keyword` text the fallback prints verbatim, correctly, with zero parsing --
+//     `dumper_sanity.cpp`'s own new `ESC-1` pins prove exactly that (the DEFAULT, undeclared-cascade
+//     case, the only one this slice's own scope covers). A future DECLARED, non-Keyword value for
+//     one of these four (a real `clip: 5;`, say) would print WRONG (as raw Keyword text, not
+//     routed to `Number` and quantized) until its own owning slice lands -- a KNOWN, DECLARED
+//     boundary stated here explicitly, not a silently-accepted bug, and not yet pinned by a test
+//     (no owning slice has landed to make that declared-value case meaningful to pin against).
 //
 //     THE ANIMATION GAP: `value_compute.hpp` ships no `compute_animation` function at all (its own
 //     header names why -- a genuine spec-vs-upstream field-count mismatch it refuses to guess
@@ -90,33 +116,61 @@
 //     shorthand.cpp, nunca expostas via shorthand.hpp), então re-deriva a mesma FORMA de
 //     classificador estreito em vez de inventar uma diferente.
 //
-//     OS QUATRO PARES QUE ESTE CLASSIFICADOR TRATA, EXAUSTIVAMENTE, POR CONSTRUÇÃO -- verificado
-//     contra o próprio `kTable` do property_registry.cpp (lido direto, não chutado): toda linha
-//     `two(...)` daquela tabela usa exatamente uma destas quatro formas `(domain,
-//     alternate_domain)` hoje. Uma QUINTA forma aparecendo numa futura mudança de registro NÃO é
-//     chutada em silêncio aqui -- o ramo de fallback abaixo assume o domínio PRIMÁRIO por padrão e
-//     a própria suíte de teste dumper_sanity.cpp deste arquivo documenta que esta é a enumeração
-//     completa, fechada, no momento desta escrita (a própria disciplina "enumere o espaço pequeno,
-//     não busque dentro dele" deste item, citada pelo briefing que o despachou, aplicada ao próprio
-//     espaço de domínio de um classificador):
+//     OS QUATRO PARES QUE ESTE CLASSIFICADOR TRATA ATIVAMENTE, POR CONSTRUÇÃO -- verificado contra
+//     o próprio `kTable` do property_registry.cpp (lido direto, não chutado): estas quatro formas
+//     `(domain, alternate_domain)` são as que esta função roteia pela FORMA DO TEXTO CRU,
+//     inalteradas pela `ESC-1` (a própria fronteira "o classificador de domínio-alternativo NÃO é
+//     estendido pros pares novos" deste arquivo, declarada por completo logo depois desta lista):
 //       (1) `(Keyword, LengthPercent)` -- a maioria: `bottom`/`flex-basis`/`height`/`left`/
-//           `margin-*`/`max-height`/`max-width`/`right`/`top`/`vertical-align`/`width`. Um texto
-//           cru com CARA numérica (dígito, `-`, ou `.` liderando) é `LengthPercent`; qualquer outra
-//           coisa (`auto`, `none`, `baseline`, ...) é `Keyword`.
-//       (2) `(Keyword, Length)` -- só `letter-spacing`. O mesmo teste de-liderança-numérica roteia
-//           pra `Length` em vez de `LengthPercent` (esta propriedade não tem leitura `%` nenhuma,
-//           a própria célula da seção 6.1 da spec: "keyword(normal) ou length").
+//           `margin-*`/`max-height`/`max-width`/`right`/`top`/`vertical-align`/`width`/
+//           `perspective-origin-x`/`perspective-origin-y`/`transform-origin-x`/
+//           `transform-origin-y` (as últimas quatro aterrissaram via `ESC-1`, mesma forma, sem
+//           ramo novo precisado). Um texto cru com CARA numérica (dígito, `-`, ou `.` liderando) é
+//           `LengthPercent`; qualquer outra coisa (`auto`, `none`, `baseline`, ...) é `Keyword`.
+//       (2) `(Keyword, Length)` -- `letter-spacing`, mais o próprio `perspective` da `ESC-1`
+//           (mesma forma, sem ramo novo precisado). O mesmo teste de-liderança-numérica roteia pra
+//           `Length` em vez de `LengthPercent` (estas propriedades não têm leitura `%` nenhuma, a
+//           própria célula da seção 6.1 da spec: "keyword(normal) ou length" pro `letter-spacing`,
+//           "keyword(none) ou length" pro `perspective`).
 //       (3) `(Number, LengthPercent)` -- só `line-height`. OS DOIS lados deste par começam com
 //           dígito (`"1.2"` é `Number`, `"150%"`/`"20px"` são `LengthPercent`) -- o teste de
 //           liderança-numérica sozinho não consegue distingui-los, então este ramo em vez disso
 //           checa por sufixo `%` OU sufixo de unidade-de-comprimento reconhecido (`px`/`dp`)
 //           PRIMEIRO; só um número cru sem nenhum dos dois cai pra `Number`.
-//       (4) `(Keyword, String)` -- só `text-overflow`. Nenhum dos dois lados "tem cara" de forma
-//           que um teste de liderança-numérica conseguisse rotear -- este ramo em vez disso checa
-//           contra a enumeração FECHADA, de 2 membros, que a própria célula da seção 6.1 da spec de
-//           fato nomeia ("keyword(clip,ellipsis) ou string"): exatamente `"clip"`/`"ellipsis"`
-//           roteiam pra `Keyword`, qualquer outra coisa (uma string de truncamento custom que um
-//           autor escreveu) roteia pra `String`.
+//       (4) `(Keyword, String)` -- `text-overflow`, mais os próprios `nav-up`/`nav-right`/
+//           `nav-down`/`nav-left` da `ESC-1` (mesma forma, sem ramo novo precisado). Nenhum dos
+//           dois lados "tem cara" de forma que um teste de liderança-numérica conseguisse rotear --
+//           este ramo em vez disso checa contra a enumeração FECHADA, de 2 membros, que a própria
+//           célula da seção 6.1 da spec de fato nomeia pro `text-overflow` ("keyword(clip,ellipsis)
+//           ou string"): exatamente `"clip"`/`"ellipsis"` roteiam pra `Keyword`, qualquer outra
+//           coisa (uma string de truncamento custom que um autor escreveu, OU qualquer valor de
+//           `nav-*` que não seja uma das próprias 5 palavras-chave dele -- uma string de alvo de
+//           navegação custom que um autor escreveu) roteia pra `String`.
+//
+//     DUAS FORMAS DE PAR NOVAS QUE A `ESC-1` SOMOU, DELIBERADAMENTE SEM RAMO AQUI (o próprio plano
+//     deste item, seção 6b, declarou explicitamente: "NÃO estenda o classificador"): o próprio
+//     `(Keyword, Color)` do `caret-color` e o próprio `(Keyword, Number)` de
+//     `clip`/`font-weight`/`z-index` são duas formas GENUINAMENTE novas -- verificado contra o
+//     próprio `kTable` do property_registry.cpp, nenhum dos quatro ramos existentes deste
+//     classificador estreito e sintático cobre nenhuma das duas (a própria forma crua de um valor
+//     `Color`, `#rrggbb`/cor nomeada, e a própria forma crua de um `Number` puro não se sobrepõem a
+//     nada que os quatro ramos próprios desta função já testam). Decidir qual dos dois um dado
+//     texto cru é pra ESTAS quatro propriedades fica explicitamente a cargo do próprio fallback do
+//     ramo abaixo (retorna o domínio PRIMÁRIO, `Keyword`) -- rotear texto cru entre dois domínios
+//     pra uma propriedade que ainda não "funciona" por completo (o próprio comportamento de
+//     render/computo/seleção-de-face dela) é trabalho da própria fatia dona (`ESC-16` pro
+//     `font-weight`, `ESC-20` pro `z-index`, `ESC-21` pro `clip`, `ESC-22` pro `caret-color`, per o
+//     próprio plano deste item), não desta camada de impressão adjacente-ao-registro. Isto é
+//     SEGURO hoje especificamente porque o próprio `initial_value` de registro de cada uma destas
+//     quatro propriedades (`"auto"`/`"auto"`/`"normal"`/`"auto"`) é texto `Keyword` legal que o
+//     fallback imprime verbatim, corretamente, com zero parse -- os próprios pins novos da `ESC-1`
+//     do `dumper_sanity.cpp` provam exatamente isso (o caso DEFAULT, de cascata não-declarada, o
+//     único que o próprio escopo desta fatia cobre). Um futuro valor DECLARADO, não-Keyword, pra
+//     uma destas quatro (um `clip: 5;` real, digamos) imprimiria ERRADO (como texto Keyword cru,
+//     não roteado pra `Number` e quantizado) até a própria fatia dona aterrissar -- uma fronteira
+//     CONHECIDA, DECLARADA aqui explicitamente, não um bug silenciosamente aceito, e ainda não
+//     pinada por teste nenhum (nenhuma fatia dona aterrissou pra tornar esse caso de valor
+//     declarado significativo de pinar contra).
 //
 //     A LACUNA DO ANIMATION: o `value_compute.hpp` não entrega função `compute_animation` nenhuma
 //     (o próprio cabeçalho dele nomeia por quê -- um descompasso genuíno spec-vs-upstream de
@@ -192,16 +246,25 @@ bool is_numeric_leading(std::string_view raw) {
   return std::isdigit(c) != 0 || raw.front() == '-' || raw.front() == '.';
 }
 
-// EN: This file's header, "The four pairs this classifier handles, exhaustively, by
-//     construction". `info.has_alternate_domain == false` is the common case and is handled by
-//     the caller before this function is even reached (see `try_print_for_domain` below) -- this
-//     function is only ever called for the 13 `two(...)` rows `property_registry.cpp` declares
-//     today.
-// PT: O próprio cabeçalho deste arquivo, "Os quatro pares que este classificador trata,
-//     exaustivamente, por construção". `info.has_alternate_domain == false` é o caso comum e é
-//     tratado pelo chamador antes mesmo desta função ser alcançada (ver `try_print_for_domain`
-//     abaixo) -- esta função só é chamada mesmo pras 13 linhas `two(...)` que o
-//     property_registry.cpp declara hoje.
+// EN: This file's header, "The four pairs this classifier actively discriminates" plus "Two new
+//     pair shapes ESC-1 added, deliberately not given a branch here". `info.has_alternate_domain
+//     == false` is the common case and is handled by the caller before this function is even
+//     reached (see `try_print_for_domain` below) -- this function IS called for all 30 `two(...)`
+//     rows `property_registry.cpp` declares today (17 pre-`ESC-1` + 13 `ESC-1` new -- corrected
+//     count, not the 13 this comment stated before `ESC-1`: that number only ever counted the
+//     pre-`ESC-1` rows), but only FOUR pair shapes among those 30 rows are actively routed by raw
+//     text shape below; the other two shapes (`(Keyword,Color)`, `(Keyword,Number)`) fall through
+//     to the primary-domain default, reachable-but-deliberately-not-classified since `ESC-1`.
+// PT: O próprio cabeçalho deste arquivo, "Os quatro pares que este classificador trata
+//     ativamente" mais "Duas formas de par novas que a ESC-1 somou, deliberadamente sem ramo
+//     aqui". `info.has_alternate_domain == false` é o caso comum e é tratado pelo chamador antes
+//     mesmo desta função ser alcançada (ver `try_print_for_domain` abaixo) -- esta função É
+//     chamada pras 30 linhas `two(...)` que o property_registry.cpp declara hoje (17 pré-`ESC-1` +
+//     13 novas da `ESC-1` -- contagem corrigida, não as 13 que este comentário declarava antes da
+//     `ESC-1`: aquele número só contava as próprias linhas pré-`ESC-1`), mas só QUATRO formas de
+//     par entre estas 30 linhas são roteadas ativamente pela forma do texto cru abaixo; as outras
+//     duas formas (`(Keyword,Color)`, `(Keyword,Number)`) caem pro próprio default de domínio
+//     primário, alcançáveis-mas-deliberadamente-não-classificadas desde a `ESC-1`.
 ValueDomain resolve_effective_domain(const PropertyInfo& info, std::string_view raw) {
   const ValueDomain primary = info.domain;
   const ValueDomain alt = info.alternate_domain;
@@ -222,13 +285,21 @@ ValueDomain resolve_effective_domain(const PropertyInfo& info, std::string_view 
     return (raw == "clip" || raw == "ellipsis") ? ValueDomain::Keyword : ValueDomain::String;
   }
 
-  // EN: Unreachable by construction against today's registry (see this file's own header,
-  //     "exhaustively, by construction") -- defaults to the primary domain rather than crashing or
-  //     guessing, per this project's own fail-high discipline applied to an internal classifier.
-  // PT: Inalcançável por construção contra o registro de hoje (ver o próprio cabeçalho deste
-  //     arquivo, "exaustivamente, por construção") -- assume o domínio primário em vez de travar ou
-  //     chutar, pela própria disciplina fail-high deste projeto aplicada a um classificador
-  //     interno.
+  // EN: REACHABLE since `ESC-1`, for the two new pair shapes this file's own header names ("Two
+  //     new pair shapes ESC-1 added, deliberately not given a branch here"): `caret-color`'s own
+  //     `(Keyword, Color)` and `clip`/`font-weight`/`z-index`'s own `(Keyword, Number)`. Defaults
+  //     to the primary domain (`Keyword`) rather than crashing or guessing which of the two a raw
+  //     text is -- a DELIBERATE default until each property's own owning slice (`ESC-16`/`ESC-20`/
+  //     `ESC-21`/`ESC-22`) lands the real routing, per this project's own fail-high discipline
+  //     applied to an internal classifier, not an oversight.
+  // PT: ALCANÇÁVEL desde a `ESC-1`, pras duas formas de par novas que o próprio cabeçalho deste
+  //     arquivo nomeia ("Duas formas de par novas que a ESC-1 somou, deliberadamente sem ramo
+  //     aqui"): o próprio `(Keyword, Color)` do `caret-color` e o próprio `(Keyword, Number)` de
+  //     `clip`/`font-weight`/`z-index`. Assume o domínio primário (`Keyword`) em vez de travar ou
+  //     chutar qual dos dois um texto cru é -- um default DELIBERADO até a própria fatia dona de
+  //     cada propriedade (`ESC-16`/`ESC-20`/`ESC-21`/`ESC-22`) aterrissar o roteamento de verdade,
+  //     pela própria disciplina fail-high deste projeto aplicada a um classificador interno, não
+  //     um esquecimento.
   return primary;
 }
 
@@ -305,12 +376,23 @@ bool try_print_animation(std::string_view raw, std::string* out) {
 
 // EN: Dispatches a Composite-domain property by NAME (property_registry.hpp's own
 //     `ValueDomain::Composite` is one tag for five different per-kind grammars, spec section 9 --
-//     this file, not the registry, knows which of the 7 Composite-tagged property NAMES needs
-//     which value_compute.hpp function).
+//     this file, not the registry, knows which of the 9 Composite-tagged property NAMES needs
+//     which value_compute.hpp function). `ESC-1` added `transition`/`font-effect` to the 7 that
+//     were here before -- both route through the SAME `try_print_animation` empty-list echo
+//     `animation` already uses (this file's own header, "The animation gap", extended verbatim:
+//     neither `transition`'s own §9.3 grammar nor `font-effect`'s own §9 grammar exists in
+//     `value_compute.hpp` yet, owners `ESC-23`/`ESC-24` respectively, same documented gap, same
+//     one function, no new one invented for two more names that need the identical shape).
 // PT: Despacha uma propriedade de domínio Composite por NOME (o próprio
 //     `ValueDomain::Composite` do property_registry.hpp é uma tag só pra cinco gramáticas
-//     por-espécie diferentes, seção 9 da spec -- este arquivo, não o registro, sabe qual dos 7
-//     NOMES de propriedade tagueados Composite precisa de qual função do value_compute.hpp).
+//     por-espécie diferentes, seção 9 da spec -- este arquivo, não o registro, sabe qual dos 9
+//     NOMES de propriedade tagueados Composite precisa de qual função do value_compute.hpp). A
+//     `ESC-1` somou `transition`/`font-effect` aos 7 que já estavam aqui -- as duas roteiam pelo
+//     MESMO eco de lista-vazia `try_print_animation` que o `animation` já usa (o próprio
+//     cabeçalho deste arquivo, "A lacuna do animation", estendido verbatim: nem a própria
+//     gramática §9.3 do `transition` nem a própria gramática §9 do `font-effect` existe no
+//     value_compute.hpp ainda, donas `ESC-23`/`ESC-24` respectivamente, mesma lacuna documentada,
+//     mesma função só, nenhuma nova inventada pra mais dois nomes que precisam da forma idêntica).
 bool try_print_composite(std::string_view name, std::string_view raw, float dp_ratio,
                          std::string* out) {
   if (name == "box-shadow") {
@@ -323,13 +405,13 @@ bool try_print_composite(std::string_view name, std::string_view raw, float dp_r
   if (name == "transform") {
     return compute_transform_list(raw, dp_ratio, out) == ValueComputeStatus::Ok;
   }
-  if (name == "animation") {
+  if (name == "animation" || name == "transition" || name == "font-effect") {
     return try_print_animation(raw, out);
   }
-  // EN: Unreachable by construction -- these 7 names are the only Composite-tagged entries
+  // EN: Unreachable by construction -- these 9 names are the only Composite-tagged entries
   //     property_registry.cpp declares today (see this file's own header, same "exhaustively, by
   //     construction" discipline as resolve_effective_domain above).
-  // PT: Inalcançável por construção -- estes 7 nomes são as únicas entradas tagueadas Composite
+  // PT: Inalcançável por construção -- estes 9 nomes são as únicas entradas tagueadas Composite
   //     que o property_registry.cpp declara hoje (ver o próprio cabeçalho deste arquivo, mesma
   //     disciplina "exaustivamente, por construção" do resolve_effective_domain acima).
   return false;

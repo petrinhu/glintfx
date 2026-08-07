@@ -2,7 +2,7 @@
 // EN: UIX-PROP-REGISTRY -- functional/coverage test for glintfx::uix::style's property registry
 //     (property_registry.hpp). Standalone, no parser, no cascade, no value resolution -- see that
 //     header's own header comment for the full scope/boundary. Two jobs, mirroring this task's
-//     own Definition of Done: (1) prove the table's own shape (72 entries, alphabetical,
+//     own Definition of Done: (1) prove the table's own shape (107 entries, alphabetical,
 //     lookup-by-name works, `nullptr` for unknown names) and (2) prove EVERY property the real
 //     corpus measures (`/var/tmp/censo-rcss-qa1/censo.md` section 3, 64 distinct names,
 //     hardcoded below with a citation, not re-derived from the live file -- the census is a fixed,
@@ -15,7 +15,7 @@
 //     glintfx::uix::style (property_registry.hpp). Standalone, sem parser, sem cascata, sem
 //     resolução de valor -- ver o próprio comentário de cabeçalho daquele header pro
 //     escopo/fronteira completos. Dois trabalhos, espelhando o próprio DoD desta tarefa: (1)
-//     provar a própria forma da tabela (72 entradas, alfabética, busca-por-nome funciona,
+//     provar a própria forma da tabela (107 entradas, alfabética, busca-por-nome funciona,
 //     `nullptr` pra nome desconhecido) e (2) provar que TODA propriedade que o corpus real mede
 //     (`/var/tmp/censo-rcss-qa1/censo.md` seção 3, 64 nomes distintos, hardcoded abaixo com
 //     citação, não re-derivado do arquivo vivo -- o censo é um retrato fixo, datado, e
@@ -53,19 +53,20 @@ using glintfx::uix::style::PropertyInfo;
 using glintfx::uix::style::ValueDomain;
 
 // ---------------------------------------------------------------------------
-// EN: Case 1 -- table shape: exactly 72 entries (docs/uix-rcss.md section 6.1's own declared
-//     size), sorted ascending byte-wise by name (section 6's own required `PROP`-line sort order,
-//     `std::string::operator<`, no locale -- reused verbatim, not reinvented, same reasoning
-//     lexer.hpp's own header cites for docs/uix-dom.md's identical rule).
-// PT: Caso 1 -- forma da tabela: exatamente 72 entradas (o próprio tamanho declarado na seção 6.1
-//     do docs/uix-rcss.md), ordenadas ascendente byte-a-byte por nome (a própria ordem de sort
-//     exigida pra linha `PROP` da seção 6, `std::string::operator<`, sem locale -- reusada
-//     verbatim, não reinventada, mesmo raciocínio que o próprio cabeçalho do lexer.hpp cita pra
-//     regra idêntica do docs/uix-dom.md).
+// EN: Case 1 -- table shape: exactly 107 entries (docs/uix-rcss.md section 6.1's own declared
+//     size, raised from 72 by `ESC-1`'s own +35 rows), sorted ascending byte-wise by name (section
+//     6's own required `PROP`-line sort order, `std::string::operator<`, no locale -- reused
+//     verbatim, not reinvented, same reasoning lexer.hpp's own header cites for
+//     docs/uix-dom.md's identical rule).
+// PT: Caso 1 -- forma da tabela: exatamente 107 entradas (o próprio tamanho declarado na seção 6.1
+//     do docs/uix-rcss.md, elevado de 72 pelas próprias +35 linhas da `ESC-1`), ordenadas
+//     ascendente byte-a-byte por nome (a própria ordem de sort exigida pra linha `PROP` da seção 6,
+//     `std::string::operator<`, sem locale -- reusada verbatim, não reinventada, mesmo raciocínio
+//     que o próprio cabeçalho do lexer.hpp cita pra regra idêntica do docs/uix-dom.md).
 // ---------------------------------------------------------------------------
 void test_table_shape_and_sort_order() {
   auto table = all_properties();
-  check(table.size() == 72, "table has exactly 72 entries (docs/uix-rcss.md section 6.1)");
+  check(table.size() == 107, "table has exactly 107 entries (docs/uix-rcss.md section 6.1)");
   for (std::size_t i = 1; i < table.size(); ++i) {
     check(table[i - 1].name < table[i].name, "table is sorted ascending, byte-wise, by name");
   }
@@ -73,15 +74,26 @@ void test_table_shape_and_sort_order() {
 
 // ---------------------------------------------------------------------------
 // EN: Case 2 -- lookup: a handful of representative entries (spot-checked against
-//     docs/uix-rcss.md section 6.1's own literal cells), plus the two ⚠️-flagged surprising
+//     docs/uix-rcss.md section 6.1's own literal cells), plus the THREE ⚠️-flagged surprising
 //     `inherited: true` entries the spec itself warns "nobody fixes them later" (`focus`,
-//     `opacity`), plus a name genuinely outside the table returns `nullptr` (fail-high contract,
-//     header "Fail-high policy").
+//     `opacity`, and `ESC-1`'s own `text-decoration`), plus `ESC-1`'s own seven representative new
+//     rows (one per shape this slice introduced: sole-Keyword at the very top of the sort order,
+//     `(Keyword,Color)`, `(Keyword,Number)`, `(Keyword,String)`, plain `Length` with a unitless
+//     initial, and `Composite` with an empty initial), plus a name genuinely outside the table
+//     (not just unmeasured -- a real CSS property the pinned RmlUi build itself does not register,
+//     proving this registry is RmlUi-parity, not CSS-the-whole-language) returns `nullptr`
+//     (fail-high contract, header "Fail-high policy").
 // PT: Caso 2 -- busca: um punhado de entradas representativas (conferidas à mão contra as
-//     próprias células literais da seção 6.1 do docs/uix-rcss.md), mais as duas entradas
+//     próprias células literais da seção 6.1 do docs/uix-rcss.md), mais as TRÊS entradas
 //     `inherited: true` surpreendentes marcadas com ⚠️ que a própria spec avisa "ninguém conserta
-//     depois" (`focus`, `opacity`), mais um nome genuinamente fora da tabela retornando `nullptr`
-//     (contrato fail-high, "Política fail-high" no cabeçalho).
+//     depois" (`focus`, `opacity`, e o próprio `text-decoration` da `ESC-1`), mais as próprias sete
+//     linhas novas representativas da `ESC-1` (uma por forma que esta fatia introduziu:
+//     Keyword-único no topo da própria ordem de sort, `(Keyword,Color)`, `(Keyword,Number)`,
+//     `(Keyword,String)`, `Length` puro com inicial sem unidade, e `Composite` com inicial vazio),
+//     mais um nome genuinamente fora da tabela (não só não-medido -- uma propriedade CSS real que o
+//     próprio build fixado do RmlUi não registra, provando que este registro é paridade-RmlUi, não
+//     CSS-a-linguagem-inteira) retornando `nullptr` (contrato fail-high, "Política fail-high" no
+//     cabeçalho).
 // ---------------------------------------------------------------------------
 void test_lookup_spot_check() {
   const PropertyInfo* color = find_property("color");
@@ -123,6 +135,24 @@ void test_lookup_spot_check() {
           "paragraph's own sibling in docs/uix-rcss.md section 6.1)");
   }
 
+  // EN: `ESC-1`'s own THIRD surprising ⚠️ entry (see this function's own header) -- real CSS
+  //     declares `text-decoration` `Inherited: no`; RmlUi registers `inherited: true`, confirmed
+  //     directly at `StyleSheetSpecification.cpp:362`, not guessed.
+  // PT: a própria TERCEIRA entrada ⚠️ surpreendente da `ESC-1` (ver o próprio cabeçalho desta
+  //     função) -- o CSS real declara `text-decoration` `Inherited: no`; o RmlUi registra
+  //     `inherited: true`, confirmado direto em `StyleSheetSpecification.cpp:362`, não chutado.
+  const PropertyInfo* text_decoration = find_property("text-decoration");
+  check(text_decoration != nullptr, "lookup: 'text-decoration' found");
+  if (text_decoration != nullptr) {
+    check(text_decoration->inherited == true,
+          "lookup: 'text-decoration' IS inherited -- the THIRD surprising ⚠️ entry (ESC-1), "
+          "diverging from real CSS's own 'Inherited: no', confirmed at the RmlUi call site");
+    check(text_decoration->domain == ValueDomain::Keyword,
+          "lookup: 'text-decoration' domain is Keyword (no alternate domain)");
+    check(text_decoration->initial_value == "none",
+          "lookup: 'text-decoration' initial value is 'none'");
+  }
+
   const PropertyInfo* width = find_property("width");
   check(width != nullptr, "lookup: 'width' found");
   if (width != nullptr) {
@@ -133,38 +163,260 @@ void test_lookup_spot_check() {
           "lookup: 'width' alternate domain is LengthPercent");
   }
 
-  check(find_property("z-index") == nullptr,
-        "lookup: 'z-index' is NOT in the table (zero-measured, docs/rmlx-subset.md section 2 -- "
-        "fail-high nullptr, not a crash, not a guess");
+  // EN: `ESC-1` spot-checks -- one representative row per NEW shape this slice introduced (see
+  //     this function's own header for which shape each one stands in for), verified against
+  //     `StyleSheetSpecification.cpp:248-436`'s own call sites, not guessed.
+  // PT: spot-checks da `ESC-1` -- uma linha representativa por forma NOVA que esta fatia
+  //     introduziu (ver o próprio cabeçalho desta função pra qual forma cada uma representa),
+  //     verificadas contra os próprios call sites de `StyleSheetSpecification.cpp:248-436`, não
+  //     chutadas.
+  const PropertyInfo* caret_color = find_property("caret-color");
+  check(caret_color != nullptr, "lookup: 'caret-color' found (ESC-1)");
+  if (caret_color != nullptr) {
+    check(caret_color->inherited == true,
+          "lookup: 'caret-color' IS inherited -- agrees with real CSS's own inherited "
+          "'caret-color', NOT a divergence (no ⚠️ for this one, unlike text-decoration above)");
+    check(caret_color->has_alternate_domain,
+          "lookup: 'caret-color' has an alternate domain ('keyword(auto) or color')");
+    check(caret_color->domain == ValueDomain::Keyword,
+          "lookup: 'caret-color' primary domain is Keyword");
+    check(caret_color->alternate_domain == ValueDomain::Color,
+          "lookup: 'caret-color' alternate domain is Color");
+    check(caret_color->initial_value == "auto", "lookup: 'caret-color' initial value is 'auto'");
+  }
+
+  const PropertyInfo* font_weight = find_property("font-weight");
+  check(font_weight != nullptr, "lookup: 'font-weight' found (ESC-1)");
+  if (font_weight != nullptr) {
+    check(font_weight->inherited == true, "lookup: 'font-weight' is inherited");
+    check(font_weight->has_alternate_domain,
+          "lookup: 'font-weight' has an alternate domain ('keyword(normal,bold) or number')");
+    check(font_weight->domain == ValueDomain::Keyword,
+          "lookup: 'font-weight' primary domain is Keyword");
+    check(font_weight->alternate_domain == ValueDomain::Number,
+          "lookup: 'font-weight' alternate domain is Number (the normal=400/bold=700 mapping is "
+          "parser-side, owner ESC-16 -- this registry only stores the domain TAG)");
+    check(font_weight->initial_value == "normal",
+          "lookup: 'font-weight' initial value is 'normal'");
+  }
+
+  const PropertyInfo* nav_up = find_property("nav-up");
+  check(nav_up != nullptr, "lookup: 'nav-up' found (ESC-1)");
+  if (nav_up != nullptr) {
+    check(nav_up->inherited == false, "lookup: 'nav-up' is not inherited");
+    check(nav_up->has_alternate_domain,
+          "lookup: 'nav-up' has an alternate domain ('keyword(...) or string')");
+    check(nav_up->domain == ValueDomain::Keyword, "lookup: 'nav-up' primary domain is Keyword");
+    check(nav_up->alternate_domain == ValueDomain::String,
+          "lookup: 'nav-up' alternate domain is String");
+    check(nav_up->initial_value == "none", "lookup: 'nav-up' initial value is 'none'");
+  }
+
+  const PropertyInfo* rmlui_direction = find_property("-rmlui-direction");
+  check(rmlui_direction != nullptr, "lookup: '-rmlui-direction' found (ESC-1)");
+  if (rmlui_direction != nullptr) {
+    check(rmlui_direction->inherited == true, "lookup: '-rmlui-direction' is inherited");
+    check(rmlui_direction->domain == ValueDomain::Keyword,
+          "lookup: '-rmlui-direction' domain is Keyword (no alternate domain)");
+    check(rmlui_direction->initial_value == "auto",
+          "lookup: '-rmlui-direction' initial value is 'auto'");
+  }
+  // EN: `-rmlui-direction` sorts byte-wise BEFORE `-rmlui-language` (`'d' < 'l'`), and both sort
+  //     before every plain-letter name (`'-'` is `0x2D`, less than `'a'` `0x61`) -- so
+  //     `-rmlui-direction` is index 0 of `all_properties()`, the very top of the sort order this
+  //     table's own contract requires (section 6's own byte-wise rule, Case 1 above).
+  // PT: `-rmlui-direction` ordena byte-a-byte ANTES de `-rmlui-language` (`'d' < 'l'`), e as duas
+  //     ordenam antes de todo nome de letra pura (`'-'` é `0x2D`, menor que `'a'` `0x61`) -- então
+  //     `-rmlui-direction` é o índice 0 do `all_properties()`, o próprio topo da ordem de sort que
+  //     o próprio contrato desta tabela exige (a própria regra byte-wise da seção 6, Caso 1 acima).
+  check(!all_properties().empty() && all_properties()[0].name == "-rmlui-direction",
+        "lookup: '-rmlui-direction' is the very first entry in sort order (top of the table)");
+
+  const PropertyInfo* scrollbar_margin = find_property("scrollbar-margin");
+  check(scrollbar_margin != nullptr, "lookup: 'scrollbar-margin' found (ESC-1)");
+  if (scrollbar_margin != nullptr) {
+    check(scrollbar_margin->inherited == false, "lookup: 'scrollbar-margin' is not inherited");
+    check(scrollbar_margin->domain == ValueDomain::Length,
+          "lookup: 'scrollbar-margin' domain is Length (no alternate domain)");
+    check(scrollbar_margin->initial_value == "0",
+          "lookup: 'scrollbar-margin' initial value is the literal '0', UNITLESS -- transcribed "
+          "verbatim from StyleSheetSpecification.cpp:384, never widened to '0px'");
+  }
+
+  const PropertyInfo* font_effect = find_property("font-effect");
+  check(font_effect != nullptr, "lookup: 'font-effect' found (ESC-1)");
+  if (font_effect != nullptr) {
+    check(font_effect->inherited == true, "lookup: 'font-effect' is inherited");
+    check(font_effect->domain == ValueDomain::Composite,
+          "lookup: 'font-effect' domain is Composite (no alternate domain)");
+    check(font_effect->initial_value.empty(),
+          "lookup: 'font-effect' initial value is empty ('*(empty)*')");
+  }
+
+  // EN: `z-index` is `ESC-1`'s own INVERSION of what this same lookup used to prove: before this
+  //     slice it was the fail-high exemplar (genuinely absent); now it is a positive hit like
+  //     every other entry above. `grid-template-rows` takes over as the fail-high exemplar below --
+  //     a REAL CSS property this table does NOT register, proving fail-high still works and that
+  //     this registry's own closed set is RmlUi-parity, not "every CSS property that exists".
+  // PT: `z-index` é a própria INVERSÃO da `ESC-1` do que esta mesma busca costumava provar: antes
+  //     desta fatia era o exemplar fail-high (genuinamente ausente); agora é um acerto positivo
+  //     como toda outra entrada acima. `grid-template-rows` assume como o exemplar fail-high
+  //     abaixo -- uma propriedade CSS REAL que esta tabela NÃO registra, provando que o fail-high
+  //     ainda funciona e que o próprio conjunto fechado deste registro é paridade-RmlUi, não "toda
+  //     propriedade CSS que existe".
+  const PropertyInfo* z_index = find_property("z-index");
+  check(z_index != nullptr, "lookup: 'z-index' found (ESC-1 -- was the fail-high exemplar before)");
+  if (z_index != nullptr) {
+    check(z_index->inherited == false, "lookup: 'z-index' is not inherited");
+    check(z_index->has_alternate_domain,
+          "lookup: 'z-index' has an alternate domain ('keyword(auto) or number')");
+    check(z_index->domain == ValueDomain::Keyword, "lookup: 'z-index' primary domain is Keyword");
+    check(z_index->alternate_domain == ValueDomain::Number,
+          "lookup: 'z-index' alternate domain is Number");
+    check(z_index->initial_value == "auto", "lookup: 'z-index' initial value is 'auto'");
+  }
+
+  check(find_property("grid-template-rows") == nullptr,
+        "lookup: 'grid-template-rows' is NOT in the table -- a real CSS property the pinned "
+        "RmlUi build itself does not register (not merely zero-measured), fail-high nullptr, not "
+        "a crash, not a guess");
   check(find_property("") == nullptr, "lookup: empty name returns nullptr, not UB");
 }
 
 // ---------------------------------------------------------------------------
-// EN: Case 3 -- the ⚠️ registry-vs-census gap this task's own brief asked to be closed: exactly
-//     `max-height`/`max-width` are registry entries with ZERO corpus justification anywhere (not
-//     measured directly, and not reachable through any measured shorthand's own expansion --
-//     verified by exhaustive `comm` against the real corpus and the real glintfx tree, see this
-//     item's own delivery notes for the full accounting). This is NOT a bug in this test or this
-//     table -- docs/uix-rcss.md section 6.1's own table lists them, and "the spec is the
-//     contract" (this task's own brief) -- it is a DECLARED, PROVEN gap this test pins so it
-//     cannot silently grow (a THIRD entry appearing here unexplained would be new, unreported
-//     drift, not this same known one).
-// PT: Caso 3 -- o ⚠️ vão registro-vs-censo que o próprio briefing desta tarefa pediu pra fechar:
-//     exatamente `max-height`/`max-width` são entradas de registro com ZERO justificativa de
-//     corpus em lugar nenhum (não medidas diretamente, e não alcançáveis por nenhuma expansão de
-//     shorthand medido -- verificado por `comm` exaustivo contra o corpus real e a própria árvore
-//     da glintfx, ver as próprias notas de entrega deste item pra contagem completa). Isto NÃO é
-//     um bug deste teste nem desta tabela -- a própria tabela da seção 6.1 do docs/uix-rcss.md as
+// EN: Case 3 -- `ESC-1` RECLASSIFICATION (function name kept unchanged on purpose: this exact
+//     identifier is cited verbatim as pinned evidence by docs/uix-rcss.md section 6.1's own
+//     `max-height`/`max-width` paragraph -- renaming it would break that citation for zero
+//     behavioural gain). `max-height`/`max-width` are STILL registry entries with ZERO corpus
+//     justification anywhere (not measured directly, and not reachable through any measured
+//     shorthand's own expansion -- verified by exhaustive `comm` against the real corpus and the
+//     real glintfx tree, see this item's own delivery notes for the full accounting) -- that fact
+//     does not change. What changes is the FRAMING: before `ESC-1`, this was "the one registry
+//     entry with zero corpus justification", a standalone anomaly; after `ESC-1`, `ESC-1`'s own 35
+//     new rows are ALL zero-corpus BY DESIGN (`docs/adr/0022-paridade-total-com-o-motor-substituido.md`,
+//     `docs/rmlx-subset.md` §7's "if the engine being replaced accepts it, ours accepts it"), so
+//     `max-height`/`max-width` are no longer the one exception -- they are the PRECEDENT the
+//     general rule generalizes from. This is NOT a bug in this test or this table -- docs/uix-rcss.md
+//     section 6.1's own table lists them, and "the spec is the contract" (this task's own brief) --
+//     it is a DECLARED, PROVEN gap this test still pins so it cannot silently grow (a zero-corpus
+//     entry OUTSIDE both the census AND `ESC-1`'s own parity-authorized 35 would be new, unreported
+//     drift, not this same known precedent).
+// PT: Caso 3 -- RECLASSIFICAÇÃO da `ESC-1` (nome da função mantido de propósito: este identificador
+//     exato é citado verbatim como evidência fixada pelo próprio parágrafo `max-height`/`max-width`
+//     da seção 6.1 do docs/uix-rcss.md -- renomear quebraria aquela citação por zero ganho
+//     comportamental). `max-height`/`max-width` AINDA são entradas de registro com ZERO
+//     justificativa de corpus em lugar nenhum (não medidas diretamente, e não alcançáveis por
+//     nenhuma expansão de shorthand medido -- verificado por `comm` exaustivo contra o corpus real
+//     e a própria árvore da glintfx, ver as próprias notas de entrega deste item pra contagem
+//     completa) -- esse fato não muda. O que muda é o ENQUADRAMENTO: antes da `ESC-1`, isto era "a
+//     única entrada de registro com zero justificativa de corpus", uma anomalia isolada; depois da
+//     `ESC-1`, as próprias 35 linhas novas dela são TODAS zero-corpus POR DESENHO
+//     (`docs/adr/0022-paridade-total-com-o-motor-substituido.md`, §7 do `docs/rmlx-subset.md`, "se
+//     o motor que está sendo substituído aceita, o nosso aceita"), então `max-height`/`max-width`
+//     deixam de ser a única exceção -- viram o PRECEDENTE de que a regra geral generaliza. Isto NÃO
+//     é um bug deste teste nem desta tabela -- a própria tabela da seção 6.1 do docs/uix-rcss.md as
 //     lista, e "a spec é o contrato" (o próprio briefing desta tarefa) -- é um vão DECLARADO,
-//     PROVADO que este teste pina pra ele não crescer em silêncio (uma TERCEIRA entrada aparecendo
-//     aqui sem explicação seria drift novo, não-reportado, não este mesmo já conhecido).
+//     PROVADO que este teste ainda pina pra ele não crescer em silêncio (uma entrada zero-corpus
+//     FORA tanto do censo QUANTO das próprias 35 autorizadas-por-paridade da `ESC-1` seria drift
+//     novo, não-reportado, não este mesmo precedente já conhecido).
 // ---------------------------------------------------------------------------
 void test_max_height_max_width_are_the_one_known_unexplained_gap() {
   check(find_property("max-height") != nullptr,
         "max-height IS a registry entry (docs/uix-rcss.md section 6.1), despite zero corpus "
-        "justification -- pinned, not silently dropped");
+        "justification -- pinned, not silently dropped; now ESC-1's own precedent, not a standalone "
+        "anomaly");
   check(find_property("max-width") != nullptr,
-        "max-width IS a registry entry, same declared, unexplained-by-corpus gap as max-height");
+        "max-width IS a registry entry, same declared, unexplained-by-corpus gap as max-height -- "
+        "same reclassification");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-1` NEW CASE -- enumerate the closed 35-name space itself, don't just search inside it
+//     (this repo's own "enumere o espaço pequeno, não busque dentro dele" house rule, cited by
+//     dumper.cpp's own header for a structurally identical reason). `table.size() == 107` (Case 1)
+//     plus the sort-order assertion plus the handful of Case 2 spot-checks do NOT, on their own,
+//     prove these 107 rows are these EXACT 107 names -- they would pass identically if `ESC-1` had
+//     accidentally added 35 DIFFERENT rows totalling 107, sorted, with the 7 spot-checked names
+//     unchanged. This case closes that hole directly: every one of the 35 names this task's own
+//     plan enumerated (independently re-derived against
+//     `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, the pinned
+//     build, not the `examples/RmlUi` study clone -- see this item's own delivery notes) is present,
+//     and the count of that hardcoded list is self-checked at exactly 35 so a future edit to this
+//     very array cannot silently drift from the number this task's own contract fixes.
+// PT: NOVO CASO da `ESC-1` -- enumera o próprio espaço fechado de 35 nomes, não só busca dentro
+//     dele (a própria regra da casa deste repo "enumere o espaço pequeno, não busque dentro dele",
+//     citada pelo próprio cabeçalho do dumper.cpp por um motivo estruturalmente idêntico).
+//     `table.size() == 107` (Caso 1) mais a asserção de ordem de sort mais o punhado de
+//     spot-checks do Caso 2 NÃO provam, sozinhos, que estas 107 linhas são estes 107 nomes EXATOS
+//     -- passariam idênticos se a `ESC-1` tivesse acidentalmente somado 35 linhas DIFERENTES
+//     totalizando 107, ordenadas, com os 7 nomes spot-checados inalterados. Este caso fecha esse
+//     buraco direto: cada um dos 35 nomes que o próprio plano desta tarefa enumerou (re-derivados
+//     de forma independente contra
+//     `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, o build
+//     fixado, não o clone de estudo `examples/RmlUi` -- ver as próprias notas de entrega deste
+//     item) está presente, e a contagem desta lista hardcoded se autochecka em exatamente 35 pra
+//     uma futura edição deste mesmo array não conseguir divergir em silêncio do número que o
+//     próprio contrato desta tarefa fixa.
+// ---------------------------------------------------------------------------
+void test_esc1_thirty_five_new_properties_are_exactly_these_names() {
+  static constexpr std::string_view kEsc1NewNames[] = {
+      "-rmlui-direction",
+      "-rmlui-language",
+      "align-content",
+      "align-self",
+      "caret-color",
+      "clear",
+      "clip",
+      "drag",
+      "fill-image",
+      "flex-direction",
+      "flex-wrap",
+      "float",
+      "font-effect",
+      "font-kerning",
+      "font-style",
+      "font-weight",
+      "image-color",
+      "nav-down",
+      "nav-left",
+      "nav-right",
+      "nav-up",
+      "overscroll-behavior",
+      "perspective",
+      "perspective-origin-x",
+      "perspective-origin-y",
+      "pointer-events",
+      "scrollbar-margin",
+      "text-decoration",
+      "transform-origin-x",
+      "transform-origin-y",
+      "transform-origin-z",
+      "transition",
+      "visibility",
+      "word-break",
+      "z-index",
+  };
+  static constexpr std::size_t kEsc1NewCount = sizeof(kEsc1NewNames) / sizeof(kEsc1NewNames[0]);
+  check(kEsc1NewCount == 35, "this test's own hardcoded ESC-1 new-name list has 35 names (self-check)");
+
+  int found = 0;
+  std::vector<std::string_view> missing;
+  for (std::string_view name : kEsc1NewNames) {
+    if (find_property(name) != nullptr) {
+      ++found;
+    } else {
+      missing.push_back(name);
+    }
+  }
+
+  std::fprintf(stdout, "SCOPE: %zu ESC-1 new names enumerated, %d found in the registry, %zu missing\n",
+               kEsc1NewCount, found, missing.size());
+  for (std::string_view name : missing) {
+    std::fprintf(stderr, "  missing: %.*s\n", static_cast<int>(name.size()), name.data());
+  }
+
+  check(missing.empty(), "every one of ESC-1's own 35 new names resolves via find_property()");
+  check(found == 35, "all 35 ESC-1 new names found (enumeration, not a directed search)");
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +591,7 @@ int main() {
   test_table_shape_and_sort_order();
   test_lookup_spot_check();
   test_max_height_max_width_are_the_one_known_unexplained_gap();
+  test_esc1_thirty_five_new_properties_are_exactly_these_names();
   test_every_measured_property_is_covered();
 
   if (g_failures > 0) {

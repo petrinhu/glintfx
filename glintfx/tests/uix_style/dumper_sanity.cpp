@@ -715,6 +715,122 @@ body { font-size: 64px; }
         "root-only lookup");
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-1` landing -- default-dump pins for a representative slice of the 35 new registry
+//     rows, no `StyleSheet` rule declaring any of them (every value below is therefore the
+//     registry's own `initial_value`, undeclared-cascade path, matching this file's own
+//     `test_state_matrix_and_path_addressing`'s "empty stylesheet" shape). Two DIFFERENT reasons
+//     these pins exist, not one uniform "red before, green after" claim (this file's own brief:
+//     "não adivinhe... rode e veja o que sai de fato" -- measured, not assumed, for every one):
+//       - `transition`/`font-effect` (Composite domain): THIS is the pair `dumper.cpp`'s own
+//         `try_print_composite` gains a NAMED branch for in this same commit (this file's own
+//         header, "The animation gap" -- the identical empty-list-echo mechanism `animation`
+//         already has, extended to two more names). `font-effect`'s own registry initial is the
+//         EMPTY string (`""`) -- before the fix, `try_print_composite` has no branch for the name
+//         "font-effect" at all, both dispatch attempts inside `canonical_print` fail identically,
+//         and the LAST-RESORT defensive fallback echoes `info->initial_value` VERBATIM, i.e. the
+//         empty string, NOT "none" -- genuinely RED here, verified by running this suite before
+//         `dumper.cpp`'s own fix landed (see this item's own delivery notes for the captured
+//         output). `transition`'s own registry initial is the literal string `"none"` -- the SAME
+//         last-resort fallback therefore ALREADY echoes the byte-correct answer even before the
+//         fix (a property of the DATA, not a proof the code path is exercised): this assertion is
+//         a locked-in regression pin proving the OUTPUT stays "none" once the fix makes it an
+//         explicit, named, tested branch rather than an accidental catch-all echo -- reported
+//         here as measured fact, not silently presented as an equally-red case it is not.
+//       - `caret-color`/`z-index` (Keyword-primary of a NEW `two(...)` pair `resolve_effective_
+//         domain` does not enumerate -- this file's own header, "The four pairs..."): both
+//         ALREADY print correctly before AND after this commit's own `dumper.cpp` touch, because
+//         `resolve_effective_domain`'s own fallback branch defaults to the PRIMARY domain
+//         (`Keyword`) for any pair it does not recognise, and both of these two properties'
+//         registry initials (`"auto"`) are legal Keyword text printed verbatim, no parsing
+//         involved. Section 6b of this item's own plan states this explicitly: `dumper.cpp`'s own
+//         classifier is NOT extended for these new pairs (routing raw text between two DOMAINS
+//         for these belongs to `ESC-16`/`ESC-20`/`ESC-21`/`ESC-22`, the owning slices) -- these
+//         two pins are therefore GREEN already, locking in today's correct-by-fallback behaviour
+//         as a permanent regression guard, not a red-before-green-after pair.
+//       - `scrollbar-margin`/`transform-origin-z` (plain `Length` domain, unitless `"0"` initial,
+//         transcribed VERBATIM from `StyleSheetSpecification.cpp:384`/`:396` -- never widened to
+//         `"0px"`): `value_compute.cpp`'s own `parse_length()` explicitly accepts a UNITLESS
+//         literal zero (its own header comment: "Unitless is only accepted for the literal zero"),
+//         so this was already reachable via the EXISTING `ValueDomain::Length` dispatch branch,
+//         untouched by this item's own `dumper.cpp` edit -- pinned here as the MEASURED value
+//         (this file's own brief: never guessed), not merely assumed from reading
+//         `value_compute.cpp` in isolation.
+// PT: pouso da `ESC-1` -- pins de dump-default pra uma fatia representativa das 35 linhas novas do
+//     registro, nenhuma regra de `StyleSheet` declarando nenhuma delas (todo valor abaixo é
+//     portanto o próprio `initial_value` do registro, caminho de cascata não-declarada, casando
+//     com a própria forma "folha de estilo vazia" do `test_state_matrix_and_path_addressing` deste
+//     arquivo). DOIS motivos DIFERENTES pra estes pins existirem, não uma afirmação uniforme só de
+//     "vermelho antes, verde depois" (o próprio briefing deste item: "não adivinhe... rode e veja o
+//     que sai de fato" -- medido, não suposto, pra cada um):
+//       - `transition`/`font-effect` (domínio Composite): ESTE é o par que o próprio
+//         `try_print_composite` do `dumper.cpp` ganha um ramo NOMEADO neste mesmo commit (o
+//         próprio cabeçalho deste arquivo, "A lacuna do animation" -- o mesmo mecanismo de eco de
+//         lista-vazia que o `animation` já tem, estendido pra mais dois nomes). O próprio inicial
+//         de registro do `font-effect` é a string VAZIA (`""`) -- antes do conserto, o
+//         `try_print_composite` não tem ramo nenhum pro nome "font-effect", as duas tentativas de
+//         despacho dentro do `canonical_print` falham identicamente, e o próprio fallback
+//         defensivo de ÚLTIMO RECURSO ecoa `info->initial_value` VERBATIM, ou seja, a string
+//         vazia, NÃO "none" -- genuinamente VERMELHO aqui, verificado rodando esta suíte antes do
+//         próprio conserto do `dumper.cpp` aterrissar (ver as próprias notas de entrega deste item
+//         pra saída capturada). O próprio inicial de registro do `transition` é a string literal
+//         `"none"` -- o MESMO fallback de último recurso portanto JÁ ecoa a resposta byte-correta
+//         mesmo antes do conserto (uma propriedade do DADO, não uma prova de que o caminho de
+//         código é exercitado): esta asserção é um pin de regressão travado provando que a SAÍDA
+//         continua "none" quando o conserto o torna um ramo explícito, nomeado, testado, em vez de
+//         um eco acidental de catch-all -- reportado aqui como fato medido, não silenciosamente
+//         apresentado como um caso igualmente vermelho que não é.
+//       - `caret-color`/`z-index` (Keyword-primário de um par NOVO `two(...)` que o
+//         `resolve_effective_domain` não enumera -- o próprio cabeçalho deste arquivo, "Os quatro
+//         pares..."): AS DUAS já imprimem certo antes E depois do próprio toque deste commit no
+//         `dumper.cpp`, porque o próprio ramo de fallback do `resolve_effective_domain` assume o
+//         domínio PRIMÁRIO (`Keyword`) pra qualquer par que ele não reconhece, e os próprios
+//         iniciais de registro das duas propriedades (`"auto"`) são texto Keyword legal impresso
+//         verbatim, nenhum parse envolvido. A seção 6b do próprio plano deste item declara isto
+//         explicitamente: o próprio classificador do `dumper.cpp` NÃO é estendido pra estes pares
+//         novos (rotear texto cru entre dois DOMÍNIOS pra estas pertence à `ESC-16`/`ESC-20`/
+//         `ESC-21`/`ESC-22`, as fatias donas) -- estes dois pins portanto já são VERDES, travando
+//         o próprio comportamento certo-por-fallback de hoje como uma guarda de regressão
+//         permanente, não um par vermelho-antes-verde-depois.
+//       - `scrollbar-margin`/`transform-origin-z` (domínio `Length` puro, inicial `"0"` sem
+//         unidade, transcrito VERBATIM de `StyleSheetSpecification.cpp:384`/`:396` -- nunca
+//         alargado pra `"0px"`): o próprio `parse_length()` do value_compute.cpp aceita
+//         explicitamente um zero literal SEM unidade (o próprio comentário de cabeçalho dele:
+//         "Unitless is only accepted for the literal zero"), então isto já era alcançável pelo
+//         ramo de despacho EXISTENTE `ValueDomain::Length`, intocado pela própria edição deste
+//         item no `dumper.cpp` -- pinado aqui como o valor MEDIDO (o próprio briefing deste
+//         arquivo: nunca chutado), não meramente suposto a partir de ler o value_compute.cpp
+//         isoladamente.
+// ---------------------------------------------------------------------------
+void test_esc1_new_properties_default_dump() {
+  Element body("body");
+  StyleSheet sheet; // empty -- every property computes to its own registry initial value.
+
+  const std::string dump = dump_style(sheet, body, 1.0f);
+  const std::vector<std::string> lines = split_lines(dump);
+
+  check(count_exact_line(lines, "body PROP transition=none") == 2,
+        "ESC-1: default dump, 'body PROP transition=none' -- regression pin, see this function's "
+        "own header for why this one is NOT genuinely red-before-green-after (initial_value's own "
+        "literal text already IS the expected answer)");
+  check(count_exact_line(lines, "body PROP font-effect=none") == 2,
+        "ESC-1: default dump, 'body PROP font-effect=none' -- genuinely RED before dumper.cpp's "
+        "own fix (registry initial is the EMPTY string, the pre-fix fallback echoes that empty "
+        "string verbatim, not \"none\")");
+  check(count_exact_line(lines, "body PROP caret-color=auto") == 2,
+        "ESC-1: default dump, 'body PROP caret-color=auto' -- already correct via "
+        "resolve_effective_domain's own primary-domain fallback, locked in as a regression pin");
+  check(count_exact_line(lines, "body PROP z-index=auto") == 2,
+        "ESC-1: default dump, 'body PROP z-index=auto' -- same fallback reasoning as caret-color "
+        "above, locked in as a regression pin");
+  check(count_exact_line(lines, "body PROP scrollbar-margin=0.0000px") == 2,
+        "ESC-1: default dump, 'body PROP scrollbar-margin=0.0000px' -- MEASURED (not guessed): "
+        "the unitless '0' initial IS accepted by parse_length()'s own literal-zero special case");
+  check(count_exact_line(lines, "body PROP transform-origin-z=0.0000px") == 2,
+        "ESC-1: default dump, 'body PROP transform-origin-z=0.0000px' -- same unitless-zero "
+        "measured shape as scrollbar-margin above");
+}
+
 } // namespace
 
 int main() {
@@ -725,6 +841,7 @@ int main() {
   test_domain_routing_alternate_and_fail_high_fallback();
   test_state_matrix_and_path_addressing();
   test_uix_em_unit_font_size_chain();
+  test_esc1_new_properties_default_dump();
 
   std::printf(
       "SCOPE: 3 exemplos trabalhados byte-exatos (15.1/15.3 pipeline real ponta-a-ponta; 15.2 "

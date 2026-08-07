@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // EN: UIX-PROP-REGISTRY -- glintfx's own RCSS property registry: the fixed, closed table this
-//     style engine's future cascade slice (RMLX-2) enumerates one entry per registered
+//     style engine's own cascade (`cascade.hpp`/`cascade.cpp`, landed since this item's own
+//     original delivery -- not a "future" slice any more) enumerates one entry per registered
 //     property, per node, per docs/uix-rcss.md section 3's own `PROPS <n>` contract (`n` is this
 //     table's own size). THIRD brick of the style engine, after S1's lexer.hpp/.cpp (tokenizer)
 //     and this item's own sibling, shorthand.hpp/.cpp (shorthand-to-longhand expansion, which
 //     this file's table is the target of).
 //
-//     SOURCE OF TRUTH: `docs/uix-rcss.md` section 6.1's own 72-row table (name, initial value,
-//     `inherited` flag, value domain), itself cited against
-//     `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp:262-433`'s own
-//     `RegisterProperty(id, name, default_value, inherited, forces_layout)` call sites (4th
-//     positional argument is `inherited`, per that document's own explicit warning against
-//     misreading the signature) plus `glintfx/src/rml/decorator_ripple.cpp:332-336` and
-//     `glintfx/src/rml/decorator_image_tint.cpp:409-411` for the 5 glintfx-authored custom
+//     SOURCE OF TRUTH: `docs/uix-rcss.md` section 6.1's own 107-row table (name, initial value,
+//     `inherited` flag, value domain -- raised from 72 by `ESC-1`'s own +35 rows, 2026-08-07),
+//     itself cited against `glintfx/build/_deps/rmlui-src/Source/Core/
+//     StyleSheetSpecification.cpp:248-436`'s own `RegisterProperty(id, name, default_value,
+//     inherited, forces_layout)` call sites (4th positional argument is `inherited`, per that
+//     document's own explicit warning against misreading the signature) plus
+//     `glintfx/src/rml/decorator_ripple.cpp:332-336` and
+//     `glintfx/src/rml/decorator_image_tint.cpp:409-411` for the 8 glintfx-authored custom
 //     `ripple-*`/`image-tint-*` entries. This file's own property_registry.cpp restates that
 //     table verbatim, once, as a `constexpr` array -- see that file's own header for the
-//     72-vs-64-names reconciliation this item's own brief asked for (not duplicated here).
+//     107-vs-64-names reconciliation this item's own brief asked for (not duplicated here).
 //
 //     SCOPE, THIS ITEM'S OWN DECLARED TETO -- what this table IS and is NOT:
 //       - IS: name lookup, initial value (for the "author never declared it" case docs/uix-rcss.md
@@ -56,23 +58,25 @@
 //     NAMESPACE: `glintfx::uix::style`, same module as lexer.hpp -- see that file's own header
 //     for why this is NOT the DOM sibling's flat `glintfx::uix`.
 // PT: UIX-PROP-REGISTRY -- registro de propriedades RCSS próprio da glintfx: a tabela fixa e
-//     fechada que a futura fatia de cascata deste motor de estilo (RMLX-2) enumera, uma entrada
-//     por propriedade registrada, por nó, per o próprio contrato `PROPS <n>` da seção 3 do
+//     fechada que a própria cascata deste motor de estilo (`cascade.hpp`/`cascade.cpp`, aterrissada
+//     desde a própria entrega original deste item -- não é mais uma fatia "futura") enumera, uma
+//     entrada por propriedade registrada, por nó, per o próprio contrato `PROPS <n>` da seção 3 do
 //     docs/uix-rcss.md (`n` é o próprio tamanho desta tabela). TERCEIRO tijolo do motor de estilo,
 //     depois do lexer.hpp/.cpp da S1 (tokenizador) e do próprio irmão deste item,
 //     shorthand.hpp/.cpp (expansão de shorthand pra longhand, cujo alvo é a própria tabela deste
 //     arquivo).
 //
-//     FONTE DE VERDADE: a própria tabela de 72 linhas da seção 6.1 do `docs/uix-rcss.md` (nome,
-//     valor inicial, flag `inherited`, domínio de valor), ela própria citada contra o próprio
-//     `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp:262-433` (chamadas
+//     FONTE DE VERDADE: a própria tabela de 107 linhas da seção 6.1 do `docs/uix-rcss.md` (nome,
+//     valor inicial, flag `inherited`, domínio de valor -- elevada de 72 pelas próprias +35 linhas
+//     da `ESC-1`, 2026-08-07), ela própria citada contra o próprio
+//     `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436` (chamadas
 //     `RegisterProperty(id, name, default_value, inherited, forces_layout)`, 4º argumento
 //     posicional é `inherited`, per o próprio aviso explícito daquele documento contra má-leitura
 //     da assinatura) mais `glintfx/src/rml/decorator_ripple.cpp:332-336` e
-//     `glintfx/src/rml/decorator_image_tint.cpp:409-411` pras 5 entradas `ripple-*`/
+//     `glintfx/src/rml/decorator_image_tint.cpp:409-411` pras 8 entradas `ripple-*`/
 //     `image-tint-*` custom, autoradas pela glintfx. O próprio property_registry.cpp deste arquivo
 //     restata aquela tabela verbatim, uma vez, como um array `constexpr` -- ver o próprio
-//     cabeçalho daquele arquivo pra reconciliação 72-vs-64-nomes que o próprio briefing deste item
+//     cabeçalho daquele arquivo pra reconciliação 107-vs-64-nomes que o próprio briefing deste item
 //     pediu (não duplicada aqui).
 //
 //     ESCOPO, O PRÓPRIO TETO DECLARADO DESTE ITEM -- o que esta tabela É e NÃO É:
@@ -141,7 +145,8 @@ enum class ValueDomain {
   LengthPercent, // family (a) only -- box-relative, symbolic %, see header "Scope"
   Color,
   String,
-  Composite, // shadow-list / decorator-list / filter-list / transform-list / animation -- §9
+  Composite, // shadow-list / decorator-list / filter-list / transform-list / animation /
+             // transition (owner ESC-23) / font-effect-list (owner ESC-24) -- §9
 };
 
 // EN: One row of docs/uix-rcss.md section 6.1's own table. `initial_value` is an empty
@@ -168,24 +173,27 @@ struct PropertyInfo {
   ValueDomain alternate_domain = ValueDomain::Keyword;
 };
 
-// EN: Linear scan over a 72-entry table -- deliberately NOT a hash map or `std::lower_bound`
+// EN: Linear scan over a 107-entry table -- deliberately NOT a hash map or `std::lower_bound`
 //     despite the table being sorted (property_registry.cpp's own static_assert-adjacent test
-//     coverage proves the sort, see tests/uix_style/property_registry_sanity.cpp): this is not a
-//     per-frame hot path at this item's own stage (no cascade/parser consumes it yet), and a
-//     linear scan over 72 short `string_view` comparisons is not a measured bottleneck anywhere
-//     in this repo -- a future consumer that DOES put this on a hot path can switch to
-//     `std::lower_bound` against `all_properties()` (already sorted) without changing this
-//     function's own contract. Returns `nullptr` for any name outside the closed table -- see
-//     header "Fail-high policy".
-// PT: Varredura linear sobre uma tabela de 72 entradas -- deliberadamente NÃO um hash map nem
+//     coverage proves the sort, see tests/uix_style/property_registry_sanity.cpp): `cascade.cpp`,
+//     `parser.cpp`, and `dumper.cpp` all call `find_property()`/`all_properties()` today (this
+//     table stopped being standalone before `ESC-1`), but none of them puts it on a MEASURED
+//     per-frame hot path at this item's own stage, and a linear scan over 107 short
+//     `string_view` comparisons is not a measured bottleneck anywhere in this repo -- a future
+//     consumer that DOES put this on a hot path can switch to `std::lower_bound` against
+//     `all_properties()` (already sorted) without changing this function's own contract. Returns
+//     `nullptr` for any name outside the closed table -- see header "Fail-high policy".
+// PT: Varredura linear sobre uma tabela de 107 entradas -- deliberadamente NÃO um hash map nem
 //     `std::lower_bound` apesar da tabela estar ordenada (a própria cobertura de teste adjacente
 //     a static_assert do property_registry.cpp prova a ordenação, ver o próprio
-//     tests/uix_style/property_registry_sanity.cpp): isto não é um caminho quente por-frame no
-//     próprio estágio deste item (nenhuma cascata/parser consome isto ainda), e uma varredura
-//     linear sobre 72 comparações curtas de `string_view` não é um gargalo medido em lugar nenhum
-//     deste repo -- um futuro consumidor que PUSER isto num caminho quente pode trocar pra
-//     `std::lower_bound` contra `all_properties()` (já ordenada) sem mudar o próprio contrato
-//     desta função. Retorna `nullptr` pra todo nome fora da tabela fechada -- ver "Política
+//     tests/uix_style/property_registry_sanity.cpp): `cascade.cpp`, `parser.cpp` e `dumper.cpp`
+//     chamam `find_property()`/`all_properties()` hoje (esta tabela deixou de ser standalone antes
+//     da `ESC-1`), mas nenhum deles a põe num caminho quente por-frame MEDIDO no próprio estágio
+//     deste item, e uma varredura linear sobre 107 comparações curtas de `string_view` não é um
+//     gargalo medido em lugar nenhum deste repo -- um futuro consumidor que PUSER isto num caminho
+//     quente pode trocar pra `std::lower_bound` contra `all_properties()` (já ordenada) sem mudar
+//     o próprio contrato desta função. Retorna `nullptr` pra todo nome fora da tabela fechada --
+//     ver "Política
 //     fail-high" no cabeçalho.
 const PropertyInfo* find_property(std::string_view name);
 

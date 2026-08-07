@@ -12,6 +12,27 @@
 - **Cross-ref:** `docs/rmlx-subset.md` (the frozen subset spec this ADR's decision produces and
   depends on -- read together, not a substitute for one another), `TODO.md` (`RMLX-0..11`, `WR0..WR11`).
 
+> **EN -- Amendment 2026-08-07:** [[0022-paridade-total-com-o-motor-substituido]] **widens**, and does not
+> revoke, the default this ADR's `docs/rmlx-subset.md` draws its boundary against. The two-part
+> anticorruption mechanism described below -- physical confinement + frozen documentary spec, gated
+> by the header clause's "stop, edit the spec, get sign-off, then implement" process -- is unchanged
+> and remains binding. What changed is one input to that mechanism: `docs/rmlx-subset.md`'s default
+> for what counts as "in scope" moved from **what the corpus measures** to **what the pinned
+> upstream RmlUi 6.3 itself accepts** (líder's order, 2026-08-07: "NAO ESTREITE O ESCOPO POR
+> GUSWORLD"). Read ADR-0022 for the full reasoning; this paragraph exists only so a reader of this
+> ADR does not mistake the frozen-subset mechanism for a frozen-subset *content* that never changes.
+>
+> **PT -- Emenda 2026-08-07:** o [[0022-paridade-total-com-o-motor-substituido]] **alarga**, e não revoga,
+> o default contra o qual o `docs/rmlx-subset.md` deste ADR traça sua fronteira. O mecanismo
+> anticorrupção em duas partes descrito abaixo -- confinamento físico + spec documental congelada,
+> com gate pelo processo da cláusula do cabeçalho ("parar, editar a spec, pegar aval, só então
+> implementar") -- continua inalterado e vinculante. O que mudou foi um insumo desse mecanismo: o
+> default do `docs/rmlx-subset.md` pro que conta como "dentro do escopo" saiu de **o que o corpus
+> mede** para **o que o RmlUi 6.3 upstream pinado em si aceita** (ordem do líder, 2026-08-07: "NAO
+> ESTREITE O ESCOPO POR GUSWORLD"). Leia o ADR-0022 pelo raciocínio completo; este parágrafo existe
+> só para quem lê este ADR não confundir o mecanismo de subconjunto congelado com um *conteúdo* de
+> subconjunto congelado que nunca muda.
+
 ## Context / Contexto
 
 **EN:** The líder ordered the **elimination of RmlUi** as glintfx's UI/RCSS engine, over 12 waves

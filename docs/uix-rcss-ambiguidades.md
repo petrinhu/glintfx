@@ -553,6 +553,12 @@ re-running the census (out of this fatia's scope) or reading implementation sour
 task's own independence rule):
 
 1. §6.1's "`max-height`/`max-width` are the only 2 of 72 zero-measured entries" (exact count).
+   ⚠️ **Note added 2026-08-07:** this sentence remains **historically correct** as a measurement --
+   nothing here is disputed or re-counted. What died is the *criterion* it was being cited to
+   support ("2 of 72 measured zero, therefore those 2 are safe to treat as low-risk/cut-candidate").
+   [[0022-paridade-total-com-o-motor-substituido]] retires "zero-measured" as a scope boundary
+   project-wide: the count above is sequencing/risk data only, never a reason to exclude a property
+   the pinned upstream engine itself accepts. See ADR-0022 for the full reasoning.
 2. §6.2's "`border-top`'s width-then-color order is the corpus's own 100%-measured order" (exact
    ratio/count).
 3. §9.1's "124 of 135 single-layer `box-shadow` declarations omit `spread`" (exact ratio).
@@ -816,3 +822,11 @@ factuais que esta auditoria não tem como reverificar sem rerodar o censo (fora 
 ou ler código de implementação (proibido pela própria regra de independência desta tarefa). Nenhuma
 delas afeta os achados BLOQUEIA/PROVÁVEL acima, que se apoiam em comportamento de *código* upstream,
 não em estatística de corpus.
+
+⚠️ **Nota adicionada em 2026-08-07, sobre a primeira reivindicação (entradas zero-corpus de
+`max-height`/`max-width`):** a frase continua **historicamente correta** como medição -- nada aqui é
+contestado ou recontado. O que morreu foi o *critério* pelo qual ela era citada ("2 de 72 medidas
+zero, logo essas 2 são seguras de tratar como baixo-risco/candidatas a corte"). O
+[[0022-paridade-total-com-o-motor-substituido]] aposenta "zero-medido" como fronteira de escopo em
+todo o projeto: a contagem acima é apenas dado de sequenciamento/risco, nunca razão para excluir uma
+propriedade que o motor upstream pinado em si aceita. Ver o ADR-0022 pelo raciocínio completo.

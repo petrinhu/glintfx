@@ -1,5 +1,22 @@
 # UIX RCSS corpus census -- in-repo, re-derivable / Censo de corpus RCSS -- no repositório, re-derivável
 
+> **EN -- Scope banner, added 2026-08-07 by [[0022-paridade-total-com-o-motor-substituido]]:** every
+> number below is **sequencing/risk data only** ("what is used breaks early if we get it wrong"), and
+> is **never** a scope boundary. "Zero in this census" is a statement about this census, never about
+> the world; glintfx targets broad distribution, not GusWorld-plus-glintfx's-own-test-corpus (líder's
+> order, 2026-08-07: "NAO ESTREITE O ESCOPO POR GUSWORLD"). **The measured content below remains
+> valid as measurement** -- nothing was deleted or corrected by this banner; only the conclusion
+> "absent here therefore excluded" is retired. See ADR-0022 for the full reasoning.
+>
+> **PT -- Banner de escopo, adicionado em 2026-08-07 pelo [[0022-paridade-total-com-o-motor-substituido]]:**
+> todo número abaixo é **apenas dado de sequenciamento/risco** ("o que é usado quebra cedo se
+> errarmos"), e **nunca** fronteira de escopo. "Zero neste censo" é uma afirmação sobre este censo,
+> jamais sobre o mundo; o alvo da glintfx é distribuição ampla, não
+> GusWorld-mais-o-próprio-corpus-de-teste-da-glintfx (ordem do líder, 2026-08-07: "NAO ESTREITE O
+> ESCOPO POR GUSWORLD"). **O conteúdo medido abaixo continua válido como medição** -- nada foi
+> apagado nem corrigido por este banner; só a conclusão "ausente aqui logo excluído" se aposenta. Ver
+> o ADR-0022 pelo raciocínio completo.
+
 > **EN:** This document replaces `/var/tmp/censo-rcss-qa1/censo.md`, the scratch report `docs/uix-rcss.md`
 > cites **15** times and `docs/rmlx-subset.md` cites **2** more times (**17** citations total, both
 > docs, all to the same now-deleted path) as the authority behind `RMLX-2`'s property registry, unit

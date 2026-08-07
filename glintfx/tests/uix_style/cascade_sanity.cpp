@@ -669,6 +669,104 @@ void test_cascade_tree_preorder_and_inheritance_integration() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// EN: `UIX-INLINE-STYLE` -- the `style="..."` attribute's OWN precedence: it wins over EVERY
+//     `StyleSheet` rule matching this element, REGARDLESS of that rule's own specificity -- real
+//     upstream's own `ElementStyle::GetLocalProperty` (`examples/RmlUi/Source/Core/
+//     ElementStyle.cpp:48-60`) checks `inline_properties` FIRST, unconditionally, before ever
+//     consulting the cascade-matched `definition` at all; there is no numeric specificity an
+//     inline declaration is compared against. This test builds the STRONGEST possible rule
+//     opponent this module can construct -- an `#id` selector (`kSpecificityWeightId`, 1'000'000,
+//     the single highest per-compound weight this module defines) -- and proves the inline
+//     attribute still wins, so this is never "inline just happens to have a bigger number", it is
+//     a genuinely different, unconditional mechanism.
+// PT: `UIX-INLINE-STYLE` -- a PRÓPRIA precedência do atributo `style="..."`: ela vence QUALQUER
+//     regra de `StyleSheet` que case com este elemento, INDEPENDENTE da própria especificidade
+//     daquela regra -- o próprio `ElementStyle::GetLocalProperty` do upstream real
+//     (`examples/RmlUi/Source/Core/ElementStyle.cpp:48-60`) checa `inline_properties` PRIMEIRO,
+//     incondicionalmente, antes de sequer consultar o `definition` casado-pela-cascata; não existe
+//     especificidade numérica nenhuma contra a qual uma declaração inline é comparada. Este teste
+//     constrói o oponente de regra MAIS FORTE que este módulo consegue construir -- um seletor
+//     `#id` (`kSpecificityWeightId`, 1'000'000, o único maior peso por-compound que este módulo
+//     define) -- e prova que o atributo inline AINDA vence, então isto nunca é "inline só por
+//     acaso tem um número maior", é um mecanismo genuinamente diferente, incondicional.
+// ---------------------------------------------------------------------------
+void test_inline_style_wins_over_highest_specificity_rule() {
+  Element el("div");
+  el.set_id("hero");
+  const bool set_ok = el.set_attribute("style", "color: #00ff00;");
+  check(set_ok, "inline_style_precedence: set_attribute(\"style\", ...) succeeds");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(rule_with({chain1(id_only("hero"))}, {{"color", "#ff0000"}}));
+
+  MatchState state;
+  ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+  const std::string* color = find_value(style, "color");
+  check(color != nullptr && *color == "#00ff00",
+        "inline_style_precedence: the style=\"...\" attribute (#00ff00) wins over an #id rule "
+        "(#ff0000, kSpecificityWeightId == 1'000'000, the single highest per-compound weight this "
+        "module defines) -- inline precedence is unconditional, never a specificity comparison");
+}
+
+// ---------------------------------------------------------------------------
+// EN: The `style="..."` attribute only overrides the properties it ACTUALLY declares -- every
+//     other property on the same element still resolves through the ordinary cascade/inheritance/
+//     initial-value pipeline, completely unaffected. Proves this is a per-property patch, never a
+//     blanket "ignore the cascade for this element" switch.
+// PT: O atributo `style="..."` só sobrescreve as propriedades que REALMENTE declara -- toda outra
+//     propriedade do mesmo elemento continua resolvendo pelo próprio pipeline comum de
+//     cascata/herança/valor-inicial, completamente inafetada. Prova que isto é um remendo
+//     por-propriedade, nunca um interruptor genérico "ignore a cascata pra este elemento".
+// ---------------------------------------------------------------------------
+void test_inline_style_only_overrides_its_own_declared_properties() {
+  Element el("div");
+  el.add_class("box");
+  const bool set_ok = el.set_attribute("style", "color: #00ff00;");
+  check(set_ok, "inline_style_scoped: set_attribute(\"style\", ...) succeeds");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(
+      rule_with({chain1(class_only("box"))}, {{"color", "#ff0000"}, {"display", "flex"}}));
+
+  MatchState state;
+  ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+  const std::string* color = find_value(style, "color");
+  const std::string* display = find_value(style, "display");
+  check(color != nullptr && *color == "#00ff00",
+        "inline_style_scoped: 'color' comes from the inline attribute, not the rule");
+  check(display != nullptr && *display == "flex",
+        "inline_style_scoped: 'display' is untouched -- inline style never declared it, so the "
+        "rule's own \"flex\" still wins normally");
+}
+
+// ---------------------------------------------------------------------------
+// EN: An element with NO `style` attribute at all behaves exactly as before this item -- proves
+//     `UIX-INLINE-STYLE` is additive, opt-in per element, never a behaviour change for the
+//     overwhelming majority of elements that never carry this attribute (every OTHER test in this
+//     file already covers this path; this case pins it explicitly, by name, so a future reader
+//     never has to infer it from absence).
+// PT: Um elemento SEM atributo `style` nenhum se comporta exatamente como antes deste item -- prova
+//     que a `UIX-INLINE-STYLE` é aditiva, opt-in por elemento, nunca uma mudança de comportamento
+//     pra esmagadora maioria dos elementos que nunca carregam este atributo (todo OUTRO teste deste
+//     arquivo já cobre este caminho; este caso o prende explicitamente, por nome, pra um leitor
+//     futuro nunca precisar inferir isso da ausência).
+// ---------------------------------------------------------------------------
+void test_no_style_attribute_is_unaffected() {
+  Element el("div");
+  el.add_class("box");
+  check(!el.has_attribute("style"), "no_style_attribute: setup -- no 'style' attribute present");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(rule_with({chain1(class_only("box"))}, {{"color", "#ff0000"}}));
+
+  MatchState state;
+  ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+  const std::string* color = find_value(style, "color");
+  check(color != nullptr && *color == "#ff0000",
+        "no_style_attribute: the rule's own color wins normally, unaffected by UIX-INLINE-STYLE");
+}
+
 } // namespace
 
 int main() {
@@ -681,6 +779,9 @@ int main() {
   test_determinism_shuffled_noncoflicting_declaration_order();
   test_precedence_holds_beyond_former_rule_index_ceiling();
   test_cascade_tree_preorder_and_inheritance_integration();
+  test_inline_style_wins_over_highest_specificity_rule();
+  test_inline_style_only_overrides_its_own_declared_properties();
+  test_no_style_attribute_is_unaffected();
 
   std::printf(
       "SCOPE: 72 longhands resolvidas, 0 elementos de corpus (ver cascade_corpus_sanity), %d "

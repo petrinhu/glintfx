@@ -55,8 +55,8 @@ constexpr bool starts_with_at(std::string_view s, std::size_t at, std::string_vi
 
 } // namespace
 
-Lexer::Lexer(std::string_view source) : source_(source) {
-  mode_stack_.push_back(Mode::Structural);
+Lexer::Lexer(std::string_view source, bool start_in_declaration_mode) : source_(source) {
+  mode_stack_.push_back(start_in_declaration_mode ? Mode::Declaration : Mode::Structural);
   if (source_.size() > kMaxInputBytes) {
     done_ = true;
     sticky_ = Token{TokenKind::Error,

@@ -760,4 +760,71 @@ SheetParseResult parse_stylesheet(std::string_view source) {
   return parser.run();
 }
 
+// EN: `UIX-INLINE-STYLE` -- implementation. See parser.hpp's own header comment on
+//     `parse_inline_style`/`InlineStyleParseResult` for the full contract (recovery scope, why this
+//     is NOT `parse_stylesheet` wrapping `source` in a synthetic rule). Drives a `Lexer` started
+//     directly in Declaration mode (`lexer.hpp`'s own `start_in_declaration_mode`) one token at a
+//     time -- the SAME `apply_declaration`/`compute_line_col` this translation unit's own
+//     `collect_declarations` already uses for an ordinary rule body, called here without that
+//     method's own `BraceClose`-terminates postcondition, since a bare declaration list has no
+//     brace of its own to wait for.
+// PT: `UIX-INLINE-STYLE` -- implementação. Ver o próprio comentário de cabeçalho do parser.hpp em
+//     `parse_inline_style`/`InlineStyleParseResult` pro contrato completo (escopo de recuperação,
+//     por que isto NÃO é o `parse_stylesheet` envolvendo `source` numa regra sintética). Dirige um
+//     `Lexer` começado direto em modo Declaration (o próprio `start_in_declaration_mode` do
+//     lexer.hpp) um token de cada vez -- o MESMO `apply_declaration`/`compute_line_col` que o
+//     próprio `collect_declarations` desta unidade de tradução já usa pro corpo de uma regra comum,
+//     chamado aqui sem a própria pós-condição termina-em-`BraceClose` daquele método, já que uma
+//     lista de declaração nua não tem chave própria nenhuma pra esperar.
+InlineStyleParseResult parse_inline_style(std::string_view source) {
+  InlineStyleParseResult result;
+  Lexer lexer(source, /*start_in_declaration_mode=*/true);
+  Token cur = lexer.next();
+
+  for (;;) {
+    if (cur.kind == TokenKind::Error) {
+      auto [line, col] = compute_line_col(source, cur.offset);
+      result.error = ParseError{std::string(cur.text), line, col, cur.offset};
+      result.declarations.clear(); // no partial tree on failure -- mirrors SheetParseResult's own
+                                   // discipline (parser.hpp header, "sheet is non-null iff error
+                                   // is nullopt").
+      result.diagnostics.clear();
+      return result;
+    }
+    if (cur.kind == TokenKind::EndOfFile) {
+      return result;
+    }
+    if (cur.kind == TokenKind::Comment) {
+      cur = lexer.next();
+      continue;
+    }
+    if (cur.kind == TokenKind::Declaration) {
+      apply_declaration(cur.text, cur.value, &result.declarations, &result.diagnostics, source,
+                        cur.offset);
+      cur = lexer.next();
+      continue;
+    }
+    // EN: `BraceClose` (a stray '}' -- nothing meaningful can open one here, this buffer has no
+    //     '{' of its own) or `BraceOpen`/`At`/`Prelude` (a lexer-contract violation for pure
+    //     Declaration-mode scanning, this grammar never yields them once mode_stack_ starts at
+    //     Declaration and never grows past it) -- same "log, never silently ignore" discipline as
+    //     `collect_declarations`'s own analogous defensive branch, declaration-scoped recovery,
+    //     never fatal.
+    // PT: `BraceClose` (um '}' solto -- nada com sentido consegue abrir um aqui, este buffer não
+    //     tem '{' próprio nenhum) ou `BraceOpen`/`At`/`Prelude` (uma violação de contrato de lexer
+    //     pra scan puro em modo Declaration, esta gramática nunca os produz já que o mode_stack_
+    //     começa em Declaration e nunca cresce além dele) -- mesma disciplina "loga, nunca ignora
+    //     em silêncio" do próprio ramo defensivo análogo do `collect_declarations`, recuperação
+    //     escopada-por-declaração, nunca fatal.
+    {
+      auto [line, col] = compute_line_col(source, cur.offset);
+      result.diagnostics.push_back(ParseDiagnostic{
+          "unexpected token in inline style declaration list (no enclosing '{'/'}' exists for a "
+          "style=\"...\" attribute)",
+          line, col, cur.offset});
+    }
+    cur = lexer.next();
+  }
+}
+
 } // namespace glintfx::uix::style

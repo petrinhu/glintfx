@@ -31,6 +31,7 @@ void check(bool cond, const char* what) {
 
 using glintfx::uix::style::FontFaceRule;
 using glintfx::uix::style::KeyframesRule;
+using glintfx::uix::style::parse_inline_style;
 using glintfx::uix::style::parse_stylesheet;
 using glintfx::uix::style::PropertyDeclaration;
 using glintfx::uix::style::Rule;
@@ -308,6 +309,166 @@ void test_fatal_lexer_error_propagates() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// EN: `UIX-INLINE-STYLE` -- `parse_inline_style` is the `style="..."` attribute's OWN entry point,
+//     never a synthetic-selector wrap of `parse_stylesheet` -- it starts the `Lexer` directly in
+//     Declaration mode (`docs/uix-rcss.md` `UIX-RCSS-ERRATA-6`, mirroring real upstream's own
+//     `StyleSheetParser::ParseProperties`, a SEPARATE entry point from `Parse()`). Basic form: the
+//     `npc_dialogue__no_com_3_escolhas.rml` fixture's own real inline attribute
+//     (`style="decorator: image( retrato.png cover );"`), the exact one measured by this item's own
+//     QA pass to reach the registry through unchanged (longhand pass-through, same
+//     `apply_declaration` this file's own `test_longhand_passthrough` above already exercises for
+//     rule bodies).
+// PT: `UIX-INLINE-STYLE` -- o `parse_inline_style` é o PRÓPRIO ponto de entrada do atributo
+//     `style="..."`, nunca um envelope de seletor sintético do `parse_stylesheet` -- começa o
+//     `Lexer` direto em modo Declaration (`docs/uix-rcss.md` `UIX-RCSS-ERRATA-6`, espelhando o
+//     próprio `StyleSheetParser::ParseProperties` do upstream real, um ponto de entrada SEPARADO do
+//     `Parse()`). Forma básica: o próprio atributo inline real da fixture
+//     `npc_dialogue__no_com_3_escolhas.rml` (`style="decorator: image( retrato.png cover );"`), o
+//     exato medido pela própria passada de QA deste item pra chegar no registro sem mudança
+//     (passagem direta de longhand, o MESMO `apply_declaration` que o próprio
+//     `test_longhand_passthrough` acima deste arquivo já exercita pra corpo de regra).
+// ---------------------------------------------------------------------------
+void test_inline_style_basic_declarations() {
+  auto result = parse_inline_style("decorator: image( retrato.png cover ); color: white;");
+  check(!result.error.has_value(), "inline_style_basic: no fatal error");
+  check(result.diagnostics.empty(), "inline_style_basic: no diagnostics for well-formed input");
+  check(result.declarations.size() == 2, "inline_style_basic: exactly 2 declarations");
+  check(has_declaration_name(result.declarations, "decorator"),
+        "inline_style_basic: 'decorator' reached the registry");
+  check(has_declaration(result.declarations, "color", "white"),
+        "inline_style_basic: 'color' == 'white', longhand pass-through unchanged");
+}
+
+// ---------------------------------------------------------------------------
+// EN: BOUNDARY -- `style=""` (attribute present, value empty). Legal, a no-op: zero declarations,
+//     zero diagnostics, no fatal error -- the exact same "nothing to parse" outcome an empty rule
+//     body (`.x {}`) already has via `parse_stylesheet`, never a malformed-input diagnostic.
+// PT: FRONTEIRA -- `style=""` (atributo presente, valor vazio). Legal, um no-op: zero declarações,
+//     zero diagnósticos, nenhum erro fatal -- o EXATO MESMO resultado "nada pra parsear" que um
+//     corpo de regra vazio (`.x {}`) já tem via `parse_stylesheet`, nunca um diagnóstico de input
+//     malformado.
+// ---------------------------------------------------------------------------
+void test_inline_style_empty_attribute_is_a_clean_noop() {
+  auto result = parse_inline_style("");
+  check(!result.error.has_value(), "inline_style_empty: no fatal error");
+  check(result.diagnostics.empty(), "inline_style_empty: no diagnostics");
+  check(result.declarations.empty(), "inline_style_empty: zero declarations");
+}
+
+// ---------------------------------------------------------------------------
+// EN: BOUNDARY -- an attribute made ENTIRELY of whitespace (`style="   \t\n "`). Same clean no-op
+//     as the empty-string case above -- `Lexer::scan_declaration`'s own EOF-permissiveness already
+//     treats a whitespace-only dangling NAME run as "nothing attempted", never a partial
+//     identifier, so this needs no special case in `parse_inline_style` itself to stay clean.
+// PT: FRONTEIRA -- um atributo feito INTEIRAMENTE de whitespace (`style="   \t\n "`). O MESMO no-op
+//     limpo do caso string-vazia acima -- o próprio `Lexer::scan_declaration`'s EOF-permissiveness
+//     já trata um trecho de NOME pendurado só-whitespace como "nada tentado", nunca um
+//     identificador parcial, então isto não precisa de caso especial nenhum no próprio
+//     `parse_inline_style` pra ficar limpo.
+// ---------------------------------------------------------------------------
+void test_inline_style_whitespace_only_attribute_is_a_clean_noop() {
+  auto result = parse_inline_style("   \t\n ");
+  check(!result.error.has_value(), "inline_style_whitespace_only: no fatal error");
+  check(result.diagnostics.empty(), "inline_style_whitespace_only: no diagnostics");
+  check(result.declarations.empty(), "inline_style_whitespace_only: zero declarations");
+}
+
+// ---------------------------------------------------------------------------
+// EN: BOUNDARY -- a NAME with no ':' ever found before a ';' (`style="garbage;"`). Silently
+//     dropped, zero diagnostics -- this is NOT a new rule `parse_inline_style` invents, it is the
+//     PRE-EXISTING `scan_declaration()` NAME-state `;` handling (lexer.cpp, "Found name with no
+//     value" upstream-equivalent silent discard) this function inherits unchanged by reusing the
+//     SAME lexer in Declaration mode -- proven identical to the rule-body case via the SAME input
+//     wrapped in a `{}` body through `parse_stylesheet`, both producing zero surviving
+//     declarations and zero diagnostics, so a `style="..."` attribute never gets a STRICTER (or
+//     LOOSER) reading of this one malformed shape than an ordinary rule body already has.
+// PT: FRONTEIRA -- um NOME sem ':' nunca achado antes de um ';' (`style="garbage;"`). Descartado em
+//     silêncio, zero diagnósticos -- isto NÃO é uma regra nova que o `parse_inline_style` inventa, é
+//     o próprio tratamento PRÉ-EXISTENTE de ';' do estado NAME do `scan_declaration()`
+//     (lexer.cpp, descarte silencioso equivalente ao "Found name with no value" do upstream) que
+//     esta função herda sem mudança por reusar o MESMO lexer em modo Declaration -- provado
+//     idêntico ao caso de corpo-de-regra via o MESMO input envelopado num corpo `{}` pelo
+//     `parse_stylesheet`, os dois produzindo zero declarações sobreviventes e zero diagnósticos,
+//     então um atributo `style="..."` nunca recebe uma leitura MAIS ESTRITA (nem MAIS FROUXA) desta
+//     uma forma malformada do que um corpo de regra comum já tem.
+// ---------------------------------------------------------------------------
+void test_inline_style_name_with_no_colon_is_silently_dropped_same_as_rule_body() {
+  auto inline_result = parse_inline_style("garbage;");
+  check(!inline_result.error.has_value(), "inline_style_no_colon: no fatal error");
+  check(inline_result.diagnostics.empty(),
+        "inline_style_no_colon: no diagnostics -- pre-existing lexer-level silent discard");
+  check(inline_result.declarations.empty(), "inline_style_no_colon: zero declarations");
+
+  auto rule_result = parse_stylesheet(".x { garbage; }");
+  check(rule_result.sheet && rule_result.sheet->rules.size() == 1,
+        "inline_style_no_colon: rule-body parity setup -- the wrapping rule still registers");
+  if (rule_result.sheet && !rule_result.sheet->rules.empty()) {
+    check(rule_result.sheet->rules[0].declarations.empty(),
+          "inline_style_no_colon: rule-body twin ALSO drops it silently -- same lexer, same "
+          "outcome, proving parity rather than a new inline-only rule");
+  }
+  check(rule_result.diagnostics.empty(),
+        "inline_style_no_colon: rule-body twin ALSO produces zero diagnostics");
+}
+
+// ---------------------------------------------------------------------------
+// EN: BOUNDARY -- an extra trailing `;` after a well-formed declaration (`style="color: red;;"`).
+//     The empty declaration between the two `;` is silently skipped -- one declaration survives,
+//     zero diagnostics, same pre-existing `scan_declaration()` behaviour a stray `;;` already has
+//     inside an ordinary rule body.
+// PT: FRONTEIRA -- um ';' extra sobrando depois de uma declaração bem-formada
+//     (`style="color: red;;"`). A declaração vazia entre os dois ';' é pulada em silêncio -- uma
+//     declaração sobrevive, zero diagnósticos, mesmo comportamento pré-existente do
+//     `scan_declaration()` que um `;;` solto já tem dentro de um corpo de regra comum.
+// ---------------------------------------------------------------------------
+void test_inline_style_extra_trailing_semicolon_is_silently_dropped() {
+  auto result = parse_inline_style("color: red;;");
+  check(!result.error.has_value(), "inline_style_extra_semicolon: no fatal error");
+  check(result.diagnostics.empty(), "inline_style_extra_semicolon: no diagnostics");
+  check(result.declarations.size() == 1,
+        "inline_style_extra_semicolon: exactly one declaration survives");
+  check(has_declaration(result.declarations, "color", "red"),
+        "inline_style_extra_semicolon: 'color' == 'red' unaffected by the stray trailing ';'");
+}
+
+// ---------------------------------------------------------------------------
+// EN: BOUNDARY + THE SILENCE-DIES CASE -- a valid declaration followed by garbage (an unknown
+//     property name): `style="color: red; not-a-real-property: 5;"`. `color` survives; the
+//     unknown-property declaration is dropped AND emits a `ParseDiagnostic` naming the raw
+//     offending text, the SAME `apply_declaration` path (and the SAME message shape) an unknown
+//     property inside an ordinary `{}` rule body already produces
+//     (`test_recovery_unknown_property_dropped` above, same file) -- proving the silence this
+//     item's own brief names ("o silêncio morre") is closed: a malformed inline declaration is no
+//     longer invisible, it is diagnosed exactly like its `<style>` sibling.
+// PT: FRONTEIRA + O CASO QUE MATA O SILÊNCIO -- uma declaração válida seguida de lixo (um nome de
+//     propriedade desconhecido): `style="color: red; not-a-real-property: 5;"`. `color` sobrevive;
+//     a declaração de propriedade desconhecida é descartada E emite um `ParseDiagnostic` nomeando
+//     o texto cru ofensor, o MESMO caminho `apply_declaration` (e a MESMA forma de mensagem) que uma
+//     propriedade desconhecida dentro de um corpo de regra `{}` comum já produz
+//     (`test_recovery_unknown_property_dropped` acima, mesmo arquivo) -- provando que o silêncio
+//     que o próprio briefing deste item nomeia ("o silêncio morre") está fechado: uma declaração
+//     inline malformada não é mais invisível, é diagnosticada exatamente como a própria irmã dela
+//     de `<style>`.
+// ---------------------------------------------------------------------------
+void test_inline_style_valid_followed_by_garbage_diagnoses() {
+  auto result = parse_inline_style("color: red; not-a-real-property: 5;");
+  check(!result.error.has_value(), "inline_style_valid_then_garbage: no fatal error");
+  check(result.declarations.size() == 1,
+        "inline_style_valid_then_garbage: only the known declaration survives");
+  check(has_declaration(result.declarations, "color", "red"),
+        "inline_style_valid_then_garbage: 'color' == 'red' survives");
+  check(!has_declaration_name(result.declarations, "not-a-real-property"),
+        "inline_style_valid_then_garbage: the unknown property never reaches declarations");
+  check(!result.diagnostics.empty(),
+        "inline_style_valid_then_garbage: THE SILENCE DIES -- a ParseDiagnostic was recorded");
+  if (!result.diagnostics.empty()) {
+    check(result.diagnostics[0].message.find("not-a-real-property") != std::string::npos,
+          "inline_style_valid_then_garbage: the diagnostic names the raw offending text, same "
+          "minimum-logging-content discipline as docs/uix-rcss.md section 11");
+  }
+}
+
 } // namespace
 
 int main() {
@@ -322,6 +483,12 @@ int main() {
   test_keyframes_structural_record();
   test_keyframes_percentage_selectors();
   test_fatal_lexer_error_propagates();
+  test_inline_style_basic_declarations();
+  test_inline_style_empty_attribute_is_a_clean_noop();
+  test_inline_style_whitespace_only_attribute_is_a_clean_noop();
+  test_inline_style_name_with_no_colon_is_silently_dropped_same_as_rule_body();
+  test_inline_style_extra_trailing_semicolon_is_silently_dropped();
+  test_inline_style_valid_followed_by_garbage_diagnoses();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "parser_atrule_sanity: %d assertion(s) FAILED\n", g_failures);

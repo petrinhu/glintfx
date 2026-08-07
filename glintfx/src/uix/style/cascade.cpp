@@ -107,6 +107,48 @@ ComputedStyle compute_element_style(const StyleSheet& sheet, const glintfx::uix:
     }
   }
 
+  // EN: `UIX-INLINE-STYLE` -- see cascade.hpp's own header comment, "Inline style attribute", for
+  //     the full contract. Applied AFTER every `sheet.rules` entry above has already had its own
+  //     chance to win -- a declaration found here OVERWRITES `winners[idx]` unconditionally,
+  //     bypassing the `>=`-on-Specificity comparison the loop above uses, because this is a
+  //     genuinely separate mechanism (real upstream's own `ElementStyle::GetLocalProperty` checks
+  //     `inline_properties` FIRST, unconditionally -- see cascade.hpp header for the exact
+  //     citation), never "a very high Specificity value". The overwhelming majority of elements
+  //     carry no `style` attribute at all -- `element.attribute("style")` returns `std::nullopt`
+  //     for every one of them, and this whole block is skipped, leaving every winner exactly as
+  //     the rule loop above already decided (zero behaviour change for that majority).
+  // PT: `UIX-INLINE-STYLE` -- ver o próprio comentário de cabeçalho do cascade.hpp, "Atributo de
+  //     estilo em linha", pro contrato completo. Aplicado DEPOIS de toda entrada de `sheet.rules`
+  //     acima já ter tido a própria chance de vencer -- uma declaração achada aqui SOBRESCREVE
+  //     `winners[idx]` incondicionalmente, contornando a comparação `>=`-sobre-Specificity que o
+  //     laço acima usa, porque isto é um mecanismo genuinamente separado (o próprio
+  //     `ElementStyle::GetLocalProperty` do upstream real checa `inline_properties` PRIMEIRO,
+  //     incondicionalmente -- ver o cabeçalho do cascade.hpp pra citação exata), nunca "um valor de
+  //     Specificity bem alto". A esmagadora maioria dos elementos não carrega atributo `style`
+  //     nenhum -- `element.attribute("style")` retorna `std::nullopt` pra cada um deles, e este
+  //     bloco inteiro é pulado, deixando todo vencedor exatamente como o laço de regra acima já
+  //     decidiu (zero mudança de comportamento pra essa maioria).
+  if (const std::optional<std::string_view> inline_style = element.attribute("style");
+      inline_style.has_value()) {
+    const InlineStyleParseResult inline_result = parse_inline_style(*inline_style);
+    for (const PropertyDeclaration& decl : inline_result.declarations) {
+      const PropertyInfo* info = find_property(decl.name);
+      if (info == nullptr) {
+        // EN: Defensive, not hostile -- unreachable via `parse_inline_style` (its own
+        //     `apply_declaration` reuse already guarantees every name reaching `declarations` is
+        //     registry-known), same trust-boundary reasoning the rule loop's own analogous branch
+        //     above already states.
+        // PT: Defensivo, não hostil -- inalcançável via `parse_inline_style` (o próprio reuso de
+        //     `apply_declaration` já garante que todo nome chegando em `declarations` é conhecido
+        //     do registro), mesmo raciocínio de fronteira-de-confiança que o próprio ramo análogo
+        //     do laço de regra acima já declara.
+        continue;
+      }
+      const std::size_t idx = static_cast<std::size_t>(info - registry.data());
+      winners[idx] = DeclaredWinner{/*has_value=*/true, decl.value, /*specificity=*/0};
+    }
+  }
+
   ComputedStyle out;
   out.reserve(registry.size());
   for (std::size_t i = 0; i < registry.size(); ++i) {

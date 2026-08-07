@@ -618,10 +618,39 @@ public:
   // EN: If `source.size() > kMaxInputBytes`, this constructor does NOT throw or abort -- it
   //     records the failure internally so the FIRST `next()` call returns `Error` (offset 0),
   //     same fail-high discipline as the DOM sibling's own `Lexer::Lexer`.
+  //
+  //     `start_in_declaration_mode` (`UIX-INLINE-STYLE`, default `false`, ZERO behaviour change
+  //     for every pre-existing caller): the floor entry of `mode_stack_` is normally `Structural`
+  //     (a whole `.rcss` file or a `<style>` block's own text, entered via `parse_stylesheet`) --
+  //     `true` starts that SAME floor entry as `Declaration` instead, for a source buffer that is
+  //     ALREADY inside an implicit declaration block with no `{`/`}` of its own, the exact shape a
+  //     `style="..."` attribute's raw value has (RCSS's own inline-style grammar, matching real
+  //     upstream's `StyleSheetParser::ParseProperties`, `examples/RmlUi/Source/Core/
+  //     StyleSheetParser.cpp` -- a SEPARATE entry point from `Parse()`, never wrapping the text in
+  //     a synthetic selector). `scan_declaration()`'s own `BraceClose` branch already guards its
+  //     `pop_back` with `mode_stack_.size() > 1` -- with a single `Declaration` floor entry, a
+  //     stray `}` in this mode is returned as its own token (never pops below the floor, never
+  //     flips back to `Structural`) exactly like a stray `}` at `Structural`'s own floor already
+  //     is, symmetric with zero new code.
   // PT: Se `source.size() > kMaxInputBytes`, este construtor NÃO lança nem aborta -- registra a
   //     falha internamente pra que a PRIMEIRA chamada de `next()` retorne `Error` (offset 0),
   //     mesma disciplina fail-high do próprio `Lexer::Lexer` do irmão DOM.
-  explicit Lexer(std::string_view source);
+  //
+  //     `start_in_declaration_mode` (`UIX-INLINE-STYLE`, default `false`, ZERO mudança de
+  //     comportamento pra todo chamador pré-existente): a entrada-piso do `mode_stack_` é
+  //     normalmente `Structural` (um arquivo `.rcss` inteiro ou o próprio texto de um bloco
+  //     `<style>`, entrado via `parse_stylesheet`) -- `true` começa essa MESMA entrada-piso como
+  //     `Declaration` em vez disso, pra um buffer-fonte que JÁ está dentro de um bloco de
+  //     declaração implícito, sem `{`/`}` próprio nenhum, a exata forma que o valor cru de um
+  //     atributo `style="..."` tem (a própria gramática de estilo-em-linha do RCSS, casando com o
+  //     próprio `StyleSheetParser::ParseProperties` do upstream real,
+  //     `examples/RmlUi/Source/Core/StyleSheetParser.cpp` -- um ponto de entrada SEPARADO do
+  //     `Parse()`, nunca envolvendo o texto num seletor sintético). O próprio ramo `BraceClose` do
+  //     `scan_declaration()` já protege o `pop_back` com `mode_stack_.size() > 1` -- com uma única
+  //     entrada-piso `Declaration`, um `}` solto neste modo é retornado como o próprio token (nunca
+  //     desempilha abaixo do piso, nunca vira `Structural` de volta) exatamente como um `}` solto
+  //     no próprio piso de `Structural` já é, simétrico com zero código novo.
+  explicit Lexer(std::string_view source, bool start_in_declaration_mode = false);
 
   // EN: Returns the next token in the stream. See this file's header comment, "Error stickiness /
   //     EOF stickiness" paragraph.

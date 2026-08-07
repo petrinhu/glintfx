@@ -168,6 +168,63 @@
 //         future `S6b` was always going to consume a finished tree, not something this file
 //         produces itself.
 //
+//     INLINE STYLE ATTRIBUTE (`UIX-INLINE-STYLE`, closing a gap this module's own original slice
+//     left unimplemented -- `docs/uix-rcss.md`'s `UIX-RCSS-ERRATA-6` is this contract's normative
+//     home, restated here so a reader of THIS file's own algorithm never has to cross-reference to
+//     find the one precedence rule that is NOT specificity-driven): after every `StyleSheet` rule
+//     has been considered (the algorithm above, unchanged), `element`'s own `style="..."` attribute
+//     -- if present (`glintfx::uix::Element::attribute("style")`) -- is parsed
+//     (`parser.hpp`'s own `parse_inline_style`) and its declarations OVERWRITE `winners`
+//     UNCONDITIONALLY, never compared against any rule's own `Specificity`. This is not "a very
+//     high specificity number" (no `Specificity` value this module defines is reserved or treated
+//     as a ceiling for this) -- it is a genuinely different, SEPARATE mechanism, matching real
+//     upstream's own `ElementStyle::GetLocalProperty` (`examples/RmlUi/Source/Core/
+//     ElementStyle.cpp:48-60`): `inline_properties` is checked FIRST, unconditionally, before
+//     `definition` (the cascade-matched winner) is ever consulted at all -- there is no numeric
+//     specificity an inline declaration is compared against, by construction, not merely by every
+//     real corpus fixture measured so far never exercising a counter-example. An element with no
+//     `style` attribute (the overwhelming majority) takes this branch's own early-exit and is
+//     byte-for-byte unaffected by this paragraph's own existence.
+//
+//     A malformed inline declaration (an unknown property name, a malformed shorthand value) is
+//     dropped exactly like its `<style>`-block sibling would be -- see `parse_inline_style`'s own
+//     doc-comment for the shared `apply_declaration` recovery this reuses UNCHANGED; this file
+//     itself never sees or reports that `ParseDiagnostic` list (matching this file's own
+//     "Deliberately not this file's job" paragraph below: producing a diagnostic-consuming report
+//     format is not this module's concern, `parse_inline_style`'s own caller-visible
+//     `InlineStyleParseResult::diagnostics` already is the reporting surface, exactly parallel to
+//     how a `<style>` block's own `SheetParseResult::diagnostics` is reported one layer above THIS
+//     file, never inside it).
+// PT: ATRIBUTO DE ESTILO EM LINHA (`UIX-INLINE-STYLE`, fechando uma lacuna que a própria fatia
+//     original deste módulo deixou não-implementada -- a `UIX-RCSS-ERRATA-6` do docs/uix-rcss.md é
+//     a casa normativa deste contrato, restatada aqui pra um leitor DESTE arquivo nunca precisar
+//     cruzar referência pra achar a única regra de precedência que NÃO é dirigida-por-
+//     especificidade): depois de toda regra de `StyleSheet` já ter sido considerada (o algoritmo
+//     acima, inalterado), o próprio atributo `style="..."` de `element` -- se presente
+//     (`glintfx::uix::Element::attribute("style")`) -- é parseado (o próprio `parse_inline_style`
+//     do parser.hpp) e as próprias declarações dele SOBRESCREVEM `winners` INCONDICIONALMENTE,
+//     nunca comparadas contra a `Specificity` de regra nenhuma. Isto NÃO é "um número de
+//     especificidade bem alto" (nenhum valor de `Specificity` que este módulo define é reservado ou
+//     tratado como teto pra isto) -- é um mecanismo genuinamente diferente, SEPARADO, casando com o
+//     próprio `ElementStyle::GetLocalProperty` do upstream real (`examples/RmlUi/Source/Core/
+//     ElementStyle.cpp:48-60`): `inline_properties` é checado PRIMEIRO, incondicionalmente, antes
+//     do `definition` (o vencedor casado-pela-cascata) sequer ser consultado -- não existe
+//     especificidade numérica nenhuma contra a qual uma declaração inline é comparada, por
+//     construção, não meramente porque nenhuma fixture real de corpus medida até agora exercitou um
+//     contra-exemplo. Um elemento sem atributo `style` nenhum (a esmagadora maioria) toma o próprio
+//     early-exit deste ramo e fica byte-a-byte inafetado pela própria existência deste parágrafo.
+//
+//     Uma declaração inline malformada (um nome de propriedade desconhecido, um valor de shorthand
+//     malformado) é descartada exatamente como a própria irmã dela de bloco `<style>` seria -- ver
+//     o próprio comentário de doc do `parse_inline_style` pra própria recuperação `apply_declaration`
+//     compartilhada que isto reusa SEM MUDANÇA; este arquivo em si nunca vê nem reporta aquela lista
+//     de `ParseDiagnostic` (casando com o próprio parágrafo "Deliberadamente não é trabalho deste
+//     arquivo" abaixo: produzir um formato de relatório consumidor-de-diagnóstico não é preocupação
+//     deste módulo, o próprio `InlineStyleParseResult::diagnostics` visível-ao-chamador do
+//     `parse_inline_style` já é a superfície de relatório, exatamente paralelo a como o próprio
+//     `SheetParseResult::diagnostics` de um bloco `<style>` é reportado uma camada acima DESTE
+//     arquivo, nunca dentro dele).
+//
 //     NAMESPACE: `glintfx::uix::style`, same module as every sibling header. Depends on
 //     `glintfx::uix::Element`/`as_element` (the flat DOM namespace) by fully-qualified name at every
 //     use, same discipline `selector_match.hpp` already established for this exact cross-module

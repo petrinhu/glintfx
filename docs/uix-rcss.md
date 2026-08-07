@@ -759,6 +759,131 @@ precisou de entrada na seção 14.1, só de uma regra completada.
 
 ---
 
+## 🟤 Errata (`UIX-RCSS-ERRATA-6`, 2026-08-07) / Errata (`UIX-RCSS-ERRATA-6`, 2026-08-07)
+
+**EN:** ⚠️ **Reported by the orchestrator as an autonomous-mode decision, pending the líder's
+retroactive confirmation** (this repo's own autonomous-mode convention): this document never named
+the `style="..."` attribute anywhere, and Side B never read it -- a real, corpus-measured gap,
+closed here by amending the spec FIRST, then implementing (`UIX-INLINE-STYLE`, `TODO.md`). Measured
+by an independent QA pass enumerating the 4 unique inline-style-value forms this repo's own corpus
+actually contains (`decorator: image(...)`, a percentage `width`/`left`, `font-size: <N>dp`), all 4
+failing 100% before this errata: Side A (real RmlUi) honoured the attribute, Side B silently fell
+back to the registry's own initial value, with **zero diagnosable trace** -- the differential
+oracle's own `fonteng_ab_visual_scene.rml`/`fonteng_perf_scene.rml` (`font-size`),
+`system_menu__config_audio_sliders.rml` (`width`/`left`), and `npc_dialogue__*` (`decorator`)
+divergences are this exact gap, not a coincidence.
+
+**What was missing, closed here:**
+
+1. **The attribute IS read, and IS in scope.** `glintfx::uix::Element::attribute("style")`
+   (`glintfx/src/uix/dom/dom_tree.hpp`) already stored it as an ordinary, inert generic attribute
+   (that module's own header comment, "perfectly ordinary, INERT generic attributes, zero
+   special-casing") -- this errata is the cascade's own missing consumer, not a DOM-layer change.
+2. **Grammar and recovery: identical to a rule body's own declaration list, never a separate
+   dialect.** A `style="..."` value is a flat `name: value;` run with no selector and no enclosing
+   `{`/`}` of its own -- parsed by a NEW, dedicated entry point,
+   `glintfx::uix::style::parse_inline_style` (`parser.hpp`/`.cpp`), which reuses the SAME
+   registry/shorthand `apply_declaration` machinery §11 below already governs for an ordinary rule
+   body, UNCHANGED -- an unknown property name or malformed shorthand value is dropped with a
+   `ParseDiagnostic` naming the raw offending text, every OTHER declaration in the same attribute
+   still applies, matching real upstream's own `Element.cpp:1753-1772` (`attribute == "style"`
+   branch calling `StyleSheetParser::ParseProperties` directly, a SEPARATE entry point from
+   `Parse()`, never a synthetic selector wrap).
+3. **Precedence: unconditional, never a specificity comparison.** A `style="..."` declaration wins
+   over EVERY `StyleSheet` rule matching the element, REGARDLESS of that rule's own specificity --
+   not "a very high `Specificity` number" (this module defines no such reserved value), a
+   genuinely SEPARATE mechanism, matching real upstream's own `ElementStyle::GetLocalProperty`
+   (`examples/RmlUi/Source/Core/ElementStyle.cpp:48-60`): `inline_properties` is checked FIRST,
+   unconditionally, before `definition` (the cascade-matched winner) is ever consulted. §1's own
+   "the cascade (origin, specificity, source order)" framing gains a fourth, higher-precedence
+   ORIGIN this errata names for the first time: the element's own inline declaration, evaluated
+   before -- never inside -- the specificity/source-order ranking §1 already describes for
+   `StyleSheet` rules.
+4. **Dump appearance: no new syntax, the SAME `PROP` line an ordinary rule's own winning
+   declaration already produces.** An inline-declared property's raw text goes through the exact
+   same downstream value-computation pipeline §7/§8/§9 already describe (quantization, canonical
+   color/composite forms) -- there is no `PROP` marker distinguishing "this value came from
+   `style=\"...\"`" from "this value came from a matched rule"; the byte-exact worked example below
+   is this errata's own concrete proof.
+5. **Worked example (`npc_dialogue__no_com_3_escolhas.rml`, the real corpus fixture that measured
+   this gap):** `<div id="npcdlg-portrait" style="decorator: image( retrato_seu_bertoldo_caim.png
+   cover );"></div>`, no matching `StyleSheet` rule for `#npcdlg-portrait` at all. Side A prints
+   `PROP decorator=image(retrato_seu_bertoldo_caim.png)`; Side B, before this errata, printed the
+   registry's own initial value, `PROP decorator=none`. ⚠️ **A residual divergence survives this
+   errata for this SAME worked example, deliberately out of `UIX-INLINE-STYLE`'s own scope:** Side
+   A drops the `cover` fit keyword from its own printed `image(...)` form while Side B currently
+   keeps it (`image(retrato_seu_bertoldo_caim.png cover)`) -- a PRE-EXISTING, SEPARATE divergence,
+   reproduced identically by an ordinary `<style>` rule using `decorator: image(... cover)`
+   (`gusworld_battle_cockpit.rml:59,229`) with no inline attribute involved at all, so it is not
+   this errata's own defect to fix -- it belongs to whichever slice owns `value_compute.hpp`'s own
+   `image()` composite-value printing, tracked separately, not by `UIX-INLINE-STYLE`.
+
+**PT:** ⚠️ **Reportado pelo orquestrador como decisão de modo autônomo, pendente de confirmação
+retroativa do líder** (a própria convenção de modo autônomo deste repo): este documento nunca
+nomeou o atributo `style="..."` em lugar nenhum, e o lado B nunca o lia -- uma lacuna real, medida
+por corpus, fechada aqui emendando a spec PRIMEIRO, depois implementando (`UIX-INLINE-STYLE`,
+`TODO.md`). Medida por uma passada de QA independente que enumerou as 4 formas únicas de valor de
+estilo em linha que o corpus deste repo de fato contém (`decorator: image(...)`, um `width`/`left`
+percentual, `font-size: <N>dp`), as 4 falhando 100% antes desta errata: o lado A (RmlUi real)
+honrava o atributo, o lado B caía em silêncio pro próprio valor inicial do registro, com **zero
+rastro diagnosticável** -- as próprias divergências do oráculo diferencial em
+`fonteng_ab_visual_scene.rml`/`fonteng_perf_scene.rml` (`font-size`),
+`system_menu__config_audio_sliders.rml` (`width`/`left`), e `npc_dialogue__*` (`decorator`) são
+esta exata lacuna, não coincidência.
+
+**O que faltava, fechado aqui:**
+
+1. **O atributo É lido, e ESTÁ em escopo.** O próprio `glintfx::uix::Element::attribute("style")`
+   (`glintfx/src/uix/dom/dom_tree.hpp`) já o guardava como um atributo genérico, comum, inerte
+   (o próprio comentário de cabeçalho daquele módulo, "atributos genéricos perfeitamente comuns,
+   INERTES, zero caso-especial") -- esta errata é o próprio consumidor faltante da cascata, não uma
+   mudança de camada-DOM.
+2. **Gramática e recuperação: idênticas à própria lista de declaração de um corpo de regra, nunca
+   um dialeto separado.** Um valor `style="..."` é um trecho plano `nome: valor;` sem seletor
+   nenhum e sem `{`/`}` envolvente próprio nenhum -- parseado por um NOVO ponto de entrada
+   dedicado, `glintfx::uix::style::parse_inline_style` (`parser.hpp`/`.cpp`), que reusa a MESMA
+   maquinaria `apply_declaration` de registro/shorthand que a seção 11 abaixo já governa pra um
+   corpo de regra comum, SEM MUDANÇA -- um nome de propriedade desconhecido ou um valor de
+   shorthand malformado é descartado com um `ParseDiagnostic` nomeando o texto cru ofensor, toda
+   OUTRA declaração no mesmo atributo ainda se aplica, casando com o próprio
+   `Element.cpp:1753-1772` do upstream real (o ramo `attribute == "style"` chamando o
+   `StyleSheetParser::ParseProperties` direto, um ponto de entrada SEPARADO do `Parse()`, nunca um
+   envelope de seletor sintético).
+3. **Precedência: incondicional, nunca uma comparação de especificidade.** Uma declaração
+   `style="..."` vence QUALQUER regra de `StyleSheet` que case com o elemento, INDEPENDENTE da
+   própria especificidade daquela regra -- não "um número de `Specificity` bem alto" (este módulo
+   não define valor reservado nenhum assim), um mecanismo genuinamente SEPARADO, casando com o
+   próprio `ElementStyle::GetLocalProperty` do upstream real (`examples/RmlUi/Source/Core/
+   ElementStyle.cpp:48-60`): `inline_properties` é checado PRIMEIRO, incondicionalmente, antes do
+   `definition` (o vencedor casado-pela-cascata) sequer ser consultado. A própria formulação "a
+   cascata (origem, especificidade, ordem de fonte)" da seção 1 ganha uma quarta ORIGEM, de
+   precedência MAIOR, que esta errata nomeia pela primeira vez: a própria declaração inline do
+   elemento, avaliada antes -- nunca dentro -- do ranqueamento por especificidade/ordem-de-fonte
+   que a seção 1 já descreve pras regras de `StyleSheet`.
+4. **Aparência no dump: nenhuma sintaxe nova, a MESMA linha `PROP` que a própria declaração
+   vencedora de uma regra comum já produz.** O texto cru de uma propriedade declarada em linha
+   passa pelo exato mesmo pipeline de computação-de-valor rio-abaixo que as seções 7/8/9 já
+   descrevem (quantização, formas canônicas de cor/composto) -- não existe marcador `PROP`
+   distinguindo "este valor veio de `style=\"...\"`" de "este valor veio de uma regra casada"; o
+   exemplo trabalhado byte-exato abaixo é a própria prova concreta desta errata.
+5. **Exemplo trabalhado (`npc_dialogue__no_com_3_escolhas.rml`, a própria fixture real de corpus
+   que mediu esta lacuna):** `<div id="npcdlg-portrait" style="decorator: image(
+   retrato_seu_bertoldo_caim.png cover );"></div>`, nenhuma regra de `StyleSheet` casando
+   `#npcdlg-portrait` de jeito nenhum. O lado A imprime
+   `PROP decorator=image(retrato_seu_bertoldo_caim.png)`; o lado B, antes desta errata, imprimia o
+   próprio valor inicial do registro, `PROP decorator=none`. ⚠️ **Uma divergência residual
+   sobrevive a esta errata pra este MESMO exemplo trabalhado, deliberadamente fora do próprio
+   escopo da `UIX-INLINE-STYLE`:** o lado A descarta a própria palavra-chave de encaixe `cover` da
+   própria forma impressa de `image(...)` enquanto o lado B atualmente a mantém
+   (`image(retrato_seu_bertoldo_caim.png cover)`) -- uma divergência PRÉ-EXISTENTE, SEPARADA,
+   reproduzida identicamente por uma regra `<style>` comum usando `decorator: image(... cover)`
+   (`gusworld_battle_cockpit.rml:59,229`) sem atributo inline nenhum envolvido, então não é defeito
+   próprio desta errata pra consertar -- pertence a qualquer fatia que possua a própria impressão
+   de valor-composto `image()` do `value_compute.hpp`, rastreada separadamente, não pela
+   `UIX-INLINE-STYLE`.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values

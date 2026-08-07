@@ -498,4 +498,81 @@ struct SheetParseResult {
 //     fraco "só precisa ficar viva pela duração desta chamada" do glintfx::uix::parse_document.
 SheetParseResult parse_stylesheet(std::string_view source);
 
+// EN: `UIX-INLINE-STYLE` -- `source` is a `style="..."` attribute's own raw VALUE (never the whole
+//     `style="..."` token, never wrapped in a synthetic selector) -- the entry point a `style`
+//     attribute needs, mirroring real upstream's own SEPARATE `StyleSheetParser::ParseProperties`
+//     (`examples/RmlUi/Source/Core/StyleSheetParser.cpp`, called directly from
+//     `Element::OnAttributeChange`'s own `"style"` branch, never through `Parse()`/a synthetic
+//     rule). See `docs/uix-rcss.md`'s `UIX-RCSS-ERRATA-6` for the full contract this closes
+//     (precedence, malformed-declaration handling, byte-exact dump appearance).
+//
+//     Reuses this file's OWN registry/shorthand declaration-expansion machinery
+//     (`apply_declaration`, this file's "Declaration expansion" paragraph) UNCHANGED -- a
+//     `style="..."` attribute's own grammar is a flat `name: value;` run, exactly what
+//     `Lexer(source, /*start_in_declaration_mode=*/true)` (lexer.hpp) scans directly, with NO
+//     enclosing `{`/`}` of its own -- so this function is NOT `parse_stylesheet` wrapping `source`
+//     in a synthetic rule (which would shift every diagnostic's own `offset`/`line`/`column` by the
+//     wrapper's own length, and would need an always-valid dummy selector this module has no
+//     principled way to invent); it drives the SAME lexer directly, one token at a time, the same
+//     shape `parser.cpp`'s own `.cpp`-local `collect_declarations` already has for an ordinary
+//     rule/keyframe-block body, restated here because that method's own postcondition (consuming a
+//     terminating `BraceClose`) does not fit a buffer that never has one.
+//
+//     RECOVERY: identical discipline to `parse_stylesheet`'s own declaration-scoped recovery (this
+//     file's header, scope (a)) -- an unknown property name or a malformed shorthand value is
+//     dropped, with a `ParseDiagnostic` naming the raw offending text, and EVERY OTHER declaration
+//     in this SAME attribute still applies; a genuinely malformed *lexical* construct (an
+//     unterminated quoted value, matching `Lexer`'s own sticky-`Error` contract) is the only path
+//     that reaches `error` (`sheet`-less `declarations`, matching `SheetParseResult`'s own "no
+//     partial tree on failure" discipline). A stray top-level `}` (nothing meaningful can open one
+//     inside a bare declaration list) is diagnosed and skipped, the SAME declaration-scoped
+//     recovery, never fatal.
+//
+//     ⚠️ `source` MUST outlive every entry of the returned `declarations` -- identical zero-copy
+//     contract to `parse_stylesheet`'s own (this file's header, "Zero-copy, unlike the DOM
+//     sibling"), because `PropertyDeclaration::name`/`::value` are `std::string_view`s into it.
+// PT: `UIX-INLINE-STYLE` -- `source` é o próprio VALOR cru de um atributo `style="..."` (nunca o
+//     token `style="..."` inteiro, nunca envolvido num seletor sintético) -- o ponto de entrada que
+//     um atributo `style` precisa, espelhando o próprio `StyleSheetParser::ParseProperties`
+//     SEPARADO do upstream real (`examples/RmlUi/Source/Core/StyleSheetParser.cpp`, chamado direto
+//     do próprio ramo `"style"` do `Element::OnAttributeChange`, nunca através do `Parse()`/uma
+//     regra sintética). Ver a `UIX-RCSS-ERRATA-6` do `docs/uix-rcss.md` pro contrato completo que
+//     isto fecha (precedência, tratamento de declaração malformada, aparência byte-exata no dump).
+//
+//     Reusa a PRÓPRIA maquinaria de expansão-de-declaração por registro/shorthand deste arquivo
+//     (`apply_declaration`, o próprio parágrafo "Expansão de declaração" deste arquivo) SEM
+//     mudança -- a própria gramática de um atributo `style="..."` é um trecho plano `nome: valor;`,
+//     exatamente o que `Lexer(source, /*start_in_declaration_mode=*/true)` (lexer.hpp) escaneia
+//     direto, SEM `{`/`}` envolvente nenhum próprio -- então esta função NÃO é o `parse_stylesheet`
+//     envolvendo `source` numa regra sintética (o que deslocaria o próprio `offset`/`line`/`column`
+//     de todo diagnóstico pelo próprio comprimento do envelope, e precisaria de um seletor-dummy
+//     sempre-válido que este módulo não tem jeito principiado de inventar); ela dirige o MESMO
+//     lexer direto, um token de cada vez, a mesma forma que o próprio `collect_declarations` local-
+//     do-.cpp do parser.cpp já tem pro corpo de uma regra/bloco-de-keyframe comum, restatada aqui
+//     porque a própria pós-condição daquele método (consumir um `BraceClose` terminador) não cabe
+//     num buffer que nunca tem um.
+//
+//     RECUPERAÇÃO: disciplina idêntica à própria recuperação escopada-por-declaração do
+//     `parse_stylesheet` (o cabeçalho deste arquivo, escopo (a)) -- um nome de propriedade
+//     desconhecido ou um valor de shorthand malformado é descartado, com um `ParseDiagnostic`
+//     nomeando o texto cru ofensor, e TODA OUTRA declaração NESTE MESMO atributo ainda se aplica;
+//     uma construção genuinamente malformada no nível LÉXICO (um valor entre aspas não-terminado,
+//     casando com o próprio contrato de `Error` pegajoso do `Lexer`) é o único caminho que alcança
+//     `error` (`declarations` sem `sheet`, casando com a própria disciplina "nenhuma árvore parcial
+//     na falha" do `SheetParseResult`). Um `}` de topo-de-nível solto (nada com sentido consegue
+//     abrir um dentro de uma lista de declaração nua) é diagnosticado e pulado, a MESMA recuperação
+//     escopada-por-declaração, nunca fatal.
+//
+//     ⚠️ `source` PRECISA sobreviver a toda entrada de `declarations` retornado -- contrato
+//     zero-cópia idêntico ao próprio `parse_stylesheet` (o cabeçalho deste arquivo, "Zero-cópia,
+//     diferente do irmão DOM"), porque `PropertyDeclaration::name`/`::value` são `std::string_view`s
+//     sobre ele.
+struct InlineStyleParseResult {
+  std::vector<PropertyDeclaration> declarations;
+  std::vector<ParseDiagnostic> diagnostics;
+  std::optional<ParseError> error;
+};
+
+InlineStyleParseResult parse_inline_style(std::string_view source);
+
 } // namespace glintfx::uix::style

@@ -590,29 +590,39 @@ jobs:
       #     caminho relativo puro sem '/' no inicio (ex.: "glintfx/src/foo.cpp"), entao
       #     um filtro que exige um '/' literal antes de "glintfx" nunca casa --
       #     reproduzido e confirmado localmente.
-      # EN: `constParameterCallback:*/image_encode.cpp` (IMG-ENCODE, W21) -- `write_cb()`'s
-      #     `void* data` parameter must stay non-const to match stb_image_write's own
-      #     `stbi_write_func` typedef EXACTLY (`void (*)(void*, void*, int)`); constifying it
-      #     would require a `reinterpret_cast<stbi_write_func*>` at every `_to_func` call site
-      #     just to silence a style note about a signature this file does not own -- see
-      #     `image_encode.cpp`'s own doc-comment right above `write_cb()` for the full rationale.
-      # PT: `constParameterCallback:*/image_encode.cpp` (IMG-ENCODE, W21) -- o parâmetro
-      #     `void* data` de `write_cb()` precisa ficar não-const pra bater EXATAMENTE com o
-      #     próprio typedef `stbi_write_func` do stb_image_write (`void (*)(void*, void*, int)`);
-      #     tornar const forçaria um `reinterpret_cast<stbi_write_func*>` em todo sítio de
-      #     chamada `_to_func` só pra calar uma nota de estilo sobre uma assinatura que este
-      #     arquivo não possui -- ver o próprio comentário de `image_encode.cpp` logo acima de
-      #     `write_cb()` pro racional completo.
+      # EN: Suppressions come from tools/cppcheck-suppressions.txt (CI-CPPCHECK-DIVERGENCIA,
+      #     2026-08-07) -- the SAME file tools/precommit.sh's own --project-mode branch reads,
+      #     via `--suppressions-list`, so this step and the local pre-commit gate cannot drift
+      #     apart again by editing one `--suppress=` list and forgetting the other (that is
+      #     exactly what happened here for 8 CI runs straight: two file-scoped suppressions
+      #     landed ONLY in precommit.sh's own CPPCHECK_COMMON_ARGS, on the false premise that
+      #     this --project mode "PERMANENTLY" never looks at glintfx/src/uix/ -- both findings
+      #     were later resolved by CODE fixes instead, see CHANGELOG/TODO.md item
+      #     CI-CPPCHECK-DIVERGENCIA for the full story). See that file's own header comment for
+      #     the per-entry rationale (image_encode.cpp's `constParameterCallback`, etc.) and for
+      #     why the LOCAL-only fallback suppressions (`unusedStructMember`, `missingInclude`)
+      #     deliberately stay OUT of this shared file.
+      # PT: As supressões vêm de tools/cppcheck-suppressions.txt (CI-CPPCHECK-DIVERGENCIA,
+      #     2026-08-07) -- o MESMO arquivo que o próprio ramo de modo --project do
+      #     tools/precommit.sh lê, via `--suppressions-list`, pra este passo e o gate local de
+      #     pre-commit não poderem mais divergir editando uma lista `--suppress=` e esquecendo a
+      #     outra (foi exatamente isso que aconteceu aqui por 8 execuções seguidas do CI: duas
+      #     supressões restritas a arquivo caíram SÓ no próprio CPPCHECK_COMMON_ARGS do
+      #     precommit.sh, sob a premissa falsa de que este modo --project "PERMANENTEMENTE"
+      #     nunca olha pra glintfx/src/uix/ -- os dois achados depois foram resolvidos por
+      #     conserto de CÓDIGO em vez de supressão, ver o item CI-CPPCHECK-DIVERGENCIA do
+      #     CHANGELOG/TODO.md pra história completa). Ver o próprio comentário de cabeçalho
+      #     daquele arquivo pro racional de cada entrada (o `constParameterCallback` do
+      #     image_encode.cpp etc.) e pra por que as supressões SÓ-LOCAIS de fallback
+      #     (`unusedStructMember`, `missingInclude`) ficam de propósito FORA deste arquivo
+      #     compartilhado.
       - name: TST-L1-STATIC -- cppcheck
         run: |
           cppcheck --enable=warning,style,performance,portability \
             --std=c++20 --language=c++ --platform=unix64 \
             --project=glintfx/build-lint/compile_commands.json \
             --file-filter='*glintfx/src/*' \
-            --suppress=missingIncludeSystem \
-            --suppress='*:*/third_party/*' \
-            --suppress='*:*/_deps/*' \
-            --suppress='constParameterCallback:*/image_encode.cpp' \
+            --suppressions-list=tools/cppcheck-suppressions.txt \
             --error-exitcode=1
 
       # EN: Installed into $HOME/.local/bin (added to PATH via GITHUB_PATH) instead of

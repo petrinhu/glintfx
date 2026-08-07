@@ -188,8 +188,8 @@ AppendResult Element::append_child(std::unique_ptr<Node> child) {
 
   child->parent_ = this;
   child->depth_ = depth_ + 1;
-  Node* raw = child.get();
   children_.push_back(std::move(child));
+  Node* raw = children_.back().get();
   return AppendResult{raw, AppendOutcome::Appended};
 }
 

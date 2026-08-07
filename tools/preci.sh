@@ -509,7 +509,28 @@ run_full_extras() {
 
   section "TST-L1-SECRETS -- gitleaks"
   if command -v gitleaks >/dev/null 2>&1; then
-    gitleaks detect --source "${REPO_ROOT}" --no-banner
+    # EN: `--redact` (CI-CPPCHECK-DIVERGENCIA domino sweep, 2026-08-07) -- CI's own
+    #     TST-L1-SECRETS step (`.github/workflows/ci.yml`) already carries this; this
+    #     invocation did not, a real (if low-risk) config divergence found while
+    #     enumerating the whole local/CI gate matrix for CI-CPPCHECK-DIVERGENCIA.
+    #     Redacting keeps a real found secret's VALUE out of this terminal's own
+    #     scrollback/tmux history/screen capture -- detection scope (same `--source`,
+    #     same default full-history scan) was already identical, this only changes
+    #     what gets PRINTED. `-v` (CI's own extra per-finding verbosity) intentionally
+    #     NOT mirrored here: local runs already see the finding location without it,
+    #     and --redact already keeps the printed value safe either way.
+    # PT: `--redact` (varredura-dominó da CI-CPPCHECK-DIVERGENCIA, 2026-08-07) -- o
+    #     próprio passo TST-L1-SECRETS do CI (`.github/workflows/ci.yml`) já carrega
+    #     isto; esta invocação não carregava, uma divergência de config real (ainda que
+    #     de baixo risco) achada ao enumerar a matriz inteira de gates local/CI da
+    #     CI-CPPCHECK-DIVERGENCIA. Redigir mantém o VALOR de um segredo achado de
+    #     verdade fora do scrollback/histórico do tmux/captura de tela deste terminal --
+    #     o escopo de detecção (mesmo `--source`, mesma varredura de histórico completo
+    #     por padrão) já era idêntico, isto só muda o que é IMPRESSO. `-v` (a
+    #     verbosidade extra por-achado do próprio CI) de propósito NÃO espelhado aqui:
+    #     rodadas locais já veem a localização do achado sem ele, e o --redact já
+    #     mantém o valor impresso seguro dos dois jeitos.
+    gitleaks detect --source "${REPO_ROOT}" --no-banner --redact
     ran_anything=1
   else
     echo "warning: 'gitleaks' not found in PATH -- skipping TST-L1-SECRETS (install it to enable this check, see TOOLING.md)" >&2

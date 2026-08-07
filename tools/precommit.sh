@@ -275,172 +275,123 @@ fi
 
 # -----------------------------------------------------------------------------
 # EN: 1) cppcheck on staged glintfx/src/*.cpp|*.hpp -- same flags as CI's
-#     TST-L1-STATIC (3/3), INCLUDING its per-file suppressions (kept in sync by hand --
-#     see `constParameterCallback:*/image_encode.cpp` below, IMG-ENCODE/W21: `write_cb()`'s
-#     `void* data` parameter must stay non-const to match stb_image_write's own
-#     `stbi_write_func` typedef exactly; see `image_encode.cpp`'s own doc-comment right
-#     above `write_cb()` for the full rationale, same one `.github/workflows/ci.yml`'s own
-#     TST-L1-STATIC step cites).
+#     TST-L1-STATIC (3/3), INCLUDING its common suppressions, which now live in ONE
+#     shared file (`tools/cppcheck-suppressions.txt`, read via `--suppressions-list`)
+#     instead of two hand-written `--suppress=` lists -- see that file's own header
+#     comment for the full rationale and CI-CPPCHECK-DIVERGENCIA (2026-08-07, TODO.md):
+#     the two lists silently drifted for 8 CI runs straight after two file-scoped
+#     suppressions landed ONLY here, on the FALSE premise (corrected below, and in
+#     `.github/workflows/ci.yml`'s own cppcheck step comment) that CI's --project mode
+#     "PERMANENTLY" never looks at glintfx/src/uix/ -- it does (those files are wired
+#     into `glintfx/build-lint/compile_commands.json` via `glintfx/tests/CMakeLists.txt`
+#     test targets that list their sources directly), and both findings this drift hid
+#     were resolved by fixing the CODE, not by suppressing (see dom_tree.cpp's own
+#     `Element::append_child` and shorthand.cpp's own `kBoxIndexTable`).
 # PT: 1) cppcheck nos glintfx/src/*.cpp|*.hpp staged -- mesmas flags do
-#     TST-L1-STATIC (3/3) do CI, INCLUINDO as próprias suppressions por-arquivo dele
-#     (mantidas em sincronia à mão -- ver `constParameterCallback:*/image_encode.cpp`
-#     abaixo, IMG-ENCODE/W21: o parâmetro `void* data` de `write_cb()` precisa ficar
-#     não-const pra bater exatamente com o próprio typedef `stbi_write_func` do
-#     stb_image_write; ver o próprio comentário de `image_encode.cpp` logo acima de
-#     `write_cb()` pro racional completo, o mesmo que o próprio passo TST-L1-STATIC de
-#     `.github/workflows/ci.yml` cita).
+#     TST-L1-STATIC (3/3) do CI, INCLUINDO as supressões comuns dele, que agora moram
+#     num ÚNICO arquivo compartilhado (`tools/cppcheck-suppressions.txt`, lido via
+#     `--suppressions-list`) em vez de duas listas `--suppress=` escritas à mão -- ver o
+#     próprio comentário de cabeçalho daquele arquivo pro racional completo e o
+#     CI-CPPCHECK-DIVERGENCIA (2026-08-07, TODO.md): as duas listas divergiram em
+#     silêncio por 8 execuções seguidas do CI depois que duas supressões restritas a
+#     arquivo caíram SÓ aqui, sob a premissa FALSA (corrigida abaixo, e no próprio
+#     comentário do passo cppcheck do `.github/workflows/ci.yml`) de que o modo
+#     --project do CI "PERMANENTEMENTE" nunca olha pra glintfx/src/uix/ -- ele olha
+#     (esses arquivos estão amarrados em `glintfx/build-lint/compile_commands.json` via
+#     alvos de teste do `glintfx/tests/CMakeLists.txt` que listam os fontes deles
+#     diretamente), e os dois achados que essa divergência escondia foram resolvidos
+#     consertando o CÓDIGO, não suprimindo (ver o próprio `Element::append_child` do
+#     dom_tree.cpp e o próprio `kBoxIndexTable` do shorthand.cpp).
 # -----------------------------------------------------------------------------
 CPPCHECK_COMMON_ARGS=(
   --enable=warning,style,performance,portability
   --std=c++20 --language=c++ --platform=unix64
-  --suppress=missingIncludeSystem
-  --suppress='*:*/third_party/*'
-  --suppress='*:*/_deps/*'
-  --suppress='constParameterCallback:*/image_encode.cpp'
-  # EN: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- this repo's
-  #     OWN LOCAL-ONLY fallback (see the header comment above, "a header with NO
-  #     consuming TU in the db yet ... falls back to the flag-less per-file pass"),
-  #     not the CI cppcheck step (that one runs `--project=glintfx/build-lint/
-  #     compile_commands.json`, and glintfx/src/uix/ is PERMANENTLY absent from that db
-  #     -- it is a deliberately standalone CMake project, see
-  #     glintfx/src/uix/dom/CMakeLists.txt's own header comment -- so CI's --project
-  #     mode never even LOOKS at these files, no suppression needed there). False-
-  #     positived exactly the sprite_batch.hpp way described above the moment
-  #     lexer.hpp/lexer.cpp were staged for the very first time: cppcheck's isolated,
-  #     flag-less, per-file pass over lexer.hpp alone cannot see that lexer.cpp (a
-  #     SEPARATE isolated pass) is the real consumer of every `Token`/`Lexer` member.
-  #     This is a wildcard on the whole DIRECTORY, not one file, because every future
-  #     header this standalone module gains (S2's tree, S3's parser, ...) hits the
-  #     identical structural cause for as long as the module stays unwired -- see this
-  #     precommit run's own precedent below of re-deriving the SAME false positive
-  #     per-file otherwise. Revisit/narrow/remove this suppression once RMLX-10/11
-  #     wires glintfx/src/uix/ into the main glintfx CMake graph for real (at which
-  #     point it gains a real compile_commands.json entry and the documented routing
-  #     fix above starts finding it on its own, same as it already does for
-  #     sprite_batch.hpp today).
-  # PT: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- o PRÓPRIO
-  #     fallback SÓ-LOCAL deste repo (ver o comentário de cabeçalho acima, "um header
-  #     SEM TU consumidora no db ainda ... cai no fallback sem flags por-arquivo"), não
-  #     o passo cppcheck do CI (aquele roda `--project=glintfx/build-lint/
-  #     compile_commands.json`, e glintfx/src/uix/ está PERMANENTEMENTE ausente daquele
-  #     db -- é um projeto CMake deliberadamente standalone, ver o próprio comentário
-  #     de cabeçalho do glintfx/src/uix/dom/CMakeLists.txt -- então o modo --project do
-  #     CI nem OLHA pra estes arquivos, nenhuma supressão necessária lá). Deu falso-
-  #     positivo exatamente do jeito sprite_batch.hpp descrito acima no momento em que
-  #     lexer.hpp/lexer.cpp foram staged pela primeira vez: a passada isolada e
-  #     sem-flags do cppcheck sobre o lexer.hpp sozinho não consegue ver que o
-  #     lexer.cpp (uma passada isolada SEPARADA) é o consumidor real de todo membro de
-  #     `Token`/`Lexer`. É um wildcard no DIRETÓRIO inteiro, não um arquivo só, porque
-  #     todo header futuro que este módulo standalone ganhar (a árvore da S2, o parser
-  #     da S3, ...) bate na mesma causa estrutural enquanto o módulo ficar não-amarrado
-  #     -- ver o próprio precedente desta rodada de precommit de re-derivar o MESMO
-  #     falso positivo por-arquivo do contrário. Revisar/estreitar/remover esta
-  #     supressão quando a RMLX-10/11 amarrar o glintfx/src/uix/ no grafo CMake
-  #     principal da glintfx de verdade (nesse ponto ele ganha uma entrada real de
-  #     compile_commands.json e o conserto de roteamento documentado acima passa a
-  #     achá-lo sozinho, igual já faz hoje pro sprite_batch.hpp).
-  #     Bare leading '*' (NOT '*/glintfx/src/uix/*') -- reproduced live, same gotcha
-  #     the CI cppcheck step's own --file-filter comment already names: this LOCAL
-  #     flag-less fallback hands cppcheck a RELATIVE path with no leading '/'
-  #     ("glintfx/src/uix/dom/lexer.hpp"), so a pattern requiring a literal '/' right
-  #     before "glintfx" never matches here (confirmed: '*/glintfx/src/uix/*' left the
-  #     4 findings above un-suppressed; '*glintfx/src/uix/*' suppresses all 4). The
-  #     pre-existing 'constParameterCallback:*/image_encode.cpp' entry above gets away
-  #     with the leading '*/' only because THAT invocation is --project mode, whose
-  #     compile_commands.json entries are ABSOLUTE paths (a real '/' precedes
-  #     "image_encode.cpp" there) -- the two entries are not actually the same shape
-  #     underneath, even though they look alike.
-  # PT: Asterisco líder nu (NÃO '*/glintfx/src/uix/*') -- reproduzido ao vivo, a mesma
-  #     pegadinha que o próprio comentário do --file-filter do passo cppcheck do CI já
-  #     nomeia: este fallback LOCAL sem flags entrega ao cppcheck um caminho RELATIVO
-  #     sem '/' no início ("glintfx/src/uix/dom/lexer.hpp"), então um padrão exigindo
-  #     um '/' literal logo antes de "glintfx" nunca casa aqui (confirmado:
-  #     '*/glintfx/src/uix/*' deixou os 4 achados acima sem-supressão;
-  #     '*glintfx/src/uix/*' suprime os 4). A entrada pré-existente
-  #     'constParameterCallback:*/image_encode.cpp' acima escapa com o '*/' líder só
-  #     porque AQUELA invocação é modo --project, cujas entradas de
-  #     compile_commands.json são caminhos ABSOLUTOS (um '/' real precede
-  #     "image_encode.cpp" lá) -- as duas entradas não são de fato a mesma forma por
-  #     baixo, mesmo parecendo iguais.
-  --suppress='unusedStructMember:*glintfx/src/uix/*'
-  # EN: `returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp` (RMLX-1/S2, 2026-08-05) --
-  #     genuine cppcheck false positive, not a two-pass-isolation artifact like the
-  #     `unusedStructMember` entry above (this one is independent of whether the module has a
-  #     `compile_commands.json` entry -- it is a value-flow limitation in cppcheck's own
-  #     lifetime analysis, verified by re-running THIS suppression's exact finding under a
-  #     manual, fully-flagged standalone build of the module: still flagged). Site:
-  #     `Element::append_child` takes `raw = child.get()` on a local `unique_ptr<Node>`
-  #     parameter, THEN `std::move(child)`-s it into `children_.push_back(...)`; cppcheck
-  #     reads "pointer obtained from a local that is then moved" and assumes `raw` dangles.
-  #     It does not: `child.get()` returns a pointer to the heap-allocated `Node` object the
-  #     `unique_ptr` OWNS, not to the `unique_ptr` handle itself -- a `unique_ptr` move never
-  #     relocates its pointee, only transfers ownership of the handle, so the address `raw`
-  #     holds stays valid for as long as SOME `unique_ptr` (now `children_`'s own element)
-  #     keeps owning it. This is a documented, common cppcheck false-positive shape for the
-  #     `T* p = up.get(); consume(std::move(up)); return p;` idiom. Scoped to this one file
-  #     (not the whole `glintfx/src/uix/*` directory like the entry above) because this is a
-  #     property of ONE function's code shape, not of the module's build-graph isolation --
-  #     it does not automatically apply to files this module gains later.
-  # PT: `returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp` (RMLX-1/S2, 2026-08-05) --
-  #     falso positivo genuíno do cppcheck, não um artefato de isolamento-em-duas-passadas
-  #     como a entrada `unusedStructMember` acima (este é independente de o módulo ter
-  #     entrada em `compile_commands.json` ou não -- é uma limitação de análise de
-  #     value-flow/lifetime do próprio cppcheck, verificada re-rodando o achado exato desta
-  #     supressão sob um build standalone manual e totalmente-flagged do módulo: continua
-  #     acusando). Sítio: `Element::append_child` toma `raw = child.get()` sobre um parâmetro
-  #     local `unique_ptr<Node>`, DEPOIS faz `std::move(child)` pra dentro de
-  #     `children_.push_back(...)`; o cppcheck lê "ponteiro obtido de um local que depois é
-  #     movido" e assume que `raw` fica pendurado. Não fica: `child.get()` retorna um
-  #     ponteiro pro objeto `Node` alocado no heap que o `unique_ptr` POSSUI, não pro próprio
-  #     handle `unique_ptr` -- um move de `unique_ptr` nunca realoca o objeto apontado, só
-  #     transfere a posse do handle, então o endereço que `raw` guarda continua válido
-  #     enquanto ALGUM `unique_ptr` (agora o próprio elemento de `children_`) continuar dono
-  #     dele. É uma forma documentada e comum de falso-positivo do cppcheck pro idioma
-  #     `T* p = up.get(); consume(std::move(up)); return p;`. Restrito a este único arquivo
-  #     (não o diretório `glintfx/src/uix/*` inteiro como a entrada acima) porque isto é uma
-  #     propriedade da forma de código de UMA função, não do isolamento do grafo de build do
-  #     módulo -- não vale automaticamente pra arquivos que este módulo ganhar depois.
-  --suppress='returnDanglingLifetime:*glintfx/src/uix/dom/dom_tree.cpp'
-  # EN: `containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp` (UIX-PROP-REGISTRY,
-  #     2026-08-06) -- genuine cppcheck false positive, same "verified independent of
-  #     compile_commands.json presence" class as the `returnDanglingLifetime` entry above, not
-  #     the two-pass-isolation artifact the `unusedStructMember` entry is. Site: a lookup table
-  #     shaped `constexpr std::array<int, 4> kBoxIndexTable[5]` (5 rows, one per possible
-  #     `Box`-shorthand token count 0..4, each row itself a 4-element `std::array` -- the CSS
-  #     box-model expansion table docs/uix-rcss.md section 6.3 states), indexed by a value a
-  #     guard two lines above already proves is in `[1, 4]` (`tokens.empty() || tokens.size() >
-  #     4` returns early otherwise) -- well within the table's real 5 entries. cppcheck's own
-  #     value-flow analysis confuses the OUTER C-array size (5) with the INNER
-  #     `std::array<int, 4>` element type's own template argument (4), and reports the access as
-  #     out-of-bounds against the wrong bound. Verified by hand-tracing every index the guard
-  #     allows (0 is provably unreachable, 1-4 are all valid row indices into the 5-row table)
-  #     and by this module's own green test suite (`uix_style_shorthand_expansion_sanity`
-  #     exercises every one of the 4 reachable Box token counts, including the boundary `4`
-  #     cppcheck itself names as the disputed value). Scoped to this one file (not the whole
-  #     `glintfx/src/uix/style/*` directory) because this is a property of ONE table's own
-  #     shape, not of the module's build-graph isolation.
-  # PT: `containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp` (UIX-PROP-REGISTRY,
-  #     2026-08-06) -- falso positivo genuíno do cppcheck, mesma classe "verificado
-  #     independente de presença em compile_commands.json" da entrada `returnDanglingLifetime`
-  #     acima, não o artefato de isolamento-em-duas-passadas que a entrada `unusedStructMember`
-  #     é. Sítio: uma tabela de busca com forma `constexpr std::array<int, 4>
-  #     kBoxIndexTable[5]` (5 linhas, uma por contagem-de-token possível de shorthand `Box`
-  #     0..4, cada linha ela própria um `std::array` de 4 elementos -- a tabela de expansão de
-  #     box-model do CSS que a seção 6.3 do docs/uix-rcss.md declara), indexada por um valor que
-  #     uma guarda duas linhas acima já prova estar em `[1, 4]` (`tokens.empty() ||
-  #     tokens.size() > 4` retorna cedo caso contrário) -- bem dentro das 5 entradas reais da
-  #     tabela. A própria análise de value-flow do cppcheck confunde o tamanho EXTERNO do
-  #     C-array (5) com o próprio argumento de template do tipo-elemento INTERNO
-  #     `std::array<int, 4>` (4), e reporta o acesso como fora-dos-limites contra o limite
-  #     errado. Verificado rastreando à mão todo índice que a guarda permite (0 é
-  #     comprovadamente inalcançável, 1-4 são todos índices de linha válidos na tabela de 5
-  #     linhas) e pela própria suíte de teste verde deste módulo (`uix_style_shorthand_expansion_sanity`
-  #     exercita cada uma das 4 contagens de token Box alcançáveis, incluindo o limite `4` que o
-  #     próprio cppcheck nomeia como o valor contestado). Restrito a este único arquivo (não o
-  #     diretório `glintfx/src/uix/style/*` inteiro) porque isto é uma propriedade da FORMA de
-  #     UMA tabela, não do isolamento do grafo de build do módulo.
-  --suppress='containerOutOfBounds:*glintfx/src/uix/style/shorthand.cpp'
+  --suppressions-list="${SCRIPT_DIR}/cppcheck-suppressions.txt"
   --error-exitcode=1
+)
+
+# EN: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- this repo's OWN
+#     LOCAL-ONLY fallback suppression, deliberately NOT in the shared
+#     `tools/cppcheck-suppressions.txt` (see that file's own header comment for why):
+#     it only matters for precommit.sh's own flag-less, per-file FALLBACK invocation
+#     (the `not_in_db` branch below, used when a staged file has no
+#     `compile_commands.json` entry of its own yet -- a brand-new header/TU nothing
+#     #includes so far). ⚠️ **Re-verified live (CI-CPPCHECK-DIVERGENCIA domino sweep,
+#     2026-08-07), NOT dead like the two findings that item fixed by code:** every
+#     header CURRENTLY under `glintfx/src/uix/` already has a real proxy TU in
+#     `compile_commands.json` (routes via --project mode today, this suppression is not
+#     hit for any of them right now), but a throwaway probe header with no consuming
+#     `.cpp` at all -- the exact "just wrote the header, TDD says write the .cpp next"
+#     window this repo's own red/green workflow produces -- still reproduces this exact
+#     `unusedStructMember` false positive under the SAME flag-less invocation this
+#     fallback uses. The suppression protects a real, recurring editing-order case, not
+#     a stale one; keep it. CI's build-lint always configures a FULL
+#     `compile_commands.json` before cppcheck runs, so CI never takes the flag-less
+#     path and never needs this -- that half of the ORIGINAL comment here was correct;
+#     what was FALSE (corrected 2026-08-07, CI-CPPCHECK-DIVERGENCIA) was the claim that
+#     glintfx/src/uix/ is "PERMANENTLY absent" from CI's db: it is present today (see
+#     the block comment above `CPPCHECK_COMMON_ARGS`), it was only absent back when
+#     this entry was first written (2026-08-05), before `glintfx/tests/CMakeLists.txt`
+#     wired the module's sources into real test targets. False-positived exactly the
+#     sprite_batch.hpp way described in `find_header_proxy_tu()`'s own comment above the
+#     moment lexer.hpp/lexer.cpp were staged for the very first time: cppcheck's
+#     isolated, flag-less, per-file pass over lexer.hpp alone cannot see that lexer.cpp
+#     (a SEPARATE isolated pass) is the real consumer of every `Token`/`Lexer` member.
+#     Kept as a directory-wide wildcard (not narrowed to specific files) because ANY
+#     currently-staged header this fallback ever reaches would hit the identical cause
+#     -- narrowing it further has not been worth the churn. Bare leading '*' (NOT
+#     '*/glintfx/src/uix/*') -- this LOCAL flag-less fallback hands cppcheck a RELATIVE
+#     path with no leading '/' ("glintfx/src/uix/dom/lexer.hpp"), so a pattern requiring
+#     a literal '/' right before "glintfx" never matches here (confirmed live:
+#     '*/glintfx/src/uix/*' left findings un-suppressed; '*glintfx/src/uix/*' suppresses
+#     them). The shared file's own `*:*/third_party/*`-shaped entries get away with the
+#     leading '*/' only because those apply to --project mode too, whose
+#     compile_commands.json entries are ABSOLUTE paths (a real '/' precedes the
+#     basename there) -- not the same path shape underneath, even though they look
+#     alike.
+# PT: `unusedStructMember:*glintfx/src/uix/*` (RMLX-1/S1, 2026-08-05) -- a PRÓPRIA
+#     supressão SÓ-LOCAL deste repo, de propósito FORA do
+#     `tools/cppcheck-suppressions.txt` compartilhado (ver o próprio comentário de
+#     cabeçalho daquele arquivo pro porquê): ela só importa pra própria invocação de
+#     FALLBACK sem flags, por-arquivo, do precommit.sh (o ramo `not_in_db` abaixo,
+#     usado quando um arquivo staged ainda não tem entrada própria em
+#     `compile_commands.json` -- um header/TU novinho que nada faz #include ainda).
+#     ⚠️ **Reverificada ao vivo (varredura-dominó da CI-CPPCHECK-DIVERGENCIA,
+#     2026-08-07), NÃO está morta como os dois achados que aquele item consertou por
+#     código:** todo header HOJE sob `glintfx/src/uix/` já tem uma TU proxy real no
+#     `compile_commands.json` (roteia por modo --project hoje, esta supressão não é
+#     acionada pra nenhum deles agora), mas um header-sonda descartável sem `.cpp`
+#     consumidor nenhum -- exatamente a janela "acabei de escrever o header, o TDD
+#     manda escrever o .cpp em seguida" que o próprio fluxo red/green desta casa
+#     produz -- ainda reproduz este `unusedStructMember` exato sob a MESMA invocação
+#     sem flags que este fallback usa. A supressão protege um caso real e recorrente
+#     de ORDEM de edição, não um obsoleto; mantida. O build-lint do CI sempre configura
+#     um `compile_commands.json` COMPLETO antes do cppcheck rodar, então o CI nunca
+#     passa pelo caminho sem flags e nunca precisa disto -- essa metade do comentário
+#     ORIGINAL aqui estava certa; o que era FALSO
+#     (corrigido em 2026-08-07, CI-CPPCHECK-DIVERGENCIA) era a alegação de que
+#     glintfx/src/uix/ está "PERMANENTEMENTE ausente" do db do CI: ele está presente
+#     hoje (ver o comentário de bloco acima de `CPPCHECK_COMMON_ARGS`), só estava
+#     ausente lá atrás quando esta entrada foi escrita pela primeira vez (2026-08-05),
+#     antes do `glintfx/tests/CMakeLists.txt` amarrar os fontes do módulo em alvos de
+#     teste de verdade. Deu falso-positivo exatamente do jeito sprite_batch.hpp descrito
+#     no próprio comentário da `find_header_proxy_tu()` acima no momento em que
+#     lexer.hpp/lexer.cpp foram staged pela primeira vez: a passada isolada e sem-flags
+#     do cppcheck sobre o lexer.hpp sozinho não consegue ver que o lexer.cpp (uma
+#     passada isolada SEPARADA) é o consumidor real de todo membro de `Token`/`Lexer`.
+#     Mantida como wildcard no diretório inteiro (não estreitada a arquivos específicos)
+#     porque QUALQUER header staged hoje que este fallback alcançar bateria na mesma
+#     causa -- estreitar mais não valeu o esforço até agora. Asterisco líder nu (NÃO
+#     '*/glintfx/src/uix/*') -- este fallback LOCAL sem flags entrega ao cppcheck um
+#     caminho RELATIVO sem '/' no início ("glintfx/src/uix/dom/lexer.hpp"), então um
+#     padrão exigindo um '/' literal logo antes de "glintfx" nunca casa aqui (confirmado
+#     ao vivo: '*/glintfx/src/uix/*' deixou achados sem-supressão; '*glintfx/src/uix/*'
+#     suprime). As entradas em forma `*:*/third_party/*` do arquivo compartilhado
+#     escapam com o '*/' líder só porque aquelas também valem pro modo --project, cujas
+#     entradas de compile_commands.json são caminhos ABSOLUTOS (um '/' real precede o
+#     basename lá) -- não é a mesma forma de caminho por baixo, mesmo parecendo igual.
+CPPCHECK_LOCAL_FALLBACK_SUPPRESS=(
+  --suppress='unusedStructMember:*glintfx/src/uix/*'
 )
 
 # -----------------------------------------------------------------------------
@@ -580,7 +531,8 @@ run_cppcheck_gate() {
 
   if [[ "${#not_in_db[@]}" -gt 0 ]]; then
     echo "precommit: ${#not_in_db[@]} file(s) not in ${compiledb} (new file, or no configured build) -- falling back to a flag-less per-file check" >&2
-    cppcheck "${CPPCHECK_COMMON_ARGS[@]}" --suppress=missingInclude \
+    cppcheck "${CPPCHECK_COMMON_ARGS[@]}" "${CPPCHECK_LOCAL_FALLBACK_SUPPRESS[@]}" \
+      --suppress=missingInclude \
       -I glintfx/include -I glintfx/src \
       "${not_in_db[@]}" || failed=1
   fi

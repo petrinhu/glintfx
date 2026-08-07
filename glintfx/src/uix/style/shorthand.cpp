@@ -331,13 +331,13 @@ const ShorthandInfo* find_shorthand_info(std::string_view name) {
 // PT: A própria tabela da seção 6.3 do docs/uix-rcss.md, verbatim -- `v0..v3` indexam `tokens`,
 //     `n` é `tokens.size()` (1..4). Ver o próprio precedente do lexer.hpp de citar um algoritmo
 //     uma vez, por tabela, em vez de re-derivá-lo em prosa por call site.
-constexpr std::array<int, 4> kBoxIndexTable[5] = {
+constexpr std::array<std::array<int, 4>, 5> kBoxIndexTable = {{
     {0, 0, 0, 0}, // n=0, unused (guarded out before this table is indexed)
     {0, 0, 0, 0}, // n=1
     {0, 1, 0, 1}, // n=2
     {0, 1, 2, 1}, // n=3
     {0, 1, 2, 3}, // n=4
-};
+}};
 
 // EN: `Box` algorithm (docs/uix-rcss.md section 6.3). `targets` must have exactly 4 entries.
 //     Accepts 1-4 tokens; anything else is `MalformedValue` (0 tokens: nothing to expand; 5+:
@@ -354,19 +354,36 @@ bool expand_box(std::span<const std::string_view> targets, std::string_view raw_
   if (tokens.empty() || tokens.size() > 4) {
     return false;
   }
-  // EN: `tools/precommit.sh`'s own CPPCHECK_COMMON_ARGS carries a `containerOutOfBounds`
-  //     suppression scoped to this exact file/line-shape for the indexing below -- see that
-  //     file's own comment for the verified-false-positive analysis (cppcheck confuses the
-  //     C-array's own outer size, 5, with the template argument, 4, of the
-  //     `std::array<int, 4>` element type it holds; the guard just above already proves
-  //     `tokens.size()` is in `[1, 4]`, well within `kBoxIndexTable`'s real 5 entries).
-  // PT: O próprio CPPCHECK_COMMON_ARGS do `tools/precommit.sh` carrega uma supressão de
-  //     `containerOutOfBounds` restrita a este arquivo/forma-de-linha exatos pra indexação
-  //     abaixo -- ver o próprio comentário daquele arquivo pra análise de falso-positivo
-  //     verificado (o cppcheck confunde o próprio tamanho externo do C-array, 5, com o
-  //     argumento de template, 4, do tipo-elemento `std::array<int, 4>` que ele guarda; a
-  //     guarda logo acima já prova que `tokens.size()` está em `[1, 4]`, bem dentro das 5
-  //     entradas reais do `kBoxIndexTable`).
+  // EN: `kBoxIndexTable` used to be a plain C-array of `std::array<int, 4>`
+  //     (`std::array<int, 4> kBoxIndexTable[5]`); cppcheck 2.13/2.21 both confused that
+  //     C-array's own outer size (5) with the inner element type's template argument (4)
+  //     and reported this exact indexing as `containerOutOfBounds`, even though the guard
+  //     just above already proves `tokens.size()` is in `[1, 4]`, well within the table's
+  //     real 5 rows (CI-CPPCHECK-DIVERGENCIA, 2026-08-07 -- see that item's own TODO.md
+  //     entry for the fuller story of why the CI and local gates disagreed on this
+  //     finding). Wrapping the whole table in one `std::array<std::array<int, 4>, 5>`
+  //     (nested-braces form below) gives cppcheck's own value-flow analysis a single
+  //     aggregate type with an unambiguous `size()`, and the false positive is gone under
+  //     both cppcheck 2.13.0 (CI) and 2.21.1 (measured locally) -- no suppression needed
+  //     here anymore. Equivalent generated code, verified against the module's own green
+  //     test suite (`uix_style_shorthand_expansion_sanity` exercises all 4 reachable Box
+  //     token counts).
+  // PT: `kBoxIndexTable` costumava ser um C-array puro de `std::array<int, 4>`
+  //     (`std::array<int, 4> kBoxIndexTable[5]`); o cppcheck 2.13/2.21 confundiam o
+  //     próprio tamanho externo desse C-array (5) com o argumento de template do
+  //     tipo-elemento interno (4) e acusavam esta indexação exata de
+  //     `containerOutOfBounds`, mesmo com a guarda logo acima já provando que
+  //     `tokens.size()` está em `[1, 4]`, bem dentro das 5 linhas reais da tabela
+  //     (CI-CPPCHECK-DIVERGENCIA, 2026-08-07 -- ver a própria entrada deste item no
+  //     `TODO.md` pra história completa de por que o gate do CI e o local discordavam
+  //     deste achado). Envolver a tabela inteira num único
+  //     `std::array<std::array<int, 4>, 5>` (forma de chaves aninhadas abaixo) dá à
+  //     análise de value-flow do cppcheck um único tipo agregado com `size()`
+  //     inequívoco, e o falso positivo some tanto sob o cppcheck 2.13.0 (CI) quanto o
+  //     2.21.1 (medido localmente) -- nenhuma supressão necessária aqui mais. Código
+  //     gerado equivalente, verificado contra a própria suíte de teste verde do módulo
+  //     (`uix_style_shorthand_expansion_sanity` exercita as 4 contagens de token Box
+  //     alcançáveis).
   const std::array<int, 4>& idx = kBoxIndexTable[tokens.size()];
   for (std::size_t i = 0; i < 4; ++i) {
     out->push_back({targets[i], tokens[static_cast<std::size_t>(idx[i])]});

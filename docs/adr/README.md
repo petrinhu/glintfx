@@ -26,3 +26,4 @@
 | [0018](0018-draw2d-text.md) | `draw_text` in the Draw2D atom: sovereign-C-core glyph source, top-left anchor, word-wrap/alignment in scope / `draw_text` no átomo Draw2D: fonte de glifo no núcleo C soberano, âncora topo-esquerdo, word-wrap/alinhamento no escopo | Accepted |
 | [0019](0019-license-rotation-apache-2.0.md) | License rotation: MPL-2.0 to Apache-2.0 / Rotação de licença: MPL-2.0 para Apache-2.0 | Accepted |
 | [0020](0020-rml-anticorruption-layer.md) | RmlUi anticorruption layer: frozen subset + whitelist gate / Camada anticorrupção do RmlUi: subconjunto congelado + gate de whitelist | Accepted |
+| [0021](0021-self-hosted-runner-em-repo-publico.md) | Self-hosted CI runner on a public repo: accepted risk / Runner de CI self-hosted em repo público: risco aceito | Accepted |

@@ -1602,17 +1602,25 @@ fallthrough `case 5 → case 4`/`case 9 → case 7` duplication), a missing alph
 `ff` (fully opaque, matching upstream's `hex_values[3] = {'f','f'}` pre-fill default), then all four
 channels print as two lowercase hex digits each, in `rgba` order, prefixed by `#`.
 
-**In scope, authorized by `docs/rmlx-subset.md` §7 (2026-08-07), not by census count (§13):** the
-two named colors the census actually measured (`transparent` → `#00000000`, `white` →
-`#ffffffff`) were already in scope because they are measured; the **rest** of RmlUi's 19-entry
-named-color table (`black`, `red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:117-135`) and every functional color form (`rgb()`, `rgba()`, `hsl()`,
-`lab()`, `lch()`, `oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:178-195`) are **zero-measured** in the census (section 0: *"0
-`rgb()`/`rgba()` funcional"*) but are authorized now regardless: the pinned RmlUi build accepts
-every one of them, so the líder's 2026-08-07 order ("if the engine being replaced accepts it, ours
-accepts it") puts all of it in scope, not only units. Zero census usage remains real, useful
-sequencing/risk data (§13) -- it stops being a reason to fail-high. A conforming dumper encountering
+**In scope, authorized by `docs/rmlx-subset.md` §7 (2026-08-07) -- because the pinned RmlUi build
+has them, not because the census measured them (§13):** glintfx's own engine implements **3** of
+RmlUi's 19 named colors today -- `white`, `black`, `transparent`
+(`glintfx/src/uix/style/value_compute.cpp:784-793`, verified directly, matching `TODO.md`'s own
+`ESC-5` entry). **Correction on record: an earlier draft of this paragraph named only 2
+(`transparent`, `white`) and listed `black` among the "rest" still to add -- wrong, `black` is
+already implemented; the earlier text conflated "how many the census measured in real use" (2) with
+"how many the engine accepts" (3), which is exactly the corpus-count framing §7 exists to retire.**
+The census's own 2-color measurement explains *why* `transparent`/`white` were the first two built,
+not *why* they -- or `black`, or any of the other 16 -- are in scope; all 19 are, because the pinned
+build accepts all 19. The **remaining 16** of RmlUi's named-color table (`red`, `blue`, ... --
+`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`) and every functional
+color form (`rgb()`, `rgba()`, `hsl()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
+`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:178-195`) are **zero-measured**
+in the census (section 0: *"0 `rgb()`/`rgba()` funcional"*) but are authorized now regardless: the
+pinned RmlUi build accepts every one of them, so the líder's 2026-08-07 order ("if the engine being
+replaced accepts it, ours accepts it") puts all of it in scope, not only units. Zero census usage
+remains real, useful sequencing/risk data (§13) -- it stops being a reason to fail-high. A
+conforming dumper encountering
 any of these must still parse and print them correctly per the same canonical form rules the hex
 forms above already follow; only a color syntax **neither the census nor the pinned RmlUi build**
 accepts would still fail-high (§11) -- there is currently no such case.
@@ -2187,13 +2195,14 @@ today is the `ms` duration unit (§9.3: *"`ms` is not a recognized duration unit
 all"*) -- not listed as a bullet below because it was never framed as a corpus-count cut here in
 the first place; every bullet below **was**, and that framing is what this rewrite corrects.
 
-- **Color:** every RmlUi named color beyond `transparent`/`white` (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`
-  registers 19 total, `black` through `aqua` plus `transparent`) -- owned by `ESC-5`. Every
-  functional color form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`,
-  `oklch()`, same file `:178-193`, conversions `:64-115`) -- owned by `ESC-6`. **Open discrepancy on
-  record, not resolved by this rewrite:** `TODO.md`'s `ESC-5` entry reports a *third* survivor,
-  `black` (citing `value_compute.cpp:784-792`), where §7.1 above still names only `transparent`/
-  `white` as measured; whoever lands `ESC-5` settles which is right against the code, not this doc.
+- **Color:** glintfx's own engine implements 3 of the 19 named colors RmlUi's pinned build
+  registers (`white`, `black`, `transparent` -- `value_compute.cpp:784-793`); the remaining
+  **16** (`red` through `aqua`, `glintfx/build/_deps/rmlui-src/Source/Core/
+  PropertyParserColour.cpp:117-135`) are owned by `ESC-5`, matching `TODO.md`'s own entry
+  (3 → 19, corrected here 2026-08-07 after §7.1 above briefly and wrongly said 2 → 17 --
+  `black` was already implemented, not "the rest"). Every functional color form (`rgb()`,
+  `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file `:178-193`,
+  conversions `:64-115`) -- owned by `ESC-6`.
 - **`transition`, `font-effect`:** both real, registered RmlUi properties
   (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` owned by `ESC-23` (the same
   pin-with-named-owner-and-automatic-expiry mechanism §14.2 already uses for `animation`);
@@ -3216,10 +3225,18 @@ upstream), um canal alpha ausente tem default `ff` (totalmente opaco, batendo co
 pré-preenchimento default `hex_values[3] = {'f','f'}` do upstream), depois os quatro canais imprimem
 como dois dígitos hex minúsculos cada, em ordem `rgba`, prefixados por `#`.
 
-**No escopo, autorizado pela §7 (2026-08-07) do `docs/rmlx-subset.md`, não por contagem de censo
-(seção 13):** as duas cores nomeadas que o censo de fato mediu (`transparent` → `#00000000`,
-`white` → `#ffffffff`) já estavam no escopo por serem medidas; o **resto** da tabela de 19 cores
-nomeadas do RmlUi (`black`, `red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
+**No escopo, autorizado pela §7 (2026-08-07) do `docs/rmlx-subset.md` -- porque o build fixado do
+RmlUi as tem, não porque o censo as mediu (seção 13):** o próprio motor da glintfx implementa **3**
+das 19 cores nomeadas do RmlUi hoje -- `white`, `black`, `transparent`
+(`glintfx/src/uix/style/value_compute.cpp:784-793`, verificado direto, batendo com o próprio item
+`ESC-5` do `TODO.md`). **Correção em registro: um rascunho anterior deste parágrafo nomeava só 2**
+(`transparent`, `white`) **e listava `black` entre o "resto" ainda por somar -- errado, `black` já
+está implementado; o texto anterior confundia "quantas o censo mediu em uso real" (2) com "quantas
+o motor aceita" (3), exatamente o enquadramento por contagem de corpus que a §7 existe pra
+aposentar.** A própria medição de 2 cores do censo explica *por que* `transparent`/`white` foram as
+duas primeiras construídas, não *por que* elas -- ou `black`, ou qualquer uma das outras 16 --
+estão no escopo; as 19 estão, porque o build fixado aceita as 19. O **resto das 16** da tabela de
+19 cores nomeadas do RmlUi (`red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
 PropertyParserColour.cpp:117-135`) e toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`,
 `lab()`, `lch()`, `oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
 PropertyParserColour.cpp:178-195`) estão com **zero medição** no censo (seção 0: *"0
@@ -3573,15 +3590,14 @@ RmlUi aceitam. O único exemplo confirmado disso em registro hoje é a unidade d
 listada como bullet abaixo porque nunca foi enquadrada aqui como corte por contagem de corpus; todo
 bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
 
-- **Cor:** toda cor nomeada do RmlUi além de `transparent`/`white`
-  (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135` registra 19 ao
-  todo, `black` até `aqua` mais `transparent`) -- dona é a `ESC-5`. Toda forma funcional de cor
-  (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, mesmo arquivo
-  `:178-193`, conversões `:64-115`) -- dona é a `ESC-6`. **Discrepância aberta em registro, não
-  resolvida por esta reescrita:** o item `ESC-5` do `TODO.md` reporta uma *terceira* sobrevivente,
-  `black` (citando `value_compute.cpp:784-792`), onde a §7.1 acima ainda nomeia só `transparent`/
-  `white` como medidas; quem entregar a `ESC-5` resolve qual está certo contra o código, não esta
-  doc.
+- **Cor:** o próprio motor da glintfx implementa 3 das 19 cores nomeadas que o build fixado do
+  RmlUi registra (`white`, `black`, `transparent` -- `value_compute.cpp:784-793`); o resto
+  (**16**: `red` até `aqua`, `glintfx/build/_deps/rmlui-src/Source/Core/
+  PropertyParserColour.cpp:117-135`) tem dona `ESC-5`, batendo com o próprio item do `TODO.md`
+  (3 → 19, corrigido aqui em 2026-08-07 depois que a §7.1 acima disse por um tempo, errado, 2 →
+  17 -- `black` já estava implementado, não era "o resto"). Toda forma funcional de cor (`rgb()`,
+  `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, mesmo arquivo `:178-193`,
+  conversões `:64-115`) -- dona é a `ESC-6`.
 - **`transition`, `font-effect`:** as duas são propriedades reais e registradas do RmlUi
   (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` tem dona `ESC-23` (o mesmo mecanismo
   de pin-com-dona-nomeada-e-expiração-automática que a §14.2 já usa pra `animation`); `font-effect`

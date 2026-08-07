@@ -54,6 +54,14 @@ Checks: >
 #     replacing RmlUi with the clean-room UI engine, delete this line, and if the
 #     5-file list above has grown, that growth was silent scope creep and should have
 #     been caught earlier -- check it.
+#     CAVEAT (honesty note, not a retraction): applied exactly as ordered, but this
+#     specific failure did NOT reproduce under measurement -- the check name doesn't
+#     exist as stable, its plausible alpha counterpart isn't exposed by this apt
+#     clang-tidy build at all, and a full clean per-file run of glintfx/src WITHOUT
+#     this exemption line still came back 0 failures. Treat this as a preventive,
+#     zero-cost exemption, not a confirmed-bug fix, until re-checked against a real
+#     CI run of the per-file script (not yet pushed as of this date). Full trail:
+#     TODO.md CI-TIDY-CRASH-2.
 # PT: CI-TIDY-CRASH-2 (2026-08-06, expira junto com o RMLX-* tirando o RmlUi da árvore):
 #     clang-analyzer-security.ArrayBound dispara em TypeConverter.inl:386 do RmlUi
 #     vendorizado (TypeConverterVectorString::Convert, o truque clássico de "tratar
@@ -66,6 +74,14 @@ Checks: >
 #     RmlUi pelo motor de UI clean-room, apague esta linha, e se a lista de 5 arquivos
 #     acima tiver crescido, esse crescimento foi scope creep silencioso e devia ter
 #     sido pego antes -- confira.
+#     RESSALVA (nota de honestidade, não uma retratação): aplicada exatamente como
+#     pedido, mas esta falha específica NÃO reproduziu sob medição -- o nome do check
+#     não existe como estável, o correlato alpha plausível não é exposto por este
+#     clang-tidy do apt de jeito nenhum, e um laço arquivo-a-arquivo completo do
+#     glintfx/src SEM esta linha de isenção ainda voltou com 0 falhas. Tratar como
+#     isenção preventiva de custo zero, não como conserto de bug confirmado, até
+#     reconferir contra um CI real do script per-file (ainda não pushado nesta data).
+#     Trilha completa: TODO.md CI-TIDY-CRASH-2.
 WarningsAsErrors: 'clang-analyzer-*,-clang-analyzer-security.ArrayBound'
 HeaderFilterRegex: ''
 FormatStyle: none

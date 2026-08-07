@@ -1,7 +1,7 @@
 # RMLX subset spec (what the RmlUi-elimination arc may build)
 
-> **EN:** The frozen boundary for `RMLX-1..11` (`TODO.md`): exactly what RmlUi surface glintfx's own DOM/RCSS/layout/data-binding/effects/animation/widgets engine is allowed to reimplement, backed by two independent censuses (glintfx's own contact with RmlUi, and GusWorld's measured RCSS usage) plus the four value-type decisions the anticorruption layer already ships. Diátaxis type: **reference**. Audience: the implementer of any `RMLX-*` wave, and whoever reviews it. Owner: `software-architect`; written **2026-08-04** against `main` at `83b0649`, one wave (`RMLX-0`) fully delivered (`F1`-`F4`). **Amended 2026-08-06 (§6, EN / §6, PT):** the líder's two `RMLX-2` decisions on comma-list selectors and unit parity, plus the selector-form census that closes this document's own naming gap -- see `TODO.md`'s `RMLX-2` entry ("TRÊS DECISÕES DO LÍDER 2026-08-06") for the source record.
-> **PT:** A fronteira congelada para `RMLX-1..11` (`TODO.md`): exatamente qual superfície do RmlUi o motor próprio de DOM/RCSS/layout/data-binding/efeitos/animação/widgets da glintfx tem permissão de reimplementar, apoiada em dois censos independentes (o contato da própria glintfx com o RmlUi, e o uso de RCSS medido no GusWorld) mais as quatro decisões de tipo-valor que a camada anticorrupção já entrega. Tipo Diátaxis: **reference**. Audiência: quem implementa qualquer onda `RMLX-*`, e quem a revisa. Owner: `software-architect`; escrito em **2026-08-04** contra `main` em `83b0649`, com uma onda (`RMLX-0`) inteiramente entregue (`F1`-`F4`). **Emendado em 2026-08-06 (§6 EN / §6 PT):** as duas decisões do líder na `RMLX-2` sobre seletor com lista de vírgula e paridade de unidades, mais o censo de formas de seletor que fecha a lacuna de nomeação do próprio documento -- ver o item `RMLX-2` do `TODO.md` ("TRÊS DECISÕES DO LÍDER 2026-08-06") pelo registro-fonte.
+> **EN:** The frozen boundary for `RMLX-1..11` (`TODO.md`): exactly what RmlUi surface glintfx's own DOM/RCSS/layout/data-binding/effects/animation/widgets engine is allowed to reimplement, backed by two independent censuses (glintfx's own contact with RmlUi, and GusWorld's measured RCSS usage) plus the four value-type decisions the anticorruption layer already ships. Diátaxis type: **reference**. Audience: the implementer of any `RMLX-*` wave, and whoever reviews it. Owner: `software-architect`; written **2026-08-04** against `main` at `83b0649`, one wave (`RMLX-0`) fully delivered (`F1`-`F4`). **Amended 2026-08-06 (§6, EN / §6, PT):** the líder's two `RMLX-2` decisions on comma-list selectors and unit parity, plus the selector-form census that closes this document's own naming gap -- see `TODO.md`'s `RMLX-2` entry ("TRÊS DECISÕES DO LÍDER 2026-08-06") for the source record. **Amended again 2026-08-07 (§7, EN / §7, PT):** the líder's order that this project targets broad distribution, not GusWorld -- generalizes §6.3's unit-parity precedent into the document's own general rule, and changes what sections 1-2's censuses are for (sequencing/risk data, never a scope boundary).
+> **PT:** A fronteira congelada para `RMLX-1..11` (`TODO.md`): exatamente qual superfície do RmlUi o motor próprio de DOM/RCSS/layout/data-binding/efeitos/animação/widgets da glintfx tem permissão de reimplementar, apoiada em dois censos independentes (o contato da própria glintfx com o RmlUi, e o uso de RCSS medido no GusWorld) mais as quatro decisões de tipo-valor que a camada anticorrupção já entrega. Tipo Diátaxis: **reference**. Audiência: quem implementa qualquer onda `RMLX-*`, e quem a revisa. Owner: `software-architect`; escrito em **2026-08-04** contra `main` em `83b0649`, com uma onda (`RMLX-0`) inteiramente entregue (`F1`-`F4`). **Emendado em 2026-08-06 (§6 EN / §6 PT):** as duas decisões do líder na `RMLX-2` sobre seletor com lista de vírgula e paridade de unidades, mais o censo de formas de seletor que fecha a lacuna de nomeação do próprio documento -- ver o item `RMLX-2` do `TODO.md` ("TRÊS DECISÕES DO LÍDER 2026-08-06") pelo registro-fonte. **Emendado de novo em 2026-08-07 (§7 EN / §7 PT):** a ordem do líder de que este projeto mira distribuição ampla, não o GusWorld -- generaliza o precedente de paridade de unidades da §6.3 pra regra geral do próprio documento, e muda pra que servem os censos das seções 1-2 (dado de sequenciamento/risco, nunca fronteira de escopo).
 
 ---
 
@@ -75,7 +75,7 @@ Scope declared by the consumer: `GusEngine/app` in full, `.cpp`/`.hpp`/`.rml`, i
 - ⚠️ **Do not use `appmode_spike/main.rml`** -- untracked scratch in the consumer's repo, may disappear at any time; its markup is copied as a corpus **fixture**, never referenced by path.
 - `overflow` is the **2nd most-used property** in the consumer (after `:hover`), ahead of every layout property except `:hover` itself -- `RMLX-4` (flex + scroll + z-index) is sized around it, not around `flex`.
 - `transform` (19) is **~3× more used than `@keyframes`** (6) -- `RMLX-8` (animation) is designed around 2D `transform` first, `@keyframes`/`animation` second.
-- `nth-child`, `:not(`, and `z-index` all measure **zero**. Cutting them is a **real-zero loss**, not an "acceptable" one -- no wave needs to plan a fallback for them.
+- `nth-child`, `:not(`, and `z-index` all measure **zero** in this consumer's corpus. As of §7 below (2026-08-07), that zero is **sequencing/risk data only** -- it says these three are lower-priority to get right early, not that they are cut. All three are now authorized (§6.2, §7): the pinned RmlUi build accepts every one of them, and glintfx's target is broad distribution, not this consumer's corpus.
 
 ### 3. Four type decisions (with evidence)
 
@@ -153,7 +153,7 @@ Not a corner case: the census found **15 instances across 13 source files** (the
 
 #### 6.2 Closing the gap decision 1 exposes -- every selector form this document authorizes, by count
 
-Section 2's real-zero cuts (`nth-child`, `:not(`, `z-index`) name individual pseudo-classes and one property, never a selector *form* -- so before this amendment, the header clause's own rule ("every selector this document does not name is out of scope by default") left **every** selector form out of scope by omission, including the ones already shipping in glintfx's own UA-stylesheet. This table closes that gap with `UIX-RCSS-CENSUS` section 1's full result -- **1073 selector instances across 319 distinct selectors, in 842 rules**, covering both zero and non-zero forms alike:
+Section 2's zero-measured selector items (`nth-child`, `:not(`, `z-index`) name individual pseudo-classes and one property, never a selector *form* -- so before this amendment, the header clause's own rule ("every selector this document does not name is out of scope by default") left **every** selector form out of scope by omission, including the ones already shipping in glintfx's own UA-stylesheet. This table closes that gap with `UIX-RCSS-CENSUS` section 1's full result -- **1073 selector instances across 319 distinct selectors, in 842 rules**, covering both zero and non-zero forms alike. **Superseded in part by §7 (2026-08-07):** the "Authorized" column below no longer follows from this census's own zero/non-zero split -- a zero-instance form is authorized exactly when the pinned RmlUi build accepts it, which section 7 records is true for every row this table lists.
 
 | Form | Instances | Authorized | Example `file:line` |
 | :--- | ---: | :--- | :--- |
@@ -161,18 +161,20 @@ Section 2's real-zero cuts (`nth-child`, `:not(`, `z-index`) name individual pse
 | `#id` | 183 | **yes** | `glintfx/tests/app_process_event_scene.rcss:23` -- `#btn_a` |
 | descendant (space) | 131 | **yes** | `glintfx/tests/click_scene.rcss:12` -- `#panel span` |
 | tag | 110 | **yes** | `glintfx/demos/showcase/showcase.rcss:17` -- `body` |
-| pseudo-class, composite (`.foo:hover`/`#foo:hover`; `:hover` is the only pseudo-class found) | 37 | **yes**, `:hover` only | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
-| comma-list (multiple selectors, one rule) | 15 | **yes -- this amendment** | `glintfx/src/ua_stylesheet.hpp:99-102` |
+| pseudo-class, composite (`.foo:hover`/`#foo:hover`) | 37 | **yes** -- census found only `:hover`, but §7: the pinned RmlUi build has **no closed pseudo-class list** at all (`Element::SetPseudoClass(const String&, bool)` is public API, `glintfx/build/_deps/rmlui-src/Include/RmlUi/Core/Element.h:266`; the selector's own match set is a free-form `StringList pseudo_class_names`, `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSelector.h:116`) -- any pseudo-class name the parser accepts as an identifier matches, `:hover` is simply the only one this corpus happens to author | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
+| comma-list (multiple selectors, one rule) | 15 | **yes -- authorized by decision 1, §6.1** | `glintfx/src/ua_stylesheet.hpp:99-102` |
 | compound, no combinator (`tag.class`/`tag#id`) | 5 | **yes** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
 | child (`>`) | 2 | **yes** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
-| universal (`*`) | **0** | **no -- fail-high** | -- |
-| attribute (`[x]`) | **0** | **no -- fail-high** | -- |
-| adjacent/general sibling (`+`/`~`) | **0** | **no -- fail-high** | -- |
-| `nth-child`, `:not(` | **0** (already named §2) | **no -- fail-high** | -- |
+| universal (`*`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts it (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | -- |
+| attribute (`[x]`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts it (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1108`/`:94-114`, `ParseAttributeSelector`) | -- |
+| adjacent/general sibling (`+`/`~`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts both (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1091-1092`, `SelectorCombinator::NextSibling`/`SubsequentSibling`) | -- |
+| `nth-child`, `:not(` | **0** (also named §2) | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts both (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetFactory.cpp:15`, `StructuralSelectorType::Nth_Child`; `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:594`, `current_string == "not"`) | -- |
 
 Every measured selector instance in the census matches an authorized form -- the corpus does not already contain an unauthorized construct in real use. This is now `docs/rmlx-subset.md`'s own selector-form boundary; `docs/uix-rcss.md` section 11's own restatement of it should cite this section going forward, rather than `TODO.md`'s `RMLX-2` entry directly.
 
 ⚠️ **Zero in this corpus is not an argument to ban.** glintfx's target is broad distribution, not GusWorld-plus-glintfx's-own-test-corpus -- "zero in these two repositories" is a statement about two repositories, never about the world (see `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). What stays out today stays out **under the fail-high policy** already canonized by `polygon()` and restated by `docs/uix-rcss.md` section 11: an unrecognized selector form fails the *whole rule* to register (never the whole stylesheet, never a partial/guessed match), logged naming the raw selector text and `file:line` -- never a silent break. Authorizing more selector forms later follows the header clause exactly as this amendment did: stop, edit this spec with a diff, get the líder's sign-off, then implement.
+
+**This paragraph survives §7 (2026-08-07) unedited, on purpose.** It was already right when the table above it, before this amendment, was wrong -- the table used to read this paragraph's own "zero is not an argument to ban" as license to fail-high four selector forms anyway, which was the contradiction §7 exists to fix. What "stays out today" after §7 is only what neither this corpus **nor the pinned RmlUi build** accepts -- for selector forms, per the table above, that set is currently empty; the fail-high policy itself, and the stop-edit-sign-off mechanism for widening scope further, are exactly what this paragraph already said.
 
 #### 6.3 Decision 2 -- units: full parity with what the old engine accepts, not the measured minimum
 
@@ -185,6 +187,26 @@ The census measured 8 units in real use (`dp` 2237, `px` 334, `%` 207, unitless 
 3. **Radial-gradient center coordinate** (`radial-gradient(circle at 35% 30%, ...)`) -- the two percentages are X/Y coordinates inside the decorator's own 2D box, a third semantics, neither the gradient axis nor layout's containing block.
 
 `docs/uix-rcss.md` section 5 already implements this three-way split in the dump format that ships `RMLX-2`'s oracle; this amendment is what makes that split a decision **this** document -- the one with sign-off authority under the header clause -- also records, not only an implementer's private inference from the dump spec alone.
+
+### 7. Amendment 2026-08-07 -- full parity with the substituted engine (the líder's order)
+
+**Ordered by:** the líder, 2026-08-07, verbatim:
+
+> "ESTE PROJETO É PARA DISTRIBUICAO. GUSWORLD É UM consumidor apenas! NAO ESTREITE O ESCOPO POR GUSWORLD, NEM DECIDA NADA PELO QUE ELE PRECISA OU NÃO PRECISA!"
+
+This is the sign-off the header clause requires before this amendment could land -- the same "stop, edit this spec with a diff, get the líder's sign-off" mechanism section 6 followed on 2026-08-06, applied to itself.
+
+**The rule, canonical wording (governs every restatement of it in this document or in `docs/uix-rcss.md`; do not paraphrase):**
+
+> If the engine being replaced accepts it, ours accepts it -- parity, not the measured minimum. Usage counts in any repository (ours, a consumer's, both) are sequencing/risk data only ("what is used breaks early if we get it wrong"), and are never a scope boundary. "Zero in these repositories" is a statement about these repositories, never about the world; glintfx targets broad distribution.
+
+**This generalizes a precedent already in this document.** Section 6.3's unit decision (2026-08-06) -- "full clean-room parity with every unit RmlUi itself accepts, not the 8-unit measured floor" -- was the líder choosing parity over the measured minimum once, for one axis (units), without it yet being stated as the document's general rule. This amendment states it as the general rule and applies it retroactively to every axis this document scopes: selector forms (section 6.2, corrected in place above), the section-2 zero-measured items (corrected in place above), and any future census this document or `docs/uix-rcss.md` records.
+
+**What changes for sections 1 and 2.** Both censuses -- glintfx's own contact with RmlUi (section 1) and the consumer's 12-number census (section 2) -- keep every measured number **as measurement**; nothing in either table is deleted or corrected by this amendment. What they no longer do is **set a boundary**. A wave planner reads them to know **what breaks first if a construct is implemented wrong** (a construct GusWorld already exercises 53 times is riskier to get subtly wrong than one it never touches) and **in what order it is safe to sequence work** -- never to know **what is in scope**.
+
+**The boundary, restated.** In scope is: (a) whatever glintfx's own **pinned** RmlUi build accepts -- `glintfx/build/_deps/rmlui-src` (the actual dependency the build links, `FetchContent`-fetched, pinned by `CMakeLists.txt`), **not** `examples/RmlUi` (the separately-cloned, gitignored, RE-study copy named in section 3's own caveat -- the two can drift, and it is the pinned build tree whose acceptance actually matters); plus (b) whatever glintfx itself already registers independently of RmlUi (the UA-stylesheet's own comma-list selectors, section 6.1, are authorized on that basis alone, regardless of what RmlUi does). Out of scope by default is only what **neither** of those two accepts -- the fail-high policy (section 6.2's closing paragraph, `docs/uix-rcss.md` section 11) is unchanged for that remainder.
+
+**Mechanism unchanged, default flipped.** The header clause's stop-edit-sign-off mechanism is not touched by this amendment. What changes is which side of "in scope by default" a construct starts on: before this amendment, everything not explicitly named was out by default; after it, everything the pinned RmlUi build (or glintfx's own registration) accepts is in by default, and only what goes beyond that parity remains out by default, still gated by the same sign-off mechanism.
 
 ---
 
@@ -250,7 +272,7 @@ Escopo declarado pelo consumidor: `GusEngine/app` inteiro, `.cpp`/`.hpp`/`.rml`,
 - ⚠️ **Não usar `appmode_spike/main.rml`** -- scratch untracked no repo do consumidor, pode sumir a qualquer momento; o markup dele é copiado como fixture do corpus, nunca referenciado por caminho.
 - `overflow` é a **2ª propriedade mais usada** no consumidor (depois de `:hover`), à frente de toda propriedade de layout menos o próprio `:hover` -- a `RMLX-4` (flex + scroll + z-index) é dimensionada em torno dela, não em torno de `flex`.
 - `transform` (19) é **~3× mais usado que `@keyframes`** (6) -- a `RMLX-8` (animação) é desenhada em torno de `transform` 2D primeiro, `@keyframes`/`animation` depois.
-- `nth-child`, `:not(` e `z-index` dão **zero** os três. Cortá-los é **perda real zero**, não "aceitável" -- nenhuma onda precisa planejar fallback pra eles.
+- `nth-child`, `:not(` e `z-index` dão **zero** os três, neste corpus do consumidor. A partir da §7 abaixo (2026-08-07), esse zero é **só dado de sequenciamento/risco** -- diz que esses três são menor prioridade pra acertar cedo, não que estão cortados. Os três estão autorizados agora (§6.2, §7): o build fixado do RmlUi aceita todos, e o alvo da glintfx é distribuição ampla, não o corpus deste consumidor.
 
 ### 3. As quatro decisões de tipo (com evidência)
 
@@ -328,7 +350,7 @@ Não é caso de canto: o censo achou **15 ocorrências em 13 arquivos-fonte** (a
 
 #### 6.2 Fechando a lacuna que a decisão 1 expõe -- toda forma de seletor que este documento autoriza, com contagem
 
-Os cortes de zero real da seção 2 (`nth-child`, `:not(`, `z-index`) nomeiam pseudo-classes individuais e uma propriedade, nunca uma *forma* de seletor -- então, antes desta emenda, a própria regra da cláusula do cabeçalho ("todo seletor que este documento não nomeia está fora de escopo por padrão") deixava **toda** forma de seletor fora de escopo por omissão, incluindo as que já rodam na própria UA-stylesheet da glintfx. Esta tabela fecha essa lacuna com o resultado completo da seção 1 do `UIX-RCSS-CENSUS` -- **1073 instâncias de seletor em 319 seletores distintos, dentro de 842 regras**, cobrindo formas com zero e com uso real igualmente:
+Os itens de zero medido da seção 2 (`nth-child`, `:not(`, `z-index`) nomeiam pseudo-classes individuais e uma propriedade, nunca uma *forma* de seletor -- então, antes desta emenda, a própria regra da cláusula do cabeçalho ("todo seletor que este documento não nomeia está fora de escopo por padrão") deixava **toda** forma de seletor fora de escopo por omissão, incluindo as que já rodam na própria UA-stylesheet da glintfx. Esta tabela fecha essa lacuna com o resultado completo da seção 1 do `UIX-RCSS-CENSUS` -- **1073 instâncias de seletor em 319 seletores distintos, dentro de 842 regras**, cobrindo formas com zero e com uso real igualmente. **Superada em parte pela §7 (2026-08-07):** a coluna "Autorizada" abaixo não segue mais do recorte zero/não-zero deste censo -- uma forma com zero instância está autorizada exatamente quando o build fixado do RmlUi a aceita, o que a seção 7 registra ser verdade para toda linha desta tabela.
 
 | Forma | Instâncias | Autorizada | Exemplo `arquivo:linha` |
 | :--- | ---: | :--- | :--- |
@@ -336,18 +358,20 @@ Os cortes de zero real da seção 2 (`nth-child`, `:not(`, `z-index`) nomeiam ps
 | `#id` | 183 | **sim** | `glintfx/tests/app_process_event_scene.rcss:23` -- `#btn_a` |
 | descendente (espaço) | 131 | **sim** | `glintfx/tests/click_scene.rcss:12` -- `#panel span` |
 | tag | 110 | **sim** | `glintfx/demos/showcase/showcase.rcss:17` -- `body` |
-| pseudo-classe, composto (`.foo:hover`/`#foo:hover`; `:hover` é a única pseudo-classe encontrada) | 37 | **sim**, só `:hover` | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
-| lista com vírgula (vários seletores, uma regra) | 15 | **sim -- esta emenda** | `glintfx/src/ua_stylesheet.hpp:99-102` |
+| pseudo-classe, composto (`.foo:hover`/`#foo:hover`) | 37 | **sim** -- o censo achou só `:hover`, mas §7: o build fixado do RmlUi **não tem lista fechada** de pseudo-classe nenhuma (`Element::SetPseudoClass(const String&, bool)` é API pública, `glintfx/build/_deps/rmlui-src/Include/RmlUi/Core/Element.h:266`; o próprio conjunto de casamento do seletor é uma `StringList pseudo_class_names` de forma livre, `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSelector.h:116`) -- qualquer nome de pseudo-classe que o parser aceite como identificador casa, `:hover` é só o único que este corpus por acaso autora | `glintfx/src/uix/dom/test_fixtures/difficulty_menu__lista_hardcore_bloqueado.rml:69` -- `.difficulty-item:hover` |
+| lista com vírgula (vários seletores, uma regra) | 15 | **sim -- autorizado pela decisão 1, §6.1** | `glintfx/src/ua_stylesheet.hpp:99-102` |
 | composto, sem combinador (`tag.classe`/`tag#id`) | 5 | **sim** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
 | filho (`>`) | 2 | **sim** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
-| universal (`*`) | **0** | **não -- fail-high** | -- |
-| atributo (`[x]`) | **0** | **não -- fail-high** | -- |
-| irmão adjacente/geral (`+`/`~`) | **0** | **não -- fail-high** | -- |
-| `nth-child`, `:not(` | **0** (já nomeados na §2) | **não -- fail-high** | -- |
+| universal (`*`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | -- |
+| atributo (`[x]`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1108`/`:94-114`, `ParseAttributeSelector`) | -- |
+| irmão adjacente/geral (`+`/`~`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita os dois (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1091-1092`, `SelectorCombinator::NextSibling`/`SubsequentSibling`) | -- |
+| `nth-child`, `:not(` | **0** (já nomeados na §2) | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita os dois (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetFactory.cpp:15`, `StructuralSelectorType::Nth_Child`; `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:594`, `current_string == "not"`) | -- |
 
 Toda instância de seletor medida no censo casa com uma forma autorizada -- o corpus não contém, hoje, nenhuma construção não-autorizada já em uso real. Esta é agora a fronteira de forma-de-seletor do próprio `docs/rmlx-subset.md`; a seção 11 do `docs/uix-rcss.md`, ao restatar isso, deve citar esta seção daqui em diante, em vez do item `RMLX-2` do `TODO.md` direto.
 
 ⚠️ **Zero neste corpus não é argumento para banir.** O alvo da glintfx é distribuição ampla, não GusWorld-mais-o-corpus-de-teste-da-própria-glintfx -- "zero nestes dois repositórios" é uma afirmação sobre dois repositórios, nunca sobre o mundo (ver `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). O que fica fora hoje fica fora **sob a política fail-high** já canonizada pelo `polygon()` e restatada pela seção 11 do `docs/uix-rcss.md`: uma forma de seletor não-reconhecida faz **a regra inteira** falhar ao registrar (nunca a folha inteira, nunca um casamento parcial/chutado), logada nomeando o texto cru do seletor e `arquivo:linha` -- nunca quebra em silêncio. Autorizar mais formas de seletor depois segue a cláusula do cabeçalho exatamente como esta emenda seguiu: parar, editar esta spec com um diff, pegar o aval do líder, só então implementar.
+
+**Este parágrafo sobrevive à §7 (2026-08-07) intacto, de propósito.** Ele já estava certo quando a tabela acima dele, antes desta emenda, estava errada -- a tabela lia o próprio "zero não é argumento pra banir" deste parágrafo como licença pra ainda assim aplicar fail-high em quatro formas de seletor, que era exatamente a contradição que a §7 existe pra consertar. O que "fica fora hoje" depois da §7 é só o que nem este corpus **nem o build fixado do RmlUi** aceitam -- pra formas de seletor, pela tabela acima, esse conjunto está vazio hoje; a política fail-high em si, e o mecanismo parar-editar-aval pra alargar escopo mais adiante, são exatamente o que este parágrafo já dizia.
 
 #### 6.3 Decisão 2 -- unidades: paridade completa com o que o motor antigo aceita, não o mínimo medido
 
@@ -360,3 +384,23 @@ O censo mediu 8 unidades em uso real (`dp` 2237, `px` 334, `%` 207, sem-unidade 
 3. **Coordenada do centro do gradiente radial** (`radial-gradient(circle at 35% 30%, ...)`) -- as duas porcentagens são coordenadas X/Y dentro da própria caixa 2D do decorator, uma terceira semântica, nem eixo de gradiente nem containing block de layout.
 
 O `docs/uix-rcss.md` seção 5 já implementa essa separação em três no formato de dump que serve o oráculo da `RMLX-2`; esta emenda é o que faz essa separação virar uma decisão que **este** documento -- o que tem autoridade de aval sob a cláusula do cabeçalho -- também registra, não só uma inferência privada do implementer a partir da spec de dump sozinha.
+
+### 7. Emenda 2026-08-07 -- paridade total com o motor substituído (ordem do líder)
+
+**Ordenado por:** o líder, 2026-08-07, ao pé da letra:
+
+> "ESTE PROJETO É PARA DISTRIBUICAO. GUSWORLD É UM consumidor apenas! NAO ESTREITE O ESCOPO POR GUSWORLD, NEM DECIDA NADA PELO QUE ELE PRECISA OU NÃO PRECISA!"
+
+Este é o aval que a cláusula do cabeçalho exige antes desta emenda poder valer -- o mesmo mecanismo "parar, editar esta spec com um diff, pegar o aval do líder" que a seção 6 seguiu em 2026-08-06, aplicado a si mesmo.
+
+**A regra, redação canônica (vale para qualquer restatement dela neste documento ou no `docs/uix-rcss.md`; não parafrasear):**
+
+> Se o motor que está sendo substituído aceita, o nosso aceita -- paridade, não o mínimo medido. Contagem de uso em qualquer repositório (nosso, de um consumidor, os dois) é apenas dado de sequenciamento/risco ("o que é usado quebra cedo se errarmos"), e nunca fronteira de escopo. "Zero nestes repositórios" é afirmação sobre estes repositórios, jamais sobre o mundo; o alvo da glintfx é distribuição ampla.
+
+**Isto generaliza um precedente que já estava neste documento.** A decisão de unidades da seção 6.3 (2026-08-06) -- "paridade clean-room completa com toda unidade que o próprio RmlUi aceita, não o piso de 8 unidades medidas" -- foi o líder escolhendo paridade em vez do mínimo medido uma vez, pra um eixo só (unidades), sem ainda estar formulado como a regra geral do documento. Esta emenda formula isso como regra geral e a aplica retroativamente a todo eixo que este documento delimita: formas de seletor (seção 6.2, corrigida no lugar acima), os itens de zero medido da seção 2 (corrigidos no lugar acima), e qualquer censo futuro que este documento ou o `docs/uix-rcss.md` registrar.
+
+**O que muda pras seções 1 e 2.** Os dois censos -- o contato da própria glintfx com o RmlUi (seção 1) e o censo de 12 números do consumidor (seção 2) -- mantêm todo número medido **como medição**; nada nas duas tabelas é apagado ou corrigido por esta emenda. O que eles deixam de fazer é **definir fronteira**. Quem planeja uma onda lê essas tabelas pra saber **o que quebra primeiro se uma construção for implementada errada** (uma construção que o GusWorld já exercita 53 vezes é mais arriscada de errar sutilmente que uma que ele nunca toca) e **em que ordem é seguro sequenciar o trabalho** -- nunca pra saber **o que está no escopo**.
+
+**A fronteira, reformulada.** Está no escopo: (a) o que o próprio build **fixado** (pinned) do RmlUi da glintfx aceita -- `glintfx/build/_deps/rmlui-src` (a dependência de verdade que o build linka, buscada via `FetchContent`, fixada pelo `CMakeLists.txt`), **não** `examples/RmlUi` (a cópia clonada à parte, gitignorada, de estudo/RE, nomeada na própria ressalva da seção 3 -- as duas podem divergir, e é a árvore fixada pelo build cuja aceitação de fato importa); mais (b) o que a própria glintfx já registra independente do RmlUi (os seletores com lista de vírgula da própria UA-stylesheet, seção 6.1, estão autorizados só por essa base, independente do que o RmlUi faça). Fora do escopo por padrão fica só o que **nenhum** dos dois aceita -- a política fail-high (parágrafo final da seção 6.2, seção 11 do `docs/uix-rcss.md`) não muda pro resto.
+
+**Mecanismo intacto, padrão invertido.** O mecanismo parar-editar-aval da cláusula do cabeçalho não é tocado por esta emenda. O que muda é de que lado de "dentro do escopo por padrão" uma construção começa: antes desta emenda, tudo que não estava nomeado explicitamente ficava fora por padrão; depois dela, tudo que o build fixado do RmlUi (ou o próprio registro da glintfx) aceita fica dentro por padrão, e só o que vai além dessa paridade continua fora por padrão, ainda sob o mesmo mecanismo de aval.

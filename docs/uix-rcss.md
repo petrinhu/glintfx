@@ -1138,8 +1138,10 @@ addition appends to the end of this same fixed sequence, in the order the table 
 rows, never by re-sorting the existing ones.
 
 `:focus` and `:active` are **not** separate rows in this wave's matrix -- 3 and 2 measured uses
-respectively is real, non-zero usage (unlike `nth-child`/`:not`/`z-index`'s measured zero in
-`docs/rmlx-subset.md` section 2, which that document correctly treats as a real-zero cut), so the
+respectively is real, non-zero usage, and `docs/rmlx-subset.md` section 7 (2026-08-07) now treats
+even `nth-child`/`:not`/`z-index`'s measured-zero the same way: authorized, because the pinned
+RmlUi build accepts all three, not cut. Zero-vs-non-zero measured usage is not why this table has
+only two rows -- the reason is stated on its own terms below. The
 **pseudo-class matching mechanism itself must be generic** (any of `:hover`/`:focus`/`:active` must
 be a selectable, settable boolean flag per element in both engines' selector matcher -- not a
 `:hover`-hardcoded special case), but this wave's **oracle matrix** exercises only `hover-all` by
@@ -1259,6 +1261,21 @@ have to replicate identically, exactly the shared-private-assumption risk `docs/
 "why this document exists" section warns against.
 
 #### 6.1 Registry table (72 longhand entries, alphabetical -- the dump's own required order)
+
+**72 is today's count, not the parity target.** `docs/rmlx-subset.md` §7 (2026-08-07) authorizes
+every property the pinned RmlUi build registers; `TODO.md`'s `ESC-1` (wave `WR2R`) is the owning
+slice that raises this table to **107** (72 + 35, `RegisterDefaultProperties`,
+`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, plus glintfx's own
+8: `ripple` ×5, `image-tint` ×3). **Verified while writing this note (`ESC-0`): unlike §14.1/§14.2's
+own divergence counts, this 72 is not read at runtime by `GLINTFX_RCSS2_SPEC_DOC` -- that mechanism
+only parses this document's own two divergence-count declaration lines, one per §14 subsection
+(`glintfx/src/rml/rcss_dump_differential_oracle.cpp:1160-1217`); this table's own row count has no
+automated doc-vs-code cross-check today.** That is a separate gap, not something `ESC-0` was asked
+to close -- flagged here only so a future reader does not assume a guard exists that does not. (This
+note deliberately does not quote either declaration line's own literal text: `parse_declared_count()`
+matches on that exact bold-prefixed string, and quoting it here a second time would make the count
+"appear twice" and fail the parse -- confirmed by breaking it that way once while drafting this note,
+then rewording to fix it.)
 
 | Property | Initial value | Inherited | Value domain (section 7) |
 | :--- | :--- | :---: | :--- |
@@ -1394,26 +1411,39 @@ directly for this list, only cite it here.
 `vertical-align` `:331-333`, `white-space` `:364` -- `image-tint-mode`'s own 4-member set is
 glintfx-authored, not upstream, already correctly enumerated before this errata
 (`glintfx/src/rml/decorator_image_tint.cpp:409-411`), unaffected by this pass, restated here only for
-the denominator's own completeness. **Why full upstream, not a corpus-narrowed subset** (the same
-"real zero is a real cut" discipline section 13 below applies to *unmeasured properties and value
-syntax forms*): accepting a keyword string is a zero-cost set-membership check, not new
+the denominator's own completeness. **Why full upstream, not a corpus-narrowed subset:** this was
+already the right call before `docs/rmlx-subset.md` section 7 (2026-08-07, the líder's order that
+this project targets broad distribution and does not narrow scope by consumer usage) made it the
+document's general rule -- accepting a keyword string is a zero-cost set-membership check, not new
 parser/serializer machinery the way accepting a functional color form (`rgb()`, section 13) or a new
-property (`transition`, section 13) would be -- there is nothing here analogous to "implementing a
-feature nobody asked for". This dump's own scope is computed **values**, never layout (§12); printing
-`display=table-row` as a legal computed value commits this project to nothing about ever laying out a
-table, exactly as printing an out-of-viewport length commits it to nothing about ever rendering
-off-screen. The closest existing precedent is section 6.3's own `Box`-algorithm 3-value row: real,
-unmeasured, upstream, cheap to include faithfully, kept **because** it costs nothing beyond honestly
-implementing an algorithm this table already requires for the measured cases. **Flagged for the
-líder's attention regardless, not silently decided** (the same courtesy `ERRATA-2`'s premultiply
-call and `ERRATA-4`'s reversal of it both extended): `display`'s own 14-member upstream list is the
-one most likely to deserve a second look, since several of its members name layout modes
-(`table-row`, `flow-root`, ...) this codebase has no plan to ever lay out -- if the líder judges that
-a corpus-narrowed `display` set (measured: `none`, `block`, `inline-block`, plus `flex` per
-`docs/rmlx-subset.md` section 2's own consumer census, 10 instances) is the right call instead, that
-is a one-cell edit here, not a design change anywhere else in this document.
+property (`transition`, section 13) would be, so there was never anything here analogous to
+"implementing a feature nobody asked for". This dump's own scope is computed **values**, never
+layout (§12); printing `display=table-row` as a legal computed value commits this project to
+nothing about ever laying out a table, exactly as printing an out-of-viewport length commits it to
+nothing about ever rendering off-screen. The closest existing precedent is section 6.3's own
+`Box`-algorithm 3-value row: real, unmeasured, upstream, cheap to include faithfully, kept
+**because** it costs nothing beyond honestly implementing an algorithm this table already requires
+for the measured cases. `display`'s own 14-member upstream list, several of whose members name
+layout modes (`table-row`, `flow-root`, ...) this codebase has no plan to ever lay out, was flagged
+for the líder's attention when this errata was written, offering a corpus-narrowed alternative
+(measured: `none`, `block`, `inline-block`, plus `flex` per `docs/rmlx-subset.md` section 2's own
+consumer census, 10 instances) as a live option. **`docs/rmlx-subset.md` section 7 closes that
+option**, not just for `display`: printing a keyword this dump never sees exercised commits this
+project to nothing about implementing the layout mode it names (the same "computed values, not
+layout" reasoning stated above), so there is no remaining reason, under the líder's 2026-08-07
+order, to narrow this or any other full-upstream keyword set by corpus count. The full 14-member
+`display` set stays, and any future narrowing would need a reason other than "the consumer's corpus
+doesn't use it".
 
 #### 6.2 Shorthand-to-longhand expansion (no separate registry slot; feeds the longhand entries above)
+
+**13 shorthands is today's count (10 rows below, `border-top`/`-right`/`-bottom`/`-left` counted as
+4), not the parity target.** `docs/rmlx-subset.md` §7 authorizes every shorthand the pinned RmlUi
+build registers; `TODO.md`'s `ESC-2` (wave `WR2R`) is the owning slice that raises this to **20**
+(+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
+`transform-origin`). Like §6.1's 72, this count has no automated doc-vs-code cross-check today --
+only §14.1/§14.2's own divergence counts are runtime-verified against this document (`ESC-0`
+verified this while writing the note above; not repeated in full here).
 
 Evidence: `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp` `RegisterShorthand` calls +
 `PropertySpecification.cpp:311-472` (the four expansion algorithms, cited per-type below).
@@ -1572,15 +1602,20 @@ fallthrough `case 5 → case 4`/`case 9 → case 7` duplication), a missing alph
 `ff` (fully opaque, matching upstream's `hex_values[3] = {'f','f'}` pre-fill default), then all four
 channels print as two lowercase hex digits each, in `rgba` order, prefixed by `#`.
 
-**Out of scope, requires the líder's sign-off before implementation (§13):** the two named colors
-the census actually measured (`transparent` → `#00000000`, `white` → `#ffffffff`) are in scope
-because they are measured; the **rest** of RmlUi's 19-entry named-color table (`black`, `red`,
-`blue`, ... -- `PropertyParserColour.cpp:117-136`) and every functional color form (`rgb()`,
-`rgba()`, `hsl()`, `lab()`, `oklab()`, `lch()`, `oklch()`) are **zero-measured** in the census
-(section 0: *"0 `rgb()`/`rgba()` funcional"*) and are **not** authorized by the líder's units-parity
-decision, which named units specifically, not color syntax. A conforming dumper encountering any of
-these must **fail-high** (§11), not silently support them by accident because the parser happened
-to be easy to extend.
+**In scope, authorized by `docs/rmlx-subset.md` §7 (2026-08-07), not by census count (§13):** the
+two named colors the census actually measured (`transparent` → `#00000000`, `white` →
+`#ffffffff`) were already in scope because they are measured; the **rest** of RmlUi's 19-entry
+named-color table (`black`, `red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:117-135`) and every functional color form (`rgb()`, `rgba()`, `hsl()`,
+`lab()`, `lch()`, `oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:178-195`) are **zero-measured** in the census (section 0: *"0
+`rgb()`/`rgba()` funcional"*) but are authorized now regardless: the pinned RmlUi build accepts
+every one of them, so the líder's 2026-08-07 order ("if the engine being replaced accepts it, ours
+accepts it") puts all of it in scope, not only units. Zero census usage remains real, useful
+sequencing/risk data (§13) -- it stops being a reason to fail-high. A conforming dumper encountering
+any of these must still parse and print them correctly per the same canonical form rules the hex
+forms above already follow; only a color syntax **neither the census nor the pinned RmlUi build**
+accepts would still fail-high (§11) -- there is currently no such case.
 
 **Colors are dumped straight-alpha for scalar color-typed properties -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -1982,9 +2017,16 @@ translate(<x>;<y>) | scale(<x>;<y>) | rotate(<angle>)
 
 `<x>`/`<y>` for `translate`/`scale` per §7/§8 (resolved length or plain number respectively);
 `<angle>` per §8.2. **This grammar is not verified against any measured 3D or matrix transform
-function** (`translate3d`, `matrix`, `perspective`, ...) -- if a real fixture is ever found using
-one, per this document's own header clause, **stop and edit this section with a diff** before
-implementing it; do not silently extend the grammar to fit.
+function** (`translate3d`, `matrix`, `matrix3d`, `perspective`, `rotate3d`, `rotateX/Y/Z`,
+`scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`). **This is 3 functions today, not the
+parity target: `docs/rmlx-subset.md` §7 (2026-08-07) authorizes every one of them (the pinned
+RmlUi build's own `PropertyParserTransform.cpp` accepts all of them, evidence in `docs/rmlx-subset.md`
+§7), and `TODO.md`'s `ESC-7` (wave `WR2R`) is the owning slice that raises this grammar to 21 --
+scope stays parse + compute + serialize only, applying the render matrix is still `RMLX-8`'s job,
+unchanged.** Finding a real fixture that uses one of them is no longer the trigger this grammar
+needs extending -- the pinned build's own acceptance already is; `ESC-7` extends this section's own
+grammar with a diff when it lands, per the header clause's mechanism (unchanged), not because a
+fixture was found.
 
 ### 10. `@font-face` and `@keyframes`: structural registries, not element properties
 
@@ -2016,11 +2058,15 @@ parse failure that poisons the rest of the stylesheet, never a silent guess. Con
 
 - **Unknown property name** (not in §6.1's registry): the declaration is dropped; every *other*
   declaration in the same rule block still applies.
-- **Unknown selector form** (anything `docs/rmlx-subset.md` section... -- restated here for this
-  wave's own selector scope: `class`/`id`/descendant/child (`>`)/tag/compound/comma-list/`:hover`
-  per the líder's decision 1, `TODO.md`'s `RMLX-2` entry -- `nth-child`, `:not(`, attribute
-  selectors, sibling combinators, and every pseudo-class beyond `:hover`/`:focus`/`:active` are all
-  **out of subset**, matching `docs/rmlx-subset.md` section 2's own real-zero cuts): **corrected,
+- **Unknown selector form** (restated here for this wave's own selector scope, per
+  `docs/rmlx-subset.md` §6.2/§7 (2026-08-07): `class`/`id`/descendant/child (`>`)/tag/compound/
+  comma-list/pseudo-class (any name the pinned RmlUi build's own parser accepts as an identifier,
+  not only `:hover`)/`nth-child`/`:not(`/attribute selectors (`[x]`)/sibling combinators (`+`/`~`)/
+  universal selector (`*`) are all **in subset** -- the pinned RmlUi build accepts every one of
+  them, per `docs/rmlx-subset.md` §7's parity rule, so none of them are the example this bullet
+  needs today. What would still trigger this bullet is a selector form **neither the census nor the
+  pinned RmlUi build's own parser** recognizes -- there is currently no known example of one; this
+  bullet documents the *consequence*, which does not depend on one existing yet): **corrected,
   `UIX-RCSS-ERRATA-2` (`Finding G`, reverified directly) -- only the individual selector that fails
   to register is dropped, not the whole rule.** `StyleSheetParser::ConstructNodes`
   (`StyleSheetParser.cpp:947-967`) resolves each comma-separated selector independently
@@ -2125,37 +2171,75 @@ facts, and a future dump format for any of them is a new decision, made the same
 (spec first, líder sign-off, then code), never a silent extension of this file, mirroring
 `docs/uix-dom.md` section 10's identical clause for its own boundary.
 
-### 13. Explicitly out-of-subset today -- requires the líder's sign-off before any implementation
+### 13. What still requires new code -- owned by an `ESC-*` slice, not out-of-subset
 
-Per this document's own header clause and `docs/rmlx-subset.md`'s: **stop, edit this spec with a
-diff, get the líder's sign-off, only then implement.** Named here so a future implementer does not
-have to rediscover each one fixture by fixture:
+**Superseded by `docs/rmlx-subset.md` §7 (2026-08-07, the líder's order).** Every construct this
+section used to list as "out-of-subset, requires sign-off" turned out to be something the pinned
+RmlUi build already accepts -- verified item by item below, citations against
+`glintfx/build/_deps/rmlui-src`, not the `examples/RmlUi` study clone. Under §7's rule ("if the
+engine being replaced accepts it, ours accepts it"), none of it is out-of-subset any more; what's
+left is a **staging list**: what this dump format/registry does not implement *yet*, and which
+`ESC-*` slice (`TODO.md`, wave `WR2R`) owns adding it. This section stops being the sign-off gate
+for the items below -- that gate already fired, on 2026-08-07, for the whole list. The header
+clause's stop-edit-sign-off mechanism is unchanged for what it still guards: a construct **neither**
+the census **nor** the pinned RmlUi build accepts. The one confirmed example of that on record
+today is the `ms` duration unit (§9.3: *"`ms` is not a recognized duration unit in upstream RmlUi at
+all"*) -- not listed as a bullet below because it was never framed as a corpus-count cut here in
+the first place; every bullet below **was**, and that framing is what this rewrite corrects.
 
-- **Color:** every RmlUi named color beyond `transparent`/`white` (17 more entries,
-  `PropertyParserColour.cpp:117-136`), and every functional color form (`rgb()`, `rgba()`, `hsl()`,
-  `lab()`, `lch()`, `oklab()`, `oklch()`) -- zero-measured, and the líder's units-parity decision
-  named units, not color syntax, so this was never implicitly authorized.
-- **`transition`, `font-effect`:** both are real, registered RmlUi properties
-  (`StyleSheetSpecification.cpp:399`, `:405`) but **zero-measured** in the census -- excluded from
-  §6.1's registry on the same "real zero is a real cut" basis `docs/rmlx-subset.md` section 2 uses
-  for `nth-child`/`:not`/`z-index`, **not** silently folded in because they happen to share
-  machinery with `animation`/`filter`.
-- **`z-index`, `nth-child`, `:not(`, attribute selectors (`[x]`), sibling combinators (`+`/`~`),
-  universal selector (`*`):** already named as real-zero cuts by `docs/rmlx-subset.md` itself;
-  restated here so this document alone (per its own header promise) states the complete selector
-  boundary without requiring a reader to also have that document open.
-- **3D/matrix `transform` functions** (`translate3d`, `matrix`, `perspective`, ...): §9.4's own
-  stated limit -- the 2D subset is verified against the corpus's 2 instances, nothing beyond it is.
-- **`radial-gradient`'s `ellipse` shape:** only `circle` is in scope per `docs/effects.md`'s own
-  already-shipped grammar; an `ellipse` fixture would need this document's own sign-off before a
-  dumper may accept it, not merely a code change to `docs/effects.md`.
-- **Unmeasured RmlUi native properties not in §6.1** (a non-exhaustive sample, named because they
-  are the ones a reader familiar with full upstream RmlUi might expect and reasonably assume are
-  included): `font-style`, `font-weight` (measured **zero** in the census despite `font-family`/
-  `font-size` being heavily used -- flagged explicitly since their absence is easy to miss),
-  `caret-color`, `image-color`, `visibility`, `clip`, `float`, `clear`, `drag`, `nav-*`,
-  `pointer-events`, `perspective*`, `transform-origin*`, `-rmlui-language`, `-rmlui-direction`,
-  `word-break`, `text-decoration`, `font-kerning`, `scrollbar-margin`, `overscroll-behavior`.
+- **Color:** every RmlUi named color beyond `transparent`/`white` (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`
+  registers 19 total, `black` through `aqua` plus `transparent`) -- owned by `ESC-5`. Every
+  functional color form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`,
+  `oklch()`, same file `:178-193`, conversions `:64-115`) -- owned by `ESC-6`. **Open discrepancy on
+  record, not resolved by this rewrite:** `TODO.md`'s `ESC-5` entry reports a *third* survivor,
+  `black` (citing `value_compute.cpp:784-792`), where §7.1 above still names only `transparent`/
+  `white` as measured; whoever lands `ESC-5` settles which is right against the code, not this doc.
+- **`transition`, `font-effect`:** both real, registered RmlUi properties
+  (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` owned by `ESC-23` (the same
+  pin-with-named-owner-and-automatic-expiry mechanism §14.2 already uses for `animation`);
+  `font-effect` owned by `ESC-24`.
+- **Selector forms:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; attribute selectors
+  with the 7 operators `=`/`~=`/`|=`/`^=`/`$=`/`*=`/bare (`StyleSheetSelector.h:39-46`,
+  `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; sibling combinators (`+`/`~`,
+  `StyleSheetParser.cpp:1091-1092`) -- `ESC-10`; the 13 structural pseudo-classes (`nth-child`,
+  `nth-last-child`, `nth-of-type`, `nth-last-of-type`, `first-child`, `last-child`, `first-of-type`,
+  `last-of-type`, `only-child`, `only-of-type`, `empty`, `not(<selector>)` with its own nested
+  selector tree, `scope` -- `StyleSheetSelector.h:69-83`) -- `ESC-11`; and the fully generic,
+  unbounded pseudo-class matcher itself (`Element::SetPseudoClass` is public API with no closed
+  list, `Include/RmlUi/Core/Element.h:266`, `StyleSheetSelector.h:116` -- corrected, §6.2's own
+  row above) -- `ESC-12`.
+- **3D/matrix `transform` functions** (`translate3d`, `matrix`, `matrix3d`, `rotate3d`,
+  `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`, `perspective` --
+  `PropertyParserTransform.cpp`): §9.4's grammar stays at the 2D subset (3 functions) until `ESC-7`
+  lands (+18, closing 3 → 21) -- scope is parse + compute + serialize only; applying the render
+  matrix is still `RMLX-8`'s job, unchanged.
+- **`radial-gradient`'s `ellipse` shape** (`ending-shape` accepts `circle, ellipse, unspecified`,
+  `DecoratorGradient.cpp:519`): `circle` stays the only shape `docs/effects.md`'s grammar accepts
+  until `ESC-15` (native decorator/filter/font-effect parity, a broader slice this shape is folded
+  into rather than getting its own) lands.
+- **At-rules `@media`, `@decorator`, `@spritesheet`:** the pinned RmlUi build accepts 5
+  stylesheet-level at-rules (`@font-face`, `@keyframes`, `@decorator`, `@spritesheet`, `@media` --
+  `StyleSheetParser.cpp:569-663,786-798`); this document's own dump format handles 2
+  (`@font-face`/`@keyframes`, §10). `@media` is owned by `ESC-13`; `@decorator`/`@spritesheet` by
+  `ESC-14`.
+- **Unmeasured RmlUi native properties beyond §6.1's current 72:** `ESC-1` (the 72 → 107 registry
+  slice, §6.1's own new note above) names every one of these by its exact upstream call site, so
+  they are not re-listed here to avoid a second, driftable copy of that enumeration. Several need
+  more than a registry row to actually work end to end, and have their own owning slice for that:
+  `font-style`/`font-weight` rendering (face selection, not just the registry entry) -- `ESC-16`;
+  `text-decoration` rendering -- `ESC-17`; `float`/`clear` cascade computation -- `ESC-18`;
+  `word-break` -- `ESC-19`; `z-index` computed (stacking-context application stays `RMLX-4`) --
+  `ESC-20`; `visibility`/`pointer-events`/`clip` -- `ESC-21`; `nav-up/right/down/left`/
+  `overscroll-behavior`/`scrollbar-margin`/`drag`/`caret-color`/`image-color` -- `ESC-22`;
+  `perspective`/`perspective-origin-x/y`/`transform-origin-x/y/z` -- `ESC-24`.
+
+**The closing sweep, `ESC-25`:** enumerates the pinned build's own closed space in full (every
+property, shorthand, keyword set, unit, function, selector form, stylesheet rule) against
+`glintfx/build/_deps/rmlui-src`, not `examples/RmlUi`, to catch whatever the `ESC-1..24` slices
+above did not individually name -- `TODO.md`'s own entry states why *enumerate* and not *search*:
+directed search is exactly the method that produced this section's original gap. Anything that
+sweep still finds excluded is excluded by a **líder-recorded decision naming implementability or a
+technical dependency** -- never a usage count, per §7.
 
 ### 14. Divergence ledger
 
@@ -2599,10 +2683,23 @@ this identical decision at the identical layer (`StyleSheetParser::Parse`'s own
 `State::AtRuleIdentifier` branch, `:786-789`) -- this is not a boundary this module invented, it is
 the one place upstream's own tokenizer-vs-parser split already draws the line the same way.
 **Decision:** stays lexer-level, permanently, not merely "for now" -- the teto is already declared
-(only the literal, case-sensitive `"keyframes"`; `docs/rmlx-subset.md` section 13's own real-zero
-exclusions for `@media`/`@import`/`@charset`/`@supports` get the ordinary Declaration-mode default,
-and a real fixture needing one of those is the same "stop, add a name to this table" move, never a
-silent default-widening).
+(only the literal, case-sensitive `"keyframes"`). **Correction while auditing this line for
+`ESC-0` (2026-08-07): the cross-reference this sentence used to make, to "`docs/rmlx-subset.md`
+section 13's own real-zero exclusions for `@media`/`@import`/`@charset`/`@supports`", does not
+resolve -- that document has no such section or list. What actually governs `@media`,
+`@decorator`, and `@spritesheet` today is this document's own §13 above (rewritten 2026-08-07):
+they are named there, owned by `ESC-13`/`ESC-14`, not corpus-count exclusions. `@media` in
+particular is **accepted by the pinned RmlUi build** (`StyleSheetParser.cpp:835-854`) -- a fact
+this sentence's old framing did not know, since it treated `@media` as a same-class exclusion
+alongside `@import`/`@charset`/`@supports`, which are not. `@import`/`@charset`/`@supports` remain
+genuinely unhandled: the pinned parser's own at-rule dispatch names exactly 5 identifiers
+(`keyframes`, `decorator`, `spritesheet`, `media`, `font-face`, `StyleSheetParser.cpp:786-863`) and
+none of those three is among them, so under §7 they stay out because **neither side** accepts them
+-- not because of a corpus count.** Whether authorizing `@media` for this dump format needs a
+lexer-level special case of its own (the way `@keyframes` does, for the same brace-balance reason)
+is `ESC-13`'s own question to answer, not resolved here -- a real fixture needing one of the three
+genuinely-unhandled at-rules is still the same "stop, add a name to this table" move, never a
+silent default-widening.
 
 ---
 
@@ -2734,9 +2831,11 @@ ao fim desta mesma sequência fixa, na ordem em que a tabela acima ganha as nova
 reordenando as existentes.
 
 `:focus` e `:active` **não** são linhas separadas na matriz desta onda -- 3 e 2 usos medidos
-respectivamente é uso real, não-zero (diferente do zero medido de `nth-child`/`:not`/`z-index` da
-seção 2 do `docs/rmlx-subset.md`, que aquele documento corretamente trata como corte de zero real),
-então **o próprio mecanismo de casamento de pseudo-classe tem de ser genérico** (qualquer uma de
+respectivamente é uso real, não-zero, e a seção 7 do `docs/rmlx-subset.md` (2026-08-07) hoje trata
+até o zero medido de `nth-child`/`:not`/`z-index` do mesmo jeito: autorizado, porque o build fixado
+do RmlUi aceita os três, não cortado. Uso medido zero-vs-não-zero não é o motivo desta tabela ter
+só duas linhas -- o motivo está declarado abaixo, nos próprios termos dele. O
+**próprio mecanismo de casamento de pseudo-classe tem de ser genérico** (qualquer uma de
 `:hover`/`:focus`/`:active` tem de ser uma flag booleana selecionável e setável por elemento no
 matcher de seletor dos dois motores -- não um caso especial hardcoded pra `:hover`), mas a **matriz
 do oráculo desta onda** exercita só `hover-all` por nome. Somar linhas `focus-all` e `active-all`
@@ -2862,6 +2961,22 @@ suposição-privada-compartilhada que a própria seção "por que este documento
 
 #### 6.1 Tabela de registro (72 entradas longhand, alfabética -- a própria ordem exigida do dump)
 
+**72 é a contagem de hoje, não o alvo de paridade.** A §7 do `docs/rmlx-subset.md` (2026-08-07)
+autoriza toda propriedade que o build fixado do RmlUi registra; a `ESC-1` do `TODO.md` (onda
+`WR2R`) é a fatia dona que eleva esta tabela pra **107** (72 + 35, `RegisterDefaultProperties`,
+`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetSpecification.cpp:248-436`, mais 8 próprias da
+glintfx: `ripple` ×5, `image-tint` ×3). **Verificado ao escrever esta nota (`ESC-0`): diferente das
+próprias contagens de divergência da §14.1/§14.2, este 72 não é lido em tempo de execução pelo
+`GLINTFX_RCSS2_SPEC_DOC`** -- esse mecanismo só faz parse das duas próprias linhas de declaração de
+contagem de divergência deste documento, uma por subseção da §14
+(`glintfx/src/rml/rcss_dump_differential_oracle.cpp:1160-1217`); a contagem de linha desta tabela
+não tem checagem automática doc-vs-código hoje. Essa é uma lacuna separada, não algo que a `ESC-0`
+foi pedida pra fechar -- sinalizada aqui só pra um leitor futuro não supor que existe uma guarda que
+não existe. (Esta nota deliberadamente não cita o texto literal de nenhuma das duas linhas de
+declaração: o `parse_declared_count()` casa por aquela string exata com prefixo em negrito, e
+citá-la aqui de novo faria a contagem "aparecer duas vezes" e falhar o parse -- confirmado ao
+quebrar assim uma vez enquanto esta nota era escrita, depois reformulado pra consertar.)
+
 *(mesma tabela da seção 6.1 em inglês acima -- valores, nomes de propriedade, e domínios de valor
 não são traduzidos, são identificadores de código en-intl por convenção do próprio `CLAUDE.md` do
 projeto.)*
@@ -2931,28 +3046,41 @@ são a **enumeração upstream RmlUi completa**, verbatim do próprio call site
 não upstream, já corretamente enumerado antes desta errata
 (`glintfx/src/rml/decorator_image_tint.cpp:409-411`), não afetado por esta passada, restatado aqui só
 pela completude do próprio denominador. **Por que upstream completo, não um subconjunto
-corpus-estreitado** (a mesma disciplina "zero real é corte real" que a seção 13 abaixo aplica a
-*propriedades e formas de sintaxe de valor não-medidas*): aceitar uma string de palavra-chave é uma
+corpus-estreitado:** isso já era a decisão certa antes da seção 7 do `docs/rmlx-subset.md`
+(2026-08-07, a ordem do líder de que este projeto mira distribuição ampla e não estreita escopo por
+uso do consumidor) virar a regra geral do documento -- aceitar uma string de palavra-chave é uma
 checagem de pertencimento-a-conjunto de custo zero, não maquinaria nova de parser/serializador do
 jeito que aceitar uma forma funcional de cor (`rgb()`, seção 13) ou uma propriedade nova
-(`transition`, seção 13) seria -- não há nada aqui análogo a "implementar uma feature que ninguém
-pediu". O próprio escopo deste dump é valores **computados**, nunca layout (§12); imprimir
+(`transition`, seção 13) seria, então nunca houve aqui nada análogo a "implementar uma feature que
+ninguém pediu". O próprio escopo deste dump é valores **computados**, nunca layout (§12); imprimir
 `display=table-row` como um valor computado legal não compromete este projeto a nada sobre algum dia
 fazer layout de tabela, exatamente como imprimir um comprimento fora-do-viewport não compromete a
 nada sobre algum dia renderizar fora-da-tela. O precedente existente mais próximo é a própria linha
 de 3 valores do algoritmo `Box` da seção 6.3: real, não-medida, upstream, barata de incluir
 fielmente, mantida **porque** não custa nada além de implementar honestamente um algoritmo que esta
-tabela já exige pros casos medidos. **Sinalizado pra atenção do líder de qualquer jeito, não decidido
-em silêncio** (a mesma cortesia que a própria chamada de pré-multiplicação da `ERRATA-2` e a própria
-reversão dela pela `ERRATA-4` estenderam): a própria lista de 14 membros upstream do `display` é a
-que mais provavelmente merece um segundo olhar, já que vários dos próprios membros nomeiam modos de
-layout (`table-row`, `flow-root`, ...) que este código-base não tem plano nenhum de algum dia
-fazer layout. Se o líder julgar que um conjunto `display` corpus-estreitado (medido: `none`, `block`,
-`inline-block`, mais `flex` pelo próprio censo do consumidor da seção 2 do
-`docs/rmlx-subset.md`, 10 instâncias) é a decisão certa em vez disso, isso é uma edição de célula
-aqui, não uma mudança de design em lugar nenhum mais deste documento.
+tabela já exige pros casos medidos. A própria lista de 14 membros upstream do `display`, vários dos
+próprios membros nomeando modos de layout (`table-row`, `flow-root`, ...) que este código-base não
+tem plano nenhum de algum dia fazer layout, foi sinalizada pra atenção do líder quando esta errata
+foi escrita, oferecendo uma alternativa corpus-estreitada (medido: `none`, `block`, `inline-block`,
+mais `flex` pelo próprio censo do consumidor da seção 2 do `docs/rmlx-subset.md`, 10 instâncias)
+como opção viva. **A seção 7 do `docs/rmlx-subset.md` fecha essa opção**, não só pro `display`:
+imprimir uma palavra-chave que este dump nunca vê exercitada não compromete este projeto a nada
+sobre implementar o modo de layout que ela nomeia (o mesmo raciocínio "valores computados, não
+layout" declarado acima), então não sobra motivo, sob a ordem do líder de 2026-08-07, pra estreitar
+este ou qualquer outro conjunto de palavra-chave upstream-completo por contagem de corpus. O
+conjunto `display` de 14 membros inteiro fica, e um estreitamento futuro precisaria de um motivo
+diferente de "o corpus do consumidor não usa".
 
 #### 6.2 Expansão shorthand-pra-longhand (sem slot próprio de registro; alimenta as entradas longhand acima)
+
+**13 atalhos é a contagem de hoje (10 linhas abaixo, `border-top`/`-right`/`-bottom`/`-left`
+contados como 4), não o alvo de paridade.** A §7 do `docs/rmlx-subset.md` autoriza todo atalho que
+o build fixado do RmlUi registra; a `ESC-2` do `TODO.md` (onda `WR2R`) é a fatia dona que eleva
+isso pra **20** (+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
+`transform-origin`). Como o 72 da seção 6.1, esta contagem não tem checagem automática
+doc-vs-código hoje -- só as próprias contagens de divergência da §14.1/§14.2 são verificadas em
+tempo de execução contra este documento (a `ESC-0` verificou isso ao escrever a nota acima; não
+repetido aqui na íntegra).
 
 *(mesma tabela da seção 6.2 em inglês -- nomes de propriedade e algoritmos não traduzidos. A linha de
 `border-top`/`-right`/`-bottom`/`-left` foi corrigida em 2026-08-06 -- ver a nota a seguir.)*
@@ -3088,15 +3216,21 @@ upstream), um canal alpha ausente tem default `ff` (totalmente opaco, batendo co
 pré-preenchimento default `hex_values[3] = {'f','f'}` do upstream), depois os quatro canais imprimem
 como dois dígitos hex minúsculos cada, em ordem `rgba`, prefixados por `#`.
 
-**Fora de escopo, exige aval do líder antes de qualquer implementação (seção 13):** as duas cores
-nomeadas que o censo de fato mediu (`transparent` → `#00000000`, `white` → `#ffffffff`) estão no
-escopo por serem medidas; o **resto** da tabela de 19 cores nomeadas do RmlUi (`black`, `red`,
-`blue`, ... -- `PropertyParserColour.cpp:117-136`) e toda forma funcional de cor (`rgb()`, `rgba()`,
-`hsl()`, `lab()`, `lch()`, `oklab()`, `oklch()`) estão com **zero medição** no censo (seção 0: *"0
-`rgb()`/`rgba()` funcional"*) e **não** estão autorizadas pela decisão de paridade-de-unidades do
-líder, que nomeou unidades, não sintaxe de cor. Um dumper conforme encontrando qualquer uma delas
-tem de **fail-high** (seção 11), não suportar em silêncio por acaso porque o parser era fácil de
-estender.
+**No escopo, autorizado pela §7 (2026-08-07) do `docs/rmlx-subset.md`, não por contagem de censo
+(seção 13):** as duas cores nomeadas que o censo de fato mediu (`transparent` → `#00000000`,
+`white` → `#ffffffff`) já estavam no escopo por serem medidas; o **resto** da tabela de 19 cores
+nomeadas do RmlUi (`black`, `red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:117-135`) e toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`,
+`lab()`, `lch()`, `oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:178-195`) estão com **zero medição** no censo (seção 0: *"0
+`rgb()`/`rgba()` funcional"*) mas estão autorizadas agora de qualquer jeito: o build fixado do
+RmlUi aceita todas elas, então a ordem do líder de 2026-08-07 ("se o motor que está sendo
+substituído aceita, o nosso aceita") põe tudo isso no escopo, não só unidades. Uso zero no censo
+segue sendo dado real e útil de sequenciamento/risco (seção 13) -- deixa de ser motivo pra
+fail-high. Um dumper conforme encontrando qualquer uma dessas ainda tem de parsear e imprimir
+corretamente pelas mesmas regras de forma canônica que as formas hex acima já seguem; só uma
+sintaxe de cor que **nem o censo nem o build fixado do RmlUi** aceita ainda dispararia **fail-high**
+(seção 11) -- hoje não há esse caso.
 
 **Cores são dumpadas straight-alpha pra propriedades tipo-cor escalares -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -3300,12 +3434,16 @@ Concretamente:
 
 - **Nome de propriedade desconhecido** (não no registro da seção 6.1): a declaração é descartada;
   toda *outra* declaração no mesmo bloco de regra continua se aplicando.
-- **Forma de seletor desconhecida** (qualquer coisa fora do escopo desta onda -- restated aqui pro
-  próprio escopo de seletor desta onda: `class`/`id`/descendente/filho (`>`)/tag/composto/
-  lista-vírgula/`:hover` pela decisão 1 do líder, entrada `RMLX-2` do `TODO.md` -- `nth-child`,
-  `:not(`, seletores de atributo, combinadores irmão, e toda pseudo-classe além de
-  `:hover`/`:focus`/`:active` estão todos **fora de escopo**, batendo com os próprios cortes de zero
-  real da seção 2 do `docs/rmlx-subset.md`): **corrigido, `UIX-RCSS-ERRATA-2` (Achado G,
+- **Forma de seletor desconhecida** (restated aqui pro próprio escopo de seletor desta onda, pelas
+  §6.2/§7 (2026-08-07) do `docs/rmlx-subset.md`: `class`/`id`/descendente/filho (`>`)/tag/composto/
+  lista-vírgula/pseudo-classe (qualquer nome que o próprio parser do build fixado do RmlUi aceite
+  como identificador, não só `:hover`)/`nth-child`/`:not(`/seletores de atributo (`[x]`)/
+  combinadores irmão (`+`/`~`)/seletor universal (`*`) estão todos **dentro de escopo** -- o build
+  fixado do RmlUi aceita todos eles, pela regra de paridade da §7 do `docs/rmlx-subset.md`, então
+  nenhum deles é o exemplo que este bullet precisa hoje. O que ainda dispararia este bullet é uma
+  forma de seletor que **nem o censo nem o próprio parser do build fixado do RmlUi** reconhece --
+  hoje não há exemplo conhecido de uma; este bullet documenta a *consequência*, que não depende de
+  já existir um caso): **corrigido, `UIX-RCSS-ERRATA-2` (Achado G,
   reverificado direto) -- só o seletor individual que falha ao registrar é descartado, não a regra
   inteira.** `StyleSheetParser::ConstructNodes` (`StyleSheetParser.cpp:947-967`) resolve cada
   seletor separado por vírgula de forma independente (`for (const String& selector : selector_list)
@@ -3419,39 +3557,78 @@ respectivamente -- nenhum deles é fato de cascata, e um futuro formato de dump 
 código), nunca uma extensão silenciosa deste arquivo, espelhando a cláusula idêntica da seção 10 do
 `docs/uix-dom.md` pra própria fronteira.
 
-### 13. Explicitamente fora de escopo hoje -- exige aval do líder antes de qualquer implementação
+### 13. O que ainda precisa de código novo -- dono é uma fatia `ESC-*`, não "fora de escopo"
 
-Pela própria cláusula de cabeçalho deste documento e a do `docs/rmlx-subset.md`: **parar, editar
-esta spec com um diff, pegar o aval do líder, só então implementar.** Nomeado aqui pra um futuro
-implementer não ter de redescobrir cada um fixture por fixture:
+**Superada pela §7 do `docs/rmlx-subset.md` (2026-08-07, ordem do líder).** Toda construção que
+esta seção listava como "fora de escopo, exige aval" era, apurado item a item abaixo, algo que o
+build fixado do RmlUi já aceita -- citações contra `glintfx/build/_deps/rmlui-src`, não o clone de
+estudo `examples/RmlUi`. Sob a regra da §7 ("se o motor que está sendo substituído aceita, o nosso
+aceita"), nada disso é mais fora de escopo; o que sobra é uma **lista de estágio**: o que este
+formato de dump/registro ainda não implementa, e qual fatia `ESC-*` (`TODO.md`, onda `WR2R`) é dona
+de somar cada uma. Esta seção deixa de ser o portão de aval pros itens abaixo -- esse aval já saiu,
+em 2026-08-07, pra lista inteira. O mecanismo parar-editar-aval da cláusula do cabeçalho continua
+intacto pro que ele ainda guarda: uma construção que **nem** o censo **nem** o build fixado do
+RmlUi aceitam. O único exemplo confirmado disso em registro hoje é a unidade de duração `ms` (§9.3:
+*"`ms` não é reconhecida como unidade de duração no RmlUi upstream, de jeito nenhum"*) -- não
+listada como bullet abaixo porque nunca foi enquadrada aqui como corte por contagem de corpus; todo
+bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
 
-- **Cor:** toda cor nomeada do RmlUi além de `transparent`/`white` (mais 17 entradas,
-  `PropertyParserColour.cpp:117-136`), e toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`,
-  `lab()`, `lch()`, `oklab()`, `oklch()`) -- zero-medida, e a decisão de paridade-de-unidades do
-  líder nomeou unidades, não sintaxe de cor, então isso nunca foi autorizado implicitamente.
+- **Cor:** toda cor nomeada do RmlUi além de `transparent`/`white`
+  (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135` registra 19 ao
+  todo, `black` até `aqua` mais `transparent`) -- dona é a `ESC-5`. Toda forma funcional de cor
+  (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, mesmo arquivo
+  `:178-193`, conversões `:64-115`) -- dona é a `ESC-6`. **Discrepância aberta em registro, não
+  resolvida por esta reescrita:** o item `ESC-5` do `TODO.md` reporta uma *terceira* sobrevivente,
+  `black` (citando `value_compute.cpp:784-792`), onde a §7.1 acima ainda nomeia só `transparent`/
+  `white` como medidas; quem entregar a `ESC-5` resolve qual está certo contra o código, não esta
+  doc.
 - **`transition`, `font-effect`:** as duas são propriedades reais e registradas do RmlUi
-  (`StyleSheetSpecification.cpp:399`, `:405`) mas com **zero medição** no censo -- excluídas do
-  registro da seção 6.1 na mesma base de "zero real é corte real" que a seção 2 do
-  `docs/rmlx-subset.md` usa pra `nth-child`/`:not`/`z-index`, **não** dobradas em silêncio só porque
-  por acaso compartilham maquinaria com `animation`/`filter`.
-- **`z-index`, `nth-child`, `:not(`, seletores de atributo (`[x]`), combinadores irmão (`+`/`~`),
-  seletor universal (`*`):** já nomeados como cortes de zero real pelo próprio `docs/rmlx-subset.md`;
-  restated aqui pra este documento sozinho (pela própria promessa do cabeçalho dele) declarar a
-  fronteira de seletor completa sem exigir que um leitor também tenha aquele documento aberto.
-- **Funções de `transform` 3D/matriz** (`translate3d`, `matrix`, `perspective`, ...): o próprio
-  limite declarado da seção 9.4 -- o subconjunto 2D é verificado contra as 2 instâncias do corpus,
-  nada além disso.
-- **A forma `ellipse` do `radial-gradient`:** só `circle` está no escopo pela própria gramática já
-  entregue do `docs/effects.md`; um fixture com `ellipse` precisaria do aval deste documento antes
-  de um dumper poder aceitar, não meramente uma mudança de código no `docs/effects.md`.
-- **Propriedades nativas do RmlUi não-medidas fora da seção 6.1** (uma amostra não-exaustiva,
-  nomeada porque são as que um leitor familiarizado com o RmlUi upstream completo poderia esperar e
-  razoavelmente supor incluídas): `font-style`, `font-weight` (medidas **zero** no censo apesar de
-  `font-family`/`font-size` serem muito usadas -- sinalizadas explicitamente já que a ausência delas
-  é fácil de passar batido), `caret-color`, `image-color`, `visibility`, `clip`, `float`, `clear`,
-  `drag`, `nav-*`, `pointer-events`, `perspective*`, `transform-origin*`, `-rmlui-language`,
-  `-rmlui-direction`, `word-break`, `text-decoration`, `font-kerning`, `scrollbar-margin`,
-  `overscroll-behavior`.
+  (`StyleSheetSpecification.cpp:399`, `:405`) -- `transition` tem dona `ESC-23` (o mesmo mecanismo
+  de pin-com-dona-nomeada-e-expiração-automática que a §14.2 já usa pra `animation`); `font-effect`
+  tem dona `ESC-24`.
+- **Formas de seletor:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; seletores de
+  atributo com os 7 operadores `=`/`~=`/`|=`/`^=`/`$=`/`*=`/nu (`StyleSheetSelector.h:39-46`,
+  `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; combinadores irmão (`+`/`~`,
+  `StyleSheetParser.cpp:1091-1092`) -- `ESC-10`; as 13 pseudo-classes estruturais (`nth-child`,
+  `nth-last-child`, `nth-of-type`, `nth-last-of-type`, `first-child`, `last-child`,
+  `first-of-type`, `last-of-type`, `only-child`, `only-of-type`, `empty`, `not(<seletor>)` com
+  árvore de seletor própria, `scope` -- `StyleSheetSelector.h:69-83`) -- `ESC-11`; e o próprio
+  casador de pseudo-classe genérico e sem limite (`Element::SetPseudoClass` é API pública sem lista
+  fechada, `Include/RmlUi/Core/Element.h:266`, `StyleSheetSelector.h:116` -- corrigido, a própria
+  linha da §6.2 acima) -- `ESC-12`.
+- **Funções de `transform` 3D/matriz** (`translate3d`, `matrix`, `matrix3d`, `rotate3d`,
+  `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`, `perspective` --
+  `PropertyParserTransform.cpp`): a gramática da seção 9.4 fica no subconjunto 2D (3 funções) até a
+  `ESC-7` entrar (+18, fechando 3 → 21) -- escopo é só parse + computo + serialização; aplicar a
+  matriz de render continua sendo trabalho da `RMLX-8`, sem mudança.
+- **A forma `ellipse` do `radial-gradient`** (`ending-shape` aceita `circle, ellipse, unspecified`,
+  `DecoratorGradient.cpp:519`): `circle` fica a única forma que a gramática do `docs/effects.md`
+  aceita até a `ESC-15` (paridade de decoradores/filtros/efeitos-de-fonte nativos, fatia mais larga
+  em que esta forma entra dobrada, não uma fatia própria) entrar.
+- **Regras de folha `@media`, `@decorator`, `@spritesheet`:** o build fixado do RmlUi aceita 5
+  regras de folha (`@font-face`, `@keyframes`, `@decorator`, `@spritesheet`, `@media` --
+  `StyleSheetParser.cpp:569-663,786-798`); o próprio formato de dump deste documento trata 2
+  (`@font-face`/`@keyframes`, seção 10). `@media` tem dona `ESC-13`; `@decorator`/`@spritesheet`
+  têm dona `ESC-14`.
+- **Propriedades nativas do RmlUi não-medidas além das 72 atuais da seção 6.1:** a `ESC-1` (a fatia
+  72 → 107 do registro, própria nota nova da seção 6.1 acima) nomeia cada uma pelo call site
+  upstream exato, então não são re-listadas aqui pra evitar uma segunda cópia dessa enumeração que
+  poderia divergir. Várias precisam de mais que uma linha de registro pra funcionar ponta a ponta,
+  e têm fatia dona própria pra isso: renderização de `font-style`/`font-weight` (seleção de face,
+  não só a entrada de registro) -- `ESC-16`; renderização de `text-decoration` -- `ESC-17`;
+  computação de `float`/`clear` na cascata -- `ESC-18`; `word-break` -- `ESC-19`; `z-index`
+  computado (aplicação de contexto de empilhamento continua na `RMLX-4`) -- `ESC-20`;
+  `visibility`/`pointer-events`/`clip` -- `ESC-21`; `nav-up/right/down/left`/
+  `overscroll-behavior`/`scrollbar-margin`/`drag`/`caret-color`/`image-color` -- `ESC-22`;
+  `perspective`/`perspective-origin-x/y`/`transform-origin-x/y/z` -- `ESC-24`.
+
+**A varredura de fechamento, `ESC-25`:** enumera o espaço fechado inteiro do build fixado (toda
+propriedade, atalho, conjunto de palavra-chave, unidade, função, forma de seletor, regra de folha)
+contra `glintfx/build/_deps/rmlui-src`, não `examples/RmlUi`, pra pegar o que as fatias `ESC-1..24`
+acima não nomearam individualmente -- o próprio item do `TODO.md` diz por que *enumerar* e não
+*buscar*: busca dirigida é exatamente o método que produziu o buraco original desta seção. O que
+essa varredura ainda encontrar excluído sai por **decisão registrada do líder nomeando
+implementabilidade ou dependência técnica** -- nunca contagem de uso, pela §7.
 
 ### 14. Registro de divergências (divergence ledger)
 
@@ -3714,7 +3891,20 @@ real precisa e toma esta decisão idêntica na camada idêntica (o próprio ramo
 do `StyleSheetParser::Parse`, `:786-789`) -- esta não é uma fronteira que este módulo inventou, é o
 único lugar em que a própria divisão tokenizador-vs-parser do upstream já traça a linha do mesmo
 jeito. **Decisão:** fica no nível do lexer, permanentemente, não só "por enquanto" -- o teto já está
-declarado (só o literal, case-sensitive, `"keyframes"`; as próprias exclusões de zero-real da seção
-13 do `docs/rmlx-subset.md` pra `@media`/`@import`/`@charset`/`@supports` recebem o default comum de
-modo Declaration, e uma fixture real precisando de uma delas é o mesmo movimento "parar, somar um
-nome nesta tabela", nunca um alargamento silencioso do default).
+declarado (só o literal, case-sensitive, `"keyframes"`). **Correção ao auditar esta linha pra
+`ESC-0` (2026-08-07): a referência cruzada que esta frase fazia, pra "as próprias exclusões de
+zero-real da seção 13 do `docs/rmlx-subset.md` pra `@media`/`@import`/`@charset`/`@supports`", não
+resolve -- aquele documento não tem essa seção nem essa lista. O que de fato rege `@media`,
+`@decorator` e `@spritesheet` hoje é a própria seção 13 deste documento (reescrita em 2026-08-07):
+estão nomeadas lá, donas `ESC-13`/`ESC-14`, não exclusões por contagem de corpus. `@media` em
+particular é **aceito pelo build fixado do RmlUi** (`StyleSheetParser.cpp:835-854`) -- fato que o
+enquadramento antigo desta frase não sabia, já que tratava `@media` como exclusão da mesma classe
+que `@import`/`@charset`/`@supports`, o que não são. `@import`/`@charset`/`@supports` seguem
+genuinamente não-tratados: o próprio despacho de at-rule do parser fixado nomeia exatamente 5
+identificadores (`keyframes`, `decorator`, `spritesheet`, `media`, `font-face`,
+`StyleSheetParser.cpp:786-863`) e nenhum dos três está entre eles, então sob a §7 ficam fora porque
+**nenhum dos dois lados** aceita -- não por contagem de corpus.** Se autorizar `@media` neste
+formato de dump exige um caso especial próprio no lexer (do mesmo jeito que `@keyframes` exige, pelo
+mesmo motivo de balanço de chaves) é pergunta da própria `ESC-13` responder, não resolvida aqui --
+uma fixture real precisando de um dos três at-rules genuinamente não-tratados é o mesmo movimento
+"parar, somar um nome nesta tabela", nunca um alargamento silencioso do default.

@@ -50,7 +50,9 @@
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
 
+#include <cmath>
 #include <cstdio>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -289,6 +291,64 @@ void test_15_4_quantize_boundary() {
   check_eq(glintfx::rcss_quantize(1.21874f), "1.2187", "15.4 one step below the tie rounds toward zero (own float32-verified anchor)");
   check_eq(glintfx::rcss_quantize(-1.21875f), "-1.2188", "15.4 negative exact tie also grows in magnitude (own float32-verified anchor)");
   check_eq(glintfx::rcss_quantize(-1.21874f), "-1.2187", "15.4 negative one-step-below stays at smaller magnitude (own float32-verified anchor)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `UIX-QUANTIZE-MAGNITUDE` -- mirrors side B's own `test_quantize_magnitude_ceiling()`
+//     (`glintfx/tests/uix_style/value_compute_sanity.cpp`) byte-for-byte, same rationale, same
+//     literal ceiling value (`140737488355328.0 = 2^47`, deliberately duplicated per this file's
+//     own `kQuantizeMagnitudeCeiling` comment -- ADR-0020, the two dumper sides do not share
+//     code). Pure function, no document/Harness needed, same footing as `test_15_4_*` above. See
+//     that side-B test's own header comment for the full rationale each numbered case below
+//     mirrors.
+// PT: `UIX-QUANTIZE-MAGNITUDE` -- espelha byte-a-byte o próprio `test_quantize_magnitude_ceiling()`
+//     do lado B (`glintfx/tests/uix_style/value_compute_sanity.cpp`), mesmo raciocínio, mesmo
+//     valor literal de teto (`140737488355328.0 = 2^47`, deliberadamente duplicado per o próprio
+//     comentário do `kQuantizeMagnitudeCeiling` deste arquivo -- ADR-0020, os dois lados do dumper
+//     não compartilham código). Função pura, nenhum documento/Harness necessário, o mesmo patamar
+//     do `test_15_4_*` acima. Ver o próprio comentário de cabeçalho daquele teste do lado B pro
+//     raciocínio completo que cada caso numerado abaixo espelha.
+void test_quantize_magnitude_ceiling() {
+  const double kMaxD = 140737488355328.0; // 2^47, MUST match kQuantizeMagnitudeCeiling above
+  const float kMaxF = static_cast<float>(kMaxD);
+  check(static_cast<double>(kMaxF) == kMaxD,
+        "kMaxQuantizeMagnitude (2^47) is exactly representable in float32 -- test setup sanity");
+  const std::string kSaturatedPos = "140737488355328.0000";
+  const std::string kSaturatedNeg = "-140737488355328.0000";
+
+  // (1) far below the ceiling -- ordinary corpus-scale value, untouched.
+  check_eq(glintfx::rcss_quantize(999999.0f), "999999.0000", "far below ceiling: untouched");
+  check_eq(glintfx::rcss_quantize(-999999.0f), "-999999.0000", "far below ceiling, negative: untouched");
+
+  // (2) exactly at the ceiling -- the LAST unclamped value.
+  check_eq(glintfx::rcss_quantize(kMaxF), kSaturatedPos, "exactly at the ceiling: NOT clamped");
+  check_eq(glintfx::rcss_quantize(-kMaxF), kSaturatedNeg, "exactly at the negative ceiling: NOT clamped");
+
+  // (3) the very next float32 above/below the ceiling -- the FIRST clamped value.
+  const float kJustAbove = std::nextafterf(kMaxF, std::numeric_limits<float>::max());
+  const float kJustBeyondNeg = std::nextafterf(-kMaxF, std::numeric_limits<float>::lowest());
+  check_eq(glintfx::rcss_quantize(kJustAbove), kSaturatedPos,
+           "one float32 step past the ceiling: clamped, saturates to the SAME string as (2)");
+  check_eq(glintfx::rcss_quantize(kJustBeyondNeg), kSaturatedNeg,
+           "one float32 step past the negative ceiling: clamped, saturates to the SAME string as (2)");
+
+  // (4) the OLD divergent zone -- side A's own long long UB threshold (~9.2234e14) used to be UB
+  //     HERE; side B's own unsigned long long UB threshold (~1.8447e15) was not. Both now agree.
+  check_eq(glintfx::rcss_quantize(1.0e15f), kSaturatedPos,
+           "old divergent zone (9.2234e14 < 1e15 < 1.8447e15): saturated, side A no longer UB here");
+  check_eq(glintfx::rcss_quantize(-1.0e15f), kSaturatedNeg, "old divergent zone, negative mirror");
+  check_eq(glintfx::rcss_quantize(9.223372e14f), kSaturatedPos,
+           "at this file's own OLD long long UB threshold (~LLONG_MAX/10000): saturated, no "
+           "longer UB");
+  check_eq(glintfx::rcss_quantize(1.844674e15f), kSaturatedPos,
+           "at side B's own OLD unsigned long long UB threshold (~ULLONG_MAX/10000): also "
+           "saturated");
+
+  // (5) FLT_MAX -- the true float32 ceiling. No crash, no UB, same defined string.
+  check_eq(glintfx::rcss_quantize(std::numeric_limits<float>::max()), kSaturatedPos,
+           "FLT_MAX: 23 orders of magnitude past the old thresholds, still saturates cleanly");
+  check_eq(glintfx::rcss_quantize(std::numeric_limits<float>::lowest()), kSaturatedNeg,
+           "-FLT_MAX: negative mirror");
 }
 
 // ---------------------------------------------------------------------------
@@ -544,6 +604,7 @@ void test_9_2_1_auto_spacing_rules_3_and_4(Harness& h) {
 
 int main() {
   test_15_4_quantize_boundary();
+  test_quantize_magnitude_ceiling();
 
   Harness h;
   if (!h.setup()) {
@@ -562,7 +623,7 @@ int main() {
     std::puts(
         "rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4; plus own-finding "
         "premultiplied-alpha-has-teeth; plus UIX-RCSS-CONFORMIDADE additions: 9.1 literal, 9.2.1 "
-        "rules 3+4)");
+        "rules 3+4; plus UIX-QUANTIZE-MAGNITUDE ceiling coverage)");
     return 0;
   }
   std::printf("rcss_dump_worked_examples: %d failure(s)\n", g_failures);

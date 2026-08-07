@@ -661,6 +661,24 @@ std::string quantize(float x) {
     //     silêncio.
     return "0.0000";
   }
+  // EN: `UIX-QUANTIZE-MAGNITUDE` -- see `kMaxQuantizeMagnitude`'s own header comment for the full
+  //     derivation. Saturate BEFORE the `* 10000` scale step (not after): `d` here is the raw
+  //     value in the CALLER's own unit (px/deg/number/%), so this check is independent of the
+  //     internal `10000` scale factor and stays correct even if that factor's own value ever
+  //     changes. Clamping (not rejecting) mirrors the non-finite branch just above -- neither has
+  //     a `ValueComputeStatus` channel available at this function's own signature.
+  // PT: `UIX-QUANTIZE-MAGNITUDE` -- ver o próprio comentário de cabeçalho do `kMaxQuantizeMagnitude`
+  //     pra derivação completa. Satura ANTES do passo de escala `* 10000` (não depois): `d` aqui é
+  //     o valor cru na própria unidade do CHAMADOR (px/deg/número/%), então esta checagem é
+  //     independente do fator de escala interno `10000` e continua correta mesmo se aquele fator
+  //     um dia mudar de valor. Saturar (não rejeitar) espelha o ramo do não-finito logo acima --
+  //     nenhum dos dois tem canal `ValueComputeStatus` disponível na própria assinatura desta
+  //     função.
+  if (d > kMaxQuantizeMagnitude) {
+    d = kMaxQuantizeMagnitude;
+  } else if (d < -kMaxQuantizeMagnitude) {
+    d = -kMaxQuantizeMagnitude;
+  }
   double scaled = d * 10000.0;
   double rounded = std::trunc(scaled + std::copysign(0.5, scaled));
   bool negative = rounded < 0.0;

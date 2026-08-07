@@ -89,7 +89,11 @@
 //     (a nested `linear-gradient(...)`/`radial-gradient(...)`, docs/uix-rcss.md section 9.2's own
 //     table) -- the corpus never nests more than 1 level deep, this ceiling exists only to keep a
 //     hostile/adversarial-review-generated input from recursing unboundedly, never to serve a real
-//     use case beyond what the corpus already shows.
+//     use case beyond what the corpus already shows. `kMaxQuantizeMagnitude` (see that constant's
+//     own comment, right below) is a DIFFERENT kind of ceiling from the two above -- it does not
+//     reject (there is no `ValueComputeStatus` channel at its own call site) and it does NOT keep
+//     this paragraph's own "never silently truncate" promise: it saturates. That is a deliberate
+//     departure, not an oversight -- `quantize()`'s own comment states the reasoning.
 //
 //     NAMESPACE: `glintfx::uix::style`, same module as lexer.hpp/property_registry.hpp/
 //     shorthand.hpp.
@@ -188,6 +192,11 @@
 //     própria tabela da seção 9.2 do docs/uix-rcss.md) -- o corpus nunca aninha mais de 1 nível de
 //     profundidade, este teto existe só pra um input hostil/gerado-por-revisão-adversarial não
 //     recursar sem limite, nunca pra servir um caso de uso real além do que o corpus já mostra.
+//     `kMaxQuantizeMagnitude` (ver o próprio comentário daquela constante, logo abaixo) é um tipo
+//     DIFERENTE de teto dos dois acima -- ele não rejeita (não há canal `ValueComputeStatus` no
+//     próprio call site dele) e NÃO mantém a própria promessa "nunca truncam em silêncio" deste
+//     parágrafo: ele satura. É um desvio deliberado, não um descuido -- o próprio comentário do
+//     `quantize()` explica o raciocínio.
 //
 //     NAMESPACE: `glintfx::uix::style`, o mesmo módulo do lexer.hpp/property_registry.hpp/
 //     shorthand.hpp.
@@ -217,6 +226,77 @@ enum class ValueComputeStatus {
 inline constexpr std::size_t kMaxRawValueBytes = 8192;
 inline constexpr int kMaxNestDepth = 8;
 
+// EN: `UIX-QUANTIZE-MAGNITUDE` -- the raw-magnitude ceiling `quantize()` (below) saturates ANY
+//     finite `x` to before its own `* 10000` scale-and-round-to-integer step, so the later
+//     `static_cast<unsigned long long>` can never see a value it cannot represent. See header
+//     "Teto" for why this ceiling is documented separately from `kMaxRawValueBytes`/
+//     `kMaxNestDepth` rather than folded into that paragraph: those two are TEXTUAL/STRUCTURAL
+//     ceilings enforced by functions that already return `ValueComputeStatus` (reject, propagate
+//     `Invalid`, the caller's whole declaration drops); this one guards a NUMERIC ceiling inside
+//     `quantize()` itself, the one funnel point every `print_number`/`print_length_px`/
+//     `print_percent`/`print_angle_deg` call in this file shares -- including paths a textual/
+//     structural check upstream (`parse_float_token`'s own `isfinite`) cannot reach, because the
+//     offending magnitude can also arise from a RUNTIME multiplication this module performs itself
+//     (`resolve_length_px()`'s own `v * dp_ratio`, where `dp_ratio` is a caller-supplied,
+//     magnitude-unbounded `App`/`UiLayer` API argument, not RCSS source text) -- `quantize()` has
+//     no `ValueComputeStatus` return channel to reject through without a signature change rippling
+//     into every one of its own ~15 call sites across this file, so it follows this file's own
+//     EXISTING precedent for a spec-silent numeric edge case instead: the same function's own
+//     non-finite (`NaN`/`Inf`) input already canonicalizes to a defined, well-formed string rather
+//     than propagating a status; this ceiling extends that exact idiom to "syntactically an
+//     ordinary finite float, numerically pathological" inputs, the same category non-finite belongs
+//     to, not the category `kMaxRawValueBytes`/`kMaxNestDepth` police (malformed/hostile TEXT
+//     shape). Value: `2^47 = 140737488355328.0` -- a power of two so a `float` at or adjacent to
+//     this exact boundary is bit-exact and reproducible (this module's own `UIX-RCSS-ERRATA-3`
+//     lesson: a "nice-looking" decimal literal is not reliably float32-exact at a boundary a test
+//     needs to pin), chosen with a ~6.55x safety margin below the TIGHTER of the two thresholds
+//     this ceiling replaces (`LLONG_MAX / 10000 ~= 9.2234e14`, side A's own `long long`-typed
+//     `rcss_quantize()` in `glintfx/src/rml/rcss_dump.cpp`; side B's own `unsigned long long` here
+//     is looser still, `ULLONG_MAX / 10000 ~= 1.8447e15`) -- the corpus's own largest measured
+//     value is 3 digits (`999dp`), so this ceiling is chosen for float32's own true UB boundary,
+//     never for any real corpus/use-case magnitude. Side A independently reproduces this SAME
+//     numeric value as a local literal in its own file (not a shared header -- see `ADR-0020`, the
+//     two dumper sides intentionally do not share code) -- the two ceilings, and the saturation
+//     target they produce, MUST stay byte-identical, or the differential oracle's own
+//     `UIX-RCSS-ORACULO` regains exactly the blind spot this item closes.
+// PT: `UIX-QUANTIZE-MAGNITUDE` -- o teto de magnitude crua que o `quantize()` (abaixo) satura
+//     qualquer `x` finito ANTES do próprio passo de escalar-por-`10000`-e-arredondar-pra-inteiro,
+//     pra que o `static_cast<unsigned long long>` posterior nunca veja um valor que não consegue
+//     representar. Ver "Teto" no cabeçalho pro motivo deste teto estar documentado separado do
+//     parágrafo `kMaxRawValueBytes`/`kMaxNestDepth` em vez de dobrado ali dentro: aqueles dois são
+//     tetos TEXTUAIS/ESTRUTURAIS aplicados por funções que já devolvem `ValueComputeStatus`
+//     (rejeitam, propagam `Invalid`, a declaração inteira do chamador cai); este guarda um teto
+//     NUMÉRICO dentro do próprio `quantize()`, o único ponto de funil que toda chamada
+//     `print_number`/`print_length_px`/`print_percent`/`print_angle_deg` deste arquivo compartilha
+//     -- incluindo caminhos que uma checagem textual/estrutural a montante (o próprio `isfinite` do
+//     `parse_float_token`) não alcança, porque a magnitude ofensora também pode nascer de uma
+//     multiplicação em TEMPO DE EXECUÇÃO que este próprio módulo faz (o próprio `v * dp_ratio` do
+//     `resolve_length_px()`, onde `dp_ratio` é um argumento de API do `App`/`UiLayer` fornecido pelo
+//     chamador, sem teto de magnitude nenhum -- não texto-fonte RCSS) -- o `quantize()` não tem
+//     canal de retorno `ValueComputeStatus` pra rejeitar sem uma mudança de assinatura ondular por
+//     ~15 dos seus próprios call sites neste arquivo, então ele segue o precedente JÁ EXISTENTE
+//     deste arquivo pra um caso-limite numérico que a spec não endereça, em vez disso: o próprio
+//     input não-finito (`NaN`/`Inf`) desta mesma função já canonicaliza pra uma string definida,
+//     bem-formada, em vez de propagar um status; este teto estende esse MESMO idioma pra inputs
+//     "sintaticamente um float finito comum, numericamente patológico", a mesma categoria a que o
+//     não-finito pertence, não a categoria que `kMaxRawValueBytes`/`kMaxNestDepth` policiam (forma
+//     de TEXTO malformada/hostil). Valor: `2^47 = 140737488355328.0` -- uma potência de dois pra
+//     que um `float` na fronteira exata ou adjacente a ela seja bit-exato e reproduzível (a própria
+//     lição da `UIX-RCSS-ERRATA-3` deste módulo: um literal decimal "de cara bonita" não é
+//     confiavelmente float32-exato numa fronteira que um teste precisa pinar), escolhido com uma
+//     margem de segurança de ~6,55x abaixo do MAIS APERTADO dos dois limiares que este teto
+//     substitui (`LLONG_MAX / 10000 ~= 9,2234e14`, o próprio `rcss_quantize()` tipado `long long`
+//     do lado A em `glintfx/src/rml/rcss_dump.cpp`; o próprio `unsigned long long` do lado B aqui é
+//     ainda mais folgado, `ULLONG_MAX / 10000 ~= 1,8447e15`) -- o maior valor medido do próprio
+//     corpus tem 3 dígitos (`999dp`), então este teto é escolhido pra própria fronteira real de UB
+//     do float32, nunca pra nenhuma magnitude real de corpus/caso-de-uso. O lado A reproduz este
+//     MESMO valor numérico de forma independente, como literal local no próprio arquivo dele (não
+//     um header compartilhado -- ver `ADR-0020`, os dois lados do dumper intencionalmente não
+//     compartilham código) -- os dois tetos, e o alvo de saturação que produzem, TÊM que ficar
+//     byte-idênticos, senão o próprio `UIX-RCSS-ORACULO` diferencial recupera exatamente o ponto
+//     cego que este item fecha.
+inline constexpr double kMaxQuantizeMagnitude = 140737488355328.0; // 2^47
+
 // EN: docs/uix-rcss.md section 8's own explicit algorithm (widen to double, scale by 10000, round
 //     half-away-from-zero via trunc(scaled + copysign(0.5, scaled)), format as fixed 4-decimal-
 //     digit ASCII, '-' prefix iff negative, -0.0 canonicalized to 0.0) -- implemented WITHOUT any
@@ -227,7 +307,18 @@ inline constexpr int kMaxNestDepth = 8;
 //     (`NaN`/`Inf`) is not addressed by the spec's own algorithm text -- this implementation
 //     defensively canonicalizes it to `"0.0000"` (never a literal `"nan"`/`"inf"` string reaching a
 //     dump line) rather than propagating undefined text, a decision this file's own delivery notes
-//     name explicitly rather than leaving silent.
+//     name explicitly rather than leaving silent. `UIX-QUANTIZE-MAGNITUDE`'s own finding: the spec
+//     also does not address FINITE-but-enormous `x` -- widened to `double` and scaled by `10000`,
+//     `|x|` above roughly `1.8447e15` (this file's own `unsigned long long`) or `9.2234e14` (side
+//     A's own `long long`, `glintfx/src/rml/rcss_dump.cpp`) overflows the integer cast that follows,
+//     undefined behavior in both, at DIFFERENT thresholds -- and `parse_float_token`'s own
+//     `isfinite` guard does not catch it (it rejects non-finite RESULTS, not large-but-finite ones).
+//     `x` is clamped to `kMaxQuantizeMagnitude` (`+-2^47`, see that constant's own header comment
+//     for the full magnitude-boundary derivation and why side A independently reproduces the same
+//     numeric value) BEFORE the `* 10000` scale step, so the cast that follows can never see a
+//     value outside its own representable range -- same "defensively canonicalize a spec-silent
+//     edge case, at this function's own one shared funnel point" idiom as the non-finite clause
+//     just above, extended to cover magnitude instead of finiteness.
 // PT: O próprio algoritmo explícito da seção 8 do docs/uix-rcss.md (amplia pra double, escala por
 //     10000, arredonda meio-pra-longe-de-zero via trunc(scaled + copysign(0.5, scaled)), formata
 //     como ASCII ponto-fixo de 4 casas decimais, prefixo '-' sse negativo, -0.0 canonicalizado pra
@@ -239,7 +330,20 @@ inline constexpr int kMaxNestDepth = 8;
 //     (`NaN`/`Inf`) não é endereçado pelo próprio texto do algoritmo da spec -- esta implementação
 //     canonicaliza defensivamente pra `"0.0000"` (nunca uma string literal `"nan"`/`"inf"`
 //     chegando numa linha de dump) em vez de propagar texto indefinido, uma decisão que as próprias
-//     notas de entrega deste item nomeiam explicitamente em vez de deixar em silêncio.
+//     notas de entrega deste item nomeiam explicitamente em vez de deixar em silêncio. O próprio
+//     achado da `UIX-QUANTIZE-MAGNITUDE`: a spec também não endereça `x` FINITO-porém-enorme --
+//     ampliado pra `double` e escalado por `10000`, `|x|` acima de aproximadamente `1,8447e15`
+//     (o próprio `unsigned long long` deste arquivo) ou `9,2234e14` (o próprio `long long` do lado
+//     A, `glintfx/src/rml/rcss_dump.cpp`) estoura o cast pra inteiro seguinte, comportamento
+//     indefinido nos dois, em limiares DIFERENTES -- e a própria guarda `isfinite` do
+//     `parse_float_token` não pega isso (ela rejeita RESULTADOS não-finitos, não os grandes-porém-
+//     finitos). `x` é saturado pra `kMaxQuantizeMagnitude` (`+-2^47`, ver o próprio comentário de
+//     cabeçalho daquela constante pra derivação completa da fronteira de magnitude e por que o
+//     lado A reproduz o mesmo valor numérico de forma independente) ANTES do passo de escala
+//     `* 10000`, pra que o cast seguinte nunca veja um valor fora da própria faixa representável --
+//     o mesmo idioma "canonicalizar defensivamente um caso-limite que a spec silencia, no único
+//     ponto de funil compartilhado desta função" da cláusula do não-finito logo acima, estendido
+//     pra cobrir magnitude em vez de finitude.
 std::string quantize(float x);
 
 // EN: docs/uix-rcss.md section 7's own `number` row -- `quantize(x)`, no suffix, no sign for

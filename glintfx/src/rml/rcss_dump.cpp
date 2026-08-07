@@ -223,6 +223,28 @@
 
 namespace glintfx {
 
+// EN: `UIX-QUANTIZE-MAGNITUDE` -- MUST stay byte-identical to side B's own
+//     `glintfx::uix::style::kMaxQuantizeMagnitude` (`glintfx/src/uix/style/value_compute.hpp`,
+//     that constant's own header comment has the full magnitude-boundary derivation and safety
+//     margin). Reproduced here as a local literal, NOT a shared header/include across the two
+//     dumper sides -- deliberate, per `ADR-0020`'s own anti-corruption-layer boundary (this file
+//     is the RmlUi-hosted side, on its own way OUT of this repo per `UIX-RCSS-DUMP-A`'s own scope;
+//     side B is the clean-room engine replacing it). If this value and side B's own ever drift,
+//     `UIX-RCSS-ORACULO`'s own differential harness regains exactly the blind spot this item
+//     closes (the two sides silently disagreeing on magnitudes no existing fixture exercises).
+// PT: `UIX-QUANTIZE-MAGNITUDE` -- TEM que ficar byte-idêntico ao próprio
+//     `glintfx::uix::style::kMaxQuantizeMagnitude` do lado B (`glintfx/src/uix/style/
+//     value_compute.hpp`, o próprio comentário de cabeçalho daquela constante tem a derivação
+//     completa da fronteira de magnitude e a margem de segurança). Reproduzido aqui como literal
+//     local, NÃO um header compartilhado entre os dois lados do dumper -- deliberado, per a
+//     própria fronteira de anti-corruption-layer do `ADR-0020` (este arquivo é o lado hospedado
+//     no RmlUi, no próprio caminho de SAÍDA deste repo per o próprio escopo da
+//     `UIX-RCSS-DUMP-A`; o lado B é o motor clean-room que o substitui). Se este valor e o do
+//     lado B algum dia divergirem, o próprio harness diferencial da `UIX-RCSS-ORACULO` recupera
+//     exatamente o ponto cego que este item fecha (os dois lados discordando em silêncio de
+//     magnitudes que nenhuma fixture existente exercita).
+inline constexpr double kQuantizeMagnitudeCeiling = 140737488355328.0; // 2^47
+
 std::string rcss_quantize(float x) {
   double d = static_cast<double>(x);
   // EN: Defensive, not in the spec's own algorithm text: a non-finite input (NaN/Inf, reachable
@@ -236,6 +258,26 @@ std::string rcss_quantize(float x) {
   //     NaN pro texto do dump -- falha pro lado de uma linha bem-formada, nunca pro lado de
   //     "nan.nnnn" no texto de saída que um parser de diff a jusante teria que tratar à parte.
   if (!std::isfinite(d)) d = 0.0;
+  // EN: `UIX-QUANTIZE-MAGNITUDE` -- see `kQuantizeMagnitudeCeiling`'s own comment just above.
+  //     Saturate BEFORE the `* 10000` scale step, same reasoning and same idiom as side B's own
+  //     `quantize()`: no diagnostic channel reaches the stylesheet author from this dump-layer
+  //     function either way (this file's own upstream, RmlUi's cascade, has already accepted the
+  //     declaration by the time a value reaches here), so saturating to a defined, well-formed
+  //     string is this function's own available remedy for a spec-silent numeric edge case, the
+  //     exact same footing the non-finite branch just above already stands on.
+  // PT: `UIX-QUANTIZE-MAGNITUDE` -- ver o próprio comentário do `kQuantizeMagnitudeCeiling` logo
+  //     acima. Satura ANTES do passo de escala `* 10000`, mesmo raciocínio e mesmo idioma do
+  //     próprio `quantize()` do lado B: nenhum canal de diagnóstico chega ao autor da folha de
+  //     estilo a partir desta função de camada de dump de qualquer jeito (o próprio upstream
+  //     deste arquivo, a cascata do RmlUi, já aceitou a declaração no momento em que um valor
+  //     chega aqui), então saturar pra uma string definida, bem-formada, é o próprio remédio
+  //     disponível desta função pra um caso-limite numérico que a spec silencia, o mesmo patamar
+  //     em que o ramo do não-finito logo acima já está.
+  if (d > kQuantizeMagnitudeCeiling) {
+    d = kQuantizeMagnitudeCeiling;
+  } else if (d < -kQuantizeMagnitudeCeiling) {
+    d = -kQuantizeMagnitudeCeiling;
+  }
   const double scaled = d * 10000.0;
   const double rounded = std::trunc(scaled + std::copysign(0.5, scaled));
   // EN: No separate "-0 -> 0" step needed here (unlike the `double q` this algorithm's own
@@ -792,7 +834,38 @@ std::optional<std::string> decorator_entry_value(Rml::Element* el, const Rml::De
     const Rml::Property* fill = get_sub("fill");
     const Rml::Property* rotation = get_sub("rotation");
     if (!sides || !fill || !rotation) return std::nullopt;
-    const long sides_int = std::lround(sides->Get<float>());
+    // EN: `UIX-QUANTIZE-MAGNITUDE`'s own auditoria-dominó sibling, found while auditing this file's
+    //     other float-to-integer conversion (`rcss_quantize()` above): `std::lround()` on a
+    //     `float` whose magnitude exceeds what `long` can represent is a domain error, an
+    //     unspecified result per the C standard -- the SAME missing-guard shape as this file's own
+    //     `rcss_quantize()` bug, one function away. Side B's own `polygon()` sides parse
+    //     (`glintfx/src/uix/style/value_compute.cpp`) never had this exposure: it keeps the value
+    //     `float` end to end and range-checks it directly, no intermediate integer cast at all --
+    //     this side-A-only artifact exists because `sides` here is read back out of an
+    //     already-parsed RmlUi `Property` as `float`, and `long` is only introduced locally to
+    //     compare against the `[3,1024]` range below. Fail-high BEFORE the conversion (same
+    //     "section 11 fail-high: range violation" the line below already documents) rather than
+    //     relying on `std::lround()`'s own unspecified-but-in-practice-huge-negative return for an
+    //     out-of-range input to accidentally fall outside `[3,1024]` anyway.
+    // PT: O próprio sibling de auditoria-dominó da `UIX-QUANTIZE-MAGNITUDE`, achado ao auditar a
+    //     outra conversão float-para-inteiro deste arquivo (`rcss_quantize()` acima): `std::lround()`
+    //     sobre um `float` cuja magnitude excede o que `long` consegue representar é um erro de
+    //     domínio, resultado não-especificado per o padrão C -- a MESMA forma de guarda faltando
+    //     do próprio bug do `rcss_quantize()` deste arquivo, uma função adiante. O próprio parse de
+    //     sides do `polygon()` do lado B (`glintfx/src/uix/style/value_compute.cpp`) nunca teve
+    //     essa exposição: mantém o valor `float` do início ao fim e faz o range-check direto nele,
+    //     sem cast intermediário pra inteiro nenhum -- este artefato é exclusivo do lado A porque
+    //     `sides` aqui é lido de volta de uma `Property` já parseada do RmlUi como `float`, e
+    //     `long` só é introduzido localmente pra comparar contra o range `[3,1024]` abaixo.
+    //     Fail-high ANTES da conversão (o mesmo "section 11 fail-high: range violation" que a
+    //     linha abaixo já documenta) em vez de depender do retorno não-especificado-mas-na-prática-
+    //     enorme-e-negativo do `std::lround()` pra um input fora de faixa acidentalmente cair fora
+    //     de `[3,1024]` de qualquer jeito.
+    const float sides_raw = sides->Get<float>();
+    if (!std::isfinite(sides_raw) || sides_raw < -1e6f || sides_raw > 1e6f) {
+      return std::nullopt; // fail-high: magnitude guard before std::lround(), see comment above
+    }
+    const long sides_int = std::lround(sides_raw);
     if (sides_int < 3 || sides_int > 1024) return std::nullopt; // section 11 fail-high: range violation
     const std::optional<std::string> fill_str = polygon_fill_value(fill->Get<Rml::String>());
     if (!fill_str.has_value()) return std::nullopt;

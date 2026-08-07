@@ -15,7 +15,9 @@
 
 #include "uix/style/property_registry.hpp"
 
+#include <cmath>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -95,6 +97,98 @@ void test_quantize_additional_coverage() {
   check_eq(quantize(-0.00001f), "0.0000", "quantize(-0.00001): canonicalizes -0.0 to 0.0");
   check_eq(quantize(90.0f), "90.0000", "quantize(90): integer value still gets 4 digits");
   check_eq(quantize(0.5f), "0.5000", "quantize(0.5): full 4-digit form, never a shorter one");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `UIX-QUANTIZE-MAGNITUDE` -- `kMaxQuantizeMagnitude`'s own boundary, both signs. See that
+//     constant's own header comment (value_compute.hpp) for the full derivation: two ORIGINAL UB
+//     thresholds (side A's own `long long` at ~9.2234e14, `glintfx/src/rml/rcss_dump.cpp`; side
+//     B's own `unsigned long long` here at ~1.8447e15) collapse into ONE shared, much tighter
+//     saturation ceiling (`kMaxQuantizeMagnitude`, `2^47`) both sides now agree on. Exercises:
+//     (1) far below the ceiling, ordinary corpus-scale value, untouched; (2) exactly AT the
+//     ceiling (the nearest float32, itself bit-exact per this constant's own power-of-two choice),
+//     still untouched -- the boundary itself is the LAST unclamped value; (3) the very NEXT
+//     representable float32 above the ceiling (`std::nextafterf`), the FIRST clamped value --
+//     saturates to the exact same string as (2), proving the `>` comparison fires exactly where
+//     documented. Per this codebase's own measured lesson ("teste na fronteira exata não basta"),
+//     the adjacent-float pair in (2)/(3) is deliberately NOT the only boundary probe: (4) also
+//     exercises the OLD divergent zone (a value strictly between the two original per-side UB
+//     thresholds, where side A used to be UB and side B did not -- reproducing the exact magnitude
+//     this item's own bug report names for each threshold) and (5) exercises `FLT_MAX`, the true
+//     float32 ceiling the bug report also named (23 orders of magnitude above the old thresholds)
+//     -- all of them well past the new ceiling, not merely one float step past it, so a future
+//     off-by-one OR an accidental widening of the ceiling itself is unlikely to make every one of
+//     these cases pass by coincidence.
+// PT: `UIX-QUANTIZE-MAGNITUDE` -- a própria fronteira do `kMaxQuantizeMagnitude`, nos dois sinais.
+//     Ver o próprio comentário de cabeçalho daquela constante (value_compute.hpp) pra derivação
+//     completa: dois limiares de UB ORIGINAIS (o próprio `long long` do lado A em ~9,2234e14,
+//     `glintfx/src/rml/rcss_dump.cpp`; o próprio `unsigned long long` do lado B aqui em ~1,8447e15)
+//     colapsam num ÚNICO teto de saturação compartilhado, bem mais apertado
+//     (`kMaxQuantizeMagnitude`, `2^47`), que os dois lados agora concordam. Exercita: (1) bem
+//     abaixo do teto, valor de escala de corpus comum, intocado; (2) exatamente NO teto (o float32
+//     mais próximo, ele mesmo bit-exato per a própria escolha de potência-de-dois desta constante),
+//     ainda intocado -- a própria fronteira é o ÚLTIMO valor não-saturado; (3) o PRÓXIMO float32
+//     representável logo acima do teto (`std::nextafterf`), o PRIMEIRO valor saturado -- satura
+//     pra exatamente a mesma string de (2), provando que a comparação `>` dispara exatamente onde
+//     documentado. Per a própria lição medida desta casa ("teste na fronteira exata não basta"), o
+//     par de floats adjacentes em (2)/(3) deliberadamente NÃO é a única sonda de fronteira: (4)
+//     também exercita a ANTIGA zona divergente (um valor estritamente entre os dois limiares de UB
+//     originais por-lado, onde o lado A costumava ser UB e o lado B não -- reproduzindo a magnitude
+//     exata que o próprio relatório deste item nomeia pra cada limiar) e (5) exercita `FLT_MAX`, o
+//     verdadeiro teto do float32 que o relatório também nomeou (23 ordens de grandeza acima dos
+//     limiares antigos) -- todos bem além do novo teto, não meramente um passo de float além dele,
+//     então um futuro erro de um-a-mais OU um alargamento acidental do próprio teto dificilmente
+//     faria todos estes casos passarem por coincidência.
+void test_quantize_magnitude_ceiling() {
+  const float kMaxF = static_cast<float>(kMaxQuantizeMagnitude);
+  check(static_cast<double>(kMaxF) == kMaxQuantizeMagnitude,
+        "kMaxQuantizeMagnitude (2^47) is exactly representable in float32 -- test setup sanity");
+  const std::string kSaturatedPos = "140737488355328.0000";
+  const std::string kSaturatedNeg = "-140737488355328.0000";
+
+  // (1) far below the ceiling -- ordinary corpus-scale value, untouched.
+  check_eq(quantize(999999.0f), "999999.0000",
+           "far below ceiling: untouched, matches direct computation");
+  check_eq(quantize(-999999.0f), "-999999.0000", "far below ceiling, negative: untouched");
+
+  // (2) exactly at the ceiling -- the LAST unclamped value (`>`, not `>=`).
+  check_eq(quantize(kMaxF), kSaturatedPos,
+           "exactly at kMaxQuantizeMagnitude: NOT clamped, happens to already format to the "
+           "saturation target string");
+  check_eq(quantize(-kMaxF), kSaturatedNeg, "exactly at -kMaxQuantizeMagnitude: NOT clamped");
+
+  // (3) the very next float32 above/below the ceiling -- the FIRST clamped value.
+  const float kJustAbove = std::nextafterf(kMaxF, std::numeric_limits<float>::max());
+  const float kJustBeyondNeg = std::nextafterf(-kMaxF, std::numeric_limits<float>::lowest());
+  check(kJustAbove > kMaxF, "nextafterf sanity: strictly greater than the ceiling");
+  check(kJustBeyondNeg < -kMaxF, "nextafterf sanity: strictly less than the negative ceiling");
+  check_eq(quantize(kJustAbove), kSaturatedPos,
+           "one float32 step past the ceiling: clamped, saturates to the SAME string as (2)");
+  check_eq(quantize(kJustBeyondNeg), kSaturatedNeg,
+           "one float32 step past the negative ceiling: clamped, saturates to the SAME string as "
+           "(2), negative mirror");
+
+  // (4) the OLD divergent zone this item's own bug report named: side A's `long long` UB
+  //     threshold (~9.2234e14) and side B's `unsigned long long` UB threshold (~1.8447e15) used
+  //     to disagree between them -- both are now WELL past the new, shared, much tighter ceiling.
+  check_eq(quantize(1.0e15f), kSaturatedPos,
+           "old divergent zone (9.2234e14 < 1e15 < 1.8447e15): both sides now agree, saturated");
+  check_eq(quantize(-1.0e15f), kSaturatedNeg, "old divergent zone, negative mirror");
+  check_eq(quantize(9.223372e14f), kSaturatedPos,
+           "at side A's own OLD long long UB threshold (~LLONG_MAX/10000): well past the new "
+           "ceiling, saturated -- this exact magnitude used to be the edge of side A's own UB");
+  check_eq(quantize(1.844674e15f), kSaturatedPos,
+           "at side B's own OLD unsigned long long UB threshold (~ULLONG_MAX/10000): also well "
+           "past the new ceiling, saturated -- this exact magnitude used to be the edge of side "
+           "B's own UB");
+
+  // (5) FLT_MAX -- the true float32 ceiling this item's own bug report named (float goes up to
+  //     ~3.4028e38, 23 orders of magnitude above the old thresholds). No crash, no UB, same string.
+  check_eq(quantize(std::numeric_limits<float>::max()), kSaturatedPos,
+           "FLT_MAX (~3.4028e38): 23 orders of magnitude past the old thresholds, still saturates "
+           "cleanly, no UB");
+  check_eq(quantize(std::numeric_limits<float>::lowest()), kSaturatedNeg,
+           "-FLT_MAX: negative mirror, same margin");
 }
 
 // ---------------------------------------------------------------------------
@@ -603,6 +697,7 @@ void test_decorator_list_malformed_entry_drops_whole_property() {
 int main() {
   test_worked_example_15_4_quantization_boundary();
   test_quantize_additional_coverage();
+  test_quantize_magnitude_ceiling();
   test_worked_example_15_3_three_percent_families();
   test_worked_example_15_2_border_top_order_is_load_bearing();
   test_worked_example_9_1_box_shadow();

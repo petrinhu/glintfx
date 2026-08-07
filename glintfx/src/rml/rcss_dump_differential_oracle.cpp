@@ -21,15 +21,21 @@
 //     líder's own sign-off) is this task's OWN delivery report's job, never a silent code change
 //     in this file.
 //
-//     🔵 THE ONE DOCUMENTED EXCEPTION -- `docs/uix-rcss.md` section 14.1 (`UIX-RCSS-ERRATA-5`,
-//     2026-08-06) -- is the SOLE case this harness is allowed to swallow, and it is swallowed
-//     through exactly one generic, table-driven mechanism (`kKnownDivergences` / `matches()`
-//     below), never an `if` naming `border-top` or any other property inline in the diff loop
-//     (section 14.1's own normative requirement 1, "the harness owns zero exception logic of its
-//     own"). `kDeclaredDivergenceCount` mirrors section 14.1's own "Deliberate divergences: N"
-//     count line and is asserted equal to `kKnownDivergences.size()` at startup -- a silent drift
-//     between the document's own declared count and this table is itself a failure, not a warning
-//     (this task's own brief, "conferir a contagem declarada... divergir é falha, não aviso").
+//     🔵 THE DOCUMENTED EXCEPTIONS -- `docs/uix-rcss.md` sections 14.1 (permanent, líder-decided,
+//     `UIX-RCSS-ERRATA-5`/`UIX-ORACLE-CANON`) and 14.2 (temporary, owning-wave-decided,
+//     `UIX-ORACLE-CANON`) -- are the ONLY cases this harness is allowed to swallow, and both are
+//     swallowed through exactly one generic, table-driven mechanism (`kKnownDivergences` /
+//     `matches()` below, four `DivergenceScope` shapes -- `UIX-ORACLE-MECANISMO`), never an `if`
+//     naming `border-top` or any other property inline in the diff loop (section 14.1's own
+//     normative requirement 1, "the harness owns zero exception logic of its own"). Each section's
+//     own declared count line (BOTH language halves, per section -- 4 numbers total) is read LIVE
+//     from the doc file itself at startup (`check_declared_count()`) and checked against
+//     `kKnownDivergences`' own per-section row count -- a silent drift between the document's own
+//     declared count and this table is itself a failure, not a warning (this task's own brief,
+//     "conferir a contagem declarada... divergir é falha, não aviso"). `UIX-ORACLE-MECANISMO` also
+//     added a per-row meta-test (`GLINTFX_ORACLE_NEUTRALIZE_PIN`, `read_neutralize_pin()`):
+//     neutralizing one row's own lookup and asserting the run goes red proves that row's own
+//     fixture actually reaches the code path it excuses, section 14.1's own normative requirement 3.
 //
 //     CORPUS SCOPE, AND WHY IT IS NARROWER THAN "every .rml this repo has". Side B's own
 //     `parse_stylesheet()` takes RCSS TEXT directly -- it has no file-interface, no `<link
@@ -109,16 +115,23 @@
 //     NOVA exceção deliberada exigindo o próprio aval do líder) é trabalho do PRÓPRIO relatório de
 //     entrega desta tarefa, nunca uma mudança de código silenciosa neste arquivo.
 //
-//     🔵 A ÚNICA EXCEÇÃO DOCUMENTADA -- seção 14.1 do docs/uix-rcss.md (`UIX-RCSS-ERRATA-5`,
-//     2026-08-06) -- é o ÚNICO caso que este harness tem permissão de engolir, e é engolido por
-//     exatamente um mecanismo genérico, guiado-por-tabela (`kKnownDivergences`/`matches()` abaixo),
-//     nunca um `if` nomeando `border-top` ou qualquer outra propriedade inline no laço de diff (o
-//     próprio requisito normativo 1 da seção 14.1, "o harness não possui lógica de exceção
-//     própria nenhuma"). `kDeclaredDivergenceCount` espelha a própria linha de contagem "Deliberate
-//     divergences: N" da seção 14.1 e é asserido igual a `kKnownDivergences.size()` na partida --
-//     uma deriva silenciosa entre a contagem declarada do documento e esta tabela é, ela mesma, uma
-//     falha, não um aviso (o próprio briefing desta tarefa, "conferir a contagem declarada...
-//     divergir é falha, não aviso").
+//     🔵 AS EXCEÇÕES DOCUMENTADAS -- seções 14.1 (permanente, decidida pelo líder,
+//     `UIX-RCSS-ERRATA-5`/`UIX-ORACLE-CANON`) e 14.2 (temporária, decidida pela onda dona,
+//     `UIX-ORACLE-CANON`) do docs/uix-rcss.md -- são os ÚNICOS casos que este harness tem permissão
+//     de engolir, e as duas são engolidas por exatamente um mecanismo genérico, guiado-por-tabela
+//     (`kKnownDivergences`/`matches()` abaixo, quatro formas de `DivergenceScope` --
+//     `UIX-ORACLE-MECANISMO`), nunca um `if` nomeando `border-top` ou qualquer outra propriedade
+//     inline no laço de diff (o próprio requisito normativo 1 da seção 14.1, "o harness não possui
+//     lógica de exceção própria nenhuma"). A própria linha de contagem declarada de cada seção (as
+//     DUAS metades de idioma, por seção -- 4 números no total) é lida AO VIVO do próprio arquivo da
+//     doc na partida (check_declared_count()) e checada contra a própria contagem de linha
+//     por-seção do kKnownDivergences -- uma deriva silenciosa entre a contagem declarada do
+//     documento e esta tabela é, ela mesma, uma falha, não um aviso (o próprio briefing desta
+//     tarefa, "conferir a contagem declarada... divergir é falha, não aviso"). A
+//     `UIX-ORACLE-MECANISMO` também somou um meta-teste por-linha (`GLINTFX_ORACLE_NEUTRALIZE_PIN`,
+//     read_neutralize_pin()): neutralizar a própria busca de uma linha e assertar que a rodada fica
+//     vermelha prova que a fixture daquela linha de fato alcança o caminho de código que ela
+//     desculpa, o próprio requisito normativo 3 da seção 14.1.
 //
 //     ESCOPO DE CORPUS, E POR QUE É MAIS ESTREITO QUE "todo .rml deste repo". O próprio
 //     `parse_stylesheet()` do lado B recebe TEXTO RCSS direto -- não tem interface de arquivo
@@ -190,13 +203,16 @@
 #include "uix/dom/parser.hpp"
 #include "uix/style/dumper.hpp"
 #include "uix/style/parser.hpp"
+#include "uix/style/value_compute.hpp"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -220,6 +236,22 @@
 #endif
 #ifndef GLINTFX_RCSS2_UA_STYLESHEET
 #error "GLINTFX_RCSS2_UA_STYLESHEET must be defined by CMake (glintfx/tests/CMakeLists.txt)"
+#endif
+// EN: `UIX-ORACLE-MECANISMO` -- the spec doc itself (`docs/uix-rcss.md`), read at startup so
+//     §14.1/§14.2's own declared "N deliberate divergences"/"N scheduled gaps" count lines (BOTH
+//     language halves each) can be checked LIVE against `kKnownDivergences`' own table size,
+//     instead of a second hand-maintained constant sitting in THIS SAME FILE next to the table it
+//     was supposed to police (the auto-referential shape `kDeclaredDivergenceCount` used to have --
+//     see `check_declared_count()`'s own header comment below for the full story).
+// PT: `UIX-ORACLE-MECANISMO` -- o próprio documento-fonte (`docs/uix-rcss.md`), lido na partida pra
+//     que as próprias linhas de contagem declaradas "N divergências deliberadas"/"N lacunas
+//     agendadas" da §14.1/§14.2 (as DUAS metades de idioma, cada uma) sejam checadas AO VIVO contra
+//     o próprio tamanho da tabela do `kKnownDivergences`, em vez de uma segunda constante mantida à
+//     mão MORANDO NESTE MESMO ARQUIVO ao lado da própria tabela que deveria policiar (a forma
+//     auto-referencial que o `kDeclaredDivergenceCount` costumava ter -- ver o próprio comentário
+//     de cabeçalho do check_declared_count() abaixo pra história completa).
+#ifndef GLINTFX_RCSS2_SPEC_DOC
+#error "GLINTFX_RCSS2_SPEC_DOC must be defined by CMake (glintfx/tests/CMakeLists.txt)"
 #endif
 
 namespace {
@@ -608,26 +640,106 @@ const char* state_of(std::size_t one_based_lineno, std::size_t hover_boundary) {
 //     o próprio comentário do `kKnownDivergences` do dom_dump_differential_oracle.cpp já dá pro
 //     próprio espelho do ledger do DOM).
 // ---------------------------------------------------------------------------
-struct KnownDivergence {
-  const char* fixture;    // file name only, never the absolute path
-  const char* path;       // node path, e.g. "body/1"
-  const char* property;   // property name, e.g. "border-top-color"
-  const char* rml_value;  // exact side-A byte
-  const char* uix_value;  // exact side-B byte
-  const char* ledger_ref; // where in docs/uix-rcss.md section 14.1 this is written down
+// EN: `UIX-ORACLE-MECANISMO` -- which `docs/uix-rcss.md` section this row mirrors. §14.1
+//     ("deliberate divergences", permanent, líder-decided) and §14.2 ("scheduled gaps", temporary,
+//     owning-wave-decided) are two SEPARATE ledgers with two SEPARATE declared-count lines (see
+//     `check_declared_count()` below) -- a row must say which one it counts against, or the
+//     per-section count check below has no way to partition `kKnownDivergences` back into the two
+//     numbers it is checking.
+// PT: `UIX-ORACLE-MECANISMO` -- qual seção do docs/uix-rcss.md esta linha espelha. A §14.1
+//     ("divergências deliberadas", permanente, decidida-pelo-líder) e a §14.2 ("lacunas agendadas",
+//     temporária, decidida-pela-onda-dona) são DOIS ledgers SEPARADOS com DUAS linhas de contagem
+//     declaradas separadas (ver check_declared_count() abaixo) -- uma linha precisa dizer contra
+//     qual das duas ela conta, ou a checagem de contagem por-seção abaixo não tem como particionar
+//     o kKnownDivergences de volta nos dois números que está checando.
+enum class DivergenceSection { kSection14_1,
+                               kSection14_2 };
+
+// EN: `UIX-ORACLE-MECANISMO` -- every exception this table can express, generalized beyond "one
+//     exact fixture" (the only shape the table had before this fatia, `UIX-RCSS-ERRATA-5`'s single
+//     `border-top` row). `docs/uix-rcss.md` §14.1/§14.2 (committed `f3d4890`) added THREE new
+//     shapes measurement actually needs: a mismatch that reproduces on literally EVERY in-scope
+//     fixture at one fixed node (the DOM root, `kCorpusWide`); a mismatch whose exact byte pair is
+//     IDENTICAL across a named list of fixtures regardless of which node inside each one carries it
+//     (`kFixtureSet`); and a mismatch whose byte pair DIFFERS per node (a different embedded image
+//     URL per portrait) but is still ONE `docs/uix-rcss.md` table row/ONE líder decision, so it MUST
+//     stay ONE `KnownDivergence` entry too, not five, or the per-section count check below (which
+//     compares `kKnownDivergences`' own row count against the doc's own declared row count) would
+//     drift the moment a single doc row needs more than one concrete node to describe (`kNodeList`).
+// PT: `UIX-ORACLE-MECANISMO` -- toda exceção que esta tabela consegue expressar, generalizada além
+//     de "uma fixture exata" (a única forma que a tabela tinha antes desta fatia, a linha única de
+//     `border-top` da `UIX-RCSS-ERRATA-5`). A §14.1/§14.2 do docs/uix-rcss.md (commitada `f3d4890`)
+//     somou TRÊS formas novas que a medição de fato precisa: um descasamento que reproduz em
+//     literalmente TODA fixture dentro do escopo, num nó fixo (a raiz do DOM, `kCorpusWide`); um
+//     descasamento cujo par de byte exato é IDÊNTICO numa lista nomeada de fixtures independente de
+//     qual nó dentro de cada uma o carrega (`kFixtureSet`); e um descasamento cujo par de byte
+//     DIFERE por nó (uma URL de imagem embutida diferente por retrato) mas ainda é UMA linha de
+//     tabela do docs/uix-rcss.md/UMA decisão do líder, então TEM que ficar UMA entrada
+//     `KnownDivergence` também, não cinco, ou a checagem de contagem por-seção abaixo (que compara
+//     o próprio tamanho de linha do kKnownDivergences contra o próprio tamanho declarado da doc)
+//     derivaria no momento em que uma única linha da doc precisasse de mais de um nó concreto pra
+//     descrever (`kNodeList`).
+enum class DivergenceScope {
+  kFixtureExact, // ONE named fixture, ONE exact node path, ONE exact (rml_value, uix_value) pair.
+  kFixtureSet,   // a named LIST of fixtures, path IGNORED (any node), ONE shared (rml_value,
+                 // uix_value) pair -- correct only when the byte pair is truly identical everywhere
+                 // it fires (measured, per docs/uix-rcss.md's own "byte-identical copy" claim).
+  kCorpusWide,   // EVERY in-scope fixture (fixtures/nodes fields unused), ONE exact node path
+                 // (the DOM root, "body"), ONE shared (rml_value, uix_value) pair.
+  kNodeList,     // an explicit list of (fixture, path, rml_value, uix_value) tuples -- for the ONE
+                 // case where the byte pair itself varies per node (see `nodes` field below).
 };
 
-// EN: Mirrors `docs/uix-rcss.md` section 14.1's own "Deliberate divergences: N" count line
-//     VERBATIM -- asserted equal to `kKnownDivergences.size()` in `main()`. A future implementer
-//     who adds a líder-approved row to that document's own table MUST bump this constant in the
-//     SAME commit, or this harness fails loudly at startup rather than silently drifting.
-// PT: Espelha a própria linha de contagem "Deliberate divergences: N" da seção 14.1 do
-//     docs/uix-rcss.md AO PÉ DA LETRA -- asserida igual a `kKnownDivergences.size()` no main(). Um
-//     futuro implementador que somar uma linha aprovada-pelo-líder àquela tabela do documento TEM
-//     que subir esta constante no MESMO commit, ou este harness falha alto na partida em vez de
-//     derivar em silêncio.
-constexpr std::size_t kDeclaredDivergenceCount = 1;
+// EN: One concrete (fixture, path, side-A byte, side-B byte) instance -- only meaningful for a
+//     `kNodeList` row's own `nodes` field.
+// PT: Uma instância concreta (fixture, caminho, byte lado A, byte lado B) -- só faz sentido pro
+//     próprio campo `nodes` de uma linha `kNodeList`.
+// EN: `= nullptr` default member initializers on every raw-pointer field -- cppcheck's own
+//     `uninitMemberVarNoCtor` (local precommit gate, flag-less fallback pass) reads a scalar member
+//     with no in-class default as unsafe even though every real instance is fully brace-initialized
+//     in `known_divergences()`'s own table below; this silences that without changing aggregate-init
+//     behavior (still an aggregate in C++20, no user-declared constructor added).
+// PT: `= nullptr` como inicializador de membro default em todo campo de ponteiro cru -- o próprio
+//     `uninitMemberVarNoCtor` do cppcheck (gate local de pre-commit, passada de fallback sem flags)
+//     lê um membro escalar sem default in-class como inseguro mesmo que toda instância real seja
+//     inteiramente brace-inicializada na própria tabela do known_divergences() abaixo; isto silencia
+//     sem mudar o comportamento de aggregate-init (continua um agregado em C++20, nenhum construtor
+//     declarado-pelo-usuário somado).
+struct NodeInstance {
+  const char* fixture = nullptr;
+  const char* path = nullptr;
+  const char* rml_value = nullptr;
+  const char* uix_value = nullptr;
+};
 
+struct KnownDivergence {
+  DivergenceSection section = DivergenceSection::kSection14_1;
+  DivergenceScope scope = DivergenceScope::kFixtureExact;
+  std::vector<const char*> fixtures; // kFixtureExact: exactly 1 entry; kFixtureSet: N entries;
+                                     // kCorpusWide/kNodeList: unused, left empty
+  const char* path = nullptr;        // kFixtureExact/kCorpusWide only; nullptr otherwise (unused)
+  const char* property = nullptr;    // always required -- the property NAME, shared by every scope
+  const char* rml_value = nullptr;   // kFixtureExact/kFixtureSet/kCorpusWide only; nullptr for kNodeList
+  const char* uix_value = nullptr;   // kFixtureExact/kFixtureSet/kCorpusWide only; nullptr for kNodeList
+  std::vector<NodeInstance> nodes;   // kNodeList only; empty otherwise
+  const char* ledger_ref = nullptr;  // where in docs/uix-rcss.md this is written down
+};
+
+// EN: `UIX-ORACLE-MECANISMO` -- 4 rows mirror `docs/uix-rcss.md` §14.1 (permanent, líder-decided,
+//     `f3d4890`), 3 mirror §14.2 (temporary, `RMLX-8`-owned). `check_declared_count()` (in `main()`)
+//     asserts BOTH per-section counts, in BOTH language halves, against this table's own per-
+//     section row counts -- LIVE, read from the doc file itself, not a second hand-kept constant
+//     living next to this table (see that function's own header comment for why the old
+//     `kDeclaredDivergenceCount` was itself the exact "golden auto-referential" antipattern this
+//     table's own §14.1 requirement 3 warns against one level up).
+// PT: `UIX-ORACLE-MECANISMO` -- 4 linhas espelham a §14.1 do docs/uix-rcss.md (permanente, decidida
+//     pelo líder, `f3d4890`), 3 espelham a §14.2 (temporária, dona `RMLX-8`). O
+//     check_declared_count() (no main()) assere as DUAS contagens por-seção, nas DUAS metades de
+//     idioma, contra a própria contagem de linha por-seção desta tabela -- AO VIVO, lida do próprio
+//     arquivo da doc, não uma segunda constante mantida à mão morando ao lado desta tabela (ver o
+//     próprio comentário de cabeçalho daquela função pro motivo do antigo `kDeclaredDivergenceCount`
+//     ser ele mesmo o antipadrão exato "golden auto-referencial" que o próprio requisito 3 da §14.1
+//     desta tabela avisa contra, um nível acima).
 const std::vector<KnownDivergence>& known_divergences() {
   static const std::vector<KnownDivergence> rows = {
       // EN: `UIX-RCSS-ERRATA-5`, 2026-08-06 -- `#b { border-top: #7A5A2E 1dp; }` (reversed-order
@@ -660,22 +772,190 @@ const std::vector<KnownDivergence>& known_divergences() {
       //     desta tabela, então um descasamento FUTURO inesperado de `border-top-width` nesta mesma
       //     fixture corretamente apareceria como uma divergência NOVA, UNKNOWN, nunca engolida em
       //     silêncio por esta linha.
-      {"uix_rcss_errata5_border_top_reversed.rml", "body/1", "border-top-color", "#7a5a2eff", "#000000ff",
-       "docs/uix-rcss.md section 14.1, row 1 (UIX-RCSS-ERRATA-5, 2026-08-06)"},
+      {DivergenceSection::kSection14_1, DivergenceScope::kFixtureExact, {"uix_rcss_errata5_border_top_reversed.rml"}, "body/1", "border-top-color", "#7a5a2eff", "#000000ff", {}, "docs/uix-rcss.md section 14.1, row 1 (UIX-RCSS-ERRATA-5, 2026-08-06)"},
+
+      // EN: `UIX-ORACLE-CANON`, 2026-08-07 -- the DOM root (`body`, path exactly `"body"`, no
+      //     `/<n>` suffix) always prints `position=absolute` on side A: upstream's own
+      //     `ElementDocument` constructor force-sets it as an INSTANCE property outside the
+      //     cascade. Side B has no such special-case and keeps the registry's own `static` initial.
+      //     CORPUS-WIDE by construction (reproduces on all 33 in-scope fixtures, `STATE none` and
+      //     `hover-all` alike) -- `path`/`fixtures` therefore mean something DIFFERENT here than on
+      //     a `kFixtureExact` row: `path` still pins the node ("body" only, never a descendant),
+      //     but `fixtures` is unused/empty because EVERY in-scope fixture is in scope for this row
+      //     by definition (see `fixture_in_scope()` below).
+      // PT: `UIX-ORACLE-CANON`, 2026-08-07 -- a raiz do DOM (`body`, caminho exatamente `"body"`,
+      //     sem sufixo `/<n>`) sempre imprime `position=absolute` no lado A: o próprio construtor
+      //     `ElementDocument` do upstream força isto como propriedade de INSTÂNCIA fora da cascata.
+      //     O lado B não tem caso-especial nenhum desses e mantém o próprio inicial de registro
+      //     `static`. CORPUS-WIDE por construção (reproduz nas 33 fixtures dentro do escopo,
+      //     `STATE none` e `hover-all` igual) -- `path`/`fixtures` portanto significam algo
+      //     DIFERENTE aqui do que numa linha `kFixtureExact`: `path` ainda pina o nó ("body" só,
+      //     nunca um descendente), mas `fixtures` fica sem uso/vazio porque TODA fixture dentro do
+      //     escopo está dentro do escopo desta linha por definição (ver fixture_in_scope() abaixo).
+      {DivergenceSection::kSection14_1, DivergenceScope::kCorpusWide, {}, "body", "position", "absolute", "static", {}, "docs/uix-rcss.md section 14.1, row 2 (UIX-ORACLE-CANON, 2026-08-07)"},
+
+      // EN: `UIX-ORACLE-CANON`, 2026-08-07 -- `decorator: polygon(6, fill: radial-gradient(...))`,
+      //     a glintfx-authored decorator with no upstream RmlUi grammar for a nested gradient
+      //     function as another custom decorator's own argument: side A's dumper drives RmlUi's
+      //     real property parser, which REJECTS the whole `decorator:` declaration at parse time
+      //     (fail-high) and prints the registry's own `none` initial; side B's clean-room parser has
+      //     no such limitation and prints the full composite value. Byte-identical copy of the same
+      //     declaration across all 12 named fixtures (measured, `docs/uix-rcss.md`'s own words) --
+      //     `kFixtureSet`, path ignored, ONE shared byte pair.
+      // PT: `UIX-ORACLE-CANON`, 2026-08-07 -- `decorator: polygon(6, fill: radial-gradient(...))`,
+      //     um decorator autoral da glintfx sem gramática nenhuma no RmlUi upstream pra uma função
+      //     de gradiente aninhada como argumento de OUTRO decorator custom: o dumper do lado A
+      //     dirige o parser de propriedade real do RmlUi, que REJEITA a declaração `decorator:`
+      //     inteira em tempo de parse (fail-high) e imprime o próprio inicial de registro `none`; o
+      //     parser clean-room do lado B não tem limitação nenhuma dessas e imprime o valor composto
+      //     inteiro. Cópia byte-idêntica da mesma declaração nas 12 fixtures nomeadas (medido, nas
+      //     próprias palavras do docs/uix-rcss.md) -- `kFixtureSet`, caminho ignorado, UM par de
+      //     byte compartilhado.
+      {DivergenceSection::kSection14_1, DivergenceScope::kFixtureSet, {"difficulty_menu__lista_hardcore_bloqueado.rml", "difficulty_menu__splash_confirmacao.rml", "save_load_menu__modo_carregar_dois_slots_ocupados.rml", "save_load_menu__modo_salvar_com_autosave.rml", "save_load_menu__modo_salvar_todos_vazios.rml", "system_menu__config_audio_sliders.rml", "system_menu__config_categorias.rml", "system_menu__config_controles_tabela.rml", "system_menu__confirmacao_menu_inicial.rml", "system_menu__pause_raiz.rml", "title_menu__com_save.rml", "title_menu__sem_save.rml"}, nullptr, "decorator", "none",
+       "polygon(6.0000;radial-gradient(40.0000%;35.0000%;#f0d98cff:0.0000%;#c9a24bff:55.0000%;#7a5a2eff:100.0000%);"
+       "0.0000)",
+       {},
+       "docs/uix-rcss.md section 14.1, row 3 (UIX-ORACLE-CANON, 2026-08-07)"},
+
+      // EN: `UIX-ORACLE-CANON`, 2026-08-07 -- `decorator: image(<url> cover)`: side A's own
+      //     `image()` serializer drops the `cover` fit keyword from its printed form, side B keeps
+      //     it. ONE `docs/uix-rcss.md` table row, but the byte pair DIFFERS per node (a different
+      //     embedded image URL per portrait) -- `kNodeList`, 5 explicit (fixture, path, rml_value,
+      //     uix_value) tuples, per docs/uix-rcss.md's own node list. Path/values for the 3
+      //     `npc_dialogue__*` fixtures are IDENTICAL (all three embed the same
+      //     `retrato_seu_bertoldo_caim.png` at the same `body/1/4`, confirmed by reading those
+      //     fixtures' own `.rml` -- ordinary test data, not either dumper's source). The two
+      //     `gusworld_battle_cockpit.rml` nodes/URLs were confirmed against this harness's own
+      //     first, pre-fix run (an UNKNOWN divergence at the exact path prints the exact byte pair
+      //     this harness itself measured, never assumed from prose).
+      // PT: `UIX-ORACLE-CANON`, 2026-08-07 -- `decorator: image(<url> cover)`: o próprio
+      //     serializador `image()` do lado A descarta a palavra-chave de encaixe `cover` da própria
+      //     forma impressa, o lado B mantém. UMA linha de tabela do docs/uix-rcss.md, mas o par de
+      //     byte DIFERE por nó (uma URL de imagem embutida diferente por retrato) -- `kNodeList`, 5
+      //     tuplas explícitas (fixture, caminho, byte lado A, byte lado B), pela própria lista de nó
+      //     do docs/uix-rcss.md. Caminho/valores das 3 fixtures `npc_dialogue__*` são IDÊNTICOS (as
+      //     três embutem o mesmo `retrato_seu_bertoldo_caim.png` no mesmo `body/1/4`, confirmado
+      //     lendo os PRÓPRIOS `.rml` daquelas fixtures -- dado de teste comum, não o fonte de
+      //     nenhum dos dois dumpers). Os dois nós/URLs do `gusworld_battle_cockpit.rml` foram
+      //     confirmados contra a PRÓPRIA primeira rodada, pré-conserto, deste harness (uma
+      //     divergência UNKNOWN no caminho exato imprime o próprio par de byte exato que este
+      //     harness mediu, nunca suposto da prosa).
+      {DivergenceSection::kSection14_1, DivergenceScope::kNodeList, {}, nullptr, "decorator", nullptr, nullptr, {
+                                                                                                                    {"gusworld_battle_cockpit.rml", "body/0/0/0/3/0", "image(vance_dragon_glyph.png)", "image(vance_dragon_glyph.png cover)"},
+                                                                                                                    {"gusworld_battle_cockpit.rml", "body/0/1/0/0/0", "image(retratos/retrato_gus_combate_nobg.png)", "image(retratos/retrato_gus_combate_nobg.png cover)"},
+                                                                                                                    {"npc_dialogue__no_com_3_escolhas.rml", "body/1/4", "image(retrato_seu_bertoldo_caim.png)", "image(retrato_seu_bertoldo_caim.png cover)"},
+                                                                                                                    {"npc_dialogue__no_linear_fala_curta.rml", "body/1/4", "image(retrato_seu_bertoldo_caim.png)", "image(retrato_seu_bertoldo_caim.png cover)"},
+                                                                                                                    {"npc_dialogue__no_linear_fala_longa.rml", "body/1/4", "image(retrato_seu_bertoldo_caim.png)", "image(retrato_seu_bertoldo_caim.png cover)"},
+                                                                                                                },
+       "docs/uix-rcss.md section 14.1, row 4 (UIX-ORACLE-CANON, 2026-08-07)"},
+
+      // EN: `UIX-ORACLE-CANON`/`UIX-ORACLE-MEDICAO`, 2026-08-07 -- §14.2 (SCHEDULED, `RMLX-8`-
+      //     owned, NOT a líder-permanent decision): side B has no `compute_animation`, so an
+      //     `animation` declaration always falls back to the registry's own `none` initial; side A
+      //     reproduces RmlUi's real `@keyframes`-driven value. 3 unique nodes, all on the single
+      //     corpus fixture that uses `animation` -- one `kFixtureExact` row each (the byte pair
+      //     differs per node, and unlike the `image()`-cover case above, `docs/uix-rcss.md` itself
+      //     already lists these as 3 SEPARATE table rows/3 separate `RMLX-8` removal targets, not
+      //     one row with an internal node list -- mirrored here 1:1, not merged).
+      // PT: `UIX-ORACLE-CANON`/`UIX-ORACLE-MEDICAO`, 2026-08-07 -- §14.2 (AGENDADA, dona `RMLX-8`,
+      //     NÃO é decisão permanente do líder): o lado B não tem `compute_animation`, então uma
+      //     declaração `animation` sempre cai pro próprio inicial de registro `none`; o lado A
+      //     reproduz o valor real, movido por `@keyframes`, do RmlUi. 3 nós únicos, todos na única
+      //     fixture de corpus que usa `animation` -- uma linha `kFixtureExact` cada (o par de byte
+      //     difere por nó, e diferente do caso `image()`-cover acima, o próprio docs/uix-rcss.md já
+      //     lista estas como 3 linhas de tabela SEPARADAS/3 alvos de remoção `RMLX-8` separados, não
+      //     uma linha com lista de nó interna -- espelhado aqui 1:1, não fundido).
+      {DivergenceSection::kSection14_2, DivergenceScope::kFixtureExact, {"gusworld_battle_cockpit.rml"}, "body/0/0/0/1", "animation", "animation(linear;18.0000;linear-out;infinite;false;false)", "none", {}, "docs/uix-rcss.md section 14.2, row 1 (UIX-ORACLE-CANON, 2026-08-07, owned by RMLX-8)"},
+      {DivergenceSection::kSection14_2, DivergenceScope::kFixtureExact, {"gusworld_battle_cockpit.rml"}, "body/0/0/3/0", "animation", "animation(step-start;1.1000;linear-out;infinite;false;false)", "none", {}, "docs/uix-rcss.md section 14.2, row 2 (UIX-ORACLE-CANON, 2026-08-07, owned by RMLX-8)"},
+      {DivergenceSection::kSection14_2, DivergenceScope::kFixtureExact, {"gusworld_battle_cockpit.rml"}, "body/0/1/0/0", "animation", "animation(infinite-alternate;2.4000;cubic-in-out;1;false;false)", "none", {}, "docs/uix-rcss.md section 14.2, row 3 (UIX-ORACLE-CANON, 2026-08-07, owned by RMLX-8)"},
   };
   return rows;
 }
 
+// EN: A `KnownDivergence` is in scope for `fixture` iff its own `scope` says so -- `kCorpusWide`
+//     always is; every other scope checks its own `fixtures` list.
+// PT: Um `KnownDivergence` está no escopo de `fixture` sse o próprio `scope` diz que sim --
+//     `kCorpusWide` sempre está; toda outra escopo checa a própria lista `fixtures`.
+bool fixture_in_scope(const KnownDivergence& k, const std::string& fixture) {
+  if (k.scope == DivergenceScope::kCorpusWide) return true;
+  return std::any_of(k.fixtures.begin(), k.fixtures.end(), [&fixture](const char* f) { return fixture == f; });
+}
+
+// EN: `UIX-ORACLE-MECANISMO` -- generic across all four `DivergenceScope` values, no `if` naming a
+//     property or fixture ANYWHERE in here (section 14.1's own normative requirement 1) -- every
+//     literal string this function compares against comes from the `KnownDivergence` row itself,
+//     never from code.
+// PT: `UIX-ORACLE-MECANISMO` -- genérica pros quatro valores de `DivergenceScope`, nenhum `if`
+//     nomeando propriedade ou fixture em lugar NENHUM aqui (o próprio requisito normativo 1 da
+//     seção 14.1) -- toda string literal que esta função compara vem da PRÓPRIA linha
+//     `KnownDivergence`, nunca de código.
+// EN: `UIX-ORACLE-MECANISMO` -- human-readable one-liner per pin, used by the startup "declared
+//     pins" printout AND by the two `fail()` messages that need to name a pin without assuming its
+//     own `scope` has a single `fixture`/`path` (only `kFixtureExact` does -- the other three
+//     scopes need their own description shape).
+// PT: `UIX-ORACLE-MECANISMO` -- descrição legível de uma linha por pin, usada pelo próprio
+//     impresso de "pins declarados" da partida E pelas duas mensagens fail() que precisam nomear
+//     um pin sem supor que o próprio `scope` dele tem um `fixture`/`path` único (só o
+//     `kFixtureExact` tem -- os outros três escopos precisam da própria forma de descrição).
+std::string describe_scope(const KnownDivergence& k) {
+  switch (k.scope) {
+    case DivergenceScope::kFixtureExact:
+      return "FixtureExact(" + std::string(k.fixtures.empty() ? "?" : k.fixtures[0]) + ", " +
+             std::string(k.path != nullptr ? k.path : "?") + ")";
+    case DivergenceScope::kCorpusWide:
+      return "CorpusWide(path=" + std::string(k.path != nullptr ? k.path : "?") + ")";
+    case DivergenceScope::kFixtureSet: {
+      std::string s = "FixtureSet{";
+      for (std::size_t i = 0; i < k.fixtures.size(); ++i) {
+        if (i != 0) s += ", ";
+        s += k.fixtures[i];
+      }
+      s += "}";
+      return s;
+    }
+    case DivergenceScope::kNodeList: {
+      std::string s = "NodeList{";
+      for (std::size_t i = 0; i < k.nodes.size(); ++i) {
+        if (i != 0) s += ", ";
+        s += std::string(k.nodes[i].fixture) + ":" + k.nodes[i].path;
+      }
+      s += "}";
+      return s;
+    }
+  }
+  return "?";
+}
+
 bool matches(const KnownDivergence& k, const std::string& fixture, const DiffEntry& d) {
-  if (fixture != k.fixture) return false;
   if (!d.present_rml || !d.present_uix) return false;
   const std::optional<ParsedProp> rml_p = parse_prop_line(d.rml_line);
   const std::optional<ParsedProp> uix_p = parse_prop_line(d.uix_line);
   if (!rml_p.has_value() || !uix_p.has_value()) return false;
-  if (rml_p->path != k.path || rml_p->name != k.property) return false;
-  if (uix_p->path != k.path || uix_p->name != k.property) return false;
-  if (rml_p->value != k.rml_value || uix_p->value != k.uix_value) return false;
-  return true;
+  if (rml_p->path != uix_p->path) return false; // same node on both sides, required by every scope
+  if (rml_p->name != k.property || uix_p->name != k.property) return false;
+
+  switch (k.scope) {
+    case DivergenceScope::kFixtureExact: {
+      if (!fixture_in_scope(k, fixture)) return false;
+      if (rml_p->path != k.path) return false;
+      return rml_p->value == k.rml_value && uix_p->value == k.uix_value;
+    }
+    case DivergenceScope::kFixtureSet: {
+      if (!fixture_in_scope(k, fixture)) return false;
+      return rml_p->value == k.rml_value && uix_p->value == k.uix_value;
+    }
+    case DivergenceScope::kCorpusWide: {
+      if (rml_p->path != k.path) return false;
+      return rml_p->value == k.rml_value && uix_p->value == k.uix_value;
+    }
+    case DivergenceScope::kNodeList: {
+      return std::any_of(k.nodes.begin(), k.nodes.end(), [&](const NodeInstance& n) {
+        return fixture == n.fixture && rml_p->path == n.path && rml_p->value == n.rml_value &&
+               uix_p->value == n.uix_value;
+      });
+    }
+  }
+  return false;
 }
 
 // EN: A fixture is IN SCOPE iff it carries at least one `<style` block and zero `<link` tags --
@@ -699,9 +979,150 @@ bool in_scope(const std::string& comment_stripped_source) {
          comment_stripped_source.find("<link") == std::string::npos;
 }
 
+// ---------------------------------------------------------------------------
+// EN: `UIX-ORACLE-MECANISMO` -- doc-driven declared-count check, replacing the OLD
+//     `kDeclaredDivergenceCount` (a `constexpr` living in THIS SAME FILE, a few dozen lines from
+//     the table it asserted against). That old shape was itself the "golden auto-referential"
+//     antipattern `docs/uix-rcss.md` section 14.1's own requirement 3 warns against one level up
+//     (an un-exercised exception is worse than none because green looks like proof and is not) --
+//     here the SAME failure mode applied to the COUNT rather than a ROW: nothing outside this one
+//     `.cpp` ever read the actual document, so a future implementer editing `docs/uix-rcss.md`'s
+//     own count line WITHOUT also bumping this file's constant (or vice versa) would drift in
+//     total silence, the two "views of one fact" `known_divergences()`'s own header comment already
+//     names never actually cross-checked against each other. Found reviewing another agent's
+//     deliverable, not assumed.
+//
+//     `parse_declared_count()` finds `label` in `doc_text`, refuses (returns `nullopt`) if it is
+//     ABSENT, AMBIGUOUS (appears twice -- this table's format never repeats a section's own count
+//     line, so a second occurrence means something is already wrong upstream of this function), or
+//     is not immediately followed by at least one ASCII digit (an edited-but-broken line, e.g. the
+//     number deleted and not replaced) -- every one of those is "illegible", and this function
+//     never guesses past illegible, per this fatia's own brief ("falhar alto também se o arquivo
+//     estiver ausente ou a linha ilegível -- nunca degradar em silêncio").
+// PT: `UIX-ORACLE-MECANISMO` -- checagem de contagem declarada, guiada-pela-doc, substituindo o
+//     ANTIGO `kDeclaredDivergenceCount` (um `constexpr` morando NESTE MESMO ARQUIVO, a poucas
+//     dezenas de linha da própria tabela contra a qual asseria). Aquela forma antiga era ela mesma
+//     o antipadrão "golden auto-referencial" que o próprio requisito 3 da seção 14.1 do
+//     docs/uix-rcss.md avisa contra um nível acima (uma exceção não-exercitada é pior que nenhuma
+//     porque verde parece prova e não é) -- aqui o MESMO modo de falha se aplicava à CONTAGEM em
+//     vez de a uma LINHA: nada fora deste `.cpp` nunca lia o documento de fato, então um futuro
+//     implementador editando a própria linha de contagem do docs/uix-rcss.md SEM também subir a
+//     constante deste arquivo (ou vice-versa) derivaria em silêncio total, as "duas vistas de um
+//     fato só" que o próprio comentário de cabeçalho do known_divergences() já nomeia nunca de fato
+//     cruzadas uma contra a outra. Achado revisando o entregável de outro agente, não suposto.
+//
+//     parse_declared_count() acha `label` em `doc_text`, recusa (devolve `nullopt`) se estiver
+//     AUSENTE, AMBÍGUA (aparece duas vezes -- o formato desta tabela nunca repete a própria linha
+//     de contagem de uma seção, então uma segunda ocorrência significa que algo já está errado rio
+//     acima desta função), ou não é seguida imediatamente por pelo menos um dígito ASCII (uma linha
+//     editada-mas-quebrada, ex. o número apagado e não reposto) -- toda uma dessas é "ilegível", e
+//     esta função nunca chuta além de ilegível, pelo próprio brief desta fatia ("falhar alto também
+//     se o arquivo estiver ausente ou a linha ilegível -- nunca degradar em silêncio").
+// ---------------------------------------------------------------------------
+std::optional<std::size_t> parse_declared_count(const std::string& doc_text, const std::string& label) {
+  const std::size_t pos = doc_text.find(label);
+  if (pos == std::string::npos) return std::nullopt;
+  if (doc_text.find(label, pos + 1) != std::string::npos) return std::nullopt; // ambiguous: appears twice
+  std::size_t end = pos + label.size();
+  const std::size_t start = end;
+  while (end < doc_text.size() && std::isdigit(static_cast<unsigned char>(doc_text[end]))) ++end;
+  if (end == start) return std::nullopt; // no digit right after the label -- illegible
+  return static_cast<std::size_t>(std::strtoul(doc_text.substr(start, end - start).c_str(), nullptr, 10));
+}
+
+// EN: One label/table-size pair, checked and reported by name -- so a failure says EXACTLY which
+//     of the four (§14.1 EN, §14.1 PT, §14.2 EN, §14.2 PT) discords, per this fatia's own brief.
+// PT: Um par label/tamanho-de-tabela, checado e reportado por nome -- pra que uma falha diga
+//     EXATAMENTE qual das quatro (§14.1 EN, §14.1 PT, §14.2 EN, §14.2 PT) discorda, pelo próprio
+//     brief desta fatia.
+void check_declared_count(const std::string& doc_text, const char* what, const char* label,
+                          std::size_t table_size) {
+  const std::optional<std::size_t> declared = parse_declared_count(doc_text, label);
+  if (!declared.has_value()) {
+    fail(std::string(what) + ": docs/uix-rcss.md's own declared count line ('" + label +
+         "N') is missing, ambiguous (appears twice), or not followed by a digit -- refusing to "
+         "trust kKnownDivergences without a live, legible count to check it against");
+    return;
+  }
+  if (*declared != table_size) {
+    fail(std::string(what) + ": docs/uix-rcss.md declares " + std::to_string(*declared) +
+         ", but kKnownDivergences has " + std::to_string(table_size) +
+         " row(s) for this section -- one of the two is stale, fix before trusting any result below");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: `UIX-ORACLE-MECANISMO` -- meta-test neutralization pin, read from
+//     `GLINTFX_ORACLE_NEUTRALIZE_PIN` once at startup. When set to a valid index `k` into
+//     `known_divergences()`, `matches()`'s own caller (the diff loop in `main()`) skips row `k`
+//     ENTIRELY, as if it did not exist -- every diff line that row would otherwise have swallowed
+//     surfaces as a brand-new UNKNOWN divergence instead, which `main()` already fails the run on.
+//     This is the mechanism section 14.1's own normative requirement 3 asks for: neutralizing a
+//     row's own lookup and asserting the run goes red PROVES the row's own fixture actually reaches
+//     the code path that row excuses, not merely that the row exists in the table. Deliberately
+//     lives at the OUTER loop (which row to even consider), never inside `matches()` itself --
+//     `matches()` stays a pure function of `(KnownDivergence, fixture, DiffEntry)`, with zero
+//     knowledge of this env var, so its own behavior is identical whether called from `main()`'s
+//     normal path or from a future caller that never neutralizes anything.
+// PT: `UIX-ORACLE-MECANISMO` -- pin de neutralização do meta-teste, lido de
+//     `GLINTFX_ORACLE_NEUTRALIZE_PIN` uma vez na partida. Quando setado pra um índice válido `k` em
+//     `known_divergences()`, o PRÓPRIO chamador do matches() (o laço de diff no main()) pula a
+//     linha `k` POR INTEIRO, como se não existisse -- toda linha de diff que aquela linha teria
+//     engolido de outro jeito aparece como divergência UNKNOWN nova em vez disso, o que o main() já
+//     falha a rodada por causa disso. Este é o mecanismo que o próprio requisito normativo 3 da
+//     seção 14.1 pede: neutralizar a própria busca de uma linha e assertar que a rodada fica
+//     vermelha PROVA que a própria fixture daquela linha de fato alcança o caminho de código que
+//     aquela linha desculpa, não só que a linha existe na tabela. Mora deliberadamente no laço
+//     EXTERNO (qual linha sequer considerar), nunca dentro do próprio matches() -- matches()
+//     continua uma função pura de (KnownDivergence, fixture, DiffEntry), com conhecimento zero
+//     desta env var, então o próprio comportamento dele é idêntico seja chamado do caminho normal
+//     do main() ou de um futuro chamador que nunca neutraliza nada.
+std::optional<std::size_t> read_neutralize_pin() {
+  const char* raw = std::getenv("GLINTFX_ORACLE_NEUTRALIZE_PIN");
+  if (raw == nullptr || raw[0] == '\0') return std::nullopt;
+  const std::string s(raw);
+  if (!std::all_of(s.begin(), s.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); })) {
+    std::fprintf(stderr,
+                 "WARNING: GLINTFX_ORACLE_NEUTRALIZE_PIN='%s' is not a plain non-negative integer -- "
+                 "ignoring, no pin neutralized\n",
+                 raw);
+    return std::nullopt;
+  }
+  return static_cast<std::size_t>(std::strtoul(s.c_str(), nullptr, 10));
+}
+
 } // namespace
 
-int main() {
+// EN: `UIX-ORACLE-MECANISMO` -- `--list-pins` prints the TOTAL pin count (`known_divergences().
+//     size()`) and exits 0 WITHOUT creating a GLFW window/RmlUi context -- this mode is pure table
+//     introspection (`tools/rcss_oracle_neutralize_all.sh`'s own driver loop calls it first, to
+//     learn how many `GLINTFX_ORACLE_NEUTRALIZE_PIN` values to iterate), so it stays cheap and has
+//     no display dependency, unlike every other mode of this binary.
+// PT: `UIX-ORACLE-MECANISMO` -- `--list-pins` imprime a contagem TOTAL de pin
+//     (`known_divergences().size()`) e sai 0 SEM criar janela GLFW/contexto RmlUi -- este modo é
+//     introspecção pura de tabela (o próprio laço condutor do tools/rcss_oracle_neutralize_all.sh
+//     chama ele primeiro, pra saber quantos valores de GLINTFX_ORACLE_NEUTRALIZE_PIN iterar), então
+//     fica barato e sem dependência de display, diferente de todo outro modo deste binário.
+int main(int argc, char** argv) {
+  if (argc >= 2 && std::string(argv[1]) == "--list-pins") {
+    std::printf("%zu\n", known_divergences().size());
+    return 0;
+  }
+
+  const std::optional<std::size_t> neutralize_pin = read_neutralize_pin();
+  if (neutralize_pin.has_value()) {
+    if (*neutralize_pin >= known_divergences().size()) {
+      std::fprintf(stderr,
+                   "FAIL: GLINTFX_ORACLE_NEUTRALIZE_PIN=%zu is out of range (only %zu pin(s) exist, "
+                   "valid indices 0..%zu)\n",
+                   *neutralize_pin, known_divergences().size(),
+                   known_divergences().empty() ? 0 : known_divergences().size() - 1);
+      return 20;
+    }
+    std::printf("NEUTRALIZING pin %zu of %zu (%s) -- expecting this run to FAIL\n", *neutralize_pin,
+                known_divergences().size(), known_divergences()[*neutralize_pin].ledger_ref);
+  }
+
   glintfx::WindowGlfw host;
   if (!host.create("rcss-dump-differential-oracle", 320, 240)) {
     std::puts("FAIL: host window create");
@@ -736,12 +1157,117 @@ int main() {
          "what this task claims to measure");
   }
 
-  if (known_divergences().size() != kDeclaredDivergenceCount) {
-    fail("kKnownDivergences.size() (" + std::to_string(known_divergences().size()) +
-         ") != kDeclaredDivergenceCount (" + std::to_string(kDeclaredDivergenceCount) +
-         ") -- this table has drifted from docs/uix-rcss.md section 14.1's own declared "
-         "\"Deliberate divergences: N\" count line; fix whichever one is stale before trusting "
-         "any result below");
+  // EN: `UIX-ORACLE-MECANISMO` -- the 4 doc-driven count checks (§14.1 EN/PT, §14.2 EN/PT), each
+  //     against this table's own per-section row count. Read the spec doc ONCE; an empty read
+  //     (missing file, permission error, or a genuinely empty file) fails ALL FOUR explicitly
+  //     rather than silently skipping them (this fatia's own brief: "falhar alto também se o
+  //     arquivo estiver ausente").
+  // PT: `UIX-ORACLE-MECANISMO` -- as 4 checagens de contagem guiadas-pela-doc (§14.1 EN/PT, §14.2
+  //     EN/PT), cada uma contra a própria contagem de linha por-seção desta tabela. Lê a doc-fonte
+  //     UMA VEZ; uma leitura vazia (arquivo ausente, erro de permissão, ou um arquivo genuinamente
+  //     vazio) falha as QUATRO explicitamente em vez de pular em silêncio (o próprio brief desta
+  //     fatia: "falhar alto também se o arquivo estiver ausente").
+  const std::string spec_doc_text = read_file(fs::path(GLINTFX_RCSS2_SPEC_DOC));
+  if (spec_doc_text.empty()) {
+    fail(std::string("GLINTFX_RCSS2_SPEC_DOC (") + GLINTFX_RCSS2_SPEC_DOC +
+         ") is empty or unreadable -- cannot verify any of the four docs/uix-rcss.md §14.1/§14.2 "
+         "declared divergence counts; refusing to trust kKnownDivergences without them");
+  } else {
+    std::size_t table_14_1 = 0;
+    std::size_t table_14_2 = 0;
+    for (const KnownDivergence& row : known_divergences()) {
+      if (row.section == DivergenceSection::kSection14_1) {
+        ++table_14_1;
+      } else {
+        ++table_14_2;
+      }
+    }
+    // EN: `UIX-ORACLE-MECANISMO` -- every label carries the literal Markdown `**` bold-marker
+    //     prefix that immediately precedes the actual count line in `docs/uix-rcss.md` (`**Deliberate
+    //     divergences: 4.**`, etc). MEASURED, not assumed, to matter for §14.2: that section's own
+    //     HEADING repeats the bare phrase without the marker (`#### 14.2 🟣 Scheduled gaps: pinned
+    //     until an owning wave ships (...)`), which is a plain-text prefix match for the label
+    //     WITHOUT `**` and is immediately followed by `p`, not a digit -- `parse_declared_count()`'s
+    //     own `doc_text.find(label)` finds THAT occurrence first (it comes earlier in the file than
+    //     the real count line) and correctly refuses it as illegible, exactly the failure this
+    //     harness's own first run against the real doc caught. The `**` prefix is unique to the
+    //     count line itself in all four cases (verified against this doc's own text at the time this
+    //     row was written), closing the false "illegible" failure without weakening the actual
+    //     ambiguity/illegibility guard `parse_declared_count()` still applies.
+    // PT: `UIX-ORACLE-MECANISMO` -- toda label carrega o próprio marcador de negrito `**` literal do
+    //     Markdown que precede imediatamente a linha de contagem de verdade no docs/uix-rcss.md
+    //     (`**Deliberate divergences: 4.**` etc). MEDIDO, não suposto, importar pra §14.2: o próprio
+    //     TÍTULO daquela seção repete a frase nua sem o marcador (`#### 14.2 🟣 Scheduled gaps:
+    //     pinned until an owning wave ships (...)`), que é um casamento de prefixo puro-texto pra
+    //     label SEM `**` e é seguido imediatamente por `p`, não um dígito -- o próprio
+    //     doc_text.find(label) do parse_declared_count() acha AQUELA ocorrência primeiro (vem mais
+    //     cedo no arquivo que a linha de contagem de verdade) e corretamente recusa como ilegível,
+    //     exatamente a falha que a PRÓPRIA primeira rodada deste harness contra a doc real pegou. O
+    //     prefixo `**` é único da própria linha de contagem nos quatro casos (verificado contra o
+    //     próprio texto desta doc no momento em que esta linha foi escrita), fechando a falsa falha
+    //     "ilegível" sem enfraquecer a própria guarda de ambiguidade/ilegibilidade que o
+    //     parse_declared_count() continua aplicando.
+    check_declared_count(spec_doc_text, "section 14.1 EN ('Deliberate divergences: N')",
+                         "**Deliberate divergences: ", table_14_1);
+    check_declared_count(spec_doc_text, "section 14.1 PT ('Divergências deliberadas: N')",
+                         "**Divergências deliberadas: ", table_14_1);
+    check_declared_count(spec_doc_text, "section 14.2 EN ('Scheduled gaps: N')", "**Scheduled gaps: ", table_14_2);
+    check_declared_count(spec_doc_text, "section 14.2 PT ('Lacunas agendadas: N')", "**Lacunas agendadas: ",
+                         table_14_2);
+  }
+
+  // EN: `UIX-ORACLE-MECANISMO` -- declare every pin, unconditionally, before running anything --
+  //     "toda divergência tem atribuição escrita, auditável e viva" (this fatia's own brief) means
+  //     a reader six months from now needs the full roster in the log, not just a final size.
+  // PT: `UIX-ORACLE-MECANISMO` -- declara todo pin, incondicionalmente, antes de rodar qualquer
+  //     coisa -- "toda divergência tem atribuição escrita, auditável e viva" (o próprio brief desta
+  //     fatia) significa que um leitor daqui a seis meses precisa do elenco inteiro no log, não só
+  //     de um tamanho final.
+  std::printf("PINS: %zu declared (%zu section-14.1, %zu section-14.2):\n", known_divergences().size(),
+              std::count_if(known_divergences().begin(), known_divergences().end(),
+                            [](const KnownDivergence& k) { return k.section == DivergenceSection::kSection14_1; }),
+              std::count_if(known_divergences().begin(), known_divergences().end(),
+                            [](const KnownDivergence& k) { return k.section == DivergenceSection::kSection14_2; }));
+  for (std::size_t i = 0; i < known_divergences().size(); ++i) {
+    const KnownDivergence& k = known_divergences()[i];
+    std::printf("  pin %zu [%s]: property=%s, %s -- %s\n", i,
+                k.section == DivergenceSection::kSection14_1 ? "14.1" : "14.2", k.property, describe_scope(k).c_str(),
+                k.ledger_ref);
+  }
+
+  // EN: `UIX-ORACLE-MECANISMO` -- side A's own `kQuantizeMagnitudeCeiling`
+  //     (`glintfx/src/rml/rcss_dump.cpp`) is TU-local BY DESIGN (see `value_compute.hpp`'s own
+  //     header comment for `kMaxQuantizeMagnitude`: "not a shared header -- the two sides of the
+  //     dumper intentionally do not share code"), so it is NOT reachable from this file without
+  //     opening `rcss_dump.cpp` -- forbidden for this fatia (author-independence discipline this
+  //     whole oracle exists to prove). What follows is therefore NOT a live cross-check of both
+  //     sides: it is a LIVE check of side B's own `kMaxQuantizeMagnitude` (read via `value_compute.
+  //     hpp`, a legitimate header include) against a DOCUMENTED PIN of what side A is expected to
+  //     hold, taken from this task's own brief (`UIX-ORACLE-MECANISMO`), dated below. If this ever
+  //     fires, read the failure message before assuming which side moved -- this check cannot tell
+  //     you.
+  // PT: `UIX-ORACLE-MECANISMO` -- o próprio `kQuantizeMagnitudeCeiling` do lado A
+  //     (`glintfx/src/rml/rcss_dump.cpp`) é TU-local DE PROPÓSITO (ver o próprio comentário de
+  //     cabeçalho do `kMaxQuantizeMagnitude` no value_compute.hpp: "não um header compartilhado --
+  //     os dois lados do dumper intencionalmente não compartilham código"), então NÃO é alcançável
+  //     a partir deste arquivo sem abrir o rcss_dump.cpp -- proibido pra esta fatia (disciplina de
+  //     independência-de-autor que este oráculo inteiro existe pra provar). O que segue portanto
+  //     NÃO é uma checagem cruzada ao vivo dos dois lados: é uma checagem AO VIVO do próprio
+  //     kMaxQuantizeMagnitude do lado B (lido via value_compute.hpp, um include de header
+  //     legítimo) contra um PIN DOCUMENTADO do que o lado A é esperado carregar, tirado do próprio
+  //     briefing desta tarefa (UIX-ORACLE-MECANISMO), datado abaixo. Se isto algum dia disparar,
+  //     leia a mensagem de falha antes de supor qual lado se moveu -- esta checagem não consegue
+  //     te dizer.
+  constexpr double kExpectedSideAQuantizeMagnitudeCeiling = 140737488355328.0; // 2^47
+  if (glintfx::uix::style::kMaxQuantizeMagnitude != kExpectedSideAQuantizeMagnitudeCeiling) {
+    fail("glintfx::uix::style::kMaxQuantizeMagnitude (value_compute.hpp, live) = " +
+         std::to_string(glintfx::uix::style::kMaxQuantizeMagnitude) +
+         " != the value THIS ORACLE was told (2026-08-07, UIX-ORACLE-MECANISMO's own brief) side "
+         "A's rcss_dump.cpp::kQuantizeMagnitudeCeiling holds (" +
+         std::to_string(kExpectedSideAQuantizeMagnitudeCeiling) +
+         ") -- side B moved, OR side A moved and this oracle's own pin (kept here because side A's "
+         "constant is TU-local and unreachable from a header, ADR-0020) is now stale; this check "
+         "canNOT tell you which -- go read rcss_dump.cpp's own kQuantizeMagnitudeCeiling by hand");
   }
 
   // EN: Collect candidate fixtures from all four corpus directories into a SORTED, DEDUPED set
@@ -906,6 +1432,18 @@ int main() {
     for (const DiffEntry& d : diffs) {
       bool is_known = false;
       for (std::size_t k = 0; k < known_divergences().size(); ++k) {
+        // EN: neutralized pin -- see `read_neutralize_pin()`'s own header comment. Pretend row k
+        //     does not exist for THIS lookup only; `known_hit[k]` stays false, so the closing
+        //     "known divergence no longer reproduces" check below ALSO fires for it -- both are
+        //     legitimate, expected failure reasons for a neutralized run, and either alone already
+        //     makes this process exit non-zero, which is all the meta-test asserts.
+        // PT: pin neutralizado -- ver o próprio comentário de cabeçalho do read_neutralize_pin().
+        //     Finge que a linha k não existe só pra ESTA busca; known_hit[k] fica falso, então a
+        //     checagem de fechamento "known divergence no longer reproduces" abaixo TAMBÉM dispara
+        //     pra ela -- as duas são motivos de falha legítimos e esperados pra uma rodada
+        //     neutralizada, e qualquer uma sozinha já faz este processo sair não-zero, que é tudo
+        //     que o meta-teste assere.
+        if (neutralize_pin.has_value() && *neutralize_pin == k) continue;
         if (matches(known_divergences()[k], name, d)) {
           known_hit[k] = true;
           is_known = true;
@@ -924,9 +1462,9 @@ int main() {
     }
     if (unknown > 0) {
       fail(name + ": " + std::to_string(unknown) +
-           " divergence(s) not in docs/uix-rcss.md section 14.1's table (see the rml/uix line "
-           "pairs above; a NEW divergence is a RESULT to be classified and written up, never a "
-           "dumper to be edited until the diff goes green)");
+           " divergence(s) not in docs/uix-rcss.md section 14.1/14.2's own kKnownDivergences table "
+           "(see the rml/uix line pairs above; a NEW divergence is a RESULT to be classified and "
+           "written up, never a dumper to be edited until the diff goes green)");
     }
 
     doc->Close();
@@ -936,11 +1474,12 @@ int main() {
   // PT: A outra metade do pin -- ver o próprio comentário do known_divergences().
   for (std::size_t k = 0; k < known_divergences().size(); ++k) {
     if (known_hit[k]) continue;
-    fail(std::string("known divergence no longer reproduces (fixture ") + known_divergences()[k].fixture +
-         ", ledger: " + known_divergences()[k].ledger_ref +
-         ") -- if a dumper legitimately changed, get the líder to update docs/uix-rcss.md section "
-         "14.1 and REMOVE the row here in the same commit; do not leave a pin that no longer "
-         "measures anything");
+    fail(std::string("known divergence no longer reproduces (pin ") + std::to_string(k) + " " +
+         describe_scope(known_divergences()[k]) + ", ledger: " + known_divergences()[k].ledger_ref +
+         ") -- if a dumper legitimately changed, get the líder to update docs/uix-rcss.md and REMOVE "
+         "the row here in the same commit; do not leave a pin that no longer measures anything (or, "
+         "if GLINTFX_ORACLE_NEUTRALIZE_PIN was set to this exact index, this is the EXPECTED half of "
+         "the meta-test neutralization proof, not a real drift)");
   }
 
   // EN: The scope line, printed unconditionally -- a zero declared distinguishes "there were none"

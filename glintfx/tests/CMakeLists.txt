@@ -4177,11 +4177,53 @@ target_compile_definitions(rcss_dump_differential_oracle PRIVATE
   GLINTFX_RCSS2_DEMOS_DIR="${CMAKE_SOURCE_DIR}/demos/showcase"
   GLINTFX_RCSS2_DOM_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/uix/dom/test_fixtures"
   GLINTFX_RCSS2_ORACLE_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/src/rml/rcss_dump_test_fixtures"
-  GLINTFX_RCSS2_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp")
+  GLINTFX_RCSS2_UA_STYLESHEET="${CMAKE_SOURCE_DIR}/src/ua_stylesheet.hpp"
+  # EN: `UIX-ORACLE-MECANISMO` -- the spec doc itself, ONE level up from `${CMAKE_SOURCE_DIR}`
+  #     (=glintfx/), same absolute-source-tree-path discipline every other GLINTFX_RCSS2_* define
+  #     above already follows -- read at startup to check §14.1/§14.2's own declared divergence
+  #     counts LIVE against `kKnownDivergences`' own table size (see that file's own
+  #     `check_declared_count()` header comment for why this replaced a second hand-kept constant).
+  # PT: `UIX-ORACLE-MECANISMO` -- o próprio documento-fonte, UM nível acima do `${CMAKE_SOURCE_DIR}`
+  #     (=glintfx/), mesma disciplina de caminho absoluto na árvore-fonte que toda outra definição
+  #     GLINTFX_RCSS2_* acima já segue -- lido na partida pra checar as próprias contagens de
+  #     divergência declaradas da §14.1/§14.2 AO VIVO contra o próprio tamanho de tabela do
+  #     kKnownDivergences (ver o próprio comentário de cabeçalho do check_declared_count() daquele
+  #     arquivo pro motivo desta substituir uma segunda constante mantida à mão).
+  GLINTFX_RCSS2_SPEC_DOC="${CMAKE_SOURCE_DIR}/../docs/uix-rcss.md")
 add_test(NAME rcss_dump_differential_oracle
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:rcss_dump_differential_oracle>
     -P ${CMAKE_SOURCE_DIR}/tests/run_xvfb.cmake
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ---------------------------------------------------------------------------
+# EN: `UIX-ORACLE-MECANISMO` -- meta-test: proves every `kKnownDivergences` row is actually
+#     EXERCISED by a real fixture (docs/uix-rcss.md section 14.1's own normative requirement 3), by
+#     neutralizing each pin's own lookup (`GLINTFX_ORACLE_NEUTRALIZE_PIN=<k>`, one process per k, so
+#     one pin's mutation never bleeds into another's) and asserting the run goes RED. Driven by
+#     `tools/rcss_oracle_neutralize_all.sh`, which discovers the pin count itself via
+#     `${EXE} --list-pins` (no display needed for that call) before looping -- this test's own row
+#     count therefore never needs to be kept in sync with `kKnownDivergences`' own size by hand.
+#     Runs under the SAME Xvfb/XDG_RUNTIME_DIR isolation `run_xvfb.cmake` gives every other GLFW-
+#     backed test in this suite (the script re-implements that recipe itself, since `run_xvfb.cmake`
+#     treats a non-zero exit as ITS OWN test failure -- the opposite of what this meta-test needs
+#     from each individual neutralized run).
+# PT: `UIX-ORACLE-MECANISMO` -- meta-teste: prova que toda linha do kKnownDivergences é de fato
+#     EXERCITADA por uma fixture real (o próprio requisito normativo 3 da seção 14.1 do
+#     docs/uix-rcss.md), neutralizando a própria busca de cada pin (GLINTFX_ORACLE_NEUTRALIZE_PIN=<k>,
+#     um processo por k, pra que a mutação de um pin nunca vaze pra outro) e assertando que a rodada
+#     fica VERMELHA. Conduzido pelo tools/rcss_oracle_neutralize_all.sh, que descobre a própria
+#     contagem de pin via ${EXE} --list-pins (sem display nenhum precisado pra essa chamada) antes
+#     de iterar -- a própria contagem de linha deste teste portanto nunca precisa ficar em sincronia
+#     à mão com o próprio tamanho do kKnownDivergences. Roda sob o MESMO isolamento Xvfb/
+#     XDG_RUNTIME_DIR que o run_xvfb.cmake dá a todo outro teste com GLFW desta suíte (o script
+#     reimplementa a própria receita, já que o run_xvfb.cmake trata saída não-zero como falha DO
+#     PRÓPRIO teste dele -- o oposto do que este meta-teste precisa de cada rodada neutralizada
+#     individual).
+# ---------------------------------------------------------------------------
+add_test(NAME rcss_dump_differential_oracle_meta_neutralization
+  COMMAND bash ${CMAKE_SOURCE_DIR}/../tools/rcss_oracle_neutralize_all.sh
+    $<TARGET_FILE:rcss_dump_differential_oracle>
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ---------------------------------------------------------------------------

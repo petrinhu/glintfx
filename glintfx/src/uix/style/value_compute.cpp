@@ -1267,15 +1267,55 @@ ValueComputeStatus compute_polygon(std::string_view inner, float dp_ratio, int d
   return ValueComputeStatus::Ok;
 }
 
-// EN: Shared by `compute_horizontal_gradient`/`compute_vertical_gradient` -- both reuse upstream's
-//     own `PropertyParserColorStopList` (`DecoratorGradient.cpp:186-221`'s own dispatch on the
-//     decorator name, the SAME parser every `linear-gradient`/`radial-gradient` stop goes through),
-//     so both colors get the SAME `UIX-RCSS-ERRATA-4` lossy round-trip gradient stops do.
-// PT: Compartilhado por `compute_horizontal_gradient`/`compute_vertical_gradient` -- os dois
-//     reusam o próprio `PropertyParserColorStopList` do upstream (o próprio dispatch por nome de
-//     decorator do `DecoratorGradient.cpp:186-221`, o MESMO parser que todo stop de
-//     `linear-gradient`/`radial-gradient` atravessa), então as duas cores recebem a MESMA
-//     ida-e-volta com perda da `UIX-RCSS-ERRATA-4` que os stops de gradiente recebem.
+// EN: `UIX-GRADIENT-ALFA` -- shared by `compute_horizontal_gradient`/`compute_vertical_gradient`.
+//     ⚠️ CORRECTED (this item): the previous version of this comment claimed both reuse upstream's
+//     own `PropertyParserColorStopList`, "the SAME parser every `linear-gradient`/`radial-gradient`
+//     stop goes through" -- that claim was FALSE, inherited from `docs/uix-rcss.md`'s own
+//     `UIX-RCSS-ERRATA-4` text without independent re-verification, and it drove this function to
+//     apply `dump_box_shadow_or_gradient_stop_color()`'s own lossy premultiply-round-trip where it
+//     never belonged, corrupting the RGB of any low-alpha 8-digit hex stop
+//     (`UIX-ORACLE-MEDICAO`'s own residuo C, `system_menu__config_controles_tabela.rml:469`).
+//     Verified by reading `examples/RmlUi/Source/Core/DecoratorGradient.h`/`.cpp` directly:
+//     `DecoratorStraightGradient` (the type `horizontal-gradient`/`vertical-gradient` actually
+//     instantiate) declares plain `Colourb start, stop;` (`DecoratorGradient.h:34`) -- NOT
+//     `ColourbPremultiplied`, structurally different from `BoxShadow`'s/`ColorStop`'s own
+//     `ColourbPremultiplied color;` (`DecorationTypes.h:9`/`:22`) -- and
+//     `DecoratorStraightGradientInstancer::InstanceDecorator` (`DecoratorGradient.cpp:196-219`)
+//     fetches `properties_.GetProperty(ids.start)->Get<Colourb>()`, never calling
+//     `.ToPremultiplied()` anywhere, a completely different code path from
+//     `PropertyParserColorStopList.cpp:47`/`PropertyParserBoxShadow.cpp:72`'s own
+//     `.ToPremultiplied()` calls. These two colors therefore print STRAIGHT, exactly like
+//     `background-color`/`border-*-color`/every other non-premultiplied color-typed field this
+//     registry has -- `parse_color()`/`print_color()` alone, no round-trip step. Full derivation,
+//     TDD proof, and the routing note for the spec's own errata (this item does not edit
+//     `docs/uix-rcss.md` itself) are in this file's own test suite,
+//     `test_gradient_alpha_roundtrip_matches_upstream_storage_type`
+//     (`tests/uix_style/value_compute_sanity.cpp`).
+// PT: `UIX-GRADIENT-ALFA` -- compartilhado por `compute_horizontal_gradient`/
+//     `compute_vertical_gradient`. ⚠️ CORRIGIDO (este item): a versão anterior deste comentário
+//     alegava que os dois reusam o próprio `PropertyParserColorStopList` do upstream, "o MESMO
+//     parser que todo stop de `linear-gradient`/`radial-gradient` atravessa" -- essa alegação era
+//     FALSA, herdada do próprio texto da `UIX-RCSS-ERRATA-4` do docs/uix-rcss.md sem
+//     re-verificação independente, e levou esta função a aplicar a própria ida-e-volta com perda
+//     de premultiplicação do `dump_box_shadow_or_gradient_stop_color()` onde ela nunca pertencia,
+//     corrompendo o RGB de todo stop hex de 8 dígitos em alfa baixo (o próprio resíduo C da
+//     `UIX-ORACLE-MEDICAO`, `system_menu__config_controles_tabela.rml:469`). Verificado lendo
+//     direto o `examples/RmlUi/Source/Core/DecoratorGradient.h`/`.cpp`: o
+//     `DecoratorStraightGradient` (o tipo que `horizontal-gradient`/`vertical-gradient` de fato
+//     instanciam) declara `Colourb start, stop;` plano (`DecoratorGradient.h:34`) -- NÃO
+//     `ColourbPremultiplied`, estruturalmente diferente do próprio `ColourbPremultiplied color;`
+//     do `BoxShadow`/`ColorStop` (`DecorationTypes.h:9`/`:22`) -- e o próprio
+//     `DecoratorStraightGradientInstancer::InstanceDecorator` (`DecoratorGradient.cpp:196-219`)
+//     busca `properties_.GetProperty(ids.start)->Get<Colourb>()`, nunca chamando
+//     `.ToPremultiplied()` em lugar nenhum, um caminho de código completamente diferente das
+//     próprias chamadas `.ToPremultiplied()` do `PropertyParserColorStopList.cpp:47`/
+//     `PropertyParserBoxShadow.cpp:72`. Estas duas cores portanto imprimem RETAS, exatamente como
+//     `background-color`/`border-*-color`/todo outro campo tipo-cor não-premultiplicado deste
+//     registro -- só `parse_color()`/`print_color()`, sem passo de ida-e-volta. Derivação
+//     completa, prova TDD, e a nota de roteamento pra própria errata da spec (este item não edita
+//     o docs/uix-rcss.md sozinho) estão na própria suíte de teste deste arquivo,
+//     `test_gradient_alpha_roundtrip_matches_upstream_storage_type`
+//     (`tests/uix_style/value_compute_sanity.cpp`).
 ValueComputeStatus compute_two_stop_straight_gradient(std::string_view inner, std::string* out) {
   auto tokens = split_whitespace(inner);
   if (tokens.size() != 2) {
@@ -1287,8 +1327,6 @@ ValueComputeStatus compute_two_stop_straight_gradient(std::string_view inner, st
       parse_color(tokens[1], &c1) != ValueComputeStatus::Ok) {
     return ValueComputeStatus::Invalid;
   }
-  c0 = dump_box_shadow_or_gradient_stop_color(c0);
-  c1 = dump_box_shadow_or_gradient_stop_color(c1);
   std::vector<std::string> parts{print_color(c0), print_color(c1)};
   *out = join(parts, ';');
   return ValueComputeStatus::Ok;

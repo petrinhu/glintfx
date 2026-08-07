@@ -453,6 +453,156 @@ void test_gradient_stop_auto_spacing_last_stop_unpositioned() {
 }
 
 // ---------------------------------------------------------------------------
+// EN: `UIX-GRADIENT-ALFA` -- fixes the residuo C of `UIX-ORACLE-MEDICAO`:
+//     `vertical-gradient()`/`horizontal-gradient()` with an 8-digit hex stop at low alpha
+//     corrupted the RGB while preserving the alpha byte exactly, measured against
+//     `system_menu__config_controles_tabela.rml:469` (`decorator: vertical-gradient( #C9A24B24
+//     #C9A24B0a );`) -- side A (real RmlUi) prints `#c9a24b24;#c9a24b0a` (STRAIGHT, unchanged
+//     except lowercasing), this module printed `#c69b4624;#b299330a` before this item.
+//
+//     EXHAUSTIVE SWEEP, DECLARED DENOMINATOR: `dump_box_shadow_or_gradient_stop_color()` (this
+//     file's own lossy premultiply-then-un-premultiply round-trip, `UIX-RCSS-ERRATA-4`) has
+//     exactly **3** call sites in this file (`grep`-confirmed, not assumed) -- `N=3`, `M=3`
+//     examined, `K=1` affected: `compute_box_shadow()` (1 call), `parse_gradient_stop()` (1 call,
+//     shared by `linear-gradient`/`radial-gradient` -- both route every stop through this SAME
+//     function via `parse_and_space_stops()`), and `compute_two_stop_straight_gradient()` (2
+//     calls, `c0`/`c1`, shared by `horizontal-gradient`/`vertical-gradient` -- both dispatch to
+//     this SAME function by name in `compute_one_decorator_function()`). 3 call sites, 5
+//     RCSS-facing property/decorator paths (`box-shadow` + the 4 gradient functions) between them.
+//
+//     ROOT CAUSE, CONFIRMED BY READING THE REAL UPSTREAM SOURCE DIRECTLY (this task's own "onde a
+//     spec e o código real do RmlUi divergirem, o código manda" clause) -- NOT the mechanism this
+//     item's own brief hypothesized (a stray un-premultiply step left over from the
+//     `UIX-RCSS-ERRATA-2`->`ERRATA-4` reversal): the round-trip arithmetic ITSELF is correct
+//     (proven by `test_box_shadow_color_lossy_roundtrip_orchestrator_table` above, unchanged,
+//     still green) -- the bug is that `compute_two_stop_straight_gradient()` applies it to a
+//     decorator type that was NEVER premultiplied by upstream in the first place.
+//     `examples/RmlUi/Source/Core/DecoratorGradient.h` declares `Colourb start, stop;` for
+//     `DecoratorStraightGradient` (line ~34) -- a PLAIN, non-premultiplied `Colourb`, structurally
+//     DIFFERENT from `BoxShadow`'s/`ColorStop`'s own `ColourbPremultiplied color;`
+//     (`DecorationTypes.h:9`/`:22`, the fact `UIX-RCSS-ERRATA-4`'s own text correctly cites for
+//     THOSE two). `DecoratorStraightGradientInstancer::InstanceDecorator`
+//     (`DecoratorGradient.cpp:196-219`, read directly) fetches
+//     `properties_.GetProperty(ids.start)->Get<Colourb>()` -- **never** `.ToPremultiplied()`
+//     anywhere in this instancer, a COMPLETELY DIFFERENT code path from
+//     `PropertyParserColorStopList.cpp:47`/`PropertyParserBoxShadow.cpp:72`'s own
+//     `.ToPremultiplied()` calls. `docs/uix-rcss.md`'s own `UIX-RCSS-ERRATA-4` text asserts
+//     `horizontal-gradient`/`vertical-gradient` "reuse upstream's own `PropertyParserColorStopList`
+//     ... the SAME parser every `linear-gradient`/`radial-gradient` stop goes through" -- this
+//     claim is FALSE for these two specifically, per the direct reading above; this file's own
+//     (now-corrected) comment at `compute_two_stop_straight_gradient()`'s own declaration
+//     previously repeated the same false claim, inherited from the same source, not independently
+//     re-verified. Reported for routing to the spec's own owner (this item does not edit
+//     `docs/uix-rcss.md` itself, per this task's own file-boundary rule) -- not silently patched
+//     into the doc by this item alone.
+//
+//     Side A empirically confirms the same conclusion two different ways: (1) the residuo C
+//     measurement itself (straight, unchanged RGB); (2) the SECOND corpus occurrence in the same
+//     fixture (`#22D3EE1a #22D3EE0a`, line 472) that `UIX-ORACLE-MEDICAO`'s own report flagged as
+//     "not verified, never bound to an element in that oracle run" -- exercised here directly,
+//     proving the fix is not a one-RGB-value coincidence.
+// PT: `UIX-GRADIENT-ALFA` -- conserta o resíduo C da `UIX-ORACLE-MEDICAO`:
+//     `vertical-gradient()`/`horizontal-gradient()` com um stop hex de 8 dígitos em alfa baixo
+//     corrompia o RGB preservando o byte de alfa exato, medido contra
+//     `system_menu__config_controles_tabela.rml:469` (`decorator: vertical-gradient( #C9A24B24
+//     #C9A24B0a );`) -- o lado A (RmlUi real) imprime `#c9a24b24;#c9a24b0a` (RETO, inalterado
+//     exceto lowercase), este módulo imprimia `#c69b4624;#b299330a` antes deste item.
+//
+//     VARREDURA EXAUSTIVA, DENOMINADOR DECLARADO: o `dump_box_shadow_or_gradient_stop_color()`
+//     (a própria ida-e-volta com perda de premultiplicar-depois-des-premultiplicar deste arquivo,
+//     `UIX-RCSS-ERRATA-4`) tem exatamente **3** call sites neste arquivo (confirmado por `grep`,
+//     não suposto) -- `N=3`, `M=3` examinados, `K=1` afetado: `compute_box_shadow()` (1 chamada),
+//     `parse_gradient_stop()` (1 chamada, compartilhada por `linear-gradient`/`radial-gradient` --
+//     os dois roteiam todo stop por esta MESMA função via `parse_and_space_stops()`), e
+//     `compute_two_stop_straight_gradient()` (2 chamadas, `c0`/`c1`, compartilhada por
+//     `horizontal-gradient`/`vertical-gradient` -- os dois despacham pra esta MESMA função por nome
+//     no `compute_one_decorator_function()`). 3 call sites, 5 caminhos RCSS-facing (propriedade/
+//     decorator) entre eles (`box-shadow` mais as 4 funções de gradiente).
+//
+//     CAUSA RAIZ, CONFIRMADA LENDO O PRÓPRIO FONTE UPSTREAM DIRETO (a própria cláusula "onde a
+//     spec e o código real do RmlUi divergirem, o código manda" desta tarefa) -- NÃO o mecanismo
+//     que o próprio briefing deste item hipotetizou (um passo de des-premultiplicar sobrando da
+//     reversão `UIX-RCSS-ERRATA-2`->`ERRATA-4`): a própria aritmética da ida-e-volta está correta
+//     (provado pelo `test_box_shadow_color_lossy_roundtrip_orchestrator_table` acima, inalterado,
+//     ainda verde) -- o bug é que `compute_two_stop_straight_gradient()` a aplica a um tipo de
+//     decorator que NUNCA foi premultiplicado pelo upstream, de saída.
+//     `examples/RmlUi/Source/Core/DecoratorGradient.h` declara `Colourb start, stop;` pro
+//     `DecoratorStraightGradient` (linha ~34) -- um `Colourb` PLANO, não-premultiplicado,
+//     estruturalmente DIFERENTE do próprio `ColourbPremultiplied color;` do `BoxShadow`/`ColorStop`
+//     (`DecorationTypes.h:9`/`:22`, o fato que o próprio texto da `UIX-RCSS-ERRATA-4` cita
+//     corretamente pra ESSES dois). O `DecoratorStraightGradientInstancer::InstanceDecorator`
+//     (`DecoratorGradient.cpp:196-219`, lido direto) busca
+//     `properties_.GetProperty(ids.start)->Get<Colourb>()` -- **nunca** `.ToPremultiplied()` em
+//     lugar nenhum deste instancer, um caminho de código COMPLETAMENTE DIFERENTE das próprias
+//     chamadas `.ToPremultiplied()` do `PropertyParserColorStopList.cpp:47`/
+//     `PropertyParserBoxShadow.cpp:72`. O próprio texto da `UIX-RCSS-ERRATA-4` do
+//     `docs/uix-rcss.md` afirma que `horizontal-gradient`/`vertical-gradient` "reusam o próprio
+//     `PropertyParserColorStopList` do upstream... o MESMO parser que todo stop de
+//     `linear-gradient`/`radial-gradient` atravessa" -- esta alegação é FALSA especificamente pra
+//     estes dois, per a leitura direta acima; o próprio comentário deste arquivo na declaração do
+//     `compute_two_stop_straight_gradient()` (agora corrigido) repetia a mesma alegação falsa,
+//     herdada da mesma fonte, não re-verificada independentemente. Reportado pro roteamento ao
+//     próprio dono da spec (este item não edita o `docs/uix-rcss.md` sozinho, per a própria regra
+//     de fronteira-de-arquivo desta tarefa) -- não remendado em silêncio na doc por este item
+//     sozinho.
+//
+//     O lado A confirma empiricamente a mesma conclusão de duas formas diferentes: (1) a própria
+//     medição do resíduo C (RGB reto, inalterado); (2) a SEGUNDA ocorrência do corpus na mesma
+//     fixture (`#22D3EE1a #22D3EE0a`, linha 472) que o próprio relatório da `UIX-ORACLE-MEDICAO`
+//     sinalizou como "não verificada, nunca vinculada a um elemento naquela corrida do oráculo" --
+//     exercitada aqui direto, provando que o conserto não é coincidência de um único valor de RGB.
+void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
+  std::string out;
+
+  // linear-gradient / radial-gradient stops -- ColorStop, ColourbPremultiplied upstream
+  // (DecorationTypes.h:9) -- KEEP the lossy round-trip, same byte math as box-shadow's own
+  // orchestrator-table row 2 (test_box_shadow_color_lossy_roundtrip_orchestrator_table above:
+  // #c9a24b40 -> #c79f4740) -- different alpha here (0x24/0x0a), independently reconfirmed.
+  check(compute_decorator_list("linear-gradient(90deg, #C9A24B24, #C9A24B0a)", 1.0f, &out) ==
+            ValueComputeStatus::Ok,
+        "linear-gradient with low-alpha 8-digit hex stops computes Ok");
+  check_eq(out, "linear-gradient(90.0000;#c69b4624:0.0000%;#b299330a:100.0000%)",
+           "linear-gradient KEEPS the lossy round-trip -- ColorStop IS ColourbPremultiplied "
+           "upstream, this is CORRECT behaviour, not the bug this item fixes");
+
+  check(compute_decorator_list("radial-gradient(#C9A24B24, #C9A24B0a)", 1.0f, &out) ==
+            ValueComputeStatus::Ok,
+        "radial-gradient with low-alpha 8-digit hex stops computes Ok");
+  check_eq(out, "radial-gradient(50.0000%;50.0000%;#c69b4624:0.0000%;#b299330a:100.0000%)",
+           "radial-gradient KEEPS the lossy round-trip too -- same ColorStop storage, same "
+           "parse_gradient_stop() call site as linear-gradient");
+
+  // horizontal-gradient / vertical-gradient -- DecoratorStraightGradient, plain Colourb upstream
+  // (DecoratorGradient.h) -- NEVER round-trip. This IS the fix: byte-exact match to the oracle's
+  // own measured side-A line for system_menu__config_controles_tabela.rml:469.
+  check(compute_decorator_list("horizontal-gradient(#C9A24B24 #C9A24B0a)", 1.0f, &out) ==
+            ValueComputeStatus::Ok,
+        "horizontal-gradient with low-alpha 8-digit hex computes Ok");
+  check_eq(out, "horizontal-gradient(#c9a24b24;#c9a24b0a)",
+           "horizontal-gradient NEVER round-trips -- start-color/stop-color are plain Colourb "
+           "upstream, straight passthrough, never the corrupted #c69b4624;#b299330a this bug used "
+           "to produce");
+
+  check(compute_decorator_list("vertical-gradient(#C9A24B24 #C9A24B0a)", 1.0f, &out) ==
+            ValueComputeStatus::Ok,
+        "vertical-gradient with low-alpha 8-digit hex computes Ok");
+  check_eq(out, "vertical-gradient(#c9a24b24;#c9a24b0a)",
+           "vertical-gradient NEVER round-trips either -- this IS "
+           "system_menu__config_controles_tabela.rml:469's own exact value, byte-exact match to "
+           "the oracle's own measured side-A line, never the #c69b4624;#b299330a residuo C "
+           "reported");
+
+  // The second corpus occurrence UIX-ORACLE-MEDICAO's own report explicitly flagged as
+  // unverified ("did not appear in the diff for this fixture", never bound to an element in that
+  // run) -- exercised directly here to prove the fix generalizes past one RGB/alpha pair.
+  check(compute_decorator_list("vertical-gradient(#22D3EE1a #22D3EE0a)", 1.0f, &out) ==
+            ValueComputeStatus::Ok,
+        "vertical-gradient second corpus occurrence (config_controles_tabela.rml:472) computes Ok");
+  check_eq(out, "vertical-gradient(#22d3ee1a;#22d3ee0a)",
+           "second corpus occurrence also stays straight -- not a one-fixture, one-RGB coincidence");
+}
+
+// ---------------------------------------------------------------------------
 // EN: docs/uix-rcss.md section 7.1 -- all 4 authorized hex forms normalize to the same 8-digit
 //     canonical form, plus the 3 authorized named colors, plus fail-high for everything else
 //     (section 13's own "requires the líder's sign-off" clause).
@@ -779,23 +929,34 @@ void test_decorator_list_malformed_entry_drops_whole_property() {
 
   // EN: docs/uix-rcss.md section 9.2's own newly-added row (UIX-RCSS-ERRATA-2) -- 107 corpus
   //     occurrences, the single most-used decorator function in the corpus, missing entirely
-  //     before this errata. Same grammar as horizontal-gradient, and a color pair chosen so the
-  //     premultiply/un-premultiply round-trip step is NOT a no-op, unlike the horizontal-gradient
-  //     case above -- same lossy round-trip and same literal as the 9.1 worked example above
-  //     (`UIX-RCSS-ERRATA-4`'s own reversed decision).
+  //     before this errata. Same grammar as horizontal-gradient.
+  //     ⚠️ CORRECTED by `UIX-GRADIENT-ALFA` (this item): this check used to assert a lossy
+  //     premultiply/un-premultiply round-trip here (`#22D3EE26` -> `#21d0ea26`), reasoning by false
+  //     analogy to box-shadow/gradient-stop colors -- that assertion itself encoded the residuo C
+  //     bug `UIX-ORACLE-MEDICAO` measured, not correct behaviour. Verified by reading
+  //     `DecoratorGradient.h`/`.cpp` directly (see `compute_two_stop_straight_gradient()`'s own
+  //     header comment in value_compute.cpp for the full derivation): `horizontal-gradient`/
+  //     `vertical-gradient` use plain `Colourb`, never premultiplied by upstream -- straight
+  //     passthrough is correct, `#22D3EE26` prints as `#22d3ee26` (lowercased, unchanged), never
+  //     `#21d0ea26`.
   // PT: A própria linha recém-acrescentada da seção 9.2 do docs/uix-rcss.md (UIX-RCSS-ERRATA-2) --
   //     107 ocorrências no corpus, a função de decorator mais usada do corpus inteiro, faltando por
-  //     inteiro antes desta errata. Mesma gramática do horizontal-gradient, e um par de cores
-  //     escolhido pra o passo de ida-e-volta premultiplicar/des-premultiplicar NÃO ser um no-op,
-  //     diferente do caso horizontal-gradient acima -- mesma ida-e-volta com perda e mesmo literal
-  //     do exemplo trabalhado 9.1 acima (a própria decisão revertida da `UIX-RCSS-ERRATA-4`).
+  //     inteiro antes desta errata. Mesma gramática do horizontal-gradient.
+  //     ⚠️ CORRIGIDO pela `UIX-GRADIENT-ALFA` (este item): esta checagem alegava uma ida-e-volta
+  //     com perda de premultiplicar/des-premultiplicar aqui (`#22D3EE26` -> `#21d0ea26`),
+  //     raciocinando por falsa analogia com cores de box-shadow/stop-de-gradiente -- a própria
+  //     asserção codificava o bug do resíduo C que a `UIX-ORACLE-MEDICAO` mediu, não o
+  //     comportamento correto. Verificado lendo direto o `DecoratorGradient.h`/`.cpp` (ver o
+  //     próprio comentário de cabeçalho do `compute_two_stop_straight_gradient()` no
+  //     value_compute.cpp pra derivação completa): `horizontal-gradient`/`vertical-gradient` usam
+  //     `Colourb` plano, nunca premultiplicado pelo upstream -- passthrough reto é o correto,
+  //     `#22D3EE26` imprime como `#22d3ee26` (lowercase, inalterado), nunca `#21d0ea26`.
   check(compute_decorator_list("vertical-gradient(#22D3EE26 #ffffffff)", 1.0f, &out) ==
             ValueComputeStatus::Ok,
         "vertical-gradient computes Ok");
-  check_eq(out, "vertical-gradient(#21d0ea26;#ffffffff)",
-           "vertical-gradient: same lossy premultiply/un-premultiply round-trip as "
-           "box-shadow/gradient-stop colors, #22D3EE26 -> #21d0ea26 (same math as the 9.1 worked "
-           "example)");
+  check_eq(out, "vertical-gradient(#22d3ee26;#ffffffff)",
+           "vertical-gradient NEVER round-trips -- straight passthrough, lowercased only, never "
+           "the #21d0ea26 this test used to (wrongly) assert");
 
   check(compute_decorator_list("image( runes-base.png )", 1.0f, &out) == ValueComputeStatus::Ok,
         "image() computes Ok");
@@ -830,6 +991,7 @@ int main() {
   test_box_shadow_malformed_layer_drops_whole_property();
   test_gradient_stop_auto_spacing_general_run();
   test_gradient_stop_auto_spacing_last_stop_unpositioned();
+  test_gradient_alpha_roundtrip_matches_upstream_storage_type();
   test_color_parsing_all_forms();
   test_length_resolution();
   test_font_size_em_resolution();

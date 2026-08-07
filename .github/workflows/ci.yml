@@ -521,32 +521,58 @@ jobs:
           cmake --preset embed-only -S glintfx -DGLINTFX_BUILD_TESTS=OFF -DGLINTFX_BUILD_DEMOS=OFF
           rm -rf glintfx/build-full glintfx/build-embed-only
 
-      # EN: TST-L1-STATIC (3/4) -- clang-tidy. Checks and the WarningsAsErrors policy
+      # EN: TST-L1-STATIC (3/4) -- clang-tidy, ONE FILE PER INVOCATION (CI-TIDY-CRASH,
+      #     líder's decision 2, 2026-08-06). Checks and the WarningsAsErrors policy
       #     live in glintfx/.clang-tidy (only clang-analyzer-* fails the build today;
       #     modernize-*/cppcoreguidelines-* are reported, not gated -- see that file's
       #     header comment for the sempre-verde rationale).
-      #     Recursive glob (`shopt -s globstar` + `src/**/*.cpp`) instead of the flat
-      #     `src/*.cpp` used before FX-CARVE-1 -- the flat glob silently skipped
-      #     `glintfx/src/fx/*.cpp` (effects_gl3.cpp, the new fx OBJECT-lib TU carved
-      #     out of render_gl3.cpp), a lint-coverage gap found during A3-AUDIO/
-      #     FX-CARVE-1 CI integration (S3). `bash -c` wraps the shell so `globstar`
-      #     takes effect (the workflow's default `run:` shell already is bash on
-      #     ubuntu-latest, but the option must be set explicitly in-line).
-      # PT: TST-L1-STATIC (3/4) -- clang-tidy. Checks e a politica de WarningsAsErrors
-      #     vivem em glintfx/.clang-tidy (so clang-analyzer-* falha o build hoje;
-      #     modernize-*/cppcoreguidelines-* sao reportados, nao gateados -- ver o
-      #     comentario de cabecalho daquele arquivo para o motivo do sempre-verde).
-      #     Glob recursivo (`shopt -s globstar` + `src/**/*.cpp`) em vez do `src/*.cpp`
-      #     plano usado antes do FX-CARVE-1 -- o glob plano pulava em silencio
-      #     `glintfx/src/fx/*.cpp` (effects_gl3.cpp, a nova TU da OBJECT-lib fx
-      #     recortada de render_gl3.cpp), um buraco de cobertura de lint achado durante
-      #     a integracao de CI do A3-AUDIO/FX-CARVE-1 (S3). `bash -c` embrulha o shell
-      #     para o `globstar` valer (o shell default do `run:` ja e bash no
-      #     ubuntu-latest, mas a option precisa ser setada explicitamente in-line).
-      - name: TST-L1-STATIC -- clang-tidy
-        run: |
-          shopt -s globstar
-          clang-tidy -p glintfx/build-lint glintfx/src/**/*.cpp
+      #     WHY one-file-per-invocation instead of a single multi-file
+      #     `clang-tidy -p ... src/**/*.cpp` call: a crash on ANY one file (a real one
+      #     hit this job -- ubuntu-latest's apt clang-tidy resolves to 18.1.3, which
+      #     has a confirmed upstream bug, llvm/llvm-project#169198 fixed by #169215,
+      #     that SIGSEGVs modernize-use-std-print's FormatStringConverter on a non-ASCII
+      #     byte inside a printf format-string literal) kills the WHOLE clang-tidy
+      #     process and silently drops every file after it from the report -- lost
+      #     coverage that looks like nothing ran, not a red gate you can act on.
+      #     tools/run_clang_tidy_per_file.sh runs one `clang-tidy` subprocess per .cpp
+      #     (found via `find`, not a shell glob -- see the script's own header for why
+      #     that also closes the flat-glob-skips-nested-dirs gap FX-CARVE-1 hit),
+      #     accumulates ALL failures instead of stopping at the first one, distinguishes
+      #     a tool CRASH (exit >= 128) from a real lint VIOLATION (exit == 1), and always
+      #     prints "encontrados/analisados/falharam" -- including when falharam is zero,
+      #     per this repo's own scope-line convention -- so a crash on file N never again
+      #     hides whether files N+1..last were actually analyzed. Slower than the old
+      #     one-shot call (each subprocess reparses RmlUi's headers from scratch) --
+      #     accepted cost (líder, 2026-08-06); do not reach for aggressive parallelism
+      #     here without raising it first.
+      # PT: TST-L1-STATIC (3/4) -- clang-tidy, UM ARQUIVO POR CHAMADA (CI-TIDY-CRASH,
+      #     decisão 2 do líder, 2026-08-06). Checks e a política de WarningsAsErrors
+      #     vivem em glintfx/.clang-tidy (só clang-analyzer-* falha o build hoje;
+      #     modernize-*/cppcoreguidelines-* são reportados, não gateados -- ver o
+      #     comentário de cabeçalho daquele arquivo para o motivo do sempre-verde).
+      #     POR QUE um-arquivo-por-chamada em vez de uma única chamada multi-arquivo
+      #     `clang-tidy -p ... src/**/*.cpp`: um crash em QUALQUER arquivo (um real
+      #     bateu neste job -- o clang-tidy do apt no ubuntu-latest resolve para 18.1.3,
+      #     que tem um bug upstream confirmado, llvm/llvm-project#169198 corrigido pelo
+      #     #169215, que dá SIGSEGV no FormatStringConverter do modernize-use-std-print
+      #     ao processar um byte não-ASCII dentro de um literal de format-string de
+      #     printf) mata o processo clang-tidy INTEIRO e derruba em silêncio todo
+      #     arquivo depois dele do relatório -- cobertura perdida que parece "nada
+      #     rodou", não um gate vermelho acionável.
+      #     tools/run_clang_tidy_per_file.sh roda um subprocesso `clang-tidy` por .cpp
+      #     (achado via `find`, não glob de shell -- ver o cabeçalho do próprio script
+      #     para o porquê disso também fechar o buraco de glob-plano-pula-dir-aninhado
+      #     que o FX-CARVE-1 bateu), acumula TODAS as falhas em vez de parar na
+      #     primeira, distingue um CRASH de ferramenta (exit >= 128) de uma VIOLAÇÃO
+      #     real de lint (exit == 1), e sempre imprime "encontrados/analisados/
+      #     falharam" -- inclusive quando falharam é zero, pela própria convenção de
+      #     linha de escopo deste repo -- para que um crash no arquivo N nunca mais
+      #     esconda se os arquivos N+1..último foram de fato analisados. Mais lento que
+      #     a chamada única de antes (cada subprocesso reprocessa os headers do RmlUi
+      #     do zero) -- custo aceito (líder, 2026-08-06); não buscar paralelismo
+      #     agressivo aqui sem antes levantar isso.
+      - name: TST-L1-STATIC -- clang-tidy (per-file)
+        run: ./tools/run_clang_tidy_per_file.sh glintfx/build-lint glintfx/src
 
       # EN: TST-L1-STATIC (4/4) -- cppcheck, restricted to our own src/ (--file-filter)
       #     with vendored/fetched code suppressed (third_party/, _deps/) -- those are

@@ -513,8 +513,133 @@ void test_length_resolution() {
   check(parse_length("5", &v, &u) == ValueComputeStatus::Invalid,
         "unitless non-zero is fail-high, never guessed");
   check(parse_length("1em", &v, &u) == ValueComputeStatus::Invalid,
-        "em: fail-high, needs font-size context this pure-function layer does not have");
+        "em: fail-high in the GENERAL pure-function funnel -- parse_length()/resolve_length_px() "
+        "stay unit-incomplete on purpose (see value_compute.hpp's own header, 'Scope'); "
+        "parse_font_size() below is the NEW, narrow, font-size-only resolver that actually "
+        "computes em, added additively rather than widening this general pair");
   check(parse_length("1rem", &v, &u) == ValueComputeStatus::Invalid, "rem: fail-high, same reason");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `UIX-EM-UNIT` -- `font-size`'s own `em` resolution. `UIX-ORACLE-MEDICAO`'s own residuo B
+//     measured this LIVE against `fonteng_sup_scene.rml` (`.sup{font-size:0.7em}` over
+//     `body{font-size:64px}`): side A (real RmlUi) prints `44.8000px` (`0.7 * 64`, exact), side B
+//     (this module, before this item) fell back to the registry's own `12.0000px` initial value --
+//     NOT a coincidence that happened to look plausible, the documented `Invalid`-from-`parse_length`
+//     fail-high path `canonical_print`'s own one-shot retry always takes for a value shape this
+//     module could not resolve at all. `parse_font_size()` closes that specific gap WITHOUT widening
+//     `parse_length`/`resolve_length_px`'s own general, ancestor-blind signature (the test just
+//     above still asserts `parse_length("1em", ...)` stays `Invalid` -- unchanged, zero ripple to
+//     `box-shadow`/`drop-shadow`/`blur`/`transform`'s own length arguments, which the corpus's own
+//     census, `docs/uix-rcss-censo.md`, never exercises with `em` -- the ONE real corpus occurrence
+//     of `em` is this exact `font-size` declaration). Chained case (`parent 200px -> child 0.5em ->
+//     grandchild 0.25em`) exercises the property this bug hid behind: each level's OWN resolved px
+//     becomes the NEXT level's `parent_font_size_px` argument -- calling `parse_font_size()` twice in
+//     a row, feeding the first call's own output into the second call's own input, is this test's
+//     own proof that inheritance chains correctly rather than each level re-reading some fixed
+//     ancestor.
+// PT: `UIX-EM-UNIT` -- resolução do próprio `em` do `font-size`. O próprio resíduo B da
+//     `UIX-ORACLE-MEDICAO` mediu isto AO VIVO contra o `fonteng_sup_scene.rml`
+//     (`.sup{font-size:0.7em}` sobre `body{font-size:64px}`): o lado A (RmlUi real) imprime
+//     `44.8000px` (`0.7 * 64`, exato), o lado B (este módulo, antes deste item) caía pro próprio
+//     `12.0000px` de valor inicial de registro -- NÃO uma coincidência que calhou de parecer
+//     plausível, é o próprio caminho fail-high `Invalid`-vindo-do-`parse_length` que o próprio retry
+//     de um-tiro do `canonical_print` sempre toma pra uma forma de valor que este módulo não
+//     conseguia resolver de jeito nenhum. `parse_font_size()` fecha exatamente essa lacuna SEM
+//     alargar a própria assinatura geral, cega-a-ancestral, do `parse_length`/`resolve_length_px` (o
+//     teste logo acima ainda afirma que `parse_length("1em", ...)` fica `Invalid` -- inalterado, zero
+//     ondulação pros próprios argumentos de comprimento de `box-shadow`/`drop-shadow`/`blur`/
+//     `transform`, que o próprio censo do corpus, `docs/uix-rcss-censo.md`, nunca exercita com `em`
+//     -- a ÚNICA ocorrência real de `em` no corpus é exatamente esta declaração de `font-size`).
+//     Caso encadeado (`pai 200px -> filho 0.5em -> neto 0.25em`) exercita exatamente a propriedade
+//     que este bug escondia: o próprio px resolvido de CADA nível vira o argumento
+//     `parent_font_size_px` do PRÓXIMO nível -- chamar `parse_font_size()` duas vezes seguidas,
+//     alimentando a própria saída da primeira chamada na própria entrada da segunda, é a própria
+//     prova deste teste de que a herança encadeia corretamente em vez de cada nível reler algum
+//     ancestral fixo.
+void test_font_size_em_resolution() {
+  float px = 0.0f;
+
+  // (1) The exact oracle-measured case: parent 64px, child 0.7em -> 44.8px, never the 12px fallback.
+  check(parse_font_size("0.7em", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Ok,
+        "0.7em over a 64px parent resolves Ok, not Invalid");
+  check_eq(print_length_px(px), "44.8000px",
+           "0.7em over a 64px parent is 44.8px, matching UIX-ORACLE-MEDICAO's own measured side-A "
+           "value byte-exact -- never 12.0000px, the registry-initial coincidence this bug produced");
+
+  // (2) Chained: parent 200px (absolute) -> child 0.5em (=100px) -> grandchild 0.25em relative to
+  //     the CHILD's own resolved 100px (=25px), never relative to the 200px grandparent or to some
+  //     fixed context -- this is "where inheritance goes wrong hides", per this item's own brief.
+  float child_px = 0.0f;
+  check(parse_font_size("0.5em", /*parent_font_size_px=*/200.0f, /*dp_ratio=*/1.0f, &child_px) ==
+            ValueComputeStatus::Ok,
+        "chained step 1: 0.5em over a 200px parent resolves Ok");
+  check_eq(print_length_px(child_px), "100.0000px", "chained step 1: 0.5 * 200 = 100px");
+
+  float grandchild_px = 0.0f;
+  check(parse_font_size("0.25em", /*parent_font_size_px=*/child_px, /*dp_ratio=*/1.0f,
+                        &grandchild_px) == ValueComputeStatus::Ok,
+        "chained step 2: 0.25em resolves Ok against the PREVIOUS step's own resolved px, not the "
+        "original 200px grandparent");
+  check_eq(print_length_px(grandchild_px), "25.0000px",
+           "chained step 2: 0.25 * 100 = 25px -- if this read 50px (0.25 * 200), the chain would be "
+           "silently skipping a generation, exactly the inheritance bug this test is designed to "
+           "catch");
+
+  // (3) Absolute units still resolve exactly as parse_length()/resolve_length_px() already do --
+  //     parse_font_size() delegates to them for px/dp/unitless-zero, never re-deriving that logic.
+  //     `parent_font_size_px` is irrelevant here (a hostile/nonsensical value proves it is ignored).
+  check(parse_font_size("16px", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/2.0f, &px) ==
+            ValueComputeStatus::Ok,
+        "16px (absolute) resolves Ok regardless of parent_font_size_px");
+  check_eq(print_length_px(px), "16.0000px", "16px ignores both parent_font_size_px and dp_ratio");
+
+  check(parse_font_size("2dp", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/8.0f, &px) ==
+            ValueComputeStatus::Ok,
+        "2dp (dp_ratio-relative, not font-size-relative) resolves Ok");
+  check_eq(print_length_px(px), "16.0000px", "2dp at dp_ratio=8 resolves to 16px, parent ignored");
+
+  check(parse_font_size("0", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Ok,
+        "unitless 0 still accepted (CSS's own zero-length convention), parent ignored");
+
+  // (4) `rem`: SAME hole as `em` was, diagnosed here rather than fixed -- docs/uix-rcss-censo.md's
+  //     own measured corpus has ZERO `rem` occurrences (vs. `em`'s exactly 1, the fixture this whole
+  //     item traces to), so implementing it would be building past what any real fixture exercises,
+  //     the same corpus-driven discipline this file's own `kMaxNestDepth`/`kMaxRawValueBytes`
+  //     already follow (see value_compute.hpp's own header, "Teto"). Also proves the `"...rem"`
+  //     suffix is never misparsed as an `em` value missing its leading digit (`"1rem"` also ends in
+  //     the two bytes `"em"` -- the substring left over after stripping THAT `"em"` would be `"1r"`,
+  //     which correctly fails float parsing on its own trailing `'r'`, but this module says so
+  //     EXPLICITLY rather than relying on that as an accident).
+  // PT: `rem`: MESMO buraco que o `em` tinha, diagnosticado aqui em vez de consertado -- o próprio
+  //     corpus medido do docs/uix-rcss-censo.md tem ZERO ocorrências de `rem` (contra exatamente 1
+  //     do `em`, a própria fixture a que este item inteiro remonta), então implementar seria
+  //     construir além do que fixture nenhuma real exercita, a mesma disciplina guiada-por-corpus que
+  //     o próprio `kMaxNestDepth`/`kMaxRawValueBytes` deste arquivo já seguem (ver o próprio
+  //     cabeçalho do value_compute.hpp, "Teto"). Também prova que o próprio sufixo `"...rem"` nunca é
+  //     mal-parseado como um valor `em` faltando o próprio dígito líder (`"1rem"` também termina nos
+  //     dois bytes `"em"` -- o resto da substring depois de tirar AQUELE `"em"` seria `"1r"`, que
+  //     falha corretamente o parse de float pelo próprio `'r'` sobrando -- mas este módulo diz isso
+  //     EXPLICITAMENTE em vez de confiar nisso como acidente).
+  check(parse_font_size("1rem", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Invalid,
+        "rem: fail-high, same hole as em was, diagnosed not implemented (zero corpus occurrences)");
+  check(parse_font_size("0.7rem", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Invalid,
+        "0.7rem: fail-high too, not misparsed as '0.7r' + implicit em");
+
+  // (5) Malformed shapes stay Invalid -- same fail-high discipline as parse_length().
+  check(parse_font_size("", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Invalid,
+        "empty raw text: Invalid");
+  check(parse_font_size("em", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Invalid,
+        "bare 'em' with no leading number: Invalid, never silently 0 or 1");
+  check(parse_font_size("bogus", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+            ValueComputeStatus::Invalid,
+        "unrecognised unit: Invalid");
 }
 
 // ---------------------------------------------------------------------------
@@ -707,6 +832,7 @@ int main() {
   test_gradient_stop_auto_spacing_last_stop_unpositioned();
   test_color_parsing_all_forms();
   test_length_resolution();
+  test_font_size_em_resolution();
   test_non_finite_input_is_fail_high_at_parse_time();
   test_transform_list();
   test_decorator_list_malformed_entry_drops_whole_property();

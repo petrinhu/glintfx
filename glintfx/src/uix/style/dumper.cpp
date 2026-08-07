@@ -144,12 +144,14 @@
 // Copyright (c) 2026 Petrus Silva Costa
 #include "uix/style/dumper.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "uix/style/property_registry.hpp"
@@ -423,6 +425,131 @@ void collect_element_paths(const glintfx::uix::Element& element, const std::stri
   }
 }
 
+// EN: `UIX-EM-UNIT`'s own UA-default font-size, in px -- `property_registry.cpp`'s own `font-size`
+//     row (`one("font-size", "12px", true, LEN)`), matching this file's own PRE-existing fallback
+//     (`canonical_print()`'s own one-shot retry against the registry's `initial_value`, unchanged)
+//     for the ONE case this ceiling is reachable at all: the document root's own conceptual parent
+//     (a real DOM has no ancestor above `body`, so `body`'s own `em`, if it ever declared one, needs
+//     SOME starting point -- not exercised by this repo's own corpus today, docs/uix-rcss-censo.md's
+//     own measured `em` count is exactly 1, `fonteng_sup_scene.rml`'s `.sup`, one level below
+//     `body`'s own absolute `64px`). A literal, not a `find_property("font-size")->initial_value`
+//     re-parse, for the same reason `kMaxQuantizeMagnitude` above is a literal, not a runtime lookup
+//     -- this value is exercised by every dump this function ever produces (unlike a rare boundary
+//     ceiling), so a `find_property` call here would be a hot-path indirection this file's own
+//     sibling `value_compute.hpp` header already avoids for its OWN literals; kept in sync with
+//     `property_registry.cpp`'s own row by this comment's own explicit cross-reference, not by
+//     shared code (the two files are deliberately independent registries per this project's own
+//     ADR-0020 discipline elsewhere in this module).
+// PT: O próprio font-size default de UA da `UIX-EM-UNIT`, em px -- a própria linha `font-size` do
+//     property_registry.cpp (`one("font-size", "12px", true, LEN)`), casando com o próprio fallback
+//     PRÉ-existente deste arquivo (o próprio retry de um-tiro do `canonical_print()` contra o
+//     `initial_value` do registro, inalterado) pro ÚNICO caso em que este teto é alcançável de
+//     jeito nenhum: o próprio pai conceitual da raiz do documento (um DOM real não tem ancestral
+//     acima do `body`, então o próprio `em` do `body`, se algum dia declarasse um, precisa de ALGUM
+//     ponto de partida -- não exercitado pelo próprio corpus deste repo hoje, a própria contagem
+//     medida de `em` do docs/uix-rcss-censo.md é exatamente 1, o `.sup` do `fonteng_sup_scene.rml`,
+//     um nível abaixo do próprio `64px` absoluto do `body`). Um literal, não um re-parse de
+//     `find_property("font-size")->initial_value`, pelo MESMO motivo que o `kMaxQuantizeMagnitude`
+//     acima é um literal, não uma consulta em tempo de execução -- este valor é exercitado por todo
+//     dump que esta função algum dia produz (diferente de um teto raro de fronteira), então uma
+//     chamada `find_property` aqui seria uma indireção de hot-path que o próprio cabeçalho irmão
+//     value_compute.hpp já evita pros PRÓPRIOS literais dele; mantido em sincronia com a própria
+//     linha do property_registry.cpp por esta própria referência-cruzada explícita do comentário,
+//     não por código compartilhado (os dois arquivos são deliberadamente registros independentes per
+//     a própria disciplina ADR-0020 deste módulo em outro lugar).
+constexpr float kUaDefaultFontSizePx = 12.0f;
+
+// EN: `UIX-EM-UNIT` -- resolves each node's own `font-size` property to a concrete pixel value, in
+//     the SAME pre-order (parent-before-child) sequence `paths`/`node_styles` already share, so
+//     `em`'s own parent-relative multiplier (docs/uix-rcss.md section 1's own "em/rem against the
+//     font-size chain" clause) has a real ancestor value to multiply against -- something
+//     `canonical_print()`'s own per-property, ancestor-blind signature structurally cannot supply
+//     (see dumper.hpp's own header, `dump_style()`'s own doc-comment, for the full rationale).
+//     Absolute (`px`/`dp`) and unitless-zero declarations resolve exactly as `canonical_print()`
+//     already would (delegates to the SAME `parse_font_size()`, which itself delegates to
+//     `parse_length()`/`resolve_length_px()` for those two units, unchanged) -- the ONLY declarations
+//     whose print output diverges from plain `canonical_print()` are the `em`-shaped ones.
+//     `by_element` is safe to key by raw `Element*` (never dereferenced past the lifetime of the
+//     `node_styles` vector this function's own caller owns for the duration of one `dump_style()`
+//     call, same "observer, not owner" contract `NodeStyle::element` itself already documents) --
+//     every child's own parent is guaranteed already inserted by the time that child is visited
+//     (`cascade_tree()`'s own pre-order-depth-first traversal, restated by this file's own
+//     `collect_element_paths()` doc-comment above), so a lookup miss is unreachable by construction;
+//     handled defensively anyway (falls back to `kUaDefaultFontSizePx`) rather than assuming.
+// PT: `UIX-EM-UNIT` -- resolve o próprio "font-size" de cada nó pra um valor de pixel concreto, na
+//     MESMA sequência pré-ordem (pai-antes-de-filho) que `paths`/`node_styles` já compartilham, pra
+//     que o próprio multiplicador relativo-ao-pai do `em` (a própria cláusula "em/rem contra a
+//     cadeia de font-size" da seção 1 do docs/uix-rcss.md) tenha um valor ancestral real pra
+//     multiplicar -- algo que a própria assinatura por-propriedade, cega-a-ancestral, do
+//     `canonical_print()` estruturalmente não consegue fornecer (ver o próprio cabeçalho do
+//     dumper.hpp, o próprio doc-comment do `dump_style()`, pro racional completo). Declarações
+//     absolutas (`px`/`dp`) e zero-sem-unidade resolvem EXATAMENTE como o `canonical_print()` já
+//     resolveria (delega pro MESMO `parse_font_size()`, que ele mesmo delega pro
+//     `parse_length()`/`resolve_length_px()` pras duas unidades, inalterado) -- as ÚNICAS
+//     declarações cuja saída de impressão diverge do `canonical_print()` puro são as com forma
+//     `em`. `by_element` é seguro de indexar pelo `Element*` cru (nunca desreferenciado além da
+//     vida do próprio vetor `node_styles` que o próprio chamador desta função possui durante UMA
+//     chamada de `dump_style()`, mesmo contrato "observador, não dono" que o próprio
+//     `NodeStyle::element` já documenta) -- o próprio pai de todo filho está garantido já inserido
+//     no momento em que aquele filho é visitado (a própria travessia pré-ordem-profundidade-primeiro
+//     do `cascade_tree()`, restatada pelo próprio doc-comment do `collect_element_paths()` acima),
+//     então um miss de busca é inalcançável por construção; tratado defensivamente mesmo assim (cai
+//     pro `kUaDefaultFontSizePx`) em vez de assumir.
+std::vector<float> resolve_font_size_chain_px(const std::vector<std::string>& paths,
+                                              const std::vector<NodeStyle>& node_styles,
+                                              float dp_ratio) {
+  const std::size_t n = paths.size() < node_styles.size() ? paths.size() : node_styles.size();
+  std::vector<float> resolved(n, kUaDefaultFontSizePx);
+  std::unordered_map<const glintfx::uix::Element*, float> by_element;
+  by_element.reserve(n);
+
+  for (std::size_t i = 0; i < n; ++i) {
+    const glintfx::uix::Element* element = node_styles[i].element;
+    const ComputedStyle& style = node_styles[i].style;
+
+    float parent_px = kUaDefaultFontSizePx;
+    if (element != nullptr) {
+      const glintfx::uix::Element* parent = element->parent();
+      if (parent != nullptr) {
+        const auto it = by_element.find(parent);
+        if (it != by_element.end()) {
+          parent_px = it->second;
+        }
+      }
+    }
+
+    float px = kUaDefaultFontSizePx;
+    // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if` instead of a raw hand-rolled loop, same
+    //     lookup, same early-exit-on-match semantics.
+    // PT: `useStlAlgorithm` (cppcheck) -- `std::find_if` em vez de um laço escrito à mão, a mesma
+    //     busca, a mesma semântica de saída antecipada ao achar.
+    const auto font_size_it =
+        std::find_if(style.begin(), style.end(),
+                     [](const ComputedProperty& prop) { return prop.name == "font-size"; });
+    if (font_size_it != style.end()) {
+      float out_px = 0.0f;
+      if (parse_font_size(font_size_it->value, parent_px, dp_ratio, &out_px) ==
+          ValueComputeStatus::Ok) {
+        px = out_px;
+      }
+      // EN: `Invalid` (a malformed/unresolvable value) falls back to `kUaDefaultFontSizePx`, the
+      //     SAME registry-initial-value fallback `canonical_print()`'s own one-shot retry already
+      //     uses for every other property -- this function does not invent a second fail-high
+      //     policy.
+      // PT: `Invalid` (um valor malformado/não-resolvível) cai pro `kUaDefaultFontSizePx`, o
+      //     MESMO fallback de valor-inicial-de-registro que o próprio retry de um-tiro do
+      //     `canonical_print()` já usa pra toda outra propriedade -- esta função não inventa uma
+      //     segunda política fail-high.
+    }
+
+    resolved[i] = px;
+    if (element != nullptr) {
+      by_element[element] = px;
+    }
+  }
+  return resolved;
+}
+
 } // namespace
 
 std::string canonical_print(const ComputedProperty& prop, float dp_ratio) {
@@ -498,6 +625,18 @@ std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& roo
     //     de uma futura mudança numa das duas travessias algum dia dessincronizá-las (este dumper
     //     nunca trava sobre os próprios inputs, pelo próprio cabeçalho do dumper.hpp).
     const std::size_t n = paths.size() < node_styles.size() ? paths.size() : node_styles.size();
+
+    // EN: `UIX-EM-UNIT` -- see dumper.hpp's own `dump_style()` doc-comment for the full rationale.
+    //     Computed once per STATE block (node_styles/paths themselves are recomputed per state just
+    //     above, so this chain is too -- a hover-state font-size declaration, if the corpus ever
+    //     grows one, gets its own correctly-scoped chain rather than reusing `none`'s).
+    // PT: `UIX-EM-UNIT` -- ver o próprio doc-comment do `dump_style()` no dumper.hpp pro racional
+    //     completo. Computado uma vez por bloco STATE (node_styles/paths eles mesmos são
+    //     recomputados por state logo acima, então esta cadeia também é -- uma declaração de
+    //     font-size em hover-state, se o corpus algum dia crescer uma, ganha a própria cadeia
+    //     corretamente escopada em vez de reusar a do `none`).
+    const std::vector<float> font_size_px = resolve_font_size_chain_px(paths, node_styles, dp_ratio);
+
     for (std::size_t i = 0; i < n; ++i) {
       const std::string& path = paths[i];
       const ComputedStyle& style = node_styles[i].style;
@@ -512,7 +651,19 @@ std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& roo
         out += " PROP ";
         out += prop.name; // structural identifier, never escaped -- spec section 7's own rule.
         out += '=';
-        out += canonical_print(prop, dp_ratio);
+        // EN: `UIX-EM-UNIT` -- `font-size` alone is printed from the pre-resolved chain above
+        //     (handles `em`, delegates identically to `canonical_print()` for every other unit);
+        //     every other property is completely unaffected, same `canonical_print()` call as
+        //     before.
+        // PT: `UIX-EM-UNIT` -- só o `font-size` é impresso a partir da cadeia pré-resolvida acima
+        //     (trata `em`, delega identicamente ao `canonical_print()` pra toda outra unidade); toda
+        //     outra propriedade fica completamente inafetada, a mesma chamada `canonical_print()` de
+        //     antes.
+        if (prop.name == "font-size") {
+          out += print_length_px(font_size_px[i]);
+        } else {
+          out += canonical_print(prop, dp_ratio);
+        }
         out += '\n';
       }
     }

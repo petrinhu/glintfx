@@ -660,6 +660,61 @@ void test_state_matrix_and_path_addressing() {
         "index 1 (the Text node) never gets a PROPS/PROP line of its own -- only element nodes do");
 }
 
+// ---------------------------------------------------------------------------
+// EN: `UIX-EM-UNIT` -- end-to-end proof that `dump_style()`'s own `font-size` special-case
+//     (`resolve_font_size_chain_px()`, dumper.cpp) actually reaches the real pipeline, not just
+//     `value_compute.hpp::parse_font_size()` in isolation (`value_compute_sanity.cpp`'s own
+//     `test_font_size_em_resolution` already covers that unit-level). `UIX-ORACLE-MEDICAO`'s own
+//     residuo B is THIS exact shape, measured against `fonteng_sup_scene.rml`:
+//     `.sup{font-size:0.7em}` over `body{font-size:64px}` -- side A (real RmlUi) prints `44.8000px`,
+//     this dumper used to fall back to the registry's own `12.0000px` initial value. `.deeper` adds
+//     one more level (`0.5em`, relative to `.sup`'s OWN resolved 44.8px, not `body`'s 64px) --
+//     `22.4000px` is the ONLY value consistent with a real chain; `32.0000px` (`0.5 * 64`) would mean
+//     every node was resolving against the SAME root value instead of its own immediate parent, the
+//     exact "inheritance goes wrong" failure mode this item's own brief named.
+// PT: `UIX-EM-UNIT` -- prova ponta-a-ponta de que o próprio caso-especial de `font-size` do
+//     `dump_style()` (`resolve_font_size_chain_px()`, dumper.cpp) de fato alcança o pipeline real,
+//     não só o `value_compute.hpp::parse_font_size()` isolado (o próprio
+//     `test_font_size_em_resolution` do value_compute_sanity.cpp já cobre isso no nível de unidade).
+//     O próprio resíduo B da `UIX-ORACLE-MEDICAO` é exatamente esta forma, medida contra o
+//     `fonteng_sup_scene.rml`: `.sup{font-size:0.7em}` sobre `body{font-size:64px}` -- o lado A
+//     (RmlUi real) imprime `44.8000px`, este dumper caía pro próprio `12.0000px` de valor inicial de
+//     registro. `.deeper` soma mais um nível (`0.5em`, relativo ao próprio `44.8px` resolvido do
+//     `.sup`, não o `64px` do `body`) -- `22.4000px` é o ÚNICO valor consistente com uma cadeia real;
+//     `32.0000px` (`0.5 * 64`) significaria todo nó resolvendo contra o MESMO valor de raiz em vez do
+//     próprio pai imediato, exatamente o modo de falha "herança vai errado" que o próprio briefing
+//     deste item nomeou.
+void test_uix_em_unit_font_size_chain() {
+  static constexpr std::string_view kRcss = R"RCSS(
+body { font-size: 64px; }
+.sup { font-size: 0.7em; }
+.deeper { font-size: 0.5em; }
+)RCSS";
+  static constexpr std::string_view kRml =
+      R"RML(<rml><body><span id="s" class="sup"><span id="d" class="deeper"></span></span></body></rml>)RML";
+
+  auto sheet_result = glintfx::uix::style::parse_stylesheet(kRcss);
+  auto doc_result = glintfx::uix::parse_document(kRml);
+  check(sheet_result.sheet != nullptr, "UIX-EM-UNIT: stylesheet parses");
+  check(doc_result.document != nullptr, "UIX-EM-UNIT: document parses");
+  if (!sheet_result.sheet || !doc_result.document) {
+    return;
+  }
+
+  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f);
+  const std::vector<std::string> lines = split_lines(dump);
+
+  check(count_exact_line(lines, "body PROP font-size=64.0000px") == 2,
+        "UIX-EM-UNIT: body's own absolute font-size, unaffected, both STATE blocks");
+  check(count_exact_line(lines, "body/0 PROP font-size=44.8000px") == 2,
+        "UIX-EM-UNIT: .sup's 0.7em over body's 64px is 44.8px (0.7*64, oracle side-A byte-exact), "
+        "never the 12.0000px registry-initial fallback this used to produce");
+  check(count_exact_line(lines, "body/0/0 PROP font-size=22.4000px") == 2,
+        "UIX-EM-UNIT: .deeper's 0.5em is relative to .sup's OWN resolved 44.8px (0.5*44.8=22.4), "
+        "not body's 64px (which would wrongly give 32.0000px) -- proves the chain, not a flat "
+        "root-only lookup");
+}
+
 } // namespace
 
 int main() {
@@ -669,6 +724,7 @@ int main() {
   test_worked_example_15_3_percent_families();
   test_domain_routing_alternate_and_fail_high_fallback();
   test_state_matrix_and_path_addressing();
+  test_uix_em_unit_font_size_chain();
 
   std::printf(
       "SCOPE: 3 exemplos trabalhados byte-exatos (15.1/15.3 pipeline real ponta-a-ponta; 15.2 "

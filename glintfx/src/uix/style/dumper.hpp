@@ -236,6 +236,35 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio);
 //     não existe par `Element`/`StyleSheet` que esta função não consiga dumpar (o próprio texto
 //     cru de uma declaração individual malformada cai pro próprio valor inicial de registro dela
 //     via o próprio retry fail-high do `canonical_print`, nunca uma parada dura pro dump inteiro).
+//
+// EN: `UIX-EM-UNIT`, added here rather than to `canonical_print()`'s own signature above: this
+//     function's own `font-size` line, ONLY, is printed from a resolved-pixel value this function
+//     computes itself by walking `root`'s own subtree top-down (parent before child, the same order
+//     `cascade_tree()` already produces) and feeding each node's own resolved font-size in as the
+//     NEXT node's `value_compute.hpp::parse_font_size()` own `parent_font_size_px` argument -- the
+//     one piece of ancestor context `em` needs that `canonical_print()`'s own per-property,
+//     ancestor-blind signature structurally cannot supply (see this file's own `canonical_print()`
+//     doc-comment above, unchanged). Every OTHER property still goes through `canonical_print()`
+//     exactly as before -- this is a single, named exception, not a rewrite of the print loop's own
+//     general shape. `UIX-ORACLE-MEDICAO`'s own residuo B is the fixture this closes:
+//     `fonteng_sup_scene.rml`'s own `.sup{font-size:0.7em}` over `body{font-size:64px}` now dumps
+//     `44.8000px`, matching side A (real RmlUi), not the `12.0000px` registry-initial fallback this
+//     function's own `font-size` line used to fall back to for any `em`-shaped value.
+// PT: `UIX-EM-UNIT`, acrescentado aqui em vez da própria assinatura do `canonical_print()` acima: a
+//     própria linha de `font-size` desta função, SÓ ela, é impressa a partir de um valor de pixel já
+//     resolvido que esta própria função computa percorrendo a própria subárvore de `root` de cima pra
+//     baixo (pai antes de filho, a mesma ordem que o `cascade_tree()` já produz) e alimentando o
+//     próprio font-size resolvido de cada nó como o próprio argumento `parent_font_size_px` do
+//     `value_compute.hpp::parse_font_size()` do PRÓXIMO nó -- a única peça de contexto ancestral que
+//     o `em` precisa e que a própria assinatura por-propriedade, cega-a-ancestral, do
+//     `canonical_print()` estruturalmente não consegue fornecer (ver o próprio doc-comment do
+//     `canonical_print()` acima, inalterado). Toda OUTRA propriedade ainda passa pelo
+//     `canonical_print()` exatamente como antes -- esta é uma única exceção nomeada, não uma
+//     reescrita da própria forma geral do laço de impressão. O próprio resíduo B da
+//     `UIX-ORACLE-MEDICAO` é a fixture que isto fecha: o próprio `.sup{font-size:0.7em}` sobre
+//     `body{font-size:64px}` do `fonteng_sup_scene.rml` agora dumpa `44.8000px`, casando com o lado A
+//     (RmlUi real), não o fallback `12.0000px` de inicial-de-registro pro qual a própria linha de
+//     `font-size` desta função caía pra qualquer valor com forma `em`.
 std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& root, float dp_ratio);
 
 } // namespace glintfx::uix::style

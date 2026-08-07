@@ -451,6 +451,81 @@ ValueComputeStatus parse_length(std::string_view raw, float* out_value, LengthUn
 //     família de unidade `LENGTH` da seção 8.1 do docs/uix-rcss.md que este módulo suporta.
 float resolve_length_px(float value, LengthUnit unit, float dp_ratio);
 
+// EN: `UIX-EM-UNIT` -- `font-size`'s OWN `em` resolution, additive to this file's header "Scope"
+//     paragraph above rather than a widening of it: `parse_length()`/`resolve_length_px()` remain
+//     EXACTLY as documented there (px/dp only, `em`/`rem`/`vw`/`vh` still `Invalid` through that
+//     pair, unchanged, zero ripple to every OTHER caller of those two -- `box-shadow`'s own layer
+//     lengths, `drop-shadow`, `blur`, `transform`'s own `translate`, none of which the corpus ever
+//     declares with `em` per `docs/uix-rcss-censo.md`'s own measured count). `docs/uix-rcss.md`
+//     section 1's own scope text says otherwise for THIS dump as a whole ("resolving every unit that
+//     does not require box geometry -- absolute lengths, `em`/`rem` against the font-size chain, `dp`
+//     against `dp_ratio`... but before anything that requires `RMLX-3`"), i.e. `em` needs a FONT-SIZE
+//     CHAIN, not box layout -- `RMLX-3`'s own boundary this file's header cites is the wrong reason
+//     for `em` specifically (it is the right reason for `vw`/`vh`, which genuinely need viewport
+//     geometry, and for `%`, which genuinely needs a containing block). A font-size chain is
+//     ANCESTOR-SHAPED information this file's own general funnel structurally cannot carry (every
+//     function above takes only a single already-isolated value plus `dp_ratio`, no notion of "the
+//     node this value belongs to" or "that node's own parent") -- so rather than threading a new
+//     required parameter through `parse_length`/`resolve_length_px` and every one of their ~8
+//     existing call sites (a change this item's own brief explicitly scoped OUT, and one the corpus
+//     gives no evidence any of those OTHER call sites need), this function is a separate, NARROW,
+//     single-purpose resolver: the caller supplies the ALREADY-RESOLVED parent font-size in px (the
+//     one piece of ancestor context `em` needs), and this function does the rest, delegating to
+//     `parse_length()`/`resolve_length_px()` unchanged for the two units they already own. The
+//     caller (a dumper walking its own tree top-down, parent before child, exactly the order
+//     `cascade_tree()`'s own pre-order-depth-first traversal already produces) is responsible for
+//     building that chain -- this function is deliberately ignorant of trees, elements, or
+//     inheritance, the same "pure value-computation, no DOM, no cascade" discipline this file's own
+//     top header states for every OTHER function here.
+//       `rem` is recognised syntactically (as a suffix this function must NOT misparse as `em`
+//     missing its leading digit) but NOT resolved -- `Invalid`, same as before this item, per
+//     `docs/uix-rcss-censo.md`'s own measured corpus: exactly 1 `em` occurrence, ZERO `rem`, so this
+//     item's own scope stops at the ONE unit the corpus and this item's own worked bug report
+//     (`UIX-ORACLE-MEDICAO`'s own residuo B, `fonteng_sup_scene.rml`) actually exercise -- same
+//     corpus-driven-teto discipline `kMaxNestDepth`/`kMaxRawValueBytes` already follow above. A
+//     future item implementing `rem` needs the DOCUMENT ROOT's own resolved font-size (a DIFFERENT
+//     ancestor than `parent_font_size_px` below, the immediate parent) -- reported here, not guessed.
+// PT: `UIX-EM-UNIT` -- a própria resolução de `em` do `font-size`, aditiva ao próprio parágrafo
+//     "Escopo" do cabeçalho deste arquivo acima, não um alargamento dele:
+//     `parse_length()`/`resolve_length_px()` ficam EXATAMENTE como documentado lá (só px/dp,
+//     `em`/`rem`/`vw`/`vh` ainda `Invalid` por aquele par, inalterado, zero ondulação pra todo OUTRO
+//     chamador dos dois -- os próprios comprimentos de camada do `box-shadow`, `drop-shadow`, `blur`,
+//     o próprio `translate` do `transform`, nenhum dos quais o corpus algum dia declara com `em` per
+//     a própria contagem medida do `docs/uix-rcss-censo.md`). O próprio texto de escopo da seção 1 do
+//     `docs/uix-rcss.md` diz o contrário pra ESTE dump como um todo ("resolvendo toda unidade que não
+//     precisa de geometria de caixa -- comprimentos absolutos, `em`/`rem` contra a cadeia de
+//     font-size, `dp` contra `dp_ratio`... mas antes de qualquer coisa que precise da `RMLX-3`"), ou
+//     seja, `em` precisa de uma CADEIA DE FONT-SIZE, não de layout de caixa -- a própria fronteira da
+//     `RMLX-3` que o cabeçalho deste arquivo cita é o motivo ERRADO especificamente pro `em` (é o
+//     motivo certo pro `vw`/`vh`, que genuinamente precisam de geometria de viewport, e pro `%`, que
+//     genuinamente precisa de um containing block). Uma cadeia de font-size é informação com FORMA-DE-
+//     ANCESTRAL que o próprio funil geral deste arquivo estruturalmente não consegue carregar (toda
+//     função acima recebe só um único valor já isolado mais `dp_ratio`, nenhuma noção de "o nó a que
+//     este valor pertence" ou "o próprio pai daquele nó") -- então em vez de enfiar um novo parâmetro
+//     obrigatório no `parse_length`/`resolve_length_px` e em cada um dos ~8 próprios call sites
+//     existentes deles (uma mudança que o próprio briefing deste item escopou FORA, e uma que o
+//     corpus não dá evidência nenhuma de que aqueles OUTROS call sites precisem), esta função é um
+//     resolvedor separado, ESTREITO, de propósito único: o chamador fornece o próprio font-size do
+//     pai JÁ RESOLVIDO em px (a única peça de contexto ancestral que o `em` precisa), e esta função
+//     faz o resto, delegando pro `parse_length()`/`resolve_length_px()` inalterados pras duas
+//     unidades que eles já possuem. O chamador (um dumper percorrendo a própria árvore de cima pra
+//     baixo, pai antes de filho, exatamente a ordem que a própria travessia pré-ordem-profundidade-
+//     primeiro do `cascade_tree()` já produz) é responsável por construir aquela cadeia -- esta
+//     função é deliberadamente ignorante de árvores, elementos, ou herança, a mesma disciplina
+//     "computação pura de valor, sem DOM, sem cascata" que o próprio cabeçalho de topo deste arquivo
+//     declara pra toda OUTRA função aqui.
+//       `rem` é reconhecido sintaticamente (como um sufixo que esta função NÃO PODE mal-parsear como
+//     um `em` faltando o próprio dígito líder) mas NÃO resolvido -- `Invalid`, igual antes deste
+//     item, per o próprio corpus medido do `docs/uix-rcss-censo.md`: exatamente 1 ocorrência de `em`,
+//     ZERO de `rem`, então o próprio escopo deste item para na ÚNICA unidade que o corpus e o próprio
+//     relatório de bug trabalhado deste item (o próprio resíduo B da `UIX-ORACLE-MEDICAO`,
+//     `fonteng_sup_scene.rml`) de fato exercitam -- mesma disciplina teto-guiado-por-corpus que
+//     `kMaxNestDepth`/`kMaxRawValueBytes` acima já seguem. Um futuro item implementando `rem` precisa
+//     do próprio font-size já resolvido da RAIZ do documento (um ancestral DIFERENTE do
+//     `parent_font_size_px` abaixo, o pai imediato) -- reportado aqui, não chutado.
+ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px, float dp_ratio,
+                                   float* out_px);
+
 // EN: Parses a bare `<number>%` token (e.g. `"50%"`) into its numeric part -- does NOT resolve
 //     against any base (section 5's own "stays symbolic" rule); the caller decides which of the
 //     three families (section 5's own table) this percent belongs to.

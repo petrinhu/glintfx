@@ -902,6 +902,63 @@ float resolve_length_px(float value, LengthUnit unit, float dp_ratio) {
   return unit == LengthUnit::Dp ? value * dp_ratio : value;
 }
 
+// EN: `UIX-EM-UNIT` -- see value_compute.hpp's own header comment at this function's own
+//     declaration for the full "why a separate function, not a widened parse_length/
+//     resolve_length_px" rationale. Delegates to parse_length()/resolve_length_px() UNCHANGED for
+//     px/dp/unitless-zero (identical result to calling those two directly); adds exactly one new
+//     recognised shape, `<number>em`, resolved as `multiplier * parent_font_size_px`. `rem` is
+//     explicitly excluded (checked BEFORE the bare `em` suffix test, not left to fall through) --
+//     `"1rem"` also ends in the two bytes `"em"`, so without this explicit exclusion the leftover
+//     substring after stripping that `"em"` would be `"1r"`, which `parse_float_token` already
+//     rejects on its own (a trailing, non-numeric `'r'` fails `strtof`'s own whole-string match) --
+//     but this function says so EXPLICITLY, as a documented policy decision (zero corpus `rem`
+//     occurrences, see this function's own header comment), not as an accident a future reader would
+//     have to re-derive by tracing `parse_float_token`'s own failure mode.
+// PT: `UIX-EM-UNIT` -- ver o próprio comentário de cabeçalho do value_compute.hpp na própria
+//     declaração desta função pro racional completo "por que uma função separada, não um
+//     parse_length/resolve_length_px alargado". Delega pro parse_length()/resolve_length_px()
+//     INALTERADOS pra px/dp/zero-sem-unidade (resultado idêntico a chamar os dois direto); soma
+//     exatamente uma forma nova reconhecida, `<número>em`, resolvida como
+//     `multiplicador * parent_font_size_px`. `rem` é explicitamente excluído (checado ANTES do
+//     próprio teste de sufixo `em` cru, não deixado cair por acidente) -- `"1rem"` também termina nos
+//     dois bytes `"em"`, então sem esta exclusão explícita a substring restante depois de tirar
+//     aquele `"em"` seria `"1r"`, que o `parse_float_token` já rejeita sozinho (um `'r'` final,
+//     não-numérico, falha o próprio casamento string-inteira do `strtof`) -- mas esta função diz isso
+//     EXPLICITAMENTE, como uma decisão de política documentada (zero ocorrências de `rem` no corpus,
+//     ver o próprio comentário de cabeçalho desta função), não como um acidente que um futuro leitor
+//     teria que re-derivar rastreando o próprio modo de falha do `parse_float_token`.
+ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px, float dp_ratio,
+                                   float* out_px) {
+  if (raw.empty() || raw.size() > kMaxRawValueBytes) {
+    return ValueComputeStatus::Invalid;
+  }
+  float value = 0.0f;
+  LengthUnit unit = LengthUnit::Px;
+  if (parse_length(raw, &value, &unit) == ValueComputeStatus::Ok) {
+    *out_px = resolve_length_px(value, unit, dp_ratio);
+    return ValueComputeStatus::Ok;
+  }
+  if (ends_with(raw, "rem")) {
+    // EN: `rem` -- diagnosed, not implemented, per this function's own header comment. Falls
+    //     through to the shared `Invalid` return below.
+    // PT: `rem` -- diagnosticado, não implementado, per o próprio comentário de cabeçalho desta
+    //     função. Cai pro `Invalid` compartilhado abaixo.
+    return ValueComputeStatus::Invalid;
+  }
+  if (ends_with(raw, "em")) {
+    if (!std::isfinite(parent_font_size_px)) {
+      return ValueComputeStatus::Invalid;
+    }
+    float multiplier = 0.0f;
+    if (!parse_float_token(raw.substr(0, raw.size() - 2), &multiplier)) {
+      return ValueComputeStatus::Invalid;
+    }
+    *out_px = multiplier * parent_font_size_px;
+    return ValueComputeStatus::Ok;
+  }
+  return ValueComputeStatus::Invalid;
+}
+
 ValueComputeStatus parse_percent(std::string_view raw, float* out_percent) {
   if (raw.empty() || raw.back() != '%' || raw.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;

@@ -238,6 +238,90 @@ void test_15_3_three_percent_families(Harness& h) {
 }
 
 // ---------------------------------------------------------------------------
+// EN: `UIX-QUANTIZE-MAGNITUDE`'s own auditoria-dominó sibling fix -- `polygon()` sides magnitude
+//     guard before `std::lround()` (`rcss_dump.cpp`, `polygon_sides` local, "auditoria-dominó
+//     sibling" comment).
+//
+//     🔴 OWN FINDING, MEASURED, not merely a regression test: `decorator: polygon(1e20, red)` is
+//     REGRESSION coverage, not DISCRIMINATING coverage, and this paragraph exists so a future
+//     reader does not mistake the difference. `sides: 1e20` is finite, so it survives
+//     `PropertyParserNumber`'s own parse and reaches this function with `sides`/`fill`/`rotation`
+//     all non-null (measured with a temporary debug print, restored byte-identical against the
+//     committed blob afterward, `git diff` confirmed clean). With this guard TEMPORARILY disabled
+//     (a `sed` toggle on a throwaway copy, never the shared tree -- see this item's own delivery
+//     report, `/var/tmp/mut-quantize/relatorio.md`), `std::lround(1e20f)` on THIS platform
+//     (x86-64/glibc/clang, `cvttsd2si`-based) measured **exactly `LONG_MIN`
+//     (`-9223372036854775808`)** -- not garbage-that-happens-to-be-anything, a DETERMINISTIC
+//     hardware sentinel for "out of range" -- which the PRE-EXISTING `sides_int < 3 || > 1024`
+//     check one line below ALSO rejects, producing the IDENTICAL observable outcome
+//     (`decorator=none`) with or without this guard. **On this specific hardware, no finite
+//     `float` can make this test discriminate the new guard from the old range check's own
+//     accidental self-healing** (`cvttsd2si`'s own out-of-range/NaN sentinel is always a huge
+//     negative number regardless of the SIGN of the overflow, so `-1e20f` measures the same way).
+//     This is the "prove the mutation reached the code" lesson turned around: I do NOT get to
+//     claim this assertion proves the guard's own branch executed, because measurement proved the
+//     opposite -- removing the guard changes NOTHING observable here. The guard's own
+//     justification is NOT this test: it is the C++ standard's own classification of an
+//     out-of-representable-range `std::lround()` result as unspecified behavior, a classification
+//     that does not promise `LONG_MIN` on a different compiler/optimization level/architecture,
+//     and is exactly the "do not rely on today's accidental hardware behavior" discipline this
+//     whole item exists to enforce elsewhere. This test is kept as a real, valuable regression
+//     (proves `polygon(1e20, red)` never crashes and always degrades to `decorator=none`, both
+//     WITH and WITHOUT this guard -- a fact worth pinning either way) and the doc comment says so
+//     honestly rather than silently inflating it into proof it is not.
+// PT: O próprio sibling de auditoria-dominó da `UIX-QUANTIZE-MAGNITUDE` -- a guarda de magnitude
+//     do `polygon()` sides antes do `std::lround()` (`rcss_dump.cpp`, `polygon_sides` local,
+//     comentário "auditoria-dominó sibling").
+//
+//     🔴 ACHADO PRÓPRIO, MEDIDO, não meramente um teste de regressão: `decorator: polygon(1e20,
+//     red)` é cobertura de REGRESSÃO, não cobertura DISCRIMINANTE, e este parágrafo existe pra um
+//     futuro leitor não confundir as duas. `sides: 1e20` é finito, então sobrevive ao parse do
+//     `PropertyParserNumber` e chega nesta função com `sides`/`fill`/`rotation` todos não-nulos
+//     (medido com um print de debug temporário, restaurado byte-idêntico contra o blob commitado
+//     depois, `git diff` confirmou limpo). Com esta guarda TEMPORARIAMENTE desligada (um toggle de
+//     `sed` numa cópia descartável, nunca a árvore compartilhada -- ver o próprio relatório de
+//     entrega deste item, `/var/tmp/mut-quantize/relatorio.md`), `std::lround(1e20f)` NESTA
+//     plataforma (x86-64/glibc/clang, baseado em `cvttsd2si`) mediu **exatamente `LONG_MIN`
+//     (`-9223372036854775808`)** -- não lixo-que-calha-de-ser-qualquer-coisa, um sentinel
+//     DETERMINÍSTICO de hardware pra "fora de faixa" -- que a checagem PRÉ-EXISTENTE
+//     `sides_int < 3 || > 1024` uma linha abaixo TAMBÉM rejeita, produzindo o MESMO resultado
+//     observável (`decorator=none`) com ou sem esta guarda. **Nesta plataforma específica, nenhum
+//     `float` finito consegue fazer este teste discriminar a guarda nova do próprio
+//     auto-conserto acidental da checagem de faixa antiga** (o próprio sentinel de fora-de-faixa/
+//     NaN do `cvttsd2si` é sempre um número negativo enorme independente do SINAL do overflow,
+//     então `-1e20f` mede igual). Esta é a lição "prove que a mutação chegou no código" ao
+//     contrário: eu NÃO tenho como afirmar que esta asserção prova que o ramo da guarda executou,
+//     porque a medição provou o oposto -- remover a guarda não muda NADA observável aqui. A
+//     própria justificativa da guarda NÃO é este teste: é a própria classificação do padrão C++
+//     pra um resultado de `std::lround()` fora da faixa representável como comportamento
+//     não-especificado, uma classificação que não promete `LONG_MIN` num compilador/nível de
+//     otimização/arquitetura diferente, e é exatamente a disciplina "não confiar no comportamento
+//     acidental de hoje do hardware" que este item inteiro existe pra impor em outro lugar. Este
+//     teste fica como regressão real e valiosa (prova que `polygon(1e20, red)` nunca crasha e
+//     sempre degrada pra `decorator=none`, TANTO com quanto sem esta guarda -- fato que vale a
+//     pena pinar de qualquer jeito) e o comentário diz isso com honestidade em vez de inflar em
+//     silêncio pra prova que não é.
+void test_quantize_magnitude_polygon_sides_sibling(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#p { decorator: polygon(1e20, red); }\n"
+      "</style></head><body><div id=\"p\"></div></body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "polygon sides sibling: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+  check_eq(extract_prop(dump, "STATE none\n", "body/0", "decorator"), "none",
+           "polygon(1e20, red): no crash, degrades to decorator=none -- REGRESSION coverage only, "
+           "NOT discriminating for this guard on this platform (see header comment above: the "
+           "pre-existing [3,1024] check self-heals std::lround()'s own measured LONG_MIN fallout "
+           "identically with or without this guard)");
+
+  doc->Close();
+  h.engine.update();
+}
+
+// ---------------------------------------------------------------------------
 // EN: 15.4 -- quantization boundary: exact tie and one step outside, both signs. Pure function,
 //     no document needed.
 //
@@ -615,6 +699,7 @@ int main() {
   test_15_1_two_states_one_node_hover(h);
   test_15_2_shorthand_order_border_top(h);
   test_15_3_three_percent_families(h);
+  test_quantize_magnitude_polygon_sides_sibling(h);
   test_own_finding_premultiplied_alpha_has_teeth(h);
   test_9_1_box_shadow_literal_worked_example(h);
   test_9_2_1_auto_spacing_rules_3_and_4(h);

@@ -150,17 +150,58 @@
 //     diagnosable `Comment` token, mirroring the DOM sibling's own `<!-- -->` `Comment`-token
 //     design rather than upstream's byte-splicing. Two consequences, both DECLARED here rather
 //     than discovered by a future reader diffing behaviour:
-//       (1) This lexer is scoped NARROWER than upstream in one specific, corpus-unverified way: a
-//           comment is only recognised as its own token at a "fresh scan start" -- immediately
-//           after a structural delimiter (`{`/`}`/`@`), immediately after a completed `Declaration`
-//           (right where the next NAME would start), or at the very start of a `Prelude`/`Comment`
-//           dispatch. A `/*...*/` appearing MID-RUN, after this lexer has already started
-//           accumulating a `Prelude`/name/value run, is NOT specially recognised -- its bytes
-//           ('/','*',...,'*','/') simply become part of that run's raw text, UNLIKE upstream (which
-//           would elide it regardless of position, even inside what looks like an identifier or a
-//           quoted value). ZERO corpus evidence exists either way (no real fixture places a comment
-//           mid-identifier or mid-value) -- this is the FIRST of the ambiguities this task's own
-//           brief invites reporting rather than guessing silently.
+//       (1) This lexer is scoped NARROWER than upstream in one specific way: a comment is only
+//           recognised as its own token at a "fresh scan start" -- immediately after a structural
+//           delimiter (`{`/`}`/`@`), immediately after a completed `Declaration` (right where the
+//           next NAME would start), or at the very start of a `Prelude`/`Comment` dispatch -- and a
+//           fresh scan start MAY be preceded by a run of whitespace (space/'\t'/'\n'/'\r', the same
+//           4-byte set `is_whitespace()`/`strip_whitespace()` already use in lexer.cpp), which is
+//           peeked PAST when checking for a comment and, if a comment IS found there, silently
+//           consumed -- see `try_scan_comment_at_fresh_start()`'s own header comment for the exact
+//           mechanism. 🔧 **UIX-LEXER-COMENT-ESPACO, 2026-08-07: this whitespace tolerance was ADDED
+//           after a corpus-measured defect, not invented speculatively** -- `UIX-RCSS-ORACULO`
+//           (TODO.md) measured that `gusworld_battle_cockpit.rml`'s own real, unremarkable RCSS
+//           (lines 29-31, 44, 47 -- a comment on its own line, or trailing a declaration with 1-2
+//           spaces before it, the way every real author writes CSS) tripped this gap: BEFORE this
+//           fix, the fresh-scan-start check required the comment's own `/*` to sit at EXACTLY the
+//           byte immediately following the delimiter/Declaration, zero bytes tolerated, and any
+//           whitespace there made the check silently fail -- the comment's own bytes then fused
+//           into the NAME of the declaration that should have followed it, destroying that
+//           declaration (12 `ParseDiagnostic`s from that ONE fixture, explaining the majority of its
+//           102 dump-line divergences against the RmlUi oracle). Proven fixed by
+//           `lexer_whitespace_comment_sanity.cpp`'s own suite (sections 1-2, the destructive
+//           Declaration-mode case and its non-destructive Structural-mode twin, both found by this
+//           item's own domino audit of every fresh-scan-start dispatch point in this file -- there
+//           are exactly two, and both had the gap).
+//
+//           Two DIFFERENT, ASYMMETRIC behaviours remain for a `/*...*/` appearing genuinely MID-RUN
+//           -- i.e. AFTER a run has already started accumulating non-whitespace, non-comment bytes,
+//           past any fresh-scan-start point (whitespace-tolerant or not):
+//             - Inside a Declaration's own NAME or VALUE run (`scan_declaration()`), it is NOT
+//               specially recognised at all -- its bytes ('/','*',...,'*','/') simply become part of
+//               that run's raw text (`wid/*x*/th` tokenizes as the single, glued identifier "width",
+//               not two fragments with a gap), UNLIKE upstream (which would elide it regardless of
+//               position, even inside what looks like an identifier or a quoted value). ZERO corpus
+//               evidence exists either way (no real fixture places a comment mid-identifier or
+//               mid-value) -- this remains the FIRST of the ambiguities this task's own brief
+//               invites reporting rather than guessing silently, UNCHANGED by
+//               `UIX-LEXER-COMENT-ESPACO` (proven by that item's own
+//               `test_mid_run_comment_inside_declaration_name_still_fuses_deliberately`).
+//             - Inside a Prelude run (`scan_structural()`), by contrast, `/*` IS one of the raw-run
+//               loop's own per-iteration stop conditions, the SAME tier as `{`/`}`/`@` -- so a
+//               comment DOES end an in-progress Prelude run wherever it appears, splitting it into
+//               two Prelude tokens with a Comment token between them (`.fo/*x*/o { ... }` tokenizes
+//               as `Prelude(".fo")`, `Comment("x")`, `Prelude("o ")`, NOT one glued Prelude). 🔧
+//               **UIX-LEXER-COMENT-ESPACO's own domino audit found this PRE-EXISTING code behaviour
+//               was undocumented and in direct tension with this paragraph's own preceding "mid-run
+//               is never recognised" wording** -- that wording was accurate ONLY for the
+//               Declaration-name/value case above, never for Prelude; corrected here rather than
+//               left as a header describing behaviour the code does not uniformly have (this repo's
+//               own "cabeçalho descrevendo comportamento que não existe é pior que cabeçalho
+//               ausente" discipline). Zero behaviour change: `scan_structural()`'s own Prelude-run
+//               loop was NOT touched by this item's fix. ZERO corpus evidence either way for THIS
+//               case too (no real fixture places a comment mid-selector) -- locked in by
+//               `test_mid_run_comment_inside_prelude_splits_deliberately_pre_existing_behaviour`.
 //       (2) A byte-exact reconstruction of "what upstream's own elided prelude/value string would
 //           have been" is NOT this lexer's job -- every `Token`'s `offset`/`length` are exposed
 //           (same "S3 does its own raw slicing" precedent the DOM sibling's own head-blob-opacity
@@ -386,19 +427,65 @@
 //     desenho de token-`Comment` do `<!-- -->` do irmão DOM em vez da emenda-por-byte do upstream.
 //     Duas consequências, as duas DECLARADAS aqui em vez de descobertas por um leitor futuro
 //     comparando comportamentos:
-//       (1) Este lexer é escopado MAIS ESTREITO que o upstream de um jeito específico,
-//           não-verificado-por-corpus: um comentário só é reconhecido como o próprio token num
-//           "início de scan fresco" -- logo depois de um delimitador estrutural (`{`/`}`/`@`), logo
-//           depois de uma `Declaration` completa (bem onde o próximo NOME começaria), ou bem no
-//           início de um dispatch de `Prelude`/`Comment`. Um `/*...*/` que aparece NO MEIO de um
-//           trecho, depois de este lexer já ter começado a acumular um trecho de `Prelude`/
-//           nome/valor, NÃO é especialmente reconhecido -- os bytes dele ('/','*',...,'*','/')
-//           simplesmente viram parte do texto cru daquele trecho, DIFERENTE do upstream (que
-//           elidiria independente de posição, mesmo dentro do que parece um identificador ou um
-//           valor entre aspas). ZERO evidência de corpus existe dos dois lados (nenhuma fixture
-//           real põe um comentário no meio de um identificador ou de um valor) -- esta é a
-//           PRIMEIRA das ambiguidades que o próprio briefing desta tarefa convida a reportar em vez
-//           de chutar em silêncio.
+//       (1) Este lexer é escopado MAIS ESTREITO que o upstream de um jeito específico: um
+//           comentário só é reconhecido como o próprio token num "início de scan fresco" -- logo
+//           depois de um delimitador estrutural (`{`/`}`/`@`), logo depois de uma `Declaration`
+//           completa (bem onde o próximo NOME começaria), ou bem no início de um dispatch de
+//           `Prelude`/`Comment` -- e um início de scan fresco PODE ser precedido de um trecho de
+//           whitespace (espaço/'\t'/'\n'/'\r', o mesmo conjunto de 4 bytes que o
+//           `is_whitespace()`/`strip_whitespace()` já usam no lexer.cpp), que é espiado ao checar
+//           por um comentário e, se um comentário É achado ali, consumido em silêncio -- ver o
+//           próprio comentário de cabeçalho do `try_scan_comment_at_fresh_start()` pro mecanismo
+//           exato. 🔧 **`UIX-LEXER-COMENT-ESPACO`, 2026-08-07: esta tolerância de whitespace foi
+//           SOMADA depois de um defeito medido-por-corpus, não inventada especulativamente** -- a
+//           `UIX-RCSS-ORACULO` (TODO.md) mediu que o próprio RCSS real, comum, do
+//           `gusworld_battle_cockpit.rml` (linhas 29-31, 44, 47 -- um comentário na própria linha,
+//           ou depois de uma declaração com 1-2 espaços antes, do jeito que todo autor real escreve
+//           CSS) tropeçava neste buraco: ANTES deste conserto, o check de início-de-scan-fresco
+//           exigia que o próprio `/*` do comentário estivesse EXATAMENTE no byte imediatamente
+//           seguinte ao delimitador/Declaration, zero bytes tolerados, e qualquer whitespace ali
+//           fazia o check falhar em silêncio -- os bytes do próprio comentário então se fundiam no
+//           NOME da declaração que deveria vir depois dele, destruindo aquela declaração (12
+//           `ParseDiagnostic`s dessa ÚNICA fixture, explicando a maioria das 102 linhas de dump
+//           divergentes dela contra o oráculo do RmlUi). Provado consertado pela própria suíte do
+//           `lexer_whitespace_comment_sanity.cpp` (seções 1-2, o caso destrutivo em modo Declaration
+//           e o próprio gêmeo não-destrutivo em modo Structural, os dois achados pela própria
+//           auditoria-dominó deste item em todo ponto de despacho de início-de-scan-fresco deste
+//           arquivo -- existem exatamente dois, e os dois tinham o buraco).
+//
+//           Dois comportamentos DIFERENTES, ASSIMÉTRICOS continuam pra um `/*...*/` que aparece
+//           genuinamente NO MEIO de um trecho -- ou seja, DEPOIS de um trecho já ter começado a
+//           acumular bytes não-whitespace, não-comentário, passado qualquer ponto de início-de-
+//           scan-fresco (tolerante a whitespace ou não):
+//             - Dentro do próprio trecho de NOME ou VALUE de uma Declaration (`scan_declaration()`),
+//               ele NÃO é especialmente reconhecido -- os bytes dele ('/','*',...,'*','/')
+//               simplesmente viram parte do texto cru daquele trecho (`wid/*x*/th` tokeniza como o
+//               identificador único, colado, "width", não dois trechos com um vão), DIFERENTE do
+//               upstream (que elidiria independente de posição, mesmo dentro do que parece um
+//               identificador ou um valor entre aspas). ZERO evidência de corpus existe dos dois
+//               lados (nenhuma fixture real põe um comentário no meio de um identificador ou de um
+//               valor) -- isto continua sendo a PRIMEIRA das ambiguidades que o próprio briefing
+//               desta tarefa convida a reportar em vez de chutar em silêncio, INALTERADO pela
+//               `UIX-LEXER-COMENT-ESPACO` (provado pelo próprio
+//               `test_mid_run_comment_inside_declaration_name_still_fuses_deliberately` daquele
+//               item).
+//             - Dentro de um trecho de Prelude (`scan_structural()`), em contraste, "/*" É uma das
+//               próprias condições-de-parada por-iteração do laço de trecho-cru, a MESMA categoria
+//               de `{`/`}`/`@` -- então um comentário TERMINA um trecho de Prelude em andamento onde
+//               quer que apareça, dividindo-o em dois tokens Prelude com um token Comment entre eles
+//               (`.fo/*x*/o { ... }` tokeniza como `Prelude(".fo")`, `Comment("x")`,
+//               `Prelude("o ")`, NÃO um Prelude colado só). 🔧 **A própria auditoria-dominó da
+//               `UIX-LEXER-COMENT-ESPACO` achou este comportamento de código PRÉ-EXISTENTE
+//               não-documentado e em tensão direta com o próprio texto "meio-de-trecho nunca é
+//               reconhecido" do parágrafo anterior** -- aquele texto era preciso SÓ pro caso de
+//               nome/valor de Declaration acima, nunca pra Prelude; corrigido aqui em vez de deixado
+//               como um cabeçalho descrevendo comportamento que o código não tem uniformemente
+//               (própria disciplina deste repo de "cabeçalho descrevendo comportamento que não
+//               existe é pior que cabeçalho ausente"). Zero mudança de comportamento: o próprio laço
+//               de trecho-cru de Prelude do scan_structural() NÃO foi tocado por este conserto. ZERO
+//               evidência de corpus dos dois lados TAMBÉM pra este caso (nenhuma fixture real põe um
+//               comentário no meio de um seletor) -- travado pelo próprio
+//               `test_mid_run_comment_inside_prelude_splits_deliberately_pre_existing_behaviour`.
 //       (2) Uma reconstrução byte-exata de "qual teria sido a string de prelúdio/valor elidida do
 //           próprio upstream" NÃO é trabalho deste lexer -- todo `offset`/`length` de `Token` são
 //           expostos (mesmo precedente "a S3 faz a própria fatia crua" que o próprio parágrafo de
@@ -588,6 +675,32 @@ private:
   //     fechamento é Error) e retorna um token Comment; senão retorna false (o chamador segue com
   //     o próprio scan).
   bool try_scan_comment(Token* out);
+
+  // EN: UIX-LEXER-COMENT-ESPACO -- the fresh-scan-start comment check, shared by scan_structural()'s
+  //     own entry and scan_declaration()'s own loop top (the EXACT two fresh-scan-start dispatch
+  //     points this grammar has -- see lexer.hpp header, "Comment handling" point (1)). Peeks PAST
+  //     any run of whitespace (the same 4-byte space/'\t'/'\n'/'\r' set is_whitespace() uses in
+  //     lexer.cpp) to check whether a "/*" begins there; if it does, the whitespace is folded into
+  //     the SAME "insignificant bytes may be silently consumed, without their own token" precedent
+  //     this module's own "EOF permissiveness" paragraph already establishes for a stray ';' of an
+  //     empty declaration -- it becomes part of NEITHER the token that precedes it NOR the returned
+  //     Comment token. If NO "/*" is found there, pos_ is rolled back to exactly where this call
+  //     started -- every OTHER token this grammar can produce (Prelude, Declaration name/value) is
+  //     completely unaffected, its own span starting exactly where it always did.
+  // PT: UIX-LEXER-COMENT-ESPACO -- a checagem de comentário em início-de-scan-fresco, compartilhada
+  //     pela própria entrada do scan_structural() e pelo próprio topo-de-laço do scan_declaration()
+  //     (os EXATOS dois pontos de despacho de início-de-scan-fresco que esta gramática tem -- ver o
+  //     cabeçalho do lexer.hpp, "Trato de comentário", ponto (1)). Espia PASSANDO por qualquer
+  //     trecho de whitespace (o mesmo conjunto de 4 bytes espaço/'\t'/'\n'/'\r' que o is_whitespace()
+  //     usa no lexer.cpp) pra checar se um "/*" começa ali; se começa, o whitespace é dobrado no
+  //     MESMO precedente "bytes insignificantes podem ser consumidos em silêncio, sem token próprio"
+  //     que o próprio parágrafo "Permissividade de EOF" deste módulo já estabelece pra um ';' solto
+  //     de declaração vazia -- ele não vira parte NEM do token que o precede NEM do token Comment
+  //     retornado. Se NENHUM "/*" é achado ali, pos_ é revertido pra exatamente onde esta chamada
+  //     começou -- todo OUTRO token que esta gramática pode produzir (Prelude, nome/valor de
+  //     Declaration) fica completamente inafetado, o próprio trecho dele começando exatamente onde
+  //     sempre começou.
+  bool try_scan_comment_at_fresh_start(Token* out);
 
   std::string_view source_;
   std::size_t pos_ = 0;

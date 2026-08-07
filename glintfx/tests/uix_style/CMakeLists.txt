@@ -22,6 +22,17 @@ add_executable(uix_style_lexer_hardening_sanity lexer_hardening_sanity.cpp)
 target_link_libraries(uix_style_lexer_hardening_sanity PRIVATE glintfx::uix_style)
 add_test(NAME uix_style_lexer_hardening_sanity COMMAND uix_style_lexer_hardening_sanity)
 
+# EN: UIX-LEXER-COMENT-ESPACO -- whitespace-before-comment fresh-scan-start regression suite (the
+#     corpus-measured defect UIX-RCSS-ORACULO found: gusworld_battle_cockpit.rml:29-31/44/47). Own
+#     executable, same "zero RmlUi/GLFW/GL" discipline as the two lexer executables above.
+# PT: UIX-LEXER-COMENT-ESPACO -- suíte de regressão de whitespace-antes-de-comentário no início-de-
+#     scan-fresco (o defeito medido-por-corpus que a UIX-RCSS-ORACULO achou:
+#     gusworld_battle_cockpit.rml:29-31/44/47). Executável próprio, mesma disciplina "zero
+#     RmlUi/GLFW/GL" dos dois executáveis de lexer acima.
+add_executable(uix_style_lexer_whitespace_comment_sanity lexer_whitespace_comment_sanity.cpp)
+target_link_libraries(uix_style_lexer_whitespace_comment_sanity PRIVATE glintfx::uix_style)
+add_test(NAME uix_style_lexer_whitespace_comment_sanity COMMAND uix_style_lexer_whitespace_comment_sanity)
+
 # EN: GLINTFX_UIX_STYLE_*_DIR: absolute paths to the real corpus directories, resolved at
 #     CONFIGURE time (portable regardless of ctest's CWD at RUN time -- same reasoning
 #     glintfx/tests/uix/CMakeLists.txt already applies to its own GLINTFX_UIX_TESTS_DIR/

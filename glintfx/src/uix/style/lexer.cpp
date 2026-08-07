@@ -103,6 +103,33 @@ bool Lexer::try_scan_comment(Token* out) {
   return true;
 }
 
+// EN: UIX-LEXER-COMENT-ESPACO -- see lexer.hpp header's own comment on this method's declaration
+//     for the full rationale/history; this is HOW, not WHY (per this file's own top-of-file
+//     convention). Peek past whitespace ONLY to look for a comment; if found, the whitespace is
+//     never materialised into any token (folded away exactly like a stray ';' already is in
+//     scan_declaration()'s own EOF-permissiveness path). If not found, roll pos_ back so the
+//     caller's own subsequent scan (Prelude raw run, or Declaration NAME run) starts at EXACTLY the
+//     same byte it always did -- zero behaviour change for every other token shape.
+// PT: UIX-LEXER-COMENT-ESPACO -- ver o próprio comentário de cabeçalho da declaração deste método no
+//     lexer.hpp pro racional/histórico completos; isto é COMO, não PORQUÊ (pela própria convenção de
+//     topo-de-arquivo deste arquivo). Espia passando por whitespace SÓ pra procurar um comentário; se
+//     achado, o whitespace nunca é materializado em token nenhum (dobrado embora exatamente como um
+//     ';' solto já é no próprio caminho de permissividade-de-EOF do scan_declaration()). Se não
+//     achado, reverte pos_ pra que o próprio scan subsequente do chamador (trecho-cru de Prelude, ou
+//     trecho de NOME de Declaration) comece em EXATAMENTE o mesmo byte que sempre começou -- zero
+//     mudança de comportamento pra todo outro formato de token.
+bool Lexer::try_scan_comment_at_fresh_start(Token* out) {
+  const std::size_t saved = pos_;
+  while (pos_ < source_.size() && is_whitespace(source_[pos_])) {
+    ++pos_;
+  }
+  if (try_scan_comment(out)) {
+    return true;
+  }
+  pos_ = saved;
+  return false;
+}
+
 Token Lexer::next() {
   if (done_) {
     return sticky_;
@@ -121,7 +148,7 @@ Token Lexer::scan_structural() {
   }
 
   Token comment;
-  if (try_scan_comment(&comment)) {
+  if (try_scan_comment_at_fresh_start(&comment)) {
     return comment;
   }
 
@@ -205,7 +232,7 @@ Token Lexer::scan_declaration() {
     }
 
     Token comment;
-    if (try_scan_comment(&comment)) {
+    if (try_scan_comment_at_fresh_start(&comment)) {
       return comment;
     }
 

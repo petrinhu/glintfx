@@ -366,9 +366,34 @@ void test_worked_example_15_2_shorthand_order() {
   //     isoladamente, que a própria camada de impressão deste arquivo já é `ERRATA-2`-correta e vai
   //     reproduzir a âncora de byte exata da spec no momento em que o `shorthand.cpp` for
   //     atualizado -- a lacuna é inteiramente rio-acima da própria fronteira deste dumper.
+  // EN: `UIX-RCSS-CONFORMIDADE` ADDENDUM (2026-08-06): the comment block above predates
+  //     `UIX-RCSS-ERRATA-5` and frames `#000000ff` here as a bug pending a `shorthand.cpp` fix
+  //     (`UIX-SHORTHAND-PARCIAL`). That framing is now STALE, not this assertion's byte value: the
+  //     líder has since decided (§14.1 of `docs/uix-rcss.md`, dated 2026-08-06) that Side B's
+  //     atomic-discard IS the correct, permanent behaviour -- Side A's own partial-write
+  //     (`border-top-color=#7a5a2eff`) is the one that stays a no-rollback upstream artifact, not
+  //     a target this side needs to converge toward. `UIX-SHORTHAND-PARCIAL`'s own scope (1)
+  //     ("decide whether Side B replicates the partial write") is closed as "no" -- only its scope
+  //     (3), an end-to-end pipeline assertion (which THIS check already is), remained open, and
+  //     this very assertion below satisfies it. Left un-rewritten below, not to disturb a
+  //     concurrently-owned file more than necessary -- see this task's own report for the full
+  //     trace.
+  // PT: ADENDO `UIX-RCSS-CONFORMIDADE` (2026-08-06): o bloco de comentário acima é anterior à
+  //     `UIX-RCSS-ERRATA-5` e enquadra `#000000ff` aqui como um bug aguardando conserto no
+  //     `shorthand.cpp` (`UIX-SHORTHAND-PARCIAL`). Esse enquadramento está OBSOLETO agora, não o
+  //     valor de byte desta asserção: o líder decidiu desde então (§14.1 do `docs/uix-rcss.md`,
+  //     datado 2026-08-06) que o descarte atômico do lado B É o comportamento correto e
+  //     permanente -- a própria escrita parcial do lado A (`border-top-color=#7a5a2eff`) é que
+  //     fica sendo o artefato de upstream sem rollback, não um alvo que este lado precisa alcançar.
+  //     O próprio escopo (1) da `UIX-SHORTHAND-PARCIAL` ("decidir se o lado B replica a escrita
+  //     parcial") está fechado como "não" -- só o escopo (3) dela, uma asserção ponta-a-ponta do
+  //     pipeline (que ESTA checagem já é), continuava aberto, e esta própria asserção abaixo o
+  //     satisfaz. Deixado sem reescrever abaixo, pra não mexer mais que o necessário num arquivo de
+  //     posse concorrente -- ver o próprio relatório desta tarefa pro rastro completo.
   check(count_exact_line(lines, "body/1 PROP border-top-color=#000000ff") == 2,
-        "15.2: #b border-top-color -- MEASURED current behaviour (both longhands revert, "
-        "pre-ERRATA-2 shape) -- see the comment above for the traced upstream gap");
+        "15.2: #b border-top-color -- Side B's own atomic-discard, now the líder-decided PERMANENT "
+        "behaviour (UIX-RCSS-ERRATA-5, docs/uix-rcss.md section 14.1), not a bug pending fix -- see "
+        "the addendum comment immediately above");
   check(count_exact_line(lines, "body/1 PROP border-top-width=0.0000px") == 2,
         "15.2: #b border-top-width -- reverted (matches both the old AND corrected spec reading, "
         "since this longhand never matched anything either way)");

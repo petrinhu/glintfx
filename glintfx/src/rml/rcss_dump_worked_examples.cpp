@@ -431,6 +431,115 @@ void test_own_finding_premultiplied_alpha_has_teeth(Harness& h) {
   h.engine.update();
 }
 
+// ---------------------------------------------------------------------------
+// EN: `UIX-RCSS-CONFORMIDADE` -- section 9.1's own worked example, LITERAL, byte-exact, reproduced
+//     for the first time in THIS file (the two-layer `box-shadow` declaration the document itself
+//     quotes: `box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp 0dp 16dp 0dp;`). Everything
+//     this file had before this test used DIFFERENT literals
+//     (`test_own_finding_premultiplied_alpha_has_teeth` above uses `#22D3EE80`/`#C9A24B40`/
+//     `#22D3EE00`) -- close, but never the document's own §9.1 literal itself, meaning the exact
+//     text a second implementer would copy-paste out of `docs/uix-rcss.md` had never been run
+//     through THIS side's real dumper until now. Side B (`glintfx/tests/uix_style/
+//     value_compute_sanity.cpp`, `test_worked_example_9_1_box_shadow`) already had this exact
+//     literal; this test closes the asymmetry (`UIX-RCSS-DUMP-A-DESPREMULT`'s own residue note,
+//     `TODO.md`). Expected value taken VERBATIM from §9.1's own worked-example block, not derived
+//     by reading `rcss_dump.cpp` (this task's own restriction: the expected answer comes from the
+//     document, never from the implementation under test).
+// PT: `UIX-RCSS-CONFORMIDADE` -- o próprio exemplo trabalhado da seção 9.1, LITERAL, byte-exato,
+//     reproduzido pela primeira vez NESTE arquivo (a declaração `box-shadow` de duas camadas que o
+//     próprio documento cita: `box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp 0dp 16dp
+//     0dp;`). Tudo que este arquivo tinha antes deste teste usava literais DIFERENTES
+//     (`test_own_finding_premultiplied_alpha_has_teeth` acima usa `#22D3EE80`/`#C9A24B40`/
+//     `#22D3EE00`) -- perto, mas nunca o próprio literal da §9.1, o que significa que o texto exato
+//     que um segundo implementador copiaria e colaria de `docs/uix-rcss.md` nunca tinha passado
+//     pelo dumper real DESTE lado até agora. O lado B (`glintfx/tests/uix_style/
+//     value_compute_sanity.cpp`, `test_worked_example_9_1_box_shadow`) já tinha esse literal exato;
+//     este teste fecha a assimetria (nota de resíduo da `UIX-RCSS-DUMP-A-DESPREMULT`, `TODO.md`).
+//     Valor esperado tirado VERBATIM do próprio bloco de exemplo trabalhado da §9.1, não derivado
+//     lendo o `rcss_dump.cpp` (a própria restrição desta tarefa: a resposta esperada vem do
+//     documento, nunca da implementação sob teste).
+void test_9_1_box_shadow_literal_worked_example(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#k { box-shadow: #22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp 0dp 16dp 0dp; }\n"
+      "</style></head><body><div id=\"k\"></div></body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "9.1 literal: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+  check_eq(extract_prop(dump, "STATE none\n", "body/0", "box-shadow"),
+           "#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|"
+           "#21d0ea26;0.0000px;0.0000px;16.0000px;0.0000px;false",
+           "9.1 literal box-shadow= line, byte-exact against docs/uix-rcss.md's own §9.1 worked "
+           "example text");
+
+  doc->Close();
+  h.engine.update();
+}
+
+// ---------------------------------------------------------------------------
+// EN: `UIX-RCSS-CONFORMIDADE` -- section 9.2.1's own auto-spacing algorithm has FOUR numbered
+//     rules. The one worked example the document gives (reused verbatim by `test_15_3` above)
+//     only reaches rule 1 (explicit position kept, `55%`/`100%`) and rule 2 (first stop, no
+//     explicit position, assigned `0%`) -- it never has a stop that is BOTH unpositioned AND last
+//     (rule 3), nor a run of two-or-more consecutive unpositioned stops between two positioned
+//     neighbors (rule 4, the only rule with a real formula, and per this task's own briefing "the
+//     place an off-by-one is most likely"). Side B (`value_compute_sanity.cpp`,
+//     `test_gradient_stop_auto_spacing_general_run`) already enumerates rule 4 directly against the
+//     pure `resolve_gradient_stop_positions()` function; this side has no equivalent low-level
+//     function (Side A's dumper walks the real RmlUi decorator instance, never a standalone
+//     stop-spacing routine), so both rules are pinned here through the real pipeline instead, two
+//     small `linear-gradient(...)` fixtures built BY HAND from the algorithm's own four numbered
+//     steps (§9.2.1), not by reading `rcss_dump.cpp`:
+//       rule 3: `linear-gradient(90deg, #FF0000 10%, #00FF00)` -- 2 stops, first explicit `10%`,
+//       LAST has no explicit position -> rule 3 assigns it `100%`.
+//       rule 4: `linear-gradient(90deg, #FF0000 0%, #0000FF, #00FF00, #FFFF00 100%)` -- 4 stops,
+//       first/last explicit (`0%`/`100%`), a K=2 run of unpositioned stops in between -> rule 4's
+//       own formula, `P_before + i*(P_after-P_before)/(K+1)` for i=1..K, gives
+//       `0 + 1*(100-0)/3 = 33.3333%` and `0 + 2*(100-0)/3 = 66.6667%`. All four colors carry an
+//       implicit `alpha=ff`, so the premultiply/un-premultiply round trip (§7.1/`ERRATA-4`) is a
+//       no-op here (`channel*255/255=channel` exactly) -- this test is about stop POSITIONS, not
+//       about re-testing color lossiness already covered above.
+// PT: `UIX-RCSS-CONFORMIDADE` -- o próprio algoritmo de auto-espaçamento da seção 9.2.1 tem QUATRO
+//     regras numeradas. O único exemplo trabalhado que o documento dá (reusado verbatim pelo
+//     `test_15_3` acima) só alcança a regra 1 (posição explícita mantida, `55%`/`100%`) e a regra 2
+//     (primeiro stop, sem posição explícita, recebe `0%`) -- nunca tem um stop que seja AO MESMO
+//     TEMPO sem posição E último (regra 3), nem um trecho de dois-ou-mais stops sem posição
+//     consecutivos entre dois vizinhos posicionados (regra 4, a única regra com fórmula de fato, e
+//     per o próprio briefing desta tarefa "o lugar mais provável de um off-by-one"). O lado B
+//     (`value_compute_sanity.cpp`, `test_gradient_stop_auto_spacing_general_run`) já enumera a
+//     regra 4 direto contra a própria função pura `resolve_gradient_stop_positions()`; este lado
+//     não tem função de baixo nível equivalente (o dumper deste lado percorre a instância real de
+//     decorator do RmlUi, nunca uma rotina standalone de espaçamento de stop), então as duas regras
+//     são fixadas aqui pelo pipeline real, em vez disso, com duas fixtures pequenas de
+//     `linear-gradient(...)` montadas À MÃO a partir dos próprios quatro passos numerados do
+//     algoritmo (§9.2.1), não lendo o `rcss_dump.cpp`.
+void test_9_2_1_auto_spacing_rules_3_and_4(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#m { decorator: linear-gradient(90deg, #FF0000 10%, #00FF00); }\n"
+      "#n { decorator: linear-gradient(90deg, #FF0000 0%, #0000FF, #00FF00, #FFFF00 100%); }\n"
+      "</style></head><body><div id=\"m\"></div><div id=\"n\"></div></body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "9.2.1 rules 3/4: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+
+  check_eq(extract_prop(dump, "STATE none\n", "body/0", "decorator"),
+           "linear-gradient(90.0000;#ff0000ff:10.0000%;#00ff00ff:100.0000%)",
+           "9.2.1 rule 3: last stop, no explicit position, assigned 100.0000%");
+  check_eq(extract_prop(dump, "STATE none\n", "body/1", "decorator"),
+           "linear-gradient(90.0000;#ff0000ff:0.0000%;#0000ffff:33.3333%;#00ff00ff:66.6667%;"
+           "#ffff00ff:100.0000%)",
+           "9.2.1 rule 4: K=2 unpositioned run interpolated evenly between 0% and 100% neighbors "
+           "(0+1*100/3=33.3333%, 0+2*100/3=66.6667%)");
+
+  doc->Close();
+  h.engine.update();
+}
+
 } // namespace
 
 int main() {
@@ -446,11 +555,14 @@ int main() {
   test_15_2_shorthand_order_border_top(h);
   test_15_3_three_percent_families(h);
   test_own_finding_premultiplied_alpha_has_teeth(h);
+  test_9_1_box_shadow_literal_worked_example(h);
+  test_9_2_1_auto_spacing_rules_3_and_4(h);
 
   if (g_failures == 0) {
     std::puts(
         "rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4; plus own-finding "
-        "premultiplied-alpha-has-teeth)");
+        "premultiplied-alpha-has-teeth; plus UIX-RCSS-CONFORMIDADE additions: 9.1 literal, 9.2.1 "
+        "rules 3+4)");
     return 0;
   }
   std::printf("rcss_dump_worked_examples: %d failure(s)\n", g_failures);

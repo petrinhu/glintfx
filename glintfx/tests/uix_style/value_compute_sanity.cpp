@@ -336,6 +336,29 @@ void test_gradient_stop_auto_spacing_general_run() {
 }
 
 // ---------------------------------------------------------------------------
+// EN: `UIX-RCSS-CONFORMIDADE` -- section 9.2.1's own rule 3 ("the LAST stop, if it has no explicit
+//     position, is assigned 100%"), the one rule of the algorithm's own four numbered steps that
+//     neither the document's own §9.2.1/§15.3 worked example (rule 2 only: first stop unpositioned)
+//     nor `test_gradient_stop_auto_spacing_general_run` immediately above (rule 4 only: an interior
+//     K=2 run, both ends already explicit) ever exercises. Two stops, first explicit at `10%`,
+//     second (and last) with no explicit position -- rule 3 fires alone, undiluted by rule 2 or 4.
+// PT: `UIX-RCSS-CONFORMIDADE` -- a própria regra 3 da seção 9.2.1 ("o ÚLTIMO stop, se não tiver
+//     posição explícita, recebe 100%"), a única das quatro regras numeradas do algoritmo que nem o
+//     próprio exemplo trabalhado §9.2.1/§15.3 do documento (só regra 2: primeiro stop sem posição)
+//     nem o `test_gradient_stop_auto_spacing_general_run` logo acima (só regra 4: um trecho K=2
+//     interior, as duas pontas já explícitas) chegam a exercitar. Dois stops, primeiro explícito em
+//     `10%`, segundo (e último) sem posição explícita -- a regra 3 dispara sozinha, sem diluição
+//     das regras 2 ou 4.
+void test_gradient_stop_auto_spacing_last_stop_unpositioned() {
+  std::vector<std::optional<float>> explicit_positions{10.0f, std::nullopt};
+  std::vector<float> resolved = resolve_gradient_stop_positions(explicit_positions);
+  check(resolved.size() == 2, "auto-spacing rule 3: 2 positions produced");
+  check_eq(print_percent(resolved[0]), "10.0000%", "auto-spacing rule 3: stop 0 stays explicit 10%");
+  check_eq(print_percent(resolved[1]), "100.0000%",
+           "auto-spacing rule 3: last stop, no explicit position, assigned 100%");
+}
+
+// ---------------------------------------------------------------------------
 // EN: docs/uix-rcss.md section 7.1 -- all 4 authorized hex forms normalize to the same 8-digit
 //     canonical form, plus the 3 authorized named colors, plus fail-high for everything else
 //     (section 13's own "requires the líder's sign-off" clause).
@@ -586,6 +609,7 @@ int main() {
   test_box_shadow_color_lossy_roundtrip_orchestrator_table();
   test_box_shadow_malformed_layer_drops_whole_property();
   test_gradient_stop_auto_spacing_general_run();
+  test_gradient_stop_auto_spacing_last_stop_unpositioned();
   test_color_parsing_all_forms();
   test_length_resolution();
   test_non_finite_input_is_fail_high_at_parse_time();
@@ -618,7 +642,10 @@ int main() {
       "this item's) | decorator functions covered 10 of 10 (image, linear-gradient, "
       "radial-gradient, polygon, image-tint, ripple, horizontal-gradient, vertical-gradient, blur, "
       "drop-shadow) | resolved-percentage exceptions 1 of 1 (gradient-stop auto-spacing, section "
-      "9.2.1) | worked examples reproduced byte-exact 5 of 6 (15.2, 15.3, 15.4 all 4 rows -- "
+      "9.2.1, all 4 numbered rules now individually exercised -- rule 1/2 via the 15.3 worked "
+      "example reuse, rule 3 via UIX-RCSS-CONFORMIDADE's own added last-stop-unpositioned case, "
+      "rule 4 via the K=2 general run above) | worked examples reproduced byte-exact 5 of 6 (15.2, "
+      "15.3, 15.4 all 4 rows -- "
       "UIX-RCSS-ERRATA-3's own corrected literals, an earlier draft of this file's own reported "
       "divergence against the pre-errata-3 literals is superseded, not reproduced here -- plus "
       "9.1's own box-shadow example, all against the CURRENT spec text including UIX-RCSS-ERRATA-4 "

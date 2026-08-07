@@ -20,19 +20,34 @@ namespace glintfx::uix::style {
 namespace {
 
 // EN: One property's own currently-winning DECLARED value, tracked while walking `sheet.rules` in
-//     source order -- see cascade.hpp's own header comment for why `combined` alone (chain
-//     specificity + rule_index, already summed) is sufficient to decide every subsequent
-//     comparison, matching upstream's own `SetProperty` direction (`>`-keeps existing,
-//     `>=`-overwrites). `value` stays a `string_view` into the CALLER's own `sheet` source buffer
-//     for the DURATION of this one function's own winner-selection loop only -- it is copied into
-//     an owned `std::string` before this function returns anything to a caller (see
+//     source order -- `specificity` here is the winning declaration's own CHAIN specificity ALONE,
+//     never summed with a rule position (see cascade.hpp's own header comment, "A ceiling this file
+//     used to have, and why it does not any more", `UIX-CASCADE-TETO-REGRAS`, for why an earlier
+//     revision's `combined = chain_specificity + rule_index` encoding is GONE, not merely widened).
+//     Comparing this field directly against a new match's own chain specificity, with `>=`
+//     overwriting, matches upstream's own `SetProperty` direction (`>`-keeps existing,
+//     `>=`-overwrites) exactly -- source-order tie-break needs no numeric encoding of rule position
+//     at all, because `compute_element_style`'s own single ascending-`rule_index` pass below already
+//     IS that ordering; visiting two equal-specificity declarations in source order and always
+//     overwriting on a tie makes the LATER one win as a byproduct of the loop shape, not a property
+//     of the stored number. `value` stays a `string_view` into the CALLER's own `sheet` source
+//     buffer for the DURATION of this one function's own winner-selection loop only -- it is copied
+//     into an owned `std::string` before this function returns anything to a caller (see
 //     `compute_element_style`'s own final loop below), so this local, transient view never escapes
 //     this translation unit.
 // PT: O próprio valor DECLARADO atualmente-vencedor de uma propriedade, rastreado enquanto percorre
-//     `sheet.rules` em ordem-fonte -- ver o próprio comentário de cabeçalho do cascade.hpp pro
-//     porquê de `combined` sozinho (especificidade de cadeia + rule_index, já somados) ser
-//     suficiente pra decidir toda comparação subsequente, batendo com a própria direção do
-//     `SetProperty` do upstream (`>`-mantém o existente, `>=`-sobrescreve). `value` fica um
+//     `sheet.rules` em ordem-fonte -- `specificity` aqui é a própria especificidade de CADEIA da
+//     declaração vencedora SOZINHA, nunca somada com uma posição de regra (ver o próprio comentário
+//     de cabeçalho do cascade.hpp, "Um teto que este arquivo tinha, e por que não tem mais",
+//     `UIX-CASCADE-TETO-REGRAS`, pro porquê da codificação `combined = especificidade_de_cadeia +
+//     rule_index` de uma revisão anterior ter SUMIDO, não meramente alargado). Comparar este campo
+//     diretamente contra a própria especificidade de cadeia de um novo casamento, com `>=`
+//     sobrescrevendo, bate com a própria direção do `SetProperty` do upstream exatamente
+//     (`>`-mantém o existente, `>=`-sobrescreve) -- o desempate por ordem-de-fonte não precisa de
+//     codificação numérica de posição-de-regra nenhuma, porque a própria passada única, `rule_index`
+//     ascendente, do `compute_element_style` abaixo já É aquela ordenação; visitar duas declarações
+//     de especificidade IGUAL em ordem-fonte e sempre sobrescrever em empate faz a POSTERIOR vencer
+//     como subproduto da forma do laço, não uma propriedade do número guardado. `value` fica um
 //     `string_view` sobre o próprio buffer-fonte do `sheet` do CHAMADOR só pela DURAÇÃO do próprio
 //     laço de seleção-de-vencedor desta única função -- é copiado pra um `std::string` de posse
 //     antes desta função retornar qualquer coisa a um chamador (ver o próprio laço final do
@@ -51,19 +66,19 @@ ComputedStyle compute_element_style(const StyleSheet& sheet, const glintfx::uix:
   const std::span<const PropertyInfo> registry = all_properties();
   std::vector<DeclaredWinner> winners(registry.size());
 
-  // EN: `rule_index` is `Specificity` (int64_t, selector_match.hpp), not `std::size_t` -- it is
-  //     added directly into the SAME integer as a chain specificity below, and mixing signedness
-  //     there would be exactly the kind of silent-narrowing footgun this project's own conventions
-  //     warn against.
-  // PT: `rule_index` é `Specificity` (int64_t, selector_match.hpp), não `std::size_t` -- é somado
-  //     diretamente no MESMO inteiro que uma especificidade de cadeia abaixo, e misturar
-  //     sinalização ali seria exatamente o tipo de armadilha de estreitamento-silencioso que as
-  //     próprias convenções deste projeto avisam contra.
-  Specificity rule_index = 0;
+  // EN: No running `rule_index` counter here any more (an earlier revision had one, ONLY to sum it
+  //     into `combined` below -- see `UIX-CASCADE-TETO-REGRAS`, cascade.hpp's own header). Visiting
+  //     `sheet.rules` in this vector's own source order, and always overwriting on `>=`, already
+  //     IS the source-order tie-break -- no separate number needs to record "which position was
+  //     this".
+  // PT: Nenhum contador `rule_index` corrente aqui mais (uma revisão anterior tinha um, SÓ pra
+  //     somá-lo no `combined` abaixo -- ver `UIX-CASCADE-TETO-REGRAS`, o próprio cabeçalho do
+  //     cascade.hpp). Percorrer `sheet.rules` na própria ordem-fonte deste vetor, e sempre
+  //     sobrescrever em `>=`, já É o desempate por ordem-de-fonte -- nenhum número separado precisa
+  //     registrar "qual posição era essa".
   for (const Rule& rule : sheet.rules) {
     const MatchResult match = match_selector_list(rule.selectors, element, state);
     if (match.matched) {
-      const Specificity combined = match.specificity + rule_index;
       for (const PropertyDeclaration& decl : rule.declarations) {
         const PropertyInfo* info = find_property(decl.name);
         if (info == nullptr) {
@@ -83,14 +98,13 @@ ComputedStyle compute_element_style(const StyleSheet& sheet, const glintfx::uix:
         }
         const std::size_t idx = static_cast<std::size_t>(info - registry.data());
         DeclaredWinner& winner = winners[idx];
-        if (!winner.has_value || combined >= winner.specificity) {
+        if (!winner.has_value || match.specificity >= winner.specificity) {
           winner.has_value = true;
           winner.value = decl.value;
-          winner.specificity = combined;
+          winner.specificity = match.specificity;
         }
       }
     }
-    ++rule_index;
   }
 
   ComputedStyle out;

@@ -39,43 +39,61 @@
 //       "Why per-rule winner selection is provably equivalent" below for the arithmetic that makes
 //       this true, not merely asserted.
 //
-//     THIS FILE'S OWN FORMULA, provably equivalent to the four citations above: for each `Rule` in
-//     `sheet.rules`, in that vector's own source order, `rule_index` is that rule's own 0-based
-//     position (mirrors `rule_count`'s own per-rule, not per-selector-entry, increment).
-//     `combined = match_selector_list(rule.selectors, element, state).specificity + rule_index`
-//     (`match_selector_list`'s own documented "returns the MAXIMUM specificity among every matching
-//     entry" already reproduces `rule_count`'s own "every comma-list entry shares one value" fact
-//     for the ONE rule being considered -- see selector_match.hpp's own "Comma-list semantics"
-//     paragraph, which this file inherits without re-deriving). A property's declaration in this
-//     rule REPLACES the current winner iff `combined >= <current winner's own combined>` (matching
-//     `SetProperty`'s own `>`-keeps/`>=`-overwrites direction exactly) -- processing rules in
-//     ascending `rule_index` and declarations within one rule in their own source-order vector
-//     position makes this single pass, single comparison per declaration, sufficient; no
-//     `StyleSheetNode` tree, no separate merge pass, no node-processing-order question to resolve.
+//     THIS FILE'S OWN FORMULA, re-derived from the four citations above WITHOUT packing two
+//     dimensions into one integer (an earlier revision did; see "A CEILING THIS FILE USED TO HAVE,
+//     AND WHY IT DOES NOT ANY MORE" below for the bug that packing caused and why the fix REMOVES
+//     the encoding instead of widening it): for each `Rule` in `sheet.rules`, in that vector's own
+//     source order, a property's declaration in this rule REPLACES the current winner iff
+//     `match_selector_list(rule.selectors, element, state).specificity >= <current winner's own
+//     chain specificity>` -- comparing the two chain specificities DIRECTLY, matching `SetProperty`'s
+//     own `>`-keeps/`>=`-overwrites direction exactly (`match_selector_list`'s own documented
+//     "returns the MAXIMUM specificity among every matching entry" already reproduces `rule_count`'s
+//     own "every comma-list entry shares one value" fact for the ONE rule being considered -- see
+//     selector_match.hpp's own "Comma-list semantics" paragraph, which this file inherits without
+//     re-deriving). Processing rules in ascending source-order position, and declarations within one
+//     rule in their own source-order vector position, with this SAME `>=`-overwrites comparison at
+//     every step, is what makes source-order tie-break correct WITHOUT encoding "which position was
+//     this" into any number: visiting two EQUAL-specificity declarations in that fixed order and
+//     always overwriting on a tie makes the LATER one win purely because this file's own single
+//     ascending pass visits it later, a property of the loop shape, not of a stored integer -- no
+//     `StyleSheetNode` tree, no separate merge pass, no node-processing-order question to resolve,
+//     and (the point the packed encoding got wrong) no ceiling on how many rules a sheet may have.
 //
-//     WHY PER-RULE WINNER SELECTION IS PROVABLY EQUIVALENT TO UPSTREAM'S NODE-TREE-THEN-MERGE
-//     TWO-PASS SHAPE, NOT MERELY A SIMPLER-LOOKING APPROXIMATION: `kSpecificityWeightTag` (10'000,
-//     `selector_match.hpp`) is the SMALLEST non-zero per-compound weight upstream defines -- every
-//     chain specificity this repo's own parser can produce is therefore an exact multiple of
-//     10'000. A real stylesheet's `rule_index` is bounded by its own rule COUNT (this repo's own
-//     `UIX-RCSS-CENSUS`: 866 style blocks total, corpus-wide) -- as long as `rule_index < 10'000`
-//     (866 is two orders of magnitude under that, and `docs/uix-rcss.md` section 6's own "só as
-//     propriedades medidas em uso" discipline means this corpus is the only one this file's own
-//     acceptance criteria answer to), `combined mod 10'000` recovers `rule_index` UNIQUELY and
-//     `combined div 10'000` recovers the chain specificity's own multiple uniquely -- so two
-//     DIFFERENT `(chain_specificity, rule_index)` pairs can NEVER stamp the SAME `combined` value.
-//     Consequence: upstream's own node-merge-order tie-break (pointer value, effectively
-//     unspecified) is NEVER actually exercised by any real input this corpus contains -- the
-//     `SetProperty` comparison it feeds is always a strict `>`/`<` on two genuinely DIFFERENT
-//     stamped integers, so merge ORDER cannot change the OUTCOME, only the number of redundant
-//     overwrites performed to reach it. This file's own single ascending-`rule_index` pass reaches
-//     the identical fixed point in one pass instead of two, for a documented, arithmetic (not
-//     merely tested) reason -- restated as a corpus-scale invariant this module's own test suite
-//     pins explicitly (`tests/uix_style/cascade_sanity.cpp`'s own
-//     `test_precedence_tie_break_invariant_holds_for_corpus_scale`). A hypothetical future sheet
-//     with >= 10'000 rule BLOCKS would inherit upstream's own theoretical ambiguity at that scale
-//     too (this file does not "fix" a limitation that is upstream's own arithmetic, not this file's
-//     invention) -- named here so nobody mistakes silence for an oversight.
+//     A CEILING THIS FILE USED TO HAVE, AND WHY IT DOES NOT ANY MORE (`UIX-CASCADE-TETO-REGRAS`,
+//     found by the orchestrator's own re-verification pass, not by this file's own original test
+//     suite): an earlier revision stamped `combined = chain_specificity + rule_index` into ONE
+//     `Specificity` integer per winning declaration, reasoning that since `kSpecificityWeightTag`
+//     (10'000, `selector_match.hpp`) is the SMALLEST non-zero per-compound weight upstream defines,
+//     `combined mod 10'000` / `combined div 10'000` recover both terms uniquely as long as
+//     `rule_index < 10'000` -- true, but ONLY inside that bound, and the bound was never enforced
+//     anywhere in code (grep confirms: zero occurrences of `10'000`/`10000` in this file's own .cpp
+//     outside a comment). Outside it the failure mode is NOT upstream's own bounded ambiguity-
+//     between-EQUALS (`PropertyDictionary.cpp:134-142`'s pointer-order tie-break only ever fires
+//     between EQUAL stamped values, never inverts distinct ones) -- it is a genuine INVERSION: once
+//     the GAP between two rules' own `rule_index` values reached or exceeded the GAP between their
+//     two chain specificities, the sum let the LOWER-specificity, LATER-declared rule outrank a
+//     HIGHER-specificity, earlier one (worked example: a 1-tag chain, specificity 10'000, at
+//     `rule_index` 15'000 stamps `combined = 25'000`; a 2-tag chain, specificity 20'000 -- DOUBLE --
+//     at `rule_index` 0 stamps `combined = 20'000`; the weaker chain wins). The bound this file's
+//     own prior revision leaned on ("this repo's own corpus has 866 rules, two orders of magnitude
+//     under 10'000") was an assumption about ONE repo's OWN corpus, not a ceiling this project's own
+//     distribution target (a general-purpose library, not a fixed app) can assume of every consumer
+//     -- and this module's own sibling `lexer.hpp`'s `kMaxInputBytes` (1 MiB) sanctions well over
+//     170'000 rule blocks in a single stylesheet (a 6-byte minimal block, `a{b:c}`, repeated), 17x
+//     past the 10'000 the additive encoding actually needed to stay correct: the two declared
+//     ceilings were mutually incompatible, and nothing in this module cross-checked them. THE FIX:
+//     remove the ceiling instead of raising it -- comparing chain specificities directly, with no
+//     sum, has no analogous term to overflow or collide, and is correct for ANY rule count this
+//     `std::vector<Rule>` can hold, not merely comfortable ones. `Specificity` was already
+//     `std::int64_t` (selector_match.hpp) before this fix -- the earlier revision's ceiling was
+//     never a matter of integer WIDTH, widening it further would not have helped; the flaw was
+//     packing two independent dimensions into one comparable scalar at all, which this file's own
+//     single ascending-source-order pass never actually needed (that packing was solving upstream's
+//     merge-ORDER-independence problem, a problem this file's own single-pass shape does not have).
+//     `tests/uix_style/cascade_sanity.cpp`'s own
+//     `test_precedence_holds_beyond_former_rule_index_ceiling` pins the exact former failure point
+//     (the boundary where the two rules' own `rule_index` gap first reached their specificity gap,
+//     and one step past it) directly against `compute_element_style`.
 //
 //     INHERITANCE (`property_registry.hpp`'s own `inherited` flag): a property with no winning
 //     declaration ANYWHERE in this element's own rule set (not merely no rule matched at all -- a
@@ -197,48 +215,67 @@
 //       por-regra é provavelmente equivalente" abaixo pra aritmética que torna isto verdade, não
 //       meramente afirmado.
 //
-//     A PRÓPRIA FÓRMULA DESTE ARQUIVO, provavelmente equivalente às quatro citações acima: pra toda
-//     `Rule` em `sheet.rules`, na própria ordem-fonte daquele vetor, `rule_index` é a própria posição
-//     0-based daquela regra (espelha o próprio incremento por-regra, não por-entrada-de-seletor, do
-//     `rule_count`). `combined = match_selector_list(rule.selectors, element, state).specificity +
-//     rule_index` (o próprio "retorna a especificidade MÁXIMA entre toda entrada que casa"
+//     A PRÓPRIA FÓRMULA DESTE ARQUIVO, re-derivada das quatro citações acima SEM empacotar duas
+//     dimensões num inteiro só (uma revisão anterior empacotava; ver "UM TETO QUE ESTE ARQUIVO
+//     TINHA, E POR QUE NÃO TEM MAIS" abaixo pro defeito que aquele empacotamento causava e por que o
+//     conserto REMOVE a codificação em vez de alargá-la): pra toda `Rule` em `sheet.rules`, na
+//     própria ordem-fonte daquele vetor, a declaração de uma propriedade nesta regra SUBSTITUI o
+//     vencedor atual sse `match_selector_list(rule.selectors, element, state).specificity >=
+//     <própria especificidade de cadeia do vencedor atual>` -- comparando as duas especificidades de
+//     cadeia DIRETAMENTE, batendo com a própria direção `>`-mantém/`>=`-sobrescreve do `SetProperty`
+//     exatamente (o próprio "retorna a especificidade MÁXIMA entre toda entrada que casa"
 //     documentado do `match_selector_list` já reproduz o próprio fato "toda entrada de
 //     lista-vírgula compartilha um valor só" do `rule_count` pra ÚNICA regra sendo considerada --
 //     ver o próprio parágrafo "Semântica de lista-vírgula" do selector_match.hpp, que este arquivo
-//     herda sem re-derivar). A declaração de uma propriedade nesta regra SUBSTITUI o vencedor atual
-//     sse `combined >= <combined do próprio vencedor atual>` (batendo com a própria direção
-//     `>`-mantém/`>=`-sobrescreve do `SetProperty` exatamente) -- processar regras em `rule_index`
-//     ascendente e declarações dentro de uma regra na própria posição-de-vetor ordem-fonte delas
-//     torna esta passada única, uma comparação por declaração, suficiente; nenhuma árvore
+//     herda sem re-derivar). Processar regras em posição ordem-fonte ascendente, e declarações
+//     dentro de uma regra na própria posição-de-vetor ordem-fonte delas, com esta MESMA comparação
+//     `>=`-sobrescreve a cada passo, é o que torna o desempate por ordem-fonte correto SEM
+//     codificar "qual posição era essa" em número nenhum: visitar duas declarações de
+//     especificidade IGUAL naquela ordem fixa e sempre sobrescrever em empate faz a POSTERIOR
+//     vencer puramente porque a própria passada única, ascendente, deste arquivo a visita depois,
+//     uma propriedade da FORMA do laço, não de um inteiro guardado -- nenhuma árvore
 //     `StyleSheetNode`, nenhuma passada de mesclagem separada, nenhuma pergunta de ordem-de-
-//     processamento-de-nó pra resolver.
+//     processamento-de-nó pra resolver, e (o ponto que a codificação empacotada errava) nenhum teto
+//     em quantas regras uma folha pode ter.
 //
-//     POR QUE A SELEÇÃO DE VENCEDOR POR-REGRA É PROVAVELMENTE EQUIVALENTE À FORMA DE DUAS-PASSADAS
-//     ÁRVORE-DE-NÓ-DEPOIS-MESCLA DO UPSTREAM, NÃO MERAMENTE UMA APROXIMAÇÃO DE APARÊNCIA MAIS
-//     SIMPLES: `kSpecificityWeightTag` (10'000, selector_match.hpp) é o MENOR peso não-zero
-//     por-compound que o upstream define -- toda especificidade de cadeia que o próprio parser
-//     deste repo consegue produzir é portanto um múltiplo exato de 10'000. O `rule_index` de uma
-//     folha de estilo real é limitado pela própria CONTAGEM de regra dela (o próprio
-//     `UIX-RCSS-CENSUS` deste repo: 866 blocos de estilo no total, corpus-inteiro) -- contanto que
-//     `rule_index < 10'000` (866 está duas ordens de magnitude abaixo disso, e a própria disciplina
-//     "só as propriedades medidas em uso" da seção 6 do docs/uix-rcss.md significa que este corpus é
-//     o único a que o próprio critério de aceite deste arquivo responde), `combined mod 10'000`
-//     recupera `rule_index` UNICAMENTE e `combined div 10'000` recupera o próprio múltiplo de
-//     especificidade de cadeia unicamente -- então dois pares `(especificidade_de_cadeia,
-//     rule_index)` DIFERENTES nunca conseguem carimbar o MESMO valor `combined`. Consequência: o
-//     próprio desempate de ordem-de-mesclagem do upstream (valor de ponteiro, efetivamente
-//     não-especificado) NUNCA é de fato exercitado por input real nenhum que este corpus contenha --
-//     a comparação `SetProperty` que ele alimenta é sempre um `>`/`<` estrito sobre dois inteiros
-//     carimbados genuinamente DIFERENTES, então a ORDEM de mesclagem não consegue mudar o
-//     RESULTADO, só o número de sobrescritas redundantes realizadas pra alcançá-lo. A própria
-//     passada única, `rule_index` ascendente, deste arquivo alcança o ponto fixo idêntico numa
-//     passada em vez de duas, por um motivo documentado, aritmético (não meramente testado) --
-//     restatado como invariante de escala-de-corpus que a própria suíte de teste deste módulo prova
-//     explicitamente (o próprio `test_precedence_tie_break_invariant_holds_for_corpus_scale` do
-//     tests/uix_style/cascade_sanity.cpp). Uma hipotética futura folha com >= 10'000 BLOCOS de regra
-//     herdaria a própria ambiguidade teórica do upstream nessa escala também (este arquivo não
-//     "conserta" uma limitação que é aritmética do PRÓPRIO upstream, não invenção deste arquivo) --
-//     nomeado aqui pra ninguém confundir silêncio com descuido.
+//     UM TETO QUE ESTE ARQUIVO TINHA, E POR QUE NÃO TEM MAIS (`UIX-CASCADE-TETO-REGRAS`, achado pela
+//     própria passada de re-verificação do orquestrador, não pela própria suíte de teste original
+//     deste arquivo): uma revisão anterior carimbava `combined = especificidade_de_cadeia +
+//     rule_index` num inteiro `Specificity` SÓ por declaração vencedora, raciocinando que, como
+//     `kSpecificityWeightTag` (10'000, selector_match.hpp) é o MENOR peso não-zero por-compound que
+//     o upstream define, `combined mod 10'000` / `combined div 10'000` recuperam os dois termos
+//     unicamente contanto que `rule_index < 10'000` -- verdadeiro, mas SÓ dentro daquele limite, e o
+//     limite nunca foi imposto em código nenhum (grep confirma: zero ocorrências de
+//     `10'000`/`10000` no próprio .cpp deste arquivo fora de comentário). Fora dele o modo de falha
+//     NÃO é a própria ambiguidade limitada-entre-IGUAIS do upstream (o próprio desempate de
+//     ordem-de-ponteiro do `PropertyDictionary.cpp:134-142` só dispara entre valores carimbados
+//     IGUAIS, nunca inverte distintos) -- é uma INVERSÃO genuína: uma vez que a DIFERENÇA entre os
+//     próprios valores de `rule_index` de duas regras alcançava ou excedia a DIFERENÇA entre as duas
+//     especificidades de cadeia delas, a soma deixava a regra de especificidade MENOR, declarada
+//     DEPOIS, superar uma de especificidade MAIOR, anterior (exemplo trabalhado: uma cadeia de 1 tag,
+//     especificidade 10'000, no `rule_index` 15'000 carimba `combined = 25'000`; uma cadeia de 2
+//     tags, especificidade 20'000 -- O DOBRO -- no `rule_index` 0 carimba `combined = 20'000`; a
+//     cadeia mais fraca vence). O limite em que a própria revisão anterior deste arquivo se apoiava
+//     ("o corpus deste repo tem 866 regras, duas ordens de magnitude abaixo de 10'000") era uma
+//     suposição sobre o corpus PRÓPRIO de UM repo, não um teto que o próprio alvo de distribuição
+//     deste projeto (uma biblioteca de propósito geral, não um app fixo) pode supor de todo
+//     consumidor -- e o próprio `kMaxInputBytes` (1 MiB) do `lexer.hpp` irmão deste módulo sanciona
+//     bem mais de 170'000 blocos de regra numa folha de estilo só (um bloco mínimo de 6 bytes,
+//     `a{b:c}`, repetido), 17x além dos 10'000 que a codificação aditiva de fato precisava pra
+//     seguir correta: os dois tetos declarados eram mutuamente incompatíveis, e nada neste módulo os
+//     cruzava. O CONSERTO: remover o teto em vez de alargá-lo -- comparar especificidades de cadeia
+//     diretamente, sem soma, não tem termo análogo pra transbordar ou colidir, e é correto pra
+//     QUALQUER contagem de regra que este `std::vector<Rule>` aguente, não só contagens confortáveis.
+//     `Specificity` já era `std::int64_t` (selector_match.hpp) antes deste conserto -- o teto da
+//     revisão anterior nunca foi questão de LARGURA de inteiro, alargar mais não teria ajudado; o
+//     defeito era empacotar duas dimensões independentes num escalar comparável só, o que a própria
+//     passada única, ordem-fonte ascendente, deste arquivo nunca precisou de fato (aquele
+//     empacotamento resolvia o problema de independência-de-ORDEM-de-mesclagem do upstream, um
+//     problema que a própria forma de passada única deste arquivo não tem). O próprio
+//     `test_precedence_holds_beyond_former_rule_index_ceiling` do
+//     tests/uix_style/cascade_sanity.cpp prova o próprio ponto de falha anterior exato (a fronteira
+//     onde a própria diferença de `rule_index` das duas regras primeiro alcançava a diferença de
+//     especificidade delas, e um passo além dela) diretamente contra o `compute_element_style`.
 //
 //     HERANÇA (a própria flag `inherited` do property_registry.hpp): uma propriedade sem declaração
 //     vencedora em LUGAR NENHUM do próprio conjunto de regra deste elemento (não meramente "nenhuma

@@ -12,15 +12,18 @@
 //     SCOPE, THIS ITEM'S OWN DECLARED TETO -- same "not a value parser" boundary
 //     property_registry.hpp states, restated for the specific shape this file's own algorithms
 //     need:
-//       - This module tokenizes a shorthand's raw value by WHITESPACE RUNS ONLY (the 4-character
-//         set lexer.cpp's own `is_whitespace` already uses) -- it does NOT understand quoted
-//         strings, nested parentheses, or comma-separated lists, because NONE of the 13
-//         registered shorthands' own accepted grammars need any of those (verified against
-//         docs/uix-rcss.md section 6.2's own table: every shorthand here is a short,
-//         space-separated token run -- the corpus's genuinely rich, nested-paren/comma-list
-//         grammars, `box-shadow`/`decorator`, are NOT shorthands at all, they are single
-//         COMPOSITE-domain longhand properties, section 9's own territory, untouched by this
-//         file).
+//       - This module tokenizes a shorthand's raw value by WHITESPACE RUNS, with one exception
+//         added by `ESC-2`: a double- or single-quoted run collapses to ONE token regardless of
+//         internal whitespace (`font`'s own `font-family` item is the one target, among the 20,
+//         whose accepted grammar is a string that may contain a space, e.g. `"Times New Roman"`
+//         -- see `split_whitespace`'s own doc-comment in shorthand.cpp for the exact
+//         boundary/escape contract). This module still does NOT understand nested parentheses or
+//         comma-separated lists, because none of the 20 registered shorthands' own accepted
+//         grammars need either (verified against docs/uix-rcss.md section 6.2's own table: every
+//         shorthand here is a short, space-separated token run -- the corpus's genuinely rich,
+//         nested-paren/comma-list grammars, `box-shadow`/`decorator`, are NOT shorthands at all,
+//         they are single COMPOSITE-domain longhand properties, section 9's own territory,
+//         untouched by this file).
 //       - The `FallThrough`/`Flex` algorithms below DO need to decide, for a given raw token,
 //         which of two candidate longhand DOMAINS it looks like it belongs to (e.g. `border-top`'s
 //         own value routes each of its 2 tokens to `-width` or `-color`). This is done by a pair
@@ -68,14 +71,18 @@
 //     ESCOPO, O PRÓPRIO TETO DECLARADO DESTE ITEM -- mesma fronteira "não é um parser de valor"
 //     que o property_registry.hpp declara, restatada pra forma específica que os próprios
 //     algoritmos deste arquivo precisam:
-//       - Este módulo tokeniza o valor cru de um shorthand SÓ POR TRECHOS DE WHITESPACE (o mesmo
-//         conjunto de 4 caracteres que o próprio `is_whitespace` do lexer.cpp já usa) -- ele NÃO
-//         entende strings entre aspas, parênteses aninhados, ou listas separadas por vírgula,
-//         porque NENHUM dos 13 shorthands registrados precisa de nenhum deles (verificado contra a
-//         própria tabela da seção 6.2 do docs/uix-rcss.md: todo shorthand aqui é um trecho curto,
-//         de tokens separados por espaço -- as próprias gramáticas genuinamente ricas,
-//         parênteses-aninhados/lista-por-vírgula do corpus, `box-shadow`/`decorator`, NÃO são
-//         shorthands de jeito nenhum, são propriedades longhand de domínio COMPOSTO únicas,
+//       - Este módulo tokeniza o valor cru de um shorthand POR TRECHOS DE WHITESPACE, com uma
+//         exceção somada pela `ESC-2`: um trecho entre aspas duplas ou simples colapsa num ÚNICO
+//         token independente de whitespace interno (o próprio item `font-family` do `font` é o
+//         único alvo, dentre os 20, cuja própria gramática aceita uma string que pode conter
+//         espaço, ex. `"Times New Roman"` -- ver o próprio comentário de doc do
+//         `split_whitespace` no shorthand.cpp pro contrato exato de fronteira/escape). Este
+//         módulo continua NÃO entendendo parênteses aninhados nem listas separadas por vírgula,
+//         porque nenhum dos 20 shorthands registrados precisa de nenhum dos dois (verificado
+//         contra a própria tabela da seção 6.2 do docs/uix-rcss.md: todo shorthand aqui é um
+//         trecho curto, de tokens separados por espaço -- as próprias gramáticas genuinamente
+//         ricas, parênteses-aninhados/lista-por-vírgula do corpus, `box-shadow`/`decorator`, NÃO
+//         são shorthands de jeito nenhum, são propriedades longhand de domínio COMPOSTO únicas,
 //         território da própria seção 9, intocado por este arquivo).
 //       - Os próprios algoritmos `FallThrough`/`Flex` abaixo PRECISAM decidir, pra um dado token
 //         cru, a qual de dois DOMÍNIOS de longhand candidatos ele parece pertencer (ex. o próprio
@@ -148,12 +155,12 @@ enum class ShorthandExpandStatus {
   MalformedValue,
 };
 
-// EN: True iff `name` is one of the 13 registered shorthand names (docs/uix-rcss.md section 6.2's
+// EN: True iff `name` is one of the 20 registered shorthand names (docs/uix-rcss.md section 6.2's
 //     own table) -- for a caller that needs to distinguish "this is a shorthand" from "this is a
 //     plain longhand" before deciding whether to call `expand_shorthand` at all (e.g. a future
 //     cascade slice: try `find_property()` first, and only call this when that returns `nullptr`
 //     AND `is_shorthand()` returns true).
-// PT: Verdadeiro sse `name` é um dos 13 nomes de shorthand registrados (a própria tabela da seção
+// PT: Verdadeiro sse `name` é um dos 20 nomes de shorthand registrados (a própria tabela da seção
 //     6.2 do docs/uix-rcss.md) -- pra um chamador que precisa distinguir "isto é um shorthand" de
 //     "isto é um longhand comum" antes de decidir se chama o `expand_shorthand` de jeito nenhum
 //     (ex. uma futura fatia de cascata: tenta `find_property()` primeiro, e só chama isto quando
@@ -173,10 +180,10 @@ bool is_shorthand(std::string_view name);
 ShorthandExpandStatus expand_shorthand(std::string_view shorthand_name, std::string_view raw_value,
                                        std::vector<LonghandValue>* out);
 
-// EN: One row of the 13-entry shorthand table, exposed for enumeration (this item's own test
+// EN: One row of the 20-entry shorthand table, exposed for enumeration (this item's own test
 //     suite; a future consumer that needs to list every registered shorthand name, e.g. to build
 //     an `is_shorthand`-equivalent lookup of its own).
-// PT: Uma linha da tabela de 13 shorthands, exposta pra enumeração (a própria suíte de teste deste
+// PT: Uma linha da tabela de 20 shorthands, exposta pra enumeração (a própria suíte de teste deste
 //     item; um futuro consumidor que precisar listar todo nome de shorthand registrado, ex. pra
 //     construir uma busca própria equivalente ao `is_shorthand`).
 struct ShorthandDescriptor {

@@ -44,7 +44,7 @@
 //         open question (verified twice against the real corpus, see this comment's own git
 //         history for that original verification narrative, preserved in the commit log rather
 //         than repeated here). `ESC-1` does not change that underlying fact -- these two rows are
-//         still not measured directly and not reachable through any of the 13 shorthands section
+//         still not measured directly and not reachable through any of the 20 shorthands section
 //         6.2 defines -- it changes what the fact MEANS: they are no longer an isolated exception,
 //         they are the PRECEDENT the general rule below generalizes from.
 //       - 35 rows -- `ESC-1`'s own new rows, ALL zero-corpus BY DESIGN, not by anomaly, per
@@ -109,7 +109,7 @@
 //         corpus real, ver o próprio histórico git deste comentário pra narrativa de verificação
 //         original, preservada no log de commit em vez de repetida aqui). A `ESC-1` não muda esse
 //         fato subjacente -- estas duas linhas continuam não medidas diretamente e não alcançáveis
-//         por nenhum dos 13 shorthands da seção 6.2 -- muda o que o fato SIGNIFICA: deixam de ser
+//         por nenhum dos 20 shorthands da seção 6.2 -- muda o que o fato SIGNIFICA: deixam de ser
 //         uma exceção isolada, viram o PRECEDENTE de que a regra geral abaixo generaliza.
 //       - 35 linhas -- as próprias linhas novas da `ESC-1`, TODAS zero-corpus POR DESENHO, não por
 //         anomalia, pela própria `docs/adr/0022-paridade-total-com-o-motor-substituido.md` e pela

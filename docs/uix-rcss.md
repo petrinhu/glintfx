@@ -1014,6 +1014,155 @@ ler o fonte do upstream resolve de que lado da fronteira um decorator dado está
 
 ---
 
+## 🟢 Errata (`UIX-RCSS-ERRATA-8`, 2026-08-07) / Errata (`UIX-RCSS-ERRATA-8`, 2026-08-07)
+
+**EN:** `ESC-2` (the `+7` shorthands slice, section 6.2 above) found an implicit doctrine section
+6.2's own `FallThrough` description never states explicitly, but `glintfx/src/uix/style/
+shorthand.cpp`'s own pre-`ESC-2` `expand_fallthrough` enforced anyway: a `FallThrough` shorthand's
+value was required to claim EVERY item in its own chain, or the whole shorthand was rejected as
+`MalformedValue`. That doctrine is **false** for upstream's own real behaviour, traced directly
+against `PropertySpecification.cpp:433-471` (the generic loop section 6.2's own correction
+paragraphs above already cite for the order-dependency finding) rather than re-derived from this
+document's own earlier prose: upstream's loop has **no post-loop "was every item visited" check at
+all**. An item the token cursor never reaches during the loop simply never gets its own
+`dictionary.SetProperty()` call -- not an error condition, the same as any longhand a declaration
+simply never mentions, left for the cascade to resolve from its own §6.1 registry initial or an
+inherited value. Concretely: `border-top: 2px;` (a single width token, `border-top`'s own
+`-color` item never visited because the token cursor runs out first) is a **success** upstream,
+setting only `border-top-width` -- this document's own pre-`ESC-2` prose, and the pre-`ESC-2`
+`shorthand.cpp`, both got this wrong, requiring `border-top: 2px 1px;`-shaped 2-token completeness
+even though nothing about `border-top`'s own real upstream grammar demands it.
+
+**Why this was not caught by the 13 pre-`ESC-2` shorthands' own fixtures:** the corpus's own
+`border-top`/`-right`/`-bottom`/`-left`/`background` usage is 100% fully-specified (section 6.2's
+own table: "100% 2-part (width + color, never a 3rd token)" for `border-top` and siblings, "100%
+solid-color value" for `background`, both always exactly as many tokens as items) -- sub-
+specification never appeared in a real fixture for the 13, so the wrong doctrine never had a
+byte-exact case to contradict it. `ESC-2`'s own `font` is the shorthand whose real grammar makes
+sub-specification the NORMAL authoring shape (`font: 16px LatoLatin;` omits `font-style`/
+`font-weight` in the overwhelming common case) -- implementing `font` under the old doctrine would
+have made this real, common form `MalformedValue`, which is what surfaced the gap.
+
+**The fix:** `expand_fallthrough`'s own final loop (`shorthand.cpp`) -- a never-claimed item WITH
+a default (only `flex`'s own `Flex`-type items have one, `PropertySpecification.cpp:320-334`'s own
+`default_omitted_values` mechanism) still emits that default, unchanged; a never-claimed item with
+**no** default is now OMITTED from `expand_shorthand`'s own output, never `MalformedValue`.
+**Unaffected by this fix:** the pre-existing over-specified / reversed-order guard (a token left
+unclaimed with no item left to try it against is still `MalformedValue`, upstream's own real
+`PropertySpecification.cpp:469-471` "no more properties to pass them to" abort --
+`test_border_top_fallthrough_order_is_load_bearing`'s own reversed-order case,
+`#7A5A2E 1dp`, still fails exactly as before); `UIX-RCSS-ERRATA-5`'s own Decision 1 (§14.1 below,
+atomic-discard-on-**rejection**) -- that decision is about what Side B does when a `FallThrough`/
+`RecursiveRepeat` declaration is REJECTED (discards atomically, keeps no partial match, by líder
+decision); this correction is about a DIFFERENT code path, what happens when a value is ACCEPTED
+as sub-specified, and does not touch Decision 1's own atomic-discard-on-rejection behaviour at
+all. Pinned by `glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`'s own
+`test_border_top_sub_specified_values_are_ok_not_malformed` and the sub-specified sub-cases of
+`test_font_fallthrough_unquoted_forms`; reverting the fix to `return false` was confirmed, by
+direct mutation test, to turn exactly those cases (and only those) red.
+
+**Also registered here, the tokenization rule `font` needed and none of the pre-`ESC-2` 13
+shorthands did:** `shorthand.cpp`'s own `split_whitespace` gained quote-awareness -- a double- or
+single-quoted run (`font-family`'s own `string`-domain grammar, e.g. `"Times New Roman"`) collapses
+to ONE token, its own surrounding quote byte excluded, internal whitespace preserved, an escaped
+quote (`\"`) inside the run does not close it early (boundary/count parity with upstream's own
+real `ParsePropertyValues`, `PropertySpecification.cpp:513-682`, Whitespace mode). **One named,
+deliberate divergence from upstream's own byte CONTENT** (not its boundary/count decisions): the
+escape sequence itself (`\"`/`\'`/`\\`) is kept LITERAL in the emitted token rather than
+interpreted the way upstream's own real tokenizer does -- reason: `LonghandValue::value`
+(`shorthand.hpp`) is a `std::string_view` that must point either into the caller's own `raw_value`
+buffer or a literal of static storage duration; an interpreted escape needs synthesized memory,
+and this repo's own real caller lifetime pattern (`parser.cpp`'s own `apply_declaration` copies
+the *view*, not the bytes, into a long-lived `PropertyDeclaration` that outlives many later
+`expand_shorthand` calls) makes any reused/cleared arena unsafe (a dangling view) and any
+never-cleared one an unbounded leak -- both rejected, matching this repo's own "no mutable global
+singleton" discipline. This costs nothing for the one quoted case this document's own table above
+names (`"Times New Roman"`, no escape at all), and this repo's own `lexer.hpp` already sets the
+precedent of deferring quote-STRIPPING itself to "a future, semantic parser step" -- deferring
+escape INTERPRETATION the same way, while still tracking escape BOUNDARIES faithfully, is the same
+discipline one layer further out, not a new one. Tested directly by
+`shorthand_expansion_sanity.cpp`'s own `test_font_fallthrough_quoted_forms`, and end to end
+(lexer -> parser -> `apply_declaration`, not just `expand_shorthand()` called directly) by a
+throwaway verification program run for this fatia's own report, not committed to this repo.
+
+**PT:** A `ESC-2` (a fatia dos `+7` shorthands, seção 6.2 acima) achou uma doutrina implícita que a
+própria descrição de `FallThrough` da seção 6.2 nunca declara explicitamente, mas que o próprio
+`expand_fallthrough` pré-`ESC-2` do `glintfx/src/uix/style/shorthand.cpp` impunha mesmo assim: o
+valor de um shorthand `FallThrough` era exigido a reivindicar TODO item da própria cadeia dele, ou
+o shorthand inteiro era rejeitado como `MalformedValue`. Essa doutrina é **falsa** pro próprio
+comportamento real do upstream, rastreada direto contra `PropertySpecification.cpp:433-471` (o
+laço genérico que os próprios parágrafos de correção da seção 6.2 acima já citam pro achado de
+dependência-de-ordem) em vez de re-derivada da própria prosa anterior deste documento: o próprio
+laço do upstream **não tem checagem pós-laço nenhuma de "todo item foi visitado"**. Um item que o
+cursor de token nunca alcança durante o laço simplesmente nunca recebe a própria chamada
+`dictionary.SetProperty()` dele -- não é condição de erro, o mesmo que qualquer longhand que uma
+declaração simplesmente nunca menciona, deixado pra cascata resolver do próprio valor inicial de
+registro da §6.1 ou um valor herdado. Concretamente: `border-top: 2px;` (um único token de width,
+o próprio item `-color` de `border-top` nunca visitado porque o cursor de token esgota primeiro) é
+um **sucesso** no upstream, setando só `border-top-width` -- a própria prosa pré-`ESC-2` deste
+documento, e o próprio `shorthand.cpp` pré-`ESC-2`, os dois erravam isso, exigindo completude de
+2-token em forma de `border-top: 2px 1px;` mesmo sem nada na própria gramática real upstream de
+`border-top` exigir isso.
+
+**Por que isto não foi pego pelas próprias fixtures dos 13 shorthands pré-`ESC-2`:** o próprio uso
+de `border-top`/`-right`/`-bottom`/`-left`/`background` do corpus é 100% plenamente especificado (a
+própria tabela da seção 6.2: "100% 2-parte (width + color, nunca um 3º token)" pro `border-top` e
+irmãos, "100% valor sólido de cor" pro `background`, sempre exatamente tantos tokens quanto itens)
+-- sub-especificação nunca apareceu numa fixture real pros 13, então a doutrina errada nunca teve
+um caso byte-exato pra contradizê-la. O próprio `font` da `ESC-2` é o shorthand cuja própria
+gramática real faz da sub-especificação a forma NORMAL de autoria (`font: 16px LatoLatin;` omite
+`font-style`/`font-weight` no caso comum e esmagador) -- implementar `font` sob a doutrina antiga
+teria feito desta forma real, comum, virar `MalformedValue`, o que foi o que revelou o vão.
+
+**O conserto:** o próprio laço final do `expand_fallthrough` (`shorthand.cpp`) -- um item
+nunca-reivindicado COM um default (só os próprios itens de tipo `Flex` do `flex` têm um, o próprio
+mecanismo `default_omitted_values` do `PropertySpecification.cpp:320-334`) continua emitindo aquele
+default, intocado; um item nunca-reivindicado SEM default agora é OMITIDO da própria saída do
+`expand_shorthand`, nunca `MalformedValue`. **Não afetado por este conserto:** a própria guarda
+pré-existente de over-specified / ordem-revertida (um token deixado não-reivindicado sem item
+nenhum sobrando pra tentar continua sendo `MalformedValue`, o próprio abort real "no more
+properties to pass them to" do upstream, `PropertySpecification.cpp:469-471` -- o próprio caso de
+ordem revertida do `test_border_top_fallthrough_order_is_load_bearing`, `#7A5A2E 1dp`, continua
+falhando exatamente como antes); a própria Decisão 1 da `UIX-RCSS-ERRATA-5` (§14.1 abaixo,
+descarte-atômico-na-**rejeição**) -- aquela decisão é sobre o que o lado B faz quando uma
+declaração `FallThrough`/`RecursiveRepeat` é REJEITADA (descarta atomicamente, não mantém casamento
+parcial nenhum, por decisão do líder); esta correção é sobre um caminho de código DIFERENTE, o que
+acontece quando um valor é ACEITO como sub-especificado, e não toca no próprio comportamento de
+descarte-atômico-na-rejeição da Decisão 1 de jeito nenhum. Pinado pelo próprio
+`test_border_top_sub_specified_values_are_ok_not_malformed` e pelos subcasos sub-especificados do
+`test_font_fallthrough_unquoted_forms`, os dois do
+`glintfx/tests/uix_style/shorthand_expansion_sanity.cpp`; reverter o conserto pra `return false`
+foi confirmado, por teste de mutação direto, a deixar exatamente esses casos (e só esses)
+vermelhos.
+
+**Também registrada aqui, a regra de tokenização que o `font` precisou e nenhum dos 13 shorthands
+pré-`ESC-2` precisava:** o próprio `split_whitespace` do `shorthand.cpp` ganhou ciência de aspas --
+um trecho entre aspas duplas ou simples (a própria gramática de domínio `string` de `font-family`,
+ex. `"Times New Roman"`) colapsa num ÚNICO token, o próprio byte de aspa externa excluído,
+whitespace interno preservado, uma aspa escapada (`\"`) dentro do trecho não o fecha cedo (paridade
+de fronteira/contagem com o próprio `ParsePropertyValues` real do upstream,
+`PropertySpecification.cpp:513-682`, modo Whitespace). **Uma divergência nomeada, deliberada, do
+próprio BYTE de conteúdo do upstream** (não das próprias decisões de fronteira/contagem dele): a
+própria sequência de escape (`\"`/`\'`/`\\`) fica LITERAL no token emitido em vez de interpretada do
+jeito que o próprio tokenizador real do upstream faz -- motivo: `LonghandValue::value`
+(`shorthand.hpp`) é um `std::string_view` que precisa apontar ou pro próprio buffer `raw_value` do
+chamador ou pra um literal de duração de armazenamento estática; um escape interpretado precisa de
+memória sintetizada, e o próprio padrão real de lifetime do chamador deste repo (o próprio
+`apply_declaration` do parser.cpp copia a *view*, não os bytes, pra um `PropertyDeclaration` de
+vida longa que sobrevive a muitas chamadas posteriores de `expand_shorthand`) faz de qualquer arena
+reusada/limpa algo inseguro (uma view pendurada) e de uma nunca-limpa um vazamento sem teto -- os
+dois rejeitados, casando com a própria disciplina "sem singleton mutável global" deste repo. Isto
+não custa nada pro único caso entre aspas que a própria tabela deste documento acima nomeia
+(`"Times New Roman"`, sem escape nenhum), e o próprio `lexer.hpp` deste repo já fixa o precedente
+de adiar o próprio DESPIR-de-aspas pra "um futuro passo semântico de parser" -- adiar a
+INTERPRETAÇÃO do escape do mesmo jeito, ainda rastreando a FRONTEIRA do escape fielmente, é a mesma
+disciplina uma camada mais adiante, não uma nova. Testada direto pelo próprio
+`test_font_fallthrough_quoted_forms` do shorthand_expansion_sanity.cpp, e ponta-a-ponta (lexer ->
+parser -> `apply_declaration`, não só `expand_shorthand()` chamado direto) por um programa de
+verificação descartável rodado pro próprio relatório desta fatia, não commitado a este repo.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -1438,7 +1587,7 @@ precedent for a general rule, not a one-off exception.** `UIX-PROP-REGISTRY`'s o
 the 64-vs-72 accounting (section 6 above) and found these two were, at the time, the **only** 2 of
 the table's then-72 longhand entries with **zero** measured occurrences anywhere in this document's
 own corpus (`/var/tmp/censo-rcss-qa1/censo.md`) -- not written directly, and not reachable through
-any of the 13 shorthands section 6.2 defines (no shorthand expands into `max-height`/`max-width`;
+any of the 20 shorthands section 6.2 defines (no shorthand expands into `max-height`/`max-width`;
 they are plain, unexpanded RmlUi native properties). Section 6's own scope discipline used to state
 this registry was built "exclusively" from measured names -- by that rule alone these two did not
 belong. **They stayed in the registry anyway**, for two reasons stated once here so a future reader
@@ -1529,11 +1678,18 @@ doesn't use it".
 
 #### 6.2 Shorthand-to-longhand expansion (no separate registry slot; feeds the longhand entries above)
 
-**13 shorthands is today's count (10 rows below, `border-top`/`-right`/`-bottom`/`-left` counted as
-4), not the parity target.** `docs/rmlx-subset.md` §7 authorizes every shorthand the pinned RmlUi
-build registers; `TODO.md`'s `ESC-2` (wave `WR2R`) is the owning slice that raises this to **20**
-(+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
-`transform-origin`). Like §6.1's 107, this count has no automated doc-vs-code cross-check today --
+**`ESC-2` (wave `WR2R`) landed this table at 20 shorthands (17 rows below, `border-top`/`-right`/
+`-bottom`/`-left` counted as 4).** `docs/rmlx-subset.md` §7's "if the engine being replaced accepts
+it, ours accepts it" rule authorized every shorthand the pinned RmlUi build registers, and `ESC-2`
+delivered the remaining 7 the pre-`ESC-2` 13 had not yet listed: `border-width` (**Box**),
+`flex-flow` (**FallThrough**), `font` (**FallThrough**: `font-style, font-weight, font-size,
+font-family`), `inset` (**Box**: `top, right, bottom, left`, the bare longhand names themselves),
+`nav` (**Box**: `nav-up, nav-right, nav-down, nav-left`), `perspective-origin` (**FallThrough**),
+`transform-origin` (**FallThrough**). None of the 7 is corpus-measured by name (`ESC-1`'s own
+census-coverage accounting, section 6.1 above, already covers all 23 of their own target
+longhands via other means) -- authorized by parity, not usage count, per `docs/adr/
+0022-paridade-total-com-o-motor-substituido.md`'s own "corpus is sequencing data, never a
+boundary" doctrine. Like §6.1's 107, this count has no automated doc-vs-code cross-check today --
 only §14.1/§14.2's own divergence counts are runtime-verified against this document (`ESC-0`
 verified this while writing the note above; not repeated in full here).
 
@@ -1551,7 +1707,14 @@ Evidence: `examples/RmlUi/Source/Core/StyleSheetSpecification.cpp` `RegisterShor
 | `background` | `background-color` only | **FallThrough**, 1 item | 100% solid-color value (§4.2 of the census: `docs/effects.md`'s own documented restriction -- gradients go through `decorator`, never `background`) |
 | `gap` | `row-gap` + `column-gap` | **Replicate** (1 value sets both; 2 values set each independently) | -- |
 | `overflow` | `overflow-x` + `overflow-y` | **Replicate** | -- |
-| `flex` | `flex-grow`, `flex-shrink`, `flex-basis` | **Flex** (special-cased: the bare keyword `none` expands to `0 0 auto`; otherwise omitted trailing values default to `1`/`1`/`0`, **not** each property's own normal initial value -- `PropertySpecification.cpp:311-334`, cited because this is exactly the kind of "an ordinary reader would guess wrong" default a second implementer could plausibly miss) | -- |
+| `flex` | `flex-grow`, `flex-shrink`, `flex-basis` | **Flex** (special-cased: the bare keyword `none` expands to `0 0 auto`, discarding any trailing tokens -- `flex: none 2` still expands to `0 0 auto`, `PropertySpecification.cpp:315-317` checks only `property_values[0]`; otherwise omitted trailing values default to `1`/`1`/`0`, **not** each property's own normal initial value -- `PropertySpecification.cpp:311-334`, cited because this is exactly the kind of "an ordinary reader would guess wrong" default a second implementer could plausibly miss) | -- |
+| `border-width` (`ESC-2`, `StyleSheetSpecification.cpp:286`) | `border-top-width/-right-width/-bottom-width/-left-width` | **Box** | 0 measured (in by parity, `docs/rmlx-subset.md` §7) |
+| `inset` (`ESC-2`, `:313`) | `top`, `right`, `bottom`, `left` (the bare longhand names themselves, not `inset-*`) | **Box** | 0 measured (in by parity, §7) |
+| `nav` (`ESC-2`, `:382`) | `nav-up`, `nav-right`, `nav-down`, `nav-left` (SIDE order, "up"/"down" standing in for "top"/"bottom" -- diverges from `border-radius`'s own CORNER order, pinned by `test_nav_box_expansion_up_right_down_left_order`) | **Box** | 0 measured (in by parity, §7) |
+| `font` (`ESC-2`, `:359`) | `font-style, font-weight, font-size, font-family` | **FallThrough** -- the one shorthand of the 20 whose `font-family` item needs a quote-aware tokenizer (`split_whitespace`'s own `ESC-2` addendum, shorthand.cpp): sub-specification (omitting style/weight) is this shorthand's NORMAL authoring shape, corrected for by `UIX-RCSS-ERRATA-8` (this document's own header errata block) | 0 measured (in by parity, §7) |
+| `perspective-origin` (`ESC-2`, `:392`) | `perspective-origin-x`, `perspective-origin-y` | **FallThrough** -- neither item is a catch-all, both are `keyword(...)` or `length_percent` | 0 measured (in by parity, §7) |
+| `transform-origin` (`ESC-2`, `:397`) | `transform-origin-x`, `transform-origin-y`, `transform-origin-z` | **FallThrough** -- `-z` is the one item among all 20 shorthands' own `FallThrough` chains that is plain `length`, neither a catch-all nor a 2-way keyword-or-length domain | 0 measured (in by parity, §7) |
+| `flex-flow` (`ESC-2`, `:429`) | `flex-direction`, `flex-wrap` | **FallThrough** -- both items are CLOSED keyword sets, neither a catch-all (`flex-flow: banana` genuinely fails both, unlike `font-family`'s own open `string` domain) | 0 measured (in by parity, §7) |
 
 **Correction to the `border-top`/`-right`/`-bottom`/`-left` row above, dated 2026-08-06 (see the
 errata block at this document's own header for the full account):** "order-independent between the
@@ -3139,7 +3302,7 @@ corpus, agora o precedente de uma regra geral, não mais uma exceção isolada.*
 da `UIX-PROP-REGISTRY` fechou a conta 64-vs-72 (seção 6 acima) e achou que essas duas eram, à
 época, as **únicas** 2 das então-72 entradas longhand da tabela com **zero** ocorrência medida em
 lugar nenhum do corpus deste documento (`/var/tmp/censo-rcss-qa1/censo.md`) -- não escritas
-direto, e não alcançáveis por nenhum dos 13 shorthands da seção 6.2 (nenhum shorthand expande em
+direto, e não alcançáveis por nenhum dos 20 shorthands da seção 6.2 (nenhum shorthand expande em
 `max-height`/`max-width`; são propriedades nativas do RmlUi, planas, sem expansão). A própria
 disciplina de escopo da seção 6 costumava declarar que este registro era construído
 "exclusivamente" de nomes medidos -- por essa regra sozinha, essas duas não pertenceriam.
@@ -3237,17 +3400,25 @@ diferente de "o corpus do consumidor não usa".
 
 #### 6.2 Expansão shorthand-pra-longhand (sem slot próprio de registro; alimenta as entradas longhand acima)
 
-**13 atalhos é a contagem de hoje (10 linhas abaixo, `border-top`/`-right`/`-bottom`/`-left`
-contados como 4), não o alvo de paridade.** A §7 do `docs/rmlx-subset.md` autoriza todo atalho que
-o build fixado do RmlUi registra; a `ESC-2` do `TODO.md` (onda `WR2R`) é a fatia dona que eleva
-isso pra **20** (+7: `border-width`, `flex-flow`, `font`, `inset`, `nav`, `perspective-origin`,
-`transform-origin`). Como o 107 da seção 6.1, esta contagem não tem checagem automática
-doc-vs-código hoje -- só as próprias contagens de divergência da §14.1/§14.2 são verificadas em
-tempo de execução contra este documento (a `ESC-0` verificou isso ao escrever a nota acima; não
-repetido aqui na íntegra).
+**A `ESC-2` (onda `WR2R`) aterrissou esta tabela em 20 shorthands (17 linhas abaixo, `border-top`/
+`-right`/`-bottom`/`-left` contados como 4).** A própria regra "se o motor que está sendo
+substituído aceita, o nosso aceita" da §7 do `docs/rmlx-subset.md` autorizou todo atalho que o
+build fixado do RmlUi registra, e a `ESC-2` entregou os 7 restantes que os 13 pré-`ESC-2` ainda não
+listavam: `border-width` (**Box**), `flex-flow` (**FallThrough**), `font` (**FallThrough**:
+`font-style, font-weight, font-size, font-family`), `inset` (**Box**: `top, right, bottom, left`,
+os próprios nomes de longhand nus), `nav` (**Box**: `nav-up, nav-right, nav-down, nav-left`),
+`perspective-origin` (**FallThrough**), `transform-origin` (**FallThrough**). Nenhum dos 7 é
+medido pelo corpus por nome (a própria contagem de cobertura de censo da `ESC-1`, seção 6.1 acima,
+já cobre os 23 próprios longhands-alvo deles por outros meios) -- autorizado por paridade, não por
+contagem de uso, per a própria doutrina "corpus é dado de sequenciamento, nunca fronteira" do
+`docs/adr/0022-paridade-total-com-o-motor-substituido.md`. Como o 107 da seção 6.1, esta contagem
+não tem checagem automática doc-vs-código hoje -- só as próprias contagens de divergência da
+§14.1/§14.2 são verificadas em tempo de execução contra este documento (a `ESC-0` verificou isso ao
+escrever a nota acima; não repetido aqui na íntegra).
 
 *(mesma tabela da seção 6.2 em inglês -- nomes de propriedade e algoritmos não traduzidos. A linha de
-`border-top`/`-right`/`-bottom`/`-left` foi corrigida em 2026-08-06 -- ver a nota a seguir.)*
+`border-top`/`-right`/`-bottom`/`-left` foi corrigida em 2026-08-06 -- ver a nota a seguir. As 7
+linhas novas da `ESC-2` seguem a mesma convenção.)*
 
 **Correção à linha de `border-top`/`-right`/`-bottom`/`-left` da tabela acima, datada 2026-08-06 (ver
 o bloco de errata no cabeçalho deste documento pro relato completo):** "independente de ordem entre

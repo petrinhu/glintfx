@@ -214,10 +214,12 @@
 #include <RmlUi/Core/Unit.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -804,6 +806,643 @@ constexpr NamedColorTokenEntry kNamedColorTokenTable[] = {
 //     DERRUBADA em silêncio aqui no Lado A (o próprio caminho fail-high `std::nullopt` do
 //     `polygon_fill_value`, abaixo) -- uma divergência real, não hipotética (ver o próprio caso
 //     `#d` do `uix_esc5_named_colors.rml`, pego vermelho antes deste conserto pousar).
+// EN: `ESC-6` -- the 8 functional colour notations (`rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/
+//     `lch()`/`oklab()`/`oklch()`), re-derived independently from the pin's own
+//     `PropertyParserColour.cpp` (548 lines, read in full for this task -- every helper below cites
+//     its own exact source line range) for THIS file's own `parse_color_token` mini-parser. Same
+//     independence discipline as `ESC-5`'s own `kNamedColorTokenTable` comment above: this block is
+//     a second, from-scratch transcription of the pin, never a read of side B's own
+//     `glintfx/src/uix/style/value_compute.cpp` -- a single shared bug in understanding the pin
+//     would otherwise reach both dumper sides identically and the differential oracle would never
+//     see it.
+//
+//     Shared plumbing first (tokenizer, the two "quantize float(s) to a byte" steps, the three
+//     colour-space matrices), then the four `parse_functional_*` entry points `parse_color_token`
+//     itself dispatches to below, in the SAME order the pin's own `ParseColour`
+//     (`PropertyParserColour.cpp:166-209`) checks them.
+// PT: `ESC-6` -- as 8 notações funcionais de cor (`rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/
+//     `lch()`/`oklab()`/`oklch()`), re-derivadas independentemente do próprio
+//     `PropertyParserColour.cpp` do pin (548 linhas, lidas por inteiro pra esta tarefa -- todo
+//     helper abaixo cita a própria faixa de linha exata da fonte) pro mini-parser `parse_color_token`
+//     PRÓPRIO deste arquivo. Mesma disciplina de independência do próprio comentário da
+//     `kNamedColorTokenTable` da `ESC-5` acima: este bloco é uma segunda transcrição, do zero, do
+//     pin, nunca uma leitura do próprio `glintfx/src/uix/style/value_compute.cpp` do lado B -- um
+//     único bug de entendimento do pin alcançaria os dois lados do dumper identicamente e o oráculo
+//     diferencial nunca o veria.
+//
+//     Encanamento compartilhado primeiro (tokenizador, os dois passos de "quantiza float(s) pra
+//     byte", as três matrizes de espaço-de-cor), depois os quatro pontos de entrada
+//     `parse_functional_*` que o próprio `parse_color_token` despacha abaixo, NA MESMA ordem que o
+//     próprio `ParseColour` do pin (`PropertyParserColour.cpp:166-209`) os confere.
+
+// EN: Mirrors `StringUtilities::IsWhitespace` (`StringUtilities.h:61-64`) EXACTLY -- CR/LF/space/tab
+//     only. Deliberately NOT this file's own `std::isspace`-based `trim()` (below): that is
+//     locale-dependent and accepts a wider character set, which would silently tokenize a raw
+//     colour-function argument differently from the pin's own hand-rolled, locale-FREE whitespace
+//     set the moment a fixture used e.g. a vertical-tab or form-feed as filler -- an independent
+//     mini-parser that is "byte-identical to the pin on every fixture anyone actually writes" is not
+//     the same guarantee as "byte-identical to the pin", and this dumper's whole reason to exist is
+//     the latter.
+// PT: Espelha o `StringUtilities::IsWhitespace` (`StringUtilities.h:61-64`) EXATAMENTE -- só
+//     CR/LF/espaço/tab. Deliberadamente NÃO o `trim()` baseado em `std::isspace` deste próprio
+//     arquivo (abaixo): aquilo é dependente de locale e aceita um conjunto mais amplo de
+//     caracteres, o que tokenizaria um argumento de função-de-cor cru diferente do próprio conjunto
+//     de espaço-em-branco escrito-à-mão, LIVRE-de-locale, do pin no momento em que uma fixture
+//     usasse ex. um tab-vertical ou form-feed como enchimento -- um mini-parser independente que é
+//     "byte-idêntico ao pin em toda fixture que alguém de fato escreve" não é a mesma garantia que
+//     "byte-idêntico ao pin", e a razão de existir inteira deste dumper é a segunda.
+bool color_fn_is_whitespace(char c) { return c == '\r' || c == '\n' || c == ' ' || c == '\t'; }
+
+// EN: Mirrors `GetColourFunctionValues()` (`PropertyParserColour.cpp:534-546`) fused with the
+//     single-delimiter overload of `StringUtilities::ExpandString()`
+//     (`StringUtilities.cpp:242-291`) it calls, byte-for-byte -- including the two behaviours easy
+//     to miss on a first read that DO matter for a hostile/edge-case fixture, not just the "normal"
+//     path:
+//       (1) the argument span runs from the FIRST '(' to the LAST ')' in the whole raw token; an
+//           unclosed function (no ')' anywhere) is ACCEPTED, running to end-of-string
+//           (`:536-543`'s own `value.rfind(')') - begin_values` -- `rfind` returning `npos` on "no
+//           ')'" underflows the subtraction to a huge `size_t`, and `substr`'s own count-clamping
+//           silently reinterprets that as "rest of the string", never throwing);
+//       (2) whitespace (CR/LF/space/tab, `color_fn_is_whitespace()` just above) is trimmed at a
+//           token's LEADING/TRAILING edge but PRESERVED if embedded between two non-whitespace
+//           characters inside one token -- `ExpandString`'s own `start_ptr`/`end_ptr` are pointers
+//           into the ORIGINAL buffer, and a whitespace char simply does not advance `end_ptr`; the
+//           final `string(start_ptr, end_ptr + 1)` slice necessarily re-includes whatever sits
+//           between the two pointers, whitespace or not. `quote`/`last_char_delimiter` reproduce
+//           `ExpandString`'s own quoted-substring carve-out (a delimiter inside a matching, unescaped
+//           `'"'`/`'\''` pair does not split); never actually reachable from a well-formed numeric
+//           colour-function argument, kept anyway because "the pin never uses it here" and "the pin
+//           cannot behave this way here" are different claims, and only the second licenses dropping
+//           code from an independent re-derivation.
+//     `ignore_repeated_delimiters` reproduces the two call sites' own opposite settings
+//     (`is_comma_separated ? ',' : ' '`, `!is_comma_separated` -- `:542-543`): comma-delimited
+//     (rgb/rgba/hsl/hsla) does NOT ignore repeats, so e.g. two adjacent commas push an EMPTY token;
+//     space-delimited (lab/lch/oklab/oklch) DOES ignore repeats, so repeated whitespace between
+//     tokens never manufactures an empty one -- which is *why* the four space-delimited
+//     `parse_functional_*` callers below never guard a `.back()` read with `.empty()` first (the
+//     pin's own lab/oklab branches don't either, `:364`/`:467` etc.): every token this function
+//     hands them under space-delimiting is, by this construction, non-empty.
+// PT: Espelha o `GetColourFunctionValues()` (`PropertyParserColour.cpp:534-546`) fundido com a
+//     sobrecarga de delimitador-único do `StringUtilities::ExpandString()`
+//     (`StringUtilities.cpp:242-291`) que ele chama, byte a byte -- incluindo os dois comportamentos
+//     fáceis de perder numa primeira leitura que IMPORTAM pra uma fixture hostil/de-borda, não só
+//     pro caminho "normal":
+//       (1) o intervalo de argumento vai do PRIMEIRO '(' até o ÚLTIMO ')' no token cru inteiro; uma
+//           função sem fechar (nenhum ')' em lugar nenhum) é ACEITA, correndo até o fim-de-string
+//           (o próprio `value.rfind(')') - begin_values` de `:536-543` -- `rfind` devolvendo `npos`
+//           pra "nenhum ')'" faz a subtração dar underflow pra um `size_t` enorme, e o próprio
+//           clamping-de-contagem do `substr` reinterpreta isso em silêncio como "resto da string",
+//           nunca lançando exceção);
+//       (2) espaço-em-branco (CR/LF/espaço/tab, `color_fn_is_whitespace()` logo acima) é cortado na
+//           borda INICIAL/FINAL de um token mas PRESERVADO se embutido entre dois caracteres
+//           não-espaço dentro de UM token -- o próprio `start_ptr`/`end_ptr` do `ExpandString` são
+//           ponteiros pro buffer ORIGINAL, e um char de espaço simplesmente não avança o `end_ptr`;
+//           o slice final `string(start_ptr, end_ptr + 1)` necessariamente reinclui o que estiver
+//           entre os dois ponteiros, espaço ou não. `quote`/`last_char_delimiter` reproduzem o
+//           próprio recorte-de-substring-entre-aspas do `ExpandString` (um delimitador dentro de um
+//           par `'"'`/`'\''` casado e não-escapado não separa); nunca de fato alcançável a partir de
+//           um argumento numérico de função-de-cor bem-formado, mantido mesmo assim porque "o pin
+//           nunca usa isto aqui" e "o pin não PODE se comportar assim aqui" são afirmações
+//           diferentes, e só a segunda licencia tirar código de uma re-derivação independente.
+//     `ignore_repeated_delimiters` reproduz os próprios ajustes opostos dos dois call sites
+//     (`is_comma_separated ? ',' : ' '`, `!is_comma_separated` -- `:542-543`): delimitado-por-vírgula
+//     (rgb/rgba/hsl/hsla) NÃO ignora repetição, então ex. duas vírgulas adjacentes empurram um token
+//     VAZIO; delimitado-por-espaço (lab/lch/oklab/oklch) IGNORA repetição, então espaço-em-branco
+//     repetido entre tokens nunca fabrica um vazio -- que é *por que* os quatro chamadores
+//     `parse_functional_*` delimitados-por-espaço abaixo nunca guardam uma leitura de `.back()` com
+//     `.empty()` primeiro (os próprios ramos lab/oklab do pin também não, `:364`/`:467` etc.): todo
+//     token que esta função entrega a eles sob delimitação-por-espaço é, por esta construção,
+//     não-vazio.
+bool split_color_function_values(const std::string& raw, char delimiter, bool ignore_repeated_delimiters,
+                                 std::vector<std::string>& out) {
+  out.clear();
+  const std::size_t open = raw.find('(');
+  if (open == std::string::npos) return false;
+  const std::size_t begin = open + 1;
+  const std::size_t close = raw.rfind(')');
+  const std::string span = (close == std::string::npos || close < begin) ? raw.substr(begin) : raw.substr(begin, close - begin);
+
+  char quote = 0;
+  bool last_char_delimiter = true;
+  std::size_t start = std::string::npos;
+  std::size_t last_nonws = std::string::npos;
+  for (std::size_t i = 0; i < span.size(); ++i) {
+    const char c = span[i];
+    if (last_char_delimiter && quote == 0 && (c == '"' || c == '\'')) {
+      quote = c;
+    } else if (quote != 0 && c == quote && !(i > 0 && span[i - 1] == '\\')) {
+      quote = 0;
+    } else if (c == delimiter && quote == 0) {
+      if (start != std::string::npos) {
+        out.push_back(span.substr(start, last_nonws - start + 1));
+      } else if (!ignore_repeated_delimiters) {
+        out.emplace_back();
+      }
+      last_char_delimiter = true;
+      start = std::string::npos;
+    } else if (!color_fn_is_whitespace(c) || quote != 0) {
+      if (start == std::string::npos) start = i;
+      last_nonws = i;
+      last_char_delimiter = false;
+    }
+  }
+  if (start != std::string::npos) {
+    out.push_back(span.substr(start, last_nonws - start + 1));
+  }
+  return true;
+}
+
+// EN: The exact `(byte)(Math::Clamp((int)(v * 255.0f), 0, 255))` step the pin repeats identically
+//     three times, once per functional form that computes through a `[0,1]`-normalised RGBA array
+//     rather than through 0-255 integers directly (HSLA -- `:326-327`; CIELAB -- `:429-430`; Oklab
+//     -- `:528-529`). One shared helper here, not three copies, because the FORMULA is being
+//     transcribed once (the pin repeating itself three times is an artifact of it not sharing a
+//     helper across three originally-separate functions, not three independently-decided facts).
+//     `(int)(v * 255.0f)` truncates toward zero (a C-style cast from `float` to `int`, same as
+//     `static_cast<int>`), THEN clamps -- not the other way around, so e.g. `v == 1.5f` truncates to
+//     `382` before clamping to `255`, never rounds first.
+// PT: O próprio passo `(byte)(Math::Clamp((int)(v * 255.0f), 0, 255))` que o pin repete
+//     identicamente três vezes, uma por forma funcional que computa através de um array RGBA
+//     normalizado `[0,1]` em vez de por inteiros 0-255 diretamente (HSLA -- `:326-327`; CIELAB --
+//     `:429-430`; Oklab -- `:528-529`). Um helper compartilhado aqui, não três cópias, porque a
+//     FÓRMULA está sendo transcrita uma vez (o pin se repetir três vezes é artefato de ele não
+//     compartilhar um helper entre três funções originalmente separadas, não três fatos decididos
+//     independentemente). `(int)(v * 255.0f)` trunca em direção a zero (cast estilo-C de `float`
+//     pra `int`, igual `static_cast<int>`), DEPOIS clampa -- não o contrário, então ex. `v == 1.5f`
+//     trunca pra `382` antes de clampar pra `255`, nunca arredonda primeiro.
+Rml::byte quantize_unit_channel(float v) {
+  const int truncated = static_cast<int>(v * 255.0f);
+  if (truncated < 0) return 0;
+  if (truncated > 255) return 255;
+  return static_cast<Rml::byte>(truncated);
+}
+
+// EN: `rgb()`/`rgba()`'s own per-component clamp (`PropertyParserColour.cpp:286`,
+//     `Math::Clamp(component, 0, 255)`) -- `component` here is ALREADY a 0..255-scaled `int` (an
+//     `atoi()` integer or a `%`-scaled `atof() * 2.55f` truncated to `int`, `:277-284`), so this is
+//     an int-domain SATURATING clamp, not `quantize_unit_channel()`'s own float-domain one just
+//     above (the two are not interchangeable: `quantize_unit_channel(1.5f)` and
+//     `clamp_component_0_255(382)` reach the same `255` result through different domains, but
+//     `clamp_component_0_255` never multiplies by 255 -- its caller already did, in `%`-branch form
+//     or not).
+// PT: O próprio clamp por-componente do `rgb()`/`rgba()` (`PropertyParserColour.cpp:286`,
+//     `Math::Clamp(component, 0, 255)`) -- `component` aqui JÁ é um `int` escalado 0..255 (um
+//     inteiro de `atoi()` ou um `atof() * 2.55f` escalado-por-`%` truncado pra `int`, `:277-284`),
+//     então isto é um clamp SATURANTE em domínio-inteiro, não o de domínio-float do próprio
+//     `quantize_unit_channel()` logo acima (os dois não são intercambiáveis:
+//     `quantize_unit_channel(1.5f)` e `clamp_component_0_255(382)` chegam ao mesmo resultado `255`
+//     por domínios diferentes, mas `clamp_component_0_255` nunca multiplica por 255 -- quem chama já
+//     fez isso, em forma de ramo-`%` ou não).
+Rml::byte clamp_component_0_255(int component) {
+  if (component < 0) return 0;
+  if (component > 255) return 255;
+  return static_cast<Rml::byte>(component);
+}
+
+// EN: `HSL_f`, the pin's own HSL->RGB helper (`PropertyParserColour.cpp:11-16`), reference cited by
+//     the pin itself: https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative . `n` selects
+//     which of R(0)/G(8)/B(4) this call computes; `std::min({...})` is the 3-argument
+//     initializer_list overload (`<algorithm>`, already included above).
+// PT: `HSL_f`, o próprio helper HSL->RGB do pin (`PropertyParserColour.cpp:11-16`), referência
+//     citada pelo próprio pin: https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative .
+//     `n` seleciona qual de R(0)/G(8)/B(4) esta chamada computa; `std::min({...})` é a sobrecarga de
+//     3 argumentos via initializer_list (`<algorithm>`, já incluído acima).
+float hsl_f(float h, float s, float l, float n) {
+  const float k = std::fmod(n + h * (1.0f / 30.0f), 12.0f);
+  const float a = s * std::min(l, 1.0f - l);
+  return l - a * std::max(-1.0f, std::min({k - 3.0f, 9.0f - k, 1.0f}));
+}
+
+// EN: `HSLAToRGBA` (`PropertyParserColour.cpp:19-36`). The `s == 0.0f` branch
+//     (`vals[0] = vals[1] = vals[2];`, right-to-left assignment: S := L first, then H := that same
+//     L) is mathematically redundant -- `hsl_f()`'s own `a = s * ...` already zeroes out to `l` for
+//     `s == 0` through the general formula below -- but transcribed anyway rather than "simplified
+//     away": an independent re-derivation that silently drops a branch because it can PROVE the
+//     branch unreachable-by-effect is exactly the kind of "improvement" that turns into an
+//     undetected divergence the day the proof's own premise quietly stops holding.
+// PT: `HSLAToRGBA` (`PropertyParserColour.cpp:19-36`). O ramo `s == 0.0f`
+//     (`vals[0] = vals[1] = vals[2];`, atribuição direita-pra-esquerda: S := L primeiro, depois
+//     H := esse mesmo L) é matematicamente redundante -- o próprio `a = s * ...` do `hsl_f()` já
+//     zera pra `l` quando `s == 0` através da fórmula geral abaixo -- mas transcrito mesmo assim em
+//     vez de "simplificado embora": uma re-derivação independente que descarta um ramo em silêncio
+//     porque consegue PROVAR o ramo inalcançável-por-efeito é exatamente o tipo de "melhoria" que
+//     vira divergência não-detectada no dia em que a própria premissa da prova parar de valer em
+//     silêncio.
+void hsla_to_rgba(std::array<float, 4>& vals) {
+  if (vals[1] == 0.0f) {
+    vals[0] = vals[1] = vals[2];
+  } else {
+    float h = std::fmod(vals[0], 360.0f);
+    if (h < 0.0f) h += 360.0f;
+    const float s = vals[1];
+    const float l = vals[2];
+    vals[0] = hsl_f(h, s, l, 0.0f);
+    vals[1] = hsl_f(h, s, l, 8.0f);
+    vals[2] = hsl_f(h, s, l, 4.0f);
+  }
+}
+
+// EN: `InverseSRGBNonlinearTransfer` (`PropertyParserColour.cpp:39-42`), reference cited by the
+//     pin: https://en.wikipedia.org/wiki/SRGB#Definition . Shared by BOTH `cielab_to_rgba()` and
+//     `oklab_to_rgba()` below, same as in the pin (`:74-76` and `:110-112` both call this one
+//     function) -- linear-light sRGB in, gamma-encoded sRGB out.
+// PT: `InverseSRGBNonlinearTransfer` (`PropertyParserColour.cpp:39-42`), referência citada pelo
+//     pin: https://en.wikipedia.org/wiki/SRGB#Definition . Compartilhada pelos DOIS
+//     `cielab_to_rgba()` e `oklab_to_rgba()` abaixo, igual no pin (`:74-76` e `:110-112` chamam a
+//     mesma função) -- sRGB linear-light entra, sRGB gama-codificado sai.
+float inverse_srgb_nonlinear_transfer(float channel) {
+  return channel > 0.0031308f ? 1.055f * std::pow(channel, 1.0f / 2.4f) - 0.055f : 12.92f * channel;
+}
+
+// EN: `CIELABToRGBA` (`PropertyParserColour.cpp:45-77`), reference cited by the pin:
+//     https://en.wikipedia.org/wiki/CIELAB_color_space#Converting_between_CIELAB_and_CIE_XYZ_coordinates .
+//     `values` in: `[L(0..100), a(-160..160), b(-160..160), alpha(0..1)]`; out: `[r,g,b]` overwritten
+//     in-place, `alpha` (index 3) untouched (CIELAB has no alpha channel of its own -- the pin never
+//     touches `values[3]` in this function either).
+//     🔴 LEGACY f-inverse, not CSS Color 4's own δ = 6/29 formulation -- transcribed AS COMPUTED, not
+//     algebraically simplified: the pin compares the CUBE of each `_double_prime` term against
+//     `0.008856f` (mathematically equivalent to comparing the term itself against
+//     `cbrt(0.008856) ~= 6/29`, since cubing is monotonic for the relevant sign, but NOT
+//     necessarily float-identical -- cubing-then-comparing and comparing-then-implying are two
+//     different float operations that can round differently at the threshold boundary). The D65
+//     multiplicands (`0.95047, 1.0, 1.08883`, `:58`) and the XYZ->sRGB matrix (`:64-68`) are
+//     reproduced as bare per-term multiply-adds rather than via a `Vector3f`/matrix type this file
+//     has no equivalent for -- same nine multiplies, same three sums, same associativity (left to
+//     right, matching `xyz_to_srgb_matrix[row][0]*x + [row][1]*y + [row][2]*z`'s own left-to-right
+//     evaluation, since floating-point addition is not associative and the exact grouping is part of
+//     what "byte-identical" means here).
+// PT: `CIELABToRGBA` (`PropertyParserColour.cpp:45-77`), referência citada pelo pin:
+//     https://en.wikipedia.org/wiki/CIELAB_color_space#Converting_between_CIELAB_and_CIE_XYZ_coordinates .
+//     `values` de entrada: `[L(0..100), a(-160..160), b(-160..160), alpha(0..1)]`; saída: `[r,g,b]`
+//     sobrescritos in-place, `alpha` (índice 3) intocado (CIELAB não tem canal alfa próprio -- o
+//     próprio pin também nunca toca `values[3]` nesta função).
+//     🔴 f-inverso LEGACY, não a própria formulação δ = 6/29 do CSS Color 4 -- transcrito COMO
+//     COMPUTADO, não simplificado algebricamente: o pin compara o CUBO de cada termo
+//     `_double_prime` contra `0.008856f` (matematicamente equivalente a comparar o próprio termo
+//     contra `cbrt(0.008856) ~= 6/29`, já que cubar é monótono pro sinal relevante, mas NÃO
+//     necessariamente float-idêntico -- cubar-depois-comparar e comparar-depois-implicar são duas
+//     operações de float diferentes que podem arredondar diferente na fronteira do limiar). Os
+//     multiplicandos D65 (`0.95047, 1.0, 1.08883`, `:58`) e a matriz XYZ->sRGB (`:64-68`) são
+//     reproduzidos como multiply-adds nus por-termo em vez de via um tipo `Vector3f`/matriz que este
+//     arquivo não tem equivalente -- mesmas nove multiplicações, mesmas três somas, mesma
+//     associatividade (esquerda pra direita, casando com a própria avaliação esquerda-pra-direita de
+//     `xyz_to_srgb_matrix[row][0]*x + [row][1]*y + [row][2]*z`, já que soma de ponto flutuante não é
+//     associativa e o agrupamento exato é parte do que "byte-idêntico" significa aqui).
+void cielab_to_rgba(std::array<float, 4>& values) {
+  const float y_double_prime = (values[0] + 16.0f) / 116.0f;
+  const float x_double_prime = (values[1] / 500.0f) + y_double_prime;
+  const float z_double_prime = y_double_prime - (values[2] / 200.0f);
+
+  const float x_cubed = x_double_prime * x_double_prime * x_double_prime;
+  const float y_cubed = y_double_prime * y_double_prime * y_double_prime;
+  const float z_cubed = z_double_prime * z_double_prime * z_double_prime;
+  const float x_prime = x_cubed > 0.008856f ? x_cubed : (x_double_prime - (16.0f / 116.0f)) / 7.787f;
+  const float y_prime = y_cubed > 0.008856f ? y_cubed : (y_double_prime - (16.0f / 116.0f)) / 7.787f;
+  const float z_prime = z_cubed > 0.008856f ? z_cubed : (z_double_prime - (16.0f / 116.0f)) / 7.787f;
+
+  const float x = x_prime * 0.95047f;
+  const float y = y_prime * 1.0f;
+  const float z = z_prime * 1.08883f;
+
+  const float r = 3.2404548f * x + -1.5371389f * y + -0.4985315f * z;
+  const float g = -0.9692664f * x + 1.8760109f * y + 0.0415561f * z;
+  const float b = 0.0556434f * x + -0.2040259f * y + 1.0572252f * z;
+
+  values[0] = clampf(inverse_srgb_nonlinear_transfer(r), 0.0f, 1.0f);
+  values[1] = clampf(inverse_srgb_nonlinear_transfer(g), 0.0f, 1.0f);
+  values[2] = clampf(inverse_srgb_nonlinear_transfer(b), 0.0f, 1.0f);
+}
+
+// EN: `OklabToRGBA` (`PropertyParserColour.cpp:80-113`), references cited by the pin:
+//     https://en.wikipedia.org/wiki/Oklab_color_space#Conversions_between_color_spaces and
+//     https://bottosson.github.io/posts/oklab/ . Same bare-multiply-add transcription discipline as
+//     `cielab_to_rgba()` above (Ottosson's own Oklab->LMS' matrix, `:82-86`, then a per-channel cube,
+//     then the LMS->linear-sRGB matrix, `:100-104`), same shared `inverse_srgb_nonlinear_transfer()`
+//     for the final gamma step, `values[3]` (alpha) equally untouched.
+// PT: `OklabToRGBA` (`PropertyParserColour.cpp:80-113`), referências citadas pelo pin:
+//     https://en.wikipedia.org/wiki/Oklab_color_space#Conversions_between_color_spaces e
+//     https://bottosson.github.io/posts/oklab/ . Mesma disciplina de transcrição multiply-add nua do
+//     `cielab_to_rgba()` acima (a própria matriz Oklab->LMS' de Ottosson, `:82-86`, depois um cubo
+//     por-canal, depois a matriz LMS->sRGB-linear, `:100-104`), mesmo
+//     `inverse_srgb_nonlinear_transfer()` compartilhado pro passo final de gama, `values[3]` (alfa)
+//     igualmente intocado.
+void oklab_to_rgba(std::array<float, 4>& values) {
+  const float lightness = values[0];
+  const float a_axis = values[1];
+  const float b_axis = values[2];
+
+  const float l_prime = 1.0f * lightness + 0.3963377774f * a_axis + 0.2158037573f * b_axis;
+  const float m_prime = 1.0f * lightness + -0.1055613458f * a_axis + -0.0638541728f * b_axis;
+  const float s_prime = 1.0f * lightness + -0.0894841775f * a_axis + -1.2914855480f * b_axis;
+
+  const float l = l_prime * l_prime * l_prime;
+  const float m = m_prime * m_prime * m_prime;
+  const float s = s_prime * s_prime * s_prime;
+
+  const float r = 4.0767416621f * l + -3.3077115913f * m + 0.2309699292f * s;
+  const float g = -1.2684380046f * l + 2.6097574011f * m + -0.3413193965f * s;
+  const float b = -0.0041960863f * l + -0.7034186147f * m + 1.7076147010f * s;
+
+  values[0] = clampf(inverse_srgb_nonlinear_transfer(r), 0.0f, 1.0f);
+  values[1] = clampf(inverse_srgb_nonlinear_transfer(g), 0.0f, 1.0f);
+  values[2] = clampf(inverse_srgb_nonlinear_transfer(b), 0.0f, 1.0f);
+}
+
+// EN: `ParseRGBColour` (`PropertyParserColour.cpp:253-290`). `rgb`/`rgba` distinguished by
+//     `raw[3] == 'a'` (case-sensitive, `:261`) -- `rgb` gets a synthesised `"255"` alpha token
+//     (`:271`, an INTEGER-string default, not `1.0`). Each of the 4 channels: `%` suffix ->
+//     `atof(strip %) * 255/100` truncated to `int` (`:281`); otherwise `atoi()` (`:284`, garbage or
+//     an empty comma-run token both -> `0`). Saturating `[0,255]` clamp per channel
+//     (`clamp_component_0_255()` above == `:286`'s own `Math::Clamp(component, 0, 255)`).
+// PT: `ParseRGBColour` (`PropertyParserColour.cpp:253-290`). `rgb`/`rgba` distinguidos por
+//     `raw[3] == 'a'` (case-sensitive, `:261`) -- `rgb` ganha um token de alfa sintetizado `"255"`
+//     (`:271`, um default em string INTEIRA, não `1.0`). Cada um dos 4 canais: sufixo `%` ->
+//     `atof(tira %) * 255/100` truncado pra `int` (`:281`); senão `atoi()` (`:284`, lixo ou um token
+//     vazio de corrida-de-vírgulas ambos -> `0`). Clamp `[0,255]` saturante por canal
+//     (`clamp_component_0_255()` acima == o próprio `Math::Clamp(component, 0, 255)` de `:286`).
+bool parse_functional_rgb(const std::string& raw, Rml::Colourb& out) {
+  std::vector<std::string> tokens;
+  if (!split_color_function_values(raw, ',', false, tokens)) return false;
+
+  const bool has_alpha = raw.size() > 3 && raw[3] == 'a';
+  if (has_alpha) {
+    if (tokens.size() != 4) return false;
+  } else {
+    if (tokens.size() != 3) return false;
+    tokens.push_back("255");
+  }
+
+  int channel[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; ++i) {
+    const std::string& t = tokens[static_cast<std::size_t>(i)];
+    if (!t.empty() && t.back() == '%') {
+      channel[i] = static_cast<int>(static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str())) * (255.0f / 100.0f));
+    } else {
+      channel[i] = std::atoi(t.c_str());
+    }
+  }
+  out = Rml::Colourb(clamp_component_0_255(channel[0]), clamp_component_0_255(channel[1]), clamp_component_0_255(channel[2]),
+                     clamp_component_0_255(channel[3]));
+  return true;
+}
+
+// EN: `ParseHSLColour` (`PropertyParserColour.cpp:292-330`). `hsl`/`hsla` distinguished the same way
+//     as RGB (`raw[3] == 'a'`, `:300`); `hsl` synthesises `"1.0"` alpha (`:310` -- a FLOAT-string
+//     default this time, unlike RGB's `"255"`). H (index 0) and A (index 3) parsed via bare
+//     `atof()`, no `%` handling at all (`:317`) -- a `%`-suffixed H or A silently parses only its
+//     leading numeral (`atof` stops at the first non-numeric byte), never an error, never divided.
+//     S and L (1, 2) instead REQUIRE a trailing `%` or the WHOLE parse fails (`:320-323`, `else
+//     return false` -- unlike every other percent-or-number branch in this file's own `ESC-6` block,
+//     this is the one case where omitting `%` is a hard error, not a silent alternate reading).
+// PT: `ParseHSLColour` (`PropertyParserColour.cpp:292-330`). `hsl`/`hsla` distinguidos do mesmo jeito
+//     que RGB (`raw[3] == 'a'`, `:300`); `hsl` sintetiza alfa `"1.0"` (`:310` -- um default em string
+//     FLOAT desta vez, diferente do `"255"` do RGB). H (índice 0) e A (índice 3) parseados via
+//     `atof()` nu, sem tratamento de `%` nenhum (`:317`) -- um H ou A com sufixo `%` parseia em
+//     silêncio só o numeral líder (`atof` para no primeiro byte não-numérico), nunca um erro, nunca
+//     dividido. S e L (1, 2) em vez disso EXIGEM um `%` final ou o parse INTEIRO falha (`:320-323`,
+//     `else return false` -- diferente de todo outro ramo percentual-ou-número deste próprio bloco
+//     `ESC-6`, este é o único caso em que omitir `%` é erro rígido, não uma leitura alternativa
+//     silenciosa).
+bool parse_functional_hsl(const std::string& raw, Rml::Colourb& out) {
+  std::vector<std::string> tokens;
+  if (!split_color_function_values(raw, ',', false, tokens)) return false;
+
+  const bool has_alpha = raw.size() > 3 && raw[3] == 'a';
+  if (has_alpha) {
+    if (tokens.size() != 4) return false;
+  } else {
+    if (tokens.size() != 3) return false;
+    tokens.push_back("1.0");
+  }
+
+  std::array<float, 4> vals{};
+  for (int i : {0, 3}) {
+    vals[static_cast<std::size_t>(i)] = static_cast<float>(std::atof(tokens[static_cast<std::size_t>(i)].c_str()));
+  }
+  for (int i : {1, 2}) {
+    const std::string& t = tokens[static_cast<std::size_t>(i)];
+    if (!t.empty() && t.back() == '%') {
+      vals[static_cast<std::size_t>(i)] = static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str())) * (1.0f / 100.0f);
+    } else {
+      return false;
+    }
+  }
+
+  hsla_to_rgba(vals);
+  out = Rml::Colourb(quantize_unit_channel(vals[0]), quantize_unit_channel(vals[1]), quantize_unit_channel(vals[2]),
+                     quantize_unit_channel(vals[3]));
+  return true;
+}
+
+// EN: `ParseCIELABColour` (`PropertyParserColour.cpp:332-433`), serves BOTH `lab()` and `lch()` --
+//     the pin's own single function, re-checking `raw.substr(0, 3) == "lab"` internally (`:377`)
+//     rather than receiving it as a parameter, transcribed the same way here. Space-delimited
+//     (`split_color_function_values(raw, ' ', true, tokens)`, mirroring `:336`'s own
+//     `is_comma_separated = false`); a 5th token means alpha was given via `... / <alpha>` -- token
+//     3 MUST be the literal `"/"` or the parse fails (`:342-343`), then token 4 slides into slot 3
+//     (`:345-346`); otherwise exactly 3 tokens with a synthesised `"1.0"` alpha (`:353`).
+//     Lightness(0)/alpha(3): `%` on LIGHTNESS is NOT divided by 100 (a percent literally IS the
+//     0..100 numeral, `:364-366`) -- only `%` on ALPHA divides (`:367-368`, `i == 3` guard); L
+//     clamps `[0,100]`, alpha clamps `[0,1]` (`:373`, `i == 0 ? 100.0f : 1.0f`). `lab()`'s own a/b
+//     axes (1,2): `%` maps `-100%..100%` to `-125..125` (`:387-388`), clamped to the wider,
+//     independent `[-160,160]` "practice" bound (`:393-395` -- the `%` scale bound and the final
+//     clamp bound are two DIFFERENT constants, 125 vs 160, not a typo). `lch()`'s own chroma/hue
+//     instead: chroma `%` maps `0%..100%` to `0..150` (`:406-407`), clamped to `[0,230]`
+//     (`:412-414`); hue has NO `%` handling at all (bare `atof`, `:421`, same "silently reads only
+//     the leading numeral" shape as HSL's own H/A above) and NO clamp, then polar->Cartesian via
+//     `chroma * cos/sin(hue in degrees->radians)` (`:424-425`).
+// PT: `ParseCIELABColour` (`PropertyParserColour.cpp:332-433`), serve `lab()` E `lch()` -- a própria
+//     função única do pin, reconferindo `raw.substr(0, 3) == "lab"` internamente (`:377`) em vez de
+//     receber isso como parâmetro, transcrita do mesmo jeito aqui. Delimitado por espaço
+//     (`split_color_function_values(raw, ' ', true, tokens)`, espelhando o próprio
+//     `is_comma_separated = false` de `:336`); um 5º token significa que alfa foi dado via
+//     `... / <alfa>` -- o token 3 TEM que ser o literal `"/"` ou o parse falha (`:342-343`), depois
+//     o token 4 desliza pro slot 3 (`:345-346`); senão exatamente 3 tokens com um alfa sintetizado
+//     `"1.0"` (`:353`). Luminosidade(0)/alfa(3): `%` na LUMINOSIDADE NÃO é dividido por 100 (um
+//     percentual literalmente É o numeral 0..100, `:364-366`) -- só `%` no ALFA divide (`:367-368`,
+//     guarda `i == 3`); L clampa `[0,100]`, alfa clampa `[0,1]` (`:373`, `i == 0 ? 100.0f : 1.0f`).
+//     Os próprios eixos a/b do `lab()` (1,2): `%` mapeia `-100%..100%` pra `-125..125` (`:387-388`),
+//     clampado pro limite "na prática" mais largo e INDEPENDENTE `[-160,160]` (`:393-395` -- o
+//     limite de escala do `%` e o limite do clamp final são DUAS constantes DIFERENTES, 125 vs 160,
+//     não um erro de digitação). O próprio chroma/hue do `lch()` em vez disso: chroma `%` mapeia
+//     `0%..100%` pra `0..150` (`:406-407`), clampado pra `[0,230]` (`:412-414`); hue não tem
+//     tratamento de `%` nenhum (`atof` nu, `:421`, mesma forma "lê em silêncio só o numeral líder"
+//     do próprio H/A do HSL acima) e nenhum clamp, depois polar->Cartesiano via
+//     `chroma * cos/sin(hue em graus->radianos)` (`:424-425`).
+bool parse_functional_cielab(const std::string& raw, Rml::Colourb& out) {
+  std::vector<std::string> tokens;
+  if (!split_color_function_values(raw, ' ', true, tokens)) return false;
+
+  if (tokens.size() == 5) {
+    if (tokens[3] != "/") return false;
+    tokens[3] = std::move(tokens[4]);
+    tokens.pop_back();
+  } else {
+    if (tokens.size() != 3) return false;
+    tokens.push_back("1.0");
+  }
+
+  std::array<float, 4> lab{};
+  for (int i : {0, 3}) {
+    const std::size_t idx = static_cast<std::size_t>(i);
+    const std::string& t = tokens[idx];
+    if (t == "none") {
+      lab[idx] = 0.0f;
+    } else if (t.back() == '%') {
+      lab[idx] = static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str()));
+      if (i == 3) lab[idx] /= 100.0f;
+    } else {
+      lab[idx] = static_cast<float>(std::atof(t.c_str()));
+    }
+    lab[idx] = clampf(lab[idx], 0.0f, i == 0 ? 100.0f : 1.0f);
+  }
+
+  if (raw.substr(0, 3) == "lab") {
+    for (int i : {1, 2}) {
+      const std::size_t idx = static_cast<std::size_t>(i);
+      const std::string& t = tokens[idx];
+      if (t == "none") {
+        lab[idx] = 0.0f;
+      } else if (t.back() == '%') {
+        lab[idx] = static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str())) / 100.0f * 125.0f;
+      } else {
+        lab[idx] = static_cast<float>(std::atof(t.c_str()));
+      }
+      lab[idx] = clampf(lab[idx], -160.0f, 160.0f);
+    }
+  } else {
+    const std::string& tc = tokens[1];
+    float chroma = 0.0f;
+    if (tc == "none") {
+      chroma = 0.0f;
+    } else if (tc.back() == '%') {
+      chroma = static_cast<float>(std::atof(tc.substr(0, tc.size() - 1).c_str())) / 100.0f * 150.0f;
+    } else {
+      chroma = static_cast<float>(std::atof(tc.c_str()));
+    }
+    chroma = clampf(chroma, 0.0f, 230.0f);
+
+    const std::string& th = tokens[2];
+    const float hue = (th == "none") ? 0.0f : static_cast<float>(std::atof(th.c_str()));
+    const float hue_rad = hue * (3.14159265358979323846f / 180.0f);
+    lab[1] = chroma * std::cos(hue_rad);
+    lab[2] = chroma * std::sin(hue_rad);
+  }
+
+  cielab_to_rgba(lab);
+  out = Rml::Colourb(quantize_unit_channel(lab[0]), quantize_unit_channel(lab[1]), quantize_unit_channel(lab[2]),
+                     quantize_unit_channel(lab[3]));
+  return true;
+}
+
+// EN: `ParseOklabColour` (`PropertyParserColour.cpp:435-532`), serves BOTH `oklab()` and `oklch()`,
+//     structurally identical to `parse_functional_cielab()` above -- SAME slash-alpha/3-or-5-token
+//     rule, SAME "none"/`%`/bare-number three-way per component -- but with every bound rescaled to
+//     Oklab's own `[0,1]`-ish numeric range instead of CIELAB's `[0,100]`-ish one, and, unlike
+//     CIELAB, `%` on LIGHTNESS DOES divide by 100 here (`:467-468` -- a percent maps `0%..100%` to
+//     `0.0..1.0`, the one asymmetry with `parse_functional_cielab()`'s own L-percent branch worth
+//     naming explicitly since it is the easiest byte to get wrong copying one function's shape into
+//     the other's). L/alpha clamp `[0,1]` both (`:472`, vs CIELAB's asymmetric `100` vs `1`).
+//     `oklab()`'s own a/b axes: `%` maps `-100%..100%` to `-0.4..0.4` (`:486-487`), clamped to
+//     `[-0.5,0.5]` (`:492-494`). `oklch()`'s own chroma: `%` maps `0%..100%` to `0..0.4`
+//     (`:505-506`), clamped to `[0,0.5]` (`:511-513`); hue identical shape to CIELAB's own (no `%`,
+//     no clamp, polar->Cartesian, `:515-524`).
+// PT: `ParseOklabColour` (`PropertyParserColour.cpp:435-532`), serve `oklab()` E `oklch()`,
+//     estruturalmente idêntica ao `parse_functional_cielab()` acima -- MESMA regra de
+//     alfa-por-barra/3-ou-5-tokens, MESMO trio "none"/`%`/número-nu por componente -- mas com todo
+//     limite reescalado pra faixa numérica `[0,1]`-ish própria do Oklab em vez da `[0,100]`-ish do
+//     CIELAB, e, diferente do CIELAB, `%` na LUMINOSIDADE aqui DIVIDE por 100 (`:467-468` -- um
+//     percentual mapeia `0%..100%` pra `0.0..1.0`, a única assimetria com o próprio ramo de
+//     L-percentual do `parse_functional_cielab()` que vale nomear explicitamente por ser o byte mais
+//     fácil de errar copiando a forma de uma função pra outra). L/alfa clampam `[0,1]` os dois
+//     (`:472`, vs o `100` contra `1` assimétrico do CIELAB). Os próprios eixos a/b do `oklab()`: `%`
+//     mapeia `-100%..100%` pra `-0.4..0.4` (`:486-487`), clampado pra `[-0.5,0.5]` (`:492-494`). O
+//     próprio chroma do `oklch()`: `%` mapeia `0%..100%` pra `0..0.4` (`:505-506`), clampado pra
+//     `[0,0.5]` (`:511-513`); hue de forma idêntica ao próprio do CIELAB (sem `%`, sem clamp,
+//     polar->Cartesiano, `:515-524`).
+bool parse_functional_oklab(const std::string& raw, Rml::Colourb& out) {
+  std::vector<std::string> tokens;
+  if (!split_color_function_values(raw, ' ', true, tokens)) return false;
+
+  if (tokens.size() == 5) {
+    if (tokens[3] != "/") return false;
+    tokens[3] = std::move(tokens[4]);
+    tokens.pop_back();
+  } else {
+    if (tokens.size() != 3) return false;
+    tokens.push_back("1.0");
+  }
+
+  std::array<float, 4> ok{};
+  for (int i : {0, 3}) {
+    const std::size_t idx = static_cast<std::size_t>(i);
+    const std::string& t = tokens[idx];
+    if (t == "none") {
+      ok[idx] = 0.0f;
+    } else if (t.back() == '%') {
+      ok[idx] = static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str())) / 100.0f;
+    } else {
+      ok[idx] = static_cast<float>(std::atof(t.c_str()));
+    }
+    ok[idx] = clampf(ok[idx], 0.0f, 1.0f);
+  }
+
+  if (raw.substr(0, 5) == "oklab") {
+    for (int i : {1, 2}) {
+      const std::size_t idx = static_cast<std::size_t>(i);
+      const std::string& t = tokens[idx];
+      if (t == "none") {
+        ok[idx] = 0.0f;
+      } else if (t.back() == '%') {
+        ok[idx] = static_cast<float>(std::atof(t.substr(0, t.size() - 1).c_str())) / 100.0f * 0.4f;
+      } else {
+        ok[idx] = static_cast<float>(std::atof(t.c_str()));
+      }
+      ok[idx] = clampf(ok[idx], -0.5f, 0.5f);
+    }
+  } else {
+    const std::string& tc = tokens[1];
+    float chroma = 0.0f;
+    if (tc == "none") {
+      chroma = 0.0f;
+    } else if (tc.back() == '%') {
+      chroma = static_cast<float>(std::atof(tc.substr(0, tc.size() - 1).c_str())) / 100.0f * 0.4f;
+    } else {
+      chroma = static_cast<float>(std::atof(tc.c_str()));
+    }
+    chroma = clampf(chroma, 0.0f, 0.5f);
+
+    const std::string& th = tokens[2];
+    const float hue = (th == "none") ? 0.0f : static_cast<float>(std::atof(th.c_str()));
+    const float hue_rad = hue * (3.14159265358979323846f / 180.0f);
+    ok[1] = chroma * std::cos(hue_rad);
+    ok[2] = chroma * std::sin(hue_rad);
+  }
+
+  oklab_to_rgba(ok);
+  out = Rml::Colourb(quantize_unit_channel(ok[0]), quantize_unit_channel(ok[1]), quantize_unit_channel(ok[2]),
+                     quantize_unit_channel(ok[3]));
+  return true;
+}
+
+// EN: `parse_color_token` -- dispatch mirrors the pin's own `ParseColour`
+//     (`PropertyParserColour.cpp:166-209`) shape exactly: `#` -> hex (unchanged from `ESC-5`);
+//     `rgb`/`hsl`/`lab`-or-`lch`/`oklab`-or-`oklch` (CASE-SENSITIVE prefix checks against the RAW,
+//     un-lowered token, `:178-197`) -> the four `parse_functional_*` entry points above, each
+//     returning false straight through on any internal parse failure -- this dispatch NEVER falls
+//     through to the named-colour lookup after a functional-prefix match, same as the pin's own
+//     if/else-if chain (a failed `ParseRGBColour` etc. `return`s false immediately, `:180-181` etc.,
+//     it does not fall to `:198`'s own `else`); anything else -> `ESC-5`'s own lowercase + named-table
+//     lookup (unchanged).
+// PT: `parse_color_token` -- o despacho espelha a forma exata do próprio `ParseColour` do pin
+//     (`PropertyParserColour.cpp:166-209`): `#` -> hex (inalterado desde a `ESC-5`);
+//     `rgb`/`hsl`/`lab`-ou-`lch`/`oklab`-ou-`oklch` (checagens de prefixo CASE-SENSITIVE contra o
+//     token CRU, não-minusculizado, `:178-197`) -> os quatro pontos de entrada `parse_functional_*`
+//     acima, cada um devolvendo false direto em qualquer falha de parse interna -- este despacho
+//     NUNCA cai pro lookup de nome depois de um prefixo funcional casar, igual a própria cadeia
+//     if/else-if do pin (um `ParseRGBColour` etc. que falha devolve false imediatamente, `:180-181`
+//     etc., não cai pro próprio `else` de `:198`); qualquer outra coisa -> o próprio lookup
+//     minusculizado + tabela nomeada da `ESC-5` (inalterado).
 bool parse_color_token(const std::string& raw, Rml::Colourb& out) {
   auto hexval = [](char c) -> int {
     if (c >= '0' && c <= '9') return c - '0';
@@ -812,45 +1451,52 @@ bool parse_color_token(const std::string& raw, Rml::Colourb& out) {
     return -1;
   };
   if (raw.empty()) return false;
-  if (raw[0] != '#') {
-    std::string lowered = raw;
-    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if`, same reasoning/precedent as this
-    //     repo's own sibling fix in `value_compute.cpp`'s own `parse_color()` (`ESC-5`,
-    //     identically-shaped independent table lookup).
-    // PT: `useStlAlgorithm` (cppcheck) -- `std::find_if`, mesmo racional/precedente do próprio
-    //     conserto irmão no `parse_color()` do value_compute.cpp (`ESC-5`, lookup de tabela
-    //     independente com a mesma forma).
-    const auto* match =
-        std::find_if(std::begin(kNamedColorTokenTable), std::end(kNamedColorTokenTable),
-                     [&lowered](const NamedColorTokenEntry& entry) { return lowered == entry.name; });
-    if (match != std::end(kNamedColorTokenTable)) {
-      out = Rml::Colourb(match->r, match->g, match->b, match->a);
+
+  if (raw[0] == '#') {
+    const std::string hex = raw.substr(1);
+    auto digit_pair = [&](std::size_t i) -> int {
+      const int hi = hexval(hex[i]);
+      const int lo = hexval(hex[i + 1]);
+      if (hi < 0 || lo < 0) return -1;
+      return hi * 16 + lo;
+    };
+    if (hex.size() == 3 || hex.size() == 4) {
+      int r = hexval(hex[0]), g = hexval(hex[1]), b = hexval(hex[2]);
+      int a = (hex.size() == 4) ? hexval(hex[3]) : 15;
+      if (r < 0 || g < 0 || b < 0 || a < 0) return false;
+      out = Rml::Colourb(static_cast<Rml::byte>(r * 17), static_cast<Rml::byte>(g * 17), static_cast<Rml::byte>(b * 17),
+                         static_cast<Rml::byte>(a * 17));
+      return true;
+    }
+    if (hex.size() == 6 || hex.size() == 8) {
+      const int r = digit_pair(0), g = digit_pair(2), b = digit_pair(4);
+      const int a = (hex.size() == 8) ? digit_pair(6) : 255;
+      if (r < 0 || g < 0 || b < 0 || a < 0) return false;
+      out = Rml::Colourb(static_cast<Rml::byte>(r), static_cast<Rml::byte>(g), static_cast<Rml::byte>(b), static_cast<Rml::byte>(a));
       return true;
     }
     return false;
   }
-  const std::string hex = raw.substr(1);
-  auto digit_pair = [&](std::size_t i) -> int {
-    const int hi = hexval(hex[i]);
-    const int lo = hexval(hex[i + 1]);
-    if (hi < 0 || lo < 0) return -1;
-    return hi * 16 + lo;
-  };
-  if (hex.size() == 3 || hex.size() == 4) {
-    int r = hexval(hex[0]), g = hexval(hex[1]), b = hexval(hex[2]);
-    int a = (hex.size() == 4) ? hexval(hex[3]) : 15;
-    if (r < 0 || g < 0 || b < 0 || a < 0) return false;
-    out = Rml::Colourb(static_cast<Rml::byte>(r * 17), static_cast<Rml::byte>(g * 17), static_cast<Rml::byte>(b * 17),
-                       static_cast<Rml::byte>(a * 17));
-    return true;
-  }
-  if (hex.size() == 6 || hex.size() == 8) {
-    const int r = digit_pair(0), g = digit_pair(2), b = digit_pair(4);
-    const int a = (hex.size() == 8) ? digit_pair(6) : 255;
-    if (r < 0 || g < 0 || b < 0 || a < 0) return false;
-    out = Rml::Colourb(static_cast<Rml::byte>(r), static_cast<Rml::byte>(g), static_cast<Rml::byte>(b), static_cast<Rml::byte>(a));
+
+  if (raw.substr(0, 3) == "rgb") return parse_functional_rgb(raw, out);
+  if (raw.substr(0, 3) == "hsl") return parse_functional_hsl(raw, out);
+  if (raw.substr(0, 3) == "lab" || raw.substr(0, 3) == "lch") return parse_functional_cielab(raw, out);
+  if (raw.substr(0, 5) == "oklab" || raw.substr(0, 5) == "oklch") return parse_functional_oklab(raw, out);
+
+  std::string lowered = raw;
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if`, same reasoning/precedent as this
+  //     repo's own sibling fix in `value_compute.cpp`'s own `parse_color()` (`ESC-5`,
+  //     identically-shaped independent table lookup).
+  // PT: `useStlAlgorithm` (cppcheck) -- `std::find_if`, mesmo racional/precedente do próprio
+  //     conserto irmão no `parse_color()` do value_compute.cpp (`ESC-5`, lookup de tabela
+  //     independente com a mesma forma).
+  const auto* match =
+      std::find_if(std::begin(kNamedColorTokenTable), std::end(kNamedColorTokenTable),
+                   [&lowered](const NamedColorTokenEntry& entry) { return lowered == entry.name; });
+  if (match != std::end(kNamedColorTokenTable)) {
+    out = Rml::Colourb(match->r, match->g, match->b, match->a);
     return true;
   }
   return false;

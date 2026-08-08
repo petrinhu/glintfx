@@ -684,6 +684,165 @@ void test_9_2_1_auto_spacing_rules_3_and_4(Harness& h) {
   h.engine.update();
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-6` -- the 8 functional colour notations (`rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/
+//     `lch()`/`oklab()`/`oklch()`), side A only (`glintfx/src/rml/rcss_dump.cpp`'s own independent
+//     `parse_color_token` mini-parser, the ONLY place this side parses a color from raw text --
+//     used exclusively by `polygon()`'s own `<fill>` sub-property, `decorator_polygon.cpp:786`'s
+//     own passthrough "string" parser deferring real color parsing to
+//     `polygon_fill_value()`/`parse_color_token()`). Every case below routes through
+//     `decorator: polygon(<sides>, <fill>, <rotation>)` (rotation ALWAYS given explicitly, `0deg`
+//     -- this test is not about the sub-property's own optional-with-default behaviour, unrelated
+//     to `ESC-6`'s own scope, so it is pinned rather than left to a default this test does not
+//     otherwise exercise).
+//
+//     GOLDEN PROVENANCE -- per `ADR-0020`'s own independence discipline, every expected value below
+//     was computed by a THIRD, independent transcription of the pin
+//     (`examples/RmlUi/Source/Core/PropertyParserColour.cpp`, 548 lines, read in full for this
+//     task): a standalone Python/`numpy.float32` calculator
+//     (`/var/tmp/builds/.../scratchpad/esc6_golden_calc.py`, not committed), forcing `float32`
+//     rounding at every intermediate step to mirror C++ `float` precision, NEVER reading this
+//     file's own `rcss_dump.cpp` implementation nor side B's
+//     (`glintfx/src/uix/style/value_compute.cpp`). Two disjoint trust tiers, both documented
+//     per-case below:
+//       (1) MATHEMATICALLY EXACT anchors -- every intermediate value is provably `0.0f`/`1.0f`/a
+//           small exact integer by IEEE754 zero-propagation (adding/subtracting/multiplying by an
+//           EXACT `0.0f` or `1.0f` never rounds), so these do not depend on trusting the
+//           calculator's `pow`/`cos`/`sin`/`fmod` to match glibc's `powf`/`cosf`/`sinf`/`fmodf`
+//           bit-for-bit -- only on IEEE754's OWN mandated exactness for `+`,`-`,`*`,`/`, which every
+//           conforming implementation shares.
+//       (2) NON-TRIVIAL anchors (real matrix multiplies, real `pow`/`cos`/`sin`) -- chosen with a
+//           wide truncation-boundary margin (every computed channel comfortably inside its
+//           `[k/255, (k+1)/255)` bucket, verified by inspecting the calculator's own raw `float32`
+//           output before truncation, not merely trusted) EXCEPT where called out below as
+//           deliberately testing the truncation boundary itself (`#j`, mirrors this file's own
+//           `test_15_4`/`test_own_finding_*` precedent of pinning an exact, verified boundary
+//           rather than a comfortable one).
+// PT: `ESC-6` -- as 8 notações funcionais de cor (`rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/
+//     `lch()`/`oklab()`/`oklch()`), só lado A (o próprio mini-parser independente
+//     `parse_color_token` do `glintfx/src/rml/rcss_dump.cpp`, o ÚNICO lugar em que este lado
+//     parseia cor de texto cru -- usado exclusivamente pela própria sub-propriedade `<fill>` do
+//     `polygon()`, o próprio parser passthrough "string" do `decorator_polygon.cpp:786` adiando o
+//     parse de cor de fato pro `polygon_fill_value()`/`parse_color_token()`). Todo caso abaixo passa
+//     por `decorator: polygon(<sides>, <fill>, <rotation>)` (rotation SEMPRE dado explícito, `0deg`
+//     -- este teste não é sobre o próprio comportamento opcional-com-default da sub-propriedade,
+//     fora do próprio escopo da `ESC-6`, então é fixado em vez de deixado pro default que este teste
+//     não exercita de outra forma).
+//
+//     PROVENIÊNCIA DO GABARITO -- pela própria disciplina de independência do `ADR-0020`, todo
+//     valor esperado abaixo foi computado por uma TERCEIRA transcrição, independente, do pin
+//     (`examples/RmlUi/Source/Core/PropertyParserColour.cpp`, 548 linhas, lidas por inteiro pra esta
+//     tarefa): uma calculadora standalone Python/`numpy.float32`
+//     (`/var/tmp/builds/.../scratchpad/esc6_golden_calc.py`, não commitada), forçando arredondamento
+//     `float32` a cada passo intermediário pra espelhar a precisão `float` do C++, nunca lendo o
+//     próprio `rcss_dump.cpp` deste arquivo nem o do lado B
+//     (`glintfx/src/uix/style/value_compute.cpp`). Duas camadas de confiança disjuntas, cada uma
+//     documentada por-caso abaixo:
+//       (1) âncoras MATEMATICAMENTE EXATAS -- todo valor intermediário é provadamente `0.0f`/`1.0f`/
+//           um inteiro pequeno exato por propagação-de-zero do IEEE754 (somar/subtrair/multiplicar
+//           por um `0.0f` ou `1.0f` EXATO nunca arredonda), então não dependem de confiar que o
+//           `pow`/`cos`/`sin`/`fmod` da calculadora bate byte a byte com `powf`/`cosf`/`sinf`/`fmodf`
+//           da glibc -- só na própria exatidão mandatada do IEEE754 pra `+`,`-`,`*`,`/`, que toda
+//           implementação conformante compartilha.
+//       (2) âncoras NÃO-TRIVIAIS (multiplicação de matriz de fato, `pow`/`cos`/`sin` de fato) --
+//           escolhidas com margem larga da fronteira de truncamento (todo canal computado
+//           confortavelmente dentro do próprio balde `[k/255, (k+1)/255)`, verificado inspecionando
+//           a própria saída `float32` crua da calculadora antes de truncar, não meramente confiado)
+//           EXCETO onde nomeado abaixo como deliberadamente testando a própria fronteira de
+//           truncamento (`#j`, espelha o próprio precedente `test_15_4`/`test_own_finding_*` deste
+//           arquivo de fixar uma fronteira exata, verificada, em vez de uma confortável).
+// ---------------------------------------------------------------------------
+void test_esc6_functional_colors(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#a { decorator: polygon(6, rgb(255, 0, 0), 0deg); }\n"
+      "#b { decorator: polygon(6, rgba(10, 20, 30, 128), 0deg); }\n"
+      "#c { decorator: polygon(6, rgb(50%, 100%, 0%), 0deg); }\n"
+      "#d { decorator: polygon(6, hsl(0, 100%, 50%), 0deg); }\n"
+      "#e { decorator: polygon(6, hsla(240, 100%, 50%, 0.5), 0deg); }\n"
+      "#f { decorator: polygon(6, lab(0 0 0), 0deg); }\n"
+      "#g { decorator: polygon(6, lch(0 0 0), 0deg); }\n"
+      "#h { decorator: polygon(6, oklab(0 0 0), 0deg); }\n"
+      "#i { decorator: polygon(6, oklch(0 0 0), 0deg); }\n"
+      "#j { decorator: polygon(6, lab(53.24 80.09 67.20 / 0.5), 0deg); }\n"
+      "#k { decorator: polygon(6, lch(60 50 30), 0deg); }\n"
+      "#l { decorator: polygon(6, oklch(0.7 0.15 145), 0deg); }\n"
+      "#m { decorator: polygon(6, lab(50 none none), 0deg); }\n"
+      "</style></head><body>"
+      "<div id=\"a\"></div><div id=\"b\"></div><div id=\"c\"></div><div id=\"d\"></div>"
+      "<div id=\"e\"></div><div id=\"f\"></div><div id=\"g\"></div><div id=\"h\"></div>"
+      "<div id=\"i\"></div><div id=\"j\"></div><div id=\"k\"></div><div id=\"l\"></div>"
+      "<div id=\"m\"></div>"
+      "</body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "ESC-6: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+  auto polygon_at = [&](int idx) { return extract_prop(dump, "STATE none\n", "body/" + std::to_string(idx), "decorator"); };
+
+  // (1) EXACT: rgb()/rgba() integer form -- atoi only, zero float ops, zero rounding ambiguity.
+  check_eq(polygon_at(0), "polygon(6.0000;#ff0000ff;0.0000)", "ESC-6 rgb(255,0,0): pure int, exact");
+  check_eq(polygon_at(1), "polygon(6.0000;#0a141e80;0.0000)",
+           "ESC-6 rgba(10,20,30,128): plain-int alpha (NOT percent, NOT bare-atof-as-fraction -- "
+           "rgba's alpha shares the SAME int-domain parse as R/G/B, PropertyParserColour.cpp:275-286)");
+
+  // (2) EXACT-MARGIN: rgb() percent form -- one float multiply/truncate per channel
+  //     (`(float)atof(strip%) * (255.0f/100.0f)`, `:281`), margin-verified: 50%->127.5 truncates to
+  //     127 regardless of which side of .5 float noise lands on; 100%->255.0 verified by the
+  //     calculator's own raw float32 output to land AT (not just below) 255.0, so the truncation is
+  //     not a coincidence of Python-vs-C++ float noise.
+  check_eq(polygon_at(2), "polygon(6.0000;#7fff00ff;0.0000)", "ESC-6 rgb(50%,100%,0%): percent form");
+
+  // (3) EXACT: hsl(0,100%,50%) is pure red -- H=0,S=1,L=0.5 makes every intermediate value exactly
+  //     0.0f/0.5f/1.0f (HSL_f's own `k`/`a`/`min`/`max` terms all land on EXACT float32 values for
+  //     these inputs, hand-traced against PropertyParserColour.cpp:11-36).
+  check_eq(polygon_at(3), "polygon(6.0000;#ff0000ff;0.0000)", "ESC-6 hsl(0,100%,50%): exact pure red");
+
+  // (4) EXACT-MARGIN: hsla(240,100%,50%,0.5) is pure blue, alpha=0.5*255=127.5->127. H=240 puts the
+  //     HSL_f `k` terms within ~1e-6 of the exact 0/4/8/12 lattice (float32 noise from `h*(1/30)`
+  //     not being exactly 8.0) -- margin-traced by hand (this file's own comment) to be >>1e-6 away
+  //     from any branch-selection boundary in HSL_f's own nested min/max, so the noise washes out
+  //     to the SAME R=0,G=0,B=1.0 exact result either way.
+  check_eq(polygon_at(4), "polygon(6.0000;#0000ff7f;0.0000)", "ESC-6 hsla(240,100%,50%,0.5): pure blue, alpha 127");
+
+  // (5)-(8) MATHEMATICALLY EXACT: all-zero lab()/lch()/oklab()/oklch() collapse to black by
+  //     IEEE754 zero-propagation alone (every `+0`/`-0`/`*0` is exact; CIELAB's own linear
+  //     f-inverse branch subtracts the SAME `16.0f/116.0f` literal it just added, giving an EXACT
+  //     `0.0f`, not merely a small number -- hand-verified in this task's own delivery report).
+  //     alpha default "1.0" parses to exactly 1.0f (a trivially-exact float32 literal).
+  check_eq(polygon_at(5), "polygon(6.0000;#000000ff;0.0000)", "ESC-6 lab(0 0 0): exact black (IEEE754 zero-propagation)");
+  check_eq(polygon_at(6), "polygon(6.0000;#000000ff;0.0000)", "ESC-6 lch(0 0 0): exact black (chroma=0 -> a=b=0, same as lab)");
+  check_eq(polygon_at(7), "polygon(6.0000;#000000ff;0.0000)", "ESC-6 oklab(0 0 0): exact black (IEEE754 zero-propagation)");
+  check_eq(polygon_at(8), "polygon(6.0000;#000000ff;0.0000)", "ESC-6 oklch(0 0 0): exact black (chroma=0 -> a=b=0, same as oklab)");
+
+  // (9) NON-TRIVIAL, DELIBERATE TRUNCATION BOUNDARY: lab(53.24 80.09 67.20 / 0.5) -- real CIELAB
+  //     matrix + `pow()`-based sRGB transfer, slash-alpha syntax. The calculator's own raw (pre-
+  //     truncation) red channel measured 0.99997705f -- comfortably `< 1.0f` (by ~230x a single
+  //     float32 ULP at this magnitude) but close enough to 1.0 that `r*255=254.994` TRUNCATES to
+  //     254 (`0xfe`), not 255 -- a real, deliberate boundary case (mirrors `test_15_4`'s own
+  //     "truncates toward zero, does not round" discipline), not a margin oversight. Alpha
+  //     0.5*255=127.5 truncates to 127 (`0x7f`) with a comfortable margin.
+  check_eq(polygon_at(9), "polygon(6.0000;#fe00007f;0.0000)",
+           "ESC-6 lab(53.24 80.09 67.20 / 0.5): near-red, DELIBERATE truncation boundary (raw "
+           "r=0.99997705f truncates to 254, not 255 -- proves (int) truncates toward zero rather "
+           "than rounds)");
+
+  // (10)-(11) NON-TRIVIAL, comfortable margins: lch() polar->Cartesian->matrix, oklch() likewise --
+  //     every computed channel measured well inside its truncation bucket by the calculator's own
+  //     raw float32 output (not merely assumed).
+  check_eq(polygon_at(10), "polygon(6.0000;#df6e67ff;0.0000)", "ESC-6 lch(60 50 30): polar->Cartesian, real matrix, comfortable margins");
+  check_eq(polygon_at(11), "polygon(6.0000;#5ab660ff;0.0000)", "ESC-6 oklch(0.7 0.15 145): Oklab polar form, comfortable margins");
+
+  // (12) 'none' keyword: lab(50 none none) == lab(50 0 0) -- both axes read as exactly 0.0f
+  //     (PropertyParserColour.cpp:362-363/383-384/402-403/417-418's own uniform "'none' -> 0.0f"
+  //     rule, present in all four families).
+  check_eq(polygon_at(12), "polygon(6.0000;#767676ff;0.0000)", "ESC-6 lab(50 none none): 'none' reads as 0.0f, same as lab(50 0 0)");
+
+  doc->Close();
+  h.engine.update();
+}
+
 } // namespace
 
 int main() {
@@ -703,12 +862,13 @@ int main() {
   test_own_finding_premultiplied_alpha_has_teeth(h);
   test_9_1_box_shadow_literal_worked_example(h);
   test_9_2_1_auto_spacing_rules_3_and_4(h);
+  test_esc6_functional_colors(h);
 
   if (g_failures == 0) {
     std::puts(
         "rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4; plus own-finding "
         "premultiplied-alpha-has-teeth; plus UIX-RCSS-CONFORMIDADE additions: 9.1 literal, 9.2.1 "
-        "rules 3+4; plus UIX-QUANTIZE-MAGNITUDE ceiling coverage)");
+        "rules 3+4; plus UIX-QUANTIZE-MAGNITUDE ceiling coverage; plus ESC-6 functional colors)");
     return 0;
   }
   std::printf("rcss_dump_worked_examples: %d failure(s)\n", g_failures);

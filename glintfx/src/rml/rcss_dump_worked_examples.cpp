@@ -843,6 +843,298 @@ void test_esc6_functional_colors(Harness& h) {
   h.engine.update();
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- the 18 new transform functions (`PropertyParserTransform.cpp`), fixture-free
+//     (`rcss_dump_test_fixtures/` is a LATER phase's own turf per this task's own instruction --
+//     side B is still mid-flight). RED at the moment this function was FIRST written (every
+//     assertion below failed against pre-`ESC-7` `rcss_dump.cpp`, which only knew
+//     `TRANSLATE2D`/`SCALE2D`/`ROTATE2D` and dropped everything else to `nullopt` -> the WHOLE
+//     `transform` value for every element below printed `none`, confirmed by this file's own
+//     manual `ctest -R rcss_dump_worked_examples` run -- this suite's own binary name matches
+//     neither `sanity` nor `differential_oracle`, so `.claude/tdd-guard.json`'s own `fast_command`
+//     filter does not see it; the guard's own PostToolUse hook cannot register this RED by
+//     itself, so it was confirmed BY HAND per this task's own explicit permission, not forged).
+//     Two element groups: `#core*` chain MULTIPLE new primitives per element (also exercises the
+//     `transform_value()` loop's own `|`-joining across >2 primitives, a shape none of the
+//     pre-`ESC-7` worked examples needed); the rest are ISOLATED single-declaration corner cases
+//     from this task's own required list, one element each so a REJECTED declaration's own
+//     `none` fallback cannot be confused with a sibling's accepted value.
+// PT: `ESC-7` -- as 18 funções de transform novas (`PropertyParserTransform.cpp`), sem fixture
+//     (`rcss_dump_test_fixtures/` é território de uma fase POSTERIOR pela própria instrução desta
+//     tarefa -- o lado B ainda está em voo). VERMELHA no momento em que esta função foi ESCRITA
+//     PELA PRIMEIRA VEZ (toda asserção abaixo falhava contra o `rcss_dump.cpp` pré-`ESC-7`, que só
+//     conhecia `TRANSLATE2D`/`SCALE2D`/`ROTATE2D` e descartava todo o resto pra `nullopt` -> o
+//     valor `transform` INTEIRO de todo elemento abaixo imprimia `none`, confirmado por uma
+//     rodada manual do próprio `ctest -R rcss_dump_worked_examples` deste arquivo -- o próprio
+//     nome deste binário de suíte não casa nem `sanity` nem `differential_oracle`, então o próprio
+//     filtro `fast_command` do `.claude/tdd-guard.json` não o enxerga; o próprio hook PostToolUse
+//     do guard não consegue registrar este VERMELHO sozinho, então foi confirmado À MÃO pela
+//     própria permissão explícita desta tarefa, não forjado). Dois grupos de elemento: os `#core*`
+//     encadeiam MÚLTIPLAS primitivas novas por elemento (também exercita o próprio junte-por-`|`
+//     do laço do `transform_value()` com mais de 2 primitivas, forma que nenhum exemplo trabalhado
+//     pré-`ESC-7` precisava); o resto são casos-de-canto de declaração única ISOLADOS da própria
+//     lista exigida desta tarefa, um elemento cada, pra o próprio fallback `none` de uma
+//     declaração REJEITADA não se confundir com o valor aceito de um vizinho.
+// ---------------------------------------------------------------------------
+void test_esc7_transform_functions(Harness& h) {
+  const std::string rml =
+      "<rml><head><style>\n"
+      "#coreA { transform: matrix(1,2,3,4,5,6) matrix3d(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16) perspective(500px); }\n"
+      "#coreB { transform: translateX(10px) translateY(20%) translateZ(30px) translate3d(10%, 2cm, 5px); }\n"
+      "#coreC { transform: scaleX(1.5) scaleY(2.5) scaleZ(0.5) scale3d(1,2,3); }\n"
+      "#coreD { transform: rotateX(30deg) rotateY(60deg) rotateZ(90deg) rotate3d(1,0,0,45deg); }\n"
+      "#coreE { transform: skewX(15deg) skewY(25deg) skew(10deg,20deg); }\n"
+      "#wsBoth { transform: translateX ( 10px ); }\n"
+      "#wsOpenOnly { transform: translateX( 10px); }\n"
+      "#spacedUnit { transform: rotate(45 deg); }\n"
+      "#sci { transform: scaleX(1e2); }\n"
+      "#zeroLen { transform: translateX(0); }\n"
+      "#zeroAngle { transform: rotate(0); }\n"
+      "#caseFnBad { transform: translatex(10px); }\n"
+      "#caseUnitOk { transform: rotate(45DEG); }\n"
+      "#neg { transform: perspective(-100px); }\n"
+      "#scaleDup { transform: scale(2); }\n"
+      "#commaReject { transform: rotate(1deg), rotate(2deg); }\n"
+      "</style></head><body>"
+      "<div id=\"coreA\"></div><div id=\"coreB\"></div><div id=\"coreC\"></div><div id=\"coreD\"></div>"
+      "<div id=\"coreE\"></div><div id=\"wsBoth\"></div><div id=\"wsOpenOnly\"></div><div id=\"spacedUnit\"></div>"
+      "<div id=\"sci\"></div><div id=\"zeroLen\"></div><div id=\"zeroAngle\"></div><div id=\"caseFnBad\"></div>"
+      "<div id=\"caseUnitOk\"></div><div id=\"neg\"></div><div id=\"scaleDup\"></div><div id=\"commaReject\"></div>"
+      "</body></rml>";
+  Rml::ElementDocument* doc = h.load(rml);
+  check(doc != nullptr, "ESC-7: document loaded");
+  if (!doc) return;
+
+  const std::string dump = glintfx::rcss_dump_document(doc);
+  auto transform_at = [&](int idx) { return extract_prop(dump, "STATE none\n", "body/" + std::to_string(idx), "transform"); };
+
+  // (a) `#coreA` (body/0): `matrix()` (6 raw numbers, `PropertyParserTransform.cpp:55-58`,
+  //     `ResolvedPrimitive(const NumericValue*)`'s PLAIN overload -- NO unit conversion, integers
+  //     1..6 exact in float32) + `matrix3d()` (16 raw numbers, same plain-overload passthrough,
+  //     `:59-62`) + `perspective(500px)` (transform FUNCTION, not the `perspective` PROPERTY --
+  //     `Unit::PX` short-circuits `ElementStyle::ResolveNumericValue` before any DP/PPI math,
+  //     `ElementStyle.cpp:746`, so 500 round-trips exact).
+  check_eq(transform_at(0),
+           "matrix(1.0000;2.0000;3.0000;4.0000;5.0000;6.0000)|"
+           "matrix3d(1.0000;2.0000;3.0000;4.0000;5.0000;6.0000;7.0000;8.0000;9.0000;10.0000;11.0000;12.0000;13.0000;14.0000;15.0000;16.0000)|"
+           "perspective(500.0000px)",
+           "ESC-7 #coreA: matrix(6) + matrix3d(16) + perspective() function, exact integer passthrough");
+
+  // (b) `#coreB` (body/1): `translateX`/`translateY` (`<length-percent>`, PERCENT branch exercised
+  //     by `translateY(20%)`), `translateZ` (`<length>`, PERCENT unreachable via the real parser),
+  //     `translate3d` MIXED (x=%, y=PHYSICAL unit `cm`, z=`px` -- this task's own required corner).
+  //     `2cm` is NOT integer-exact: `ComputePPILength()`'s own float32 chain
+  //     (`ComputeProperty.cpp:29-50`, `dp_ratio` default `1.0f` per `App`/`UiLayer::Config`'s own
+  //     field default, `app.hpp:41`/`ui_layer.hpp:76` -- this harness never calls `set_dp_ratio`)
+  //     measured by this task's own standalone probe (`inch = 2*96*1 = 192.0f` exact;
+  //     `192.0f * (1.0f/2.54f) = 75.59054565...f`) BEFORE this test ever ran against the real
+  //     engine -- reproduced here, then CONFIRMED unchanged by the real `ctest` run (not
+  //     hand-trusted alone; see this task's own delivery report for the cross-check).
+  check_eq(transform_at(1), "translateX(10.0000px)|translateY(20.0000%)|translateZ(30.0000px)|translate3d(10.0000%;75.5905px;5.0000px)",
+           "ESC-7 #coreB: translateX/Y/Z + translate3d mixed (%, cm physical unit, px)");
+
+  // (c) `#coreC` (body/2): `scaleX`/`scaleY`/`scaleZ`/`scale3d` -- all `Unit::NUMBER` passthrough,
+  //     no conversion (`ResolvedPrimitive`'s plain overload, same shape as `matrix`/`matrix3d`
+  //     above); 1.5/2.5/0.5 are all exact float32 (binary fractions), 1/2/3 exact integers.
+  check_eq(transform_at(2), "scaleX(1.5000)|scaleY(2.5000)|scaleZ(0.5000)|scale3d(1.0000;2.0000;3.0000)",
+           "ESC-7 #coreC: scaleX/Y/Z + scale3d, exact float32 passthrough");
+
+  // (d) `#coreD` (body/3): `rotateX`/`rotateY`/`rotateZ` (each `ResolvedPrimitive(values,
+  //     {Unit::RAD})` -- deg->rad at construction, this dumper's own `resolved_angle_bare_
+  //     degrees()` converts back rad->deg) + `rotate3d(1,0,0,45deg)` (x/y/z stay bare NUMBER,
+  //     only the 4th slot is RAD-resolved, `TransformPrimitive.cpp:128`). This task's own
+  //     standalone round-trip probe (deg -literal RMLUI_PI==the longer pi literal this dumper's
+  //     own helper uses, bit-identical once rounded to float32, confirmed by the same probe- ->
+  //     rad -> deg) measured 0 exact round-trips for 30/45/60/90 and a <2e-6 float32 noise floor
+  //     for the others that `rcss_quantize()`'s own 4-decimal rounding step absorbs completely --
+  //     see this task's own delivery report for the full probe transcript.
+  check_eq(transform_at(3), "rotateX(30.0000)|rotateY(60.0000)|rotateZ(90.0000)|rotate3d(1.0000;0.0000;0.0000;45.0000)",
+           "ESC-7 #coreD: rotateX/Y/Z + rotate3d (x/y/z bare, angle rad-resolved)");
+
+  // (e) `#coreE` (body/4): `skewX`/`skewY` (`ResolvedPrimitive(values, {Unit::RAD})`, same shape
+  //     as the single-axis rotations) + `skew(10deg,20deg)` (`Skew2D`, BOTH slots RAD-resolved,
+  //     `{Unit::RAD, Unit::RAD}`, `TransformPrimitive.cpp:141`).
+  check_eq(transform_at(4), "skewX(15.0000)|skewY(25.0000)|skew(10.0000;20.0000)", "ESC-7 #coreE: skewX/Y + skew(2-arg)");
+
+  // (f) `#wsBoth` (body/5): this task's own required whitespace-around-parens corner,
+  //     `translateX ( 10px )`, VERBATIM. MEASURED, not assumed: `PropertyParserTransform::
+  //     Scan()`'s own argument capture, `sscanf(str, " %[^,)] %n", ...)`
+  //     (`PropertyParserTransform.cpp:219`), reads UP TO (not past) the closing `)` -- for THIS
+  //     input the captured arg is `"10px "` WITH a trailing space (confirmed by this task's own
+  //     isolated `sscanf` probe, byte-for-byte). `PropertyParserNumber::ParseValue`'s own
+  //     unit-detection loop (`PropertyParserNumber.cpp:47-55`) scans the VALUE STRING FROM THE
+  //     END looking for the last digit-or-whitespace position -- for `"10px "` that position is
+  //     the TRAILING SPACE ITSELF (the very first character the backward scan sees), so
+  //     `str_unit` resolves to `""` (`Unit::NUMBER`), NOT `"px"` -- confirmed by this task's own
+  //     second isolated probe, replicating the exact loop, byte-for-byte (`unit_pos=5,
+  //     str_number="10px ", str_unit=""`). `Unit::NUMBER` is not in `length_pct`'s own allowed
+  //     `Unit::LENGTH_PERCENT` bitmask (`Unit.h:58-59` -- `NUMBER`'s own bit, `1<<4`, is disjoint
+  //     from `LENGTH_PERCENT`), and the value (10) is not the `zero_unit` special case (only `0`
+  //     qualifies, `PropertyParserNumber.cpp:86-94`) -- so `ParseValue` REJECTS `"10px "`,
+  //     `Scan("translateX", ...)` returns `false`, no OTHER keyword in
+  //     `PropertyParserTransform::ParseValue`'s own if-else chain matches this input either (this
+  //     task's own by-hand trace of all 21 branches, delivery report has the full argument), so
+  //     the outer `while` loop's own `bytes_read` never leaves `0` and `ParseValue` returns
+  //     `false` for the WHOLE declaration -- `transform` keeps its cascade default, `none`. A
+  //     genuinely surprising, real upstream quirk this task's own brief asked to be MEASURED, not
+  //     assumed: internal whitespace around a transform-function's arguments is NOT uniformly
+  //     tolerated -- specifically, whitespace trailing the LAST arg before a `)`/`,` delimiter
+  //     breaks `PropertyParserNumber`'s own number/unit split. See `#wsOpenOnly` just below for
+  //     the complementary, ACCEPTED half of this same corner (space after `(` only, none before
+  //     `)`), proving the asymmetry rather than a blanket whitespace rejection.
+  // PT: `#wsBoth` (body/5): o próprio canto de espaços-ao-redor-do-parêntese exigido por esta
+  //     tarefa, `translateX ( 10px )`, VERBATIM. MEDIDO, não assumido: a própria captura de
+  //     argumento do `PropertyParserTransform::Scan()`, `sscanf(str, " %[^,)] %n", ...)`
+  //     (`PropertyParserTransform.cpp:219`), lê ATÉ (sem passar) o `)` de fechamento -- pra ESTA
+  //     entrada o argumento capturado é `"10px "` COM um espaço à direita (confirmado pela própria
+  //     sonda `sscanf` isolada desta tarefa, byte a byte). O próprio laço de detecção de unidade
+  //     do `PropertyParserNumber::ParseValue` (`PropertyParserNumber.cpp:47-55`) varre a STRING DE
+  //     VALOR DE TRÁS PRA FRENTE procurando a última posição dígito-ou-espaço -- pra `"10px "`
+  //     essa posição É O PRÓPRIO ESPAÇO À DIREITA (o primeiríssimo caractere que a varredura
+  //     reversa vê), então `str_unit` resolve pra `""` (`Unit::NUMBER`), NÃO `"px"` -- confirmado
+  //     pela própria segunda sonda isolada desta tarefa, replicando o laço exato, byte a byte
+  //     (`unit_pos=5, str_number="10px ", str_unit=""`). `Unit::NUMBER` não está na própria
+  //     bitmask permitida do `length_pct`, `Unit::LENGTH_PERCENT` (`Unit.h:58-59` -- o próprio bit
+  //     do `NUMBER`, `1<<4`, é disjunto de `LENGTH_PERCENT`), e o valor (10) não é o caso especial
+  //     `zero_unit` (só `0` qualifica, `PropertyParserNumber.cpp:86-94`) -- então `ParseValue`
+  //     REJEITA `"10px "`, `Scan("translateX", ...)` devolve `false`, nenhum OUTRO keyword da
+  //     própria cadeia if-else do `PropertyParserTransform::ParseValue` casa esta entrada também
+  //     (o próprio traço à mão desta tarefa dos 21 ramos, relatório de entrega tem o argumento
+  //     completo), então o próprio `bytes_read` do laço `while` externo nunca sai de `0` e
+  //     `ParseValue` devolve `false` pra declaração INTEIRA -- `transform` mantém o próprio
+  //     default de cascata, `none`. Uma peculiaridade real do upstream genuinamente surpreendente
+  //     que o próprio brief desta tarefa pediu pra MEDIR, não assumir: espaço interno ao redor dos
+  //     argumentos de uma função de transform NÃO é tolerado uniformemente -- especificamente,
+  //     espaço à direita do ÚLTIMO argumento antes de um delimitador `)`/`,` quebra a própria
+  //     divisão número/unidade do `PropertyParserNumber`. Ver `#wsOpenOnly` logo abaixo pra a
+  //     metade complementar, ACEITA, deste mesmo canto (espaço só depois do `(`, nenhum antes do
+  //     `)`), provando a assimetria em vez de uma rejeição cega de espaço.
+  check_eq(transform_at(5), "none", "ESC-7 #wsBoth: 'translateX ( 10px )' -- trailing space before ')' breaks unit split, whole decl rejected");
+
+  // (g) `#wsOpenOnly` (body/6): complementary half of (f) -- space AFTER `(` only, NONE before
+  //     `)` (`translateX( 10px)`). Captured arg is `"10px"` (NO trailing space this time, `%[^,)]`
+  //     stops exactly at `)`), unit-detection loop finds `"px"` correctly -- ACCEPTED.
+  // PT: Metade complementar de (f) -- espaço SÓ depois do `(`, NENHUM antes do `)`
+  //     (`translateX( 10px)`). Argumento capturado é `"10px"` (SEM espaço à direita desta vez, o
+  //     `%[^,)]` para exatamente no `)`), o laço de detecção de unidade acha `"px"` corretamente
+  //     -- ACEITO.
+  check_eq(transform_at(6), "translateX(10.0000px)", "ESC-7 #wsOpenOnly: 'translateX( 10px)' -- space after '(' only, accepted");
+
+  // (h) `#spacedUnit` (body/7): this task's own required "space between number and unit" corner,
+  //     `rotate(45 deg)`. Unit-detection loop's OWN backward scan (`PropertyParserNumber.cpp:
+  //     47-55`) treats a digit-or-whitespace hit as the split point -- for `"45 deg"` that is the
+  //     SPACE BETWEEN `"45"` and `"deg"` (not a trailing one), so `str_number="45 "`/`str_unit=
+  //     "deg"` splits correctly (`strtof("45 ", ...)` stops at the space, still reads `45.0f`).
+  //     ACCEPTED, unlike (f)'s trailing-before-delimiter case.
+  // PT: O próprio canto "espaço entre número e unidade" exigido por esta tarefa,
+  //     `rotate(45 deg)`. A PRÓPRIA varredura reversa do laço de detecção de unidade
+  //     (`PropertyParserNumber.cpp:47-55`) trata um acerto dígito-ou-espaço como o ponto de corte
+  //     -- pra `"45 deg"` esse é o ESPAÇO ENTRE `"45"` e `"deg"` (não um à direita), então
+  //     `str_number="45 "`/`str_unit="deg"` divide corretamente (`strtof("45 ", ...)` para no
+  //     espaço, ainda lê `45.0f`). ACEITO, diferente do caso à-direita-do-delimitador de (f).
+  check_eq(transform_at(7), "rotate(45.0000)", "ESC-7 #spacedUnit: 'rotate(45 deg)' -- space between number and unit, accepted");
+
+  // (i) `#sci` (body/8): scientific notation, `scaleX(1e2)` -- `strtof("1e2", ...)` is standard
+  //     C, reads `100.0f` exactly (no unit suffix at all, `Unit::NUMBER`, matches `scaleX`'s own
+  //     `number1` parser with no zero-unit special case needed since the value isn't 0).
+  // PT: Notação científica, `scaleX(1e2)` -- `strtof("1e2", ...)` é C padrão, lê `100.0f` exato
+  //     (sem sufixo de unidade nenhum, `Unit::NUMBER`, casa com o próprio parser `number1` do
+  //     `scaleX` sem precisar do caso especial zero-unit já que o valor não é 0).
+  check_eq(transform_at(8), "scaleX(100.0000)", "ESC-7 #sci: 'scaleX(1e2)' scientific notation");
+
+  // (j) `#zeroLen` (body/9) / (k) `#zeroAngle` (body/10): this task's own required "zero rule" --
+  //     bare `0` (no suffix) is `Unit::NUMBER`, but `PropertyParserNumber::ParseValue`'s own
+  //     `zero_unit` special case (`PropertyParserNumber.cpp:86-94`) accepts a value of EXACTLY
+  //     `0.0f` and re-labels it with the parser's own configured `zero_unit` -- `Unit::PX` for
+  //     `length_pct`(`PropertyParserTransform.cpp:10`, `translateX`'s own parser), `Unit::RAD` for
+  //     `angle` (`:10`, `rotate`'s own parser).
+  // PT: A própria regra do zero exigida por esta tarefa -- `0` nu (sem sufixo) é `Unit::NUMBER`,
+  //     mas o próprio caso especial `zero_unit` do `PropertyParserNumber::ParseValue`
+  //     (`PropertyParserNumber.cpp:86-94`) aceita um valor EXATAMENTE `0.0f` e o rerotula com o
+  //     próprio `zero_unit` configurado do parser -- `Unit::PX` pro `length_pct`
+  //     (`PropertyParserTransform.cpp:10`, o próprio parser do `translateX`), `Unit::RAD` pro
+  //     `angle` (`:10`, o próprio parser do `rotate`).
+  check_eq(transform_at(9), "translateX(0.0000px)", "ESC-7 #zeroLen: 'translateX(0)' bare zero -> 0.0000px");
+  check_eq(transform_at(10), "rotate(0.0000)", "ESC-7 #zeroAngle: 'rotate(0)' bare zero -> 0.0000 (zero degrees)");
+
+  // (l) `#caseFnBad` (body/11) / (m) `#caseUnitOk` (body/12): this task's own required
+  //     case-sensitivity corner. Function KEYWORD match is `memcmp` (`PropertyParserTransform.cpp:
+  //     170`), byte-exact, case-SENSITIVE -- `translatex` (lowercase x) matches NEITHER
+  //     `translateX` (mismatch at the 10th byte) NOR any other keyword whose own brace-check
+  //     survives it (`translate`'s own 9-char prefix DOES match, but its own brace-check fails
+  //     the same way `matrix`/`matrix3d` and `scale`/`scale3d` already do above, since the next
+  //     byte is `x` not `(`) -- REJECTED, whole declaration falls back to `none`. Unit SUFFIX
+  //     lookup, by contrast, explicitly lowercases before the map lookup
+  //     (`StringUtilities::ToLower(value.substr(unit_pos))`, `PropertyParserNumber.cpp:58`) --
+  //     `45DEG` resolves to `"deg"` regardless of the source's own casing -- ACCEPTED, same
+  //     printed value as (h)'s `45 deg`.
+  // PT: O próprio canto de sensibilidade a caixa exigido por esta tarefa. O casamento de KEYWORD
+  //     de função é `memcmp` (`PropertyParserTransform.cpp:170`), byte-exato,
+  //     SENSÍVEL-a-caixa -- `translatex` (x minúsculo) não casa NEM `translateX` (descasamento no
+  //     10º byte) NEM nenhum outro keyword cujo próprio brace-check sobreviva a ele (o próprio
+  //     prefixo de 9 caracteres de `translate` CASA, mas o próprio brace-check dele falha do MESMO
+  //     jeito que `matrix`/`matrix3d` e `scale`/`scale3d` já falham acima, já que o próximo byte é
+  //     `x`, não `(`) -- REJEITADO, declaração inteira cai pro `none`. A busca de SUFIXO de
+  //     unidade, em contraste, explicitamente coloca em minúsculas antes do lookup no mapa
+  //     (`StringUtilities::ToLower(value.substr(unit_pos))`, `PropertyParserNumber.cpp:58`) --
+  //     `45DEG` resolve pra `"deg"` independente da própria caixa da fonte -- ACEITO, mesmo valor
+  //     impresso do `45 deg` de (h).
+  check_eq(transform_at(11), "none", "ESC-7 #caseFnBad: 'translatex(10px)' -- function keyword is case-sensitive, rejected");
+  check_eq(transform_at(12), "rotate(45.0000)", "ESC-7 #caseUnitOk: 'rotate(45DEG)' -- unit suffix is case-insensitive, accepted");
+
+  // (n) `#neg` (body/13): this task's own required negative-value corner, `perspective(-100px)`.
+  //     `strtof("-100", ...)` handles the sign natively; `PropertyParserNumber::ParseValue` has no
+  //     sign check anywhere in its own body -- ACCEPTED, sign preserved through
+  //     `ElementStyle::ResolveNumericValue`'s own `Unit::PX` passthrough branch unchanged.
+  // PT: O próprio canto de valor negativo exigido por esta tarefa, `perspective(-100px)`.
+  //     `strtof("-100", ...)` trata o sinal nativamente; o próprio `PropertyParserNumber::
+  //     ParseValue` não tem checagem de sinal nenhuma em lugar nenhum do próprio corpo -- ACEITO,
+  //     sinal preservado sem mudança através do próprio ramo de passthrough `Unit::PX` do
+  //     `ElementStyle::ResolveNumericValue`.
+  check_eq(transform_at(13), "perspective(-100.0000px)", "ESC-7 #neg: 'perspective(-100px)' negative length, sign not validated, accepted");
+
+  // (o) `#scaleDup` (body/14): this task's own required 1-arg `scale(n)` duplication corner.
+  //     `PropertyParserTransform.cpp:95-103` -- the 2-arg `Scan("scale", number2, ..., 2)` is
+  //     tried FIRST and fails (no comma in `"2"`), THEN the 1-arg `Scan("scale", number1, ..., 1)`
+  //     succeeds and the SAME call site does `args[1] = args[0];` BEFORE constructing `Scale2D` --
+  //     so a 1-arg source always lands on the pre-`ESC-7` `SCALE2D` case with 2 EQUAL values;
+  //     `ESC-7` did not need to touch that case's own body for this corner, only prove it here.
+  // PT: O próprio canto de duplicação da forma `scale(n)` de 1 argumento exigido por esta tarefa.
+  //     `PropertyParserTransform.cpp:95-103` -- o `Scan("scale", number2, ..., 2)` de 2 argumentos
+  //     é tentado PRIMEIRO e falha (sem vírgula em `"2"`), DEPOIS o `Scan("scale", number1, ...,
+  //     1)` de 1 argumento tem sucesso e o MESMO call site faz `args[1] = args[0];` ANTES de
+  //     construir o `Scale2D` -- então uma fonte de 1 argumento sempre cai no case `SCALE2D`
+  //     pré-`ESC-7` com 2 valores IGUAIS; a `ESC-7` não precisou tocar o próprio corpo daquele
+  //     case pra este canto, só prová-lo aqui.
+  check_eq(transform_at(14), "scale(2.0000;2.0000)", "ESC-7 #scaleDup: 'scale(2)' 1-arg form duplicates to Scale2D(2,2)");
+
+  // (p) `#commaReject` (body/15): this task's own required comma-between-functions corner,
+  //     `rotate(1deg), rotate(2deg)`. `ReadProperties`'s own VALUE-state character loop
+  //     (`StyleSheetParser.cpp:1017-1042`) copies the comma into the value STRING VERBATIM (no
+  //     comma-as-separator handling exists at that layer for property VALUES, only for SELECTOR
+  //     lists elsewhere); `PropertyParserTransform::ParseValue`'s own `while` loop consumes
+  //     `rotate(1deg)` fully, then finds a bare `,` where it expects the next keyword's first
+  //     byte -- no branch's own `memcmp` ever matches a comma, so EVERY `Scan()` attempt fails at
+  //     the very first step, `bytes_read` stays `0`, `ParseValue` returns `false` for the WHOLE
+  //     value -- confirming this task's own "declaração inteira cai" prediction: `transform`
+  //     falls back to `none`, not a partial one-primitive list.
+  // PT: O próprio canto de vírgula-entre-funções exigido por esta tarefa,
+  //     `rotate(1deg), rotate(2deg)`. O próprio laço de caractere do estado VALUE do
+  //     `ReadProperties` (`StyleSheetParser.cpp:1017-1042`) copia a vírgula pra dentro da STRING
+  //     de valor AO PÉ DA LETRA (não existe tratamento de vírgula-como-separador nessa camada pra
+  //     VALORES de propriedade, só pra listas de SELETOR em outro lugar); o próprio laço `while`
+  //     do `PropertyParserTransform::ParseValue` consome `rotate(1deg)` por completo, depois acha
+  //     uma `,` nua onde espera o primeiro byte do próximo keyword -- nenhum `memcmp` de nenhum
+  //     ramo jamais casa uma vírgula, então TODA tentativa de `Scan()` falha logo no primeiro
+  //     passo, `bytes_read` fica em `0`, `ParseValue` devolve `false` pro valor INTEIRO --
+  //     confirmando a própria predição "declaração inteira cai" desta tarefa: `transform` cai pro
+  //     `none`, não uma lista parcial de uma primitiva só.
+  check_eq(transform_at(15), "none", "ESC-7 #commaReject: 'rotate(1deg), rotate(2deg)' -- comma between functions rejects the whole declaration");
+
+  doc->Close();
+  h.engine.update();
+}
+
 } // namespace
 
 int main() {
@@ -863,12 +1155,14 @@ int main() {
   test_9_1_box_shadow_literal_worked_example(h);
   test_9_2_1_auto_spacing_rules_3_and_4(h);
   test_esc6_functional_colors(h);
+  test_esc7_transform_functions(h);
 
   if (g_failures == 0) {
     std::puts(
         "rcss_dump_worked_examples OK (4 worked examples: 15.1, 15.2, 15.3, 15.4; plus own-finding "
         "premultiplied-alpha-has-teeth; plus UIX-RCSS-CONFORMIDADE additions: 9.1 literal, 9.2.1 "
-        "rules 3+4; plus UIX-QUANTIZE-MAGNITUDE ceiling coverage; plus ESC-6 functional colors)");
+        "rules 3+4; plus UIX-QUANTIZE-MAGNITUDE ceiling coverage; plus ESC-6 functional colors; plus "
+        "ESC-7 transform functions)");
     return 0;
   }
   std::printf("rcss_dump_worked_examples: %d failure(s)\n", g_failures);

@@ -364,6 +364,119 @@ std::string resolve_length_px(Rml::Element* el, const Rml::NumericValue& nv) {
   return rcss_quantize(px) + "px";
 }
 
+// EN: `ESC-7` -- `<length-percent>` transform slot, shared by every primitive whose arg mixes a
+//     symbolic PERCENT with a resolved LENGTH (`translateX`/`translateY`, the x/y slots of
+//     `translate3d`) AND by every primitive whose arg is LENGTH-only, no PERCENT reachable via
+//     the real parser (`translateZ`, the z slot of `translate3d`, the `perspective()` FUNCTION --
+//     all three parsed with `length1`/`&length`, `PropertyParserTransform.cpp:32/35/51/71/79`,
+//     never `length_pct`), where the PERCENT branch below is dead code for those specific call
+//     sites -- kept anyway because the primitive's own stored slot is still a `NumericValue`
+//     (`UnresolvedPrimitive<N>`, `TransformPrimitive.h:24-32/136-138`), not a bare resolved float,
+//     so the SAME two-branch shape this dumper already used for `TRANSLATE2D` (pre-`ESC-7`) is
+//     the correct, total handling for the type regardless of which units a given call site can
+//     actually observe. Was a case-local lambda before `ESC-7`; hoisted here once `ESC-7` needed
+//     the identical logic at 6 more call sites, so there is exactly ONE place this
+//     percent-vs-length branch lives.
+// PT: `ESC-7` -- slot de transform `<length-percent>`, compartilhado por toda primitiva cujo
+//     argumento mistura um PERCENT simbólico com um LENGTH resolvido (`translateX`/`translateY`,
+//     os slots x/y de `translate3d`) E por toda primitiva cujo argumento é só-LENGTH, sem PERCENT
+//     alcançável pelo parser real (`translateZ`, o slot z de `translate3d`, a FUNÇÃO
+//     `perspective()` -- as três parseadas com `length1`/`&length`,
+//     `PropertyParserTransform.cpp:32/35/51/71/79`, nunca `length_pct`), onde o ramo PERCENT
+//     abaixo é código morto pra esses call sites específicos -- mantido assim mesmo porque o
+//     próprio slot guardado da primitiva ainda é um `NumericValue` (`UnresolvedPrimitive<N>`,
+//     `TransformPrimitive.h:24-32/136-138`), não um float já resolvido, então a MESMA forma de
+//     dois ramos que este dumper já usava pro `TRANSLATE2D` (pré-`ESC-7`) é o tratamento correto
+//     e total pro tipo, independente de quais unidades um dado call site consegue de fato
+//     observar. Era um lambda local ao case antes da `ESC-7`; alçado pra cá quando a `ESC-7`
+//     precisou da mesma lógica em mais 6 call sites, então existe EXATAMENTE UM lugar onde este
+//     ramo percent-vs-length mora.
+std::string axis_value(Rml::Element* el, const Rml::NumericValue& nv) {
+  if (nv.unit == Rml::Unit::PERCENT) return quantize_percent(nv.number);
+  return resolve_length_px(el, nv);
+}
+
+// EN: `ESC-7` -- radians-ALREADY-RESOLVED -> bare degrees, quantized. Distinct from
+//     `angle_bare_degrees()` above: that one takes an UNRESOLVED `NumericValue` (unit may still
+//     be DEG/PERCENT/RAD, branches on `.unit`); this one takes a PLAIN `float` that upstream's
+//     own constructor chain has ALREADY forced into radians at primitive-construction time --
+//     true for every `ResolvedPrimitive` angle slot this file touches:
+//     `RotateX`/`RotateY`/`RotateZ`/`Rotate2D` (`ResolvedPrimitive(values, {Unit::RAD})`),
+//     `Rotate3D`'s own 4th slot only (`{NUMBER, NUMBER, NUMBER, RAD}` -- the other three stay
+//     bare numbers, `TransformPrimitive.cpp:128-133`), and `SkewX`/`SkewY`/`Skew2D`
+//     (`TransformPrimitive.cpp:135-143`, same `{RAD}`/`{RAD,RAD}` shape). Conversion factor is
+//     the exact same literal `ROTATE2D`'s own case used pre-`ESC-7`
+//     (`180.0f / 3.14159265358979323846f`) -- extracted here unchanged, not re-derived, so this
+//     helper's own output for `ROTATE2D` is byte-identical to what this file printed before
+//     `ESC-7` touched it. Deliberately NOT `Rml::Math::RadiansToDegrees` (upstream's own public
+//     free function, `Math.cpp:78-81`): that one folds through upstream's OWN `RMLUI_PI` literal
+//     (`Math.h:23`, `3.141592653f` -- fewer significant digits than the literal already pinned
+//     here), a DIFFERENT float32 rounding this dumper's pre-`ESC-7` code never depended on --
+//     this file's own conversion is docs/uix-rcss.md section 8.2's own algorithm text, not
+//     upstream's internal implementation choice, and the two are free to diverge by upstream's
+//     own admission (`ComputeProperty.cpp`'s DP-ratio comment calls its own PPI scaling "a
+//     placeholder solution"). MEASURED, not assumed, that the two literals happen to round to the
+//     SAME float32 bit pattern (`0x1.921fb6p+1`) via this task's own standalone probe -- so this
+//     divergence is theoretical for `RMLUI_PI`'s own CURRENT literal text, not observed in any
+//     printed digit, but the reasoning for NOT calling upstream's function stands regardless (the
+//     two functions are allowed to drift, and this dumper's own conversion should not silently
+//     start tracking upstream's internal choice just because they happen to agree today).
+// PT: `ESC-7` -- radianos JÁ RESOLVIDOS -> graus nus, quantizados. Distinto do
+//     `angle_bare_degrees()` acima: aquele recebe um `NumericValue` NÃO resolvido (a unidade
+//     ainda pode ser DEG/PERCENT/RAD, ramifica em `.unit`); este recebe um `float` PURO que a
+//     própria cadeia de construtor do upstream JÁ forçou pra radianos no momento de construir a
+//     primitiva -- verdade pra todo slot de ângulo `ResolvedPrimitive` que este arquivo toca:
+//     `RotateX`/`RotateY`/`RotateZ`/`Rotate2D` (`ResolvedPrimitive(values, {Unit::RAD})`), o
+//     próprio 4º slot do `Rotate3D` só (`{NUMBER, NUMBER, NUMBER, RAD}` -- os outros três ficam
+//     números nus, `TransformPrimitive.cpp:128-133`), e `SkewX`/`SkewY`/`Skew2D`
+//     (`TransformPrimitive.cpp:135-143`, mesma forma `{RAD}`/`{RAD,RAD}`). Fator de conversão é o
+//     MESMO literal exato que o próprio case do `ROTATE2D` já usava pré-`ESC-7`
+//     (`180.0f / 3.14159265358979323846f`) -- extraído aqui sem mudança, não re-derivado, então a
+//     própria saída deste helper pro `ROTATE2D` é byte-idêntica ao que este arquivo imprimia
+//     antes da `ESC-7` tocá-lo. Deliberadamente NÃO `Rml::Math::RadiansToDegrees` (a própria
+//     função livre pública do upstream, `Math.cpp:78-81`): aquela dobra pelo próprio literal
+//     `RMLUI_PI` do upstream (`Math.h:23`, `3.141592653f` -- menos dígitos significativos que o
+//     literal já fixado aqui), um arredondamento float32 DIFERENTE de que o código pré-`ESC-7`
+//     deste arquivo nunca dependeu -- a própria conversão deste arquivo é o próprio texto de
+//     algoritmo da seção 8.2 do docs/uix-rcss.md, não a escolha de implementação interna do
+//     upstream, e as duas são livres pra divergir pela própria admissão do upstream (o
+//     comentário de escala DP-ratio do `ComputeProperty.cpp` chama a própria escala PPI de "uma
+//     solução provisória"). MEDIDO, não assumido, que os dois literais por acaso arredondam pro
+//     MESMO padrão de bits float32 (`0x1.921fb6p+1`) via a própria sonda standalone desta tarefa
+//     -- então esta divergência é teórica pro próprio literal ATUAL do `RMLUI_PI`, não observada
+//     em dígito impresso nenhum, mas o raciocínio de NÃO chamar a função do upstream vale de
+//     qualquer jeito (as duas funções têm liberdade de divergir, e a própria conversão deste
+//     dumper não deveria começar a seguir em silêncio a escolha interna do upstream só porque as
+//     duas concordam hoje).
+std::string resolved_angle_bare_degrees(float radians) {
+  const float deg = radians * (180.0f / 3.14159265358979323846f);
+  return rcss_quantize(deg);
+}
+
+// EN: `ESC-7` -- join N raw floats (already-resolved, no unit conversion applicable) with
+//     `rcss_quantize()` + ';' separator -- `matrix()`'s own 6 values and `matrix3d()`'s own 16
+//     (both constructed via `ResolvedPrimitive(const NumericValue*)`'s PLAIN overload,
+//     `TransformPrimitive.cpp:41-45`, which copies `.number` verbatim with NO base-unit
+//     conversion -- the `number16` parser array, `PropertyParserTransform.cpp:30-31`, only ever
+//     hands these two primitives `Unit::NUMBER` values, so there is no unit branch to resolve
+//     here, unlike `axis_value()`/`resolved_angle_bare_degrees()` above).
+// PT: `ESC-7` -- junta N floats crus (já resolvidos, sem conversão de unidade aplicável) com
+//     `rcss_quantize()` + separador ';' -- os próprios 6 valores do `matrix()` e os próprios 16
+//     do `matrix3d()` (os dois construídos via a sobrecarga PURA do `ResolvedPrimitive(const
+//     NumericValue*)`, `TransformPrimitive.cpp:41-45`, que copia `.number` ao pé da letra SEM
+//     conversão de unidade-base -- o array de parser `number16`,
+//     `PropertyParserTransform.cpp:30-31`, só entrega a estas duas primitivas valores
+//     `Unit::NUMBER`, então não há ramo de unidade pra resolver aqui, diferente do
+//     `axis_value()`/`resolved_angle_bare_degrees()` acima).
+std::string rcss_quantize_join(const float* values, std::size_t count) {
+  std::string out;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (i) out += ";";
+    out += rcss_quantize(values[i]);
+  }
+  return out;
+}
+
 // EN: `Element::GetProperty(name)` with a defensive fallback to the property's own registered
 //     default (docs/uix-rcss.md section 3: every registry entry always emits a line, "never
 //     fewer" -- if the cascade genuinely has nothing, the registry's own default IS the correct
@@ -1801,41 +1914,217 @@ std::string animation_value(Rml::Element* el) {
   return out;
 }
 
-// EN: §9.4's own deliberately-thin 2D subset: `translate(x;y) | scale(x;y) | rotate(angle)`.
-//     Any OTHER primitive type (3D, matrix, single-axis translate/scale/rotate) is dropped from
-//     the list, fail-high, section 11 -- section 9.4's own header names this teto explicitly.
-// PT: O próprio subconjunto 2D deliberadamente fino da §9.4: `translate(x;y) | scale(x;y) |
-//     rotate(angle)`. Qualquer OUTRO tipo de primitiva (3D, matriz, translate/scale/rotate de
-//     eixo único) é descartado da lista, fail-high, seção 11 -- o próprio cabeçalho da seção 9.4
-//     nomeia este teto explicitamente.
+// EN: `ESC-7` -- full 21-primitive coverage of `TransformPrimitive::Type`
+//     (`TransformPrimitive.h:157-180`), up from the pre-`ESC-7` 3-primitive subset
+//     (`TRANSLATE2D`/`SCALE2D`/`ROTATE2D` only, section 9.4's own former teto). One case per
+//     enumerator, same declaration order as the header, so this switch's own shape is a direct,
+//     auditable checklist against `TransformPrimitive.h` rather than a set this file has to trust
+//     itself to have enumerated completely. `DECOMPOSEDMATRIX4` is the SOLE remaining `nullopt`
+//     (fail-high, logged by this function's own caller, `transform_value()`'s loop, one screen
+//     down) -- see that case's own comment for why, not a repeat of section 9.4's retired 2D-only
+//     rule. Scope stays `parse + compute + serialize`, the same boundary the pre-`ESC-7` cases
+//     already drew: this function turns an already-parsed, already-computed `TransformPrimitive`
+//     into canonical dump text; APPLYING the resulting matrix to a render pass is `RMLX-8`'s own
+//     job, untouched here, exactly as it was for the 3 primitives this function already covered.
+// PT: `ESC-7` -- cobertura completa das 21 primitivas do `TransformPrimitive::Type`
+//     (`TransformPrimitive.h:157-180`), subindo do subconjunto de 3 primitivas pré-`ESC-7`
+//     (só `TRANSLATE2D`/`SCALE2D`/`ROTATE2D`, o antigo teto da própria seção 9.4). Um case por
+//     enumerador, na MESMA ordem de declaração do header, então a própria forma deste switch é um
+//     checklist direto e auditável contra o `TransformPrimitive.h`, em vez de um conjunto que este
+//     arquivo precisa confiar ter enumerado por conta própria. `DECOMPOSEDMATRIX4` é o ÚNICO
+//     `nullopt` que sobra (fail-high, logado pelo próprio chamador desta função, o laço do
+//     `transform_value()`, uma tela abaixo) -- ver o próprio comentário daquele case pro motivo,
+//     não uma repetição da regra aposentada "só-2D" da seção 9.4. O escopo continua
+//     `parse + computo + serialização`, a MESMA fronteira que os cases pré-`ESC-7` já traçavam:
+//     esta função transforma um `TransformPrimitive` já parseado, já computado, em texto canônico
+//     de dump; APLICAR a matriz resultante num passe de render é trabalho da própria `RMLX-8`,
+//     intocado aqui, exatamente como já era pras 3 primitivas que esta função já cobria.
 std::optional<std::string> transform_primitive_value(Rml::Element* el, const Rml::TransformPrimitive& prim) {
   using Rml::TransformPrimitive;
   switch (prim.type) {
+    case TransformPrimitive::MATRIX2D: {
+      const Rml::Transforms::Matrix2D& m = prim.matrix_2d;
+      return "matrix(" + rcss_quantize_join(m.values.data(), m.values.size()) + ")";
+    }
+    case TransformPrimitive::MATRIX3D: {
+      const Rml::Transforms::Matrix3D& m = prim.matrix_3d;
+      return "matrix3d(" + rcss_quantize_join(m.values.data(), m.values.size()) + ")";
+    }
+    case TransformPrimitive::TRANSLATEX: {
+      const Rml::Transforms::TranslateX& t = prim.translate_x;
+      return "translateX(" + axis_value(el, t.values[0]) + ")";
+    }
+    case TransformPrimitive::TRANSLATEY: {
+      const Rml::Transforms::TranslateY& t = prim.translate_y;
+      return "translateY(" + axis_value(el, t.values[0]) + ")";
+    }
+    case TransformPrimitive::TRANSLATEZ: {
+      const Rml::Transforms::TranslateZ& t = prim.translate_z;
+      // EN: `length1`/`&length`, not `length_pct` (`PropertyParserTransform.cpp:71`) -- PERCENT
+      //     never reaches this slot via the real parser. `axis_value()`'s PERCENT branch is dead
+      //     code for this call site specifically; kept for the reason its own comment gives.
+      // PT: `length1`/`&length`, não `length_pct` (`PropertyParserTransform.cpp:71`) -- PERCENT
+      //     nunca alcança este slot pelo parser real. O ramo PERCENT do `axis_value()` é código
+      //     morto pra este call site especificamente; mantido pelo motivo que o próprio
+      //     comentário dele dá.
+      return "translateZ(" + axis_value(el, t.values[0]) + ")";
+    }
     case TransformPrimitive::TRANSLATE2D: {
       const Rml::Transforms::Translate2D& t = prim.translate_2d;
-      auto axis = [&](const Rml::NumericValue& nv) -> std::string {
-        if (nv.unit == Rml::Unit::PERCENT) return quantize_percent(nv.number);
-        return resolve_length_px(el, nv);
-      };
-      return "translate(" + axis(t.values[0]) + ";" + axis(t.values[1]) + ")";
+      return "translate(" + axis_value(el, t.values[0]) + ";" + axis_value(el, t.values[1]) + ")";
+    }
+    case TransformPrimitive::TRANSLATE3D: {
+      const Rml::Transforms::Translate3D& t = prim.translate_3d;
+      // EN: x/y slots parsed `length_pct` (PERCENT reachable), z slot parsed `length1`/`&length`
+      //     (PERCENT not reachable, same as `TRANSLATEZ` just above) -- `lengthpct2_length1`,
+      //     `PropertyParserTransform.cpp:32/79`. `axis_value()` is total either way.
+      // PT: Slots x/y parseados `length_pct` (PERCENT alcançável), slot z parseado
+      //     `length1`/`&length` (PERCENT não alcançável, igual ao `TRANSLATEZ` logo acima) --
+      //     `lengthpct2_length1`, `PropertyParserTransform.cpp:32/79`. `axis_value()` é total dos
+      //     dois jeitos.
+      return "translate3d(" + axis_value(el, t.values[0]) + ";" + axis_value(el, t.values[1]) + ";" + axis_value(el, t.values[2]) + ")";
+    }
+    case TransformPrimitive::SCALEX: {
+      const Rml::Transforms::ScaleX& s = prim.scale_x;
+      return "scaleX(" + rcss_quantize(s.values[0]) + ")";
+    }
+    case TransformPrimitive::SCALEY: {
+      const Rml::Transforms::ScaleY& s = prim.scale_y;
+      return "scaleY(" + rcss_quantize(s.values[0]) + ")";
+    }
+    case TransformPrimitive::SCALEZ: {
+      const Rml::Transforms::ScaleZ& s = prim.scale_z;
+      return "scaleZ(" + rcss_quantize(s.values[0]) + ")";
     }
     case TransformPrimitive::SCALE2D: {
       const Rml::Transforms::Scale2D& s = prim.scale_2d;
+      // EN: Pre-`ESC-7` case, UNCHANGED. Also the landing spot for the 1-arg `scale(n)` form --
+      //     `PropertyParserTransform.cpp:99-103` duplicates `args[1] = args[0]` BEFORE
+      //     constructing this SAME `Scale2D`, so a 1-arg source always arrives here already
+      //     2-valued; this case has no separate 1-arg branch to write.
+      // PT: Case pré-`ESC-7`, INALTERADO. Também o destino da forma `scale(n)` de 1 argumento --
+      //     `PropertyParserTransform.cpp:99-103` duplica `args[1] = args[0]` ANTES de construir
+      //     este MESMO `Scale2D`, então uma fonte de 1 argumento sempre chega aqui já com 2
+      //     valores; este case não tem ramo separado de 1-argumento pra escrever.
       return "scale(" + rcss_quantize(s.values[0]) + ";" + rcss_quantize(s.values[1]) + ")";
+    }
+    case TransformPrimitive::SCALE3D: {
+      const Rml::Transforms::Scale3D& s = prim.scale_3d;
+      return "scale3d(" + rcss_quantize(s.values[0]) + ";" + rcss_quantize(s.values[1]) + ";" + rcss_quantize(s.values[2]) + ")";
+    }
+    case TransformPrimitive::ROTATEX: {
+      const Rml::Transforms::RotateX& r = prim.rotate_x;
+      return "rotateX(" + resolved_angle_bare_degrees(r.values[0]) + ")";
+    }
+    case TransformPrimitive::ROTATEY: {
+      const Rml::Transforms::RotateY& r = prim.rotate_y;
+      return "rotateY(" + resolved_angle_bare_degrees(r.values[0]) + ")";
+    }
+    case TransformPrimitive::ROTATEZ: {
+      const Rml::Transforms::RotateZ& r = prim.rotate_z;
+      return "rotateZ(" + resolved_angle_bare_degrees(r.values[0]) + ")";
     }
     case TransformPrimitive::ROTATE2D: {
       const Rml::Transforms::Rotate2D& r = prim.rotate_2d;
-      // EN: Rotate2D::values[0] is stored resolved to RADIANS (TransformPrimitive.cpp:125-126,
-      //     `ResolvedPrimitive(values, {Unit::RAD})`) -- convert to degrees per §8.2 before
-      //     quantizing, same conversion factor as `angle_bare_degrees`.
-      // PT: Rotate2D::values[0] é guardado resolvido em RADIANOS
-      //     (TransformPrimitive.cpp:125-126, `ResolvedPrimitive(values, {Unit::RAD})`) --
-      //     converte pra graus pela §8.2 antes de quantizar, mesmo fator de conversão de
-      //     `angle_bare_degrees`.
-      const float deg = r.values[0] * (180.0f / 3.14159265358979323846f);
-      return "rotate(" + rcss_quantize(deg) + ")";
+      // EN: Pre-`ESC-7` case. Body now calls the hoisted `resolved_angle_bare_degrees()` instead
+      //     of the inline `deg` computation this case used to own -- byte-identical output
+      //     (same literal, see that helper's own comment), one less duplicate of the formula.
+      // PT: Case pré-`ESC-7`. O corpo agora chama o `resolved_angle_bare_degrees()` alçado em vez
+      //     do cálculo inline de `deg` que este case costumava ter -- saída byte-idêntica (mesmo
+      //     literal, ver o próprio comentário daquele helper), uma cópia a menos da fórmula.
+      return "rotate(" + resolved_angle_bare_degrees(r.values[0]) + ")";
     }
+    case TransformPrimitive::ROTATE3D: {
+      const Rml::Transforms::Rotate3D& r = prim.rotate_3d;
+      // EN: Only `values[3]` (the angle) is RAD-resolved -- `values[0..2]` (x/y/z axis) stay bare
+      //     `Unit::NUMBER` passthrough, NO conversion (`Rotate3D`'s own base-units array is
+      //     `{NUMBER, NUMBER, NUMBER, RAD}`, `TransformPrimitive.cpp:128`, not 4x `RAD` like the
+      //     single-axis rotations above).
+      // PT: Só `values[3]` (o ângulo) é resolvido-RAD -- `values[0..2]` (eixo x/y/z) ficam
+      //     passthrough nu de `Unit::NUMBER`, SEM conversão (o próprio array de unidades-base do
+      //     `Rotate3D` é `{NUMBER, NUMBER, NUMBER, RAD}`, `TransformPrimitive.cpp:128`, não 4x
+      //     `RAD` como as rotações de eixo único acima).
+      return "rotate3d(" + rcss_quantize(r.values[0]) + ";" + rcss_quantize(r.values[1]) + ";" + rcss_quantize(r.values[2]) + ";" +
+             resolved_angle_bare_degrees(r.values[3]) + ")";
+    }
+    case TransformPrimitive::SKEWX: {
+      const Rml::Transforms::SkewX& s = prim.skew_x;
+      return "skewX(" + resolved_angle_bare_degrees(s.values[0]) + ")";
+    }
+    case TransformPrimitive::SKEWY: {
+      const Rml::Transforms::SkewY& s = prim.skew_y;
+      return "skewY(" + resolved_angle_bare_degrees(s.values[0]) + ")";
+    }
+    case TransformPrimitive::SKEW2D: {
+      const Rml::Transforms::Skew2D& s = prim.skew_2d;
+      return "skew(" + resolved_angle_bare_degrees(s.values[0]) + ";" + resolved_angle_bare_degrees(s.values[1]) + ")";
+    }
+    case TransformPrimitive::PERSPECTIVE: {
+      const Rml::Transforms::Perspective& p = prim.perspective;
+      // EN: The transform FUNCTION `perspective(<length>)` (a primitive INSIDE a `transform:`
+      //     value list) -- NOT the same-named `perspective` PROPERTY (`Domain::KeywordOrLength`,
+      //     `kRegistry[]` above, its own `property_value()` case elsewhere in this file). Two
+      //     independent grammars that happen to share a keyword; this case owns only the
+      //     transform-function one. Parsed `length1`/`&length` (`PropertyParserTransform.cpp:51`)
+      //     -- PERCENT not reachable here either, same footnote as `TRANSLATEZ` above.
+      // PT: A FUNÇÃO de transform `perspective(<length>)` (uma primitiva DENTRO de uma lista de
+      //     valor `transform:`) -- NÃO a PROPRIEDADE de mesmo nome `perspective`
+      //     (`Domain::KeywordOrLength`, `kRegistry[]` acima, o próprio case dela no
+      //     `property_value()` em outro lugar deste arquivo). Duas gramáticas independentes que
+      //     por acaso compartilham uma palavra-chave; este case é dono só da de função-de-
+      //     transform. Parseada `length1`/`&length` (`PropertyParserTransform.cpp:51`) -- PERCENT
+      //     também não alcançável aqui, mesma nota de rodapé do `TRANSLATEZ` acima.
+      return "perspective(" + axis_value(el, p.values[0]) + ")";
+    }
+    case TransformPrimitive::DECOMPOSEDMATRIX4:
+      // EN: Confirmed absent from `PropertyParserTransform::ParseValue`'s own if-else chain
+      //     (`PropertyParserTransform.cpp:46-149`) -- every `AddPrimitive` call there constructs
+      //     one of the 21 OTHER primitive types this switch already covers; no branch anywhere in
+      //     that function ever builds a `Transforms::DecomposedMatrix4`. This enumerator is
+      //     constructed ONLY by the animation-interpolation subsystem
+      //     (`ElementAnimation.cpp:59-79`'s own `CombineAndDecompose`, called from
+      //     `PrepareTransforms` at `:523-550` as the fallback path when two keyframes' primitive
+      //     lists are not directly interpolation-compatible) -- a static style declaration this
+      //     dumper reads via `Element::GetProperty` can never produce it by itself. Left UNVERIFIED
+      //     by this file, and flagged rather than asserted either way: whether a live
+      //     `Element::GetProperty("transform")` read can OBSERVE this primitive mid-animation
+      //     (i.e. whether `PrepareTransforms`'s own decomposed result ever becomes the property's
+      //     own cascade-visible value, as opposed to staying confined to `ElementAnimation`'s own
+      //     private keyframe bookkeeping) -- tracing that fully is `AnimationComposite`'s own
+      //     domain (`animation_value()`, a separate function in this same file), out of `ESC-7`'s
+      //     own `parse + compute + serialize` scope. Either way this `nullopt` is the SAFE answer:
+      //     fail-high, logged by this function's own caller one screen down, never a crash or a
+      //     silently-wrong printed value.
+      // PT: Confirmado ausente da própria cadeia if-else do `PropertyParserTransform::ParseValue`
+      //     (`PropertyParserTransform.cpp:46-149`) -- toda chamada `AddPrimitive` ali constrói uma
+      //     das 21 OUTRAS primitivas que este switch já cobre; nenhum ramo daquela função constrói
+      //     um `Transforms::DecomposedMatrix4` em momento nenhum. Este enumerador é construído SÓ
+      //     pelo subsistema de interpolação de animação (o próprio `CombineAndDecompose` de
+      //     `ElementAnimation.cpp:59-79`, chamado do `PrepareTransforms` em `:523-550` como
+      //     caminho de fallback quando as listas de primitiva de dois keyframes não são
+      //     diretamente compatíveis pra interpolação) -- uma declaração de estilo estática que
+      //     este dumper lê via `Element::GetProperty` nunca consegue produzi-lo sozinha. Deixado
+      //     NÃO VERIFICADO por este arquivo, e sinalizado em vez de afirmado num sentido ou
+      //     noutro: se uma leitura viva de `Element::GetProperty("transform")` consegue OBSERVAR
+      //     esta primitiva no meio de uma animação (isto é, se o próprio resultado decomposto do
+      //     `PrepareTransforms` algum dia vira o próprio valor visível-à-cascata da propriedade,
+      //     em vez de ficar confinado à própria contabilidade privada de keyframe do
+      //     `ElementAnimation`) -- rastrear isso por completo é domínio do próprio
+      //     `AnimationComposite` (`animation_value()`, função separada neste mesmo arquivo), fora
+      //     do próprio escopo `parse + computo + serialização` da `ESC-7`. Dos dois jeitos, este
+      //     `nullopt` é a resposta SEGURA: fail-high, logado pelo próprio chamador desta função
+      //     uma tela abaixo, nunca um crash nem um valor impresso errado em silêncio.
+      return std::nullopt;
     default:
+      // EN: Unreachable in practice -- every OTHER `TransformPrimitive::Type` enumerator
+      //     (`TransformPrimitive.h:157-180`) has its own explicit case above. Kept as a defensive
+      //     catch-all, same fail-high shape, for a future upstream bump that adds an enumerator
+      //     this file has not been taught about yet -- never silently mis-prints an unknown shape.
+      // PT: Inalcançável na prática -- todo OUTRO enumerador de `TransformPrimitive::Type`
+      //     (`TransformPrimitive.h:157-180`) tem o próprio case explícito acima. Mantido como
+      //     catch-all defensivo, mesma forma fail-high, pra um bump futuro do upstream que some um
+      //     enumerador que este arquivo ainda não aprendeu -- nunca imprime errado em silêncio uma
+      //     forma desconhecida.
       return std::nullopt;
   }
 }
@@ -1850,7 +2139,15 @@ std::string transform_value(Rml::Element* el) {
   for (int i = 0; i < transform->GetNumPrimitives(); ++i) {
     const std::optional<std::string> entry = transform_primitive_value(el, transform->GetPrimitive(i));
     if (!entry.has_value()) {
-      std::fprintf(stderr, "rcss_dump: transform primitive #%d dropped (out of the 2D subset, section 9.4/11)\n", i);
+      // EN: `ESC-7` -- the only entry that can still land here is `DECOMPOSEDMATRIX4` (see that
+      //     case's own comment in `transform_primitive_value()` above) -- pre-`ESC-7` this
+      //     message said "out of the 2D subset, section 9.4/11", stale now that 18 more
+      //     primitive types moved OUT of the drop path.
+      // PT: `ESC-7` -- a única entrada que ainda pode cair aqui é `DECOMPOSEDMATRIX4` (ver o
+      //     próprio comentário daquele case no `transform_primitive_value()` acima) -- pré-`ESC-7`
+      //     esta mensagem dizia "out of the 2D subset, section 9.4/11", obsoleta agora que mais
+      //     18 tipos de primitiva saíram do caminho de descarte.
+      std::fprintf(stderr, "rcss_dump: transform primitive #%d dropped (DECOMPOSEDMATRIX4, animation-interpolation-only, section 11)\n", i);
       continue;
     }
     if (!first) out += "|";

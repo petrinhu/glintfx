@@ -1522,6 +1522,158 @@ próprio pin de verdade, compilado.
 
 ---
 
+## 🟠 Errata (`UIX-RCSS-ERRATA-12`, 2026-08-08) / Errata (`UIX-RCSS-ERRATA-12`, 2026-08-08)
+
+**EN:** `ESC-7` closes `docs/rmlx-subset.md` section 7's own full-parity rule for the transform
+axis: this dump format's own engine now implements all **21** functions the pin itself dispatches
+(§9.4's own worked table above) -- widened from the pre-`ESC-7` 3-function 2D subset
+(`translate`/`scale`/`rotate`) verified only against the corpus's own 2 measured `rotate(...)`
+instances, per the same corpus-count-is-not-a-boundary rule `ESC-4`/`ESC-5`/`ESC-6` already applied
+to the `LENGTH`/named-color/functional-color families. Section 13's own bullet above records this
+closed.
+
+**Two real gaps this item found and closed, both reported here per this document's own "measure,
+report the deviation" discipline rather than silently patched or silently left:**
+
+1. **`translate`/`translateX`/`translateY`/`translate3d` never accepted `%`.** Pre-`ESC-7`, these 4
+   slots resolved through `<length>` only (`parse_length()`, no `%` entry in its own unit table by
+   design) even though the pin's own grammar always used `length_pct` (`Unit::LENGTH_PERCENT`) for
+   them -- `%` was always in the pin's own accepted grammar, simply never wired on this side. No
+   fixture exercised it (the corpus's own 2 measured `transform` instances are both bare
+   `rotate(...)`), so it went unnoticed until this item re-derived the grammar against the pin
+   directly rather than trusting this document's own pre-`ESC-7` text.
+2. **`parse_angle()` (this dump engine's own shared angle parser, `glintfx/src/uix/style/
+   value_compute.cpp`) never implemented the unitless-zero exception, and matched its own `deg`/`rad`
+   suffix case-SENSITIVELY.** Both are genuine, confirmed divergences from the pin's own `angle`
+   parser (`PropertyParserNumber(Unit::ANGLE, Unit::RAD)`, the exact same `zero_unit`/
+   `ToLower`-on-unit-half mechanics `parse_length()`'s own header already documents for `LENGTH`) --
+   `parse_length()`/`parse_resolution()` already had both properties since `ESC-4`, but
+   `parse_angle()`'s own original authoring predates that rewrite and was never brought in line.
+   Fixed by switching `parse_angle()`'s own body to the SAME `find_unit_boundary()`
+   reverse-scan-then-exact-match mechanics `parse_length()` already uses, rather than patching the
+   old case-sensitive `ends_with()` pair (`ends_with()` itself is now dead code, removed). Because
+   `parse_angle()` is shared, this fix benefits ALL THREE of its own pre-existing callers --
+   `transform`'s own angle-typed functions (this item's own primary target), `linear-gradient`'s own
+   direction angle, and `polygon()`'s own rotation argument -- not merely the 18 new `transform`
+   functions this item adds. No pre-`ESC-7` test exercised either gap at any of the three call
+   sites (verified by grep before landing the fix), so neither change alters any previously-passing
+   expectation.
+
+**One deliberate divergence from this item's own task brief, measured and reported, NOT applied:**
+the brief's own prose claimed whitespace BETWEEN a number and its unit inside one argument (e.g.
+`"45 deg"`) is accepted. Tracing `PropertyParserTransform::Scan()`'s own argument extraction into
+`PropertyParserNumber::ParseValue()` confirms the PIN itself does accept it (`strtof`'s own
+partial-parse leniency). But this dump engine's own `parse_length()` already has a DIFFERENT,
+deliberate, documented non-parity on this exact point, decided at `ESC-4`: `parse_float_token()`'s
+own whole-string-match contract rejects `"10 px"`. Reusing `parse_length()`/`parse_percent()`/
+`parse_angle()` unchanged (rather than hand-rolling a second, more lenient token reader just for
+`transform`) means this item inherits that same `ESC-4` decision for every new function, for
+internal consistency across the whole engine -- `rotateX(45 deg)` (space between number and unit)
+stays `Invalid` here, diverging from the pin on this one narrow point exactly as `parse_length()`
+already did before this item existed. Not fixed, because doing so would mean widening
+`parse_float_token()`'s own whole-module contract, a bigger decision than this one item's own
+scope.
+
+**Section 11's own fail-high policy is unchanged** -- an unrecognised function name, wrong arity, or
+domain mismatch (a suffix `<number>` rejects, `%` on a `<length>`/`<angle>` slot, etc.) still fails
+the WHOLE `transform` declaration high, same as every other composite list this document defines.
+What is NEW at the list level specifically: the SEPARATOR between top-level functions is now also
+fail-high (`transform`'s own list uses whitespace only, a comma is `Invalid`) -- see §9.4's own
+"Separator" paragraph above for the `scan_transform_function_calls_strict()` mechanism this
+implements, deliberately NOT the same lenient `scan_function_calls()` `decorator`/`mask-image`
+share.
+
+**Verification, not assertion:** `test_transform_list()` plus 5 new per-family test functions
+(`value_compute_sanity.cpp`) exercise all 21 functions -- >=2 valid non-round cases per function,
+arity boundaries (including `matrix3d` with 15/17 numbers), domain boundaries, the zero-rule,
+function-name case-sensitivity, unit-suffix case-insensitivity, `scale`'s own 1-arg-duplicates
+special case (with `skew`'s own lack of that same fallback proven as the asymmetry it is), the
+comma-separator rejection, an unknown function in the MIDDLE of an otherwise-valid chain still
+invalidating the whole list, and a full 16-number `matrix3d` reproduced byte-exact both as the
+identity matrix and as 16 mutually-distinct non-round values (proving source-order preservation is
+not an accident of the identity matrix's own mostly-zero shape). Angle values requiring a `rad`
+conversion were verified independently via `numpy.float32` (matching this engine's own
+float32-then-double arithmetic exactly), never hand-computed or copied from this item's own
+compiled output.
+
+**PT:** A `ESC-7` fecha a própria regra de paridade total da seção 7 do `docs/rmlx-subset.md` pro
+eixo de transform: o próprio motor deste formato de dump agora implementa todas as **21** funções
+que o próprio pin despacha (a própria tabela trabalhada da §9.4 acima) -- alargado do subconjunto
+2D de 3 funções pré-`ESC-7` (`translate`/`scale`/`rotate`) verificado só contra as próprias 2
+instâncias `rotate(...)` medidas do corpus, pela mesma regra
+contagem-de-corpus-não-é-fronteira que a `ESC-4`/`ESC-5`/`ESC-6` já aplicaram às famílias
+`LENGTH`/cor-nomeada/cor-funcional. O próprio bullet da seção 13 acima registra isso fechado.
+
+**Duas lacunas reais que este item achou e fechou, as duas reportadas aqui per a própria disciplina
+"meça, reporte o desvio" deste documento em vez de remendadas em silêncio ou deixadas em silêncio:**
+
+1. **`translate`/`translateX`/`translateY`/`translate3d` nunca aceitavam `%`.** Pré-`ESC-7`, estes 4
+   slots resolviam só através de `<length>` (`parse_length()`, sem entrada `%` nenhuma na própria
+   tabela de unidade dele por desenho) mesmo a própria gramática do pin sempre usando `length_pct`
+   (`Unit::LENGTH_PERCENT`) pra eles -- `%` sempre esteve na própria gramática aceita do pin, só
+   nunca foi conectado deste lado. Nenhuma fixture exercitava isso (as próprias 2 instâncias
+   `transform` medidas do corpus são as duas `rotate(...)` cru), então passou despercebido até este
+   item re-derivar a gramática contra o pin direto em vez de confiar no próprio texto pré-`ESC-7`
+   deste documento.
+2. **O `parse_angle()` (o próprio parser de ângulo compartilhado deste motor de dump,
+   `glintfx/src/uix/style/value_compute.cpp`) nunca implementava a exceção de zero-sem-unidade, e
+   casava o próprio sufixo `deg`/`rad` dele CASE-SENSITIVE.** As duas são divergências genuínas,
+   confirmadas, do próprio parser `angle` do pin (`PropertyParserNumber(Unit::ANGLE, Unit::RAD)`,
+   exatamente a mesma mecânica `zero_unit`/`ToLower`-na-metade-unidade que o próprio cabeçalho do
+   `parse_length()` já documenta pro `LENGTH`) -- `parse_length()`/`parse_resolution()` já tinham as
+   duas propriedades desde a `ESC-4`, mas a própria autoria original do `parse_angle()` é anterior
+   àquela reescrita e nunca foi alinhada. Consertado trocando o próprio corpo do `parse_angle()` pra
+   MESMA mecânica de scan-reverso-depois-match-exato do `find_unit_boundary()` que o
+   `parse_length()` já usa, em vez de remendar o antigo par case-sensitive `ends_with()` (o próprio
+   `ends_with()` agora é dead code, removido). Como o `parse_angle()` é compartilhado, este conserto
+   beneficia OS TRÊS próprios chamadores pré-existentes dele -- as próprias funções tipo-ângulo do
+   `transform` (o próprio alvo primário deste item), o próprio ângulo de direção do
+   `linear-gradient`, e o próprio argumento de rotação do `polygon()` -- não só as 18 novas funções
+   de `transform` que este item soma. Nenhum teste pré-`ESC-7` exercitava nenhuma das duas lacunas
+   em nenhum dos três call sites (verificado por grep antes de pousar o conserto), então nenhuma das
+   duas mudanças altera nenhuma expectativa previamente-passando.
+
+**Um desvio deliberado do próprio briefing desta tarefa, medido e reportado, NÃO aplicado:** o
+próprio texto do briefing alegava que whitespace ENTRE um número e a própria unidade dele dentro de
+um argumento (ex. `"45 deg"`) é aceito. Rastrear a própria extração de argumento do
+`PropertyParserTransform::Scan()` pro `PropertyParserNumber::ParseValue()` confirma que o PRÓPRIO
+pin de fato aceita (a própria leniência de parse-parcial do `strtof`). Mas o próprio `parse_length()`
+deste motor de dump já tem uma não-paridade DIFERENTE, deliberada, documentada, nesse exato ponto,
+decidida na `ESC-4`: o próprio contrato de casamento-de-string-inteira do `parse_float_token()`
+rejeita `"10 px"`. Reusar `parse_length()`/`parse_percent()`/`parse_angle()` inalterados (em vez de
+escrever à mão um segundo leitor de token, mais leniente, só pro `transform`) significa que este
+item herda essa mesma decisão da `ESC-4` pra cada função nova, por consistência interna no motor
+inteiro -- `rotateX(45 deg)` (espaço entre número e unidade) continua `Invalid` aqui, divergindo do
+pin neste único ponto estreito exatamente como o `parse_length()` já divergia antes deste item
+existir. Não consertado, porque fazer isso significaria alargar o próprio contrato do
+`parse_float_token()` pro módulo inteiro, uma decisão maior que o próprio escopo deste item.
+
+**A própria política fail-high da seção 11 continua inalterada** -- um nome de função
+não-reconhecido, aridade errada, ou incompatibilidade de domínio (um sufixo que um `<number>`
+rejeita, `%` num slot `<length>`/`<angle>`, etc.) ainda derruba a declaração `transform` INTEIRA
+alto, igual todo outro tipo de lista composta que este documento define. O que é NOVO no nível de
+lista especificamente: o próprio SEPARADOR entre funções de topo-de-nível agora também é fail-high
+(a própria lista do `transform` usa só whitespace, uma vírgula é `Invalid`) -- ver o próprio
+parágrafo "Separador" da §9.4 acima pro mecanismo `scan_transform_function_calls_strict()` que isto
+implementa, deliberadamente NÃO o mesmo `scan_function_calls()` leniente que `decorator`/
+`mask-image` compartilham.
+
+**Verificação, não afirmação:** `test_transform_list()` mais 5 novas funções de teste por-família
+(`value_compute_sanity.cpp`) exercitam as 21 funções -- >=2 casos válidos não-redondos por função,
+fronteiras de aridade (incluindo `matrix3d` com 15/17 números), fronteiras de domínio, a regra do
+zero, case-sensitivity de nome de função, case-insensitivity de sufixo de unidade, o próprio caso
+especial de duplicação-1-arg do `scale` (com a própria falta daquele mesmo fallback do `skew`
+provada como a assimetria que é), a rejeição do separador-vírgula, uma função desconhecida no MEIO
+de uma cadeia fora-isso-válida ainda invalidando a lista inteira, e um `matrix3d` completo de 16
+números reproduzido byte-exato tanto como a matriz identidade quanto como 16 valores
+mutuamente-distintos não-redondos (provando que a preservação de ordem da fonte não é um acidente
+da própria forma maioria-zero da matriz identidade). Valores de ângulo exigindo conversão `rad`
+foram verificados independentemente via `numpy.float32` (casando exatamente com a própria
+aritmética float32-depois-double deste motor), nunca calculados à mão ou copiados da própria saída
+compilada deste item.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -2675,31 +2827,105 @@ initial (`none`).
 
 #### 9.4 `transform`
 
-**Scope, stated explicitly because this is the one composite this document intentionally leaves
-thinnest:** `RMLX-2`'s own scope is the cascade's computed *value* of `transform` -- the parsed list
-of transform functions -- not applying that value to produce a render matrix (that is `RMLX-8`'s
-job, per `docs/rmlx-subset.md` section 2's own framing: *"`transform` (19) é ~3× mais usado que
-`@keyframes`... `RMLX-8`... desenhada em torno de `transform` 2D primeiro"*). The census's own
-corpus shows exactly **2** `transform` instances, both `rotate(0deg)`/`rotate(360deg)` inside one
-`@keyframes` block. This dump's grammar covers exactly the 2D subset that instance needs plus its
-two obvious siblings, and states plainly that anything beyond this is unverified against the corpus:
+**Scope, unchanged by `ESC-7`:** `RMLX-2`'s own scope is the cascade's computed *value* of
+`transform` -- the parsed list of transform functions -- not applying that value to produce a
+render matrix (that is still `RMLX-8`'s job, per `docs/rmlx-subset.md` section 2's own framing:
+*"`transform` (19) é ~3× mais usado que `@keyframes`... `RMLX-8`... desenhada em torno de
+`transform` 2D primeiro"*). `matrix`/`matrix3d`'s own 6/16 numbers are copied 1:1 in SOURCE order
+below -- this dump format does not reorder them into row/column render-matrix semantics; that
+interpretation is `RMLX-8`'s job too, unchanged.
+
+**Delivered, `ESC-7` (2026-08-08):** all **21** functions the pinned RmlUi build's own
+`PropertyParserTransform.cpp` accepts, up from the pre-`ESC-7` 3-function 2D subset
+(`translate`/`scale`/`rotate`, verified only against the corpus's own 2 measured `rotate(...)`
+instances) -- `docs/rmlx-subset.md` §7's own "if the engine being replaced accepts it, ours
+accepts it" rule, the same corpus-count-is-not-a-boundary correction `ESC-4`/`ESC-5`/`ESC-6`
+already applied to the `LENGTH`/named-color/functional-color families:
 
 ```
-translate(<x>;<y>) | scale(<x>;<y>) | rotate(<angle>)
+perspective(<length>)
+| matrix(<number>×6)
+| matrix3d(<number>×16)
+| translateX(<length-percent>) | translateY(<length-percent>) | translateZ(<length>)
+| translate(<length-percent>;<length-percent>) | translate3d(<length-percent>;<length-percent>;<length>)
+| scaleX(<number>) | scaleY(<number>) | scaleZ(<number>)
+| scale(<number>;<number>) | scale3d(<number>;<number>;<number>)
+| rotateX(<angle>) | rotateY(<angle>) | rotateZ(<angle>) | rotate(<angle>)
+| rotate3d(<number>;<number>;<number>;<angle>)
+| skewX(<angle>) | skewY(<angle>)
+| skew(<angle>;<angle>)
 ```
 
-`<x>`/`<y>` for `translate`/`scale` per §7/§8 (resolved length or plain number respectively);
-`<angle>` per §8.2. **This grammar is not verified against any measured 3D or matrix transform
-function** (`translate3d`, `matrix`, `matrix3d`, `perspective`, `rotate3d`, `rotateX/Y/Z`,
-`scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`). **This is 3 functions today, not the
-parity target: `docs/rmlx-subset.md` §7 (2026-08-07) authorizes every one of them (the pinned
-RmlUi build's own `PropertyParserTransform.cpp` accepts all of them, evidence in `docs/rmlx-subset.md`
-§7), and `TODO.md`'s `ESC-7` (wave `WR2R`) is the owning slice that raises this grammar to 21 --
-scope stays parse + compute + serialize only, applying the render matrix is still `RMLX-8`'s job,
-unchanged.** Finding a real fixture that uses one of them is no longer the trigger this grammar
-needs extending -- the pinned build's own acceptance already is; `ESC-7` extends this section's own
-grammar with a diff when it lands, per the header clause's mechanism (unchanged), not because a
-fixture was found.
+**Argument domains, all 4 the pin's own `PropertyParserTransform` constructor names**
+(`PropertyParserTransform.cpp:9-10`, each a `PropertyParserNumber` member instance):
+
+| Domain | Pin construction | Used by | `%` accepted? | Unitless `0` |
+|---|---|---|---|---|
+| `<number>` | `Unit::NUMBER`, no `zero_unit` | `matrix`, `matrix3d`, `scaleX/Y/Z`, `scale`, `scale3d`, `rotate3d`'s first 3 slots | No (any suffix is `Invalid`) | Already IS this domain's native form -- no exception needed |
+| `<length>` | `Unit::LENGTH`, `zero_unit=Unit::PX` | `perspective`, `translateZ`, `translate3d`'s third slot | No | `Ok`, prints `0.0000px` |
+| `<length-percent>` | `Unit::LENGTH_PERCENT`, `zero_unit=Unit::PX` | `translateX`, `translateY`, `translate`, `translate3d`'s first two slots | **Yes** (§5's own symbolic form) | `Ok`, prints `0.0000px` (never `0.0000%`) |
+| `<angle>` | `Unit::ANGLE` (`deg`/`rad`), `zero_unit=Unit::RAD` | `rotateX/Y/Z`, `rotate`, `skewX/Y`, `skew`, `rotate3d`'s last slot | No | `Ok`, prints `0.0000` |
+
+**The zero-rule** (§8's own `zero_unit` exception, restated for `transform`'s own 4 domains): a bare
+number with NO suffix at all is `Invalid` for `<length>`/`<length-percent>`/`<angle>` **except when
+its float value is exactly `0.0`** (`float_value == 0.0f`, a numeric comparison -- `0`, `0.0`, `-0`,
+`0e0` all pass) -- `translateX(10)` is `Invalid`, `translateX(0)` is `Ok` (`0.0000px`); `rotate(45)`
+is `Invalid`, `rotate(0)` is `Ok` (`0.0000`). `<number>` has no such rule: a bare number is simply
+this domain's own valid form at any magnitude, never an exception case.
+
+**Print form per domain** (§7/§8's own canonical forms, applied here): `<number>` prints via §7's
+own `quantize(x)`, no suffix (`print_number()`); `<length>`/the resolved half of `<length-percent>`
+print via §8.1's own `quantize(x)+"px"` (`print_length_px()`, ALWAYS `px` regardless of source
+unit); the symbolic half of `<length-percent>` prints via §5's own `quantize(x)+"%"`
+(`print_percent()`, never resolved against a containing block -- `transform` has none); `<angle>`
+prints via §8.2's own bare `quantize(x)`, no suffix, already converted to degrees if the source used
+`rad` (`print_angle_deg()`). `<length-percent>` tries `%` FIRST (a value ending in `%` can never
+also be a length, the two are mutually exclusive by construction), falls back to the `<length>` path
+otherwise.
+
+**The `%`-gap this errata closes:** pre-`ESC-7`, `translate`/`translateX`/`translateY`/
+`translate3d`'s length-shaped slots resolved through `<length>` only, never `<length-percent>`, even
+though the pin's own grammar always used `length_pct` (`Unit::LENGTH_PERCENT`) for these exact 4
+slots -- `%` was always in scope, simply never wired on this side; no fixture exercised it, so
+nobody noticed.
+
+**Separator: whitespace ONLY, a comma between top-level functions is `Invalid`** -- unlike
+`decorator`/`mask-image`'s own comma-separated list (§9.2), `transform`'s own multi-function source
+syntax is ordinary CSS whitespace-adjacency (`translate(...) rotate(...)`), matching
+`PropertyParserTransform::ParseValue()`'s own `while(*next)` loop: the first position matching no
+keyword aborts the ENTIRE property (`PropertyParserTransform.cpp:141-148`) -- a comma there is
+simply a byte no keyword's own `Scan()` recognises, so the whole-parse-fails path already covers it
+without any comma-specific check of upstream's own. `rotate(1deg), rotate(2deg)` is therefore
+`Invalid` as a whole -- never two functions with the comma silently treated as a separator.
+
+**Worked examples, byte-exact, one per domain plus the full `matrix3d`:**
+
+```
+translateX(0)                                 -> translateX(0.0000px)              (<length-percent>, zero-rule)
+translateX(50%)                               -> translateX(50.0000%)              (<length-percent>, % preserved symbolic)
+translateZ(7.5px)                             -> translateZ(7.5000px)              (<length>, no %)
+scaleX(1.75)                                  -> scaleX(1.7500)                    (<number>)
+rotate(0)                                     -> rotate(0.0000)                    (<angle>, zero-rule, unitless)
+translate3d(50%, 10px, 3px)                   -> translate3d(50.0000%;10.0000px;3.0000px)
+scale(2)                                      -> scale(2.0000;2.0000)              (1-arg duplicates into both slots)
+matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)     -> matrix3d(1.0000;0.0000;0.0000;0.0000;0.0000;1.0000;0.0000;0.0000;0.0000;0.0000;1.0000;0.0000;0.0000;0.0000;0.0000;1.0000)
+```
+
+**`scale`'s own dual arity** (`PropertyParserTransform.cpp:95` tries 2 plain numbers first; `:99`
+falls back to 1, duplicating `args[1]=args[0]`, `:101`) is the ONE shape none of the other 20
+functions share -- `skew` (2 args) has **no** such 1-arg fallback in the pin (only ONE
+`Scan(..., "skew", angle2, args, 2)` call exists, `:136`), a genuine asymmetry with `scale` this
+document records explicitly rather than leaving a second implementer to assume symmetry.
+
+**Function names are case-SENSITIVE** (`translatex(...)` is `Invalid`, only `translateX` with the
+capital `X` is recognised, mirroring `PropertyParserTransform::Scan()`'s own `memcmp`,
+`PropertyParserTransform.cpp:170`); **unit suffixes are case-INSENSITIVE** (`45DEG` is `Ok`, same
+convention §8.1 already documents for `LENGTH`).
+
+See `UIX-RCSS-ERRATA-12` above for the two pre-existing gaps `ESC-7` also closed in the shared angle
+parser (unitless-zero exception, case-insensitive unit suffix) -- both benefit `transform`'s own
+angle-typed functions AND the two other pre-existing callers (`linear-gradient`'s own direction
+angle, `polygon()`'s own rotation argument), not merely the 18 functions this errata adds.
 
 ### 10. `@font-face` and `@keyframes`: structural registries, not element properties
 
@@ -2886,11 +3112,14 @@ the first place; every bullet below **was**, and that framing is what this rewri
   unbounded pseudo-class matcher itself (`Element::SetPseudoClass` is public API with no closed
   list, `Include/RmlUi/Core/Element.h:266`, `StyleSheetSelector.h:116` -- corrected, §6.2's own
   row above) -- `ESC-12`.
-- **3D/matrix `transform` functions** (`translate3d`, `matrix`, `matrix3d`, `rotate3d`,
-  `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`, `perspective` --
-  `PropertyParserTransform.cpp`): §9.4's grammar stays at the 2D subset (3 functions) until `ESC-7`
-  lands (+18, closing 3 → 21) -- scope is parse + compute + serialize only; applying the render
-  matrix is still `RMLX-8`'s job, unchanged.
+- **3D/matrix `transform` functions:** ~~§9.4's grammar stays at the 2D subset (3 functions) until
+  `ESC-7` lands...~~ **delivered by `ESC-7`, 2026-08-08 -- all 21** (`translate3d`, `matrix`,
+  `matrix3d`, `rotate3d`, `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`,
+  `translateX/Y/Z`, `perspective`, `PropertyParserTransform.cpp`, one static
+  `kTransformFunctionTable` entry per function transcribed line-for-line from that same file's own
+  `Scan(...)` call chain, `:51-139`) -- matching `TODO.md`'s own entry and `UIX-RCSS-ERRATA-12`
+  (§9.4 above). Scope stays parse + compute + serialize only; applying the render matrix is still
+  `RMLX-8`'s job, unchanged.
 - **`radial-gradient`'s `ellipse` shape** (`ending-shape` accepts `circle, ellipse, unspecified`,
   `DecoratorGradient.cpp:519`): `circle` stays the only shape `docs/effects.md`'s grammar accepts
   until `ESC-15` (native decorator/filter/font-effect parity, a broader slice this shape is folded
@@ -4459,10 +4688,13 @@ bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
   casador de pseudo-classe genérico e sem limite (`Element::SetPseudoClass` é API pública sem lista
   fechada, `Include/RmlUi/Core/Element.h:266`, `StyleSheetSelector.h:116` -- corrigido, a própria
   linha da §6.2 acima) -- `ESC-12`.
-- **Funções de `transform` 3D/matriz** (`translate3d`, `matrix`, `matrix3d`, `rotate3d`,
-  `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`, `skewX/Y`, `translateX/Y/Z`, `perspective` --
-  `PropertyParserTransform.cpp`): a gramática da seção 9.4 fica no subconjunto 2D (3 funções) até a
-  `ESC-7` entrar (+18, fechando 3 → 21) -- escopo é só parse + computo + serialização; aplicar a
+- **Funções de `transform` 3D/matriz:** ~~a gramática da seção 9.4 fica no subconjunto 2D (3
+  funções) até a `ESC-7` entrar...~~ **entregue pela `ESC-7`, 2026-08-08 -- todas as 21**
+  (`translate3d`, `matrix`, `matrix3d`, `rotate3d`, `rotateX/Y/Z`, `scale3d`, `scaleX/Y/Z`, `skew`,
+  `skewX/Y`, `translateX/Y/Z`, `perspective`, `PropertyParserTransform.cpp`, uma entrada estática
+  da `kTransformFunctionTable` por função transcrita linha-por-linha da própria cadeia de chamadas
+  `Scan(...)` daquele mesmo arquivo, `:51-139`) -- batendo com o próprio item do `TODO.md` e a
+  `UIX-RCSS-ERRATA-12` (§9.4 acima). Escopo continua só parse + computo + serialização; aplicar a
   matriz de render continua sendo trabalho da `RMLX-8`, sem mudança.
 - **A forma `ellipse` do `radial-gradient`** (`ending-shape` aceita `circle, ellipse, unspecified`,
   `DecoratorGradient.cpp:519`): `circle` fica a única forma que a gramática do `docs/effects.md`

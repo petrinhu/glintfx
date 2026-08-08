@@ -188,6 +188,8 @@ The census measured 8 units in real use (`dp` 2237, `px` 334, `%` 207, unitless 
 
 `docs/uix-rcss.md` section 5 already implements this three-way split in the dump format that ships `RMLX-2`'s oracle; this amendment is what makes that split a decision **this** document -- the one with sign-off authority under the header clause -- also records, not only an implementer's private inference from the dump spec alone.
 
+**Implemented by `ESC-4`, 2026-08-08.** The 10 units this decision named (`rem`, generalized `em`, `vw`, `vh`, `x`, `in`, `cm`, `mm`, `pt`, `pc`) are delivered -- `glintfx/src/uix/style/value_compute.hpp`'s own `LengthUnit` (11 members, `Px`/`Dp` plus these 9 -- `x` deliberately excluded, see `parse_resolution()`'s own doc-comment for why) and `LengthResolveContext`, verified by the `RMLX-2` differential oracle against the pinned RmlUi build (a new fixture, `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc4_unit_parity.rml`, byte-identical to Side A on all 10 -- 9 exercised end-to-end via the oracle, `x` via unit tests only since its only real consumer, `@spritesheet`, is not implemented yet). `docs/uix-rcss.md` section 8.1/1/15 record the byte-exact worked example.
+
 ### 7. Amendment 2026-08-07 -- full parity with the substituted engine (the líder's order)
 
 **Ordered by:** the líder, 2026-08-07, verbatim:
@@ -384,6 +386,8 @@ O censo mediu 8 unidades em uso real (`dp` 2237, `px` 334, `%` 207, sem-unidade 
 3. **Coordenada do centro do gradiente radial** (`radial-gradient(circle at 35% 30%, ...)`) -- as duas porcentagens são coordenadas X/Y dentro da própria caixa 2D do decorator, uma terceira semântica, nem eixo de gradiente nem containing block de layout.
 
 O `docs/uix-rcss.md` seção 5 já implementa essa separação em três no formato de dump que serve o oráculo da `RMLX-2`; esta emenda é o que faz essa separação virar uma decisão que **este** documento -- o que tem autoridade de aval sob a cláusula do cabeçalho -- também registra, não só uma inferência privada do implementer a partir da spec de dump sozinha.
+
+**Implementado pela `ESC-4`, 2026-08-08.** As 10 unidades que esta decisão nomeou (`rem`, `em` generalizado, `vw`, `vh`, `x`, `in`, `cm`, `mm`, `pt`, `pc`) estão entregues -- o próprio `LengthUnit` (11 membros, `Px`/`Dp` mais estas 9 -- `x` excluído de propósito, ver o próprio doc-comment do `parse_resolution()` pro porquê) e o `LengthResolveContext` do `glintfx/src/uix/style/value_compute.hpp`, verificados pelo oráculo diferencial da `RMLX-2` contra o build fixado do RmlUi (fixture nova, `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc4_unit_parity.rml`, byte-idêntica ao lado A nas 10 -- 9 exercitadas ponta-a-ponta via o oráculo, `x` só via teste de unidade já que o único consumidor real dela, `@spritesheet`, ainda não está implementado). A seção 8.1/1/15 do `docs/uix-rcss.md` registra o exemplo trabalhado byte-exato.
 
 ### 7. Emenda 2026-08-07 -- paridade total com o motor substituído (ordem do líder)
 

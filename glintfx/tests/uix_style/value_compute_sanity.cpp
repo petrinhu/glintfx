@@ -205,7 +205,7 @@ void test_worked_example_15_3_three_percent_families() {
       "linear-gradient(90deg, #FF0000 20%, #00FF00 80%), "
       "radial-gradient(circle at 35% 30%, #F0D98C, #C9A24B 55%, #7A5A2E 100%)";
   std::string decorator_dump;
-  check(compute_decorator_list(decorator_raw, /*dp_ratio=*/1.0f, &decorator_dump) ==
+  check(compute_decorator_list(decorator_raw, LengthResolveContext{.dp_ratio = 1.0f}, &decorator_dump) ==
             ValueComputeStatus::Ok,
         "15.3: decorator computes Ok");
   // EN: All 5 stop colors here carry alpha=ff, so gradient-stop premultiplication (`UIX-RCSS-
@@ -272,7 +272,7 @@ void test_worked_example_15_2_border_top_order_is_load_bearing() {
     LengthUnit len_unit = LengthUnit::Px;
     check(parse_length("1dp", &len_val, &len_unit) == ValueComputeStatus::Ok,
           "15.2 body/0: border-top-width raw '1dp' parses as a length");
-    check_eq(print_length_px(resolve_length_px(len_val, len_unit, kDpRatio)), "1.0000px",
+    check_eq(print_length_px(resolve_length_px(len_val, len_unit, LengthResolveContext{.dp_ratio = kDpRatio})), "1.0000px",
              "15.2 body/0 PROP border-top-width=1.0000px");
 
     Rgba8 color{};
@@ -303,7 +303,7 @@ void test_worked_example_15_2_border_top_order_is_load_bearing() {
     LengthUnit len_unit = LengthUnit::Px;
     check(parse_length(width_info->initial_value, &len_val, &len_unit) == ValueComputeStatus::Ok,
           "15.2 body/1: border-top-width's own registry initial value ('0px') parses");
-    check_eq(print_length_px(resolve_length_px(len_val, len_unit, kDpRatio)), "0.0000px",
+    check_eq(print_length_px(resolve_length_px(len_val, len_unit, LengthResolveContext{.dp_ratio = kDpRatio})), "0.0000px",
              "15.2 body/1 PROP border-top-width=0.0000px (never matched, registry initial)");
   }
 }
@@ -349,7 +349,7 @@ void test_worked_example_15_2_border_top_order_is_load_bearing() {
 void test_worked_example_9_1_box_shadow() {
   std::string out;
   check(compute_box_shadow("#22D3EE 0dp 0dp 0dp 1dp inset, #22D3EE26 0dp 0dp 16dp 0dp",
-                           /*dp_ratio=*/1.0f, &out) == ValueComputeStatus::Ok,
+                           LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "9.1: box-shadow computes Ok");
   check_eq(out,
            "#22d3eeff;0.0000px;0.0000px;0.0000px;1.0000px;true|"
@@ -373,16 +373,16 @@ void test_worked_example_9_1_box_shadow() {
 //     perda genuína, não uma identidade nem uma premultiplicação simples.
 void test_box_shadow_color_lossy_roundtrip_orchestrator_table() {
   std::string out;
-  check(compute_box_shadow("#22d3ee80 0dp 0dp", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_box_shadow("#22d3ee80 0dp 0dp", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "orchestrator table row 1 computes Ok");
   check(out.rfind("#21d1ed80;", 0) == 0,
         "orchestrator table row 1: #22d3ee80 -> #21d1ed80 (authored != stored != printed)");
 
-  check(compute_box_shadow("#c9a24b40 0dp 0dp", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_box_shadow("#c9a24b40 0dp 0dp", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "orchestrator table row 2 computes Ok");
   check(out.rfind("#c79f4740;", 0) == 0, "orchestrator table row 2: #c9a24b40 -> #c79f4740");
 
-  check(compute_box_shadow("#22d3ee00 0dp 0dp", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_box_shadow("#22d3ee00 0dp 0dp", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "orchestrator table row 3 computes Ok");
   check(out.rfind("#00000000;", 0) == 0,
         "orchestrator table row 3: alpha=0 -- the guarded division never fires, all channels 0");
@@ -400,7 +400,8 @@ void test_box_shadow_color_lossy_roundtrip_orchestrator_table() {
 //     chute independente deste item).
 void test_box_shadow_malformed_layer_drops_whole_property() {
   std::string out;
-  check(compute_box_shadow("#22D3EE 0dp 0dp inset, not-a-color 1dp 1dp", /*dp_ratio=*/1.0f, &out) ==
+  check(compute_box_shadow("#22D3EE 0dp 0dp inset, not-a-color 1dp 1dp",
+                           LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
         "a malformed 2nd layer invalidates the WHOLE box-shadow declaration, even though the 1st "
         "layer alone would have parsed fine");
@@ -558,14 +559,14 @@ void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
   // (DecorationTypes.h:9) -- KEEP the lossy round-trip, same byte math as box-shadow's own
   // orchestrator-table row 2 (test_box_shadow_color_lossy_roundtrip_orchestrator_table above:
   // #c9a24b40 -> #c79f4740) -- different alpha here (0x24/0x0a), independently reconfirmed.
-  check(compute_decorator_list("linear-gradient(90deg, #C9A24B24, #C9A24B0a)", 1.0f, &out) ==
+  check(compute_decorator_list("linear-gradient(90deg, #C9A24B24, #C9A24B0a)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "linear-gradient with low-alpha 8-digit hex stops computes Ok");
   check_eq(out, "linear-gradient(90.0000;#c69b4624:0.0000%;#b299330a:100.0000%)",
            "linear-gradient KEEPS the lossy round-trip -- ColorStop IS ColourbPremultiplied "
            "upstream, this is CORRECT behaviour, not the bug this item fixes");
 
-  check(compute_decorator_list("radial-gradient(#C9A24B24, #C9A24B0a)", 1.0f, &out) ==
+  check(compute_decorator_list("radial-gradient(#C9A24B24, #C9A24B0a)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "radial-gradient with low-alpha 8-digit hex stops computes Ok");
   check_eq(out, "radial-gradient(50.0000%;50.0000%;#c69b4624:0.0000%;#b299330a:100.0000%)",
@@ -575,7 +576,7 @@ void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
   // horizontal-gradient / vertical-gradient -- DecoratorStraightGradient, plain Colourb upstream
   // (DecoratorGradient.h) -- NEVER round-trip. This IS the fix: byte-exact match to the oracle's
   // own measured side-A line for system_menu__config_controles_tabela.rml:469.
-  check(compute_decorator_list("horizontal-gradient(#C9A24B24 #C9A24B0a)", 1.0f, &out) ==
+  check(compute_decorator_list("horizontal-gradient(#C9A24B24 #C9A24B0a)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "horizontal-gradient with low-alpha 8-digit hex computes Ok");
   check_eq(out, "horizontal-gradient(#c9a24b24;#c9a24b0a)",
@@ -583,7 +584,7 @@ void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
            "upstream, straight passthrough, never the corrupted #c69b4624;#b299330a this bug used "
            "to produce");
 
-  check(compute_decorator_list("vertical-gradient(#C9A24B24 #C9A24B0a)", 1.0f, &out) ==
+  check(compute_decorator_list("vertical-gradient(#C9A24B24 #C9A24B0a)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "vertical-gradient with low-alpha 8-digit hex computes Ok");
   check_eq(out, "vertical-gradient(#c9a24b24;#c9a24b0a)",
@@ -595,7 +596,7 @@ void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
   // The second corpus occurrence UIX-ORACLE-MEDICAO's own report explicitly flagged as
   // unverified ("did not appear in the diff for this fixture", never bound to an element in that
   // run) -- exercised directly here to prove the fix generalizes past one RGB/alpha pair.
-  check(compute_decorator_list("vertical-gradient(#22D3EE1a #22D3EE0a)", 1.0f, &out) ==
+  check(compute_decorator_list("vertical-gradient(#22D3EE1a #22D3EE0a)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "vertical-gradient second corpus occurrence (config_controles_tabela.rml:472) computes Ok");
   check_eq(out, "vertical-gradient(#22d3ee1a;#22d3ee0a)",
@@ -641,33 +642,172 @@ void test_color_parsing_all_forms() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: docs/uix-rcss.md section 8.1 -- only `px`/`dp` resolve, unitless `0` is accepted, every
-//     other unit (em/rem/vw/vh) is fail-high, per this item's own declared teto.
-// PT: Seção 8.1 do docs/uix-rcss.md -- só `px`/`dp` resolvem, `0` sem unidade é aceito, toda
-//     outra unidade (em/rem/vw/vh) é fail-high, per o próprio teto declarado deste item.
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own `px`/`dp` cases, UNCHANGED by this item (the
+//     unitless-`0`/non-zero-unitless fail-high rule is unchanged too). The pre-`ESC-4` version of
+//     this test also asserted `1em`/`1rem` were `Invalid` here -- that assertion is now FALSE
+//     (`parse_length`'s own domain widened to the full 11-member `LENGTH` family, see
+//     value_compute.hpp's own updated header) and is replaced by
+//     `test_length_resolution_esc4_full_unit_parity()` immediately below, which proves the
+//     opposite for all 9 new units plus the widened suffix-recognition mechanics (case-
+//     insensitivity, `x` staying excluded, `"10 px"`'s own documented divergence).
+// PT: `ESC-4` -- os próprios casos `px`/`dp` da seção 8.1 do docs/uix-rcss.md, INALTERADOS por este
+//     item (a regra fail-high de zero-sem-unidade/não-zero-sem-unidade também inalterada). A versão
+//     pré-`ESC-4` deste teste também asserava `1em`/`1rem` como `Invalid` aqui -- essa asserção
+//     agora é FALSA (o próprio domínio do `parse_length` alargou pra família `LENGTH` completa de
+//     11 membros, ver o próprio cabeçalho atualizado do value_compute.hpp) e é substituída pelo
+//     `test_length_resolution_esc4_full_unit_parity()` logo abaixo, que prova o oposto pros 9
+//     unidades novas mais a própria mecânica alargada de reconhecimento de sufixo
+//     (case-insensitivity, `x` continuando excluído, a própria divergência documentada do
+//     `"10 px"`).
 void test_length_resolution() {
   float v = 0.0f;
   LengthUnit u = LengthUnit::Px;
   check(parse_length("16px", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Px && v == 16.0f,
         "16px parses as Px unit, value 16");
-  check_eq(print_length_px(resolve_length_px(v, u, /*dp_ratio=*/2.0f)), "16.0000px",
-           "px length ignores dp_ratio");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 2.0f})),
+           "16.0000px", "px length ignores dp_ratio");
 
   check(parse_length("2dp", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Dp && v == 2.0f,
         "2dp parses as Dp unit, value 2");
-  check_eq(print_length_px(resolve_length_px(v, u, /*dp_ratio=*/8.0f)), "16.0000px",
-           "2dp at dp_ratio=8 resolves to 16px");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 8.0f})),
+           "16.0000px", "2dp at dp_ratio=8 resolves to 16px");
 
   check(parse_length("0", &v, &u) == ValueComputeStatus::Ok,
         "unitless 0 is accepted (CSS's own zero-length convention)");
   check(parse_length("5", &v, &u) == ValueComputeStatus::Invalid,
         "unitless non-zero is fail-high, never guessed");
-  check(parse_length("1em", &v, &u) == ValueComputeStatus::Invalid,
-        "em: fail-high in the GENERAL pure-function funnel -- parse_length()/resolve_length_px() "
-        "stay unit-incomplete on purpose (see value_compute.hpp's own header, 'Scope'); "
-        "parse_font_size() below is the NEW, narrow, font-size-only resolver that actually "
-        "computes em, added additively rather than widening this general pair");
-  check(parse_length("1rem", &v, &u) == ValueComputeStatus::Invalid, "rem: fail-high, same reason");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own full `LENGTH` unit family (11 members),
+//     closing `rmlx-subset.md` section 6.3/section 7's "full parity with the substituted engine"
+//     decision for this axis (2026-08-06/2026-08-07). Every resolved value below transcribes
+//     `ComputeLength`/`ComputePPILength` verbatim
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`) -- see
+//     `value_compute.hpp`'s own `resolve_length_px()` doc-comment for the exact per-unit formula
+//     this test pins. `em`/`rem` here exercise the GENERAL, ancestor-blind funnel (any property
+//     OTHER than `font-size`) -- `test_font_size_em_resolution()` below is the SEPARATE, narrower
+//     `parse_font_size()` exception for the font-size property's own parent-vs-self/root-vs-
+//     document rule, which this test does not touch.
+// PT: `ESC-4` -- a própria família de unidade `LENGTH` completa (11 membros) da seção 8.1 do
+//     docs/uix-rcss.md, fechando a decisão "paridade completa com o motor substituído" da seção
+//     6.3/seção 7 do `rmlx-subset.md` pra este eixo (2026-08-06/2026-08-07). Todo valor resolvido
+//     abaixo transcreve `ComputeLength`/`ComputePPILength` verbatim
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`) -- ver o próprio
+//     doc-comment do `resolve_length_px()` no value_compute.hpp pra fórmula exata por unidade que
+//     este teste pina. `em`/`rem` aqui exercitam o funil GERAL, cego-a-ancestral (qualquer
+//     propriedade que NÃO seja `font-size`) -- o `test_font_size_em_resolution()` abaixo é a
+//     exceção SEPARADA, mais estreita, do `parse_font_size()` pra própria regra pai-vs-
+//     elemento/raiz-vs-documento da propriedade font-size, que este teste não toca.
+void test_length_resolution_esc4_full_unit_parity() {
+  float v = 0.0f;
+  LengthUnit u = LengthUnit::Px;
+
+  // (1) em/rem, GENERAL funnel -- ctx.font_size_px (em's own base) and ctx.document_font_size_px
+  //     (rem's own base) are DELIBERATELY different values below, so a swap of the two fields
+  //     inside resolve_length_px() would fail this test rather than pass by coincidence.
+  check(parse_length("2em", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Em && v == 2.0f,
+        "ESC-4: '2em' parses as Em unit, value 2 -- the pre-ESC-4 Invalid case is now Ok");
+  check_eq(print_length_px(resolve_length_px(
+               v, u, LengthResolveContext{.font_size_px = 10.0f, .document_font_size_px = 999.0f})),
+           "20.0000px",
+           "ESC-4: 2em * ctx.font_size_px(10) = 20px -- reads font_size_px, NEVER "
+           "document_font_size_px(999), proving em is SELF-relative in the general funnel");
+
+  check(parse_length("1.5rem", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Rem,
+        "ESC-4: '1.5rem' parses as Rem unit");
+  check_eq(print_length_px(resolve_length_px(
+               v, u, LengthResolveContext{.font_size_px = 999.0f, .document_font_size_px = 20.0f})),
+           "30.0000px",
+           "ESC-4: 1.5rem * ctx.document_font_size_px(20) = 30px -- reads document_font_size_px, "
+           "NEVER font_size_px(999), proving rem is DOCUMENT-relative, not self-relative");
+
+  // (2) vw/vh -- viewport-relative, docs/uix-rcss.md section 1's own "viewport as a parameter"
+  //     clause (ESC-4's own addition): 320x240 mirrors this repo's own real oracle viewport
+  //     (rcss_dump_differential_oracle.cpp's own `engine.attach(&clock, 320, 240)`).
+  check(parse_length("50vw", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Vw,
+        "ESC-4: '50vw' parses as Vw unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.vp_w_px = 320.0f})),
+           "160.0000px", "ESC-4: 50vw * 320 * 0.01 = 160px");
+
+  check(parse_length("50vh", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Vh,
+        "ESC-4: '50vh' parses as Vh unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.vp_h_px = 240.0f})),
+           "120.0000px", "ESC-4: 50vh * 240 * 0.01 = 120px");
+
+  // (3) Physical (PPI_UNIT) -- `rmlx-subset.md` section 6.3's own ⚠️ note: these ALSO scale with
+  //     `dp_ratio` (`Unit.h:62`'s own `DP_SCALABLE_LENGTH = DP | PPI_UNIT`), NOT a fixed CSS 96dpi.
+  //     `dp_ratio=1.0` first (the identity case), then the delta test at `dp_ratio=2.0` (`1in` ->
+  //     `192px`, not `96px`) -- the one assertion that actually FALSIFIES "CSS 96dpi fixed" rather
+  //     than merely being consistent with it (this codebase's own house rule: a boundary needs the
+  //     case that would catch the wrong implementation, not just the case the right one produces).
+  check(parse_length("1in", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::In,
+        "ESC-4: '1in' parses as In unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 1.0f})),
+           "96.0000px", "ESC-4: 1in at dp_ratio=1.0 -> 96px (PixelsPerInch)");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 2.0f})),
+           "192.0000px",
+           "ESC-4: 1in at dp_ratio=2.0 -> 192px, NOT 96px -- physical units scale with dp_ratio "
+           "too, falsifying a fixed-96dpi implementation rather than merely being consistent with "
+           "one");
+
+  check(parse_length("1cm", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Cm,
+        "ESC-4: '1cm' parses as Cm unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 1.0f})),
+           "37.7953px", "ESC-4: 1cm at dp_ratio=1.0 -> 96 * (1/2.54)");
+
+  check(parse_length("1mm", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Mm,
+        "ESC-4: '1mm' parses as Mm unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 1.0f})),
+           "3.7795px", "ESC-4: 1mm at dp_ratio=1.0 -> 96 * (1/25.4)");
+
+  check(parse_length("1pt", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Pt,
+        "ESC-4: '1pt' parses as Pt unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 1.0f})),
+           "1.3333px", "ESC-4: 1pt at dp_ratio=1.0 -> 96 * (1/72)");
+
+  check(parse_length("1pc", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Pc,
+        "ESC-4: '1pc' parses as Pc unit");
+  check_eq(print_length_px(resolve_length_px(v, u, LengthResolveContext{.dp_ratio = 1.0f})),
+           "16.0000px", "ESC-4: 1pc at dp_ratio=1.0 -> 96 * (1/6)");
+
+  // (4) Case-insensitivity -- ESC-4's own measured parity side effect: the pin's own
+  //     `StringUtilities::ToLower` on the unit half is unconditional (`PropertyParserNumber.cpp:58`).
+  //     Pre-ESC-4 this function was case-SENSITIVE (an `ends_with`-per-unit chain), rejecting both.
+  check(parse_length("10PX", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::Px && v == 10.0f,
+        "ESC-4: '10PX' (uppercase suffix) now accepted, case-insensitive per the pin");
+  check(parse_length("1IN", &v, &u) == ValueComputeStatus::Ok && u == LengthUnit::In && v == 1.0f,
+        "ESC-4: '1IN' (uppercase suffix) now accepted too");
+
+  // (5) Fail-high, unchanged discipline extended to the 9 new units.
+  check(parse_length("10q", &v, &u) == ValueComputeStatus::Invalid,
+        "ESC-4: '10q' -- unrecognised suffix, Invalid, never guessed");
+  check(parse_length("10 px", &v, &u) == ValueComputeStatus::Invalid,
+        "ESC-4: '10 px' (space before the unit) -- Invalid, a DOCUMENTED divergence from the pin "
+        "(which accepts it -- strtof does not require a whole-string match); this module's own "
+        "parse_float_token() does, per value_compute.hpp's own parse_length() doc-comment, and "
+        "this item does not change that");
+  check(parse_length("10x", &v, &u) == ValueComputeStatus::Invalid,
+        "ESC-4: '10x' -- Unit::X is NOT part of Unit::LENGTH (Unit.h:58), so parse_length() must "
+        "never accept it; see parse_resolution() below for x's own separate, narrow home");
+
+  // (6) `x`/resolution -- kept OUT of parse_length()/LengthUnit entirely (Unit::X is not LENGTH), a
+  //     standalone function whose only real pin-side consumer is `@spritesheet`'s own
+  //     `resolution: <n>x` (not implemented yet, owned by ESC-14) -- passthrough, no scaling, and
+  //     (unlike parse_length) NO unitless-zero exception, because the pin's own
+  //     `PropertyParserNumber(Unit::X)` constructor call passes no `zero_unit` argument.
+  float res = 0.0f;
+  check(parse_resolution("2x", &res) == ValueComputeStatus::Ok && res == 2.0f,
+        "ESC-4: parse_resolution('2x') -- Ok, passthrough, value 2.0");
+  check(parse_resolution("2X", &res) == ValueComputeStatus::Ok && res == 2.0f,
+        "ESC-4: parse_resolution('2X') -- case-insensitive too, same as parse_length()'s own rule");
+  check(parse_resolution("10px", &res) == ValueComputeStatus::Invalid,
+        "ESC-4: parse_resolution('10px') -- Invalid, 'px' is not the resolution unit");
+  check(parse_resolution("2", &res) == ValueComputeStatus::Invalid,
+        "ESC-4: parse_resolution('2') -- Invalid, no unitless exception for resolution (the pin's "
+        "own PropertyParserNumber(Unit::X) constructor passes no zero_unit, PropertyParserNumber.h:14)");
+  check(parse_resolution("", &res) == ValueComputeStatus::Invalid,
+        "ESC-4: parse_resolution('') -- Invalid, empty input");
 }
 
 // ---------------------------------------------------------------------------
@@ -709,9 +849,10 @@ void test_length_resolution() {
 //     ancestral fixo.
 void test_font_size_em_resolution() {
   float px = 0.0f;
+  constexpr LengthResolveContext kCtx1{}; // dp_ratio=1.0, others 0 -- irrelevant to em/px/dp cases.
 
   // (1) The exact oracle-measured case: parent 64px, child 0.7em -> 44.8px, never the 12px fallback.
-  check(parse_font_size("0.7em", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+  check(parse_font_size("0.7em", /*parent_font_size_px=*/64.0f, kCtx1, &px) ==
             ValueComputeStatus::Ok,
         "0.7em over a 64px parent resolves Ok, not Invalid");
   check_eq(print_length_px(px), "44.8000px",
@@ -722,14 +863,14 @@ void test_font_size_em_resolution() {
   //     the CHILD's own resolved 100px (=25px), never relative to the 200px grandparent or to some
   //     fixed context -- this is "where inheritance goes wrong hides", per this item's own brief.
   float child_px = 0.0f;
-  check(parse_font_size("0.5em", /*parent_font_size_px=*/200.0f, /*dp_ratio=*/1.0f, &child_px) ==
+  check(parse_font_size("0.5em", /*parent_font_size_px=*/200.0f, kCtx1, &child_px) ==
             ValueComputeStatus::Ok,
         "chained step 1: 0.5em over a 200px parent resolves Ok");
   check_eq(print_length_px(child_px), "100.0000px", "chained step 1: 0.5 * 200 = 100px");
 
   float grandchild_px = 0.0f;
-  check(parse_font_size("0.25em", /*parent_font_size_px=*/child_px, /*dp_ratio=*/1.0f,
-                        &grandchild_px) == ValueComputeStatus::Ok,
+  check(parse_font_size("0.25em", /*parent_font_size_px=*/child_px, kCtx1, &grandchild_px) ==
+            ValueComputeStatus::Ok,
         "chained step 2: 0.25em resolves Ok against the PREVIOUS step's own resolved px, not the "
         "original 200px grandparent");
   check_eq(print_length_px(grandchild_px), "25.0000px",
@@ -740,56 +881,99 @@ void test_font_size_em_resolution() {
   // (3) Absolute units still resolve exactly as parse_length()/resolve_length_px() already do --
   //     parse_font_size() delegates to them for px/dp/unitless-zero, never re-deriving that logic.
   //     `parent_font_size_px` is irrelevant here (a hostile/nonsensical value proves it is ignored).
-  check(parse_font_size("16px", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/2.0f, &px) ==
-            ValueComputeStatus::Ok,
+  check(parse_font_size("16px", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.dp_ratio = 2.0f}, &px) == ValueComputeStatus::Ok,
         "16px (absolute) resolves Ok regardless of parent_font_size_px");
   check_eq(print_length_px(px), "16.0000px", "16px ignores both parent_font_size_px and dp_ratio");
 
-  check(parse_font_size("2dp", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/8.0f, &px) ==
-            ValueComputeStatus::Ok,
+  check(parse_font_size("2dp", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.dp_ratio = 8.0f}, &px) == ValueComputeStatus::Ok,
         "2dp (dp_ratio-relative, not font-size-relative) resolves Ok");
   check_eq(print_length_px(px), "16.0000px", "2dp at dp_ratio=8 resolves to 16px, parent ignored");
 
-  check(parse_font_size("0", /*parent_font_size_px=*/999.0f, /*dp_ratio=*/1.0f, &px) ==
-            ValueComputeStatus::Ok,
+  check(parse_font_size("0", /*parent_font_size_px=*/999.0f, kCtx1, &px) == ValueComputeStatus::Ok,
         "unitless 0 still accepted (CSS's own zero-length convention), parent ignored");
 
-  // (4) `rem`: SAME hole as `em` was, diagnosed here rather than fixed -- docs/uix-rcss-censo.md's
-  //     own measured corpus has ZERO `rem` occurrences (vs. `em`'s exactly 1, the fixture this whole
-  //     item traces to), so implementing it would be building past what any real fixture exercises,
-  //     the same corpus-driven discipline this file's own `kMaxNestDepth`/`kMaxRawValueBytes`
-  //     already follow (see value_compute.hpp's own header, "Teto"). Also proves the `"...rem"`
-  //     suffix is never misparsed as an `em` value missing its leading digit (`"1rem"` also ends in
-  //     the two bytes `"em"` -- the substring left over after stripping THAT `"em"` would be `"1r"`,
-  //     which correctly fails float parsing on its own trailing `'r'`, but this module says so
-  //     EXPLICITLY rather than relying on that as an accident).
-  // PT: `rem`: MESMO buraco que o `em` tinha, diagnosticado aqui em vez de consertado -- o próprio
-  //     corpus medido do docs/uix-rcss-censo.md tem ZERO ocorrências de `rem` (contra exatamente 1
-  //     do `em`, a própria fixture a que este item inteiro remonta), então implementar seria
-  //     construir além do que fixture nenhuma real exercita, a mesma disciplina guiada-por-corpus que
-  //     o próprio `kMaxNestDepth`/`kMaxRawValueBytes` deste arquivo já seguem (ver o próprio
-  //     cabeçalho do value_compute.hpp, "Teto"). Também prova que o próprio sufixo `"...rem"` nunca é
-  //     mal-parseado como um valor `em` faltando o próprio dígito líder (`"1rem"` também termina nos
-  //     dois bytes `"em"` -- o resto da substring depois de tirar AQUELE `"em"` seria `"1r"`, que
-  //     falha corretamente o parse de float pelo próprio `'r'` sobrando -- mas este módulo diz isso
-  //     EXPLICITAMENTE em vez de confiar nisso como acidente).
-  check(parse_font_size("1rem", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
-            ValueComputeStatus::Invalid,
-        "rem: fail-high, same hole as em was, diagnosed not implemented (zero corpus occurrences)");
-  check(parse_font_size("0.7rem", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
-            ValueComputeStatus::Invalid,
-        "0.7rem: fail-high too, not misparsed as '0.7r' + implicit em");
+  // (4) `ESC-4` -- `rem`: the SAME hole `em` had before this repo's own `UIX-EM-UNIT` item, now
+  //     CLOSED (not merely diagnosed) by this item, per `rmlx-subset.md` section 6.3's own "full
+  //     parity, not the measured minimum" decision (zero corpus `rem` occurrences was never a
+  //     reason to skip it -- see `docs/rmlx-subset.md` section 7, the líder's amendment
+  //     generalizing that precedent to every axis this project scopes). `rem` reads
+  //     `ctx.document_font_size_px`, a DIFFERENT field than `em`'s own `parent_font_size_px`
+  //     PARAMETER -- the two values below are deliberately UNEQUAL, so a copy-paste bug that reused
+  //     `parent_font_size_px` for `rem` too would fail this specific assertion rather than pass by
+  //     coincidence (`ComputeFontsize`'s own real split, `ComputeProperty.cpp:100-111`: `em` uses
+  //     `parent_values->font_size()`, `rem` uses `document_values->font_size()`, two different
+  //     `Style::ComputedValues*` sources).
+  // PT: `ESC-4` -- `rem`: o MESMO buraco que o `em` tinha antes do próprio item `UIX-EM-UNIT` deste
+  //     repo, agora FECHADO (não só diagnosticado) por este item, pela própria decisão "paridade
+  //     completa, não o mínimo medido" da seção 6.3 do `rmlx-subset.md` (zero ocorrências de `rem`
+  //     no corpus nunca foi motivo pra pular -- ver a seção 7 do `docs/rmlx-subset.md`, a própria
+  //     emenda do líder generalizando esse precedente pra todo eixo que este projeto escopa). `rem`
+  //     lê `ctx.document_font_size_px`, um campo DIFERENTE do próprio PARÂMETRO
+  //     `parent_font_size_px` do `em` -- os dois valores abaixo são deliberadamente DESIGUAIS, então
+  //     um bug de copiar-colar que reusasse `parent_font_size_px` também pro `rem` falharia esta
+  //     asserção específica em vez de passar por coincidência (a própria separação real do
+  //     `ComputeFontsize`, `ComputeProperty.cpp:100-111`: `em` usa `parent_values->font_size()`,
+  //     `rem` usa `document_values->font_size()`, duas fontes `Style::ComputedValues*` diferentes).
+  check(parse_font_size("1rem", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.document_font_size_px = 64.0f}, &px) ==
+            ValueComputeStatus::Ok,
+        "ESC-4: 1rem now resolves Ok (was Invalid pre-ESC-4) -- reads document_font_size_px, "
+        "never parent_font_size_px");
+  check_eq(print_length_px(px), "64.0000px",
+           "ESC-4: 1rem * document_font_size_px(64) = 64px, NOT 999px (parent_font_size_px, "
+           "deliberately different from document_font_size_px above to catch a field mix-up)");
+  check(parse_font_size("0.7rem", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.document_font_size_px = 64.0f}, &px) ==
+            ValueComputeStatus::Ok,
+        "ESC-4: 0.7rem also resolves Ok, not misparsed as '0.7r' + implicit em -- the reverse-scan "
+        "suffix table matches the WHOLE 'rem' string exactly, never a leftover 'r' from an em match");
+  check_eq(print_length_px(px), "44.8000px", "ESC-4: 0.7rem * 64 = 44.8px");
 
-  // (5) Malformed shapes stay Invalid -- same fail-high discipline as parse_length().
-  check(parse_font_size("", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+  // `ESC-4` -- non-finite `ctx.document_font_size_px` is fail-high, mirroring the pre-existing
+  // `isfinite(parent_font_size_px)` guard the `em` branch already had (this module's own house
+  // discipline: a caller-supplied ancestor value this function cannot itself validate the shape of
+  // must still not silently propagate a NaN/Inf multiplication result).
+  check(parse_font_size(
+            "1rem", /*parent_font_size_px=*/64.0f,
+            LengthResolveContext{.document_font_size_px = std::numeric_limits<float>::quiet_NaN()},
+            &px) == ValueComputeStatus::Invalid,
+        "ESC-4: 1rem with a non-finite ctx.document_font_size_px: Invalid, never a silent NaN "
+        "propagated into the caller");
+
+  // `ESC-4` -- the widened `parse_length()` now recognises `vw`/`vh`/physical suffixes too, so
+  // `parse_font_size()`'s own delegation to `resolve_length_px()` for every non-em/rem unit (the
+  // pin's own "font-relative lengths handled above, other lengths handled as normal" fallthrough,
+  // `ComputeFontsize`'s own closing comment, `ComputeProperty.cpp:116-117`) now covers `font-size:
+  // 50vw`/`font-size: 1in`, etc, not just px/dp as before this item -- `parent_font_size_px` stays
+  // irrelevant for these too, same reasoning as the px/dp cases in (3) above.
+  check(parse_font_size("50vw", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.vp_w_px = 320.0f}, &px) == ValueComputeStatus::Ok,
+        "ESC-4: font-size: 50vw now resolves Ok (delegates to the widened resolve_length_px)");
+  check_eq(print_length_px(px), "160.0000px", "ESC-4: 50vw * 320 * 0.01 = 160px");
+  check(parse_font_size("1in", /*parent_font_size_px=*/999.0f,
+                        LengthResolveContext{.dp_ratio = 2.0f}, &px) == ValueComputeStatus::Ok,
+        "ESC-4: font-size: 1in now resolves Ok too");
+  check_eq(print_length_px(px), "192.0000px",
+           "ESC-4: 1in at dp_ratio=2.0 -> 192px, same PPI_UNIT formula as the general funnel");
+
+  // (5) Malformed shapes stay Invalid -- same fail-high discipline as parse_length(). `%` stays
+  //     OUT OF SCOPE for this item on purpose (docs/rmlx-subset.md section 6.3's own closing note:
+  //     "font-size é LEN sem %" -- registry domain, not widened here).
+  check(parse_font_size("", /*parent_font_size_px=*/64.0f, kCtx1, &px) ==
             ValueComputeStatus::Invalid,
         "empty raw text: Invalid");
-  check(parse_font_size("em", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+  check(parse_font_size("em", /*parent_font_size_px=*/64.0f, kCtx1, &px) ==
             ValueComputeStatus::Invalid,
         "bare 'em' with no leading number: Invalid, never silently 0 or 1");
-  check(parse_font_size("bogus", /*parent_font_size_px=*/64.0f, /*dp_ratio=*/1.0f, &px) ==
+  check(parse_font_size("bogus", /*parent_font_size_px=*/64.0f, kCtx1, &px) ==
             ValueComputeStatus::Invalid,
         "unrecognised unit: Invalid");
+  check(parse_font_size("50%", /*parent_font_size_px=*/64.0f, kCtx1, &px) ==
+            ValueComputeStatus::Invalid,
+        "ESC-4: '50%' -- Invalid, out of THIS item's own scope by design (font-size's own registry "
+        "domain is LEN, not LengthPercent; rmlx-subset.md section 6.3's own closing note)");
 }
 
 // ---------------------------------------------------------------------------
@@ -841,37 +1025,37 @@ void test_non_finite_input_is_fail_high_at_parse_time() {
 //     só nos dois domínios citados-do-parser-upstream).
 void test_transform_list() {
   std::string out;
-  check(compute_transform_list("rotate(0deg)", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_transform_list("rotate(0deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "corpus instance 1 computes Ok");
   check_eq(out, "rotate(0.0000)", "corpus instance 1: rotate(0deg)");
 
-  check(compute_transform_list("rotate(360deg)", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_transform_list("rotate(360deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "corpus instance 2 computes Ok");
   check_eq(out, "rotate(360.0000)", "corpus instance 2: rotate(360deg)");
 
-  check(compute_transform_list("translate(10px, 20px) rotate(45deg)", 1.0f, &out) ==
+  check(compute_transform_list("translate(10px, 20px) rotate(45deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "translate+rotate computes Ok");
   check_eq(out, "translate(10.0000px;20.0000px)|rotate(45.0000)",
            "translate+rotate, whitespace-adjacent multi-function CSS transform-list syntax");
 
-  check(compute_transform_list("scale(1.5, 2)", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_transform_list("scale(1.5, 2)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "scale computes Ok");
   check_eq(out, "scale(1.5000;2.0000)", "scale: plain numbers, not lengths");
 
-  check(compute_transform_list("", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_transform_list("", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "empty transform value computes Ok");
   check_eq(out, "none", "empty transform value prints 'none'");
 
-  check(compute_transform_list("none", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_transform_list("none", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "'none' transform value computes Ok");
   check_eq(out, "none", "'none' transform value prints 'none'");
 
-  check(compute_transform_list("matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)", 1.0f, &out) ==
+  check(compute_transform_list("matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
         "matrix3d: out-of-scope per section 13, fail-high -- Invalid, never a guess");
 
-  check(compute_transform_list("translate(10px, 20px) matrix3d(...)", 1.0f, &out) ==
+  check(compute_transform_list("translate(10px, 20px) matrix3d(...)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
         "one unknown function among otherwise-valid ones: the WHOLE transform list is Invalid, "
         "per section 11's own corrected uniform malformed-entry policy -- translate() does NOT "
@@ -896,24 +1080,24 @@ void test_transform_list() {
 void test_decorator_list_malformed_entry_drops_whole_property() {
   std::string out;
 
-  check(compute_decorator_list("blur(4px), not-a-real-function(1,2,3)", 1.0f, &out) ==
+  check(compute_decorator_list("blur(4px), not-a-real-function(1,2,3)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
         "unknown function anywhere in the list invalidates the WHOLE property -- blur() does NOT "
         "survive alone (UIX-RCSS-ERRATA-2, Finding C)");
 
-  check(compute_decorator_list("", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_decorator_list("", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "empty decorator value computes Ok");
   check_eq(out, "none", "empty decorator value prints 'none'");
 
-  check(compute_decorator_list("none", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_decorator_list("none", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "'none' decorator value computes Ok");
   check_eq(out, "none", "'none' decorator value prints 'none'");
 
-  check(compute_decorator_list("radial-gradient(ellipse at 50% 50%, #fff, #000)", 1.0f, &out) ==
+  check(compute_decorator_list("radial-gradient(ellipse at 50% 50%, #fff, #000)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
         "ellipse: section 13's own out-of-scope clause, fail-high -- the whole property drops");
 
-  check(compute_decorator_list("horizontal-gradient(#000f #0000)", 1.0f, &out) ==
+  check(compute_decorator_list("horizontal-gradient(#000f #0000)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "horizontal-gradient computes Ok");
   // EN: #000f (r=0,g=0,b=0,a=ff) premultiplies to itself (alpha=255, no-op); #0000
@@ -951,20 +1135,20 @@ void test_decorator_list_malformed_entry_drops_whole_property() {
   //     value_compute.cpp pra derivação completa): `horizontal-gradient`/`vertical-gradient` usam
   //     `Colourb` plano, nunca premultiplicado pelo upstream -- passthrough reto é o correto,
   //     `#22D3EE26` imprime como `#22d3ee26` (lowercase, inalterado), nunca `#21d0ea26`.
-  check(compute_decorator_list("vertical-gradient(#22D3EE26 #ffffffff)", 1.0f, &out) ==
+  check(compute_decorator_list("vertical-gradient(#22D3EE26 #ffffffff)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Ok,
         "vertical-gradient computes Ok");
   check_eq(out, "vertical-gradient(#22d3ee26;#ffffffff)",
            "vertical-gradient NEVER round-trips -- straight passthrough, lowercased only, never "
            "the #21d0ea26 this test used to (wrongly) assert");
 
-  check(compute_decorator_list("image( runes-base.png )", 1.0f, &out) == ValueComputeStatus::Ok,
+  check(compute_decorator_list("image( runes-base.png )", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "image() computes Ok");
   check_eq(out, "image(runes-base.png)", "image(): bare url, whitespace trimmed");
 
   check(compute_decorator_list(
             "polygon(6, radial-gradient(circle at 40% 35%, #F0D98C, #C9A24B 55%, #7A5A2E 100%))",
-            1.0f, &out) == ValueComputeStatus::Ok,
+            LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
         "polygon() with nested radial-gradient fill computes Ok");
   check_eq(out,
            "polygon(6.0000;radial-gradient(40.0000%;35.0000%;#f0d98cff:0.0000%;#c9a24bff:55.0000%;"
@@ -973,7 +1157,7 @@ void test_decorator_list_malformed_entry_drops_whole_property() {
            "documented example -- the nested gradient's OWN stop colors are also premultiplied "
            "(all alpha=ff here, so a no-op, same reasoning as the 15.3 reuse above)");
 
-  check(compute_decorator_list("polygon(2, #fff)", 1.0f, &out) == ValueComputeStatus::Invalid,
+  check(compute_decorator_list("polygon(2, #fff)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
         "polygon sides out of [3,1024]: fail-high, docs/effects.md's own validated range -- the "
         "whole property drops");
 }
@@ -994,6 +1178,7 @@ int main() {
   test_gradient_alpha_roundtrip_matches_upstream_storage_type();
   test_color_parsing_all_forms();
   test_length_resolution();
+  test_length_resolution_esc4_full_unit_parity();
   test_font_size_em_resolution();
   test_non_finite_input_is_fail_high_at_parse_time();
   test_transform_list();
@@ -1037,7 +1222,10 @@ int main() {
       "row 1/3 literals -- this item's own independent finding, reported in an earlier draft of "
       "this test file, converged on the identical fix (`1.21875f = 39/32`) independently derived "
       "by `UIX-RCSS-DUMP-A`'s own author, commit `a1e0b9f`, before `UIX-RCSS-ERRATA-3` canonized "
-      "it)\n");
+      "it) | ESC-4 length-unit family: 11 of 11 (px, dp, em, rem, vw, vh, in, cm, mm, pt, pc -- "
+      "full parity with the pin's own Unit::LENGTH, up from 2 pre-ESC-4) | x/resolution: 1 "
+      "standalone function (parse_resolution), deliberately NOT part of LengthUnit (Unit::X is not "
+      "Unit::LENGTH)\n");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "value_compute_sanity: %d assertion(s) FAILED\n", g_failures);

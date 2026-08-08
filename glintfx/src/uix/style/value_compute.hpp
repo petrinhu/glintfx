@@ -432,99 +432,343 @@ ValueComputeStatus parse_color(std::string_view raw, Rgba8* out);
 //     exata da seção 7.1 do docs/uix-rcss.md.
 std::string print_color(const Rgba8& c);
 
-// EN: docs/uix-rcss.md section 8.1's own two resolved units -- see header "Scope" for why only
-//     these two (`em`/`rem`/`vw`/`vh` are `ValueComputeStatus::Invalid`, not silently guessed).
-//     Unitless `0` parses as `{0, Px}` (CSS's own zero-length convention).
-// PT: As próprias duas unidades resolvidas da seção 8.1 do docs/uix-rcss.md -- ver "Escopo" no
-//     cabeçalho pro porquê só destas duas (`em`/`rem`/`vw`/`vh` são `ValueComputeStatus::Invalid`,
-//     não chutadas em silêncio). `0` sem unidade parseia como `{0, Px}` (a própria convenção de
-//     comprimento-zero do CSS).
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own FULL `LENGTH` unit family, all 11 members,
+//     closing the `rmlx-subset.md` section 6.3/section 7 "full parity with the substituted
+//     engine" decision the líder made 2026-08-06/2026-08-07 for this exact axis. Widened from the
+//     original 2 (`Px`/`Dp`) -- see header "Scope" for the PRE-`ESC-4` rationale that no longer
+//     applies (that paragraph is rewritten by this same item, not left stale). Every suffix the
+//     pinned build's own `unit_string_map` recognises as `Unit::LENGTH`
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserNumber.cpp:7-24` cross-referenced
+//     against `Unit::LENGTH = PX|DP|VW|VH|EM|REM|PPI_UNIT`, `.../Include/RmlUi/Core/Unit.h:58`) has
+//     a member here -- `PPI_UNIT` itself is 5 concrete suffixes (`In`/`Cm`/`Mm`/`Pt`/`Pc`,
+//     `Unit.h:38`), not one. Two units this project's own domain explicitly EXCLUDES from this
+//     enum, on purpose, not by omission: `Unit::X` (`rmlx-subset.md` section 6.3's own risk #3 --
+//     `X` is bitwise OUTSIDE `Unit::LENGTH`, `Unit.h:58` proves it by construction; see
+//     `parse_resolution()` below for its own, separate, narrow home) and `Unit::PERCENT` (never
+//     part of `LENGTH` either -- this module's own symbolic `%` handling, `parse_percent()`/
+//     `print_percent()`, is untouched by this item). Unitless `0` still parses as `{0, Px}` (CSS's
+//     own zero-length convention, unchanged).
+// PT: `ESC-4` -- a PRÓPRIA família de unidade `LENGTH` completa da seção 8.1 do docs/uix-rcss.md,
+//     os 11 membros, fechando a decisão "paridade completa com o motor substituído" que o líder
+//     tomou em 2026-08-06/2026-08-07 pra este eixo exato (seção 6.3/seção 7 do `rmlx-subset.md`).
+//     Alargado dos 2 originais (`Px`/`Dp`) -- ver "Escopo" no cabeçalho pro racional PRÉ-`ESC-4` que
+//     não vale mais (aquele parágrafo é reescrito por este mesmo item, não deixado obsoleto). Todo
+//     sufixo que o próprio `unit_string_map` do build fixado reconhece como `Unit::LENGTH`
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserNumber.cpp:7-24` cruzado contra
+//     `Unit::LENGTH = PX|DP|VW|VH|EM|REM|PPI_UNIT`, `.../Include/RmlUi/Core/Unit.h:58`) tem um
+//     membro aqui -- o próprio `PPI_UNIT` já são 5 sufixos concretos (`In`/`Cm`/`Mm`/`Pt`/`Pc`,
+//     `Unit.h:38`), não um só. Duas unidades que o próprio domínio deste projeto EXCLUI deste enum,
+//     de propósito, não por omissão: `Unit::X` (o próprio risco #3 da seção 6.3 do `rmlx-subset.md`
+//     -- `X` fica bitwise FORA de `Unit::LENGTH`, `Unit.h:58` prova isso por construção; ver o
+//     `parse_resolution()` abaixo pro próprio lar separado, estreito, dele) e `Unit::PERCENT`
+//     (também nunca parte de `LENGTH` -- o próprio tratamento simbólico de `%` deste módulo,
+//     `parse_percent()`/`print_percent()`, fica intocado por este item). `0` sem unidade continua
+//     parseando como `{0, Px}` (a própria convenção de comprimento-zero do CSS, inalterada).
 enum class LengthUnit {
   Px,
   Dp,
+  Em,
+  Rem,
+  Vw,
+  Vh,
+  In,
+  Cm,
+  Mm,
+  Pt,
+  Pc,
 };
+
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own `ComputeLength`/`ComputePPILength` context, in
+//     struct form: the exact 5 pieces of caller-supplied information the pin's real formula needs
+//     to resolve ANY `LengthUnit` member above to a pixel float
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`, transcribed verbatim
+//     by `resolve_length_px()` below). `font_size_px` is the resolving NODE's OWN, already-computed
+//     font-size (`em`'s own base for every property EXCEPT `font-size` itself -- see
+//     `ElementStyle.cpp:710-742`'s own file-local `ComputeLength(value, element)` wrapper, which
+//     reads `element->GetComputedValues().font_size()`, never the parent's); `document_font_size_px`
+//     is the DOCUMENT ROOT's own resolved font-size (`rem`'s own base for every property, INCLUDING
+//     `font-size` on a non-root node -- `ElementStyle.cpp:726-731`'s own `document->
+//     GetComputedValues().font_size()` read). `vp_w_px`/`vp_h_px` are the viewport's own pixel
+//     dimensions (`vw`/`vh`'s own base, `context->GetDimensions()`, `ElementStyle.cpp:734-735`) --
+//     NOT box geometry: `docs/uix-rcss.md` section 1's own scope text already names viewport units
+//     as resolved "before anything that requires `RMLX-3`", because a document's own viewport is a
+//     single pair of numbers supplied by the caller (`App`/`UiLayer`'s own `set_viewport`), never
+//     derived from layout the way a containing-block-relative `%` is -- the SAME reason `dp_ratio`
+//     is resolved today and box-relative `%` is not. `dp_ratio` is unchanged from before this item,
+//     now living in this struct instead of its own bare `float` parameter (see `resolve_length_px`'s
+//     own updated signature below). This struct is intentionally a caller-filled VALUE, never a
+//     reference to a node/tree -- `parse_font_size()`'s own header (below) explains the ONE field
+//     this struct's own general contract does not cover (the font-size property's own parent-vs-
+//     self exception), and why that stays a SEPARATE, narrower function rather than a 6th field
+//     here.
+// PT: `ESC-4` -- o próprio contexto de `ComputeLength`/`ComputePPILength` da seção 8.1 do
+//     docs/uix-rcss.md, em forma de struct: as exatas 5 peças de informação fornecida-pelo-chamador
+//     que a própria fórmula real do pin precisa pra resolver QUALQUER membro do `LengthUnit` acima
+//     pra um float de pixel (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`,
+//     transcrita verbatim pelo `resolve_length_px()` abaixo). `font_size_px` é o próprio font-size
+//     JÁ COMPUTADO do NÓ que está resolvendo (a própria base do `em` pra toda propriedade EXCETO o
+//     próprio `font-size` -- ver o próprio wrapper local-ao-arquivo `ComputeLength(value, element)`
+//     do `ElementStyle.cpp:710-742`, que lê `element->GetComputedValues().font_size()`, nunca o do
+//     pai); `document_font_size_px` é o próprio font-size resolvido da RAIZ do documento (a própria
+//     base do `rem` pra toda propriedade, INCLUSIVE `font-size` num nó não-raiz -- a própria leitura
+//     `document->GetComputedValues().font_size()` do `ElementStyle.cpp:726-731`). `vp_w_px`/
+//     `vp_h_px` são as próprias dimensões de pixel do viewport (a própria base do `vw`/`vh`,
+//     `context->GetDimensions()`, `ElementStyle.cpp:734-735`) -- NÃO geometria de caixa: o próprio
+//     texto de escopo da seção 1 do `docs/uix-rcss.md` já nomeia unidades de viewport como
+//     resolvidas "antes de qualquer coisa que precise da `RMLX-3`", porque o próprio viewport de um
+//     documento é um par único de números fornecido pelo chamador (o próprio `set_viewport` do
+//     `App`/`UiLayer`), nunca derivado de layout do jeito que um `%` relativo-a-containing-block é
+//     -- o MESMO motivo que `dp_ratio` já é resolvido hoje e `%` box-relativo não. `dp_ratio` fica
+//     inalterado de antes deste item, agora morando nesta struct em vez do próprio parâmetro `float`
+//     cru dela (ver a própria assinatura atualizada do `resolve_length_px` abaixo). Esta struct é
+//     deliberadamente um VALOR preenchido-pelo-chamador, nunca uma referência a um nó/árvore -- o
+//     próprio cabeçalho do `parse_font_size()` (abaixo) explica o ÚNICO campo que o próprio contrato
+//     geral desta struct não cobre (a própria exceção pai-vs-elemento da propriedade font-size), e
+//     por que isso fica sendo uma função SEPARADA, mais estreita, em vez de um 6º campo aqui.
+struct LengthResolveContext {
+  float dp_ratio = 1.0f;
+  float font_size_px = 0.0f;
+  float document_font_size_px = 0.0f;
+  float vp_w_px = 0.0f;
+  float vp_h_px = 0.0f;
+};
+
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own suffix-recognition rule, transcribed from the
+//     pin's real mechanics (`PropertyParserNumber.cpp:43-73`, "Find the beginning of the unit
+//     string in 'value'" is that function's own comment, verbatim): a REVERSE scan from the end of
+//     `raw` finds the byte right after the LAST character (scanning backwards) that is a digit or
+//     whitespace -- everything before that boundary is the number half, everything from it onward
+//     is the unit half, lowercased, then matched EXACTLY (not `ends_with`) against the 11 suffixes
+//     `LengthUnit` above names. This is a DELIBERATE departure from the pre-`ESC-4` `ends_with`
+//     chain this function used to have (`"10px"` ends in the single byte `"x"` too -- an
+//     `ends_with`-per-unit chain is an ORDER-dependent bug waiting to happen the moment two
+//     suffixes share a trailing substring, which `em`/`rem` already do; a boundary scan + exact
+//     match cannot suffer that class of bug at all, by construction). Two paridade-driven, tested
+//     consequences of transcribing the pin's own mechanics rather than a narrower reimplementation:
+//     (1) case-insensitive, matching the pin's own unconditional `StringUtilities::ToLower` on the
+//     unit half (`"10PX"`/`"1IN"` now accepted, previously rejected by this function's own pre-
+//     `ESC-4` case-sensitive `ends_with`); (2) a raw text with NO digit/whitespace at all (e.g.
+//     `"nanpx"`) still correctly fails -- not because the number half is malformed (the pin's own
+//     scan leaves it empty in that case too), but because the WHOLE remaining string
+//     (`"nanpx"`, not `"px"`) never exactly matches any of the 11 table entries. One deliberate,
+//     DOCUMENTED non-parity kept on purpose: the pin's own `strtof`-based number half tolerates
+//     trailing whitespace inside the number token itself (`"10 px"` parses upstream, `strtof("10 ",
+//     ...)` simply stops at the space without failing) -- this module's own `parse_float_token()`
+//     requires a WHOLE-STRING match and therefore still rejects `"10 px"` as `Invalid`, per this
+//     file's own house fail-high discipline (`parse_float_token`'s own contract, unchanged by this
+//     item) rather than adopting `strtof`'s own more permissive partial-parse behaviour.
+// PT: `ESC-4` -- a própria regra de reconhecimento de sufixo da seção 8.1 do docs/uix-rcss.md,
+//     transcrita da própria mecânica real do pin (`PropertyParserNumber.cpp:43-73`, "Find the
+//     beginning of the unit string in 'value'" é o próprio comentário daquela função, verbatim): um
+//     scan REVERSO a partir do fim de `raw` acha o byte logo depois do ÚLTIMO caractere (escaneando
+//     de trás pra frente) que é dígito ou whitespace -- tudo antes daquela fronteira é a metade
+//     número, tudo dali em diante é a metade unidade, lowercased, depois casada EXATAMENTE (não
+//     `ends_with`) contra os 11 sufixos que o `LengthUnit` acima nomeia. Isto é um afastamento
+//     DELIBERADO da própria cadeia `ends_with` pré-`ESC-4` que esta função tinha (`"10px"` também
+//     termina no byte único `"x"` -- uma cadeia `ends_with`-por-unidade é um bug dependente-de-ORDEM
+//     esperando acontecer no momento em que dois sufixos compartilham uma substring final, o que
+//     `em`/`rem` já fazem; um scan de fronteira + match exato não consegue sofrer essa classe de bug
+//     de jeito nenhum, por construção). Duas consequências guiadas-por-paridade, testadas, de
+//     transcrever a própria mecânica do pin em vez de uma reimplementação mais estreita: (1)
+//     case-insensitive, casando com o próprio `StringUtilities::ToLower` incondicional do pin na
+//     metade unidade (`"10PX"`/`"1IN"` agora aceitos, antes rejeitados pelo próprio `ends_with`
+//     case-sensitive pré-`ESC-4` desta função); (2) um texto cru SEM dígito/whitespace nenhum (ex.
+//     `"nanpx"`) ainda falha corretamente -- não porque a metade número é malformada (o próprio scan
+//     do pin também a deixa vazia nesse caso), mas porque a STRING INTEIRA restante (`"nanpx"`, não
+//     `"px"`) nunca casa exatamente com nenhuma das 11 entradas da tabela. Uma não-paridade
+//     deliberada, DOCUMENTADA, mantida de propósito: a própria metade número do pin, baseada em
+//     `strtof`, tolera whitespace à direita dentro do próprio token número (`"10 px"` parseia no
+//     upstream, `strtof("10 ", ...)` simplesmente para no espaço sem falhar) -- o próprio
+//     `parse_float_token()` deste módulo exige casamento de STRING INTEIRA e portanto continua
+//     rejeitando `"10 px"` como `Invalid`, pela própria disciplina fail-high da casa deste arquivo
+//     (o próprio contrato do `parse_float_token`, inalterado por este item) em vez de adotar o
+//     próprio comportamento mais permissivo de parse-parcial do `strtof`.
 ValueComputeStatus parse_length(std::string_view raw, float* out_value, LengthUnit* out_unit);
 
-// EN: `px` is identity, `dp` multiplies by `dp_ratio` -- docs/uix-rcss.md section 8.1's own two
-//     resolved members of the `LENGTH` unit family this module supports.
-// PT: `px` é identidade, `dp` multiplica por `dp_ratio` -- os próprios dois membros resolvidos da
-//     família de unidade `LENGTH` da seção 8.1 do docs/uix-rcss.md que este módulo suporta.
-float resolve_length_px(float value, LengthUnit unit, float dp_ratio);
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own FULL resolution switch, transcribing
+//     `ComputeLength`/`ComputePPILength` verbatim
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:31-70`): `Px` identity;
+//     `Dp` = `value * ctx.dp_ratio`; `Em` = `value * ctx.font_size_px`; `Rem` = `value *
+//     ctx.document_font_size_px`; `Vw` = `value * ctx.vp_w_px * 0.01f`; `Vh` = `value * ctx.vp_h_px
+//     * 0.01f`; the 5 `PPI_UNIT` members go through the pin's own `inch = value * 96.0f *
+//     ctx.dp_ratio` first (`PixelsPerInch`, `ComputeProperty.cpp:29`, "Scaled by the dp-ratio as a
+//     placeholder solution until we make the pixel unit itself scalable" -- the pin's OWN comment,
+//     not a CSS assumption this module invented; `rmlx-subset.md` section 6.3's own risk #2 warns
+//     against assuming a fixed CSS 96dpi instead), then `In` = `inch`; `Cm` = `inch * (1.0f /
+//     2.54f)`; `Mm` = `inch * (1.0f / 25.4f)`; `Pt` = `inch * (1.0f / 72.0f)`; `Pc` = `inch * (1.0f
+//     / 6.0f)` -- MULTIPLICATION BY THE FLOAT32 RECIPROCAL, not division, and in exactly this
+//     grouping (`inch * (1.0f / N)`, never `inch / N.0f`): IEEE-754 float multiplication and
+//     division are not guaranteed bit-identical for the same two operands, so this module transcribes
+//     the pin's own literal operation shape rather than an arithmetically-equivalent rewrite, the
+//     one thing the differential oracle (`ESC-4`'s own acceptance criterion) can actually catch a
+//     silent bit-divergence in. Every one of the 5 `PPI_UNIT` members therefore ALSO scales with
+//     `dp_ratio` (`rmlx-subset.md` section 6.3's own ⚠️ note, `Unit.h:62`'s own `DP_SCALABLE_LENGTH
+//     = DP | PPI_UNIT`) -- `1in` at `dp_ratio=2.0` is `192px`, not `96px`, a case this file's own
+//     test suite pins explicitly so a future reader cannot mistake this for a fixed-96dpi
+//     implementation. `ctx.font_size_px` for a NON-`font-size` property is the resolving element's
+//     own already-cascaded font-size (never the parent's) -- see `LengthResolveContext`'s own
+//     header above for the full ancestor-vs-self distinction and why `parse_font_size()` below is a
+//     separate function rather than a `LengthResolveContext` field.
+// PT: `ESC-4` -- o próprio switch de resolução COMPLETO da seção 8.1 do docs/uix-rcss.md,
+//     transcrevendo `ComputeLength`/`ComputePPILength` verbatim
+//     (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:31-70`): `Px` identidade;
+//     `Dp` = `value * ctx.dp_ratio`; `Em` = `value * ctx.font_size_px`; `Rem` = `value *
+//     ctx.document_font_size_px`; `Vw` = `value * ctx.vp_w_px * 0.01f`; `Vh` = `value * ctx.vp_h_px
+//     * 0.01f`; os 5 membros `PPI_UNIT` passam primeiro pelo próprio `inch = value * 96.0f *
+//     ctx.dp_ratio` do pin (`PixelsPerInch`, `ComputeProperty.cpp:29`, "Scaled by the dp-ratio as a
+//     placeholder solution until we make the pixel unit itself scalable" -- o próprio comentário do
+//     PIN, não uma suposição CSS que este módulo inventou; o próprio risco #2 da seção 6.3 do
+//     `rmlx-subset.md` avisa contra supor um 96dpi CSS fixo), depois `In` = `inch`; `Cm` = `inch *
+//     (1.0f / 2.54f)`; `Mm` = `inch * (1.0f / 25.4f)`; `Pt` = `inch * (1.0f / 72.0f)`; `Pc` = `inch *
+//     (1.0f / 6.0f)` -- MULTIPLICAÇÃO PELO RECÍPROCO em float32, não divisão, e exatamente neste
+//     agrupamento (`inch * (1.0f / N)`, nunca `inch / N.0f`): multiplicação e divisão float IEEE-754
+//     não são garantidas bit-idênticas pros mesmos dois operandos, então este módulo transcreve a
+//     própria forma de operação literal do pin em vez de uma reescrita aritmeticamente-equivalente,
+//     a única coisa que o oráculo diferencial (o próprio critério de aceite da `ESC-4`) de fato
+//     consegue pegar uma divergência de bit silenciosa. Cada um dos 5 membros `PPI_UNIT` portanto
+//     TAMBÉM escala com `dp_ratio` (a própria nota ⚠️ da seção 6.3 do `rmlx-subset.md`, o próprio
+//     `DP_SCALABLE_LENGTH = DP | PPI_UNIT` do `Unit.h:62`) -- `1in` em `dp_ratio=2.0` é `192px`, não
+//     `96px`, um caso que a própria suíte de teste deste arquivo pina explicitamente pra um futuro
+//     leitor não confundir isto com uma implementação 96dpi fixa. `ctx.font_size_px` pra uma
+//     propriedade NÃO-`font-size` é o próprio font-size já-cascateado do elemento resolvendo (nunca
+//     o do pai) -- ver o próprio cabeçalho do `LengthResolveContext` acima pra distinção completa
+//     ancestral-vs-própria e por que o `parse_font_size()` abaixo é uma função separada em vez de um
+//     campo do `LengthResolveContext`.
+float resolve_length_px(float value, LengthUnit unit, const LengthResolveContext& ctx);
 
-// EN: `UIX-EM-UNIT` -- `font-size`'s OWN `em` resolution, additive to this file's header "Scope"
-//     paragraph above rather than a widening of it: `parse_length()`/`resolve_length_px()` remain
-//     EXACTLY as documented there (px/dp only, `em`/`rem`/`vw`/`vh` still `Invalid` through that
-//     pair, unchanged, zero ripple to every OTHER caller of those two -- `box-shadow`'s own layer
-//     lengths, `drop-shadow`, `blur`, `transform`'s own `translate`, none of which the corpus ever
-//     declares with `em` per `docs/uix-rcss-censo.md`'s own measured count). `docs/uix-rcss.md`
-//     section 1's own scope text says otherwise for THIS dump as a whole ("resolving every unit that
-//     does not require box geometry -- absolute lengths, `em`/`rem` against the font-size chain, `dp`
-//     against `dp_ratio`... but before anything that requires `RMLX-3`"), i.e. `em` needs a FONT-SIZE
-//     CHAIN, not box layout -- `RMLX-3`'s own boundary this file's header cites is the wrong reason
-//     for `em` specifically (it is the right reason for `vw`/`vh`, which genuinely need viewport
-//     geometry, and for `%`, which genuinely needs a containing block). A font-size chain is
-//     ANCESTOR-SHAPED information this file's own general funnel structurally cannot carry (every
-//     function above takes only a single already-isolated value plus `dp_ratio`, no notion of "the
-//     node this value belongs to" or "that node's own parent") -- so rather than threading a new
-//     required parameter through `parse_length`/`resolve_length_px` and every one of their ~8
-//     existing call sites (a change this item's own brief explicitly scoped OUT, and one the corpus
-//     gives no evidence any of those OTHER call sites need), this function is a separate, NARROW,
-//     single-purpose resolver: the caller supplies the ALREADY-RESOLVED parent font-size in px (the
-//     one piece of ancestor context `em` needs), and this function does the rest, delegating to
-//     `parse_length()`/`resolve_length_px()` unchanged for the two units they already own. The
-//     caller (a dumper walking its own tree top-down, parent before child, exactly the order
-//     `cascade_tree()`'s own pre-order-depth-first traversal already produces) is responsible for
-//     building that chain -- this function is deliberately ignorant of trees, elements, or
-//     inheritance, the same "pure value-computation, no DOM, no cascade" discipline this file's own
-//     top header states for every OTHER function here.
-//       `rem` is recognised syntactically (as a suffix this function must NOT misparse as `em`
-//     missing its leading digit) but NOT resolved -- `Invalid`, same as before this item, per
-//     `docs/uix-rcss-censo.md`'s own measured corpus: exactly 1 `em` occurrence, ZERO `rem`, so this
-//     item's own scope stops at the ONE unit the corpus and this item's own worked bug report
-//     (`UIX-ORACLE-MEDICAO`'s own residuo B, `fonteng_sup_scene.rml`) actually exercise -- same
-//     corpus-driven-teto discipline `kMaxNestDepth`/`kMaxRawValueBytes` already follow above. A
-//     future item implementing `rem` needs the DOCUMENT ROOT's own resolved font-size (a DIFFERENT
-//     ancestor than `parent_font_size_px` below, the immediate parent) -- reported here, not guessed.
-// PT: `UIX-EM-UNIT` -- a própria resolução de `em` do `font-size`, aditiva ao próprio parágrafo
-//     "Escopo" do cabeçalho deste arquivo acima, não um alargamento dele:
-//     `parse_length()`/`resolve_length_px()` ficam EXATAMENTE como documentado lá (só px/dp,
-//     `em`/`rem`/`vw`/`vh` ainda `Invalid` por aquele par, inalterado, zero ondulação pra todo OUTRO
-//     chamador dos dois -- os próprios comprimentos de camada do `box-shadow`, `drop-shadow`, `blur`,
-//     o próprio `translate` do `transform`, nenhum dos quais o corpus algum dia declara com `em` per
-//     a própria contagem medida do `docs/uix-rcss-censo.md`). O próprio texto de escopo da seção 1 do
-//     `docs/uix-rcss.md` diz o contrário pra ESTE dump como um todo ("resolvendo toda unidade que não
-//     precisa de geometria de caixa -- comprimentos absolutos, `em`/`rem` contra a cadeia de
-//     font-size, `dp` contra `dp_ratio`... mas antes de qualquer coisa que precise da `RMLX-3`"), ou
-//     seja, `em` precisa de uma CADEIA DE FONT-SIZE, não de layout de caixa -- a própria fronteira da
-//     `RMLX-3` que o cabeçalho deste arquivo cita é o motivo ERRADO especificamente pro `em` (é o
-//     motivo certo pro `vw`/`vh`, que genuinamente precisam de geometria de viewport, e pro `%`, que
-//     genuinamente precisa de um containing block). Uma cadeia de font-size é informação com FORMA-DE-
-//     ANCESTRAL que o próprio funil geral deste arquivo estruturalmente não consegue carregar (toda
-//     função acima recebe só um único valor já isolado mais `dp_ratio`, nenhuma noção de "o nó a que
-//     este valor pertence" ou "o próprio pai daquele nó") -- então em vez de enfiar um novo parâmetro
-//     obrigatório no `parse_length`/`resolve_length_px` e em cada um dos ~8 próprios call sites
-//     existentes deles (uma mudança que o próprio briefing deste item escopou FORA, e uma que o
-//     corpus não dá evidência nenhuma de que aqueles OUTROS call sites precisem), esta função é um
-//     resolvedor separado, ESTREITO, de propósito único: o chamador fornece o próprio font-size do
-//     pai JÁ RESOLVIDO em px (a única peça de contexto ancestral que o `em` precisa), e esta função
-//     faz o resto, delegando pro `parse_length()`/`resolve_length_px()` inalterados pras duas
-//     unidades que eles já possuem. O chamador (um dumper percorrendo a própria árvore de cima pra
-//     baixo, pai antes de filho, exatamente a ordem que a própria travessia pré-ordem-profundidade-
-//     primeiro do `cascade_tree()` já produz) é responsável por construir aquela cadeia -- esta
-//     função é deliberadamente ignorante de árvores, elementos, ou herança, a mesma disciplina
-//     "computação pura de valor, sem DOM, sem cascata" que o próprio cabeçalho de topo deste arquivo
-//     declara pra toda OUTRA função aqui.
-//       `rem` é reconhecido sintaticamente (como um sufixo que esta função NÃO PODE mal-parsear como
-//     um `em` faltando o próprio dígito líder) mas NÃO resolvido -- `Invalid`, igual antes deste
-//     item, per o próprio corpus medido do `docs/uix-rcss-censo.md`: exatamente 1 ocorrência de `em`,
-//     ZERO de `rem`, então o próprio escopo deste item para na ÚNICA unidade que o corpus e o próprio
-//     relatório de bug trabalhado deste item (o próprio resíduo B da `UIX-ORACLE-MEDICAO`,
-//     `fonteng_sup_scene.rml`) de fato exercitam -- mesma disciplina teto-guiado-por-corpus que
-//     `kMaxNestDepth`/`kMaxRawValueBytes` acima já seguem. Um futuro item implementando `rem` precisa
-//     do próprio font-size já resolvido da RAIZ do documento (um ancestral DIFERENTE do
-//     `parent_font_size_px` abaixo, o pai imediato) -- reportado aqui, não chutado.
-ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px, float dp_ratio,
-                                   float* out_px);
+// EN: `ESC-4` -- docs/uix-rcss.md section 8.1's own `x`/resolution unit, `Unit::X`
+//     (`PropertyParserNumber.cpp:12`), kept DELIBERATELY SEPARATE from `LengthUnit`/`parse_length`
+//     above -- see `Unit.h:58`'s own `LENGTH` bitmask, which does not include `X` at all
+//     (`rmlx-subset.md` section 6.3's own risk #3). The pin's ONLY real consumer of this unit is
+//     the `@spritesheet` rule's own `resolution: <n>x` sub-property
+//     (`StyleSheetSpecification.cpp:41`, `PropertyParserNumber resolution =
+//     PropertyParserNumber(Unit::X)`; `StyleSheetParser.cpp:197-206`'s own
+//     `SpritesheetPropertyParser::Parse` reads it into `image_resolution_factor`) -- a
+//     stylesheet-level AT-RULE sub-property, never a per-element cascade property at all, so this
+//     function is deliberately NOT wired into `parse_length`'s own LENGTH-family switch, `%`'s
+//     domain, or any per-element `ValueDomain` this module or `property_registry.hpp` names.
+//     `@spritesheet` itself is not implemented yet (`ESC-14`'s own scope, `docs/rmlx-subset.md`
+//     section 13) -- this function exists so a FUTURE `ESC-14` slice has the value-computation leg
+//     ready to call, the same "third leg that prints a value once its domain and text are known"
+//     role this file's own top header states for every other function here, not because any current
+//     caller invokes it. `raw` is PASSTHROUGH, never scaled (`ElementStyle.cpp:755`'s own `case
+//     Unit::X: return value.number;` -- confirmed by the pin's own real dispatch, not guessed): the
+//     number half is parsed via the SAME reverse-scan-then-exact-match mechanics `parse_length()`
+//     documents above, restricted to the single suffix `"x"` (case-insensitive, matching the pin's
+//     own unconditional lowercasing). Unlike `parse_length`, there is no unitless-zero exception --
+//     the pin's own `PropertyParserNumber(Unit::X)` constructor call passes no `zero_unit` argument
+//     (defaults to `Unit::UNKNOWN`, `PropertyParserNumber.h:14`), so a bare number with no `x`
+//     suffix is `Invalid` here even for `0`, a genuine, confirmed divergence from `parse_length`'s
+//     own zero-length CSS convention -- this function does not import that convention because the
+//     unit it serves is a resolution FACTOR, not a length, and the pin itself treats it differently.
+// PT: `ESC-4` -- a própria unidade `x`/resolution da seção 8.1 do docs/uix-rcss.md, `Unit::X`
+//     (`PropertyParserNumber.cpp:12`), mantida DELIBERADAMENTE SEPARADA do `LengthUnit`/
+//     `parse_length` acima -- ver o próprio bitmask `LENGTH` do `Unit.h:58`, que não inclui `X`
+//     nenhum (o próprio risco #3 da seção 6.3 do `rmlx-subset.md`). O ÚNICO consumidor real desta
+//     unidade no pin é a própria sub-propriedade `resolution: <n>x` da regra `@spritesheet`
+//     (`StyleSheetSpecification.cpp:41`, `PropertyParserNumber resolution =
+//     PropertyParserNumber(Unit::X)`; o próprio `SpritesheetPropertyParser::Parse` do
+//     `StyleSheetParser.cpp:197-206` a lê pro `image_resolution_factor`) -- uma sub-propriedade de
+//     AT-RULE em nível de folha de estilo, nunca uma propriedade de cascata por-elemento nenhuma,
+//     então esta função é deliberadamente NÃO conectada ao próprio switch de família LENGTH do
+//     `parse_length`, ao domínio de `%`, ou a nenhum `ValueDomain` por-elemento que este módulo ou o
+//     property_registry.hpp nomeiam. O próprio `@spritesheet` ainda não está implementado (o próprio
+//     escopo da `ESC-14`, seção 13 do `docs/rmlx-subset.md`) -- esta função existe pra uma futura
+//     fatia `ESC-14` ter a perna de computação-de-valor já pronta pra chamar, o mesmo papel de
+//     "terceira perna que imprime um valor uma vez que o domínio e o texto dele são conhecidos" que
+//     o próprio cabeçalho de topo deste arquivo declara pra toda outra função aqui, não porque
+//     algum chamador atual a invoca. `raw` é PASSTHROUGH, nunca escalado (o próprio `case Unit::X:
+//     return value.number;` do `ElementStyle.cpp:755` -- confirmado contra o próprio despacho real
+//     do pin, não chutado): a metade número é parseada pela MESMA mecânica de scan-reverso-depois-
+//     match-exato que o `parse_length()` documenta acima, restrita ao sufixo único `"x"`
+//     (case-insensitive, casando com o próprio lowercasing incondicional do pin). Diferente do
+//     `parse_length`, não há exceção de zero-sem-unidade -- a própria chamada do construtor
+//     `PropertyParserNumber(Unit::X)` do pin não passa argumento `zero_unit` nenhum (default
+//     `Unit::UNKNOWN`, `PropertyParserNumber.h:14`), então um número cru sem sufixo `x` é `Invalid`
+//     aqui mesmo pro `0`, uma divergência genuína, confirmada, da própria convenção CSS de
+//     comprimento-zero do `parse_length` -- esta função não importa aquela convenção porque a
+//     unidade que ela serve é um FATOR de resolução, não um comprimento, e o próprio pin a trata
+//     diferente.
+ValueComputeStatus parse_resolution(std::string_view raw, float* out_value);
+
+// EN: `UIX-EM-UNIT`/`ESC-4` -- `font-size`'s OWN `em`/`rem` resolution. The `UIX-EM-UNIT`-era
+//     rationale for why this stays a SEPARATE function ("a font-size chain is ancestor-shaped
+//     information the general funnel cannot carry") is PARTLY OBSOLETE as of `ESC-4`:
+//     `parse_length()`/`resolve_length_px()` ARE now widened to resolve `em`/`rem` themselves (the
+//     general, non-`font-size` funnel, `LengthResolveContext`'s own `font_size_px`/
+//     `document_font_size_px` fields) -- this function's own reason to exist NARROWS to exactly one
+//     thing `ComputeFontsize` does that `ComputeLength` structurally cannot: the font-size PROPERTY's
+//     own `em` reads the PARENT's font-size (`ComputeProperty.cpp:100-103`'s own
+//     `parent_values->font_size()`), never the resolving node's own (which does not exist yet --
+//     computing it IS what this call is doing), while every OTHER property's `em` reads the
+//     resolving node's own already-cascaded font-size (`ElementStyle.cpp:725`'s own
+//     `element->GetComputedValues().font_size()`) -- the SAME multiplier, two DIFFERENT bases,
+//     selected by whether the property being computed IS `font-size` or not. `rem` does NOT have
+//     this split (`ComputeProperty.cpp:105-111`'s own `document_values->font_size()` is the SAME
+//     base for `font-size` and every other property alike -- `rmlx-subset.md` section 6.3's own
+//     decision requires stating this explicitly rather than leaving a second implementer to
+//     re-derive it: only `em` needs the parent-vs-self split; `rem` never does), which is exactly
+//     why `rem` below delegates straight to `ctx.document_font_size_px`, the SAME field the general
+//     funnel's own `Rem` case already reads. Concretely: `parent_font_size_px` stays a SEPARATE,
+//     EXPLICIT parameter (not a `LengthResolveContext` field) because the general funnel's own
+//     `ctx.font_size_px` means "the resolving node's OWN font-size" everywhere else in this module
+//     -- reusing that SAME field here, for THIS ONE call, to instead mean "the PARENT's font-size"
+//     would be the exact kind of context-dependent field semantics this file's own house style
+//     avoids; `ctx.font_size_px` is therefore UNCHECKED/UNUSED by this function (harmless: the
+//     caller building the `LengthResolveContext` for this call needs no valid value there at all).
+//     Every unit OTHER than `em`/`rem` (`px`/`dp`/`vw`/`vh`/the 5 `PPI_UNIT` members) needs no
+//     font-size-property-specific handling at all -- `ComputeFontsize`'s own closing comment,
+//     `ComputeProperty.cpp:116-117` ("Font-relative lengths handled above, other lengths should be
+//     handled as normal"), is why this function delegates them straight to `resolve_length_px()`
+//     with the SAME `ctx` the caller passed in (`ctx.dp_ratio`/`vp_w_px`/`vp_h_px` are read exactly
+//     as any other property would read them; only `ctx.font_size_px` is the one field this
+//     function's own call never populates meaningfully). The caller (a dumper walking its own tree
+//     top-down, parent before child, exactly the order `cascade_tree()`'s own pre-order-depth-first
+//     traversal already produces) remains responsible for building the `parent_font_size_px` chain
+//     -- this function stays deliberately ignorant of trees, elements, or inheritance, the same
+//     "pure value-computation, no DOM, no cascade" discipline this file's own top header states for
+//     every OTHER function here.
+// PT: `UIX-EM-UNIT`/`ESC-4` -- a própria resolução de `em`/`rem` do `font-size`. O racional da era
+//     `UIX-EM-UNIT` pro porquê disto ficar sendo uma função SEPARADA ("uma cadeia de font-size é
+//     informação com forma-de-ancestral que o funil geral não consegue carregar") fica PARCIALMENTE
+//     OBSOLETO com a `ESC-4`: `parse_length()`/`resolve_length_px()` AGORA são alargados pra resolver
+//     `em`/`rem` eles mesmos (o funil geral, não-`font-size`, os próprios campos `font_size_px`/
+//     `document_font_size_px` do `LengthResolveContext`) -- o próprio motivo de existir desta função
+//     ESTREITA pra exatamente uma coisa que o `ComputeFontsize` faz e o `ComputeLength`
+//     estruturalmente não consegue: o próprio `em` da PROPRIEDADE font-size lê o font-size do PAI (o
+//     próprio `parent_values->font_size()` do `ComputeProperty.cpp:100-103`), nunca o do próprio nó
+//     resolvendo (que ainda não existe -- computá-lo É o que esta chamada está fazendo), enquanto o
+//     `em` de toda OUTRA propriedade lê o próprio font-size já-cascateado do nó resolvendo (o próprio
+//     `element->GetComputedValues().font_size()` do `ElementStyle.cpp:725`) -- o MESMO multiplicador,
+//     duas bases DIFERENTES, escolhidas por se a propriedade sendo computada É `font-size` ou não.
+//     `rem` NÃO tem essa separação (o próprio `document_values->font_size()` do
+//     `ComputeProperty.cpp:105-111` é a MESMA base pro `font-size` e pra toda outra propriedade igual
+//     -- a própria decisão da seção 6.3 do `rmlx-subset.md` exige declarar isto explicitamente em vez
+//     de deixar um segundo implementer re-derivar sozinho: só o `em` precisa da separação pai-vs-
+//     próprio; o `rem` nunca precisa), que é exatamente por que o `rem` abaixo delega direto pro
+//     `ctx.document_font_size_px`, o MESMO campo que o próprio caso `Rem` do funil geral já lê.
+//     Concretamente: `parent_font_size_px` continua sendo um parâmetro SEPARADO, EXPLÍCITO (não um
+//     campo do `LengthResolveContext`) porque o próprio `ctx.font_size_px` do funil geral significa
+//     "o próprio font-size do nó resolvendo" em todo lugar mais deste módulo -- reusar aquele MESMO
+//     campo aqui, pra ESTA chamada, pra em vez disso significar "o font-size do PAI" seria
+//     exatamente o tipo de semântica-de-campo-dependente-de-contexto que o próprio estilo da casa
+//     deste arquivo evita; `ctx.font_size_px` portanto fica NÃO-CONFERIDO/NÃO-USADO por esta função
+//     (inofensivo: o chamador construindo o `LengthResolveContext` pra esta chamada não precisa de
+//     valor válido nenhum ali). Toda unidade OUTRA que não `em`/`rem` (`px`/`dp`/`vw`/`vh`/os 5
+//     membros `PPI_UNIT`) não precisa de tratamento nenhum específico-de-propriedade-font-size -- o
+//     próprio comentário de fechamento do `ComputeFontsize`, `ComputeProperty.cpp:116-117`
+//     ("Font-relative lengths handled above, other lengths should be handled as normal"), é o motivo
+//     desta função delegar essas direto pro `resolve_length_px()` com o MESMO `ctx` que o chamador
+//     passou (`ctx.dp_ratio`/`vp_w_px`/`vp_h_px` são lidos exatamente como qualquer outra propriedade
+//     os leria; só `ctx.font_size_px` é o único campo que a própria chamada desta função nunca
+//     preenche de forma significativa). O chamador (um dumper percorrendo a própria árvore de cima
+//     pra baixo, pai antes de filho, exatamente a ordem que a própria travessia
+//     pré-ordem-profundidade-primeiro do `cascade_tree()` já produz) continua responsável por
+//     construir a cadeia de `parent_font_size_px` -- esta função continua deliberadamente ignorante
+//     de árvores, elementos, ou herança, a mesma disciplina "computação pura de valor, sem DOM, sem
+//     cascata" que o próprio cabeçalho de topo deste arquivo declara pra toda OUTRA função aqui.
+ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px,
+                                   const LengthResolveContext& ctx, float* out_px);
 
 // EN: Parses a bare `<number>%` token (e.g. `"50%"`) into its numeric part -- does NOT resolve
 //     against any base (section 5's own "stays symbolic" rule); the caller decides which of the
@@ -588,7 +832,20 @@ std::vector<float> resolve_gradient_stop_positions(
 //     do `Colourb`, não um chute silencioso apresentado como fato) -- per a própria regra uniforme
 //     da seção 11, um `Invalid` aqui significa que o CHAMADOR derruba a declaração `box-shadow`
 //     inteira, igual a qualquer outro valor malformado.
-ValueComputeStatus compute_box_shadow(std::string_view raw_value, float dp_ratio, std::string* out);
+//
+// EN: `ESC-4` -- the own layer offsets/blur/spread (4 length-shaped tokens per layer) now resolve
+//     through the FULL `LengthResolveContext` (`em`/`rem`/`vw`/`vh`/physical units), not just
+//     `px`/`dp` -- `float dp_ratio` widened to `const LengthResolveContext& ctx`, threaded to
+//     `resolve_length_px()` at this function's own internal length-token call site unchanged
+//     otherwise (paridade ripple, `docs/rmlx-subset.md` section 6.3/7).
+// PT: `ESC-4` -- os próprios offsets/blur/spread de camada (4 tokens com forma de comprimento por
+//     camada) agora resolvem através do `LengthResolveContext` COMPLETO (unidades `em`/`rem`/`vw`/
+//     `vh`/físicas), não só `px`/`dp` -- `float dp_ratio` alargado pra `const LengthResolveContext&
+//     ctx`, encaminhado pro `resolve_length_px()` no próprio call site interno de token-de-
+//     comprimento desta função, inalterado fora isso (ripple de paridade, seção 6.3/7 do
+//     `docs/rmlx-subset.md`).
+ValueComputeStatus compute_box_shadow(std::string_view raw_value, const LengthResolveContext& ctx,
+                                      std::string* out);
 
 // EN: docs/uix-rcss.md section 9.2's own `linear-gradient(...)` argument grammar, given the text
 //     BETWEEN the outer parentheses (e.g. `"90deg, #FF0000 20%, #00FF00 80%"`) -- produces the
@@ -644,8 +901,21 @@ ValueComputeStatus compute_radial_gradient_args(std::string_view inner_args, std
 //     não-reconhecida ou malformada -- ver "Política fail-high" no cabeçalho (a própria correção da
 //     `UIX-RCSS-ERRATA-2` ao `Finding C`). `*out` é `"none"` só pra um input genuinamente vazio/
 //     `"none"`, com `Ok`.
-ValueComputeStatus compute_decorator_list(std::string_view raw_value, float dp_ratio,
-                                          std::string* out);
+//
+// EN: `ESC-4` -- `float dp_ratio` widened to `const LengthResolveContext& ctx`, threaded unchanged
+//     to `blur`/`drop-shadow`'s own length arguments AND to `polygon()`'s own recursive nested-
+//     gradient `<fill>` (via `compute_one_decorator_function()`'s own internal signature, same
+//     widening) -- every one of the 10 in-scope functions above that resolves a length now sees the
+//     FULL `em`/`rem`/`vw`/`vh`/physical family, not just `px`/`dp` (paridade ripple,
+//     `docs/rmlx-subset.md` section 6.3/7).
+// PT: `ESC-4` -- `float dp_ratio` alargado pra `const LengthResolveContext& ctx`, encaminhado
+//     inalterado pros próprios argumentos de comprimento de `blur`/`drop-shadow` E pro próprio
+//     `<fill>` recursivo aninhado-em-gradiente do `polygon()` (via a própria assinatura interna do
+//     `compute_one_decorator_function()`, mesmo alargamento) -- cada uma das 10 funções
+//     dentro-de-escopo acima que resolve um comprimento agora vê a família `em`/`rem`/`vw`/`vh`/
+//     físicas COMPLETA, não só `px`/`dp` (ripple de paridade, seção 6.3/7 do `docs/rmlx-subset.md`).
+ValueComputeStatus compute_decorator_list(std::string_view raw_value,
+                                          const LengthResolveContext& ctx, std::string* out);
 
 // EN: docs/uix-rcss.md section 9.4's own explicitly-thin `transform` grammar
 //     (`translate(<x>;<y>) | scale(<x>;<y>) | rotate(<angle>)`) -- the 2D subset verified against
@@ -660,7 +930,15 @@ ValueComputeStatus compute_decorator_list(std::string_view raw_value, float dp_r
 //     `compute_decorator_list()` acima (a própria política uniforme de entrada-malformada da seção
 //     11 aplicada consistentemente em todo domínio de lista composta que este módulo implementa,
 //     não só nos dois citados-do-parser-upstream).
-ValueComputeStatus compute_transform_list(std::string_view raw_value, float dp_ratio,
-                                          std::string* out);
+//
+// EN: `ESC-4` -- `float dp_ratio` widened to `const LengthResolveContext& ctx`, threaded to
+//     `translate(<x>;<y>)`'s own two length arguments (`scale`/`rotate` take plain numbers/angles,
+//     untouched by this widening) -- paridade ripple, `docs/rmlx-subset.md` section 6.3/7.
+// PT: `ESC-4` -- `float dp_ratio` alargado pra `const LengthResolveContext& ctx`, encaminhado pros
+//     próprios dois argumentos de comprimento do `translate(<x>;<y>)` (`scale`/`rotate` recebem
+//     números/ângulos crus, intocados por este alargamento) -- ripple de paridade, seção 6.3/7 do
+//     `docs/rmlx-subset.md`.
+ValueComputeStatus compute_transform_list(std::string_view raw_value,
+                                          const LengthResolveContext& ctx, std::string* out);
 
 } // namespace glintfx::uix::style

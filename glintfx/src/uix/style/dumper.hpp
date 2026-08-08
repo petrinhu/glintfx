@@ -168,6 +168,7 @@
 #include "uix/dom/dom_tree.hpp"
 #include "uix/style/cascade.hpp"
 #include "uix/style/parser.hpp"
+#include "uix/style/value_compute.hpp"
 
 namespace glintfx::uix::style {
 
@@ -182,10 +183,14 @@ namespace glintfx::uix::style {
 //     function, and on `ValueComputeStatus::Invalid` retries ONCE against the property's own
 //     registry `initial_value` (spec section 11's own "whole declaration reverts" fail-high rule,
 //     applied at print time -- see this file's header comment, "keyword-domain values are not
-//     validated", for the ONE domain this retry structurally cannot help). `dp_ratio` is only
-//     consulted by domains/composite-grammars that resolve an absolute length (spec section 8.1).
-//     Exposed standalone (not `dump_style`-local) for the same "a future caller might want just
-//     this" reasoning the DOM sibling's own `escape()` is exposed for.
+//     validated", for the ONE domain this retry structurally cannot help). `ctx` is only consulted
+//     by domains/composite-grammars that resolve a length (spec section 8.1) -- `ESC-4` widened
+//     the single `float dp_ratio` this parameter used to be into the full
+//     `value_compute.hpp::LengthResolveContext` (`dp_ratio` plus the resolving NODE's OWN font-size,
+//     the document root's font-size, and the viewport dimensions -- see `dump_style()`'s own
+//     `UIX-EM-UNIT`/`ESC-4` doc-comment below for exactly how the caller must build this PER NODE,
+//     never once for the whole dump). Exposed standalone (not `dump_style`-local) for the same "a
+//     future caller might want just this" reasoning the DOM sibling's own `escape()` is exposed for.
 // PT: Imprime a própria metade `<valor-canônico>` de `prop` (seções 6-9 da spec) -- NÃO o prefixo
 //     `<nome-propriedade>=`, que o `dump_style` abaixo imprime ele mesmo a partir de `prop.name`
 //     direto (nomes de propriedade são identificadores estruturais, nunca escapados nem
@@ -199,10 +204,15 @@ namespace glintfx::uix::style {
 //     propriedade (a própria regra fail-high "a declaração inteira reverte" da seção 11 da spec,
 //     aplicada em tempo de impressão -- ver o comentário de cabeçalho deste arquivo, "valores de
 //     domínio-keyword não são validados", pro ÚNICO domínio em que este retry estruturalmente não
-//     ajuda). `dp_ratio` só é consultado por domínios/gramáticas-compostas que resolvem um
-//     comprimento absoluto (seção 8.1 da spec). Exposta standalone (não local ao `dump_style`) pelo
-//     mesmo raciocínio "um futuro chamador pode querer só isto" que expõe o `escape()` do irmão DOM.
-std::string canonical_print(const ComputedProperty& prop, float dp_ratio);
+//     ajuda). `ctx` só é consultado por domínios/gramáticas-compostas que resolvem um comprimento
+//     (seção 8.1 da spec) -- a `ESC-4` alargou o `float dp_ratio` único que este parâmetro costumava
+//     ser pro próprio `value_compute.hpp::LengthResolveContext` completo (`dp_ratio` mais o próprio
+//     font-size do NÓ resolvendo, o font-size da raiz do documento, e as dimensões de viewport -- ver
+//     o próprio doc-comment `UIX-EM-UNIT`/`ESC-4` do `dump_style()` abaixo pro exatamente como o
+//     chamador precisa construir isto POR NÓ, nunca uma vez só pro dump inteiro). Exposta standalone
+//     (não local ao `dump_style`) pelo mesmo raciocínio "um futuro chamador pode querer só isto" que
+//     expõe o `escape()` do irmão DOM.
+std::string canonical_print(const ComputedProperty& prop, const LengthResolveContext& ctx);
 
 // EN: Serializes `sheet` cascaded over `root`'s own subtree into the spec's own canonical dump
 //     format: two `STATE` blocks (`none` then `hover-all`, spec section 4's own fixed order, NOT
@@ -250,6 +260,30 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio);
 //     `fonteng_sup_scene.rml`'s own `.sup{font-size:0.7em}` over `body{font-size:64px}` now dumps
 //     `44.8000px`, matching side A (real RmlUi), not the `12.0000px` registry-initial fallback this
 //     function's own `font-size` line used to fall back to for any `em`-shaped value.
+//
+// EN: `ESC-4` -- `vp_w_px`/`vp_h_px`, NEW parameters closing `docs/uix-rcss.md` section 1's own
+//     "viewport as a parameter" clause: `vw`/`vh` are NOT box geometry (this dump still does not,
+//     and per `RMLX-3`'s own boundary still cannot, resolve box-relative `%`) -- they resolve
+//     against a single pair of numbers the CALLER supplies, the same footing `dp_ratio` already had
+//     before this item (`App`/`UiLayer`'s own `set_viewport`, not layout). Every node's own `em`
+//     (self font-size, general funnel) / `rem` (document-root font-size, general funnel) /
+//     `vw`/`vh` (this viewport pair) resolution now flows through the SAME per-node
+//     `value_compute.hpp::LengthResolveContext` this function builds internally and feeds to
+//     `canonical_print()` -- see dumper.cpp's own header/`dump_style()` implementation for exactly
+//     how `ctx.font_size_px` (THIS node's own resolved font-size) and
+//     `ctx.document_font_size_px` (the ROOT's) are populated per node, not once for the whole call.
+// PT: `ESC-4` -- `vp_w_px`/`vp_h_px`, parâmetros NOVOS fechando a própria cláusula
+//     "viewport-como-parâmetro" da seção 1 do docs/uix-rcss.md: `vw`/`vh` NÃO são geometria de
+//     caixa (este dump ainda não resolve, e pela própria fronteira da `RMLX-3` ainda não pode
+//     resolver, `%` box-relativo) -- eles resolvem contra um par único de números que o CHAMADOR
+//     fornece, o mesmo patamar que `dp_ratio` já tinha antes deste item (o próprio `set_viewport`
+//     do `App`/`UiLayer`, não layout). A própria resolução de `em` (font-size próprio, funil geral)
+//     / `rem` (font-size da raiz do documento, funil geral) / `vw`/`vh` (este par de viewport) de
+//     todo nó agora flui pelo MESMO `value_compute.hpp::LengthResolveContext` por-nó que esta
+//     função constrói internamente e alimenta pro `canonical_print()` -- ver o próprio
+//     cabeçalho/implementação do `dump_style()` no dumper.cpp pro exatamente como
+//     `ctx.font_size_px` (o próprio font-size resolvido DESTE nó) e `ctx.document_font_size_px` (o
+//     da RAIZ) são preenchidos por nó, não uma vez só pra chamada inteira.
 // PT: `UIX-EM-UNIT`, acrescentado aqui em vez da própria assinatura do `canonical_print()` acima: a
 //     própria linha de `font-size` desta função, SÓ ela, é impressa a partir de um valor de pixel já
 //     resolvido que esta própria função computa percorrendo a própria subárvore de `root` de cima pra
@@ -265,6 +299,7 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio);
 //     `body{font-size:64px}` do `fonteng_sup_scene.rml` agora dumpa `44.8000px`, casando com o lado A
 //     (RmlUi real), não o fallback `12.0000px` de inicial-de-registro pro qual a própria linha de
 //     `font-size` desta função caía pra qualquer valor com forma `em`.
-std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& root, float dp_ratio);
+std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& root, float dp_ratio,
+                       float vp_w_px, float vp_h_px);
 
 } // namespace glintfx::uix::style

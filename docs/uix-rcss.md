@@ -1163,6 +1163,88 @@ verificação descartável rodado pro próprio relatório desta fatia, não comm
 
 ---
 
+## 🟣 Errata (`UIX-RCSS-ERRATA-9`, 2026-08-08) / Errata (`UIX-RCSS-ERRATA-9`, 2026-08-08)
+
+**EN:** `ESC-4` closes `docs/rmlx-subset.md` section 6.3's own unit-parity decision (2026-08-06,
+generalized by section 7, 2026-08-07): the `LENGTH` unit family this dump resolves widens from 2
+members (`px`/`dp`) to the pin's own full 11 (`px`, `dp`, `em`, `rem`, `vw`, `vh`, `in`, `cm`,
+`mm`, `pt`, `pc` -- `value_compute.hpp`'s own `LengthUnit`), transcribed from `ComputeLength`/
+`ComputePPILength` (`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`) rather
+than assumed from plain CSS -- section 1's own new paragraph above states why viewport units are
+resolved (a caller-supplied parameter, not box geometry) and section 8.1's own new paragraph states
+the exact physical-unit formula (multiplication by the `float32` reciprocal, dp-scaled, not a fixed
+96dpi). Recorded here as an errata, not merely a feature landing, because it changes THIS
+document's own previously-stated behaviour for two constructs, both corrected in place rather than
+left stale:
+
+1. **Suffix recognition is now case-insensitive** (`"10PX"`/`"1IN"` now parse) -- a genuine,
+   measured side effect of transcribing the pin's own reverse-scan-then-`ToLower`
+   (`PropertyParserNumber.cpp:43-73`) mechanics rather than the pre-`ESC-4` per-unit `ends_with`
+   chain, which was case-sensitive by omission, never by an explicit decision this document
+   recorded. One documented non-parity survives on purpose: the pin's own `strtof`-based number
+   half tolerates trailing whitespace (`"10 px"` parses upstream); this dump's own
+   `parse_float_token()` requires a whole-string match and still rejects it as `Invalid` --
+   unchanged, and not silently made to agree with the pin here.
+2. **`font-size`'s own `em`/`rem` resolution is no longer the ONLY unit-resolving path this document
+   describes.** Section 1's original text already promised "em/rem against the font-size chain, dp
+   against dp_ratio" for the dump AS A WHOLE, ahead of the code that delivers it -- `ESC-4` is what
+   makes that promise true for every property, not only `font-size`: `em` now reads the resolving
+   node's OWN font-size for any OTHER property (`ElementStyle.cpp:725`'s own
+   `element->GetComputedValues().font_size()`), while `font-size`'s own `em` keeps reading the
+   PARENT's (`ComputeProperty.cpp:100-103`'s own `parent_values->font_size()`) -- two different
+   bases for the same multiplier, selected by which property is being computed, not a widening of
+   one function into the other's job.
+
+**Verification, not assertion:** a new corpus fixture,
+`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc4_unit_parity.rml`, exercises 9 of the 10 units
+end to end (`x` has no per-element property to exercise it through -- its only real pin-side
+consumer is `@spritesheet`'s own `resolution: <n>x`, not implemented yet, `ESC-14`'s own scope) --
+`RMLX-2`'s own differential oracle reports it byte-identical to Side A (real RmlUi) on all of them,
+the fixture's only 2 differing lines being the SAME `kCorpusWide` `position=absolute` pin (§14.1
+row 2) every other small fixture in the corpus also shows, unrelated to this errata.
+
+**PT:** A `ESC-4` fecha a própria decisão de paridade de unidade da seção 6.3 do
+`docs/rmlx-subset.md` (2026-08-06, generalizada pela seção 7, 2026-08-07): a própria família de
+unidade `LENGTH` que este dump resolve alarga de 2 membros (`px`/`dp`) pros 11 completos do pin
+(`px`, `dp`, `em`, `rem`, `vw`, `vh`, `in`, `cm`, `mm`, `pt`, `pc` -- o próprio `LengthUnit` do
+`value_compute.hpp`), transcrita do `ComputeLength`/`ComputePPILength`
+(`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-70`) em vez de suposta do CSS
+puro -- o próprio parágrafo novo da seção 1 acima declara por que unidades de viewport são
+resolvidas (um parâmetro fornecido-pelo-chamador, não geometria de caixa) e o próprio parágrafo
+novo da seção 8.1 declara a fórmula exata de unidade física (multiplicação pelo recíproco em
+`float32`, escalada por dp, não um 96dpi fixo). Registrado aqui como errata, não só um pouso de
+feature, porque muda o próprio comportamento previamente declarado deste documento pra duas
+construções, as duas corrigidas no lugar em vez de deixadas obsoletas:
+
+1. **O reconhecimento de sufixo agora é case-insensitive** (`"10PX"`/`"1IN"` agora parseiam) -- um
+   efeito colateral genuíno, medido, de transcrever a própria mecânica scan-reverso-depois-
+   `ToLower` do pin (`PropertyParserNumber.cpp:43-73`) em vez da cadeia `ends_with`-por-unidade
+   pré-`ESC-4`, que era case-sensitive por omissão, nunca por uma decisão explícita que este
+   documento registrasse. Uma não-paridade documentada sobrevive de propósito: a própria metade
+   número do pin, baseada em `strtof`, tolera whitespace à direita (`"10 px"` parseia no upstream);
+   o próprio `parse_float_token()` deste dump exige casamento de string inteira e continua
+   rejeitando como `Invalid` -- inalterado, e não feito concordar com o pin em silêncio aqui.
+2. **A própria resolução de `em`/`rem` do `font-size` deixa de ser o ÚNICO caminho de resolução de
+   unidade que este documento descreve.** O texto original da seção 1 já prometia "em/rem contra a
+   cadeia de font-size, dp contra dp_ratio" pro dump COMO UM TODO, à frente do código que entrega
+   isso -- a `ESC-4` é o que torna essa promessa verdadeira pra toda propriedade, não só
+   `font-size`: `em` agora lê o próprio font-size do nó resolvendo pra qualquer OUTRA propriedade
+   (o próprio `element->GetComputedValues().font_size()` do `ElementStyle.cpp:725`), enquanto o
+   próprio `em` do `font-size` continua lendo o do PAI (o próprio `parent_values->font_size()` do
+   `ComputeProperty.cpp:100-103`) -- duas bases diferentes pro mesmo multiplicador, escolhidas por
+   qual propriedade está sendo computada, não um alargamento de uma função pro trabalho da outra.
+
+**Verificação, não afirmação:** uma fixture de corpus nova,
+`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc4_unit_parity.rml`, exercita 9 das 10 unidades
+ponta-a-ponta (`x` não tem propriedade por-elemento nenhuma pra exercitar através dela -- o único
+consumidor real dela no pin é o próprio `resolution: <n>x` do `@spritesheet`, ainda não
+implementado, escopo da `ESC-14`) -- o próprio oráculo diferencial da `RMLX-2` reporta ela
+byte-idêntica ao lado A (RmlUi real) em todas elas, as únicas 2 linhas divergentes da fixture sendo
+o MESMO pin `kCorpusWide` de `position=absolute` (linha 2 da §14.1) que toda outra fixture pequena
+do corpus também mostra, sem relação com esta errata.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -1188,6 +1270,23 @@ box-relative/gradient-stop/radial-center percentages as symbolic `<number>%` tok
 attempts geometry it structurally cannot have yet. A future `RMLX-3` dump (box-relative % resolved
 against real layout) is **not** an extension of this one by default -- same discipline
 `docs/uix-dom.md` section 10 states for its own out-of-wave boundary.
+
+**The viewport is a PARAMETER, not box geometry (`ESC-4`, 2026-08-08).** `vw`/`vh` sit on the
+resolved side of the line this section draws above, alongside absolute lengths and `dp` -- NOT on
+the still-symbolic side alongside box-relative `%` -- for a reason worth stating explicitly rather
+than left for a second implementer to infer from the fact that both happen to involve a "size":
+`vw`/`vh` resolve against a single `(width, height)` pixel pair the CALLER supplies (mirroring
+`dp_ratio`'s own pre-existing footing, `App`/`UiLayer`'s own `set_viewport`) -- the SAME pair for
+every node in the whole dump, known before cascade even starts -- while a box-relative `%`
+resolves against ITS OWN element's containing block, a per-node fact only layout (`RMLX-3`)
+produces. `ComputeLength`'s own real signature is the evidence this distinction is not invented for
+this document: `Vector2f vp_dimensions` is a plain argument, at the SAME parameter position as
+`dp_ratio`, never a computed field on `Style::ComputedValues`
+(`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:52`). This dump's own
+`value_compute.hpp::LengthResolveContext` (`ESC-4`) mirrors that shape exactly -- `vp_w_px`/
+`vp_h_px` sit next to `dp_ratio` in the same caller-filled struct, `font_size_px`/
+`document_font_size_px` (the em/rem chain this section's own opening paragraph already named)
+alongside them, and nothing resembling a containing-block size anywhere in it.
 
 ### 2. Node addressing (reused, unchanged, from `docs/uix-dom.md`)
 
@@ -2007,6 +2106,20 @@ source order. `px` is the fixed, single output unit for every member of the `LEN
 (§9 of `examples/RmlUi/Include/RmlUi/Core/Unit.h`: `PX | DP | VW | VH | EM | REM | PPI_UNIT`) after
 resolution.
 
+**The physical-unit formula (`in`/`cm`/`mm`/`pt`/`pc`, `ESC-4`, 2026-08-08), transcribed from the
+pin, not assumed from CSS:** `ComputePPILength`
+(`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-50`) computes
+`inch = value * 96.0f * dp_ratio` first (`PixelsPerInch = 96.0f`, that file's own constant, its
+own comment reading "Scaled by the dp-ratio as a placeholder solution until we make the pixel unit
+itself scalable" -- **not** a fixed 96dpi the way plain CSS defines `1in = 96px` unconditionally),
+then `in` = `inch`; `cm` = `inch * (1.0f / 2.54f)`; `mm` = `inch * (1.0f / 25.4f)`; `pt` =
+`inch * (1.0f / 72.0f)`; `pc` = `inch * (1.0f / 6.0f)` -- multiplication by the `float32` reciprocal
+in each case, the exact operation shape both dumper sides must transcribe bit-for-bit (`x * (1.0f /
+N)` and `x / N.0f` are not guaranteed IEEE-754-identical for the same operands). Every physical
+unit therefore ALSO scales with `dp_ratio` (`Unit.h`'s own `DP_SCALABLE_LENGTH = DP | PPI_UNIT`,
+§9) -- `1in` at `dp_ratio = 2.0` is `192.0000px`, never `96.0000px`, the worked example in §15.5
+below pins this delta explicitly so a fixed-96dpi misreading cannot pass by coincidence.
+
 #### 8.2 Angles: canonicalized to degrees, always
 
 `transform`/gradient angles accept both `deg` and `rad` as input units (§9 below, full unit
@@ -2653,11 +2766,11 @@ same commit -- the stale-pin check will refuse to pass otherwise.**
 
 ### 15. Worked examples (byte-exact)
 
-**Four independent examples below (15.1-15.4), each anchoring a place this document's own prose
-alone left room for two readers to land on different bytes -- per this section's own governing
-principle, restated from the header: two independent implementers can agree on the same
-wrong-sounding-correct reading of a rule in prose; they cannot both reproduce the same byte-exact
-worked answer while disagreeing about what it means.**
+**Five independent examples below (15.1-15.5, `ESC-4`/`UIX-RCSS-ERRATA-9` added 15.5), each
+anchoring a place this document's own prose alone left room for two readers to land on different
+bytes -- per this section's own governing principle, restated from the header: two independent
+implementers can agree on the same wrong-sounding-correct reading of a rule in prose; they cannot
+both reproduce the same byte-exact worked answer while disagreeing about what it means.**
 
 #### 15.1 Two states, one node (`:hover`)
 
@@ -2883,6 +2996,56 @@ binary representation, not that it *looks like* the boundary in decimal -- widen
 by eyeballing the decimal digits, which is exactly how the original pair passed a decimal read while
 failing the binary test it existed to enforce.
 
+#### 15.5 Full unit parity (`ESC-4`, 2026-08-08) -- `em`/`rem` reading DIFFERENT ancestors from the SAME node, `vw`/`vh` against a passed-in viewport
+
+Two nodes, `dp_ratio = 1.0`, viewport `320x240` (matching this repo's own real oracle viewport,
+`rcss_dump_differential_oracle.cpp`'s own `engine.attach(&clock, 320, 240)`) -- chosen specifically
+so `em` and `rem`, declared on the SAME node, resolve against two DIFFERENT ancestors, closing
+`UIX-RCSS-ERRATA-9`'s own reported risk that a second implementer could swap
+`LengthResolveContext::font_size_px` (`em`'s own base) with `::document_font_size_px` (`rem`'s own
+base) and still pass a test that used the same value for both by coincidence:
+
+```rcss
+body { font-size: 20px; }
+#mid { font-size: 50px; }
+.remprop { margin-left: 1.5rem; }
+.emprop { margin-top: 2em; }
+.vwprop { width: 50vw; }
+.vhprop { height: 50vh; }
+```
+
+```rml
+<body><div id="mid"><div class="remprop emprop"></div></div><div class="vwprop"></div><div class="vhprop"></div></body>
+```
+
+```
+body/0/0 PROP margin-top=100.0000px
+body/0/0 PROP margin-left=30.0000px
+body/1 PROP width=160.0000px
+body/2 PROP height=120.0000px
+```
+
+- `body/0/0` (nested two levels deep, inside `#mid`) declares BOTH `margin-top: 2em` and
+  `margin-left: 1.5rem`. `margin-top=100.0000px` is `2 * 50` -- `em` reads THIS node's own
+  (inherited, not self-declared) font-size, `#mid`'s `50px`, never `body`'s `20px` (which would
+  wrongly give `40.0000px`). `margin-left=30.0000px` is `1.5 * 20` -- `rem` reads the DOCUMENT
+  ROOT's own resolved font-size, `body`'s `20px`, never the immediate parent `#mid`'s `50px`
+  (which would wrongly give `75.0000px`). The two numbers landing on different ancestors from the
+  same node, for two properties declared on that same node, is the proof neither reading is a
+  coincidence -- exactly `glintfx/tests/uix_style/dumper_sanity.cpp`'s own
+  `test_esc4_general_length_unit_parity`.
+- `body/1`'s `width=160.0000px` is `50 * 320 * 0.01` -- `vw` resolves against the viewport WIDTH
+  passed to the dump, unrelated to either sibling node's own box (this dump still cannot compute a
+  real box at all, §1's own scope). `body/2`'s `height=120.0000px` mirrors it against the viewport
+  HEIGHT, `50 * 240 * 0.01`.
+- Not shown above (already pinned by `glintfx/tests/uix_style/value_compute_sanity.cpp`'s own
+  `test_length_resolution_esc4_full_unit_parity`, a pure-function-level anchor rather than a second
+  full dump): the 5 physical units at `dp_ratio = 1.0` -- `1in` -> `96.0000px`; `1cm` ->
+  `37.7953px`; `1mm` -> `3.7795px`; `1pt` -> `1.3333px`; `1pc` -> `16.0000px` -- and the ONE
+  assertion that actually falsifies a fixed-96dpi misreading rather than merely being consistent
+  with one: `1in` at `dp_ratio = 2.0` is `192.0000px`, not `96.0000px` (§8.1's own new paragraph
+  states the formula this pins).
+
 ### 16. Contract decisions closing ambiguities reported by earlier `RMLX-2` slices
 
 **Scope of this section, stated once:** `UIX-RCSS-LEXER`'s own header comment
@@ -2999,6 +3162,24 @@ simbólicos `<número>%`, e nenhum dos dois tenta geometria que estruturalmente 
 futuro dump da `RMLX-3` (% box-relativa resolvida contra layout real) **não** é uma extensão deste
 por padrão -- mesma disciplina que a seção 10 do `docs/uix-dom.md` declara pra própria fronteira
 fora-de-onda.
+
+**O viewport é um PARÂMETRO, não geometria de caixa (`ESC-4`, 2026-08-08).** `vw`/`vh` ficam do
+lado resolvido da linha que esta seção traça acima, junto de comprimentos absolutos e `dp` -- NÃO
+do lado ainda-simbólico junto do `%` box-relativo -- por um motivo que vale declarar explicitamente
+em vez de deixar um segundo implementer inferir do fato de os dois "envolverem um tamanho": `vw`/
+`vh` resolvem contra um par único de pixel `(largura, altura)` que o CHAMADOR fornece (espelhando o
+próprio patamar pré-existente do `dp_ratio`, o próprio `set_viewport` do `App`/`UiLayer`) -- o
+MESMO par pra todo nó do dump inteiro, conhecido antes da própria cascata começar -- enquanto um
+`%` box-relativo resolve contra o PRÓPRIO containing block do elemento dele, um fato por-nó que só
+o layout (`RMLX-3`) produz. A própria assinatura real do `ComputeLength` é a evidência de que esta
+distinção não é inventada pra este documento: `Vector2f vp_dimensions` é um argumento puro, na
+MESMA posição de parâmetro que `dp_ratio`, nunca um campo computado no `Style::ComputedValues`
+(`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:52`). O próprio
+`value_compute.hpp::LengthResolveContext` deste dump (`ESC-4`) espelha essa forma exatamente --
+`vp_w_px`/`vp_h_px` ficam ao lado do `dp_ratio` na mesma struct preenchida-pelo-chamador,
+`font_size_px`/`document_font_size_px` (a cadeia em/rem que o próprio parágrafo de abertura desta
+seção já nomeou) junto deles, e nada parecido com um tamanho de containing-block em lugar nenhum
+dela.
 
 ### 2. Endereçamento de nó (reusado, sem mudança, do `docs/uix-dom.md`)
 
@@ -3710,6 +3891,22 @@ são dumpados como um conjunto ordenado em vez de na ordem-fonte. `px` é a unid
 `examples/RmlUi/Include/RmlUi/Core/Unit.h`: `PX | DP | VW | VH | EM | REM | PPI_UNIT`) depois da
 resolução.
 
+**A fórmula de unidade física (`in`/`cm`/`mm`/`pt`/`pc`, `ESC-4`, 2026-08-08), transcrita do pin,
+não suposta do CSS:** o `ComputePPILength`
+(`glintfx/build/_deps/rmlui-src/Source/Core/ComputeProperty.cpp:29-50`) computa primeiro
+`inch = value * 96.0f * dp_ratio` (`PixelsPerInch = 96.0f`, a própria constante daquele arquivo, o
+próprio comentário lendo "Scaled by the dp-ratio as a placeholder solution until we make the pixel
+unit itself scalable" -- **não** um 96dpi fixo do jeito que o CSS puro define `1in = 96px`
+incondicionalmente), depois `in` = `inch`; `cm` = `inch * (1.0f / 2.54f)`; `mm` =
+`inch * (1.0f / 25.4f)`; `pt` = `inch * (1.0f / 72.0f)`; `pc` = `inch * (1.0f / 6.0f)` --
+multiplicação pelo recíproco em `float32` em cada caso, a própria forma de operação exata que os
+dois lados do dumper precisam transcrever bit-a-bit (`x * (1.0f / N)` e `x / N.0f` não são
+garantidos IEEE-754-idênticos pros mesmos operandos). Toda unidade física portanto TAMBÉM escala
+com `dp_ratio` (o próprio `DP_SCALABLE_LENGTH = DP | PPI_UNIT` do `Unit.h`, seção 9) -- `1in` em
+`dp_ratio = 2.0` é `192.0000px`, nunca `96.0000px`, o exemplo trabalhado da seção 15.5 abaixo pina
+este delta explicitamente pra uma leitura errada de 96dpi-fixo não conseguir passar por
+coincidência.
+
 #### 8.2 Ângulos: canonicalizados pra graus, sempre
 
 `transform`/ângulos de gradiente aceitam `deg` e `rad` como unidade de entrada (seção 9 abaixo,
@@ -4131,11 +4328,12 @@ no mesmo commit -- a checagem de pin obsoleto vai se recusar a passar de outro j
 
 ### 15. Exemplos trabalhados (byte-exato)
 
-**Quatro exemplos independentes abaixo (15.1-15.4), cada um ancorando um ponto em que a própria
-prosa deste documento sozinha deixava espaço pra dois leitores caírem em bytes diferentes -- pelo
-próprio princípio-guia desta seção, restated do cabeçalho: dois implementers independentes podem
-concordar na mesma leitura que soa-correta-mas-é-errada de uma regra em prosa; não conseguem os dois
-reproduzir a mesma resposta trabalhada byte-exata discordando sobre o que ela significa.**
+**Cinco exemplos independentes abaixo (15.1-15.5, a 15.5 somada pela `ESC-4`/`UIX-RCSS-ERRATA-9`),
+cada um ancorando um ponto em que a própria prosa deste documento sozinha deixava espaço pra dois
+leitores caírem em bytes diferentes -- pelo próprio princípio-guia desta seção, restated do
+cabeçalho: dois implementers independentes podem concordar na mesma leitura que
+soa-correta-mas-é-errada de uma regra em prosa; não conseguem os dois reproduzir a mesma resposta
+trabalhada byte-exata discordando sobre o que ela significa.**
 
 #### 15.1 Dois estados, um nó (`:hover`)
 
@@ -4164,6 +4362,16 @@ ambiguidade de fusão (b)/(c) da seção 5 com uma âncora byte-exata, não só 
 pra fora, os dois sinais) não são traduzidos, são dados técnicos; ver a própria regra da casa citada
 no cabeçalho da tabela: testar só o limite exato não basta, um limite alargado ainda contém a própria
 borda.)*
+
+#### 15.5 Paridade completa de unidade (`ESC-4`, 2026-08-08) -- `em`/`rem` lendo ancestrais DIFERENTES do MESMO nó, `vw`/`vh` contra um viewport passado
+
+*(mesmo exemplo em inglês acima -- fonte RCSS/RML e linhas de dump não traduzidas, dados técnicos;
+`margin-top: 2em`/`margin-left: 1.5rem` declarados no MESMO nó resolvem contra DOIS ancestrais
+diferentes -- `#mid`'s `50px` pro `em`, `body`'s `20px` pro `rem` -- fechando o próprio risco
+relatado da `UIX-RCSS-ERRATA-9` de um segundo implementer trocar `LengthResolveContext::
+font_size_px` por `::document_font_size_px`; `width: 50vw`/`height: 50vh` em nós irmãos resolvem
+contra o viewport `320x240` passado ao dump. Ver a própria seção 8.1 acima pra fórmula de unidade
+física que os 5 valores físicos citados aqui, a `dp_ratio=1.0` e a `dp_ratio=2.0`, pinam.)*
 
 ### 16. Decisões de contrato que fecham ambiguidades reportadas por fatias anteriores da `RMLX-2`
 

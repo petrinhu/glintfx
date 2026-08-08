@@ -216,7 +216,8 @@ namespace glintfx::uix::style {
 //     DIFERENTE, de vinculação interna, ambígua contra a real em todo call site que consiga ver as
 //     duas.
 ValueComputeStatus compute_one_decorator_function(std::string_view name, std::string_view inner,
-                                                  float dp_ratio, int depth, std::string* out);
+                                                  const LengthResolveContext& ctx, int depth,
+                                                  std::string* out);
 
 namespace {
 
@@ -454,6 +455,66 @@ std::vector<std::string_view> split_whitespace(std::string_view s) {
 
 bool ends_with(std::string_view s, std::string_view suffix) {
   return s.size() >= suffix.size() && s.substr(s.size() - suffix.size()) == suffix;
+}
+
+// EN: `ESC-4` -- declarative suffix->unit table mirroring the pin's own `unit_string_map`
+//     (`PropertyParserNumber.cpp:6-24`), restricted to the `Unit::LENGTH` family (`Unit.h:58`) --
+//     see value_compute.hpp's own `parse_length()` doc-comment for the full "why a table, not
+//     ends_with" rationale. Does NOT include `""`/`"%"`/`"x"`/`"deg"`/`"rad"` (NUMBER/PERCENT/X/
+//     DEG/RAD are each some OTHER function's own domain in this module -- see
+//     `kResolutionUnitTable` below for `x`'s own separate, single-entry table).
+// PT: `ESC-4` -- tabela declarativa sufixo->unidade espelhando o próprio `unit_string_map` do pin
+//     (`PropertyParserNumber.cpp:6-24`), restrita à família `Unit::LENGTH` (`Unit.h:58`) -- ver o
+//     próprio doc-comment do `parse_length()` no value_compute.hpp pro racional completo "por que
+//     uma tabela, não ends_with". NÃO inclui `""`/`"%"`/`"x"`/`"deg"`/`"rad"` (NUMBER/PERCENT/X/DEG/
+//     RAD são cada um domínio de OUTRA função deste módulo -- ver `kResolutionUnitTable` abaixo pra
+//     própria tabela separada, de entrada única, do `x`).
+struct LengthUnitEntry {
+  std::string_view suffix;
+  LengthUnit unit = LengthUnit::Px;
+};
+constexpr LengthUnitEntry kLengthUnitTable[] = {
+    {"px", LengthUnit::Px},
+    {"dp", LengthUnit::Dp},
+    {"em", LengthUnit::Em},
+    {"rem", LengthUnit::Rem},
+    {"vw", LengthUnit::Vw},
+    {"vh", LengthUnit::Vh},
+    {"in", LengthUnit::In},
+    {"cm", LengthUnit::Cm},
+    {"mm", LengthUnit::Mm},
+    {"pt", LengthUnit::Pt},
+    {"pc", LengthUnit::Pc},
+};
+
+// EN: `ESC-4` -- reverse scan for the number/unit boundary, transcribing
+//     `PropertyParserNumber.cpp:45-55` verbatim (upstream's own comment there: "Find the beginning
+//     of the unit string in 'value'"): the byte right after the LAST character (scanning backwards
+//     from the end) that is a digit or whitespace. A `raw` with no digit/whitespace at all (e.g.
+//     `"nanpx"`) returns 0, matching the pin's own loop-completes-without-writing-`unit_pos`
+//     fallthrough -- the "number half" is then empty, which `parse_float_token()`'s own `s.empty()`
+//     guard already rejects, so this shape fails downstream, not here, same as upstream's own
+//     `strtof("", ...)` failure. `i-- > 0` here (rather than upstream's own bare `i--`, an
+//     equivalent post-decrement-while-nonzero idiom for `size_t`) is the same loop, written for
+//     clarity over cleverness.
+// PT: `ESC-4` -- scan reverso pra fronteira número/unidade, transcrevendo
+//     `PropertyParserNumber.cpp:45-55` verbatim (o próprio comentário do upstream ali: "Find the
+//     beginning of the unit string in 'value'"): o byte logo depois do ÚLTIMO caractere (escaneando
+//     de trás pra frente a partir do fim) que é dígito ou whitespace. Um `raw` sem dígito/whitespace
+//     nenhum (ex. `"nanpx"`) retorna 0, casando com o próprio fallthrough do pin de
+//     laço-completa-sem-escrever-`unit_pos` -- a "metade número" fica vazia então, que a própria
+//     guarda `s.empty()` do `parse_float_token()` já rejeita, então esta forma falha rio-abaixo, não
+//     aqui, igual à própria falha `strtof("", ...)` do upstream. `i-- > 0` aqui (em vez do próprio
+//     `i--` cru do upstream, um idioma equivalente de decrementa-enquanto-não-zero pra `size_t`) é o
+//     mesmo laço, escrito pra clareza em vez de esperteza.
+std::size_t find_unit_boundary(std::string_view raw) {
+  for (std::size_t i = raw.size(); i-- > 0;) {
+    const char c = raw[i];
+    if ((c >= '0' && c <= '9') || is_ws(c)) {
+      return i + 1;
+    }
+  }
+  return 0;
 }
 
 // EN: docs/uix-rcss.md section 9.2.1's own gradient-stop grammar -- a stop is `<color>` alone or
@@ -865,98 +926,177 @@ ValueComputeStatus parse_length(std::string_view raw, float* out_value, LengthUn
   if (raw.empty() || raw.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;
   }
-  if (ends_with(raw, "px")) {
+  const std::size_t unit_pos = find_unit_boundary(raw);
+  const std::string_view number_part = raw.substr(0, unit_pos);
+  const std::string_view unit_part = raw.substr(unit_pos);
+
+  if (unit_part.empty()) {
+    // EN: Unitless is only accepted for the literal zero (CSS's own zero-length convention) --
+    //     unchanged by `ESC-4` -- see value_compute.hpp's own header, "Scope", for why (a policy
+    //     this file, not the pin, chooses -- the pin has no unitless-zero exception for LENGTH at
+    //     all, `PropertyParserNumber::ParseValue`'s own zero-exception only fires when
+    //     `zero_unit != Unit::UNKNOWN`, which the real `length`/`length-percent` parser
+    //     registrations never set).
+    // PT: Sem unidade só é aceito pro zero literal (a própria convenção de comprimento-zero do
+    //     CSS) -- inalterado pela `ESC-4` -- ver "Escopo" no próprio cabeçalho do
+    //     value_compute.hpp pro porquê (uma política deste arquivo, não do pin -- o pin não tem
+    //     exceção nenhuma de zero-sem-unidade pra LENGTH, a própria exceção-zero do
+    //     `PropertyParserNumber::ParseValue` só dispara quando `zero_unit != Unit::UNKNOWN`, que os
+    //     próprios registros reais de parser `length`/`length-percent` nunca setam).
     float v = 0.0f;
-    if (!parse_float_token(raw.substr(0, raw.size() - 2), &v)) {
-      return ValueComputeStatus::Invalid;
+    if (parse_float_token(number_part, &v) && v == 0.0f) {
+      *out_value = 0.0f;
+      *out_unit = LengthUnit::Px;
+      return ValueComputeStatus::Ok;
     }
-    *out_value = v;
-    *out_unit = LengthUnit::Px;
-    return ValueComputeStatus::Ok;
+    return ValueComputeStatus::Invalid;
   }
-  if (ends_with(raw, "dp")) {
-    float v = 0.0f;
-    if (!parse_float_token(raw.substr(0, raw.size() - 2), &v)) {
-      return ValueComputeStatus::Invalid;
+
+  const std::string unit_lower = to_lower(unit_part);
+  for (const LengthUnitEntry& entry : kLengthUnitTable) {
+    if (unit_lower == entry.suffix) {
+      float v = 0.0f;
+      if (!parse_float_token(number_part, &v)) {
+        return ValueComputeStatus::Invalid;
+      }
+      *out_value = v;
+      *out_unit = entry.unit;
+      return ValueComputeStatus::Ok;
     }
-    *out_value = v;
-    *out_unit = LengthUnit::Dp;
-    return ValueComputeStatus::Ok;
-  }
-  // EN: Unitless is only accepted for the literal zero (CSS's own zero-length convention) -- see
-  //     value_compute.hpp's own header, "Scope", for why every OTHER unit (em/rem/vw/vh) is
-  //     `Invalid` rather than guessed.
-  // PT: Sem unidade só é aceito pro zero literal (a própria convenção de comprimento-zero do CSS)
-  //     -- ver "Escopo" no próprio cabeçalho do value_compute.hpp pro porquê toda OUTRA unidade
-  //     (em/rem/vw/vh) é `Invalid` em vez de chutada.
-  float v = 0.0f;
-  if (parse_float_token(raw, &v) && v == 0.0f) {
-    *out_value = 0.0f;
-    *out_unit = LengthUnit::Px;
-    return ValueComputeStatus::Ok;
   }
   return ValueComputeStatus::Invalid;
 }
 
-float resolve_length_px(float value, LengthUnit unit, float dp_ratio) {
-  return unit == LengthUnit::Dp ? value * dp_ratio : value;
+float resolve_length_px(float value, LengthUnit unit, const LengthResolveContext& ctx) {
+  // EN: PPI_UNIT family first (mirrors the pin's own `ComputeLength`'s own `Any(value.unit &
+  //     Unit::PPI_UNIT)` check delegating to `ComputePPILength` before its own switch,
+  //     `ComputeProperty.cpp:54-55`) -- see value_compute.hpp's own doc-comment for the exact
+  //     formula and why multiplication-by-reciprocal, not division.
+  // PT: Família PPI_UNIT primeiro (espelha a própria checagem `Any(value.unit & Unit::PPI_UNIT)`
+  //     do `ComputeLength` do pin, delegando pro `ComputePPILength` antes do próprio switch dele,
+  //     `ComputeProperty.cpp:54-55`) -- ver o próprio doc-comment do value_compute.hpp pra fórmula
+  //     exata e por que multiplicação-pelo-recíproco, não divisão.
+  if (unit == LengthUnit::In || unit == LengthUnit::Cm || unit == LengthUnit::Mm ||
+      unit == LengthUnit::Pt || unit == LengthUnit::Pc) {
+    const float inch = value * 96.0f * ctx.dp_ratio;
+    switch (unit) {
+      case LengthUnit::In:
+        return inch;
+      case LengthUnit::Cm:
+        return inch * (1.0f / 2.54f);
+      case LengthUnit::Mm:
+        return inch * (1.0f / 25.4f);
+      case LengthUnit::Pt:
+        return inch * (1.0f / 72.0f);
+      case LengthUnit::Pc:
+        return inch * (1.0f / 6.0f);
+      default:
+        break; // unreachable -- the outer `if` already narrowed to these 5.
+    }
+  }
+  switch (unit) {
+    case LengthUnit::Px:
+      return value;
+    case LengthUnit::Dp:
+      return value * ctx.dp_ratio;
+    case LengthUnit::Em:
+      return value * ctx.font_size_px;
+    case LengthUnit::Rem:
+      return value * ctx.document_font_size_px;
+    case LengthUnit::Vw:
+      return value * ctx.vp_w_px * 0.01f;
+    case LengthUnit::Vh:
+      return value * ctx.vp_h_px * 0.01f;
+    default:
+      return value; // unreachable -- PPI_UNIT already handled above.
+  }
 }
 
-// EN: `UIX-EM-UNIT` -- see value_compute.hpp's own header comment at this function's own
-//     declaration for the full "why a separate function, not a widened parse_length/
-//     resolve_length_px" rationale. Delegates to parse_length()/resolve_length_px() UNCHANGED for
-//     px/dp/unitless-zero (identical result to calling those two directly); adds exactly one new
-//     recognised shape, `<number>em`, resolved as `multiplier * parent_font_size_px`. `rem` is
-//     explicitly excluded (checked BEFORE the bare `em` suffix test, not left to fall through) --
-//     `"1rem"` also ends in the two bytes `"em"`, so without this explicit exclusion the leftover
-//     substring after stripping that `"em"` would be `"1r"`, which `parse_float_token` already
-//     rejects on its own (a trailing, non-numeric `'r'` fails `strtof`'s own whole-string match) --
-//     but this function says so EXPLICITLY, as a documented policy decision (zero corpus `rem`
-//     occurrences, see this function's own header comment), not as an accident a future reader would
-//     have to re-derive by tracing `parse_float_token`'s own failure mode.
-// PT: `UIX-EM-UNIT` -- ver o próprio comentário de cabeçalho do value_compute.hpp na própria
-//     declaração desta função pro racional completo "por que uma função separada, não um
-//     parse_length/resolve_length_px alargado". Delega pro parse_length()/resolve_length_px()
-//     INALTERADOS pra px/dp/zero-sem-unidade (resultado idêntico a chamar os dois direto); soma
-//     exatamente uma forma nova reconhecida, `<número>em`, resolvida como
-//     `multiplicador * parent_font_size_px`. `rem` é explicitamente excluído (checado ANTES do
-//     próprio teste de sufixo `em` cru, não deixado cair por acidente) -- `"1rem"` também termina nos
-//     dois bytes `"em"`, então sem esta exclusão explícita a substring restante depois de tirar
-//     aquele `"em"` seria `"1r"`, que o `parse_float_token` já rejeita sozinho (um `'r'` final,
-//     não-numérico, falha o próprio casamento string-inteira do `strtof`) -- mas esta função diz isso
-//     EXPLICITAMENTE, como uma decisão de política documentada (zero ocorrências de `rem` no corpus,
-//     ver o próprio comentário de cabeçalho desta função), não como um acidente que um futuro leitor
-//     teria que re-derivar rastreando o próprio modo de falha do `parse_float_token`.
-ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px, float dp_ratio,
-                                   float* out_px) {
+// EN: `UIX-EM-UNIT`/`ESC-4` -- see value_compute.hpp's own header comment at this function's own
+//     declaration for the full "why this stays a separate, narrow function even though
+//     parse_length/resolve_length_px are now unit-complete" rationale. Delegates to ONE
+//     `parse_length()` call for suffix recognition (unified table, `ESC-4`'s own widened function),
+//     then switches on the resulting `LengthUnit`: `Em` reads the EXPLICIT `parent_font_size_px`
+//     parameter (this function's own one deliberate exception to the general funnel); `Rem` reads
+//     `ctx.document_font_size_px` (the SAME field the general funnel's own `Rem` case already
+//     reads -- no exception needed here); every OTHER unit (`Px`/`Dp`/`Vw`/`Vh`/the 5 `PPI_UNIT`
+//     members) delegates straight to `resolve_length_px(value, unit, ctx)` unchanged, the pin's own
+//     "font-relative lengths handled above, other lengths handled as normal" fallthrough
+//     (`ComputeProperty.cpp:116-117`). Both `Em`/`Rem` guard their own ancestor value with
+//     `std::isfinite` before multiplying -- a caller-supplied ancestor this function cannot itself
+//     validate the shape of must not silently propagate a NaN/Inf product.
+// PT: `UIX-EM-UNIT`/`ESC-4` -- ver o próprio comentário de cabeçalho do value_compute.hpp na
+//     própria declaração desta função pro racional completo "por que isto continua sendo uma
+//     função separada, estreita, mesmo com parse_length/resolve_length_px agora completos em
+//     unidade". Delega pra UMA chamada `parse_length()` pro próprio reconhecimento de sufixo
+//     (tabela unificada, a própria função alargada da `ESC-4`), depois faz switch no `LengthUnit`
+//     resultante: `Em` lê o próprio parâmetro EXPLÍCITO `parent_font_size_px` (a única exceção
+//     deliberada desta função ao funil geral); `Rem` lê `ctx.document_font_size_px` (o MESMO campo
+//     que o próprio caso `Rem` do funil geral já lê -- nenhuma exceção precisada aqui); toda OUTRA
+//     unidade (`Px`/`Dp`/`Vw`/`Vh`/os 5 membros `PPI_UNIT`) delega direto pro
+//     `resolve_length_px(value, unit, ctx)` inalterado, o próprio fallthrough "font-relative
+//     lengths handled above, other lengths handled as normal" do pin
+//     (`ComputeProperty.cpp:116-117`). `Em`/`Rem` os dois guardam o próprio valor ancestral com
+//     `std::isfinite` antes de multiplicar -- um valor ancestral fornecido-pelo-chamador que esta
+//     função não consegue validar a própria forma sozinha não pode propagar em silêncio um produto
+//     NaN/Inf.
+ValueComputeStatus parse_font_size(std::string_view raw, float parent_font_size_px,
+                                   const LengthResolveContext& ctx, float* out_px) {
   if (raw.empty() || raw.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;
   }
   float value = 0.0f;
   LengthUnit unit = LengthUnit::Px;
-  if (parse_length(raw, &value, &unit) == ValueComputeStatus::Ok) {
-    *out_px = resolve_length_px(value, unit, dp_ratio);
-    return ValueComputeStatus::Ok;
-  }
-  if (ends_with(raw, "rem")) {
-    // EN: `rem` -- diagnosed, not implemented, per this function's own header comment. Falls
-    //     through to the shared `Invalid` return below.
-    // PT: `rem` -- diagnosticado, não implementado, per o próprio comentário de cabeçalho desta
-    //     função. Cai pro `Invalid` compartilhado abaixo.
+  if (parse_length(raw, &value, &unit) != ValueComputeStatus::Ok) {
     return ValueComputeStatus::Invalid;
   }
-  if (ends_with(raw, "em")) {
-    if (!std::isfinite(parent_font_size_px)) {
-      return ValueComputeStatus::Invalid;
-    }
-    float multiplier = 0.0f;
-    if (!parse_float_token(raw.substr(0, raw.size() - 2), &multiplier)) {
-      return ValueComputeStatus::Invalid;
-    }
-    *out_px = multiplier * parent_font_size_px;
-    return ValueComputeStatus::Ok;
+  switch (unit) {
+    case LengthUnit::Em:
+      if (!std::isfinite(parent_font_size_px)) {
+        return ValueComputeStatus::Invalid;
+      }
+      *out_px = value * parent_font_size_px;
+      return ValueComputeStatus::Ok;
+    case LengthUnit::Rem:
+      if (!std::isfinite(ctx.document_font_size_px)) {
+        return ValueComputeStatus::Invalid;
+      }
+      *out_px = value * ctx.document_font_size_px;
+      return ValueComputeStatus::Ok;
+    default:
+      *out_px = resolve_length_px(value, unit, ctx);
+      return ValueComputeStatus::Ok;
   }
-  return ValueComputeStatus::Invalid;
+}
+
+// EN: `ESC-4` -- `x`/resolution, `Unit::X`. See value_compute.hpp's own `parse_resolution()`
+//     doc-comment for the full rationale (deliberately NOT part of `LengthUnit`, its only real
+//     pin-side consumer is `@spritesheet`'s `resolution: <n>x`, not implemented yet). Reuses
+//     `find_unit_boundary()` for the same reverse-scan mechanics `parse_length()` uses, but matches
+//     the unit half against the single literal `"x"` rather than a table -- one entry does not
+//     warrant `kLengthUnitTable`'s own array-of-struct shape.
+// PT: `ESC-4` -- `x`/resolution, `Unit::X`. Ver o próprio doc-comment do `parse_resolution()` no
+//     value_compute.hpp pro racional completo (deliberadamente NÃO parte do `LengthUnit`, o único
+//     consumidor real dele no pin é o `resolution: <n>x` do `@spritesheet`, ainda não implementado).
+//     Reusa o `find_unit_boundary()` pra mesma mecânica de scan-reverso que o `parse_length()` usa,
+//     mas casa a metade unidade contra o literal único `"x"` em vez de uma tabela -- uma entrada só
+//     não justifica a própria forma array-de-struct do `kLengthUnitTable`.
+ValueComputeStatus parse_resolution(std::string_view raw, float* out_value) {
+  if (raw.empty() || raw.size() > kMaxRawValueBytes) {
+    return ValueComputeStatus::Invalid;
+  }
+  const std::size_t unit_pos = find_unit_boundary(raw);
+  const std::string_view number_part = raw.substr(0, unit_pos);
+  const std::string_view unit_part = raw.substr(unit_pos);
+  if (to_lower(unit_part) != "x") {
+    return ValueComputeStatus::Invalid;
+  }
+  float v = 0.0f;
+  if (!parse_float_token(number_part, &v)) {
+    return ValueComputeStatus::Invalid;
+  }
+  *out_value = v;
+  return ValueComputeStatus::Ok;
 }
 
 ValueComputeStatus parse_percent(std::string_view raw, float* out_percent) {
@@ -1055,7 +1195,7 @@ std::vector<float> resolve_gradient_stop_positions(
 // EN: Section 9.1 -- box-shadow.
 // PT: Seção 9.1 -- box-shadow.
 // ===========================================================================
-ValueComputeStatus compute_box_shadow(std::string_view raw_value, float dp_ratio,
+ValueComputeStatus compute_box_shadow(std::string_view raw_value, const LengthResolveContext& ctx,
                                       std::string* out) {
   out->clear();
   if (raw_value.size() > kMaxRawValueBytes) {
@@ -1094,7 +1234,7 @@ ValueComputeStatus compute_box_shadow(std::string_view raw_value, float dp_ratio
         if (length_count >= 4) {
           return ValueComputeStatus::Invalid; // matches upstream's own "default: return false"
         }
-        lengths[length_count++] = resolve_length_px(lv, lu, dp_ratio);
+        lengths[length_count++] = resolve_length_px(lv, lu, ctx);
       } else if (tok == "inset") {
         inset = true;
       } else if (parse_color(tok, &color) == ValueComputeStatus::Ok) {
@@ -1222,8 +1362,8 @@ ValueComputeStatus compute_radial_gradient_args(std::string_view inner_args, std
 // ===========================================================================
 namespace {
 
-ValueComputeStatus compute_polygon(std::string_view inner, float dp_ratio, int depth,
-                                   std::string* out) {
+ValueComputeStatus compute_polygon(std::string_view inner, const LengthResolveContext& ctx,
+                                   int depth, std::string* out) {
   auto pieces = split_top_level(inner, ',');
   if (pieces.size() < 2 || pieces.size() > 3) {
     return ValueComputeStatus::Invalid;
@@ -1242,7 +1382,7 @@ ValueComputeStatus compute_polygon(std::string_view inner, float dp_ratio, int d
     if (calls.size() != 1) {
       return ValueComputeStatus::Invalid;
     }
-    if (compute_one_decorator_function(calls[0].name, calls[0].inner, dp_ratio, depth + 1,
+    if (compute_one_decorator_function(calls[0].name, calls[0].inner, ctx, depth + 1,
                                        &fill_str) != ValueComputeStatus::Ok) {
       return ValueComputeStatus::Invalid;
     }
@@ -1332,7 +1472,8 @@ ValueComputeStatus compute_two_stop_straight_gradient(std::string_view inner, st
   return ValueComputeStatus::Ok;
 }
 
-ValueComputeStatus compute_drop_shadow(std::string_view inner, float dp_ratio, std::string* out) {
+ValueComputeStatus compute_drop_shadow(std::string_view inner, const LengthResolveContext& ctx,
+                                       std::string* out) {
   auto tokens = split_whitespace(inner);
   if (tokens.size() != 4) {
     return ValueComputeStatus::Invalid;
@@ -1348,7 +1489,7 @@ ValueComputeStatus compute_drop_shadow(std::string_view inner, float dp_ratio, s
     if (parse_length(tokens[static_cast<std::size_t>(i) + 1], &v, &u) != ValueComputeStatus::Ok) {
       return ValueComputeStatus::Invalid;
     }
-    lens[i] = resolve_length_px(v, u, dp_ratio);
+    lens[i] = resolve_length_px(v, u, ctx);
   }
   std::vector<std::string> parts{print_color(color), print_length_px(lens[0]),
                                  print_length_px(lens[1]), print_length_px(lens[2])};
@@ -1356,14 +1497,15 @@ ValueComputeStatus compute_drop_shadow(std::string_view inner, float dp_ratio, s
   return ValueComputeStatus::Ok;
 }
 
-ValueComputeStatus compute_blur(std::string_view inner, float dp_ratio, std::string* out) {
+ValueComputeStatus compute_blur(std::string_view inner, const LengthResolveContext& ctx,
+                                std::string* out) {
   std::string_view t = trim(inner);
   float v = 0.0f;
   LengthUnit u = LengthUnit::Px;
   if (parse_length(t, &v, &u) != ValueComputeStatus::Ok) {
     return ValueComputeStatus::Invalid;
   }
-  *out = print_length_px(resolve_length_px(v, u, dp_ratio));
+  *out = print_length_px(resolve_length_px(v, u, ctx));
   return ValueComputeStatus::Ok;
 }
 
@@ -1391,7 +1533,8 @@ ValueComputeStatus compute_url_function(std::string_view inner, std::string* out
 } // namespace
 
 ValueComputeStatus compute_one_decorator_function(std::string_view name, std::string_view inner,
-                                                  float dp_ratio, int depth, std::string* out) {
+                                                  const LengthResolveContext& ctx, int depth,
+                                                  std::string* out) {
   if (depth > kMaxNestDepth) {
     return ValueComputeStatus::Invalid;
   }
@@ -1406,7 +1549,7 @@ ValueComputeStatus compute_one_decorator_function(std::string_view name, std::st
   } else if (name == "radial-gradient") {
     st = compute_radial_gradient_args(inner, &args);
   } else if (name == "polygon") {
-    st = compute_polygon(inner, dp_ratio, depth, &args);
+    st = compute_polygon(inner, ctx, depth, &args);
   } else if (name == "ripple") {
     st = compute_ripple(inner, &args);
   } else if (name == "horizontal-gradient" || name == "vertical-gradient") {
@@ -1422,9 +1565,9 @@ ValueComputeStatus compute_one_decorator_function(std::string_view name, std::st
     //     gramática deste formato de dump pras duas é byte-idêntica.
     st = compute_two_stop_straight_gradient(inner, &args);
   } else if (name == "blur") {
-    st = compute_blur(inner, dp_ratio, &args);
+    st = compute_blur(inner, ctx, &args);
   } else if (name == "drop-shadow") {
-    st = compute_drop_shadow(inner, dp_ratio, &args);
+    st = compute_drop_shadow(inner, ctx, &args);
   } else {
     return ValueComputeStatus::Invalid; // unknown function name -- section 11's own fail-high case
   }
@@ -1439,8 +1582,8 @@ ValueComputeStatus compute_one_decorator_function(std::string_view name, std::st
   return ValueComputeStatus::Ok;
 }
 
-ValueComputeStatus compute_decorator_list(std::string_view raw_value, float dp_ratio,
-                                          std::string* out) {
+ValueComputeStatus compute_decorator_list(std::string_view raw_value,
+                                          const LengthResolveContext& ctx, std::string* out) {
   out->clear();
   std::string_view trimmed = trim(raw_value);
   if (trimmed.empty() || trimmed == "none") {
@@ -1465,7 +1608,7 @@ ValueComputeStatus compute_decorator_list(std::string_view raw_value, float dp_r
   std::vector<std::string> results;
   for (const FunctionCall& call : calls) {
     std::string one;
-    if (compute_one_decorator_function(call.name, call.inner, dp_ratio, 0, &one) !=
+    if (compute_one_decorator_function(call.name, call.inner, ctx, 0, &one) !=
         ValueComputeStatus::Ok) {
       // EN: `UIX-RCSS-ERRATA-2`'s own correction to `Finding C` -- a single unrecognised/malformed
       //     entry aborts the WHOLE property, matching upstream's own `return false` on the FIRST
@@ -1494,7 +1637,8 @@ ValueComputeStatus compute_decorator_list(std::string_view raw_value, float dp_r
 // ===========================================================================
 namespace {
 
-ValueComputeStatus compute_translate(std::string_view inner, float dp_ratio, std::string* out) {
+ValueComputeStatus compute_translate(std::string_view inner, const LengthResolveContext& ctx,
+                                     std::string* out) {
   auto pieces = split_top_level(inner, ',');
   if (pieces.size() != 2) {
     return ValueComputeStatus::Invalid;
@@ -1506,7 +1650,7 @@ ValueComputeStatus compute_translate(std::string_view inner, float dp_ratio, std
     if (parse_length(pieces[static_cast<std::size_t>(i)], &v, &u) != ValueComputeStatus::Ok) {
       return ValueComputeStatus::Invalid;
     }
-    lens[i] = resolve_length_px(v, u, dp_ratio);
+    lens[i] = resolve_length_px(v, u, ctx);
   }
   std::vector<std::string> parts{print_length_px(lens[0]), print_length_px(lens[1])};
   *out = join(parts, ';');
@@ -1541,8 +1685,8 @@ ValueComputeStatus compute_rotate(std::string_view inner, std::string* out) {
 
 } // namespace
 
-ValueComputeStatus compute_transform_list(std::string_view raw_value, float dp_ratio,
-                                          std::string* out) {
+ValueComputeStatus compute_transform_list(std::string_view raw_value,
+                                          const LengthResolveContext& ctx, std::string* out) {
   out->clear();
   std::string_view trimmed = trim(raw_value);
   if (trimmed.empty() || trimmed == "none") {
@@ -1567,7 +1711,7 @@ ValueComputeStatus compute_transform_list(std::string_view raw_value, float dp_r
     std::string args;
     ValueComputeStatus st = ValueComputeStatus::Invalid;
     if (call.name == "translate") {
-      st = compute_translate(call.inner, dp_ratio, &args);
+      st = compute_translate(call.inner, ctx, &args);
     } else if (call.name == "scale") {
       st = compute_scale(call.inner, &args);
     } else if (call.name == "rotate") {

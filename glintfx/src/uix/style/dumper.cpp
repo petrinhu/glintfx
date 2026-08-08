@@ -334,17 +334,18 @@ bool parse_plain_number(std::string_view raw, float* out) {
   return true;
 }
 
-bool try_print_length(std::string_view raw, float dp_ratio, std::string* out) {
+bool try_print_length(std::string_view raw, const LengthResolveContext& ctx, std::string* out) {
   float value = 0.0f;
   LengthUnit unit = LengthUnit::Px;
   if (parse_length(raw, &value, &unit) != ValueComputeStatus::Ok) {
     return false;
   }
-  *out = print_length_px(resolve_length_px(value, unit, dp_ratio));
+  *out = print_length_px(resolve_length_px(value, unit, ctx));
   return true;
 }
 
-bool try_print_length_percent(std::string_view raw, float dp_ratio, std::string* out) {
+bool try_print_length_percent(std::string_view raw, const LengthResolveContext& ctx,
+                              std::string* out) {
   if (looks_percent_shaped(raw)) {
     float pct = 0.0f;
     if (parse_percent(raw, &pct) != ValueComputeStatus::Ok) {
@@ -353,7 +354,7 @@ bool try_print_length_percent(std::string_view raw, float dp_ratio, std::string*
     *out = print_percent(pct);
     return true;
   }
-  return try_print_length(raw, dp_ratio, out);
+  return try_print_length(raw, ctx, out);
 }
 
 // EN: This file's header, "The animation gap". Only the two empty-list spellings spec section 9
@@ -393,17 +394,17 @@ bool try_print_animation(std::string_view raw, std::string* out) {
 //     gramática §9.3 do `transition` nem a própria gramática §9 do `font-effect` existe no
 //     value_compute.hpp ainda, donas `ESC-23`/`ESC-24` respectivamente, mesma lacuna documentada,
 //     mesma função só, nenhuma nova inventada pra mais dois nomes que precisam da forma idêntica).
-bool try_print_composite(std::string_view name, std::string_view raw, float dp_ratio,
-                         std::string* out) {
+bool try_print_composite(std::string_view name, std::string_view raw,
+                         const LengthResolveContext& ctx, std::string* out) {
   if (name == "box-shadow") {
-    return compute_box_shadow(raw, dp_ratio, out) == ValueComputeStatus::Ok;
+    return compute_box_shadow(raw, ctx, out) == ValueComputeStatus::Ok;
   }
   if (name == "decorator" || name == "mask-image" || name == "filter" ||
       name == "backdrop-filter") {
-    return compute_decorator_list(raw, dp_ratio, out) == ValueComputeStatus::Ok;
+    return compute_decorator_list(raw, ctx, out) == ValueComputeStatus::Ok;
   }
   if (name == "transform") {
-    return compute_transform_list(raw, dp_ratio, out) == ValueComputeStatus::Ok;
+    return compute_transform_list(raw, ctx, out) == ValueComputeStatus::Ok;
   }
   if (name == "animation" || name == "transition" || name == "font-effect") {
     return try_print_animation(raw, out);
@@ -431,7 +432,7 @@ bool try_print_composite(std::string_view name, std::string_view raw, float dp_r
 //     política fail-high da seção 11 da spec, aplicada NESTE estágio de impressão em vez de deixada
 //     pra uma futura reescrita de cascata).
 bool try_print_for_domain(const PropertyInfo& info, std::string_view name, std::string_view raw,
-                          float dp_ratio, std::string* out) {
+                          const LengthResolveContext& ctx, std::string* out) {
   const ValueDomain effective =
       info.has_alternate_domain ? resolve_effective_domain(info, raw) : info.domain;
 
@@ -452,9 +453,9 @@ bool try_print_for_domain(const PropertyInfo& info, std::string_view name, std::
       return true;
     }
     case ValueDomain::Length:
-      return try_print_length(raw, dp_ratio, out);
+      return try_print_length(raw, ctx, out);
     case ValueDomain::LengthPercent:
-      return try_print_length_percent(raw, dp_ratio, out);
+      return try_print_length_percent(raw, ctx, out);
     case ValueDomain::Color: {
       Rgba8 rgba{};
       if (parse_color(raw, &rgba) != ValueComputeStatus::Ok) {
@@ -471,7 +472,7 @@ bool try_print_for_domain(const PropertyInfo& info, std::string_view name, std::
       *out = print_string(raw);
       return true;
     case ValueDomain::Composite:
-      return try_print_composite(name, raw, dp_ratio, out);
+      return try_print_composite(name, raw, ctx, out);
   }
   // EN: Unreachable -- ValueDomain is a closed 7-member enum, every member handled above.
   // PT: Inalcançável -- ValueDomain é um enum fechado de 7 membros, todos tratados acima.
@@ -577,9 +578,38 @@ constexpr float kUaDefaultFontSizePx = 12.0f;
 //     do `cascade_tree()`, restatada pelo próprio doc-comment do `collect_element_paths()` acima),
 //     então um miss de busca é inalcançável por construção; tratado defensivamente mesmo assim (cai
 //     pro `kUaDefaultFontSizePx`) em vez de assumir.
+// EN: `ESC-4` -- `vp_w_px`/`vp_h_px`, NEW parameters, threaded unchanged into the per-node `ctx`
+//     this function now builds for each `parse_font_size()` call (`font-size: 50vw` is legal per
+//     `docs/rmlx-subset.md` section 6.3's own paridade decision, even though the corpus never
+//     exercises it -- `ComputeFontsize`'s own closing fallthrough, `ComputeProperty.cpp:116-117`,
+//     resolves it exactly like any other non-`em`/`rem` unit). `document_font_size_px` is the
+//     SECOND new field this function now populates per node, per `ComputeFontsize`'s own real
+//     split (`ComputeProperty.cpp:100-111`): for the DOCUMENT ROOT itself (`i == 0`, the ONE node
+//     whose own font-size property this loop is computing WHILE also being asked what its own
+//     document root's font-size is -- a genuine circularity `ComputeFontsize`'s own upstream text
+//     resolves by falling back to the UA default, `!document_values || &values == document_values`)
+//     it is `kUaDefaultFontSizePx`; for every OTHER node it is `resolved[0]`, the ROOT's OWN
+//     font-size, ALREADY resolved by the time node `i > 0` is visited (pre-order, root first) --
+//     never circular for `i > 0`, unlike `parent_px` above (which the SAME pre-order guarantee
+//     already relied on before this item).
+// PT: `ESC-4` -- `vp_w_px`/`vp_h_px`, parâmetros NOVOS, encaminhados inalterados pro `ctx` por-nó
+//     que esta função agora constrói pra cada chamada `parse_font_size()` (`font-size: 50vw` é
+//     legal pela própria decisão de paridade da seção 6.3 do `docs/rmlx-subset.md`, mesmo que o
+//     corpus nunca exercite -- o próprio fallthrough de fechamento do `ComputeFontsize`,
+//     `ComputeProperty.cpp:116-117`, resolve isso exatamente como qualquer outra unidade não-
+//     `em`/`rem`). `document_font_size_px` é o SEGUNDO campo novo que esta função agora preenche
+//     por nó, pela própria separação real do `ComputeFontsize` (`ComputeProperty.cpp:100-111`):
+//     pra RAIZ do documento em si (`i == 0`, o ÚNICO nó cuja própria propriedade font-size este laço
+//     está computando ENQUANTO também é perguntado qual é o próprio font-size da raiz do documento
+//     dele -- uma circularidade genuína que o próprio texto upstream do `ComputeFontsize` resolve
+//     caindo pro UA default, `!document_values || &values == document_values`) é
+//     `kUaDefaultFontSizePx`; pra todo OUTRO nó é `resolved[0]`, o próprio font-size da RAIZ, JÁ
+//     resolvido no momento em que o nó `i > 0` é visitado (pré-ordem, raiz primeiro) -- nunca
+//     circular pra `i > 0`, diferente do `parent_px` acima (que a MESMA garantia de pré-ordem já
+//     dependia antes deste item).
 std::vector<float> resolve_font_size_chain_px(const std::vector<std::string>& paths,
                                               const std::vector<NodeStyle>& node_styles,
-                                              float dp_ratio) {
+                                              float dp_ratio, float vp_w_px, float vp_h_px) {
   const std::size_t n = paths.size() < node_styles.size() ? paths.size() : node_styles.size();
   std::vector<float> resolved(n, kUaDefaultFontSizePx);
   std::unordered_map<const glintfx::uix::Element*, float> by_element;
@@ -600,6 +630,16 @@ std::vector<float> resolve_font_size_chain_px(const std::vector<std::string>& pa
       }
     }
 
+    // EN: `ESC-4` -- see this function's own header for the full `i == 0` (document root, UA
+    //     default) vs. `i > 0` (already-resolved `resolved[0]`) rationale.
+    // PT: `ESC-4` -- ver o próprio cabeçalho desta função pro racional completo `i == 0` (raiz do
+    //     documento, UA default) vs. `i > 0` (já-resolvido `resolved[0]`).
+    const float document_px = (i == 0) ? kUaDefaultFontSizePx : resolved[0];
+    const LengthResolveContext ctx{.dp_ratio = dp_ratio,
+                                   .document_font_size_px = document_px,
+                                   .vp_w_px = vp_w_px,
+                                   .vp_h_px = vp_h_px};
+
     float px = kUaDefaultFontSizePx;
     // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if` instead of a raw hand-rolled loop, same
     //     lookup, same early-exit-on-match semantics.
@@ -610,7 +650,7 @@ std::vector<float> resolve_font_size_chain_px(const std::vector<std::string>& pa
                      [](const ComputedProperty& prop) { return prop.name == "font-size"; });
     if (font_size_it != style.end()) {
       float out_px = 0.0f;
-      if (parse_font_size(font_size_it->value, parent_px, dp_ratio, &out_px) ==
+      if (parse_font_size(font_size_it->value, parent_px, ctx, &out_px) ==
           ValueComputeStatus::Ok) {
         px = out_px;
       }
@@ -634,7 +674,7 @@ std::vector<float> resolve_font_size_chain_px(const std::vector<std::string>& pa
 
 } // namespace
 
-std::string canonical_print(const ComputedProperty& prop, float dp_ratio) {
+std::string canonical_print(const ComputedProperty& prop, const LengthResolveContext& ctx) {
   const PropertyInfo* info = find_property(prop.name);
   if (info == nullptr) {
     // EN: Unreachable by construction (see dumper.hpp's own header) -- `prop.name` always comes
@@ -646,7 +686,7 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio) {
   }
 
   std::string result;
-  if (try_print_for_domain(*info, prop.name, prop.value, dp_ratio, &result)) {
+  if (try_print_for_domain(*info, prop.name, prop.value, ctx, &result)) {
     return result;
   }
   // EN: Spec section 11's own fail-high fallback, applied at print time (dumper.hpp's own header,
@@ -654,7 +694,7 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio) {
   // PT: O próprio fallback fail-high da seção 11 da spec, aplicado em tempo de impressão (o
   //     próprio cabeçalho do dumper.hpp, "valores de domínio-keyword não são validados" nomeia o
   //     único domínio em que isto não ajuda).
-  if (try_print_for_domain(*info, prop.name, info->initial_value, dp_ratio, &result)) {
+  if (try_print_for_domain(*info, prop.name, info->initial_value, ctx, &result)) {
     return result;
   }
   // EN: Unreachable by construction against today's registry (this file's own header, "fail-high
@@ -664,7 +704,8 @@ std::string canonical_print(const ComputedProperty& prop, float dp_ratio) {
   return std::string(info->initial_value);
 }
 
-std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& root, float dp_ratio) {
+std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& root, float dp_ratio,
+                       float vp_w_px, float vp_h_px) {
   std::string out;
 
   std::vector<std::string> paths;
@@ -708,16 +749,18 @@ std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& roo
     //     nunca trava sobre os próprios inputs, pelo próprio cabeçalho do dumper.hpp).
     const std::size_t n = paths.size() < node_styles.size() ? paths.size() : node_styles.size();
 
-    // EN: `UIX-EM-UNIT` -- see dumper.hpp's own `dump_style()` doc-comment for the full rationale.
-    //     Computed once per STATE block (node_styles/paths themselves are recomputed per state just
-    //     above, so this chain is too -- a hover-state font-size declaration, if the corpus ever
-    //     grows one, gets its own correctly-scoped chain rather than reusing `none`'s).
-    // PT: `UIX-EM-UNIT` -- ver o próprio doc-comment do `dump_style()` no dumper.hpp pro racional
-    //     completo. Computado uma vez por bloco STATE (node_styles/paths eles mesmos são
+    // EN: `UIX-EM-UNIT`/`ESC-4` -- see dumper.hpp's own `dump_style()` doc-comment for the full
+    //     rationale. Computed once per STATE block (node_styles/paths themselves are recomputed
+    //     per state just above, so this chain is too -- a hover-state font-size declaration, if
+    //     the corpus ever grows one, gets its own correctly-scoped chain rather than reusing
+    //     `none`'s).
+    // PT: `UIX-EM-UNIT`/`ESC-4` -- ver o próprio doc-comment do `dump_style()` no dumper.hpp pro
+    //     racional completo. Computado uma vez por bloco STATE (node_styles/paths eles mesmos são
     //     recomputados por state logo acima, então esta cadeia também é -- uma declaração de
     //     font-size em hover-state, se o corpus algum dia crescer uma, ganha a própria cadeia
     //     corretamente escopada em vez de reusar a do `none`).
-    const std::vector<float> font_size_px = resolve_font_size_chain_px(paths, node_styles, dp_ratio);
+    const std::vector<float> font_size_px =
+        resolve_font_size_chain_px(paths, node_styles, dp_ratio, vp_w_px, vp_h_px);
 
     for (std::size_t i = 0; i < n; ++i) {
       const std::string& path = paths[i];
@@ -727,6 +770,33 @@ std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& roo
       out += " PROPS ";
       out += std::to_string(style.size());
       out += '\n';
+
+      // EN: `ESC-4` -- the per-node `LengthResolveContext` every OTHER property (not `font-size`,
+      //     handled below via the pre-resolved chain) now resolves `em`/`rem`/`vw`/`vh`/physical
+      //     units through: `font_size_px` is THIS node's own already-resolved font-size (`em`'s
+      //     own base, `font_size_px[i]` -- index 0 is ALWAYS the document root, pre-order-DFS's
+      //     own first-visited node, `collect_element_paths()`'s own invariant), `document_font_
+      //     size_px` is the ROOT's (`rem`'s own base, `font_size_px[0]`, ALREADY fully resolved by
+      //     this point -- `resolve_font_size_chain_px()` above finished the WHOLE chain, including
+      //     index 0, before this loop starts, so reading it here is never the circular case that
+      //     function's own header names for `i == 0` DURING its own construction). `vp_w_px`/
+      //     `vp_h_px` are this call's own viewport pair, unchanged per node.
+      // PT: `ESC-4` -- o `LengthResolveContext` por-nó que toda OUTRA propriedade (não `font-size`,
+      //     tratada abaixo via a cadeia pré-resolvida) agora resolve `em`/`rem`/`vw`/`vh`/unidades
+      //     físicas através: `font_size_px` é o próprio font-size já-resolvido DESTE nó (a própria
+      //     base do `em`, `font_size_px[i]` -- índice 0 é SEMPRE a raiz do documento, o próprio
+      //     primeiro nó visitado da pré-ordem-DFS, o próprio invariante do
+      //     `collect_element_paths()`), `document_font_size_px` é o da RAIZ (a própria base do
+      //     `rem`, `font_size_px[0]`, JÁ totalmente resolvido neste ponto -- o
+      //     `resolve_font_size_chain_px()` acima terminou a CADEIA INTEIRA, incluindo o índice 0,
+      //     antes deste laço começar, então ler aqui nunca é o caso circular que o próprio
+      //     cabeçalho daquela função nomeia pro `i == 0` DURANTE a própria construção dela).
+      //     `vp_w_px`/`vp_h_px` são o próprio par de viewport desta chamada, inalterado por nó.
+      const LengthResolveContext ctx{.dp_ratio = dp_ratio,
+                                     .font_size_px = font_size_px[i],
+                                     .document_font_size_px = font_size_px[0],
+                                     .vp_w_px = vp_w_px,
+                                     .vp_h_px = vp_h_px};
 
       for (const ComputedProperty& prop : style) {
         out += path;
@@ -744,7 +814,7 @@ std::string dump_style(const StyleSheet& sheet, const glintfx::uix::Element& roo
         if (prop.name == "font-size") {
           out += print_length_px(font_size_px[i]);
         } else {
-          out += canonical_print(prop, dp_ratio);
+          out += canonical_print(prop, ctx);
         }
         out += '\n';
       }

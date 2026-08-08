@@ -1357,8 +1357,18 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "SKIP (RCSS parse error, not this harness's own concern): %s\n", name.c_str());
       continue;
     }
-    const std::string uix_dump =
-        glintfx::uix::style::dump_style(*sheet_result.sheet, dom_result.document->body(), 1.0f);
+    // EN: `ESC-4` -- `320.0f, 240.0f` are NOT arbitrary: they MUST mirror side A's own real
+    //     viewport (`host.create(..., 320, 240)`/`engine.attach(&clock, 320, 240)` above, both
+    //     unchanged by this item) so a `vw`/`vh`-bearing fixture resolves against the SAME
+    //     denominator on both sides -- a mismatched pair here would make every `vw`/`vh` line a
+    //     guaranteed, spurious divergence, unrelated to either dumper's own correctness.
+    // PT: `ESC-4` -- `320.0f, 240.0f` NÃO são arbitrários: PRECISAM espelhar o próprio viewport
+    //     real do lado A (`host.create(..., 320, 240)`/`engine.attach(&clock, 320, 240)` acima, os
+    //     dois inalterados por este item) pra uma fixture com `vw`/`vh` resolver contra o MESMO
+    //     denominador nos dois lados -- um par desencontrado aqui faria toda linha `vw`/`vh` virar
+    //     uma divergência garantida, espúria, sem relação com a correção de nenhum dos dois dumpers.
+    const std::string uix_dump = glintfx::uix::style::dump_style(
+        *sheet_result.sheet, dom_result.document->body(), 1.0f, 320.0f, 240.0f);
 
     // --- side A: the real RmlUi engine, dp_ratio left at its own 1.0 default (matching side B's
     //     own dp_ratio argument above, and matching every other UIX-RCSS-DUMP-A test in this repo,

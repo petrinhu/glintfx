@@ -143,6 +143,7 @@
 #include "uix/style/parser.hpp"
 #include "uix/style/property_registry.hpp"
 #include "uix/style/selector_match.hpp"
+#include "uix/style/value_compute.hpp"
 
 using glintfx::uix::as_element;
 using glintfx::uix::Document;
@@ -157,6 +158,7 @@ using glintfx::uix::style::ComputedProperty;
 using glintfx::uix::style::ComputedStyle;
 using glintfx::uix::style::dump_style;
 using glintfx::uix::style::find_property;
+using glintfx::uix::style::LengthResolveContext;
 using glintfx::uix::style::MatchState;
 using glintfx::uix::style::PropertyDeclaration;
 using glintfx::uix::style::Rule;
@@ -273,7 +275,7 @@ void test_worked_example_15_1_hover_states() {
     return;
   }
 
-  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f);
+  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   // EN: The point of `hover-all` (spec section 4): every property `.btn:hover` does not touch
@@ -317,7 +319,7 @@ void test_worked_example_15_2_shorthand_order() {
     return;
   }
 
-  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f);
+  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   // EN: #a -- canonical order (width-then-color), BOTH longhands set from the source.
@@ -431,11 +433,11 @@ void test_dumper_prints_15_2_anchor_given_an_errata2_compliant_cascade() {
   const float dp_ratio = 1.0f;
   for (const ComputedProperty& p : style) {
     if (p.name == "border-top-color") {
-      check(canonical_print(p, dp_ratio) == "#7a5a2eff",
+      check(canonical_print(p, LengthResolveContext{.dp_ratio = dp_ratio}) == "#7a5a2eff",
             "dumper-only: border-top-color kept, matches spec's ERRATA-2 anchor byte-exact");
     }
     if (p.name == "border-top-width") {
-      check(canonical_print(p, dp_ratio) == "0.0000px",
+      check(canonical_print(p, LengthResolveContext{.dp_ratio = dp_ratio}) == "0.0000px",
             "dumper-only: border-top-width reverted (never declared), matches spec's anchor");
     }
   }
@@ -459,7 +461,7 @@ void test_worked_example_15_3_percent_families() {
     return;
   }
 
-  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f);
+  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   // EN: byte-exact anchor from the spec's own section 15.3 -- family (b) (the two stop
@@ -526,7 +528,7 @@ void test_domain_routing_alternate_and_fail_high_fallback() {
   auto printed = [&](std::string_view name) -> std::string {
     for (const ComputedProperty& p : style) {
       if (p.name == name) {
-        return canonical_print(p, dp_ratio);
+        return canonical_print(p, LengthResolveContext{.dp_ratio = dp_ratio});
       }
     }
     return "<MISSING-PROPERTY>";
@@ -570,12 +572,12 @@ void test_domain_routing_alternate_and_fail_high_fallback() {
     ComputedProperty color_initial{"color", std::string(color_info->initial_value)};
     ComputedProperty opacity_initial{"opacity", std::string(opacity_info->initial_value)};
     ComputedProperty row_gap_initial{"row-gap", std::string(row_gap_info->initial_value)};
-    check(printed("color") == canonical_print(color_initial, dp_ratio),
+    check(printed("color") == canonical_print(color_initial, LengthResolveContext{.dp_ratio = dp_ratio}),
           "malformed color retries against the registry's own initial value and prints its "
           "canonical form (not a crash, not the malformed raw text echoed)");
-    check(printed("opacity") == canonical_print(opacity_initial, dp_ratio),
+    check(printed("opacity") == canonical_print(opacity_initial, LengthResolveContext{.dp_ratio = dp_ratio}),
           "malformed opacity retries against the registry's own initial value");
-    check(printed("row-gap") == canonical_print(row_gap_initial, dp_ratio),
+    check(printed("row-gap") == canonical_print(row_gap_initial, LengthResolveContext{.dp_ratio = dp_ratio}),
           "malformed row-gap retries against the registry's own initial value");
   }
 
@@ -622,7 +624,7 @@ void test_state_matrix_and_path_addressing() {
 
   StyleSheet sheet; // empty -- every property computes to its own registry initial value.
 
-  const std::string dump = dump_style(sheet, body, 1.0f);
+  const std::string dump = dump_style(sheet, body, 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   check(!dump.empty() && dump.back() == '\n', "file ends with a single trailing newline");
@@ -701,7 +703,7 @@ body { font-size: 64px; }
     return;
   }
 
-  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f);
+  const std::string dump = dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   check(count_exact_line(lines, "body PROP font-size=64.0000px") == 2,
@@ -806,7 +808,7 @@ void test_esc1_new_properties_default_dump() {
   Element body("body");
   StyleSheet sheet; // empty -- every property computes to its own registry initial value.
 
-  const std::string dump = dump_style(sheet, body, 1.0f);
+  const std::string dump = dump_style(sheet, body, 1.0f, 320.0f, 240.0f);
   const std::vector<std::string> lines = split_lines(dump);
 
   check(count_exact_line(lines, "body PROP transition=none") == 2,
@@ -831,6 +833,84 @@ void test_esc1_new_properties_default_dump() {
         "measured shape as scrollbar-margin above");
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-4` -- end-to-end proof that `dump_style()`'s own GENERAL (non-`font-size`) `em`/`rem`/
+//     `vw`/`vh` resolution reaches the real pipeline, not just
+//     `value_compute.hpp::resolve_length_px()` in isolation
+//     (`value_compute_sanity.cpp`'s own `test_length_resolution_esc4_full_unit_parity` already
+//     covers that unit-level). `.remprop.emprop` sits TWO levels below `body` (`body/0/0`, nested
+//     inside `#mid`, which declares a DIFFERENT font-size than `body`'s own -- the same "make the
+//     ancestor distinction impossible to fake by coincidence" shape
+//     `test_uix_em_unit_font_size_chain` above already uses for the font-size-PROPERTY-only case):
+//     `margin-top: 2em` resolves against THIS node's own (INHERITED, not self-declared) font-size,
+//     `50px` from `#mid` -- `100.0000px`, never `40.0000px` (`2 * body's 20px`, the wrong answer
+//     if `em` here silently read the document root instead of the resolving node's own font-size).
+//     `margin-left: 1.5rem` resolves against the DOCUMENT ROOT's own resolved font-size, `20px`
+//     from `body` -- `30.0000px`, never `75.0000px` (`1.5 * #mid's 50px`, the wrong answer if `rem`
+//     here silently read the immediate parent instead of the root). The two numbers landing on
+//     DIFFERENT ancestors from the SAME node, for two properties declared on that SAME node, is the
+//     proof neither is a coincidence. `width: 50vw`/`height: 50vh` on two sibling nodes prove the
+//     viewport-as-parameter clause (docs/uix-rcss.md section 1's own addition, `ESC-4`): `320x240`
+//     mirrors this repo's own real oracle viewport (`rcss_dump_differential_oracle.cpp`'s own
+//     `engine.attach(&clock, 320, 240)`).
+// PT: `ESC-4` -- prova ponta-a-ponta de que a própria resolução GERAL (não-`font-size`) de
+//     `em`/`rem`/`vw`/`vh` do `dump_style()` alcança o pipeline real, não só o
+//     `value_compute.hpp::resolve_length_px()` isolado (o próprio
+//     `test_length_resolution_esc4_full_unit_parity` do value_compute_sanity.cpp já cobre isso no
+//     nível de unidade). `.remprop.emprop` mora DOIS níveis abaixo do `body` (`body/0/0`, aninhado
+//     dentro do `#mid`, que declara um font-size DIFERENTE do próprio `body` -- a mesma forma
+//     "torna a distinção de ancestral impossível de forjar por coincidência" que o próprio
+//     `test_uix_em_unit_font_size_chain` acima já usa pro caso só-propriedade-font-size):
+//     `margin-top: 2em` resolve contra o próprio font-size (HERDADO, não auto-declarado) DESTE nó,
+//     `50px` vindo do `#mid` -- `100.0000px`, nunca `40.0000px` (`2 * 20px do body`, a resposta
+//     errada se o `em` aqui lesse em silêncio a raiz do documento em vez do próprio font-size do nó
+//     resolvendo). `margin-left: 1.5rem` resolve contra o próprio font-size resolvido da RAIZ do
+//     documento, `20px` do `body` -- `30.0000px`, nunca `75.0000px` (`1.5 * 50px do #mid`, a
+//     resposta errada se o `rem` aqui lesse em silêncio o pai imediato em vez da raiz). Os dois
+//     números pousando em ancestrais DIFERENTES a partir do MESMO nó, pra duas propriedades
+//     declaradas naquele MESMO nó, é a prova de que nenhum dos dois é coincidência. `width: 50vw`/
+//     `height: 50vh` em dois nós irmãos provam a própria cláusula viewport-como-parâmetro (a própria
+//     soma da seção 1 do docs/uix-rcss.md, `ESC-4`): `320x240` espelha o próprio viewport real de
+//     oráculo deste repo (o próprio `engine.attach(&clock, 320, 240)` do
+//     rcss_dump_differential_oracle.cpp).
+void test_esc4_general_length_unit_parity() {
+  static constexpr std::string_view kRcss = R"RCSS(
+body { font-size: 20px; }
+#mid { font-size: 50px; }
+.remprop { margin-left: 1.5rem; }
+.emprop { margin-top: 2em; }
+.vwprop { width: 50vw; }
+.vhprop { height: 50vh; }
+)RCSS";
+  static constexpr std::string_view kRml =
+      R"RML(<rml><body><div id="mid"><div class="remprop emprop"></div></div><div class="vwprop"></div><div class="vhprop"></div></body></rml>)RML";
+
+  auto sheet_result = glintfx::uix::style::parse_stylesheet(kRcss);
+  auto doc_result = glintfx::uix::parse_document(kRml);
+  check(sheet_result.sheet != nullptr, "ESC-4: stylesheet parses");
+  check(doc_result.document != nullptr, "ESC-4: document parses");
+  if (!sheet_result.sheet || !doc_result.document) {
+    return;
+  }
+
+  const std::string dump =
+      dump_style(*sheet_result.sheet, doc_result.document->body(), 1.0f, 320.0f, 240.0f);
+  const std::vector<std::string> lines = split_lines(dump);
+
+  check(count_exact_line(lines, "body/0/0 PROP margin-top=100.0000px") == 2,
+        "ESC-4: 2em on body/0/0 resolves against ITS OWN (inherited) 50px font-size, not body's "
+        "20px -- 2*50=100, never 2*20=40");
+  check(count_exact_line(lines, "body/0/0 PROP margin-left=30.0000px") == 2,
+        "ESC-4: 1.5rem on body/0/0 resolves against the DOCUMENT ROOT's 20px font-size, not its "
+        "own parent #mid's 50px -- 1.5*20=30, never 1.5*50=75");
+  check(count_exact_line(lines, "body/1 PROP width=160.0000px") == 2,
+        "ESC-4: 50vw resolves against the 320px viewport width passed to dump_style() -- "
+        "50*320*0.01=160");
+  check(count_exact_line(lines, "body/2 PROP height=120.0000px") == 2,
+        "ESC-4: 50vh resolves against the 240px viewport height passed to dump_style() -- "
+        "50*240*0.01=120");
+}
+
 } // namespace
 
 int main() {
@@ -842,6 +922,7 @@ int main() {
   test_state_matrix_and_path_addressing();
   test_uix_em_unit_font_size_chain();
   test_esc1_new_properties_default_dump();
+  test_esc4_general_length_unit_parity();
 
   std::printf(
       "SCOPE: 3 exemplos trabalhados byte-exatos (15.1/15.3 pipeline real ponta-a-ponta; 15.2 "
@@ -850,7 +931,9 @@ int main() {
       "da UIX-RCSS-ERRATA-2, fora do escopo desta fatia), 4 pares has_alternate_domain "
       "exercitados (KW/LP, KW/LEN, NUM/LP, KW/STR), 1 dp_ratio!=1.0 provando multiplicacao real, "
       "3 fallbacks fail-high provados contra o oraculo do proprio registro, 1 lacuna documentada "
-      "(animation), 2 grafias de composto-vazio, 0 golden inerte\n");
+      "(animation), 2 grafias de composto-vazio, 0 golden inerte | ESC-4: em/rem GERAIS "
+      "(nao-font-size) provados ponta-a-ponta contra ancestrais DIFERENTES (self-inherited vs "
+      "document-root) no MESMO no, vw/vh provados contra viewport 320x240 passado ao dump_style\n");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "dumper_sanity: %d assertion(s) FAILED\n", g_failures);

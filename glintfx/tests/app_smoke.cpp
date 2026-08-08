@@ -20,10 +20,58 @@
 #include <glintfx/glintfx.hpp>
 #include <cstdio>
 #include <cstring>
+
+// EN: Shape check for the SemVer build-metadata suffix (spec §10, https://semver.org/):
+//     "MAJOR.MINOR.PATCH.TWEAK+sha[.dirty]" -- 4 dot-separated numeric groups, a literal
+//     '+', then either "unknown" (no git) or a short hex commit SHA optionally followed by
+//     ".dirty". Deliberately format-only (never asserts a literal SHA/version, so it does not
+//     go stale on a bump) -- same "track drift instead of masking it" reasoning as the
+//     GLINTFX_VERSION comparison below.
+// PT: Checagem de formato do sufixo de build-metadata do SemVer (spec §10,
+//     https://semver.org/): "MAJOR.MINOR.PATCH.TWEAK+sha[.dirty]" -- 4 grupos numéricos
+//     separados por ponto, um '+' literal, depois "unknown" (sem git) ou um SHA hex curto de
+//     commit, opcionalmente seguido de ".dirty". Deliberadamente só-formato (nunca afirma um
+//     SHA/versão literal, então não fica defasado num bump) -- mesmo raciocínio de "acompanhar
+//     drift em vez de mascarar" da comparação com GLINTFX_VERSION abaixo.
+static bool is_hex_digit(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+static bool version_has_build_metadata_shape(const char* v) {
+  const char* plus = std::strchr(v, '+');
+  if (!plus) return false;
+  int dots = 0;
+  for (const char* p = v; p < plus; ++p) {
+    if (*p == '.') {
+      ++dots;
+      continue;
+    }
+    if (*p < '0' || *p > '9') return false;
+  }
+  if (dots != 3) return false;
+  const char* meta = plus + 1;
+  if (std::strcmp(meta, "unknown") == 0) return true;
+  int hex_count = 0;
+  const char* p = meta;
+  while (*p && is_hex_digit(*p)) {
+    ++hex_count;
+    ++p;
+  }
+  if (hex_count < 4) return false;
+  if (*p == '\0') return true;
+  return std::strcmp(p, ".dirty") == 0;
+}
+
 int main() {
   if (std::strcmp(glintfx::version(), GLINTFX_VERSION) != 0) {
     std::fprintf(stderr, "app smoke FAIL: version()=\"%s\" esperado \"%s\"\n",
                  glintfx::version(), GLINTFX_VERSION);
+    return 1;
+  }
+  if (!version_has_build_metadata_shape(glintfx::version())) {
+    std::fprintf(stderr,
+                 "app smoke FAIL: version() \"%s\" nao tem o formato "
+                 "MAJOR.MINOR.PATCH.TWEAK+sha[.dirty]\n",
+                 glintfx::version());
     return 1;
   }
   glintfx::AppConfig cfg; cfg.title = "app"; cfg.width = 320; cfg.height = 240;

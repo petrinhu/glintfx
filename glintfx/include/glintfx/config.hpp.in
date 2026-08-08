@@ -157,8 +157,16 @@
 //        ADR-0013); #include <glintfx/draw2d.hpp> é pulado pelo header guarda-chuva glintfx.hpp.
 #cmakedefine01 GLINTFX_MODULE_DRAW2D
 
-// EN: Library version string ("MAJOR.MINOR.PATCH"), injected from the CMake project()
-//     VERSION at configure time. Single source of truth -- see CMakeLists.txt.
-// PT: String de versão da lib ("MAJOR.MINOR.PATCH"), injetada do VERSION do project()
-//     do CMake em tempo de configure. Fonte única -- ver CMakeLists.txt.
-#define GLINTFX_VERSION "@PROJECT_VERSION@"
+// EN: Library version string ("MAJOR.MINOR.PATCH.TWEAK+sha[.dirty]"), injected from the
+//     CMake project() VERSION at configure time, plus a SemVer build-metadata suffix
+//     (spec §10, https://semver.org/) carrying the short commit SHA this build was
+//     compiled from -- "unknown" when git is unavailable, ".dirty" appended when the
+//     working tree had uncommitted changes at configure time. Single source of truth --
+//     see CMakeLists.txt (project(VERSION ...) and the GLINTFX_GIT_SHA capture above it).
+// PT: String de versão da lib ("MAJOR.MINOR.PATCH.TWEAK+sha[.dirty]"), injetada do VERSION
+//     do project() do CMake em tempo de configure, mais um sufixo de build-metadata do
+//     SemVer (spec §10, https://semver.org/) carregando o SHA curto do commit de onde este
+//     build foi compilado -- "unknown" sem git disponível, ".dirty" anexado quando a árvore
+//     de trabalho tinha mudanças não commitadas em tempo de configure. Fonte única -- ver
+//     CMakeLists.txt (project(VERSION ...) e a captura do GLINTFX_GIT_SHA logo acima dele).
+#define GLINTFX_VERSION "@PROJECT_VERSION@+@GLINTFX_GIT_SHA@"

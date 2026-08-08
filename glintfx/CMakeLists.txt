@@ -788,6 +788,51 @@ target_link_libraries(glloader INTERFACE OpenGL::GL ${CMAKE_DL_LIBS})
 # PT: Os backends do RmlUi não fazem parte da lib instalada; compilar do source fetchado.
 set(_rml_backends ${rmlui_SOURCE_DIR}/Backends)
 
+# EN: Capture the short commit SHA (+ dirty flag) at configure time for GLINTFX_VERSION's
+#     build-metadata suffix. This is SemVer's OWN mechanism (spec §10, https://semver.org/),
+#     not an invented 5th dot-component -- the spec's canonical example is literally a commit
+#     SHA ("1.0.0-beta+exp.sha.5114f85"). It is deliberately NOT part of PROJECT_VERSION /
+#     project(VERSION) itself: CMake's VERSION field is numeric-only ([0-9]+ per component),
+#     so a SHA there would break PROJECT_VERSION_TWEAK and the SameMajorVersion compatibility
+#     file below -- it is composed into the GLINTFX_VERSION *string* instead, via config.hpp.in.
+#     Best-effort: falls back to "unknown" when git is absent or this is not a checkout (e.g. a
+#     source tarball) -- configure() never fails over this, and a consumer's own FetchContent
+#     clone has its own .git, so this resolves correctly for them too, not just this repo.
+# PT: Captura o SHA curto do commit (+ flag de sujeira) em tempo de configure para o sufixo de
+#     build-metadata do GLINTFX_VERSION. É o próprio mecanismo do SemVer (spec §10,
+#     https://semver.org/), não um 5º componente por-ponto inventado -- o exemplo canônico do
+#     spec é literalmente um SHA de commit ("1.0.0-beta+exp.sha.5114f85"). Deliberadamente FORA
+#     do PROJECT_VERSION / project(VERSION): o campo VERSION do CMake é só-numérico ([0-9]+ por
+#     componente), um SHA ali quebraria o PROJECT_VERSION_TWEAK e o arquivo de compatibilidade
+#     SameMajorVersion abaixo -- é composto na *string* GLINTFX_VERSION, via config.hpp.in.
+#     Best-effort: cai para "unknown" sem git ou fora de um checkout (ex.: tarball de fonte) --
+#     o configure() nunca falha por isto, e o clone próprio do FetchContent de um consumidor tem
+#     seu próprio .git, então resolve certo pra eles também, não só para este repo.
+find_package(Git QUIET)
+set(GLINTFX_GIT_SHA "unknown")
+if(GIT_FOUND)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --short=8 HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GLINTFX_GIT_SHA
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _glintfx_git_sha_result)
+  if(NOT _glintfx_git_sha_result EQUAL 0 OR GLINTFX_GIT_SHA STREQUAL "")
+    set(GLINTFX_GIT_SHA "unknown")
+  else()
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} status --porcelain
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      OUTPUT_VARIABLE _glintfx_git_dirty
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    if(NOT _glintfx_git_dirty STREQUAL "")
+      set(GLINTFX_GIT_SHA "${GLINTFX_GIT_SHA}.dirty")
+    endif()
+  endif()
+endif()
+
 # EN: Generate config.hpp into the build tree so consumers detect build options at
 #     compile time (e.g. #if GLINTFX_BACKEND_GLFW). The build-interface include dir
 #     is propagated transitively via INTERFACE_INCLUDE_DIRECTORIES.

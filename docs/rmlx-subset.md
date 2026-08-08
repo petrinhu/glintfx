@@ -165,7 +165,7 @@ Section 2's zero-measured selector items (`nth-child`, `:not(`, `z-index`) name 
 | comma-list (multiple selectors, one rule) | 15 | **yes -- authorized by decision 1, §6.1** | `glintfx/src/ua_stylesheet.hpp:99-102` |
 | compound, no combinator (`tag.class`/`tag#id`) | 5 | **yes** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
 | child (`>`) | 2 | **yes** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
-| universal (`*`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts it (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | -- |
+| universal (`*`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts it (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml:2` -- `*` |
 | attribute (`[x]`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts it (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1108`/`:94-114`, `ParseAttributeSelector`) | -- |
 | adjacent/general sibling (`+`/`~`) | **0** | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts both (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1091-1092`, `SelectorCombinator::NextSibling`/`SubsequentSibling`) | -- |
 | `nth-child`, `:not(` | **0** (also named §2) | **yes -- §7 (2026-08-07)**, pinned RmlUi accepts both (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetFactory.cpp:15`, `StructuralSelectorType::Nth_Child`; `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:594`, `current_string == "not"`) | -- |
@@ -175,6 +175,8 @@ Every measured selector instance in the census matches an authorized form -- the
 ⚠️ **Zero in this corpus is not an argument to ban.** glintfx's target is broad distribution, not GusWorld-plus-glintfx's-own-test-corpus -- "zero in these two repositories" is a statement about two repositories, never about the world (see `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). What stays out today stays out **under the fail-high policy** already canonized by `polygon()` and restated by `docs/uix-rcss.md` section 11: an unrecognized selector form fails the *whole rule* to register (never the whole stylesheet, never a partial/guessed match), logged naming the raw selector text and `file:line` -- never a silent break. Authorizing more selector forms later follows the header clause exactly as this amendment did: stop, edit this spec with a diff, get the líder's sign-off, then implement.
 
 **This paragraph survives §7 (2026-08-07) unedited, on purpose.** It was already right when the table above it, before this amendment, was wrong -- the table used to read this paragraph's own "zero is not an argument to ban" as license to fail-high four selector forms anyway, which was the contradiction §7 exists to fix. What "stays out today" after §7 is only what neither this corpus **nor the pinned RmlUi build** accepts -- for selector forms, per the table above, that set is currently empty; the fail-high policy itself, and the stop-edit-sign-off mechanism for widening scope further, are exactly what this paragraph already said.
+
+**Universal selector implemented by `ESC-8`, 2026-08-08.** `CompoundSelector::universal` (`glintfx/src/uix/style/parser.hpp`) is a real field a bare `*`, or `*` glued to a discriminator (`*.foo`/`*#id`/`*:hover`), sets in `parse_compound` (`glintfx/src/uix/style/parser.cpp`) -- mirroring the pin's own `StyleSheetParser.cpp:1105-1106` skip byte-for-byte, including its `*div == div` fall-through accident (reproduced deliberately, not "fixed"). `selector_match.cpp`'s own `compound_matches`/`compound_specificity` needed **zero code change**: an all-empty compound already matched every element at zero specificity by the pre-existing per-field "empty == no constraint" rule, which is exactly the universal form's own documented weight (row above, "0"). Verified against the pinned RmlUi build byte-for-byte by a new fixture, `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml` (all 8 forms above the universal row exercised too, unaffected), plus 16 unit tests across `parser_selector_sanity.cpp`/`selector_match_sanity.cpp`/`cascade_sanity.cpp` proving the cascade-level consequence of zero specificity: a `*` rule can never outrank an author's own tag rule, in either source order.
 
 #### 6.3 Decision 2 -- units: full parity with what the old engine accepts, not the measured minimum
 
@@ -364,7 +366,7 @@ Os itens de zero medido da seção 2 (`nth-child`, `:not(`, `z-index`) nomeiam p
 | lista com vírgula (vários seletores, uma regra) | 15 | **sim -- autorizado pela decisão 1, §6.1** | `glintfx/src/ua_stylesheet.hpp:99-102` |
 | composto, sem combinador (`tag.classe`/`tag#id`) | 5 | **sim** | `glintfx/tests/fonteng_ab_visual_scene.rml:63` -- `div.row` |
 | filho (`>`) | 2 | **sim** | `glintfx/tests/app_process_event_scene.rcss:55` -- `#scroller > div` |
-| universal (`*`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | -- |
+| universal (`*`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1105`, `rule[start_index] == '*'`) | `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml:2` -- `*` |
 | atributo (`[x]`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1108`/`:94-114`, `ParseAttributeSelector`) | -- |
 | irmão adjacente/geral (`+`/`~`) | **0** | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita os dois (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:1091-1092`, `SelectorCombinator::NextSibling`/`SubsequentSibling`) | -- |
 | `nth-child`, `:not(` | **0** (já nomeados na §2) | **sim -- §7 (2026-08-07)**, o RmlUi fixado aceita os dois (`glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetFactory.cpp:15`, `StructuralSelectorType::Nth_Child`; `glintfx/build/_deps/rmlui-src/Source/Core/StyleSheetParser.cpp:594`, `current_string == "not"`) | -- |
@@ -374,6 +376,22 @@ Toda instância de seletor medida no censo casa com uma forma autorizada -- o co
 ⚠️ **Zero neste corpus não é argumento para banir.** O alvo da glintfx é distribuição ampla, não GusWorld-mais-o-corpus-de-teste-da-própria-glintfx -- "zero nestes dois repositórios" é uma afirmação sobre dois repositórios, nunca sobre o mundo (ver `feedback_gusworld_nao_define_prioridade`, `feedback_escopo_distribuicao_geral`). O que fica fora hoje fica fora **sob a política fail-high** já canonizada pelo `polygon()` e restatada pela seção 11 do `docs/uix-rcss.md`: uma forma de seletor não-reconhecida faz **a regra inteira** falhar ao registrar (nunca a folha inteira, nunca um casamento parcial/chutado), logada nomeando o texto cru do seletor e `arquivo:linha` -- nunca quebra em silêncio. Autorizar mais formas de seletor depois segue a cláusula do cabeçalho exatamente como esta emenda seguiu: parar, editar esta spec com um diff, pegar o aval do líder, só então implementar.
 
 **Este parágrafo sobrevive à §7 (2026-08-07) intacto, de propósito.** Ele já estava certo quando a tabela acima dele, antes desta emenda, estava errada -- a tabela lia o próprio "zero não é argumento pra banir" deste parágrafo como licença pra ainda assim aplicar fail-high em quatro formas de seletor, que era exatamente a contradição que a §7 existe pra consertar. O que "fica fora hoje" depois da §7 é só o que nem este corpus **nem o build fixado do RmlUi** aceitam -- pra formas de seletor, pela tabela acima, esse conjunto está vazio hoje; a política fail-high em si, e o mecanismo parar-editar-aval pra alargar escopo mais adiante, são exatamente o que este parágrafo já dizia.
+
+**Seletor universal implementado pela `ESC-8`, 2026-08-08.** O `CompoundSelector::universal`
+(`glintfx/src/uix/style/parser.hpp`) é um campo real que um `*` cru, ou um `*` colado a um
+discriminador (`*.foo`/`*#id`/`*:hover`), seta no `parse_compound`
+(`glintfx/src/uix/style/parser.cpp`) -- espelhando o próprio skip do pin do
+`StyleSheetParser.cpp:1105-1106` byte-por-byte, incluindo o próprio acidente de fall-through
+`*div == div` (reproduzido de propósito, não "consertado"). O próprio `compound_matches`/
+`compound_specificity` do selector_match.cpp precisou de **zero mudança de código**: um compound
+inteiramente vazio já casava todo elemento com especificidade zero pela regra pré-existente
+por-campo "vazio == sem restrição", que é exatamente o próprio peso documentado da forma universal
+(linha acima, "0"). Verificado byte-por-byte contra o build fixado do RmlUi por uma fixture nova,
+`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml` (as 8 formas acima da
+linha universal também exercitadas, inafetadas), mais 16 testes unitários entre
+`parser_selector_sanity.cpp`/`selector_match_sanity.cpp`/`cascade_sanity.cpp` provando a
+consequência em nível de cascata da especificidade zero: uma regra `*` nunca consegue superar a
+própria regra de tag de um autor, em qualquer ordem de fonte.
 
 #### 6.3 Decisão 2 -- unidades: paridade completa com o que o motor antigo aceita, não o mínimo medido
 

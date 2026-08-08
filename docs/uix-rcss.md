@@ -3102,7 +3102,14 @@ the first place; every bullet below **was**, and that framing is what this rewri
   `"none"` initial, not yet a genuine §9.3 grammar) -- `transition`'s own grammar is owned by
   `ESC-23` (the same pin-with-named-owner-and-automatic-expiry mechanism §14.2 already uses for
   `animation`); `font-effect`'s own grammar is owned by `ESC-24`.
-- **Selector forms:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; attribute selectors
+- **Selector forms:** ~~universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`~~ **delivered by
+  `ESC-8`, 2026-08-08** -- `CompoundSelector::universal` (parser.hpp), set by `parse_compound`
+  reproducing the pin's own `*div == div` fall-through accident byte-for-byte; zero code change in
+  `selector_match.cpp` (an all-empty compound already matched every element at zero specificity by
+  construction); verified against the pinned RmlUi build by
+  `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml` plus 16 unit tests
+  (`docs/rmlx-subset.md` §6.2's own "Universal selector implemented" paragraph has the full
+  account). Attribute selectors
   with the 7 operators `=`/`~=`/`|=`/`^=`/`$=`/`*=`/bare (`StyleSheetSelector.h:39-46`,
   `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; sibling combinators (`+`/`~`,
   `StyleSheetParser.cpp:1091-1092`) -- `ESC-10`; the 13 structural pseudo-classes (`nth-child`,
@@ -4678,7 +4685,14 @@ bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
   própria gramática do `transition` tem dona `ESC-23` (o mesmo mecanismo de
   pin-com-dona-nomeada-e-expiração-automática que a §14.2 já usa pra `animation`); a própria
   gramática do `font-effect` tem dona `ESC-24`.
-- **Formas de seletor:** universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`; seletores de
+- **Formas de seletor:** ~~universal (`*`, `StyleSheetParser.cpp:1105`) -- `ESC-8`~~ **entregue
+  pela `ESC-8`, 2026-08-08** -- `CompoundSelector::universal` (parser.hpp), setado pelo
+  `parse_compound` reproduzindo o próprio acidente de fall-through `*div == div` do pin
+  byte-por-byte; zero mudança de código no `selector_match.cpp` (um compound inteiramente vazio já
+  casava todo elemento com especificidade zero por construção); verificado contra o build fixado do
+  RmlUi pela `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc8_universal_selector.rml` mais 16
+  testes unitários (o próprio parágrafo "Seletor universal implementado" da §6.2 do
+  `docs/rmlx-subset.md` tem o relato completo). Seletores de
   atributo com os 7 operadores `=`/`~=`/`|=`/`^=`/`$=`/`*=`/nu (`StyleSheetSelector.h:39-46`,
   `ParseAttributeSelector` `StyleSheetParser.cpp:94-114`) -- `ESC-9`; combinadores irmão (`+`/`~`,
   `StyleSheetParser.cpp:1091-1092`) -- `ESC-10`; as 13 pseudo-classes estruturais (`nth-child`,

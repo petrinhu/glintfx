@@ -1,0 +1,10 @@
+<rml><head><style>
+* { opacity: 0.5; }
+p { color: blue; }
+* { color: red; }
+*.klass { display: none; }
+div > * { background-color: yellow; }
+div * { font-style: italic; }
+*:hover { cursor: pointer; }
+*div { text-align: center; }
+</style></head><body><p id="a"></p><div id="b"><span id="c"></span></div><div id="d"><section id="e"><span id="f"></span></section></div><div id="g" class="klass"></div><div id="h"></div></body></rml>

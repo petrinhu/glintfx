@@ -316,8 +316,8 @@ int main() {
 
   std::printf(
       "SCOPE: %zu arquivos pareados (rcss+DOM), %zu nos de DOM visitados, %zu listas-de-seletor "
-      "tentadas (x2 estados hover), %zu casamentos totais, 0 travamentos, 8 formas dentro do "
-      "subset, 0 formas fora do subset\n",
+      "tentadas (x2 estados hover), %zu casamentos totais, 0 travamentos, 9 formas dentro do "
+      "subset (ESC-8 soma universal), 0 formas fora do subset\n",
       files_paired, dom_nodes_visited, selector_lists_tried, total_matches);
 
   if (g_failures > 0) {

@@ -140,31 +140,73 @@ void apply_declaration(std::string_view name, std::string_view value,
       ParseDiagnostic{"unknown property name '" + std::string(name) + "'", line, col, offset});
 }
 
-// EN: Parses ONE compound (a tag-name?/id?/classes*/hover? run glued with no combinator) starting
-//     at `text[*pos]`, advancing `*pos` past it. Returns false (leaving `*pos` wherever it stopped)
-//     on ANY of the fail-high forms docs/rmlx-subset.md section 6.2 names as zero-measured:
-//       - a leading char that is neither an identifier-start NOR '.'/'#'/':' (catches universal
-//         `*`, attribute `[x]`, and a stray leading combinator like `+`/`~` -- none of those chars
-//         are ident-start or a marker, so `any` below stays false and this function refuses).
+// EN: Parses ONE compound (a `*`?/tag-name?/id?/classes*/hover? run glued with no combinator)
+//     starting at `text[*pos]`, advancing `*pos` past it. `ESC-8`: an optional leading `*` is
+//     consumed FIRST (mirroring `StyleSheetParser.cpp:1105-1106`'s own `if (rule[start_index] ==
+//     '*') start_index += 1;`), setting `out->universal = true` and satisfying `any` on its own --
+//     the REST of this function is otherwise completely unchanged by that addition, which is
+//     exactly what reproduces the pin's own `*div == div` fall-through accident: the skip falls
+//     straight into the SAME tag-read block below, so `*div` sets BOTH `universal` and `tag ==
+//     "div"` on one compound, never treated as two separate constraints. Returns false (leaving
+//     `*pos` wherever it stopped) on ANY of the fail-high forms docs/rmlx-subset.md section 6.2
+//     names as zero-measured:
+//       - a leading char that is neither `*` NOR an identifier-start NOR '.'/'#'/':' (catches
+//         attribute `[x]` and a stray leading combinator like `+`/`~` -- none of those chars starts
+//         the `*`-consume block, is ident-start, or is a marker, so `any` below stays false and
+//         this function refuses).
 //       - a marker ('.'/'#'/':') with nothing after it (a trailing '.'/'#'/':' with no identifier).
 //       - a ':' pseudo-class whose name is anything OTHER than the literal "hover" (catches
 //         `:not(...)`, `:nth-child(...)`, `:focus`, `:active`, ... -- only `:hover` is authorized).
 //       - trailing bytes after the compound that are neither whitespace, '>', nor ',' (catches,
-//         e.g., an attribute selector glued onto a tag: `a[href]`).
-// PT: Parseia UM compound (uma sequência tag?/id?/classes*/hover? colada sem combinador) começando
-//     em `text[*pos]`, avançando `*pos` além dele. Retorna false (deixando `*pos` onde parou) em
-//     QUALQUER uma das formas fail-high que a seção 6.2 do docs/rmlx-subset.md nomeia como
-//     zero-medidas:
-//       - um char inicial que não é nem início-de-identificador NEM '.'/'#'/':' (pega universal
-//         `*`, atributo `[x]`, e um combinador inicial solto tipo `+`/`~` -- nenhum desses chars é
-//         início-de-identificador ou marcador, então `any` abaixo fica falso e esta função recusa).
+//         e.g., an attribute selector glued onto a tag: `a[href]` -- and, per `ESC-8`, ALSO catches
+//         a second `*` glued onto the first, `**`, and a `*` glued onto a preceding identifier with
+//         no separator, `div*`: the pin's own skip fires only ONCE, at a compound's own start, so a
+//         second `*` anywhere else falls through to this SAME trailing-garbage check, exactly
+//         mirroring the pin's own literal-tag-string outcome for those two shapes -- see
+//         `parser_selector_sanity.cpp`'s own `test_fail_high_double_universal_and_glued_tag` for the
+//         full equivalent-observable account).
+// PT: Parseia UM compound (uma sequência `*`?/tag?/id?/classes*/hover? colada sem combinador)
+//     começando em `text[*pos]`, avançando `*pos` além dele. `ESC-8`: um `*` inicial opcional é
+//     consumido PRIMEIRO (espelhando o próprio `if (rule[start_index] == '*') start_index += 1;`
+//     do `StyleSheetParser.cpp:1105-1106`), setando `out->universal = true` e satisfazendo `any`
+//     sozinho -- o RESTO desta função fica inalterado por essa soma, o que é exatamente o que
+//     reproduz o próprio acidente de fall-through `*div == div` do pin: o skip cai direto no MESMO
+//     bloco de leitura-de-tag abaixo, então `*div` seta TANTO `universal` QUANTO `tag == "div"` num
+//     compound só, nunca tratado como duas restrições separadas. Retorna false (deixando `*pos`
+//     onde parou) em QUALQUER uma das formas fail-high que a seção 6.2 do docs/rmlx-subset.md
+//     nomeia como zero-medidas:
+//       - um char inicial que não é `*` NEM início-de-identificador NEM '.'/'#'/':' (pega atributo
+//         `[x]` e um combinador inicial solto tipo `+`/`~` -- nenhum desses chars começa o bloco
+//         de-consumo-de-`*`, é início-de-identificador, ou é marcador, então `any` abaixo fica
+//         falso e esta função recusa).
 //       - um marcador ('.'/'#'/':') sem nada depois (um '.'/'#'/':' final sem identificador).
 //       - uma pseudo-classe ':' cujo nome é qualquer coisa QUE NÃO o literal "hover" (pega
 //         `:not(...)`, `:nth-child(...)`, `:focus`, `:active`, ... -- só `:hover` é autorizado).
 //       - bytes finais depois do compound que não são whitespace, '>', nem ',' (pega, ex., um
-//         seletor de atributo colado numa tag: `a[href]`).
+//         seletor de atributo colado numa tag: `a[href]` -- e, pela `ESC-8`, TAMBÉM pega um
+//         segundo `*` colado no primeiro, `**`, e um `*` colado num identificador precedente sem
+//         separador, `div*`: o próprio skip do pin dispara só UMA vez, no início de um compound,
+//         então um segundo `*` em qualquer outro lugar cai nesta MESMA checagem de lixo-final,
+//         espelhando exatamente o próprio resultado de texto-de-tag-literal do pin pra essas duas
+//         formas -- ver o próprio `test_fail_high_double_universal_and_glued_tag` do
+//         parser_selector_sanity.cpp pro relato completo de equivalência-observável).
 bool parse_compound(std::string_view text, std::size_t* pos, CompoundSelector* out) {
   bool any = false;
+  // EN: `ESC-8` -- consume a leading `*` FIRST, before the tag-read block below (mirrors
+  //     StyleSheetParser.cpp:1105-1106's own skip). Deliberately does NOT `continue`/branch away
+  //     from the rest of this function -- falling straight into the unchanged tag-read block below
+  //     is exactly what reproduces the pin's own `*div == div` accident (this function's own header
+  //     comment has the full account).
+  // PT: `ESC-8` -- consome um `*` inicial PRIMEIRO, antes do bloco de leitura-de-tag abaixo
+  //     (espelha o próprio skip do StyleSheetParser.cpp:1105-1106). Deliberadamente NÃO
+  //     `continue`/desvia do resto desta função -- cair direto no bloco de leitura-de-tag
+  //     inalterado abaixo é exatamente o que reproduz o próprio acidente `*div == div` do pin (o
+  //     próprio comentário de cabeçalho desta função tem o relato completo).
+  if (*pos < text.size() && text[*pos] == '*') {
+    ++*pos;
+    out->universal = true;
+    any = true;
+  }
   if (*pos < text.size() && is_ident_start(text[*pos])) {
     const std::size_t start = *pos;
     while (*pos < text.size() && is_ident_char(text[*pos])) {
@@ -198,10 +240,11 @@ bool parse_compound(std::string_view text, std::size_t* pos, CompoundSelector* o
     any = true;
   }
   if (!any) {
-    return false; // e.g. leading '*', '[', '+', '~'
+    return false; // e.g. leading '[', '+', '~'
   }
   if (*pos < text.size() && !is_whitespace(text[*pos]) && text[*pos] != '>') {
-    return false; // trailing garbage glued onto the compound, e.g. an attribute selector 'a[href]'
+    return false; // trailing garbage glued onto the compound, e.g. an attribute selector 'a[href]',
+                  // a second '*' ('**'), or a '*' glued onto a preceding identifier ('div*')
   }
   return true;
 }

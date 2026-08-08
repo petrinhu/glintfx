@@ -112,6 +112,18 @@ CompoundSelector class_only(std::string_view cls) {
   return c;
 }
 
+// EN: `ESC-8` -- a compound whose ONLY discriminator is `universal == true`, everything else
+//     default (empty tag/id/classes, hover false) -- the exact shape `parse_compound` produces for
+//     a bare `*`. Named to match this file's own `tag_only`/`id_only`/`class_only` trio.
+// PT: `ESC-8` -- um compound cujo ÚNICO discriminador é `universal == true`, tudo mais default (tag/
+//     id/classes vazios, hover falso) -- a forma exata que `parse_compound` produz pra um `*` cru.
+//     Nomeado pra casar com o próprio trio `tag_only`/`id_only`/`class_only` deste arquivo.
+CompoundSelector universal_only() {
+  CompoundSelector c;
+  c.universal = true;
+  return c;
+}
+
 Selector chain1(CompoundSelector a) {
   Selector s;
   s.compounds = {a};
@@ -129,9 +141,35 @@ Selector chain2(CompoundSelector a, Combinator combinator, CompoundSelector b) {
 // compound_specificity: per-weight arithmetic, one boundary per weight.
 // ---------------------------------------------------------------------------
 void test_compound_specificity_weights() {
+  // EN: `ESC-8` relabel -- this check used to be captioned "defensive baseline, unreachable via
+  //     the real parser", true only of `CompoundSelector{}` LITERALLY (default `universal == false`
+  //     too, so `any` would stay false and `parse_compound` would refuse it -- still an unreachable
+  //     shape on its own). What changed is the ARITHMETIC's own MEANING: this exact zero-weight sum
+  //     (every field empty/false) is now ALSO what a REAL, reachable compound gets --
+  //     `universal_only()` below (`* { }` alone, `universal == true`, everything else identically
+  //     empty) -- because `compound_specificity` never reads `universal` at all (selector_match.cpp
+  //     is unchanged by `ESC-8`, see that file's own `compound_matches`/this function's own
+  //     doc-comment). The zero is no longer merely defensive arithmetic that happens to also be
+  //     correct; it IS the documented specificity of an authorized selector form. See
+  //     `test_form_universal_specificity_is_exact_zero` below for the reachable case this same
+  //     arithmetic now also covers.
+  // PT: Rerótulo `ESC-8` -- esta checagem costumava ser legendada "linha de base defensiva,
+  //     inalcançável via o parser real", verdadeiro só do `CompoundSelector{}` LITERAL (`universal
+  //     == false` default também, então `any` ficaria falso e `parse_compound` recusaria -- ainda
+  //     uma forma inalcançável sozinha). O que mudou foi o PRÓPRIO SIGNIFICADO da ARITMÉTICA: esta
+  //     exata soma-zero (todo campo vazio/falso) agora é TAMBÉM o que um compound REAL, alcançável,
+  //     recebe -- o `universal_only()` abaixo (`* { }` sozinho, `universal == true`, tudo mais
+  //     identicamente vazio) -- porque `compound_specificity` nunca lê `universal` de jeito nenhum
+  //     (o selector_match.cpp é inalterado pela `ESC-8`, ver o próprio comentário de doc de
+  //     `compound_matches` daquele arquivo/desta função). O zero deixou de ser mera aritmética
+  //     defensiva que por acaso também está certa; ELE É a especificidade documentada de uma forma
+  //     de seletor autorizada. Ver o `test_form_universal_specificity_is_exact_zero` abaixo pro caso
+  //     alcançável que esta mesma aritmética agora também cobre.
   check(compound_specificity(CompoundSelector{}) == 0,
-        "compound_specificity: an entirely empty compound weighs 0 (defensive baseline, "
-        "unreachable via the real parser, but the arithmetic itself must not invent a weight)");
+        "compound_specificity: an entirely empty, non-universal compound weighs 0 (still "
+        "unreachable via the real parser ON ITS OWN -- universal defaults to false too, so `any` "
+        "stays false) -- but see test_form_universal_specificity_is_exact_zero below: this SAME "
+        "zero-weight arithmetic is what a REAL, reachable universal-only compound gets, per ESC-8");
 
   CompoundSelector tag_c;
   tag_c.tag = "div";
@@ -524,6 +562,156 @@ void test_form_child() {
 }
 
 // ---------------------------------------------------------------------------
+// EN: Form 9/9: universal `*` (`ESC-8`) -- positive on a root, a deeply nested leaf, and an
+//     element of a completely different tag every time, with specificity EXACTLY zero on every
+//     one of them (never merely "low", never a partial/rounded weight).
+// PT: Forma 9/9: universal `*` (`ESC-8`) -- positivo numa raiz, numa folha profundamente aninhada,
+//     e num elemento de tag completamente diferente todas as vezes, com especificidade EXATAMENTE
+//     zero em cada uma delas (nunca meramente "baixa", nunca um peso parcial/arredondado).
+// ---------------------------------------------------------------------------
+void test_form_universal() {
+  Selector s = chain1(universal_only());
+
+  Element root("body");
+  MatchResult root_result = match_selector(s, root, MatchState{});
+  check(root_result.matched, "form *: POSITIVE -- matches the root element");
+  check(root_result.specificity == 0, "form *: POSITIVE -- root match has EXACT zero specificity");
+
+  Element* mid = add_child(root, "section");
+  Element* leaf = add_child(*mid, "span");
+  MatchResult leaf_result = match_selector(s, *leaf, MatchState{});
+  check(leaf_result.matched, "form *: POSITIVE -- matches a deeply nested leaf");
+  check(leaf_result.specificity == 0, "form *: POSITIVE -- leaf match has EXACT zero specificity");
+
+  Element other_tag("input");
+  MatchResult other_result = match_selector(s, other_tag, MatchState{});
+  check(other_result.matched, "form *: POSITIVE -- matches an element of a completely different tag");
+  check(other_result.specificity == 0,
+        "form *: POSITIVE -- different-tag match has EXACT zero specificity");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `*.foo` -- the class alone decides the match (universal waives nothing), and the
+//     specificity is EXACTLY the class weight -- universal contributed NOTHING to the sum.
+// PT: `*.foo` -- a classe sozinha decide o casamento (universal não dispensa nada), e a
+//     especificidade é EXATAMENTE o peso da classe -- universal não somou NADA.
+// ---------------------------------------------------------------------------
+void test_form_universal_class_specificity() {
+  CompoundSelector c = universal_only();
+  c.classes.push_back("foo");
+  Selector s = chain1(c);
+
+  Element with_class("div");
+  with_class.add_class("foo");
+  MatchResult positive = match_selector(s, with_class, MatchState{});
+  check(positive.matched, "form *.foo: POSITIVE -- element carrying the class matches");
+  check(positive.specificity == kSpecificityWeightClassOrPseudo,
+        "form *.foo: POSITIVE -- specificity is EXACTLY one class weight, universal added nothing");
+
+  Element without_class("div");
+  MatchResult negative = match_selector(s, without_class, MatchState{});
+  check(!negative.matched,
+        "form *.foo: NEGATIVE -- element without the class does not match despite universal");
+  check(negative.specificity == 0, "form *.foo: NEGATIVE -- specificity is 0 on a non-match");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `*div` -- the pin's own fall-through accident (`StyleSheetParser.cpp:1105-1106`), matching
+//     `parser_selector_sanity.cpp`'s own `test_form_universal_tag_accident` at the parse layer.
+//     Specificity comes ONLY from the tag weight -- universal contributed NOTHING, EXACTLY the tag
+//     weight, not "the tag weight plus a little".
+// PT: `*div` -- o próprio acidente de fall-through do pin (`StyleSheetParser.cpp:1105-1106`),
+//     casando com o próprio `test_form_universal_tag_accident` do parser_selector_sanity.cpp na
+//     camada de parse. A especificidade vem SÓ do peso da tag -- universal não somou NADA,
+//     EXATAMENTE o peso da tag, não "o peso da tag mais um pouco".
+// ---------------------------------------------------------------------------
+void test_form_universal_tag_accident_specificity() {
+  CompoundSelector c = universal_only();
+  c.tag = "div";
+  Selector s = chain1(c);
+
+  Element div_el("div");
+  MatchResult positive = match_selector(s, div_el, MatchState{});
+  check(positive.matched, "form *div: POSITIVE -- a 'div' element matches");
+  check(positive.specificity == kSpecificityWeightTag,
+        "form *div: POSITIVE -- specificity is EXACTLY the tag weight, universal added nothing");
+
+  Element span_el("span");
+  check(!match_selector(s, span_el, MatchState{}).matched,
+        "form *div: NEGATIVE -- a 'span' element does not match (tag constraint still enforced)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Universal combined with BOTH combinators this subset authorizes -- `div > *` (Child: matches
+//     a DIRECT child of a div, never the div itself), `* > div` (Child: any parent at all, rejects
+//     a root div with no parent), `div *` (Descendant: matches at ANY depth below a div).
+// PT: Universal combinado com OS DOIS combinadores que este subconjunto autoriza -- `div > *`
+//     (Filho: casa um filho DIRETO de um div, nunca o div em si), `* > div` (Filho: qualquer pai,
+//     rejeita um div-raiz sem pai), `div *` (Descendente: casa em QUALQUER profundidade abaixo de
+//     um div).
+// ---------------------------------------------------------------------------
+void test_form_universal_combinators() {
+  {
+    Element parent("div");
+    Element* direct_child = add_child(parent, "span");
+    Selector s = chain2(tag_only("div"), Combinator::Child, universal_only());
+    check(match_selector(s, *direct_child, MatchState{}).matched,
+          "form div > *: POSITIVE -- direct child of a div matches");
+    check(!match_selector(s, parent, MatchState{}).matched,
+          "form div > *: NEGATIVE -- the div itself does not match its own child-combinator "
+          "selector");
+  }
+  {
+    Selector s = chain2(universal_only(), Combinator::Child, tag_only("div"));
+    Element root_div("div");
+    check(!match_selector(s, root_div, MatchState{}).matched,
+          "form * > div: BOUNDARY -- a root div (no parent) cannot satisfy '* > div', needs a "
+          "parent");
+    Element wrapper("section");
+    Element* child_div = add_child(wrapper, "div");
+    check(match_selector(s, *child_div, MatchState{}).matched,
+          "form * > div: POSITIVE -- a div with ANY parent matches");
+  }
+  {
+    Selector s = chain2(tag_only("div"), Combinator::Descendant, universal_only());
+    Element root_div("div");
+    Element* mid = add_child(root_div, "section");
+    Element* deep = add_child(*mid, "span");
+    check(match_selector(s, *mid, MatchState{}).matched,
+          "form div *: POSITIVE -- immediate child of div matches");
+    check(match_selector(s, *deep, MatchState{}).matched,
+          "form div *: POSITIVE -- grandchild of div ALSO matches (any depth)");
+    check(!match_selector(s, root_div, MatchState{}).matched,
+          "form div *: NEGATIVE -- the div itself is not its own descendant");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: The NEW invariant this item introduces, replacing the one selector_match.hpp's own
+//     `MatchResult` doc-comment used to state ("matched == true always carries specificity >=
+//     kSpecificityWeightTag") -- see that doc-comment's own rewrite for the full account.
+//     matched == true && specificity == 0 is now a LEGAL, REACHABLE state: a universal-only
+//     compound ('*' alone) matches unconditionally with zero weight. This is the twin of the OLD
+//     invariant that dies with this item, stated explicitly so a future reader never has to
+//     re-derive it from the arithmetic alone.
+// PT: O invariante NOVO que este item introduz, substituindo o que o próprio doc-comment de
+//     `MatchResult` do selector_match.hpp costumava declarar ("matched == true sempre carrega
+//     specificity >= kSpecificityWeightTag") -- ver a própria reescrita daquele doc-comment pro
+//     relato completo. matched == true && specificity == 0 agora é um estado LEGAL, ALCANÇÁVEL: um
+//     compound só-universal ('*' sozinho) casa incondicionalmente com peso zero. Este é o gêmeo do
+//     invariante ANTIGO que morre com este item, declarado explicitamente pra um leitor futuro
+//     nunca precisar re-derivá-lo só da aritmética.
+// ---------------------------------------------------------------------------
+void test_form_universal_specificity_is_exact_zero() {
+  Selector s = chain1(universal_only());
+  Element el("div");
+  MatchResult r = match_selector(s, el, MatchState{});
+  check(r.matched && r.specificity == 0,
+        "NEW invariant: matched == true && specificity == 0 is legal (universal-only compound) -- "
+        "the OLD invariant (matched implies specificity >= 10'000) is retired by this item");
+}
+
+// ---------------------------------------------------------------------------
 // Boundary: near-miss class count -- a compound requiring 2 classes must reject an element
 // carrying only 1 of the 2 (one class short, not zero).
 // ---------------------------------------------------------------------------
@@ -617,6 +805,42 @@ void test_comma_list_forms() {
         "100'000, the lower, first-listed entry's own weight)");
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-8` -- comma-list with a universal entry alongside a class entry, on an element carrying
+//     that class: BOTH entries match (universal unconditionally, the class entry because the
+//     element carries it), and the list returns the MAXIMUM of the two -- the class entry's
+//     100'000, never universal's 0, and never their SUM (which a bug summing instead of
+//     max-ing across entries would wrongly produce, 100'000 either way here since 0+100'000 ==
+//     max(0,100'000) by coincidence -- see the `nine_classes`/`ten_classes` case in
+//     `test_specificity_pinned_against_upstream_literals_and_order` above for a pair where sum and
+//     max would visibly diverge if this module ever combined two DIFFERENT non-zero entries; this
+//     test's own job is narrower and load-bearing in a different way: proving universal's own zero
+//     never accidentally WINS a max() against a real discriminator, which a bug computing MINIMUM
+//     instead of maximum would get wrong).
+// PT: `ESC-8` -- lista-vírgula com uma entrada universal ao lado de uma entrada de classe, num
+//     elemento carregando aquela classe: AS DUAS entradas casam (universal incondicionalmente, a
+//     entrada de classe porque o elemento a carrega), e a lista retorna o MÁXIMO das duas -- o
+//     100'000 da entrada de classe, nunca o 0 do universal, e nunca a SOMA dos dois (que um bug
+//     somando em vez de tirar-o-máximo entre entradas produziria errado, 100'000 dos dois jeitos
+//     aqui já que 0+100'000 == max(0,100'000) por coincidência -- ver o caso
+//     `nine_classes`/`ten_classes` do `test_specificity_pinned_against_upstream_literals_and_order`
+//     acima pra um par onde soma e máximo divergiriam visivelmente se este módulo algum dia
+//     combinasse duas entradas DIFERENTES não-zero; o próprio trabalho deste teste é mais estreito e
+//     porta um peso diferente: provar que o próprio zero do universal nunca vence um max() contra um
+//     discriminador real por acidente, o que um bug computando MÍNIMO em vez de máximo erraria).
+// ---------------------------------------------------------------------------
+void test_comma_list_universal_max_specificity() {
+  Element el("div");
+  el.add_class("foo");
+
+  SelectorList list = {chain1(universal_only()), chain1(class_only("foo"))};
+  MatchResult r = match_selector_list(list, el, MatchState{});
+  check(r.matched, "comma-list * , .foo: both entries match");
+  check(r.specificity == kSpecificityWeightClassOrPseudo,
+        "comma-list * , .foo: returns the MAXIMUM specificity (100'000, the .foo entry), not "
+        "the universal entry's 0");
+}
+
 } // namespace
 
 int main() {
@@ -630,13 +854,19 @@ int main() {
   test_form_hover();
   test_form_compound_no_combinator();
   test_form_child();
+  test_form_universal();
+  test_form_universal_class_specificity();
+  test_form_universal_tag_accident_specificity();
+  test_form_universal_combinators();
+  test_form_universal_specificity_is_exact_zero();
   test_boundary_near_miss_class_count();
   test_boundary_root_element_has_no_ancestors();
   test_boundary_empty_selector_defensive();
   test_comma_list_forms();
+  test_comma_list_universal_max_specificity();
 
   std::printf(
-      "SCOPE: 8 formas cobertas de 8 enumeradas, 0 casos de corpus (ver "
+      "SCOPE: 9 formas cobertas de 9 enumeradas, 0 casos de corpus (ver "
       "selector_match_corpus_sanity), 0 travamentos, 0 formas fora do subset\n");
 
   if (g_failures > 0) {

@@ -2,8 +2,9 @@
 // EN: UIX-SELECTOR-MATCH -- the selector MATCHER: given an `Element` from glintfx's own DOM
 //     (`glintfx/src/uix/dom/dom_tree.hpp`) and a `Selector`/`SelectorList` already structured by
 //     `parser.hpp`'s S3 (the RCSS-side sibling, "the FOURTH tijolo"), answers two questions --
-//     does it match, and at what SPECIFICITY -- for exactly the 8 selector forms
-//     `docs/rmlx-subset.md` section 6.2 authorizes (restated once, at `compound_matches`'s own
+//     does it match, and at what SPECIFICITY -- for exactly the 9 selector forms
+//     `docs/rmlx-subset.md` section 6.2 authorizes (universal `*` delivered by `ESC-8`, restated
+//     once, at `compound_matches`'s own
 //     definition in the .cpp, not paraphrased here). This is the FIFTH brick of glintfx's own
 //     style engine, `RMLX-2`'s own "casador de seletor" item, immediately downstream of S3/parser
 //     and immediately upstream of a future cascade slice (`RMLX-2`+, not this item's job -- see
@@ -108,12 +109,17 @@
 //         that is not a DOM selector at all (parser.hpp's own doc-comment, "NÃO-RESOLVIDO... a
 //         quarta semântica de `%`"), and this file's `Selector`/`SelectorList` types are never the
 //         type a `KeyframeBlock` carries.
-//       - Attribute selectors (`[attr]`), universal (`*`), sibling combinators (`+`/`~`),
-//         `:nth-child()`/`:not()` -- all zero-measured, out of subset (`docs/rmlx-subset.md` section
-//         6.2); the parser this file consumes structurally CANNOT produce a `CompoundSelector` using
-//         any of these (no field exists on that struct for them), so there is nothing for this file
-//         to reject at its own boundary -- the fail-high already happened one slice upstream, at
-//         parse time.
+//       - Attribute selectors (`[attr]`), sibling combinators (`+`/`~`), `:nth-child()`/`:not()` --
+//         all zero-measured, out of subset (`docs/rmlx-subset.md` section 6.2); the parser this
+//         file consumes structurally CANNOT produce a `CompoundSelector` using any of these (no
+//         field exists on that struct for them), so there is nothing for this file to reject at its
+//         own boundary -- the fail-high already happened one slice upstream, at parse time.
+//         ⚠️ Universal (`*`) is NO LONGER in this list -- `ESC-8` moved it INTO subset
+//         (`docs/rmlx-subset.md` section 6.2's own row). `CompoundSelector::universal` (parser.hpp)
+//         is a real, producible field, but this file's own match/specificity code was left
+//         UNCHANGED to add it -- see `compound_matches`'s own doc-comment in the .cpp for why zero
+//         code change here was already correct (an all-empty compound already matched everything at
+//         zero specificity, by the pre-existing per-field "empty == no constraint" rule).
 //
 //     COMPLEXITY, STATED HONESTLY (this project's own "profile before optimizing" discipline, not
 //     "lock-free wishful thinking" applied to correctness instead of concurrency): the
@@ -136,8 +142,9 @@
 // PT: UIX-SELECTOR-MATCH -- o CASADOR de seletor: dado um `Element` do DOM próprio da glintfx
 //     (`glintfx/src/uix/dom/dom_tree.hpp`) e um `Selector`/`SelectorList` já estruturado pela S3 do
 //     parser.hpp (o irmão do lado RCSS, "o QUARTO tijolo"), responde duas perguntas -- casa, e com
-//     que ESPECIFICIDADE -- pras exatas 8 formas de seletor que a seção 6.2 do
-//     `docs/rmlx-subset.md` autoriza (restatada uma vez, na própria definição de `compound_matches`
+//     que ESPECIFICIDADE -- pras exatas 9 formas de seletor que a seção 6.2 do
+//     `docs/rmlx-subset.md` autoriza (universal `*` entregue pela `ESC-8`, restatada uma vez, na
+//     própria definição de `compound_matches`
 //     no .cpp, não parafraseada aqui). Este é o QUINTO tijolo do motor de estilo próprio da
 //     glintfx, o próprio item "casador de seletor" da `RMLX-2`, imediatamente rio-abaixo da S3/
 //     parser e imediatamente rio-acima de uma futura fatia de cascata (`RMLX-2`+, não trabalho
@@ -252,12 +259,19 @@
 //         -- isso não é um seletor de DOM de jeito nenhum (o próprio comentário de doc do
 //         parser.hpp, "NÃO-RESOLVIDO... a quarta semântica de `%`"), e os tipos `Selector`/
 //         `SelectorList` deste arquivo nunca são o tipo que um `KeyframeBlock` carrega.
-//       - Seletores de atributo (`[attr]`), universal (`*`), combinadores de irmão (`+`/`~`),
-//         `:nth-child()`/`:not()` -- todos zero-medidos, fora do subconjunto (seção 6.2 do
-//         `docs/rmlx-subset.md`); o parser que este arquivo consome NÃO CONSEGUE, estruturalmente,
-//         produzir um `CompoundSelector` usando nenhum destes (não existe campo nenhum naquela
-//         struct pra eles), então não há nada pra este arquivo rejeitar na própria fronteira -- o
-//         fail-high já aconteceu uma fatia rio-acima, em tempo de parse.
+//       - Seletores de atributo (`[attr]`), combinadores de irmão (`+`/`~`), `:nth-child()`/
+//         `:not()` -- todos zero-medidos, fora do subconjunto (seção 6.2 do `docs/rmlx-subset.md`);
+//         o parser que este arquivo consome NÃO CONSEGUE, estruturalmente, produzir um
+//         `CompoundSelector` usando nenhum destes (não existe campo nenhum naquela struct pra
+//         eles), então não há nada pra este arquivo rejeitar na própria fronteira -- o fail-high já
+//         aconteceu uma fatia rio-acima, em tempo de parse.
+//         ⚠️ Universal (`*`) NÃO ESTÁ MAIS nesta lista -- a `ESC-8` moveu ele PRA DENTRO do
+//         subconjunto (própria linha da seção 6.2 do `docs/rmlx-subset.md`). O
+//         `CompoundSelector::universal` (parser.hpp) é um campo real, produzível, mas o próprio
+//         código de casamento/especificidade deste arquivo ficou INALTERADO pra somá-lo -- ver o
+//         próprio comentário de doc do `compound_matches` no .cpp pro porquê de zero mudança de
+//         código aqui já estar correto (um compound inteiramente vazio já casava tudo com
+//         especificidade zero, pela regra pré-existente por-campo "vazio == sem restrição").
 //
 //     COMPLEXIDADE, DECLARADA COM HONESTIDADE (a própria disciplina "profilear antes de otimizar"
 //     deste projeto, não "lock-free wishful thinking" aplicado a corretude em vez de concorrência):
@@ -325,20 +339,33 @@ struct MatchState {
 
 // EN: `matched == false` always carries `specificity == 0` (never a partial/stale weight from a
 //     failed attempt) -- a caller can read `specificity` unconditionally without checking `matched`
-//     first and never observe a non-zero value for a non-match. `matched == true` always carries
-//     `specificity >= kSpecificityWeightTag` (10'000): every `CompoundSelector` this module's own
-//     parser can construct has AT LEAST one of tag/id/class/hover present (parser.hpp's own
-//     `CompoundSelector` doc-comment, "parse_compound... exige que ao menos UM... esteja presente"),
-//     so a matched chain's specificity is never zero by construction, not by this file's own
-//     defensive coding.
+//     first and never observe a non-zero value for a non-match.
+//     ⚠️ `ESC-8` RETIRES an invariant this comment used to state here ("matched == true always
+//     carries specificity >= kSpecificityWeightTag") -- that was true only while every
+//     `CompoundSelector` the parser could construct had at least one of tag/id/class/hover, EVERY
+//     ONE of which carries non-zero weight. `parser.hpp`'s own `CompoundSelector::universal` field
+//     adds a FIFTH way to satisfy `parse_compound`'s own "at least one present" requirement that
+//     carries ZERO weight -- a universal-only compound (`*` alone) is `matched == true` with
+//     `specificity == 0`. The NEW, correct invariant: `matched == true` implies `specificity >= 0`
+//     ALWAYS (trivially true of a non-negative quantity), and `specificity == 0` on a MATCH is
+//     legal exactly when the matched chain's every compound is universal-only (no tag/id/class/
+//     hover contributed by ANY compound in the chain) -- proven by
+//     `selector_match_sanity.cpp`'s own `test_form_universal_specificity_is_exact_zero`.
 // PT: `matched == false` sempre carrega `specificity == 0` (nunca um peso parcial/obsoleto de uma
 //     tentativa falha) -- um chamador pode ler `specificity` incondicionalmente sem checar
-//     `matched` antes e nunca observar um valor não-zero pra um não-casamento. `matched == true`
-//     sempre carrega `specificity >= kSpecificityWeightTag` (10'000): todo `CompoundSelector` que o
-//     próprio parser deste módulo consegue construir tem AO MENOS um de tag/id/classe/hover
-//     presente (o próprio comentário de doc de `CompoundSelector` do parser.hpp, "parse_compound...
-//     exige que ao menos UM... esteja presente"), então a especificidade de uma cadeia casada nunca
-//     é zero por construção, não por codificação defensiva própria deste arquivo.
+//     `matched` antes e nunca observar um valor não-zero pra um não-casamento.
+//     ⚠️ A `ESC-8` APOSENTA um invariante que este comentário costumava declarar aqui ("matched ==
+//     true sempre carrega specificity >= kSpecificityWeightTag") -- isso era verdade só enquanto
+//     todo `CompoundSelector` que o parser conseguia construir tinha ao menos um de
+//     tag/id/classe/hover, CADA UM dos quais carrega peso não-zero. O próprio campo
+//     `CompoundSelector::universal` do parser.hpp soma um QUINTO jeito de satisfazer a própria
+//     exigência "ao menos um presente" do `parse_compound` que carrega peso ZERO -- um compound
+//     só-universal (`*` sozinho) é `matched == true` com `specificity == 0`. O invariante NOVO,
+//     correto: `matched == true` implica `specificity >= 0` SEMPRE (trivialmente verdadeiro de uma
+//     quantidade não-negativa), e `specificity == 0` num CASAMENTO é legal exatamente quando todo
+//     compound da cadeia casada é só-universal (nenhum tag/id/classe/hover contribuído por NENHUM
+//     compound da cadeia) -- provado pelo próprio
+//     `test_form_universal_specificity_is_exact_zero` do selector_match_sanity.cpp.
 struct MatchResult {
   bool matched = false;
   Specificity specificity = 0;

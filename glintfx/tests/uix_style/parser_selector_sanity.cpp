@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // EN: UIX-SHEET-PARSER -- selector-structuring coverage. One test per authorized selector FORM
 //     (docs/rmlx-subset.md section 6.2's own closed, corpus-counted table: `.class`, `#id`,
-//     descendant, tag, compound-no-combinator, pseudo-class `:hover`, comma-list, child `>`) and
-//     one test per FORM that table fail-highs (universal `*`, attribute `[x]`, sibling `+`/`~`,
-//     `:not(...)`/`nth-child(...)`) -- exactly this item's own Definition of Done: "cada forma de
-//     seletor da lista acima com teste próprio, e cada forma fora do escopo com teste provando o
-//     fail-high". Zero RmlUi/GLFW/GL, same standalone discipline as every other executable in this
-//     directory.
+//     descendant, tag, compound-no-combinator, pseudo-class `:hover`, comma-list, child `>`,
+//     universal `*` -- the last one delivered by `ESC-8`, docs/rmlx-subset.md section 6.2's own
+//     row, authorized by §7 2026-08-07's parity rule) and one test per FORM that table STILL
+//     fail-highs (attribute `[x]`, sibling `+`/`~`, `:not(...)`/`nth-child(...)`) -- exactly this
+//     item's own Definition of Done: "cada forma de seletor da lista acima com teste próprio, e
+//     cada forma fora do escopo com teste provando o fail-high". Zero RmlUi/GLFW/GL, same
+//     standalone discipline as every other executable in this directory.
 // PT: UIX-SHEET-PARSER -- cobertura de estruturação de seletor. Um teste por FORMA de seletor
 //     autorizada (a própria tabela fechada, contada-por-corpus, da seção 6.2 do
 //     docs/rmlx-subset.md: `.classe`, `#id`, descendente, tag, composto-sem-combinador,
-//     pseudo-classe `:hover`, lista-vírgula, filho `>`) e um teste por FORMA que aquela tabela
-//     fail-higha (universal `*`, atributo `[x]`, irmão `+`/`~`, `:not(...)`/`nth-child(...)`) --
-//     exatamente o próprio Definition of Done deste item: "cada forma de seletor da lista acima com
-//     teste próprio, e cada forma fora do escopo com teste provando o fail-high". Zero
-//     RmlUi/GLFW/GL, mesma disciplina standalone de todo outro executável deste diretório.
+//     pseudo-classe `:hover`, lista-vírgula, filho `>`, universal `*` -- a última entregue pela
+//     `ESC-8`, própria linha da seção 6.2 do docs/rmlx-subset.md, autorizada pela regra de
+//     paridade da §7 2026-08-07) e um teste por FORMA que aquela tabela AINDA fail-higha (atributo
+//     `[x]`, irmão `+`/`~`, `:not(...)`/`nth-child(...)`) -- exatamente o próprio Definition of
+//     Done deste item: "cada forma de seletor da lista acima com teste próprio, e cada forma fora
+//     do escopo com teste provando o fail-high". Zero RmlUi/GLFW/GL, mesma disciplina standalone
+//     de todo outro executável deste diretório.
 // Copyright (c) 2026 Petrus Silva Costa
 #include "uix/style/parser.hpp"
 
@@ -199,7 +202,16 @@ void test_form_comma_list() {
 //     em silêncio pras OUTRAS 15.
 // ---------------------------------------------------------------------------
 void test_comma_list_invalid_entry_drops_only_itself() {
-  auto result = parse_stylesheet(".a, *, .b { color: red; }");
+  // EN: `[bad]` (an attribute selector), NOT `*` -- since `ESC-8`, `*` is a valid, authorized
+  //     compound (docs/rmlx-subset.md section 6.2), so it can no longer stand in as "the invalid
+  //     entry" this test needs; `[bad]` (attribute selectors, still zero-measured/unsupported,
+  //     `ESC-9`'s own territory) preserves this test's original intent unchanged.
+  // PT: `[bad]` (um seletor de atributo), NÃO `*` -- desde a `ESC-8`, `*` é um compound válido,
+  //     autorizado (seção 6.2 do docs/rmlx-subset.md), então ele não consegue mais servir de "a
+  //     entrada inválida" que este teste precisa; `[bad]` (seletores de atributo, ainda
+  //     zero-medidos/não-suportados, território da própria `ESC-9`) preserva a intenção original
+  //     deste teste sem mudança.
+  auto result = parse_stylesheet(".a, [bad], .b { color: red; }");
   check(!result.error.has_value(), "comma_list_per_entry: no fatal error");
   check(result.sheet != nullptr, "comma_list_per_entry: sheet is non-null");
   if (!result.sheet) return;
@@ -208,7 +220,7 @@ void test_comma_list_invalid_entry_drops_only_itself() {
   if (result.sheet->rules.empty()) return;
   const Rule& rule = result.sheet->rules[0];
   check(rule.selectors.size() == 2,
-        "comma_list_per_entry: only '*' was dropped -- '.a' and '.b' both survive");
+        "comma_list_per_entry: only '[bad]' was dropped -- '.a' and '.b' both survive");
   if (rule.selectors.size() == 2) {
     check(rule.selectors[0].compounds[0].classes[0] == "a", "comma_list_per_entry: entry 0 == '.a'");
     check(rule.selectors[1].compounds[0].classes[0] == "b", "comma_list_per_entry: entry 1 == '.b'");
@@ -216,7 +228,7 @@ void test_comma_list_invalid_entry_drops_only_itself() {
   check(rule.declarations.size() == 1,
         "comma_list_per_entry: the declaration block still applies to the surviving entries");
   check(!result.diagnostics.empty(),
-        "comma_list_per_entry: the dropped '*' entry is still logged, not silently swallowed");
+        "comma_list_per_entry: the dropped '[bad]' entry is still logged, not silently swallowed");
 }
 
 // ---------------------------------------------------------------------------
@@ -268,30 +280,248 @@ void test_form_child_combinator() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: FAIL-HIGH form 1 -- universal `*` (0 measured, docs/rmlx-subset.md section 6.2's own table).
-//     The WHOLE rule fails to register (docs/uix-rcss.md section 11), never a partial/guessed
-//     match, never poisons the rest of the sheet -- proven here by a SECOND, well-formed rule
-//     surviving right after it.
-// PT: Forma FAIL-HIGH 1 -- universal `*` (0 medidos, própria tabela da seção 6.2 do
-//     docs/rmlx-subset.md). A regra INTEIRA reprova de registrar (seção 11 do docs/uix-rcss.md),
-//     nunca um casamento parcial/chutado, nunca envenena o resto da folha -- provado aqui por uma
-//     SEGUNDA regra, bem-formada, sobrevivendo logo depois dela.
+// EN: Form 9 -- universal `*` (0 measured, docs/rmlx-subset.md section 6.2's own table --
+//     authorized by §7 2026-08-07's parity rule, delivered by `ESC-8`). `*` alone is CONSUMED by
+//     `parse_compound` and sets `CompoundSelector::universal`; it never becomes a token or field of
+//     its own kind -- see parser.hpp's own `CompoundSelector` doc-comment. `*` is no longer a
+//     FAIL-HIGH form (contrast the 3 that remain below, renumbered from the 4 this file used to
+//     name).
+// PT: Forma 9 -- universal `*` (0 medidos, própria tabela da seção 6.2 do docs/rmlx-subset.md --
+//     autorizada pela regra de paridade da §7 2026-08-07, entregue pela `ESC-8`). `*` sozinho é
+//     CONSUMIDO pelo `parse_compound` e seta `CompoundSelector::universal`; nunca vira token ou
+//     campo de espécie própria -- ver o próprio comentário de doc de `CompoundSelector` do
+//     parser.hpp. `*` deixou de ser forma FAIL-HIGH (contraste as 3 que restam abaixo, renumeradas
+//     das 4 que este arquivo nomeava).
 // ---------------------------------------------------------------------------
-void test_fail_high_universal() {
-  auto result = parse_stylesheet("* { color: red; } .ok { color: blue; }");
-  check(!result.error.has_value(), "fail_high_universal: no fatal error (recoverable)");
-  if (!result.sheet) return;
-  check(result.sheet->rules.size() == 1, "fail_high_universal: the '*' rule did NOT register");
-  if (result.sheet->rules.size() == 1) {
-    check(result.sheet->rules[0].selectors[0].compounds[0].classes[0] == "ok",
-          "fail_high_universal: the sibling rule '.ok' still registered");
-  }
-  check(!result.diagnostics.empty(), "fail_high_universal: a ParseDiagnostic was recorded");
+void test_form_universal_alone() {
+  SheetParseResult result;
+  const Rule* rule = parse_single_rule("* { color: red; }", &result, "form_universal_alone");
+  if (!rule) return;
+  check(rule->selectors.size() == 1, "form_universal_alone: one selector in the list");
+  check(rule->selectors[0].compounds.size() == 1, "form_universal_alone: one compound");
+  const auto& c = rule->selectors[0].compounds[0];
+  check(c.universal, "form_universal_alone: universal == true");
+  check(c.tag.empty(), "form_universal_alone: no tag");
+  check(c.id.empty(), "form_universal_alone: no id");
+  check(c.classes.empty(), "form_universal_alone: no classes");
+  check(!c.pseudo_hover, "form_universal_alone: no :hover");
 }
 
 // ---------------------------------------------------------------------------
-// EN: FAIL-HIGH form 2 -- attribute selector `[x]` (0 measured).
-// PT: Forma FAIL-HIGH 2 -- seletor de atributo `[x]` (0 medidos).
+// EN: `*` glued to a discriminator -- `universal` is set AND the discriminator's own field is set,
+//     never one instead of the other.
+// PT: `*` colado a um discriminador -- `universal` é setado E o próprio campo do discriminador é
+//     setado, nunca um em vez do outro.
+// ---------------------------------------------------------------------------
+void test_form_universal_with_class() {
+  SheetParseResult result;
+  const Rule* rule = parse_single_rule("*.foo { color: red; }", &result, "form_universal_class");
+  if (!rule) return;
+  const auto& c = rule->selectors[0].compounds[0];
+  check(c.universal, "form_universal_class: universal == true");
+  check(c.classes.size() == 1 && c.classes[0] == "foo",
+        "form_universal_class: classes == {'foo'}");
+  check(c.tag.empty() && c.id.empty() && !c.pseudo_hover,
+        "form_universal_class: no tag/id/hover");
+}
+
+void test_form_universal_with_id() {
+  SheetParseResult result;
+  const Rule* rule = parse_single_rule("*#bar { color: red; }", &result, "form_universal_id");
+  if (!rule) return;
+  const auto& c = rule->selectors[0].compounds[0];
+  check(c.universal, "form_universal_id: universal == true");
+  check(c.id == "bar", "form_universal_id: id == 'bar'");
+  check(c.tag.empty() && c.classes.empty() && !c.pseudo_hover,
+        "form_universal_id: no tag/classes/hover");
+}
+
+void test_form_universal_with_hover() {
+  SheetParseResult result;
+  const Rule* rule = parse_single_rule("*:hover { color: red; }", &result, "form_universal_hover");
+  if (!rule) return;
+  const auto& c = rule->selectors[0].compounds[0];
+  check(c.universal, "form_universal_hover: universal == true");
+  check(c.pseudo_hover, "form_universal_hover: pseudo_hover == true");
+  check(c.tag.empty() && c.id.empty() && c.classes.empty(),
+        "form_universal_hover: no tag/id/classes");
+}
+
+// ---------------------------------------------------------------------------
+// EN: The pin's own accident, reproduced DELIBERATELY, not "fixed" (`StyleSheetParser.cpp:
+//     1105-1106`): `if (rule[start_index] == '*') start_index += 1;` skips the `*` and falls
+//     straight into the SAME tag-read scan a bare `div` would take -- `*div` structurally parses
+//     to the exact compound a real author-facing `div` alone would, PLUS `universal == true` on
+//     top (a field the pin has no representation for at all, but that changes nothing observable:
+//     selector_match.cpp never reads it, see that file's own `compound_matches` doc-comment).
+//     `*div == div` is the pin's own real, measured behavior, not a bug this parser introduces.
+// PT: O próprio acidente do pin, reproduzido DE PROPÓSITO, não "consertado"
+//     (`StyleSheetParser.cpp:1105-1106`): `if (rule[start_index] == '*') start_index += 1;` pula o
+//     `*` e cai direto no MESMO scan de leitura-de-tag que um `div` cru tomaria -- `*div` parseia
+//     estruturalmente pro exato compound que um `div` cru, de-frente-pro-autor, produziria, MAIS
+//     `universal == true` por cima (um campo que o pin não tem representação nenhuma, mas que não
+//     muda nada observável: o selector_match.cpp nunca o lê, ver o próprio comentário de doc de
+//     `compound_matches` daquele arquivo). `*div == div` é o próprio comportamento real, medido, do
+//     pin, não um bug que este parser introduz.
+// ---------------------------------------------------------------------------
+void test_form_universal_tag_accident() {
+  SheetParseResult result;
+  const Rule* rule =
+      parse_single_rule("*div { color: red; }", &result, "form_universal_tag_accident");
+  if (!rule) return;
+  const auto& c = rule->selectors[0].compounds[0];
+  check(c.universal, "form_universal_tag_accident: universal == true (the '*' was consumed)");
+  check(c.tag == "div",
+        "form_universal_tag_accident: tag == 'div' (the pin's own fall-through, "
+        "StyleSheetParser.cpp:1105-1106)");
+  check(c.id.empty() && c.classes.empty() && !c.pseudo_hover,
+        "form_universal_tag_accident: no id/classes/hover");
+}
+
+// ---------------------------------------------------------------------------
+// EN: Universal as the SECOND compound of a Descendant chain -- `tag *` and `.class *`, proving
+//     the field survives combinator-joining, not just a lone compound.
+// PT: Universal como o SEGUNDO compound de uma cadeia Descendente -- `tag *` e `.classe *`,
+//     provando que o campo sobrevive à junção-por-combinador, não só um compound sozinho.
+// ---------------------------------------------------------------------------
+void test_form_universal_descendant() {
+  {
+    SheetParseResult result;
+    const Rule* rule =
+        parse_single_rule("div * { color: red; }", &result, "form_universal_descendant_tag");
+    if (rule) {
+      const auto& sel = rule->selectors[0];
+      check(sel.compounds.size() == 2, "form_universal_descendant_tag: two compounds");
+      check(sel.combinators.size() == 1 && sel.combinators[0] == Combinator::Descendant,
+            "form_universal_descendant_tag: Descendant combinator");
+      check(sel.compounds[0].tag == "div",
+            "form_universal_descendant_tag: first compound tag == 'div'");
+      check(sel.compounds[1].universal,
+            "form_universal_descendant_tag: second compound universal == true");
+    }
+  }
+  {
+    SheetParseResult result;
+    const Rule* rule = parse_single_rule(".foo * { color: red; }", &result,
+                                         "form_universal_descendant_class");
+    if (rule) {
+      const auto& sel = rule->selectors[0];
+      check(sel.compounds.size() == 2, "form_universal_descendant_class: two compounds");
+      check(sel.combinators[0] == Combinator::Descendant,
+            "form_universal_descendant_class: Descendant combinator");
+      check(sel.compounds[0].classes.size() == 1 && sel.compounds[0].classes[0] == "foo",
+            "form_universal_descendant_class: first compound class == 'foo'");
+      check(sel.compounds[1].universal,
+            "form_universal_descendant_class: second compound universal == true");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: Universal on EITHER side of a Child (`>`) combinator -- `* > div` (first compound universal,
+//     requires SOME parent) and `div > *` (second compound universal).
+// PT: Universal dos DOIS lados de um combinador Filho (`>`) -- `* > div` (primeiro compound
+//     universal, exige ALGUM pai) e `div > *` (segundo compound universal).
+// ---------------------------------------------------------------------------
+void test_form_universal_child() {
+  {
+    SheetParseResult result;
+    const Rule* rule =
+        parse_single_rule("* > div { color: red; }", &result, "form_universal_child_first");
+    if (rule) {
+      const auto& sel = rule->selectors[0];
+      check(sel.compounds.size() == 2, "form_universal_child_first: two compounds");
+      check(sel.combinators[0] == Combinator::Child,
+            "form_universal_child_first: Child combinator");
+      check(sel.compounds[0].universal,
+            "form_universal_child_first: first compound universal == true");
+      check(sel.compounds[1].tag == "div",
+            "form_universal_child_first: second compound tag == 'div'");
+    }
+  }
+  {
+    SheetParseResult result;
+    const Rule* rule =
+        parse_single_rule("div > * { color: red; }", &result, "form_universal_child_second");
+    if (rule) {
+      const auto& sel = rule->selectors[0];
+      check(sel.compounds.size() == 2, "form_universal_child_second: two compounds");
+      check(sel.combinators[0] == Combinator::Child,
+            "form_universal_child_second: Child combinator");
+      check(sel.compounds[0].tag == "div",
+            "form_universal_child_second: first compound tag == 'div'");
+      check(sel.compounds[1].universal,
+            "form_universal_child_second: second compound universal == true");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: Comma-list with a universal entry -- BOTH entries survive (contrast
+//     `test_comma_list_invalid_entry_drops_only_itself` above, which now uses `[bad]` instead of
+//     `*` for exactly this reason: `*` is no longer the invalid one).
+// PT: Lista-vírgula com uma entrada universal -- AS DUAS entradas sobrevivem (contraste o próprio
+//     `test_comma_list_invalid_entry_drops_only_itself` acima, que agora usa `[bad]` em vez de `*`
+//     exatamente por este motivo: `*` deixou de ser a inválida).
+// ---------------------------------------------------------------------------
+void test_form_universal_comma_list() {
+  SheetParseResult result;
+  const Rule* rule =
+      parse_single_rule("*, div { color: red; }", &result, "form_universal_comma_list");
+  if (!rule) return;
+  check(rule->selectors.size() == 2,
+        "form_universal_comma_list: BOTH entries survive (universal is no longer fail-high)");
+  if (rule->selectors.size() == 2) {
+    check(rule->selectors[0].compounds[0].universal,
+          "form_universal_comma_list: entry 0 is universal");
+    check(rule->selectors[1].compounds[0].tag == "div",
+          "form_universal_comma_list: entry 1 tag == 'div'");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: `**` and `div*` are STILL rejected -- not because `*` itself is unsupported (it now is), but
+//     because a trailing byte glued directly onto an already-closed compound is trailing garbage
+//     (the SAME check that already rejects `a[href]`-shaped input, `parse_compound`'s own final
+//     `if`). Equivalent-observable to the pin, which parses both into a LITERAL tag string
+//     (`"*"`/`"div*"`) that can never match any real element -- `StyleSheetParser.cpp:1105-1138`'s
+//     own `*`-skip fires only ONCE, right at a compound's own start; a SECOND `*` (or one glued
+//     onto a preceding identifier with no separator) falls through to the ordinary identifier-token
+//     scan and becomes part of a literal tag name nothing in a real document is ever named. Both
+//     sides therefore NEVER apply to any element -- the pin via a structurally-valid-but-unmatchable
+//     rule, this parser via dropping the entry outright with a diagnostic -- never via the SAME
+//     mechanism, but always with the SAME end result: nothing.
+// PT: `**` e `div*` CONTINUAM rejeitados -- não porque o `*` em si não é suportado (agora é), mas
+//     porque um byte final colado direto num compound já-fechado é lixo final (a MESMA checagem que
+//     já rejeita entrada com a forma `a[href]`, o próprio `if` final do `parse_compound`).
+//     Equivalente-observável ao pin, que parseia os dois num texto de tag LITERAL (`"*"`/`"div*"`)
+//     que nunca consegue casar com nenhum elemento real -- o próprio skip-de-`*` do
+//     `StyleSheetParser.cpp:1105-1138` dispara só UMA vez, bem no começo de um compound; um SEGUNDO
+//     `*` (ou um colado num identificador precedente sem separador) cai no scan comum de
+//     token-identificador e vira parte de um nome de tag literal que nada num documento real tem
+//     algum dia o nome. Os dois lados portanto NUNCA se aplicam a elemento nenhum -- o pin via uma
+//     regra estruturalmente-válida-mas-nunca-casável, este parser via descartar a entrada de vez com
+//     um diagnóstico -- nunca pelo MESMO mecanismo, mas sempre com o MESMO resultado final: nada.
+// ---------------------------------------------------------------------------
+void test_fail_high_double_universal_and_glued_tag() {
+  {
+    auto result = parse_stylesheet("** { color: red; } .ok { color: blue; }");
+    check(result.sheet && result.sheet->rules.size() == 1,
+          "fail_high_double_universal: '**' rule did NOT register, sibling '.ok' survived");
+    check(!result.diagnostics.empty(),
+          "fail_high_double_universal: a ParseDiagnostic was recorded");
+  }
+  {
+    auto result = parse_stylesheet("div* { color: red; } .ok { color: blue; }");
+    check(result.sheet && result.sheet->rules.size() == 1,
+          "fail_high_glued_tag_star: 'div*' rule did NOT register, sibling '.ok' survived");
+    check(!result.diagnostics.empty(), "fail_high_glued_tag_star: a ParseDiagnostic was recorded");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: FAIL-HIGH form 1 -- attribute selector `[x]` (0 measured).
+// PT: Forma FAIL-HIGH 1 -- seletor de atributo `[x]` (0 medidos).
 // ---------------------------------------------------------------------------
 void test_fail_high_attribute() {
   auto result = parse_stylesheet("a[href] { color: red; } .ok { color: blue; }");
@@ -304,8 +534,8 @@ void test_fail_high_attribute() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: FAIL-HIGH form 3 -- sibling combinators `+`/`~` (0 measured).
-// PT: Forma FAIL-HIGH 3 -- combinadores irmão `+`/`~` (0 medidos).
+// EN: FAIL-HIGH form 2 -- sibling combinators `+`/`~` (0 measured).
+// PT: Forma FAIL-HIGH 2 -- combinadores irmão `+`/`~` (0 medidos).
 // ---------------------------------------------------------------------------
 void test_fail_high_sibling() {
   {
@@ -321,10 +551,10 @@ void test_fail_high_sibling() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: FAIL-HIGH form 4 -- `:not(...)` and `nth-child(...)` (0 measured, docs/rmlx-subset.md
+// EN: FAIL-HIGH form 3 -- `:not(...)` and `nth-child(...)` (0 measured, docs/rmlx-subset.md
 //     section 2's own real-zero cuts, restated by section 6.2). Only `:hover` is an authorized
 //     pseudo-class -- every other pseudo-class name fails the whole rule.
-// PT: Forma FAIL-HIGH 4 -- `:not(...)` e `nth-child(...)` (0 medidos, os próprios cortes
+// PT: Forma FAIL-HIGH 3 -- `:not(...)` e `nth-child(...)` (0 medidos, os próprios cortes
 //     real-zero da seção 2 do docs/rmlx-subset.md, restatados pela seção 6.2). Só `:hover` é
 //     pseudo-classe autorizada -- todo outro nome de pseudo-classe reprova a regra inteira.
 // ---------------------------------------------------------------------------
@@ -354,7 +584,15 @@ int main() {
   test_comma_list_ua_stylesheet_shape_survives_one_bad_tag();
   test_form_compound_no_combinator();
   test_form_child_combinator();
-  test_fail_high_universal();
+  test_form_universal_alone();
+  test_form_universal_with_class();
+  test_form_universal_with_id();
+  test_form_universal_with_hover();
+  test_form_universal_tag_accident();
+  test_form_universal_descendant();
+  test_form_universal_child();
+  test_form_universal_comma_list();
+  test_fail_high_double_universal_and_glued_tag();
   test_fail_high_attribute();
   test_fail_high_sibling();
   test_fail_high_unsupported_pseudo_class();

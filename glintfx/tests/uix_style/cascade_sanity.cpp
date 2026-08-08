@@ -186,6 +186,20 @@ CompoundSelector tag_only(std::string_view tag) {
   return c;
 }
 
+// EN: `ESC-8` -- universal-only compound (`'*' alone`), matching selector_match_sanity.cpp's own
+//     helper of the same name -- `kSpecificityWeightTag`'s own opposite boundary: this module's
+//     single LOWEST non-defensive weight (0), used below to pin that a `*` rule can never outrank
+//     even the smallest non-zero weight this file already exercises.
+// PT: `ESC-8` -- compound só-universal (`'*' sozinho`), casando com o próprio helper de mesmo nome
+//     do selector_match_sanity.cpp -- a própria fronteira oposta do `kSpecificityWeightTag`: o
+//     único peso não-defensivo MAIS BAIXO deste módulo (0), usado abaixo pra ancorar que uma regra
+//     `*` nunca consegue superar nem o menor peso não-zero que este arquivo já exercita.
+CompoundSelector universal_only() {
+  CompoundSelector c;
+  c.universal = true;
+  return c;
+}
+
 Selector chain1(CompoundSelector a) {
   Selector s;
   s.compounds = {a};
@@ -767,6 +781,114 @@ void test_no_style_attribute_is_unaffected() {
         "no_style_attribute: the rule's own color wins normally, unaffected by UIX-INLINE-STYLE");
 }
 
+// ---------------------------------------------------------------------------
+// EN: `ESC-8` -- the universal selector's own SPECIFICITY=0 consequence at cascade level: a `*`
+//     rule can NEVER outrank an author's own tag rule, in EITHER source order. Two sub-cases:
+//     `*` declared AFTER the tag rule (the order a naive "last-writer-wins on a near-tie" bug
+//     would get wrong) and `*` declared BEFORE it (the order that must ALSO resolve to the tag
+//     rule, proving this is genuinely specificity-driven, not an artifact of one particular
+//     ordering).
+// PT: `ESC-8` -- a própria consequência de ESPECIFICIDADE=0 do seletor universal em nível de
+//     cascata: uma regra `*` NUNCA consegue superar a própria regra de tag de um autor, em
+//     QUALQUER ordem de fonte. Dois subcasos: `*` declarada DEPOIS da regra de tag (a ordem que um
+//     bug ingênuo "vence-o-último-em-quase-empate" erraria) e `*` declarada ANTES dela (a ordem
+//     que TAMBÉM precisa resolver pra regra de tag, provando que isto é genuinamente dirigido por
+//     especificidade, não um artefato de uma ordenação específica).
+// ---------------------------------------------------------------------------
+void test_universal_never_outranks_tag_either_order() {
+  Element el("p");
+
+  {
+    StyleSheet sheet;
+    sheet.rules.push_back(rule_with({chain1(tag_only("p"))}, {{"color", "#0000ff"}}));
+    sheet.rules.push_back(rule_with({chain1(universal_only())}, {{"color", "#ff0000"}}));
+
+    MatchState state;
+    ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+    const std::string* color = find_value(style, "color");
+    check(color != nullptr && *color == "#0000ff",
+          "universal-vs-tag: tag rule FIRST, universal SECOND -- blue wins (specificity 10'000 > "
+          "0), proving universal's own zero weight never lets it override an author tag rule "
+          "declared earlier, the case a naive engine giving '*' any non-zero weight would break");
+  }
+  {
+    StyleSheet sheet;
+    sheet.rules.push_back(rule_with({chain1(universal_only())}, {{"color", "#ff0000"}}));
+    sheet.rules.push_back(rule_with({chain1(tag_only("p"))}, {{"color", "#0000ff"}}));
+
+    MatchState state;
+    ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+    const std::string* color = find_value(style, "color");
+    check(color != nullptr && *color == "#0000ff",
+          "universal-vs-tag: universal FIRST, tag rule SECOND -- blue STILL wins -- specificity, "
+          "not source order, decides here; the load-bearing direction, since a >=-overwrites, "
+          "later-wins tie-break rule would (WRONGLY) let the LATER universal declaration win if "
+          "specificity were not actually gating this comparison");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-8` -- two universal rules on the SAME property: a genuine 0-vs-0 tie, resolved the ONLY
+//     way an equal-specificity tie ever resolves in this cascade -- source order, later wins
+//     (`compute_element_style`'s own `>=`-overwrites direction, cascade.cpp).
+// PT: `ESC-8` -- duas regras universais na MESMA propriedade: um empate 0-contra-0 genuíno,
+//     resolvido do ÚNICO jeito que um empate de especificidade igual algum dia resolve nesta
+//     cascata -- ordem de fonte, a posterior vence (a própria direção `>=`-sobrescreve do
+//     `compute_element_style`, cascade.cpp).
+// ---------------------------------------------------------------------------
+void test_universal_vs_universal_tie_breaks_by_source_order() {
+  Element el("div");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(rule_with({chain1(universal_only())}, {{"color", "#111111"}}));
+  sheet.rules.push_back(rule_with({chain1(universal_only())}, {{"color", "#222222"}}));
+
+  MatchState state;
+  ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+  const std::string* color = find_value(style, "color");
+  check(color != nullptr && *color == "#222222",
+        "universal-vs-universal: EQUAL specificity (0 == 0) -- the LATER rule (source order) "
+        "wins, \"#222222\" from the second rule, not \"#111111\" from the first -- the same "
+        "tie-break mechanism test_precedence_source_order_tie_break already proves at 100'000 vs. "
+        "100'000, now pinned at the 0 vs. 0 boundary this item introduces");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-8` -- the `style="..."` attribute's own unconditional precedence (`UIX-INLINE-STYLE`,
+//     see `test_inline_style_wins_over_highest_specificity_rule` above) holds against the WEAKEST
+//     possible rule opponent too, not only the strongest: a bare `*` rule (specificity 0) declared
+//     on the SAME property an inline style also declares still loses to the inline attribute --
+//     proving inline precedence is a genuinely separate, unconditional mechanism (cascade.hpp's own
+//     "applied AFTER every sheet.rules entry... bypassing the >=-on-Specificity comparison"), never
+//     "inline just happens to have a bigger number", at BOTH ends of the specificity range this
+//     module defines.
+// PT: `ESC-8` -- a própria precedência incondicional do atributo `style="..."` (`UIX-INLINE-STYLE`,
+//     ver o próprio `test_inline_style_wins_over_highest_specificity_rule` acima) se sustenta
+//     contra o oponente de regra MAIS FRACO possível também, não só o mais forte: uma regra `*` crua
+//     (especificidade 0) declarada na MESMA propriedade que um estilo inline também declara ainda
+//     perde pro atributo inline -- provando que a precedência inline é um mecanismo genuinamente
+//     separado, incondicional (o próprio "aplicado DEPOIS de toda entrada de sheet.rules...
+//     contornando a comparação >=-sobre-Specificity" do cascade.hpp), nunca "inline só por acaso
+//     tem um número maior", nas DUAS pontas da faixa de especificidade que este módulo define.
+// ---------------------------------------------------------------------------
+void test_inline_style_wins_over_universal_rule_too() {
+  Element el("div");
+  const bool set_ok = el.set_attribute("style", "color: #00ff00;");
+  check(set_ok, "inline_style_vs_universal: set_attribute(\"style\", ...) succeeds");
+
+  StyleSheet sheet;
+  sheet.rules.push_back(rule_with({chain1(universal_only())}, {{"color", "#ff0000"}}));
+
+  MatchState state;
+  ComputedStyle style = compute_element_style(sheet, el, state, nullptr);
+  const std::string* color = find_value(style, "color");
+  check(color != nullptr && *color == "#00ff00",
+        "inline_style_vs_universal: the style=\"...\" attribute (#00ff00) wins over a bare '*' "
+        "rule (#ff0000, specificity 0, the single LOWEST weight this module ever produces) -- "
+        "inline precedence is unconditional at the low end too, not merely 'inline usually has a "
+        "bigger number than whatever it competes with'");
+}
+
 } // namespace
 
 int main() {
@@ -782,6 +904,9 @@ int main() {
   test_inline_style_wins_over_highest_specificity_rule();
   test_inline_style_only_overrides_its_own_declared_properties();
   test_no_style_attribute_is_unaffected();
+  test_universal_never_outranks_tag_either_order();
+  test_universal_vs_universal_tie_breaks_by_source_order();
+  test_inline_style_wins_over_universal_rule_too();
 
   std::printf(
       "SCOPE: 72 longhands resolvidas, 0 elementos de corpus (ver cascade_corpus_sanity), %d "

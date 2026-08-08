@@ -13,9 +13,11 @@
 //     at-rules virando registros estruturais"):
 //       - SELECTOR STRUCTURING: turns a `Prelude` token's raw bytes into a `SelectorList` (a
 //         comma-separated list of `Selector` chains, each chain a sequence of `CompoundSelector`
-//         nodes joined by `Combinator::Descendant`/`Combinator::Child`). The exact 8 forms this
-//         parser recognises, and the 4 it fail-highs, are `docs/rmlx-subset.md` section 6.2's own
-//         closed, corpus-counted table -- restated once, at `parse_compound`'s own definition in
+//         nodes joined by `Combinator::Descendant`/`Combinator::Child`). The exact 9 forms this
+//         parser recognises (universal `*` delivered by `ESC-8`, docs/rmlx-subset.md section 6.2's
+//         own table, corrected by §7 2026-08-07's parity rule), and the 3 it still fail-highs, are
+//         `docs/rmlx-subset.md` section 6.2's own closed, corpus-counted table -- restated once, at
+//         `parse_compound`'s own definition in
 //         parser.cpp, not paraphrased here. This is NOT selector *matching* -- there is no DOM here,
 //         no specificity computation, no `:hover`-state evaluation; a `Selector` is a pure syntax
 //         tree, exactly as `docs/rmlx-subset.md`'s own header clause names this item's boundary
@@ -125,9 +127,11 @@
 //       - ESTRUTURAÇÃO DE SELETOR: transforma os bytes crus de um token `Prelude` numa
 //         `SelectorList` (uma lista separada-por-vírgula de cadeias `Selector`, cada cadeia uma
 //         sequência de nós `CompoundSelector` unidos por `Combinator::Descendant`/
-//         `Combinator::Child`). As exatas 8 formas que este parser reconhece, e as 4 que ele
-//         fail-higha, são a própria tabela fechada, contada-por-corpus, da seção 6.2 do
-//         `docs/rmlx-subset.md` -- restatada uma vez, na própria definição de `parse_compound` no
+//         `Combinator::Child`). As exatas 9 formas que este parser reconhece (universal `*`
+//         entregue pela `ESC-8`, própria tabela da seção 6.2 do docs/rmlx-subset.md, corrigida
+//         pela regra de paridade da §7 2026-08-07), e as 3 que ele ainda fail-higha, são a própria
+//         tabela fechada, contada-por-corpus, da seção 6.2 do `docs/rmlx-subset.md` -- restatada
+//         uma vez, na própria definição de `parse_compound` no
 //         parser.cpp, não parafraseada aqui. Isto NÃO é *casamento* de seletor -- não há DOM aqui,
 //         nenhum cálculo de especificidade, nenhuma avaliação de estado-`:hover`; um `Selector` é
 //         uma árvore de sintaxe pura, exatamente como a própria cláusula de cabeçalho do
@@ -258,26 +262,60 @@ enum class Combinator {
 };
 
 // EN: One "word" of a selector chain -- everything glued together with no combinator between it:
-//     an optional tag name, an optional `#id`, zero-or-more `.class` tokens (source order,
-//     duplicates preserved -- this parser does not dedupe, that is a semantic decision this item's
-//     brief does not own), and the ONE pseudo-class this subset authorizes, `:hover` (37 measured,
-//     always attached to a `.class` or `#id` compound in the real corpus, but this parser does not
-//     require that -- a bare `:hover` alone, zero-measured, still structurally parses). Every field
-//     empty/false is legal in principle -- `parse_compound` in parser.cpp requires at least ONE of
-//     tag/id/class/hover to be present, see that function's own comment.
-// PT: Uma "palavra" de uma cadeia de seletor -- tudo colado sem combinador nenhum entre si: um nome
-//     de tag opcional, um `#id` opcional, zero-ou-mais tokens `.classe` (ordem-fonte, duplicatas
-//     preservadas -- este parser não deduplica, é uma decisão semântica que o briefing deste item
-//     não possui), e a ÚNICA pseudo-classe que este subconjunto autoriza, `:hover` (37 medidos,
-//     sempre grudado num compound `.classe` ou `#id` no corpus real, mas este parser não exige isso
-//     -- um `:hover` cru sozinho, zero-medido, ainda parseia estruturalmente). Todo campo
-//     vazio/falso é legal em princípio -- `parse_compound` no parser.cpp exige que ao menos UM de
-//     tag/id/classe/hover esteja presente, ver o próprio comentário daquela função.
+//     an optional `*` (`ESC-8`, see `universal` below), an optional tag name, an optional `#id`,
+//     zero-or-more `.class` tokens (source order, duplicates preserved -- this parser does not
+//     dedupe, that is a semantic decision this item's brief does not own), and the ONE pseudo-class
+//     this subset authorizes, `:hover` (37 measured, always attached to a `.class` or `#id`
+//     compound in the real corpus, but this parser does not require that -- a bare `:hover` alone,
+//     zero-measured, still structurally parses). Every field empty/false is legal in principle --
+//     `parse_compound` in parser.cpp requires at least ONE of tag/id/class/hover/universal to be
+//     present, see that function's own comment.
+// PT: Uma "palavra" de uma cadeia de seletor -- tudo colado sem combinador nenhum entre si: um `*`
+//     opcional (`ESC-8`, ver `universal` abaixo), um nome de tag opcional, um `#id` opcional,
+//     zero-ou-mais tokens `.classe` (ordem-fonte, duplicatas preservadas -- este parser não
+//     deduplica, é uma decisão semântica que o briefing deste item não possui), e a ÚNICA
+//     pseudo-classe que este subconjunto autoriza, `:hover` (37 medidos, sempre grudado num
+//     compound `.classe` ou `#id` no corpus real, mas este parser não exige isso -- um `:hover` cru
+//     sozinho, zero-medido, ainda parseia estruturalmente). Todo campo vazio/falso é legal em
+//     princípio -- `parse_compound` no parser.cpp exige que ao menos UM de
+//     tag/id/classe/hover/universal esteja presente, ver o próprio comentário daquela função.
 struct CompoundSelector {
   std::string_view tag;                  // e.g. "div" -- empty if this compound has no tag
   std::string_view id;                   // e.g. "panel" (the '#' is NOT part of this view) -- empty if none
   std::vector<std::string_view> classes; // e.g. {"wide"} for ".wide" -- '.' NOT part of each view
   bool pseudo_hover = false;             // ":hover" was present on this compound
+
+  // EN: `ESC-8` -- "*" was present at the START of this compound (`StyleSheetParser.cpp:
+  //     1105-1106`'s own `if (rule[start_index] == '*') start_index += 1;`, reproduced by
+  //     `parse_compound` in parser.cpp). DELIBERATELY inert everywhere else in this module: neither
+  //     `selector_match.cpp`'s `compound_matches` nor `compound_specificity` ever reads this field
+  //     -- an all-empty compound (`tag`/`id`/`classes` empty, `pseudo_hover` false) ALREADY matches
+  //     unconditionally with zero specificity by the pre-existing "empty field == no constraint"
+  //     rule those two functions apply per FIELD, so `universal` carries no behavior of its own; it
+  //     exists purely so a caller/test can ask "was this compound LITERALLY the '*' form" (the
+  //     `*div` fall-through accident below is exactly why "all fields empty" alone cannot answer
+  //     that question -- see `parse_compound`'s own comment for the full account). `*div` sets
+  //     BOTH `universal == true` AND `tag == "div"` on the SAME compound -- the pin's own skip
+  //     falls straight into the ordinary tag-read scan, so `*div` structurally parses to the exact
+  //     compound a bare `div` alone would, plus this field on top; that is the pin's real, measured
+  //     behavior (reproduced deliberately, not "fixed"), not a bug this parser introduces.
+  // PT: `ESC-8` -- "*" estava presente no INÍCIO deste compound (o próprio `if (rule[start_index]
+  //     == '*') start_index += 1;` do `StyleSheetParser.cpp:1105-1106`, reproduzido pelo
+  //     `parse_compound` no parser.cpp). DELIBERADAMENTE inerte em todo resto deste módulo: nem o
+  //     `compound_matches` nem o `compound_specificity` do `selector_match.cpp` algum dia leem este
+  //     campo -- um compound inteiramente vazio (`tag`/`id`/`classes` vazios, `pseudo_hover` falso)
+  //     JÁ casa incondicionalmente com especificidade zero pela regra pré-existente "campo vazio ==
+  //     sem restrição" que aquelas duas funções aplicam por CAMPO, então `universal` não carrega
+  //     comportamento nenhum próprio; existe puramente pra um chamador/teste conseguir perguntar
+  //     "este compound era LITERALMENTE a forma '*'" (o próprio acidente de fall-through do `*div`
+  //     abaixo é exatamente o porquê de "todo campo vazio" sozinho não conseguir responder essa
+  //     pergunta -- ver o próprio comentário do `parse_compound` pro relato completo). `*div` seta
+  //     TANTO `universal == true` QUANTO `tag == "div"` no MESMO compound -- o próprio skip do pin
+  //     cai direto no scan comum de leitura-de-tag, então `*div` parseia estruturalmente pro exato
+  //     compound que um `div` cru sozinho produziria, mais este campo por cima; esse é o
+  //     comportamento real, medido, do pin (reproduzido de propósito, não "consertado"), não um bug
+  //     que este parser introduz.
+  bool universal = false;
 };
 
 // EN: One selector out of a possibly comma-separated list -- `compounds.size() >= 1`,

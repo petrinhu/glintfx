@@ -120,7 +120,20 @@ void test_recovery_unknown_property_dropped() {
 //     registrar), mas a FOLHA continua parseando: uma regra bem-formada logo depois ainda registra.
 // ---------------------------------------------------------------------------
 void test_recovery_malformed_rule_does_not_kill_sheet() {
-  auto result = parse_stylesheet("* { color: red; } .b { color: blue; } .c { color: green; }");
+  // EN: `[bad]` (an attribute selector), NOT `*` -- since `ESC-8`, `*` is a valid, authorized
+  //     compound (docs/rmlx-subset.md section 6.2), so it can no longer stand in as "the
+  //     malformed rule" this test needs; `[bad]` (attribute selectors, still zero-measured/
+  //     unsupported, `ESC-9`'s own territory) preserves this test's original intent unchanged --
+  //     same substitution `parser_selector_sanity.cpp`'s own
+  //     `test_comma_list_invalid_entry_drops_only_itself` already made for the identical reason.
+  // PT: `[bad]` (um seletor de atributo), NÃO `*` -- desde a `ESC-8`, `*` é um compound válido,
+  //     autorizado (seção 6.2 do docs/rmlx-subset.md), então ele não consegue mais servir de "a
+  //     regra malformada" que este teste precisa; `[bad]` (seletores de atributo, ainda
+  //     zero-medidos/não-suportados, território da própria `ESC-9`) preserva a intenção original
+  //     deste teste sem mudança -- a mesma substituição que o próprio
+  //     `test_comma_list_invalid_entry_drops_only_itself` do parser_selector_sanity.cpp já fez
+  //     pelo motivo idêntico.
+  auto result = parse_stylesheet("[bad] { color: red; } .b { color: blue; } .c { color: green; }");
   check(!result.error.has_value(), "recovery_malformed_rule: no fatal error");
   check(result.sheet != nullptr, "recovery_malformed_rule: sheet is non-null");
   if (!result.sheet) return;

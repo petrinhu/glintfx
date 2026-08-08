@@ -77,6 +77,31 @@ namespace {
 //       - pseudo_hover: `false` significa "sem restrição"; `true` exige `state.hover_active` -- ver
 //         o próprio parágrafo "Estado de pseudo-classe" do selector_match.hpp pra por que isto é um
 //         único flag GLOBAL, não por-elemento.
+//     ⚠️ `ESC-8`: `compound.universal` is deliberately NEVER read below, on purpose, not an
+//     oversight -- it carries zero matching semantics of its own. Reproducing the pin's own
+//     `*`-skip (`StyleSheetParser.cpp:1105-1106`, `if (rule[start_index] == '*') start_index +=
+//     1;`) faithfully means the '*' is CONSUMED at parse time and never becomes a constraint this
+//     matcher needs to check -- an all-empty compound (every field above empty/false) already
+//     matches ANY element unconditionally, by the four bullets above, each independently: empty
+//     tag is "no constraint", empty id is "no constraint", an empty `classes` vector is vacuously
+//     satisfied by `std::all_of`, and `pseudo_hover == false` waives the hover check. `universal`
+//     changes NONE of those four rules -- it is pure bookkeeping for a caller/test that wants to
+//     ask "was this compound literally the bare `*` form" (parser.hpp's own `CompoundSelector::
+//     universal` doc-comment has the full account, including the `*div` fall-through accident this
+//     field also records). Zero code change was required in this function for `ESC-8` to land.
+//     ⚠️ `ESC-8`: `compound.universal` deliberadamente NUNCA é lido abaixo, de propósito, não um
+//     descuido -- ele não carrega semântica de casamento nenhuma própria. Reproduzir fielmente o
+//     próprio skip-de-`*` do pin (`StyleSheetParser.cpp:1105-1106`, `if (rule[start_index] == '*')
+//     start_index += 1;`) significa que o `*` é CONSUMIDO em tempo de parse e nunca vira uma
+//     restrição que este casador precisa checar -- um compound inteiramente vazio (todo campo
+//     acima vazio/falso) já casa QUALQUER elemento incondicionalmente, pelos quatro bullets acima,
+//     cada um independentemente: tag vazia é "sem restrição", id vazio é "sem restrição", um vetor
+//     `classes` vazio é satisfeito vacuamente pelo `std::all_of`, e `pseudo_hover == false` dispensa
+//     a checagem de hover. `universal` não muda NENHUMA dessas quatro regras -- é contabilidade
+//     pura pra um chamador/teste que quer perguntar "este compound era literalmente a forma `*`
+//     crua" (o próprio comentário de doc de `CompoundSelector::universal` do parser.hpp tem o
+//     relato completo, incluindo o acidente de fall-through do `*div` que este campo também
+//     registra). Zero mudança de código foi necessária nesta função pra a `ESC-8` aterrissar.
 bool compound_matches(const CompoundSelector& compound, const glintfx::uix::Element& element,
                       const MatchState& state) {
   if (!compound.tag.empty() && compound.tag != element.tag()) {
@@ -179,6 +204,21 @@ bool match_from(const Selector& selector, std::size_t compound_index,
 
 } // namespace
 
+// EN: `ESC-8`: `compound.universal` is deliberately never read below either -- same reasoning as
+//     `compound_matches`'s own doc-comment above. A universal-only compound (every OTHER field
+//     empty/false) already sums to 0 by this arithmetic as written, with no branch needed for it:
+//     each `if` below only ADDS weight when its own field is non-empty/true, so a compound that is
+//     `*` alone (nothing else set) simply skips every branch and falls through to `return weight`
+//     at its initial 0 -- exactly `docs/rmlx-subset.md`'s own table entry for the universal form
+//     ("0" specificity), by construction, not by a special case this function adds for it.
+// PT: `ESC-8`: `compound.universal` deliberadamente nunca é lido abaixo também -- mesmo raciocínio
+//     do próprio comentário de doc do `compound_matches` acima. Um compound só-universal (todo
+//     OUTRO campo vazio/falso) já soma 0 por esta aritmética como está escrita, sem branch nenhum
+//     precisar pra isso: cada `if` abaixo só SOMA peso quando o próprio campo é não-vazio/verdadeiro,
+//     então um compound que é `*` sozinho (nada mais setado) simplesmente pula todo branch e cai no
+//     `return weight` no próprio 0 inicial -- exatamente a própria entrada de tabela da forma
+//     universal do `docs/rmlx-subset.md` ("0" de especificidade), por construção, não por um caso
+//     especial que esta função soma pra ele.
 Specificity compound_specificity(const CompoundSelector& compound) {
   Specificity weight = 0;
   if (!compound.tag.empty()) {

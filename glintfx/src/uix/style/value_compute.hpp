@@ -63,11 +63,19 @@
 //         family below. Named-color matching is now also case-insensitive (`"Red"`/`"RED"` both
 //         parse), mirroring the pin's own `StringUtilities::ToLower(value)` immediately before its
 //         own `html_colours.find()` (`:201`) -- pre-`ESC-5` this function was case-sensitive by
-//         omission, never by an explicit decision this document recorded. Every functional color
-//         form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
-//         same pin file, `:178-197`) is still `ValueComputeStatus::Invalid` -- `ESC-6`'s own
-//         declared scope, not silently accepted because the parser happened to be easy to extend
-//         that far.
+//         omission, never by an explicit decision this document recorded. **Delivered, `ESC-6`:**
+//         every functional color form the pin itself dispatches (`rgb()`, `rgba()`, `hsl()`,
+//         `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` -- same pin file, `ParseColour`'s own
+//         `:166-209` dispatch chain) now parses too, each transcribed function-for-function from the
+//         pin (`value_compute.cpp`'s own anonymous namespace, `parse_rgb_function`/
+//         `parse_hsl_function`/`parse_cielab_function`/`parse_oklab_function`), including the pin's
+//         own case-SENSITIVE prefix dispatch (`RGB(...)` at top level is `Invalid`, never silently
+//         folded into `rgb()`) and its own "a functional branch's parse failure returns `Invalid`
+//         directly, never falls through to the name table" chaining. See this function's own
+//         implementation-side header in value_compute.cpp for the full per-form grammar, the
+//         `atof`/`atoi`-leniency divergence from this file's own house `parse_float_token()`
+//         discipline (deliberate, confined to these 8 forms' own component tokens), and every clamp
+//         boundary, cited against `PropertyParserColour.cpp` line-for-line.
 //
 //     FAIL-HIGH POLICY (docs/uix-rcss.md section 11, `UIX-RCSS-ERRATA-2`'s own correction to
 //     `Finding C`/`Finding I` applied -- restated for this item's own shape): `Invalid` from ANY
@@ -180,10 +188,19 @@
 //         dois parseiam), espelhando o próprio `StringUtilities::ToLower(value)` do pin logo antes
 //         do próprio `html_colours.find()` dele (`:201`) -- pré-`ESC-5` esta função era
 //         case-sensitive por omissão, nunca por uma decisão explícita que este documento
-//         registrasse. Toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`,
-//         `lch()`, `oklab()`, `oklch()` -- mesmo arquivo do pin, `:178-197`) continua
-//         `ValueComputeStatus::Invalid` -- escopo próprio declarado da `ESC-6`, não aceito em
-//         silêncio só porque o parser calhou de ser fácil de estender até ali.
+//         registrasse. **Entregue, `ESC-6`:** toda forma funcional de cor que o próprio pin despacha
+//         (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` -- mesmo
+//         arquivo do pin, a própria cadeia de despacho `:166-209` do `ParseColour`) agora também
+//         parseia, cada uma transcrita função-por-função do pin (o próprio namespace anônimo do
+//         `value_compute.cpp`, `parse_rgb_function`/`parse_hsl_function`/`parse_cielab_function`/
+//         `parse_oklab_function`), incluindo o próprio despacho de prefixo case-SENSITIVE do pin
+//         (`RGB(...)` no nível superior é `Invalid`, nunca dobrado em silêncio pra `rgb()`) e o
+//         próprio encadeamento "a falha de parse de um ramo funcional retorna `Invalid` direto,
+//         nunca cai no lookup de nome" dele. Ver o próprio cabeçalho do lado da implementação desta
+//         função no value_compute.cpp pra gramática completa por-forma, a divergência de leniência
+//         `atof`/`atoi` da própria disciplina da casa `parse_float_token()` deste arquivo
+//         (deliberada, confinada aos próprios tokens de componente destas 8 formas), e todo limite
+//         de clamp, citado contra o `PropertyParserColour.cpp` linha-por-linha.
 //
 //     POLÍTICA FAIL-HIGH (seção 11 do docs/uix-rcss.md, restatada pra própria forma deste item):
 //     `ValueComputeStatus::Invalid` de qualquer função de valor único (`parse_color`,
@@ -430,14 +447,19 @@ float degrees_from_radians(float radians);
 std::string print_string(std::string_view raw);
 
 // EN: docs/uix-rcss.md section 7.1's own canonical color -- see header "Scope" for the exact
-//     authorized set (4 hex forms, 19 named colors as of `ESC-5`, case-insensitive). `raw` must
-//     already be whitespace-trimmed by the caller (same "this module does not re-derive what a
-//     lexer already stripped" convention property_registry.hpp/shorthand.hpp hold themselves to).
+//     authorized set (4 hex forms, 19 named colors as of `ESC-5`, 8 functional forms as of `ESC-6`
+//     -- `rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/`lch()`/`oklab()`/`oklch()` -- case-insensitive
+//     for the name table only, case-SENSITIVE for the functional-form prefix dispatch, matching the
+//     pin exactly). `raw` must already be whitespace-trimmed by the caller (same "this module does
+//     not re-derive what a lexer already stripped" convention property_registry.hpp/shorthand.hpp
+//     hold themselves to).
 // PT: A própria cor canônica da seção 7.1 do docs/uix-rcss.md -- ver "Escopo" no cabeçalho pro
-//     próprio conjunto autorizado exato (4 formas hex, 19 cores nomeadas desde a `ESC-5`,
-//     case-insensitive). `raw` já precisa vir whitespace-trimado pelo chamador (mesma convenção
-//     "este módulo não re-deriva o que um lexer já tirou" que property_registry.hpp/shorthand.hpp
-//     se prendem).
+//     próprio conjunto autorizado exato (4 formas hex, 19 cores nomeadas desde a `ESC-5`, 8 formas
+//     funcionais desde a `ESC-6` -- `rgb()`/`rgba()`/`hsl()`/`hsla()`/`lab()`/`lch()`/`oklab()`/
+//     `oklch()` -- case-insensitive só pra tabela de nome, case-SENSITIVE pro despacho de prefixo
+//     funcional, casando com o pin exatamente). `raw` já precisa vir whitespace-trimado pelo
+//     chamador (mesma convenção "este módulo não re-deriva o que um lexer já tirou" que
+//     property_registry.hpp/shorthand.hpp se prendem).
 struct Rgba8 {
   std::uint8_t r = 0;
   std::uint8_t g = 0;

@@ -657,8 +657,10 @@ void test_color_parsing_all_forms() {
         "'red': ESC-5 -- now authorized, section 13's own set widened to the pin's full 19 "
         "(was fail-high pre-ESC-5)");
   check_eq(print_color(c), "#ff0000ff", "red -> #ff0000ff");
-  check(parse_color("rgb(255,0,0)", &c) == ValueComputeStatus::Invalid,
-        "rgb(): fail-high, ESC-6's own scope, unaffected by ESC-5 (not a table key, not '#')");
+  check(parse_color("rgb(255,0,0)", &c) == ValueComputeStatus::Ok,
+        "rgb(): ESC-6 -- now authorized, functional color forms delivered (was fail-high "
+        "pre-ESC-6, RED anchor this task's own delivery notes name explicitly)");
+  check_eq(print_color(c), "#ff0000ff", "rgb(255,0,0) -> #ff0000ff");
   check(parse_color("#ff", &c) == ValueComputeStatus::Invalid,
         "2-digit hex: fail-high, not one of the 4 authorized forms");
 }
@@ -756,6 +758,428 @@ void test_color_parsing_esc5_named_color_parity() {
         "'cornflowerblue': extended CSS name, NOT in the pin's 19-entry table, fail-high");
   check(parse_color("notacolor", &c) == ValueComputeStatus::Invalid,
         "'notacolor': arbitrary non-color identifier, fail-high");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-6` -- docs/uix-rcss.md section 7.1's own 8 functional color forms (`rgb()`, `rgba()`,
+//     `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`), closing `ADR-0022`'s own measured
+//     row ("Colour functional forms | -- | 8 | --"). Anchors marked "task-given" below are
+//     transcribed verbatim from this task's own delivery notes (derived by hand from the pin's real
+//     algorithm, `PropertyParserColour.cpp`, read in full). Anchors marked "independent Python
+//     oracle" are derived by a SEPARATE, from-scratch transcription of the pin's CIELAB/Oklab math
+//     in `numpy.float32` (never by running this task's own new C++ and copying its output -- that
+//     would be a tautological test) -- script kept in this task's own delivery notes, not
+//     reproduced in this repo (this file's own house style: the ANCHOR is the deliverable, not the
+//     generator).
+//
+//     ⚠️ TWO CORRECTIONS TO THIS TASK'S OWN BRIEFING, discovered by that independent oracle and
+//     VERIFIED against this item's own actually-compiled implementation across `-O0`/`-O1`/`-O2`/
+//     `-O3`/no-flag (this repo's own default) before being pinned here -- rule 9 of this task's own
+//     briefing ("se o pin divergir do que este plano afirma, o PIN ganha"):
+//       1. **`oklab(1 0 0)` is `#fefefeff`, NOT `#ffffffff`** (the briefing's own stated anchor).
+//       Not a rounding nicety, a deterministic, platform-independent IEEE-754 fact, unrelated to any
+//       FMA-contraction risk: `OklabToRGBA(1,0,0)` produces `l'=m'=s'=1.0f` EXACTLY (matrix times a
+//       zero vector, no rounding possible), `l=m=s=1.0f` EXACTLY (cubing exactly 1.0), `pow(1.0f,
+//       y)=1.0f` EXACTLY (an IEEE-754/C++-mandated special case for ANY exponent, including this
+//       function's own `1.0f/2.4f`) -- so `InverseSRGBNonlinearTransfer(1.0f)` reduces to
+//       `1.055f * 1.0f - 0.055f` = `1.055f - 0.055f`, and `1.055f - 0.055f != 1.0f` in binary32 (it
+//       is `0.99999994f`, exactly 1 ULP below -- measured directly, bit pattern `0x3f7fffff` vs
+//       `1.0f`'s own `0x3f800000`). `0.99999994f * 255.0f = 254.99998...`, which the pin's own
+//       `(int)`-cast TRUNCATES (never rounds) to `254`, not `255`. This is the SAME phenomenon this
+//       document's own section 15's `lab(100 0 0)` warning already names for CIELAB (below) --
+//       discovered independently here for Oklab's own identity/white point, which the briefing
+//       assumed (without measuring) would be exact.
+//       2. **`lab(50 40 60/0.5)` (the briefing's own literal example for "`/` not isolated") is
+//       `Ok`, `#c35600ff` -- NOT `Invalid`.** With `/` glued to BOTH neighbors (no space on either
+//       side), the space-delimited tokenizer produces only 3 tokens (`"50"`,`"40"`,`"60/0.5"` -- the
+//       slash is swallowed into the SAME token as `"60"`, never its own token), so `ParseCIELABColour`
+//       takes its OWN no-alpha branch (`values.size()==3`) and never reaches the `values[3]=="/"`
+//       check at all; `pin_atof("60/0.5")` then stops at the `/` (this section's own documented
+//       `atof` leniency) and returns `60.0f`, silently discarding `/0.5` as trailing garbage -- the
+//       B-axis becomes `60`, alpha defaults to `1.0`. The test THIS task's own brief actually
+//       intended -- "the `/` isolation requirement is enforced" -- needs PARTIAL spacing (one side
+//       only), which genuinely IS `Invalid` (below): a real, previously-undiscovered boundary this
+//       independent verification pass found while confirming the briefing's own literal string.
+// PT: `ESC-6` -- as próprias 8 formas funcionais de cor da seção 7.1 do docs/uix-rcss.md (`rgb()`,
+//     `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`), fechando a própria linha
+//     medida da `ADR-0022` ("Colour functional forms | -- | 8 | --"). Âncoras marcadas "dada pela
+//     tarefa" abaixo são transcritas verbatim das próprias notas de entrega desta tarefa (derivadas
+//     à mão do próprio algoritmo real do pin, `PropertyParserColour.cpp`, lido inteiro). Âncoras
+//     marcadas "oráculo Python independente" são derivadas por uma transcrição SEPARADA, do zero, da
+//     própria matemática CIELAB/Oklab do pin em `numpy.float32` (nunca rodando o C++ novo desta
+//     tarefa e copiando a própria saída dele -- isso seria um teste tautológico) -- script mantido
+//     nas próprias notas de entrega desta tarefa, não reproduzido neste repo (o próprio estilo da
+//     casa deste arquivo: a ÂNCORA é o entregável, não o gerador).
+//
+//     ⚠️ DUAS CORREÇÕES AO PRÓPRIO BRIEFING desta tarefa, descobertas por aquele oráculo
+//     independente e VERIFICADAS contra a própria implementação JÁ COMPILADA deste item em
+//     `-O0`/`-O1`/`-O2`/`-O3`/sem-flag (o próprio default deste repo) antes de serem pinadas aqui --
+//     regra 9 do próprio briefing desta tarefa ("se o pin divergir do que este plano afirma, o PIN
+//     ganha"):
+//       1. **`oklab(1 0 0)` é `#fefefeff`, NÃO `#ffffffff`** (a própria âncora declarada do
+//       briefing). Não é capricho de arredondamento, é um fato IEEE-754 determinístico,
+//       independente de plataforma, sem relação com risco nenhum de contração-FMA:
+//       `OklabToRGBA(1,0,0)` produz `l'=m'=s'=1.0f` EXATO (matriz vezes vetor zero, nenhum
+//       arredondamento possível), `l=m=s=1.0f` EXATO (elevar exatamente 1.0 ao cubo), `pow(1.0f,
+//       y)=1.0f` EXATO (um caso especial mandado pela IEEE-754/C++ pra QUALQUER expoente, inclusive
+//       o próprio `1.0f/2.4f` desta função) -- então `InverseSRGBNonlinearTransfer(1.0f)` se reduz a
+//       `1.055f * 1.0f - 0.055f` = `1.055f - 0.055f`, e `1.055f - 0.055f != 1.0f` em binary32 (é
+//       `0.99999994f`, exatamente 1 ULP abaixo -- medido direto, padrão de bits `0x3f7fffff` contra
+//       o próprio `0x3f800000` do `1.0f`). `0.99999994f * 255.0f = 254.99998...`, que o próprio
+//       cast `(int)` do pin TRUNCA (nunca arredonda) pra `254`, não `255`. Este é o MESMO fenômeno
+//       que o próprio aviso do `lab(100 0 0)` da seção 15 deste documento já nomeia pro CIELAB
+//       (abaixo) -- descoberto aqui independentemente pro próprio ponto-branco/identidade do Oklab,
+//       que o briefing supôs (sem medir) que seria exato.
+//       2. **`lab(50 40 60/0.5)` (o próprio exemplo literal do briefing pro "`/` não isolado") é
+//       `Ok`, `#c35600ff` -- NÃO `Invalid`.** Com `/` colado nos DOIS vizinhos (sem espaço de
+//       nenhum lado), o tokenizador separado-por-espaço produz só 3 tokens (`"50"`,`"40"`,
+//       `"60/0.5"` -- a barra é engolida pro MESMO token que "60", nunca o próprio token dela), então
+//       o `ParseCIELABColour` toma o próprio ramo sem-alpha dele (`values.size()==3`) e nunca chega
+//       a checar `values[3]=="/"` sequer; `pin_atof("60/0.5")` então para no `/` (a própria
+//       leniência `atof` documentada desta seção) e retorna `60.0f`, descartando `/0.5` em silêncio
+//       como lixo à direita -- o eixo B vira `60`, alpha default `1.0`. O teste que o próprio
+//       briefing desta tarefa de fato pretendia -- "a exigência de isolamento do `/` é aplicada" --
+//       precisa de espaçamento PARCIAL (um lado só), que genuinamente É `Invalid` (abaixo): uma
+//       fronteira real, antes não-descoberta, que esta passada de verificação independente achou
+//       enquanto confirmava a própria string literal do briefing.
+void test_color_parsing_esc6_functional_forms() {
+  Rgba8 c{};
+
+  // --- Anchors (task-given), rgb()/rgba() -----------------------------------------------------
+  check(parse_color("rgb(255,0,0)", &c) == ValueComputeStatus::Ok, "rgb(255,0,0): Ok");
+  check_eq(print_color(c), "#ff0000ff", "rgb(255,0,0) -> #ff0000ff");
+
+  check(parse_color("rgb(100%,0%,50%)", &c) == ValueComputeStatus::Ok, "rgb(100%,0%,50%): Ok");
+  check_eq(print_color(c), "#ff007fff",
+           "rgb(100%,0%,50%) -> #ff007fff -- 50% truncates via int(50*2.55)=int(127.5)=127 (0x7f), "
+           "NEVER rounds to 128");
+
+  check(parse_color("rgba(0,0,0,128)", &c) == ValueComputeStatus::Ok, "rgba(0,0,0,128): Ok");
+  check_eq(print_color(c), "#00000080", "rgba(0,0,0,128) -> #00000080 -- alpha is a plain 0-255 int");
+
+  check(parse_color("rgba(0,0,0,0.5)", &c) == ValueComputeStatus::Ok, "rgba(0,0,0,0.5): Ok");
+  check_eq(print_color(c), "#00000000",
+           "rgba(0,0,0,0.5) -> #00000000 -- alpha is atoi-parsed, NOT 0-1 float: atoi(\"0.5\") stops "
+           "at '.', giving 0 -- rgba's own alpha is 0-255 int OR %, never a 0-1 fraction");
+
+  // --- Anchors (task-given), hsl()/hsla(), including hue wrap -----------------------------------
+  check(parse_color("hsl(120,100%,50%)", &c) == ValueComputeStatus::Ok, "hsl(120,100%,50%): Ok");
+  check_eq(print_color(c), "#00ff00ff", "hsl(120,100%,50%) -> #00ff00ff (pure green)");
+
+  check(parse_color("hsl(480,100%,50%)", &c) == ValueComputeStatus::Ok, "hsl(480,100%,50%): Ok");
+  check_eq(print_color(c), "#00ff00ff",
+           "hsl(480,...) -> same as hsl(120,...) -- fmod(480,360)=120, hue wraps positive");
+
+  check(parse_color("hsl(-240,100%,50%)", &c) == ValueComputeStatus::Ok, "hsl(-240,100%,50%): Ok");
+  check_eq(print_color(c), "#00ff00ff",
+           "hsl(-240,...) -> same as hsl(120,...) -- fmod(-240,360)=-240, +360=120, hue wraps "
+           "negative too");
+
+  check(parse_color("hsla(0,0%,100%,0.5)", &c) == ValueComputeStatus::Ok, "hsla(0,0%,100%,0.5): Ok");
+  check_eq(print_color(c), "#ffffff7f",
+           "hsla(0,0%,100%,0.5) -> #ffffff7f -- s=0 collapses to grayscale (r=g=b=l=white), alpha "
+           "here IS 0-1 float (asymmetry with rgba's own 0-255 int/%% alpha, both documented "
+           "verbatim per this task's own briefing)");
+
+  // --- Anchors (task-given), oklab() identity/zero cases -----------------------------------------
+  check(parse_color("oklab(1 0 0)", &c) == ValueComputeStatus::Ok, "oklab(1 0 0): Ok");
+  check_eq(print_color(c), "#fefefeff",
+           "oklab(1 0 0) -> #fefefeff, NOT #ffffffff -- CORRECTED anchor, see this function's own "
+           "header for the measured, platform-independent IEEE-754 reason (1.055f-0.055f != 1.0f)");
+
+  check(parse_color("oklab(0 0 0)", &c) == ValueComputeStatus::Ok, "oklab(0 0 0): Ok");
+  check_eq(print_color(c), "#000000ff", "oklab(0 0 0) -> #000000ff (exact -- 0*anything=0 exactly)");
+
+  check(parse_color("oklab(none none none)", &c) == ValueComputeStatus::Ok,
+        "oklab(none none none): Ok");
+  check_eq(print_color(c), "#000000ff",
+           "oklab(none none none) -> #000000ff, same as (0 0 0) -- 'none' means 0.0 for L/a/b, "
+           "alpha still defaults to 1.0 (3 tokens, no explicit alpha)");
+
+  // --- Non-trivial lab()/lch()/oklch(), independent Python oracle -------------------------------
+  check(parse_color("lab(55.5 23.75 -40.25 / 0.8)", &c) == ValueComputeStatus::Ok,
+        "lab(55.5 23.75 -40.25 / 0.8): Ok -- plain numbers (no clamp), alpha via isolated '/'");
+  check_eq(print_color(c), "#8779cacc", "lab non-trivial, independent Python oracle");
+
+  check(parse_color("lch(42.5 63.25 275.5)", &c) == ValueComputeStatus::Ok,
+        "lch(42.5 63.25 275.5): Ok -- plain L/chroma (no clamp), no alpha (defaults 1.0)");
+  check_eq(print_color(c), "#0068cdff",
+           "lch non-trivial, independent Python oracle -- R=0 is a ROBUST clamp (pre-clamp linear "
+           "r ~= -0.92, nowhere near the 0.0 boundary itself, verified in this task's own delivery "
+           "notes), not a fragile arithmetic coincidence");
+
+  check(parse_color("oklch(0.65 0.12 145.5)", &c) == ValueComputeStatus::Ok,
+        "oklch(0.65 0.12 145.5): Ok");
+  check_eq(print_color(c), "#5ba260ff", "oklch non-trivial, independent Python oracle");
+
+  // EN: The Ottosson post's own worked reference (https://bottosson.github.io/posts/oklab/):
+  //     sRGB red is approximately `oklch(0.62796 0.25768 29.23)` -- the decimal literals are
+  //     themselves an APPROXIMATION (Ottosson's own post rounds the true irrational coordinates),
+  //     so this is NOT expected to be bit-exact sRGB red for the SAME reason `lab(100 0 0)` below
+  //     is not bit-exact white -- measured, not assumed: R clamps to 1.0 ROBUSTLY (pre-clamp linear
+  //     r ~= 1.0000032, about 60 ULP above 1.0, per this task's own delivery notes), G/B are tiny
+  //     positive residuals (~3e-5/~3e-4) that truncate to 0 regardless of any sub-ULP wobble.
+  // PT: A própria referência trabalhada do post do Ottosson
+  //     (https://bottosson.github.io/posts/oklab/): sRGB red é aproximadamente
+  //     `oklch(0.62796 0.25768 29.23)` -- os próprios literais decimais já são uma APROXIMAÇÃO (o
+  //     próprio post do Ottosson arredonda as coordenadas irracionais verdadeiras), então isto NÃO é
+  //     esperado ser sRGB red bit-exato pelo MESMO motivo que o `lab(100 0 0)` abaixo não é branco
+  //     bit-exato -- medido, não suposto: R clampa pra 1.0 DE FORMA ROBUSTA (r linear pré-clamp ~=
+  //     1,0000032, cerca de 60 ULP acima de 1.0, per as próprias notas de entrega desta tarefa),
+  //     G/B são resíduos positivos minúsculos (~3e-5/~3e-4) que truncam pra 0 independente de
+  //     qualquer oscilação sub-ULP.
+  check(parse_color("oklch(0.62796 0.25768 29.23)", &c) == ValueComputeStatus::Ok,
+        "oklch(0.62796 0.25768 29.23) [Ottosson reference]: Ok");
+  check_eq(print_color(c), "#ff0000ff",
+           "Ottosson reference approximates sRGB red -- #ff0000ff, R clamped robustly, G/B "
+           "truncate-to-0 robustly (both far from any boundary, independent Python oracle)");
+
+  // --- Clamp boundaries actually observed post-conversion, independent Python oracle -------------
+  check(parse_color("lab(50 200 60)", &c) == ValueComputeStatus::Ok,
+        "lab(50 200 60): Ok -- a=200 clamps to +160 (kCielabAxisBoundLimit) BEFORE the CIELAB "
+        "matrix, not rejected");
+  check_eq(print_color(c), "#ff0028ff", "lab a-clamp result, independent Python oracle");
+  {
+    // EN: Contrast check -- the UNCLAMPED a=200 value would print a DIFFERENT byte (#ff0032ff, this
+    //     task's own delivery notes), proving the clamp is actually load-bearing here, not a no-op.
+    // PT: Checagem de contraste -- o próprio valor a=200 NÃO-CLAMPADO imprimiria um byte DIFERENTE
+    //     (#ff0032ff, as próprias notas de entrega desta tarefa), provando que o clamp de fato
+    //     importa aqui, não é um no-op.
+    check(print_color(c) != "#ff0032ff",
+          "lab a-clamp: the clamped result must differ from the unclamped-would-be result");
+  }
+
+  check(parse_color("lch(50% 500 90)", &c) == ValueComputeStatus::Ok,
+        "lch(50% 500 90): Ok -- L from '50%' is DIRECT 50.0 (no /100 for lightness), chroma=500 "
+        "clamps to 230 (kCielchMaximumChroma)");
+  check_eq(print_color(c), "#9c7300ff", "lch chroma-clamp result, independent Python oracle");
+
+  check(parse_color("oklab(0.5 0.9 -0.2)", &c) == ValueComputeStatus::Ok,
+        "oklab(0.5 0.9 -0.2): Ok -- a=0.9 clamps to +0.5 (kOklabAxisBoundLimit)");
+  check_eq(print_color(c), "#f400c3ff", "oklab a-clamp result, independent Python oracle");
+
+  check(parse_color("oklch(0.5 0.9 150)", &c) == ValueComputeStatus::Ok,
+        "oklch(0.5 0.9 150): Ok -- chroma=0.9 clamps to 0.5 (kOklchMaximumChroma)");
+  check_eq(print_color(c), "#009700ff", "oklch chroma-clamp result, independent Python oracle");
+
+  // EN: docs/uix-rcss.md section 15's own explicit warning, reproduced as a real test (not merely
+  //     cited): CIELAB's D65 round-trip is NOT bit-exact white for L=100 -- the compound rounding
+  //     through `f_inverse`/the XYZ matrix/`InverseSRGBNonlinearTransfer` lands 1 byte below 255 on
+  //     every channel. Verified independently by this item's own Python oracle AND by this item's
+  //     own actually-compiled build (see this function's own header, the `oklab(1 0 0)` correction,
+  //     for the SAME phenomenon's simpler, fully-traced root cause).
+  // PT: O próprio aviso explícito da seção 15 do docs/uix-rcss.md, reproduzido como teste de
+  //     verdade (não só citado): a ida-e-volta D65 do CIELAB NÃO é branco bit-exato pra L=100 -- o
+  //     arredondamento composto através do `f_inverse`/matriz XYZ/`InverseSRGBNonlinearTransfer`
+  //     pousa 1 byte abaixo de 255 em todo canal. Verificado independentemente pelo próprio oráculo
+  //     Python deste item E pelo próprio build já compilado deste item (ver o próprio cabeçalho
+  //     desta função, a correção do `oklab(1 0 0)`, pra causa raiz mais simples, totalmente
+  //     rastreada, do MESMO fenômeno).
+  check(parse_color("lab(100 0 0)", &c) == ValueComputeStatus::Ok, "lab(100 0 0): Ok");
+  check_eq(print_color(c), "#fefefeff",
+           "lab(100 0 0) -> #fefefeff, NOT pure white #ffffffff -- docs/uix-rcss.md section 15's "
+           "own explicit warning, now a real assertion");
+
+  // --- Fronteira/fail-high -----------------------------------------------------------------------
+  check(parse_color("hsl(120,0.5,0.5)", &c) == ValueComputeStatus::Invalid,
+        "hsl(120,0.5,0.5): Invalid -- S/L require a trailing '%', a bare fraction is NOT silently "
+        "reinterpreted as already-normalized [0,1]");
+  check(parse_color("rgb(1,2)", &c) == ValueComputeStatus::Invalid,
+        "rgb(1,2): Invalid -- 2 values, rgb (3-arg, no alpha suffix) requires exactly 3");
+  check(parse_color("rgba(1,2,3)", &c) == ValueComputeStatus::Invalid,
+        "rgba(1,2,3): Invalid -- 3 values, rgba (4-arg) requires exactly 4");
+
+  check(parse_color("rgb(300,-5,0)", &c) == ValueComputeStatus::Ok,
+        "rgb(300,-5,0): Ok -- out-of-range components SATURATE, never rejected");
+  check_eq(print_color(c), "#ff0000ff",
+           "rgb(300,-5,0) -> #ff0000ff -- 300 clamps to 255, -5 clamps to 0");
+
+  check(parse_color("RGB(255,0,0)", &c) == ValueComputeStatus::Invalid,
+        "RGB(255,0,0): Invalid -- top-level dispatch is case-SENSITIVE ('RGB' != 'rgb'), and the "
+        "lowered fallback 'rgb(255,0,0)' is not a valid color NAME either");
+  check(parse_color("cmyk(0,0,0,0)", &c) == ValueComputeStatus::Invalid,
+        "cmyk(0,0,0,0): Invalid -- not a recognised prefix, not a color name");
+  check(parse_color("rgb", &c) == ValueComputeStatus::Invalid,
+        "'rgb' bareword: Invalid -- prefix matches, but there is no '(' at all -- the prefix STEALS "
+        "the input from the name table (GetColourFunctionValues's own single failure case), never "
+        "silently falls back to 'is this a color name'");
+  check(parse_color("labrador", &c) == ValueComputeStatus::Invalid,
+        "'labrador': Invalid -- 'lab' prefix steals this too (substr(0,3)==\"lab\"), same reasoning "
+        "as bare 'rgb' -- never reaches the name table despite obviously not being a color function");
+
+  // EN: `rgbx(1,2,3)` -- the pin's own prefix match is LOOSE (`value.substr(0,3)=="rgb"`, not an
+  //     exact `=="rgb("` or a word-boundary check), and aridade is detected by `raw[3]=='a'` alone
+  //     -- `raw[3]` here is `'x'`, not `'a'`, so this is accepted as the 3-arg `rgb` form, per this
+  //     task's own briefing narrative (not one of the required test-list bullets, added for
+  //     completeness since it is exactly the kind of surprising, documented consequence this whole
+  //     exercise exists to pin down).
+  // PT: `rgbx(1,2,3)` -- o próprio casamento de prefixo do pin é FROUXO (`value.substr(0,3)=="rgb"`,
+  //     não um `=="rgb("` exato nem checagem de fronteira-de-palavra), e a aridade é detectada só
+  //     por `raw[3]=='a'` -- `raw[3]` aqui é `'x'`, não `'a'`, então isto é aceito como a própria
+  //     forma `rgb` de 3 argumentos, per a própria narrativa do briefing desta tarefa (não um dos
+  //     bullets obrigatórios da lista de teste, somado pra completude já que é exatamente o tipo de
+  //     consequência surpreendente, documentada, que este exercício inteiro existe pra pinar).
+  check(parse_color("rgbx(1,2,3)", &c) == ValueComputeStatus::Ok,
+        "rgbx(1,2,3): Ok -- prefix match is loose ('rgb' is the first 3 chars), aridade check is "
+        "only raw[3]=='a', and 'x' != 'a' means this is treated as 3-arg rgb");
+  check_eq(print_color(c), "#010203ff", "rgbx(1,2,3) -> #010203ff (r=1,g=2,b=3, alpha default 255)");
+
+  // --- '/' isolation boundary (this item's own independent finding, see function header) ---------
+  check(parse_color("lab(50 40 60/0.5)", &c) == ValueComputeStatus::Ok,
+        "lab(50 40 60/0.5) [task's own literal string]: Ok -- CORRECTED from the briefing's own "
+        "assumed Invalid, see this function's own header correction 2");
+  check_eq(print_color(c), "#c35600ff",
+           "lab(50 40 60/0.5) -> #c35600ff -- '/' glued both sides is swallowed into the SAME token "
+           "as '60' (space-delimited tokenizer never splits it out), atof(\"60/0.5\") stops at '/' "
+           "giving B=60, alpha silently defaults to 1.0 (the '0.5' is never read as alpha at all)");
+
+  check(parse_color("lab(50 40 60/ 0.5)", &c) == ValueComputeStatus::Invalid,
+        "lab(50 40 60/ 0.5) ['/' glued LEFT only]: Invalid -- 4 tokens ('60/' and '0.5' split by "
+        "the space, but '/' stays glued to '60'), matches NEITHER the 3-token (no alpha) NOR "
+        "5-token (isolated '/') shape -- this IS the real '/'-isolation failure the briefing's own "
+        "literal string did not actually exercise");
+  check(parse_color("lab(50 40 60 /0.5)", &c) == ValueComputeStatus::Invalid,
+        "lab(50 40 60 /0.5) ['/' glued RIGHT only]: Invalid -- same reasoning, mirrored ('60' and "
+        "'/0.5' split by the space, '/' stays glued to '0.5')");
+  check(parse_color("lab(50 40 60 / 0.5)", &c) == ValueComputeStatus::Ok,
+        "lab(50 40 60 / 0.5) ['/' fully isolated]: Ok -- 5 tokens, values[3]==\"/\" holds, alpha IS "
+        "read this time");
+  check_eq(print_color(c), "#c356007f",
+           "lab(50 40 60 / 0.5) -> #c356007f -- SAME RGB as the glued-both-sides case above "
+           "(#c35600), DIFFERENT alpha (0x7f = int(0.5*255) = 127, not the silent 0xff default) -- "
+           "proves the '/' isolation actually gates whether alpha is read at all, not just whether "
+           "parsing succeeds");
+
+  // --- Documental (this task's own briefing narrative, verbatim behaviour) -----------------------
+  check(parse_color("rgb(255,0,0", &c) == ValueComputeStatus::Ok,
+        "rgb(255,0,0 [no closing paren]: Ok -- GetColourFunctionValues's own rfind(')')==npos "
+        "underflow clamps to 'rest of string' via substr's own documented saturation, not UB");
+  check_eq(print_color(c), "#ff0000ff", "missing ')' still parses correctly to #ff0000ff");
+
+  check(parse_color("rgb(abc,def,ghi)", &c) == ValueComputeStatus::Ok,
+        "rgb(abc,def,ghi): Ok -- pin_atoi leniency, garbage -> 0 for every component");
+  check_eq(print_color(c), "#000000ff", "rgb(abc,def,ghi) -> #000000ff (all garbage -> 0)");
+
+  check(parse_color("rgb(255,,0)", &c) == ValueComputeStatus::Ok,
+        "rgb(255,,0): Ok -- repeated comma produces an empty middle token (ignore_repeated_"
+        "delimiters=false for comma-separated rgb/hsl), pin_atoi(\"\") -> 0");
+  check_eq(print_color(c), "#ff0000ff", "rgb(255,,0) -> #ff0000ff (empty component -> 0)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-6` -- the `split_whitespace()` paren-aware upgrade (value_compute.cpp's own comment at
+//     that function's own definition), exercised end to end through every one of its 5 call sites
+//     that can now receive a functional color as one of its own space-separated tokens: gradient
+//     stops (`parse_gradient_stop`, via the PUBLIC `compute_linear_gradient_args`), `box-shadow`
+//     layers (`compute_box_shadow`, PUBLIC), `drop-shadow()` and 2-color straight gradients
+//     (`compute_drop_shadow`/`compute_two_stop_straight_gradient`, both INTERNAL-linkage --
+//     exercised here via the PUBLIC `compute_decorator_list()` dispatcher instead, the only way this
+//     test file can reach them at all). `compute_radial_gradient_args`'s own `circle at X% Y%`
+//     clause is the one call site this upgrade does NOT need to prove anything new for (it never
+//     contains a paren) -- not re-tested here, already covered by this file's own pre-existing
+//     `circle at` assertions elsewhere.
+//
+//     Also exercises the SIBLING, deliberately asymmetric case-folding rule (this section's own
+//     "Fidelidade de caixa por contexto" note, this task's own briefing): `box-shadow` lowercases
+//     its own WHOLE raw value before parsing (`PropertyParserBoxShadow.cpp:24`, this file's own
+//     `compute_box_shadow`, unchanged by `ESC-6`) -- so an uppercase `RGB()` INSIDE a `box-shadow`
+//     declaration IS accepted, folded to lowercase before `parse_color()` ever inspects the prefix.
+//     A gradient stop does NOT lowercase (`compute_linear_gradient_args`/
+//     `parse_and_space_stops`/`parse_gradient_stop`, none of them call `to_lower()`) -- so the SAME
+//     uppercase `RGB()` inside a gradient stop is `Invalid`, the case-sensitive top-level dispatch
+//     rule applying with full force. Two contexts, two outcomes, from the SAME uppercase text --
+//     this is a real, measured asymmetry of the PIN itself, not an inconsistency this module
+//     introduces.
+// PT: `ESC-6` -- o próprio alargamento consciente-de-parêntese do `split_whitespace()` (o próprio
+//     comentário do value_compute.cpp na própria definição daquela função), exercitado ponta-a-ponta
+//     por cada um dos 5 call sites dela que agora conseguem receber uma cor funcional como um dos
+//     próprios tokens separados-por-espaço: stops de gradiente (`parse_gradient_stop`, via o
+//     `compute_linear_gradient_args` PÚBLICO), camadas de `box-shadow` (`compute_box_shadow`,
+//     PÚBLICO), `drop-shadow()` e gradientes retos de 2 cores
+//     (`compute_drop_shadow`/`compute_two_stop_straight_gradient`, os dois de vinculação INTERNA --
+//     exercitados aqui via o despachante `compute_decorator_list()` PÚBLICO em vez disso, o único
+//     jeito deste arquivo de teste alcançá-los sequer). A própria cláusula `circle at X% Y%` do
+//     `compute_radial_gradient_args` é o único call site que este alargamento NÃO precisa provar
+//     nada novo (nunca contém parêntese) -- não re-testada aqui, já coberta pelas próprias
+//     asserções `circle at` pré-existentes deste arquivo em outro lugar.
+//
+//     Também exercita a regra IRMÃ, deliberadamente assimétrica, de dobra-de-caixa (a própria nota
+//     "Fidelidade de caixa por contexto" desta seção, o próprio briefing desta tarefa): o
+//     `box-shadow` minusculiza o PRÓPRIO valor cru INTEIRO antes de parsear
+//     (`PropertyParserBoxShadow.cpp:24`, o próprio `compute_box_shadow` deste arquivo, inalterado
+//     pela `ESC-6`) -- então um `RGB()` maiúsculo DENTRO de uma declaração `box-shadow` É aceito,
+//     dobrado pra minúsculo antes do `parse_color()` sequer inspecionar o prefixo. Um stop de
+//     gradiente NÃO minusculiza (`compute_linear_gradient_args`/`parse_and_space_stops`/
+//     `parse_gradient_stop`, nenhum deles chama `to_lower()`) -- então o MESMO `RGB()` maiúsculo
+//     dentro de um stop de gradiente é `Invalid`, a própria regra de despacho case-sensitive de
+//     nível-superior valendo com força total. Dois contextos, dois resultados, do MESMO texto
+//     maiúsculo -- isto é uma assimetria real, medida, do PRÓPRIO pin, não uma inconsistência que
+//     este módulo introduz.
+void test_color_functional_forms_paren_aware_split_esc6() {
+  std::string out;
+
+  // --- box-shadow: lowercase rgb() embedded, paren-aware split required --------------------------
+  check(compute_box_shadow("2px 2px rgb(255, 0, 0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "box-shadow layer with an embedded rgb() color (internal comma+space) computes Ok -- "
+        "requires the paren-aware split_whitespace() fix, else 'rgb(255,'/'0,'/'0)' would shatter "
+        "into 3 bogus extra tokens instead of the one color argument it actually is");
+  check_eq(out, "#ff0000ff;2.0000px;2.0000px;0.0000px;0.0000px;false",
+           "box-shadow layer with functional color parses byte-exact (2 length tokens, no "
+           "blur/spread, not inset)");
+
+  // --- box-shadow: UPPERCASE RGB() -- accepted, box-shadow lowercases the WHOLE value first ------
+  check(compute_box_shadow("2px 2px RGB(255, 0, 0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "box-shadow lowercases its OWN whole value before parsing (PropertyParserBoxShadow.cpp's "
+        "own ToLower(value)) -- uppercase RGB() inside box-shadow IS accepted, unlike top-level "
+        "RGB() outside any box-shadow context (test_color_parsing_esc6_functional_forms's own "
+        "RGB(255,0,0)==Invalid case)");
+  check_eq(out, "#ff0000ff;2.0000px;2.0000px;0.0000px;0.0000px;false",
+           "same byte-exact result as the lowercase rgb() case -- case-folded before parse_color() "
+           "ever sees the prefix");
+
+  // --- gradient stop: lowercase rgb()/hsl() embedded, paren-aware split required ------------------
+  check(compute_linear_gradient_args("90deg, rgb(255, 0, 0) 0%, rgb(0, 0, 255) 100%", &out) ==
+            ValueComputeStatus::Ok,
+        "linear-gradient stops with embedded rgb() colors compute Ok -- same paren-aware "
+        "split_whitespace() fix, exercised via parse_gradient_stop()'s own 2-token "
+        "<color> <position%> tokenization");
+  check_eq(out, "90.0000;#ff0000ff:0.0000%;#0000ffff:100.0000%",
+           "gradient args byte-exact -- both explicit-position stops parsed and (losslessly, full "
+           "opacity) round-tripped through the box-shadow/gradient-stop premultiply pair "
+           "(UIX-RCSS-ERRATA-4)");
+
+  // --- gradient stop: UPPERCASE RGB() -- Invalid, gradient stops do NOT lowercase ------------------
+  check(compute_linear_gradient_args("90deg, RGB(255, 0, 0) 0%, rgb(0, 0, 255) 100%", &out) ==
+            ValueComputeStatus::Invalid,
+        "gradient stops do NOT lowercase (unlike box-shadow) -- uppercase RGB() inside a stop "
+        "fails parse_color()'s own case-sensitive prefix check AND the lowered name-table fallback "
+        "('rgb(255, 0, 0)' is not a valid color name) -- the WHOLE gradient declaration drops, "
+        "section 11's uniform malformed-entry policy");
+
+  // --- decorator list: drop-shadow() with embedded rgb(), paren-aware split required, via the -----
+  //     PUBLIC compute_decorator_list() dispatcher (compute_drop_shadow itself has internal linkage)
+  check(compute_decorator_list("drop-shadow(rgb(255, 0, 0) 2dp 2dp 4dp)",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "drop-shadow() with an embedded rgb() color computes Ok -- same paren-aware "
+        "split_whitespace() fix, exercised via compute_drop_shadow()'s own 4-token "
+        "<color> <len> <len> <len> tokenization (reached only through compute_decorator_list(), "
+        "compute_drop_shadow itself is anonymous-namespace, not directly callable from this file)");
+  check_eq(out, "drop-shadow(#ff0000ff;2.0000px;2.0000px;4.0000px)",
+           "drop-shadow byte-exact with functional color -- this color is NOT premultiply-"
+           "round-tripped (drop-shadow's own color stays straight, this file's own documented "
+           "scope)");
+
+  // --- decorator list: horizontal-gradient() (2-stop straight gradient) with embedded rgb() -------
+  check(compute_decorator_list("horizontal-gradient(rgb(255, 0, 0) rgb(0, 255, 0))",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "horizontal-gradient() with embedded rgb() colors computes Ok -- same paren-aware "
+        "split_whitespace() fix, exercised via compute_two_stop_straight_gradient()'s own 2-token "
+        "tokenization");
+  check_eq(out, "horizontal-gradient(#ff0000ff;#00ff00ff)",
+           "horizontal-gradient byte-exact -- UIX-GRADIENT-ALFA's own finding: straight-gradient "
+           "colors are NOT premultiply-round-tripped either, stay exactly as parsed");
 }
 
 // ---------------------------------------------------------------------------
@@ -1295,6 +1719,8 @@ int main() {
   test_gradient_alpha_roundtrip_matches_upstream_storage_type();
   test_color_parsing_all_forms();
   test_color_parsing_esc5_named_color_parity();
+  test_color_parsing_esc6_functional_forms();
+  test_color_functional_forms_paren_aware_split_esc6();
   test_length_resolution();
   test_length_resolution_esc4_full_unit_parity();
   test_font_size_em_resolution();
@@ -1344,8 +1770,12 @@ int main() {
       "full parity with the pin's own Unit::LENGTH, up from 2 pre-ESC-4) | x/resolution: 1 "
       "standalone function (parse_resolution), deliberately NOT part of LengthUnit (Unit::X is not "
       "Unit::LENGTH) | ESC-5 named-color family: 19 of 19 (full parity with the pin's own "
-      "html_colours table, up from 3 pre-ESC-5, case-insensitive) | color functional forms: 0 of 8 "
-      "(rgb/rgba/hsl/hsla/lab/lch/oklab/oklch -- ESC-6's own scope, unaffected by this item)\n");
+      "html_colours table, up from 3 pre-ESC-5, case-insensitive) | color functional forms: 8 of 8 "
+      "(rgb/rgba/hsl/hsla/lab/lch/oklab/oklch -- ESC-6, transcribed function-for-function from "
+      "PropertyParserColour.cpp, 2 briefing anchors corrected by independent Python oracle + "
+      "actually-compiled verification: oklab(1 0 0)=#fefefeff not #ffffffff, "
+      "lab(50 40 60/0.5)=Ok not Invalid -- see test_color_parsing_esc6_functional_forms's own "
+      "header)\n");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "value_compute_sanity: %d assertion(s) FAILED\n", g_failures);

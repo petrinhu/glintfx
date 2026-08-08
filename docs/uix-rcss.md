@@ -1348,6 +1348,180 @@ estava correta sozinha antes do Lado A precisar mudar sequer.
 
 ---
 
+## 🟣 Errata (`UIX-RCSS-ERRATA-11`, 2026-08-08) / Errata (`UIX-RCSS-ERRATA-11`, 2026-08-08)
+
+**EN:** `ESC-6` closes `docs/rmlx-subset.md` section 7's own full-parity rule for the LAST open
+color axis: this dump format's own engine now implements all **8** functional color forms the pin
+itself dispatches (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
+`PropertyParserColour.cpp:166-209`'s own dispatch chain, `:253-532` the 4 per-family parsers,
+`:11-113` the 3 shared color-space-conversion free functions), transcribed function-for-function on
+BOTH sides of the differential oracle -- Side B (`glintfx/src/uix/style/value_compute.cpp`'s own
+anonymous namespace, `parse_rgb_function`/`parse_hsl_function`/`parse_cielab_function`/
+`parse_oklab_function`, plus `hsl_f`/`hsla_to_rgba`/`inverse_srgb_nonlinear_transfer`/
+`cielab_to_rgba`/`oklab_to_rgba`/`radians_from_degrees_pin`/`pin_atof`/`pin_atoi`/
+`expand_color_function_values`) and Side A (`glintfx/src/rml/rcss_dump.cpp`'s own `parse_color_
+token()`, delivered independently and in parallel by a different implementer, per `ADR-0020`'s own
+oracle-independence design -- neither side's own functional-color code was copied from the other).
+Section 7.1's own paragraph below states the delivered scope and section 13's own bullet records it
+closed. `docs/uix-rcss.md`'s own `PropertyParserColour.cpp:178-197` line citation for the 8 forms is
+corrected in the same edit to `:178-195` (the exact `if`/`else if` dispatch chain span the pin's own
+source file uses, verified against the read-in-full copy, not re-typed from an earlier estimate).
+
+**Section 11's own fail-high policy is unchanged** -- a syntax neither the census nor the pinned
+RmlUi build accepts (an extended CSS name outside the pin's own 19, an unrecognised function prefix
+like `cmyk()`) still fails high, per `ADR-0022`'s own unchanged fail-high default (Decision, point
+2). What changes is only which SYNTAX is recognised, not the policy governing what happens when it
+is not.
+
+**Two corrections to this wave's own working plan, found by an independent numpy.float32
+re-transcription of the pin's CIELAB/Oklab math (never by running this item's own new C++ and
+copying its output -- that would be a tautological test) and VERIFIED, before being pinned in
+`value_compute_sanity.cpp`, against this item's own actually-compiled build across `-O0`/`-O1`/
+`-O2`/`-O3`/no-flag (this repo's own default) AND against the real, differentially-oracled pin
+(`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc6_functional_colors.rml`, `color: oklab(1 0 0);`
+byte-identical on both sides) -- recorded here because both are genuinely surprising, previously
+unverified consequences of the pin's own real arithmetic, not narrow test-authoring trivia:**
+
+1. **`oklab(1 0 0)` prints `#fefefeff`, not the pure white `#ffffffff` a first read of the algorithm
+   suggests.** A deterministic, platform-independent IEEE-754 binary32 fact, unrelated to compiler
+   optimization or FMA contraction: `OklabToRGBA(1,0,0)`'s own LMS' matrix multiply against a zero
+   `a`/`b` vector produces `l'=m'=s'=1.0f` EXACTLY (multiplying by zero is always exact), cubing
+   stays `1.0f` EXACTLY, and `std::pow(1.0f, y)` returns `1.0f` EXACTLY for ANY `y` (an IEEE-754/C++
+   standard-mandated special case, including this function's own `1.0f/2.4f` exponent) -- so
+   `InverseSRGBNonlinearTransfer(1.0f)` reduces to the single subtraction `1.055f * 1.0f - 0.055f` =
+   `1.055f - 0.055f`, and `1.055f - 0.055f != 1.0f` in binary32 (measured directly: bit pattern
+   `0x3f7fffff`, exactly 1 ULP below `1.0f`'s own `0x3f800000`). `0.99999994f * 255.0f =
+   254.99998...`, which the pin's own `(int)`-cast TRUNCATES (never rounds) to `254`. This is the
+   SAME phenomenon section 15's own `lab(100 0 0)` worked-example note already names for CIELAB's
+   D65 round-trip (`R ~= 254.998`, also `#fefefeff`) -- this errata is the first time it is
+   confirmed, independently, for Oklab's own identity/white point too.
+2. **`lab(50 40 60/0.5)` -- `/` glued to BOTH neighbors, no space on either side -- is `Ok`,
+   `#c35600ff`, not the `Invalid` a "the `/` must be isolated" reading suggests.** With zero
+   whitespace around the slash, the space-delimited tokenizer (`GetColourFunctionValues`'s own
+   `StringUtilities::ExpandString` 4-arg overload) produces only 3 tokens (`"50"`, `"40"`,
+   `"60/0.5"` -- the slash is swallowed into the SAME token as `"60"`, never becoming its own
+   token), so `ParseCIELABColour` takes its own no-alpha branch (`values.size()==3`) and never even
+   reaches the `values[3]=="/"` check; the pin's own `atof("60/0.5")` then stops at the first
+   non-numeric byte (this section's own documented `atof`/`atoi` leniency, shared by all 8 forms'
+   own component tokens) and returns `60.0f`, silently discarding `/0.5` -- the B-axis becomes `60`,
+   alpha silently defaults to `1.0`, never reading `0.5` as alpha at all. The REAL `/`-isolation
+   failure needs PARTIAL spacing (exactly one side, e.g. `lab(50 40 60/ 0.5)` or
+   `lab(50 40 60 /0.5)`, both genuinely `Invalid` -- 4 tokens, matching neither the 3-token nor the
+   5-token shape) -- a boundary this errata's own verification pass discovered while confirming a
+   test case, not one previously stated anywhere in this document.
+
+**Verification, not assertion:** `test_color_parsing_esc6_functional_forms()`/`test_color_
+functional_forms_paren_aware_split_esc6()` (`value_compute_sanity.cpp`) exercise all 8 forms --
+task-given anchors (identity/zero/wrap/aridade/saturating-clamp cases, transcribed by hand from the
+pin), the independent-Python-oracle-derived non-trivial `lab()`/`lch()`/`oklch()` cases (including
+the Ottosson post's own `oklch(0.62796 0.25768 29.23)` sRGB-red reference), every clamp boundary
+observed post-conversion (not merely asserted pre-clamp), and the two corrections above. A NEW
+corpus fixture, `glintfx/src/rml/rcss_dump_test_fixtures/uix_esc6_functional_colors.rml`, exercises
+all 4 named-color-consuming call sites `UIX-RCSS-ERRATA-10` already named (`color`, `box-shadow`, a
+`linear-gradient` stop, `polygon()`'s own `<fill>`) with functional colors instead of names, plus a
+`box-shadow`/gradient-stop pair proving the SAME case-folding asymmetry `ESC-5`'s own fixture proved
+for names (`box-shadow` lowercases its own whole value before parsing,
+`PropertyParserBoxShadow.cpp:24` -- an uppercase `RGB()` inside `box-shadow` IS accepted; a gradient
+stop does not lowercase -- the identical uppercase text inside a stop is `Invalid`) -- `RMLX-2`'s own
+differential oracle reports **zero new divergences**: `uix_esc6_functional_colors.rml`'s own 2
+differing lines are the SAME pre-existing, corpus-wide `body`/`position` pin (`docs/uix-rcss.md`
+section 14.1 row 2, `absolute` vs `static`, reproduces on every in-scope fixture in this repo, one
+occurrence per `STATE` block) every OTHER fixture in this corpus already shows -- none of this
+item's own 9 color-bearing elements (including `polygon(6, rgb(255, 165, 0))`, which this task's own
+delivery notes expected to stay red until Side A landed, and `oklab(1 0 0)`, this errata's own
+correction 1) diverges from the real, compiled pin.
+
+**PT:** A `ESC-6` fecha a própria regra de paridade total da seção 7 do `docs/rmlx-subset.md` pro
+ÚLTIMO eixo de cor em aberto: o próprio motor deste formato de dump agora implementa todas as **8**
+formas funcionais de cor que o próprio pin despacha (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`,
+`lch()`, `oklab()`, `oklch()` -- a própria cadeia de despacho `:166-209` do
+`PropertyParserColour.cpp`, `:253-532` os 4 parsers por-família, `:11-113` as 3 funções livres
+compartilhadas de conversão de espaço de cor), transcritas função-por-função nos DOIS lados do
+oráculo diferencial -- Lado B (o próprio namespace anônimo do `glintfx/src/uix/style/
+value_compute.cpp`, `parse_rgb_function`/`parse_hsl_function`/`parse_cielab_function`/
+`parse_oklab_function`, mais `hsl_f`/`hsla_to_rgba`/`inverse_srgb_nonlinear_transfer`/
+`cielab_to_rgba`/`oklab_to_rgba`/`radians_from_degrees_pin`/`pin_atof`/`pin_atoi`/
+`expand_color_function_values`) e Lado A (o próprio `parse_color_token()` do `glintfx/src/rml/
+rcss_dump.cpp`, entregue independentemente e em paralelo por um implementer diferente, per o
+próprio desenho de independência-de-oráculo da `ADR-0020` -- nenhum dos dois lados copiou o próprio
+código de cor funcional do outro). O próprio parágrafo da seção 7.1 abaixo declara o escopo entregue
+e o próprio bullet da seção 13 registra isso fechado. A própria citação de linha
+`PropertyParserColour.cpp:178-197` deste documento pras 8 formas é corrigida na mesma edição pra
+`:178-195` (o próprio trecho exato da cadeia de despacho `if`/`else if` que o próprio arquivo de
+fonte do pin usa, verificado contra a cópia lida INTEIRA, não retranscrito de uma estimativa
+anterior).
+
+**A própria política fail-high da seção 11 continua inalterada** -- uma sintaxe que nem o censo nem
+o build fixado do RmlUi aceitam (um nome CSS estendido fora das 19 do pin, um prefixo de função
+não-reconhecido tipo `cmyk()`) ainda falha alto, per o próprio default fail-high inalterado da
+`ADR-0022` (Decisão, ponto 2). O que muda é só qual SINTAXE é reconhecida, não a política que
+governa o que acontece quando não é.
+
+**Duas correções ao próprio plano de trabalho desta onda, achadas por uma retranscrição
+independente em numpy.float32 da própria matemática CIELAB/Oklab do pin (nunca rodando o C++ novo
+deste item e copiando a própria saída dele -- isso seria um teste tautológico) e VERIFICADAS, antes
+de serem pinadas no `value_compute_sanity.cpp`, contra o próprio build JÁ COMPILADO deste item em
+`-O0`/`-O1`/`-O2`/`-O3`/sem-flag (o próprio default deste repo) E contra o próprio pin
+oraculado-diferencialmente de verdade (`glintfx/src/rml/rcss_dump_test_fixtures/
+uix_esc6_functional_colors.rml`, `color: oklab(1 0 0);` byte-idêntico nos dois lados) -- registradas
+aqui porque as duas são consequências genuinamente surpreendentes, antes não-verificadas, da própria
+aritmética real do pin, não trivialidades estreitas de autoria-de-teste:**
+
+1. **`oklab(1 0 0)` imprime `#fefefeff`, não o branco puro `#ffffffff` que uma primeira leitura do
+   algoritmo sugere.** Um fato IEEE-754 binary32 determinístico, independente de plataforma, sem
+   relação com otimização de compilador ou contração-FMA: a própria multiplicação de matriz LMS' do
+   `OklabToRGBA(1,0,0)` contra um vetor `a`/`b` zero produz `l'=m'=s'=1.0f` EXATO (multiplicar por
+   zero é sempre exato), elevar ao cubo continua `1.0f` EXATO, e `std::pow(1.0f, y)` retorna `1.0f`
+   EXATO pra QUALQUER `y` (um caso especial mandado pela própria IEEE-754/padrão C++, inclusive o
+   próprio expoente `1.0f/2.4f` desta função) -- então `InverseSRGBNonlinearTransfer(1.0f)` se
+   reduz à subtração única `1.055f * 1.0f - 0.055f` = `1.055f - 0.055f`, e `1.055f - 0.055f !=
+   1.0f` em binary32 (medido direto: padrão de bits `0x3f7fffff`, exatamente 1 ULP abaixo do
+   próprio `0x3f800000` do `1.0f`). `0.99999994f * 255.0f = 254.99998...`, que o próprio cast
+   `(int)` do pin TRUNCA (nunca arredonda) pra `254`. Este é o MESMO fenômeno que a própria nota do
+   exemplo trabalhado `lab(100 0 0)` da seção 15 já nomeia pra ida-e-volta D65 do CIELAB (`R ~=
+   254,998`, também `#fefefeff`) -- esta errata é a primeira vez que isso é confirmado,
+   independentemente, pro próprio ponto-branco/identidade do Oklab também.
+2. **`lab(50 40 60/0.5)` -- `/` colado nos DOIS vizinhos, sem espaço de nenhum lado -- é `Ok`,
+   `#c35600ff`, não o `Invalid` que uma leitura "o `/` precisa estar isolado" sugere.** Com zero
+   whitespace ao redor da barra, o tokenizador separado-por-espaço (o próprio overload de 4
+   argumentos do `StringUtilities::ExpandString` que o `GetColourFunctionValues` usa) produz só 3
+   tokens (`"50"`, `"40"`, `"60/0.5"` -- a barra é engolida pro MESMO token que "60", nunca
+   virando o próprio token dela), então o `ParseCIELABColour` toma o próprio ramo sem-alpha dele
+   (`values.size()==3`) e nunca sequer chega a checar `values[3]=="/"`; o próprio `atof("60/0.5")`
+   do pin então para no primeiro byte não-numérico (a própria leniência `atof`/`atoi` documentada
+   desta seção, compartilhada pelos próprios tokens de componente das 8 formas) e retorna `60.0f`,
+   descartando `/0.5` em silêncio -- o eixo B vira `60`, alpha default silencioso `1.0`, nunca lendo
+   `0.5` como alpha de jeito nenhum. A falha REAL de isolamento-do-`/` precisa de espaçamento
+   PARCIAL (exatamente um lado, ex. `lab(50 40 60/ 0.5)` ou `lab(50 40 60 /0.5)`, os dois
+   genuinamente `Invalid` -- 4 tokens, não casando nem com a forma de 3 nem com a de 5) -- uma
+   fronteira que a própria passada de verificação desta errata descobriu enquanto confirmava um
+   caso de teste, nunca antes declarada em lugar nenhum deste documento.
+
+**Verificação, não afirmação:** `test_color_parsing_esc6_functional_forms()`/`test_color_
+functional_forms_paren_aware_split_esc6()` (`value_compute_sanity.cpp`) exercitam as 8 formas --
+âncoras dadas-pela-tarefa (casos de identidade/zero/volta/aridade/clamp-saturante, transcritas à
+mão do pin), os próprios casos não-triviais `lab()`/`lch()`/`oklch()` derivados-do-oráculo-Python-
+independente (incluindo a própria referência `oklch(0.62796 0.25768 29.23)` do post do Ottosson pro
+sRGB red), todo limite de clamp observado pós-conversão (não só afirmado pré-clamp), e as duas
+correções acima. Uma fixture de corpus NOVA, `glintfx/src/rml/rcss_dump_test_fixtures/
+uix_esc6_functional_colors.rml`, exercita os 4 call sites consumidores-de-cor-nomeada que a
+`UIX-RCSS-ERRATA-10` já nomeou (`color`, `box-shadow`, um stop de `linear-gradient`, o próprio
+`<fill>` do `polygon()`) com cores funcionais em vez de nomes, mais um par `box-shadow`/stop-de-
+gradiente provando a MESMA assimetria de dobra-de-caixa que a própria fixture da `ESC-5` provou pra
+nomes (`box-shadow` minusculiza o próprio valor inteiro antes de parsear,
+`PropertyParserBoxShadow.cpp:24` -- um `RGB()` maiúsculo dentro de `box-shadow` É aceito; um stop de
+gradiente não minusculiza -- o mesmo texto maiúsculo dentro de um stop é `Invalid`) -- o próprio
+oráculo diferencial da `RMLX-2` reporta **zero divergências novas**: as próprias 2 linhas
+diferentes do `uix_esc6_functional_colors.rml` são o MESMO pin pré-existente, corpus-wide, de
+`body`/`position` (`docs/uix-rcss.md` seção 14.1 linha 2, `absolute` vs `static`, reproduz em toda
+fixture dentro-de-escopo deste repo, uma ocorrência por bloco `STATE`) que toda OUTRA fixture deste
+corpus já mostra -- nenhum dos próprios 9 elementos portadores-de-cor deste item (incluindo
+`polygon(6, rgb(255, 165, 0))`, que as próprias notas de entrega desta tarefa esperavam continuar
+vermelho até o Lado A pousar, e `oklab(1 0 0)`, a própria correção 1 desta errata) diverge do
+próprio pin de verdade, compilado.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -2076,14 +2250,31 @@ case-insensitive (`"Red"`/`"RED"`/`"TRANSPARENT"` all parse) -- the pin's own
 (`PropertyParserColour.cpp:201`), transcribed here for the first time; pre-`ESC-5` this dump
 format's own engine was case-sensitive by omission, never by an explicit decision this document
 recorded, the same class of undocumented-narrowing `UIX-RCSS-ERRATA-9` closed for length-unit
-suffixes. Every functional color form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`,
-`oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:178-195`) remains **zero-measured** in the census (section 0: *"0
-`rgb()`/`rgba()` funcional"*) and is still unimplemented -- `ESC-6`'s own scope, not this item's. A
-conforming dumper encountering any of the 19 names, in any letter case, must parse and print it
-correctly per the same canonical form rules the hex forms above already follow; only a color syntax
-**neither the census nor the pinned RmlUi build** accepts (a functional form, or an extended CSS
-name outside the pin's own 19, e.g. `rebeccapurple`) still fail-highs (§11).
+suffixes.
+
+**Delivered, `ESC-6` (2026-08-08) -- see `UIX-RCSS-ERRATA-11` above for the verification, the two
+briefing corrections, and the full oracle result:** all **8** functional color forms the pin itself
+dispatches (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
+`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:178-195`'s own dispatch chain,
+`:253-532` the 4 per-family parsers, `:11-113` the 3 shared color-space-conversion functions), which
+remained **zero-measured** in the census (section 0: *"0 `rgb()`/`rgba()` funcional"*) but are ALL
+authorized regardless (`ADR-0022`'s own "if the engine being replaced accepts it, ours accepts it"
+rule -- census counts are sequencing/risk data, never a scope boundary), are now implemented,
+function-for-function, on both sides of the differential oracle -- Side B
+(`glintfx/src/uix/style/value_compute.cpp`'s own `parse_rgb_function`/`parse_hsl_function`/
+`parse_cielab_function`/`parse_oklab_function`) and Side A (`glintfx/src/rml/rcss_dump.cpp`'s own
+`parse_color_token()`), delivered independently and in parallel by two different implementers, per
+`ADR-0020`'s own oracle-independence design. The dispatch itself is case-SENSITIVE on the raw
+prefix, chained exactly like the pin (`#` → hex; `rgb`/`hsl`/`lab`/`lch`/`oklab`/`oklch` → the
+matching functional parser; only then the case-insensitive name lookup) -- `RGB(...)` at top level
+is `Invalid` (never silently folded into `rgb()`), and a functional branch's own parse failure
+returns `Invalid` directly, never falling through to the name table (`labrador`'s own `lab` prefix
+"steals" the input and fails there, never reaching the 19-entry table despite plainly not being a
+color function). A conforming dumper encountering any of the 19 names OR the 8 functional forms, in
+any letter case the pin itself accepts case for, must parse and print it correctly per the same
+canonical form rules the hex forms above already follow; only a color syntax **neither the census
+nor the pinned RmlUi build** accepts (an extended CSS name outside the pin's own 19, e.g.
+`rebeccapurple`, or an unrecognised prefix like `cmyk()`) still fail-highs (§11).
 
 **Colors are dumped straight-alpha for scalar color-typed properties -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -2673,9 +2864,11 @@ the first place; every bullet below **was**, and that framing is what this rewri
   `ESC-5`, 2026-08-08 -- all 19** of the named colors RmlUi's pinned build registers
   (`value_compute.cpp`'s own `kNamedColorTable`, `:876-896`, transcribed from
   `glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`), case-insensitive,
-  matching `TODO.md`'s own entry and `UIX-RCSS-ERRATA-10` (§7.1 above). Every functional color form
-  (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file
-  `:178-193`, conversions `:64-115`) is still unimplemented -- owned by `ESC-6`.
+  matching `TODO.md`'s own entry and `UIX-RCSS-ERRATA-10` (§7.1 above). ~~Every functional color
+  form... is still unimplemented...~~ **delivered by `ESC-6`, 2026-08-08 -- all 8** (`rgb()`,
+  `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file's own dispatch
+  chain `:178-195`, conversions `:11-113`), on BOTH sides of the differential oracle, matching
+  `TODO.md`'s own entry and `UIX-RCSS-ERRATA-11` (§7.1 above).
 - **`transition`, `font-effect`:** both real, registered RmlUi properties
   (`StyleSheetSpecification.cpp:399`, `:405`). **The registry row landed via `ESC-1`** (§6.1's
   table now lists both, `ValueDomain::Composite`, dumped through the same empty-list echo
@@ -3855,15 +4048,32 @@ pin logo antes da própria chamada `html_colours.find()` dele (`PropertyParserCo
 transcrito aqui pela primeira vez; pré-`ESC-5` o próprio motor deste formato de dump era
 case-sensitive por omissão, nunca por uma decisão explícita que este documento registrasse, a mesma
 classe de estreitamento-não-documentado que a `UIX-RCSS-ERRATA-9` fechou pros sufixos de unidade de
-comprimento. Toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`,
-`oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:178-195`) segue com **zero medição** no censo (seção 0: *"0
-`rgb()`/`rgba()` funcional"*) e continua não-implementada -- escopo próprio da `ESC-6`, não deste
-item. Um dumper conforme encontrando qualquer uma das 19, em qualquer caixa de letra, tem de
-parsear e imprimir corretamente pelas mesmas regras de forma canônica que as formas hex acima já
-seguem; só uma sintaxe de cor que **nem o censo nem o build fixado do RmlUi** aceita (uma forma
-funcional, ou um nome CSS estendido fora das 19 do pin, ex. `rebeccapurple`) ainda dispara
-**fail-high** (seção 11).
+comprimento.
+
+**Entregue, `ESC-6` (2026-08-08) -- ver `UIX-RCSS-ERRATA-11` acima pra verificação, as duas
+correções ao briefing, e o resultado completo do oráculo:** todas as **8** formas funcionais de cor
+que o próprio pin despacha (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`,
+`oklch()` -- a própria cadeia de despacho `:178-195` do `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp`, `:253-532` os 4 parsers por-família, `:11-113` as 3 funções
+compartilhadas de conversão de espaço de cor), que seguiam com **zero medição** no censo (seção 0:
+*"0 `rgb()`/`rgba()` funcional"*) mas estão TODAS autorizadas de qualquer jeito (a própria regra "se
+o motor que está sendo substituído aceita, o nosso aceita" da `ADR-0022` -- contagem de censo é dado
+de sequenciamento/risco, nunca fronteira de escopo), agora estão implementadas, função-por-função,
+nos dois lados do oráculo diferencial -- Lado B (o próprio `parse_rgb_function`/`parse_hsl_function`/
+`parse_cielab_function`/`parse_oklab_function` do `glintfx/src/uix/style/value_compute.cpp`) e Lado A
+(o próprio `parse_color_token()` do `glintfx/src/rml/rcss_dump.cpp`), entregues independentemente e
+em paralelo por dois implementers diferentes, per o próprio desenho de independência-de-oráculo da
+`ADR-0020`. O próprio despacho é case-SENSITIVE sobre o prefixo cru, encadeado exatamente como o pin
+(`#` → hex; `rgb`/`hsl`/`lab`/`lch`/`oklab`/`oklch` → o próprio parser funcional que casa; só então o
+lookup de nome case-insensitive) -- `RGB(...)` no nível superior é `Invalid` (nunca dobrado em
+silêncio pra `rgb()`), e a própria falha de parse de um ramo funcional retorna `Invalid` direto,
+nunca caindo no lookup de nome (o próprio prefixo `lab` de `labrador` "rouba" o input e falha ali,
+nunca alcançando a tabela de 19 entradas apesar de claramente não ser uma função de cor). Um dumper
+conforme encontrando qualquer uma das 19 nomeadas OU as 8 formas funcionais, em qualquer caixa de
+letra que o próprio pin aceite caixa, tem de parsear e imprimir corretamente pelas mesmas regras de
+forma canônica que as formas hex acima já seguem; só uma sintaxe de cor que **nem o censo nem o
+build fixado do RmlUi** aceita (um nome CSS estendido fora das 19 do pin, ex. `rebeccapurple`, ou um
+prefixo não-reconhecido tipo `cmyk()`) ainda dispara **fail-high** (seção 11).
 
 **Cores são dumpadas straight-alpha pra propriedades tipo-cor escalares -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -4226,9 +4436,11 @@ bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
   `ESC-5`, 2026-08-08 -- todas as 19** cores nomeadas que o build fixado do RmlUi registra (a
   própria `kNamedColorTable` do `value_compute.cpp`, `:876-896`, transcrita do
   `glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`), case-insensitive,
-  batendo com o próprio item do `TODO.md` e a `UIX-RCSS-ERRATA-10` (§7.1 acima). Toda forma
-  funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`,
-  mesmo arquivo `:178-193`, conversões `:64-115`) segue não-implementada -- dona é a `ESC-6`.
+  batendo com o próprio item do `TODO.md` e a `UIX-RCSS-ERRATA-10` (§7.1 acima). ~~Toda forma
+  funcional de cor... segue não-implementada...~~ **entregue pela `ESC-6`, 2026-08-08 -- todas as
+  8** (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, a própria cadeia
+  de despacho `:178-195` do mesmo arquivo, conversões `:11-113`), nos DOIS lados do oráculo
+  diferencial, batendo com o próprio item do `TODO.md` e a `UIX-RCSS-ERRATA-11` (§7.1 acima).
 - **`transition`, `font-effect`:** as duas são propriedades reais e registradas do RmlUi
   (`StyleSheetSpecification.cpp:399`, `:405`). **A própria linha de registro aterrissou via
   `ESC-1`** (a tabela da §6.1 agora lista as duas, `ValueDomain::Composite`, dumpadas pelo mesmo

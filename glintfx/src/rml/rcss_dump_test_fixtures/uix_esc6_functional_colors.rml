@@ -1,0 +1,11 @@
+<rml><head><style>
+#a { color: rgb(255, 165, 0); }
+#b { color: hsl(205, 65%, 42%); }
+#c { color: lab(55% 22 -37 / 0.75); }
+#d { color: oklch(0.68 0.14 205); }
+#e { color: oklab(1 0 0); }
+#f { box-shadow: rgb(255, 165, 0) 2dp 2dp 4dp 0dp; }
+#g { box-shadow: RGB(255, 165, 0) 2dp 2dp 4dp 0dp; }
+#h { decorator: linear-gradient(90deg, hsl(205, 65%, 42%) 0%, rgb(20, 200, 90) 100%); }
+#i { decorator: polygon(6, rgb(255, 165, 0)); }
+</style></head><body><div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div><div id="e"></div><div id="f"></div><div id="g"></div><div id="h"></div><div id="i"></div></body></rml>

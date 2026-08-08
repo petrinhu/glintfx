@@ -824,10 +824,69 @@ ValueComputeStatus parse_percent(std::string_view raw, float* out_percent);
 //     parity" per the líder's own decision) into DEGREES already (rad->deg conversion applied
 //     here, per `degrees_from_radians()` above) -- the result is ready for `print_angle_deg()`
 //     directly.
+//
+//     `ESC-7` -- TWO pre-existing gaps closed here, found by re-reading the pin directly rather
+//     than trusting this function's own pre-`ESC-7` shape (this item's own task explicitly required
+//     re-deriving `transform`'s angle-typed arguments against `PropertyParserTransform.cpp`'s own
+//     `angle(Unit::ANGLE, Unit::RAD)` member, `:10` -- that re-derivation is what surfaced both, not
+//     a `transform`-specific need): (1) **unitless-zero exception** -- the pin's own `angle` parser
+//     shares the exact same `PropertyParserNumber` machinery `length`/`length_pct` use
+//     (`PropertyParserNumber.cpp:85-94`'s own `zero_unit != Unit::UNKNOWN && float_value == 0.0f`
+//     branch), constructed with `zero_unit=Unit::RAD` -- a bare `"0"` (no `deg`/`rad` suffix) is
+//     therefore `Ok` upstream (0 rad), exactly the same convention `parse_length()`'s own header
+//     already documents for `LENGTH`'s `zero_unit=Unit::PX`, but this function never implemented
+//     its OWN copy of that exception before `ESC-7` -- confirmed missing by direct trace, not
+//     assumed from symmetry. (2) **case-insensitive unit suffix** -- the pin's own
+//     `StringUtilities::ToLower` on the unit half is UNCONDITIONAL, the same fact `parse_length()`'s
+//     own header already cites for `LENGTH` (`"10PX"` accepted) -- this function's pre-`ESC-7` body
+//     used a raw, case-SENSITIVE `ends_with(raw, "deg")`/`ends_with(raw, "rad")` pair, rejecting
+//     `"45DEG"` upstream itself accepts. Both fixes are implemented by switching this function's own
+//     body to the SAME `find_unit_boundary()` reverse-scan-then-exact-match mechanics
+//     `parse_length()` already uses (this file's own internal helper, unchanged by this item) rather
+//     than patching the old `ends_with` shape -- one shared, already-tested mechanism, not a second,
+//     independently-maintained copy of unit-boundary detection. Both gaps were latent since this
+//     function's own original authoring (pre-`ESC-4`, before `parse_length()`'s own reverse-scan
+//     rewrite existed to copy) and affected EVERY existing caller (`compute_linear_gradient_args()`'s
+//     own direction angle, `compute_polygon()`'s own rotation argument, `compute_rotate()`'s own
+//     2D-subset `rotate()`), not merely the 18 new `transform` functions this item adds -- fixing
+//     the one shared function benefits all three, and no pre-`ESC-7` test exercised either gap
+//     (verified by grep across `value_compute_sanity.cpp` before landing this change), so neither
+//     fix changes any previously-asserted, currently-passing expectation.
 // PT: Parseia `<número>deg` ou `<número>rad` (as próprias unidades de entrada aceitas da seção 8.2,
 //     "paridade completa de unidade" per a própria decisão do líder) já pra GRAUS (conversão
 //     rad->deg aplicada aqui, per `degrees_from_radians()` acima) -- o resultado já está pronto pro
 //     `print_angle_deg()` direto.
+//
+//     `ESC-7` -- DUAS lacunas pré-existentes fechadas aqui, achadas relendo o pin direto em vez de
+//     confiar na própria forma pré-`ESC-7` desta função (a própria tarefa deste item exigia
+//     re-derivar os argumentos tipo-ângulo do `transform` contra o próprio membro
+//     `angle(Unit::ANGLE, Unit::RAD)` do `PropertyParserTransform.cpp`, `:10` -- essa re-derivação é
+//     o que revelou as duas, não uma necessidade específica-de-`transform`): (1) **exceção de
+//     zero-sem-unidade** -- o próprio parser `angle` do pin compartilha exatamente a mesma mecânica
+//     `PropertyParserNumber` que `length`/`length_pct` usam (o próprio ramo `zero_unit !=
+//     Unit::UNKNOWN && float_value == 0.0f` do `PropertyParserNumber.cpp:85-94`), construído com
+//     `zero_unit=Unit::RAD` -- um `"0"` cru (sem sufixo `deg`/`rad`) é portanto `Ok` no upstream (0
+//     rad), exatamente a mesma convenção que o próprio cabeçalho do `parse_length()` já documenta
+//     pro `zero_unit=Unit::PX` do `LENGTH`, mas esta função nunca implementou a PRÓPRIA cópia
+//     daquela exceção antes da `ESC-7` -- confirmado faltando por rastreamento direto, não suposto
+//     por simetria. (2) **sufixo de unidade case-insensitive** -- o próprio
+//     `StringUtilities::ToLower` do pin na metade unidade é INCONDICIONAL, o mesmo fato que o
+//     próprio cabeçalho do `parse_length()` já cita pro `LENGTH` (`"10PX"` aceito) -- o próprio
+//     corpo pré-`ESC-7` desta função usava um par `ends_with(raw, "deg")`/`ends_with(raw, "rad")`
+//     cru, case-SENSITIVE, rejeitando `"45DEG"` que o próprio upstream aceita. As duas correções são
+//     implementadas trocando o próprio corpo desta função pra MESMA mecânica de
+//     scan-reverso-depois-match-exato do `find_unit_boundary()` que o `parse_length()` já usa (o
+//     próprio helper interno deste arquivo, inalterado por este item) em vez de remendar a forma
+//     antiga `ends_with` -- um mecanismo compartilhado, já testado, não uma segunda cópia
+//     mantida-independentemente de detecção de fronteira de unidade. As duas lacunas estavam
+//     latentes desde a própria autoria original desta função (pré-`ESC-4`, antes da própria reescrita
+//     de scan-reverso do `parse_length()` existir pra copiar) e afetavam TODO chamador existente (o
+//     próprio ângulo de direção do `compute_linear_gradient_args()`, o próprio argumento de rotação
+//     do `compute_polygon()`, o próprio `rotate()` do subconjunto-2D do `compute_rotate()`), não só
+//     as 18 novas funções de `transform` que este item soma -- consertar a única função
+//     compartilhada beneficia as três, e nenhum teste pré-`ESC-7` exercitava nenhuma das duas
+//     lacunas (verificado por grep em `value_compute_sanity.cpp` antes de pousar esta mudança), então
+//     nenhum dos dois consertos muda nenhuma expectativa previamente-asserida, atualmente-passando.
 ValueComputeStatus parse_angle(std::string_view raw, float* out_deg);
 
 // EN: docs/uix-rcss.md section 9.2.1's own auto-spacing algorithm, verbatim, as a PURE function of
@@ -959,27 +1018,122 @@ ValueComputeStatus compute_radial_gradient_args(std::string_view inner_args, std
 ValueComputeStatus compute_decorator_list(std::string_view raw_value,
                                           const LengthResolveContext& ctx, std::string* out);
 
-// EN: docs/uix-rcss.md section 9.4's own explicitly-thin `transform` grammar
-//     (`translate(<x>;<y>) | scale(<x>;<y>) | rotate(<angle>)`) -- the 2D subset verified against
-//     the corpus's own 2 measured instances (both `rotate(...)`), per that section's own stated
-//     limit. Same whole-list-fails-together shape as `compute_decorator_list()` above (section 11's
-//     own uniform malformed-entry policy applied consistently across every composite-list domain
-//     this module implements, not just the two upstream-parser-cited ones).
-// PT: A própria gramática explicitamente fina de `transform` da seção 9.4 do docs/uix-rcss.md
-//     (`translate(<x>;<y>) | scale(<x>;<y>) | rotate(<angle>)`) -- o subconjunto 2D verificado
-//     contra as próprias 2 instâncias medidas do corpus (as duas `rotate(...)`), per o próprio
-//     limite declarado daquela seção. Mesma forma de lista-falha-junto do
-//     `compute_decorator_list()` acima (a própria política uniforme de entrada-malformada da seção
-//     11 aplicada consistentemente em todo domínio de lista composta que este módulo implementa,
-//     não só nos dois citados-do-parser-upstream).
+// EN: `ESC-7` -- docs/uix-rcss.md section 9.4's own FULL `transform` grammar, all 21 functions the
+//     pinned build's own `PropertyParserTransform.cpp` accepts (`perspective`, `matrix`,
+//     `matrix3d`, `translateX/Y/Z`, `translate`, `translate3d`, `scaleX/Y/Z`, `scale`, `scale3d`,
+//     `rotateX/Y/Z`, `rotate`, `rotate3d`, `skewX/Y`, `skew`) -- widened from the pre-`ESC-7`
+//     3-function 2D subset (`translate`/`scale`/`rotate`, verified only against the corpus's own 2
+//     measured `rotate(...)` instances) per `docs/rmlx-subset.md` section 7's own "if the engine
+//     being replaced accepts it, ours accepts it" rule, the same corpus-count-is-not-a-boundary
+//     correction `ESC-4`/`ESC-5`/`ESC-6` already applied to the `LENGTH`/named-color/functional-
+//     color families. Every function name is matched byte-exact (case-SENSITIVE, mirroring the
+//     pin's own `memcmp`-based `Scan()`, `PropertyParserTransform.cpp:170`) against a static
+//     per-function argument-arity/domain table (`kTransformFunctionTable`, value_compute.cpp's own
+//     anonymous namespace) transcribed from that same file's own `Scan(...)` call chain
+//     (`:51-139`); `scale`'s own dual arity (2 numbers, or 1 duplicated into both slots) is the ONE
+//     shape the table cannot represent and is special-cased (`compute_scale()`, unchanged in shape
+//     from pre-`ESC-7`, now reached through the table dispatcher instead of a 3-way name compare).
+//     Scope stays parse + compute + serialize only, same as pre-`ESC-7` -- applying the render
+//     matrix remains `RMLX-8`'s job, unchanged by this widening; `matrix`/`matrix3d`'s own 6/16
+//     numbers are copied 1:1 in SOURCE order, never reordered into row/column semantics.
 //
-// EN: `ESC-4` -- `float dp_ratio` widened to `const LengthResolveContext& ctx`, threaded to
-//     `translate(<x>;<y>)`'s own two length arguments (`scale`/`rotate` take plain numbers/angles,
-//     untouched by this widening) -- paridade ripple, `docs/rmlx-subset.md` section 6.3/7.
-// PT: `ESC-4` -- `float dp_ratio` alargado pra `const LengthResolveContext& ctx`, encaminhado pros
-//     próprios dois argumentos de comprimento do `translate(<x>;<y>)` (`scale`/`rotate` recebem
-//     números/ângulos crus, intocados por este alargamento) -- ripple de paridade, seção 6.3/7 do
-//     `docs/rmlx-subset.md`.
+//     **Argument domains, all 4 the pin's own `PropertyParserTransform` constructor names**
+//     (`:9-10`): `Number` (`Unit::NUMBER` only -- `matrix`/`matrix3d`/`scaleX/Y/Z`/`scale`/
+//     `scale3d`/`rotate3d`'s own first 3 slots -- ANY unit suffix, including `%`, is `Invalid`, with
+//     NO unitless-zero exception at all, since a bare number already IS this domain's native form);
+//     `Length` (`Unit::LENGTH`, `parse_length()`/`resolve_length_px()` unchanged -- `perspective`,
+//     `translateZ`, `translate3d`'s own third slot -- `%` is `Invalid`, unitless `0` is `Ok` per
+//     `parse_length()`'s own zero-length convention); `LengthPercent` (`Unit::LENGTH_PERCENT` --
+//     `translateX`/`translateY`/`translate`/`translate3d`'s own first two slots -- tries `%` first
+//     via `parse_percent()`/`print_percent()` (symbolic, section 5's own "stays symbolic" rule),
+//     falls to the SAME `Length` path otherwise); `Angle` (`Unit::ANGLE`, `parse_angle()`/
+//     `print_angle_deg()`, this file's own header at that function's own declaration for the two
+//     gaps `ESC-7` closed there -- `rotateX/Y/Z`/`rotate`/`skewX/Y`/`skew`/`rotate3d`'s own last
+//     slot -- `deg`/`rad` only, `%` is `Invalid`, unitless `0` is `Ok`).
+//
+//     **The `%`-gap this item closed:** pre-`ESC-7`, `translate`'s own body called `parse_length()`
+//     directly (never `%`-aware, since `parse_length()`'s own `LENGTH` table has no `%` entry by
+//     design) even though the pin's own `translate`/`translateX`/`translateY`/`translate3d` all use
+//     `length_pct` (`Unit::LENGTH_PERCENT`, NOT `Unit::LENGTH`) for their length-shaped slots -- `%`
+//     was always in the pin's own accepted grammar for these 4 slots, simply never wired on this
+//     side; nobody noticed because no fixture exercised it.
+//
+//     **Separator: transform's own list uses whitespace ONLY, never a comma** -- a NEW, dedicated,
+//     STRICT scanner (`scan_transform_function_calls_strict()`, this file's own anonymous
+//     namespace, `ESC-7`) replaces `scan_function_calls()` for this one call site: unlike the
+//     latter (shared with `compute_decorator_list()`, deliberately comma-OR-whitespace-tolerant,
+//     silently skipping either as inter-call filler), the stricter scanner treats ANY byte that is
+//     neither whitespace nor part of a recognised `name(args)` call -- a stray comma included -- as
+//     a hard parse failure for the WHOLE list, matching `PropertyParserTransform::ParseValue()`'s
+//     own `while(*next)` loop aborting the entire property the instant no keyword matches
+//     (`PropertyParserTransform.cpp:141-148`) -- upstream needs no comma-specific check of its own
+//     because a comma is simply a byte no keyword's own `Scan()` ever recognises.
+//
+//     Same whole-list-fails-together shape as `compute_decorator_list()` above, unchanged by this
+//     item (section 11's own uniform malformed-entry policy applied consistently across every
+//     composite-list domain this module implements, not just the two upstream-parser-cited ones).
+// PT: `ESC-7` -- a própria gramática COMPLETA de `transform` da seção 9.4 do docs/uix-rcss.md, as 21
+//     funções que o próprio `PropertyParserTransform.cpp` do build fixado aceita (`perspective`,
+//     `matrix`, `matrix3d`, `translateX/Y/Z`, `translate`, `translate3d`, `scaleX/Y/Z`, `scale`,
+//     `scale3d`, `rotateX/Y/Z`, `rotate`, `rotate3d`, `skewX/Y`, `skew`) -- alargada do subconjunto
+//     2D de 3 funções pré-`ESC-7` (`translate`/`scale`/`rotate`, verificado só contra as próprias 2
+//     instâncias `rotate(...)` medidas do corpus) per a própria regra "se o motor que está sendo
+//     substituído aceita, o nosso aceita" da seção 7 do `docs/rmlx-subset.md`, a mesma correção
+//     contagem-de-corpus-não-é-fronteira que a `ESC-4`/`ESC-5`/`ESC-6` já aplicaram às famílias
+//     `LENGTH`/cor-nomeada/cor-funcional. Todo nome de função é casado byte-exato (case-SENSITIVE,
+//     espelhando o próprio `Scan()` baseado em `memcmp` do pin, `PropertyParserTransform.cpp:170`)
+//     contra uma tabela estática de aridade/domínio-de-argumento por-função
+//     (`kTransformFunctionTable`, o próprio namespace anônimo do value_compute.cpp) transcrita da
+//     própria cadeia de chamadas `Scan(...)` daquele mesmo arquivo (`:51-139`); a própria aridade
+//     dupla do `scale` (2 números, ou 1 duplicado pros dois slots) é a ÚNICA forma que a tabela não
+//     consegue representar e é tratada como caso especial (`compute_scale()`, forma inalterada
+//     desde pré-`ESC-7`, agora alcançada pelo despachante da tabela em vez de uma comparação de nome
+//     em 3 vias). O escopo continua só parse + computo + serialização, igual pré-`ESC-7` -- aplicar
+//     a matriz de render continua sendo trabalho da `RMLX-8`, inalterado por este alargamento; os
+//     próprios 6/16 números de `matrix`/`matrix3d` são copiados 1:1 na ordem da FONTE, nunca
+//     reordenados pra semântica de linha/coluna.
+//
+//     **Domínios de argumento, os 4 que o próprio construtor `PropertyParserTransform` do pin nomeia**
+//     (`:9-10`): `Number` (só `Unit::NUMBER` -- os próprios `matrix`/`matrix3d`/`scaleX/Y/Z`/
+//     `scale`/`scale3d`/os 3 primeiros slots do `rotate3d` -- QUALQUER sufixo de unidade, inclusive
+//     `%`, é `Invalid`, SEM exceção de zero-sem-unidade nenhuma, já que um número cru já É a própria
+//     forma nativa deste domínio); `Length` (`Unit::LENGTH`, `parse_length()`/
+//     `resolve_length_px()` inalterados -- `perspective`, `translateZ`, o próprio terceiro slot do
+//     `translate3d` -- `%` é `Invalid`, `0` sem unidade é `Ok` per a própria convenção de
+//     comprimento-zero do `parse_length()`); `LengthPercent` (`Unit::LENGTH_PERCENT` -- os próprios
+//     primeiros dois slots do `translateX`/`translateY`/`translate`/`translate3d` -- tenta `%`
+//     primeiro via `parse_percent()`/`print_percent()` (simbólico, a própria regra "fica simbólico"
+//     da seção 5), cai pro MESMO caminho `Length` senão); `Angle` (`Unit::ANGLE`,
+//     `parse_angle()`/`print_angle_deg()`, o próprio cabeçalho deste arquivo na própria declaração
+//     daquela função pras duas lacunas que a `ESC-7` fechou ali -- os próprios `rotateX/Y/Z`/
+//     `rotate`/`skewX/Y`/`skew`/o próprio último slot do `rotate3d` -- só `deg`/`rad`, `%` é
+//     `Invalid`, `0` sem unidade é `Ok`).
+//
+//     **A lacuna de `%` que este item fechou:** pré-`ESC-7`, o próprio corpo do `translate` chamava
+//     `parse_length()` direto (nunca consciente de `%`, já que a própria tabela `LENGTH` do
+//     `parse_length()` não tem entrada `%` nenhuma por desenho) mesmo o próprio `translate`/
+//     `translateX`/`translateY`/`translate3d` do pin todos usando `length_pct`
+//     (`Unit::LENGTH_PERCENT`, NÃO `Unit::LENGTH`) pros próprios slots com forma-de-comprimento
+//     deles -- `%` sempre esteve na própria gramática aceita do pin pra estes 4 slots, só nunca foi
+//     conectado deste lado; ninguém percebeu porque nenhuma fixture exercitava.
+//
+//     **Separador: a própria lista do transform usa SÓ whitespace, nunca vírgula** -- um escaneador
+//     NOVO, dedicado, ESTRITO (`scan_transform_function_calls_strict()`, o próprio namespace
+//     anônimo deste arquivo, `ESC-7`) substitui o `scan_function_calls()` pra este único call site:
+//     diferente do segundo (compartilhado com o `compute_decorator_list()`, deliberadamente
+//     tolerante-a-vírgula-OU-whitespace, pulando qualquer um dos dois em silêncio como
+//     preenchimento inter-chamada), o escaneador mais estrito trata QUALQUER byte que não seja nem
+//     whitespace nem parte de uma chamada `name(args)` reconhecida -- vírgula solta inclusa -- como
+//     falha de parse dura pra LISTA INTEIRA, casando com o próprio laço `while(*next)` do
+//     `PropertyParserTransform::ParseValue()` derrubando a propriedade inteira no instante em que
+//     nenhuma keyword casa (`PropertyParserTransform.cpp:141-148`) -- o upstream não precisa de
+//     checagem nenhuma específica-de-vírgula própria porque uma vírgula é simplesmente um byte que
+//     nenhum `Scan()` de keyword nunca reconhece.
+//
+//     Mesma forma de lista-falha-junto do `compute_decorator_list()` acima, inalterada por este item
+//     (a própria política uniforme de entrada-malformada da seção 11 aplicada consistentemente em
+//     todo domínio de lista composta que este módulo implementa, não só nos dois
+//     citados-do-parser-upstream).
 ValueComputeStatus compute_transform_list(std::string_view raw_value,
                                           const LengthResolveContext& ctx, std::string* out);
 

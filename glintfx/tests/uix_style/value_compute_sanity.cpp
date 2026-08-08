@@ -1556,14 +1556,91 @@ void test_non_finite_input_is_fail_high_at_parse_time() {
 }
 
 // ---------------------------------------------------------------------------
-// EN: docs/uix-rcss.md section 9.4's own thin transform grammar, plus section 11's own
-//     `UIX-RCSS-ERRATA-2`-corrected "malformed entry drops the WHOLE property" rule exercised at
-//     the transform-list level too (applied consistently, not just to the two upstream-parser-
-//     cited domains).
-// PT: A própria gramática fina de transform da seção 9.4 do docs/uix-rcss.md, mais a própria regra
-//     "entrada malformada derruba a PROPRIEDADE INTEIRA", corrigida pela `UIX-RCSS-ERRATA-2`, da
-//     seção 11, exercitada no nível de lista de transform também (aplicada consistentemente, não
-//     só nos dois domínios citados-do-parser-upstream).
+// EN: `ESC-7` -- docs/uix-rcss.md section 9.4's own grammar, raised from the pre-`ESC-7` 2D subset
+//     (`translate`/`scale`/`rotate`, 3 functions) to the pin's own FULL 21-function
+//     `PropertyParserTransform.cpp`, re-derived directly from that file (not copied from this
+//     item's own task brief, which the task itself names a "gabarito de conferência, não a fonte"
+//     -- every aridade/domain/print-form claim below was independently re-verified against
+//     `glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserTransform.cpp`/
+//     `PropertyParserNumber.cpp` before being pinned here). Section 11's own
+//     `UIX-RCSS-ERRATA-2`-corrected "malformed entry drops the WHOLE property" rule is exercised at
+//     the transform-list level throughout this whole section (applied consistently, not just to the
+//     two upstream-parser-cited domains) -- and, `ESC-7`'s own new finding, the SEPARATOR between
+//     top-level functions is ALSO fail-high now: unlike `decorator`'s own comma-tolerant
+//     `scan_function_calls()` (this file's own shared, deliberately-lenient scanner, still used
+//     unchanged by `compute_decorator_list()`), `transform`'s own list uses a NEW, stricter,
+//     `transform`-only scanner (`scan_transform_function_calls_strict()`, value_compute.cpp) that
+//     treats a stray comma between function calls as a hard parse failure, matching
+//     `PropertyParserTransform::ParseValue()`'s own `while(*next)` loop (`PropertyParserTransform.cpp
+//     :141-148`): the first position matching no keyword aborts the ENTIRE property, and a comma is
+//     simply a byte no keyword's own `Scan()` recognises, so upstream's own "abort the whole parse"
+//     path already fires for it without any comma-specific check of its own.
+//
+//     ⚠️ **Deviation from this item's own task brief, measured and reported per that task's own "a
+//     medição vence, reporte o desvio" instruction:** the brief's own prose claims
+//     `"45 deg"` (whitespace BETWEEN the number and its unit, inside one argument) is accepted.
+//     Tracing `PropertyParserTransform::Scan()`'s own argument-extraction `sscanf(str, " %[^,)]
+//     %n", ...)` (`:219`) into `PropertyParserNumber::ParseValue()` (`PropertyParserNumber.cpp:43-
+//     73`) confirms the PIN itself does accept it (`strtof`'s own partial-parse leniency never
+//     rejects trailing unconsumed bytes, only "zero bytes converted"). But THIS module's own
+//     `parse_length()` -- reused unchanged by every `Length`/`LengthPercent` transform argument
+//     below, per this file's own "one shared, already-tested mechanism" discipline -- already has a
+//     DIFFERENT, DELIBERATE, DOCUMENTED non-parity on this exact point, decided at `ESC-4` and
+//     unchanged by this item: `parse_float_token()`'s own whole-string-match contract rejects `"10
+//     px"` (see `parse_length()`'s own header, "one deliberate, DOCUMENTED non-parity kept on
+//     purpose"). Reusing `parse_length()`/`parse_percent()`/`parse_angle()` as-is (rather than
+//     hand-rolling a second, whitespace-tolerant token reader just for `transform`) means this
+//     item inherits that same `ESC-4` decision for EVERY new function below, for internal
+//     consistency across the whole module -- `rotateX( 45 deg )` (space between keyword and paren,
+//     around the argument) is `Ok`; `rotateX(45 deg)` (space BETWEEN the number and the unit) is
+//     `Invalid` here, diverging from the pin on this one narrow point exactly as `parse_length()`
+//     already did before this item existed. Not fixed here: doing so would mean widening
+//     `parse_float_token()`'s own whole-module contract, a bigger, `ESC-4`-owned decision, not this
+//     item's own to make unilaterally.
+// PT: `ESC-7` -- a própria gramática da seção 9.4 do docs/uix-rcss.md, elevada do subconjunto 2D
+//     pré-`ESC-7` (`translate`/`scale`/`rotate`, 3 funções) pras 21 funções COMPLETAS do próprio
+//     `PropertyParserTransform.cpp` do pin, re-derivada direto daquele arquivo (não copiada do
+//     próprio briefing desta tarefa, que a própria tarefa nomeia "gabarito de conferência, não a
+//     fonte" -- toda alegação de aridade/domínio/forma-de-impressão abaixo foi re-verificada
+//     independentemente contra `glintfx/build/_deps/rmlui-src/Source/Core/
+//     PropertyParserTransform.cpp`/`PropertyParserNumber.cpp` antes de ser pinada aqui). A própria
+//     regra "entrada malformada derruba a PROPRIEDADE INTEIRA", corrigida pela `UIX-RCSS-ERRATA-2`,
+//     da seção 11, é exercitada no nível de lista de transform ao longo desta seção inteira
+//     (aplicada consistentemente, não só nos dois domínios citados-do-parser-upstream) -- e, o
+//     próprio achado novo da `ESC-7`, o SEPARADOR entre funções de topo-de-nível TAMBÉM é fail-high
+//     agora: diferente do próprio `scan_function_calls()` tolerante-a-vírgula do `decorator` (o
+//     próprio escaneador compartilhado, deliberadamente-tolerante, deste arquivo, ainda usado
+//     inalterado pelo `compute_decorator_list()`), a própria lista do `transform` usa um escaneador
+//     NOVO, mais estrito, só-de-`transform` (`scan_transform_function_calls_strict()`,
+//     value_compute.cpp) que trata uma vírgula solta entre chamadas de função como falha de parse
+//     dura, casando com o próprio laço `while(*next)` do `PropertyParserTransform::ParseValue()`
+//     (`PropertyParserTransform.cpp:141-148`): a primeira posição que não casa nenhuma keyword
+//     derruba a PROPRIEDADE INTEIRA, e uma vírgula é simplesmente um byte que nenhum `Scan()` de
+//     keyword reconhece, então o próprio caminho "aborta o parse inteiro" do upstream já dispara pra
+//     ela sem checagem nenhuma específica-de-vírgula própria.
+//
+//     ⚠️ **Desvio do próprio briefing desta tarefa, medido e reportado per a própria instrução "a
+//     medição vence, reporte o desvio" daquela tarefa:** a própria prosa do briefing alega que
+//     `"45 deg"` (whitespace ENTRE o número e a própria unidade dele, dentro de um argumento) é
+//     aceito. Rastrear a própria extração de argumento `sscanf(str, " %[^,)] %n", ...)` (`:219`) do
+//     `PropertyParserTransform::Scan()` pro `PropertyParserNumber::ParseValue()`
+//     (`PropertyParserNumber.cpp:43-73`) confirma que o PRÓPRIO pin de fato aceita (a própria
+//     leniência de parse-parcial do `strtof` nunca rejeita byte sobrando não-consumido, só "zero
+//     bytes convertidos"). Mas o PRÓPRIO `parse_length()` deste módulo -- reusado inalterado por
+//     todo argumento `Length`/`LengthPercent` de transform abaixo, pela própria disciplina "um
+//     mecanismo compartilhado, já testado" deste arquivo -- já tem uma não-paridade DIFERENTE,
+//     DELIBERADA, DOCUMENTADA nesse exato ponto, decidida na `ESC-4` e inalterada por este item: o
+//     próprio contrato de casamento-de-string-inteira do `parse_float_token()` rejeita `"10 px"`
+//     (ver o próprio cabeçalho do `parse_length()`, "uma não-paridade deliberada, DOCUMENTADA,
+//     mantida de propósito"). Reusar `parse_length()`/`parse_percent()`/`parse_angle()` como estão
+//     (em vez de escrever à mão um segundo leitor de token, tolerante-a-whitespace, só pro
+//     `transform`) significa que este item herda essa MESMA decisão da `ESC-4` pra CADA função nova
+//     abaixo, por consistência interna no módulo inteiro -- `rotateX( 45 deg )` (espaço entre
+//     keyword e parêntese, ao redor do argumento) é `Ok`; `rotateX(45 deg)` (espaço ENTRE o número e
+//     a unidade) é `Invalid` aqui, divergindo do pin neste único ponto estreito exatamente como o
+//     `parse_length()` já divergia antes deste item existir. Não consertado aqui: fazer isso
+//     significaria alargar o próprio contrato do `parse_float_token()` pro módulo INTEIRO, uma
+//     decisão maior, de dona `ESC-4`, não desta tarefa decidir unilateralmente.
 void test_transform_list() {
   std::string out;
   check(compute_transform_list("rotate(0deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
@@ -1592,15 +1669,513 @@ void test_transform_list() {
         "'none' transform value computes Ok");
   check_eq(out, "none", "'none' transform value prints 'none'");
 
+  // EN: `ESC-7` -- `matrix3d` flips from "out-of-scope, fail-high" to a real, implemented function:
+  //     16 numbers, byte-exact, the REQUIRED "transforme um matrix3d completo em teste" case this
+  //     item's own task names explicitly.
+  // PT: `ESC-7` -- `matrix3d` vira de "fora de escopo, fail-high" pra função real, implementada: 16
+  //     números, byte-exato, o próprio caso EXIGIDO "transforme um matrix3d completo em teste" que a
+  //     própria tarefa deste item nomeia explicitamente.
   check(compute_transform_list("matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
-            ValueComputeStatus::Invalid,
-        "matrix3d: out-of-scope per section 13, fail-high -- Invalid, never a guess");
+            ValueComputeStatus::Ok,
+        "ESC-7: matrix3d (identity, 16 numbers) computes Ok -- no longer out-of-scope");
+  check_eq(out,
+           "matrix3d(1.0000;0.0000;0.0000;0.0000;0.0000;1.0000;0.0000;0.0000;0.0000;0.0000;1.0000;"
+           "0.0000;0.0000;0.0000;0.0000;1.0000)",
+           "ESC-7: matrix3d identity, byte-exact, all 16 values copied 1:1 in source order -- no "
+           "render-matrix semantics, that stays RMLX-8's job");
 
+  // EN: `ESC-7` -- same malformed-args shape as before (three literal dots is not 16 numbers), but
+  //     the REASON changes: `matrix3d` is now a RECOGNISED function name with the WRONG arity/
+  //     content, not an unrecognised one -- the observable Invalid outcome is unchanged, still
+  //     proving `translate()` does not survive alone in the SAME declaration.
+  // PT: `ESC-7` -- mesma forma de args malformados de antes (três pontos literais não são 16
+  //     números), mas o MOTIVO muda: `matrix3d` agora é um nome de função RECONHECIDO com aridade/
+  //     conteúdo ERRADO, não um não-reconhecido -- o resultado observável Invalid continua o mesmo,
+  //     ainda provando que `translate()` não sobrevive sozinho na MESMA declaração.
   check(compute_transform_list("translate(10px, 20px) matrix3d(...)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
             ValueComputeStatus::Invalid,
-        "one unknown function among otherwise-valid ones: the WHOLE transform list is Invalid, "
+        "one malformed function among otherwise-valid ones: the WHOLE transform list is Invalid, "
         "per section 11's own corrected uniform malformed-entry policy -- translate() does NOT "
-        "survive alone");
+        "survive alone (ESC-7: 'matrix3d(...)' -- 1 piece '...', not 16 numbers -- arity mismatch, "
+        "not an unknown name, same Invalid outcome)");
+
+  // EN: `ESC-7`'s own required case: a chain of >=3 functions, all NEW (not among the pre-ESC-7
+  //     translate/scale/rotate trio), whitespace-adjacent (standard CSS transform-list syntax).
+  // PT: O próprio caso exigido da `ESC-7`: uma cadeia de >=3 funções, todas NOVAS (fora do trio
+  //     translate/scale/rotate pré-ESC-7), adjacentes-por-whitespace (sintaxe padrão CSS de
+  //     transform-list).
+  check(compute_transform_list("translateX(5px) rotateZ(10deg) scaleY(1.5) skewX(3deg)",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "ESC-7: 4-function chain, all new functions, computes Ok");
+  check_eq(out, "translateX(5.0000px)|rotateZ(10.0000)|scaleY(1.5000)|skewX(3.0000)",
+           "ESC-7: 4-function chain preserves source order, '|' between functions");
+
+  // EN: `ESC-7`'s own required whitespace case: space between keyword and '(', around the argument.
+  // PT: O próprio caso exigido de whitespace da `ESC-7`: espaço entre keyword e '(', ao redor do
+  //     argumento.
+  check(compute_transform_list("translateX ( 10px )", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "ESC-7: 'translateX ( 10px )' -- whitespace around keyword/paren -- computes Ok");
+  check_eq(out, "translateX(10.0000px)", "ESC-7: outer whitespace never leaks into the printed value");
+
+  check(compute_transform_list("translate( 10px , 20px )", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "ESC-7: 'translate( 10px , 20px )' -- whitespace around parens AND commas -- computes Ok");
+  check_eq(out, "translate(10.0000px;20.0000px)", "ESC-7: same, comma-adjacent whitespace trimmed too");
+
+  // EN: `ESC-7`'s own required separator case: a comma BETWEEN two top-level function calls is
+  //     REJECTED (transform's own separator is whitespace only) -- see this section's own header
+  //     for the `scan_transform_function_calls_strict()` mechanism this proves.
+  // PT: O próprio caso exigido de separador da `ESC-7`: uma vírgula ENTRE duas chamadas de função de
+  //     topo-de-nível é REJEITADA (o próprio separador do transform é só whitespace) -- ver o
+  //     próprio cabeçalho desta seção pro mecanismo `scan_transform_function_calls_strict()` que
+  //     isto prova.
+  check(compute_transform_list("rotate(1deg), rotate(2deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "ESC-7: comma between two top-level transform functions is Invalid, unlike decorator's own "
+        "comma-tolerant list separator");
+
+  // EN: An unrecognised function name in the MIDDLE (not first, not last) of an otherwise-valid
+  //     chain still drops the WHOLE list -- both neighbors would individually succeed.
+  // PT: Um nome de função não-reconhecido no MEIO (não primeiro, não último) de uma cadeia
+  //     fora-isso-válida ainda derruba a lista INTEIRA -- os dois vizinhos individualmente teriam
+  //     sucesso.
+  check(compute_transform_list("translateX(5px) bogusFunc(1,2,3) rotateY(10deg)",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "unknown function in the MIDDLE of an otherwise-valid chain still invalidates the whole "
+        "list -- neither neighbor survives alone");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- `translateX`/`translateY`/`translateZ`/`translate`/`translate3d`, per
+//     `PropertyParserTransform.cpp:63-81`. Also closes the real, pre-existing `%` gap this item's
+//     own task named: pre-`ESC-7`, `compute_translate()`'s own body called `parse_length()` directly
+//     (never `%`-aware) even though the pin's own `translate`/`translateX`/`translateY`/
+//     `translate3d` all use `length_pct` (`Unit::LENGTH_PERCENT`, `PropertyParserTransform.cpp:10`)
+//     for their length-shaped slots, not `length` -- `%` was always in the pin's own accepted
+//     grammar for these 4 slots, simply never wired on this side.
+// PT: `ESC-7` -- `translateX`/`translateY`/`translateZ`/`translate`/`translate3d`, per
+//     `PropertyParserTransform.cpp:63-81`. Também fecha a lacuna real, pré-existente, de `%` que a
+//     própria tarefa deste item nomeou: pré-`ESC-7`, o próprio corpo do `compute_translate()` chamava
+//     `parse_length()` direto (nunca consciente de `%`) mesmo o próprio `translate`/`translateX`/
+//     `translateY`/`translate3d` do pin todos usando `length_pct` (`Unit::LENGTH_PERCENT`,
+//     `PropertyParserTransform.cpp:10`) pros próprios slots com forma-de-comprimento deles, não
+//     `length` -- `%` sempre esteve na própria gramática aceita do pin pra estes 4 slots, só nunca
+//     foi conectado deste lado.
+void test_transform_translate_family() {
+  std::string out;
+
+  // -- translateX: LengthPercent, 1 arg.
+  check(compute_transform_list("translateX(12.5dp)", LengthResolveContext{.dp_ratio = 2.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translateX(12.5dp) at dp_ratio=2.0 computes Ok");
+  check_eq(out, "translateX(25.0000px)", "translateX: dp resolves through dp_ratio, non-round value");
+
+  check(compute_transform_list("translateX(0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "translateX(0): unitless zero -- zero-rule -- computes Ok");
+  check_eq(out, "translateX(0.0000px)", "translateX(0) -> 0.0000px, zero-rule assumes px (never %)");
+
+  check(compute_transform_list("translateX(5)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "translateX(5): unitless NON-zero is Invalid -- the zero-rule exception is for 0 only");
+
+  check(compute_transform_list("translateX(50%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "ESC-7: translateX(50%) -- the %-gap fix -- computes Ok");
+  check_eq(out, "translateX(50.0000%)", "ESC-7: % preserved symbolic, never resolved");
+
+  check(compute_transform_list("translatex(5px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "'translatex' (lowercase x): function names are case-SENSITIVE -- Invalid, only "
+        "'translateX' (capital X) is recognised");
+
+  // -- translateY: LengthPercent, 1 arg.
+  check(compute_transform_list("translateY(-3.25em)", LengthResolveContext{.font_size_px = 16.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translateY(-3.25em) computes Ok");
+  check_eq(out, "translateY(-52.0000px)", "translateY: em resolves through font_size_px, negative, non-round");
+
+  check(compute_transform_list("translateY(-25%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "ESC-7: translateY(-25%) computes Ok");
+  check_eq(out, "translateY(-25.0000%)", "ESC-7: negative % preserved symbolic");
+
+  // -- translateZ: Length (NOT LengthPercent), 1 arg -- % is rejected, unlike its X/Y siblings.
+  check(compute_transform_list("translateZ(7.5px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translateZ(7.5px) computes Ok");
+  check_eq(out, "translateZ(7.5000px)", "translateZ: plain px, non-round");
+
+  check(compute_transform_list("translateZ(-2.5dp)", LengthResolveContext{.dp_ratio = 4.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translateZ(-2.5dp) at dp_ratio=4.0 computes Ok");
+  check_eq(out, "translateZ(-10.0000px)", "translateZ: dp resolves through dp_ratio, negative");
+
+  check(compute_transform_list("translateZ(10PX)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translateZ(10PX): unit suffix is case-INSENSITIVE (inherited from parse_length, ESC-4)");
+  check_eq(out, "translateZ(10.0000px)", "translateZ(10PX) == translateZ(10px)");
+
+  check(compute_transform_list("translateZ(50%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "translateZ(50%): Length domain (not LengthPercent) rejects % -- the pin's own "
+        "TranslateZ(length1) slot, PropertyParserTransform.cpp:71");
+
+  // -- translate: LengthPercent x2, exactly 2 args (no fallback).
+  check(compute_transform_list("translate(-1.25em, 6.5rem)",
+                               LengthResolveContext{.font_size_px = 20.0f, .document_font_size_px = 10.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translate(-1.25em, 6.5rem) computes Ok");
+  check_eq(out, "translate(-25.0000px;65.0000px)",
+           "translate: em uses font_size_px, rem uses document_font_size_px -- different fields, "
+           "both non-round");
+
+  check(compute_transform_list("translate(3.75px, -0.25dp)", LengthResolveContext{.dp_ratio = 8.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translate(3.75px, -0.25dp) at dp_ratio=8.0 computes Ok");
+  check_eq(out, "translate(3.7500px;-2.0000px)", "translate: mixed px/dp, non-round");
+
+  check(compute_transform_list("translate(50%, 3px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "ESC-7: translate(50%, 3px) -- %-gap fix on the FIRST slot -- computes Ok");
+  check_eq(out, "translate(50.0000%;3.0000px)", "ESC-7: % on slot 1, px on slot 2, mixed in one call");
+
+  check(compute_transform_list("translate(10px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "translate(10px): 1 arg -- wrong arity, translate needs exactly 2, no fallback (unlike scale)");
+
+  // -- translate3d: LengthPercent, LengthPercent, Length -- 3 args, third slot rejects %.
+  check(compute_transform_list("translate3d(50%, 10px, 3px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translate3d(50%, 10px, 3px) -- this item's own spec worked example -- computes Ok");
+  check_eq(out, "translate3d(50.0000%;10.0000px;3.0000px)",
+           "translate3d: docs/uix-rcss.md section 9.4's own byte-exact worked example");
+
+  check(compute_transform_list("translate3d(12.5%, 3.5px, -0.5px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translate3d(12.5%, 3.5px, -0.5px) computes Ok");
+  check_eq(out, "translate3d(12.5000%;3.5000px;-0.5000px)", "translate3d: non-round %, px, negative px");
+
+  check(compute_transform_list("translate3d(-6.25dp, 1in, 2.5px)", LengthResolveContext{.dp_ratio = 2.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "translate3d(-6.25dp, 1in, 2.5px) at dp_ratio=2.0 computes Ok");
+  check_eq(out, "translate3d(-12.5000px;192.0000px;2.5000px)",
+           "translate3d: dp/physical-unit/px mix -- 1in scales with dp_ratio too (PPI_UNIT family)");
+
+  check(compute_transform_list("translate3d(50%, 10px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "translate3d(50%, 10px): 2 args -- wrong arity, translate3d needs exactly 3");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- `scaleX`/`scaleY`/`scaleZ`/`scale`/`scale3d`, per
+//     `PropertyParserTransform.cpp:83-106`. `scale`'s own dual arity (2 numbers, or 1 duplicated) is
+//     the ONE shape this item's own table-driven engine special-cases rather than represents in the
+//     table -- see `compute_scale()`'s own header, value_compute.cpp.
+// PT: `ESC-7` -- `scaleX`/`scaleY`/`scaleZ`/`scale`/`scale3d`, per
+//     `PropertyParserTransform.cpp:83-106`. A própria aridade dupla do `scale` (2 números, ou 1
+//     duplicado) é a ÚNICA forma que o próprio motor tabelado deste item trata como caso especial em
+//     vez de representar na tabela -- ver o próprio cabeçalho do `compute_scale()`,
+//     value_compute.cpp.
+void test_transform_scale_family() {
+  std::string out;
+
+  check(compute_transform_list("scaleX(1.75)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleX(1.75) computes Ok");
+  check_eq(out, "scaleX(1.7500)", "scaleX: plain number, non-round");
+
+  check(compute_transform_list("scaleX(-0.125)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleX(-0.125) computes Ok");
+  check_eq(out, "scaleX(-0.1250)", "scaleX: negative, non-round");
+
+  check(compute_transform_list("scaleX(2px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scaleX(2px): Number domain rejects ANY unit -- unlike length-typed slots, there is no "
+        "unitless-zero-style exception here at all, a suffixed number is always Invalid");
+
+  check(compute_transform_list("scaleY(-0.5)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleY(-0.5) computes Ok");
+  check_eq(out, "scaleY(-0.5000)", "scaleY: negative, non-round");
+
+  check(compute_transform_list("scaleY(4.75)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleY(4.75) computes Ok");
+  check_eq(out, "scaleY(4.7500)", "scaleY: non-round");
+
+  check(compute_transform_list("scaleY(50%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scaleY(50%): Number domain rejects % too");
+
+  check(compute_transform_list("scaleZ(-1.5)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleZ(-1.5) computes Ok");
+  check_eq(out, "scaleZ(-1.5000)", "scaleZ: negative, non-round");
+
+  check(compute_transform_list("scaleZ(0.25)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scaleZ(0.25) computes Ok");
+  check_eq(out, "scaleZ(0.2500)", "scaleZ: non-round");
+
+  // EN: `scale(2)` -- this item's own task-given worked example, byte-exact: 1 number duplicates
+  //     into BOTH printed slots.
+  // PT: `scale(2)` -- o próprio exemplo trabalhado dado-pela-tarefa deste item, byte-exato: 1 número
+  //     duplica pros DOIS slots impressos.
+  check(compute_transform_list("scale(2)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scale(2): 1-arg form computes Ok");
+  check_eq(out, "scale(2.0000;2.0000)", "scale(2) -> scale(2.0000;2.0000), duplicated -- task's own example");
+
+  check(compute_transform_list("scale(1.5, -2.25)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "scale(1.5, -2.25): 2-arg form computes Ok");
+  check_eq(out, "scale(1.5000;-2.2500)", "scale: 2 distinct non-round numbers, NOT duplicated");
+
+  check(compute_transform_list("scale()", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scale(): empty parens -- neither the 2-arg nor the 1-arg reading has anything to parse");
+
+  check(compute_transform_list("scale(2px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scale(2px): domain error on the 1-arg reading too -- Number rejects units");
+
+  check(compute_transform_list("scale(1,2,3)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scale(1,2,3): 3 args matches NEITHER the 2-arg nor the 1-arg reading -- Invalid, matching "
+        "the pin's own Scan() closing-paren check failing on the leftover comma in both attempts");
+
+  check(compute_transform_list("scale3d(1.5, -2.25, 0.25)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "scale3d(1.5, -2.25, 0.25) computes Ok");
+  check_eq(out, "scale3d(1.5000;-2.2500;0.2500)", "scale3d: 3 distinct non-round numbers");
+
+  check(compute_transform_list("scale3d(-0.5, 3.75, -1.125)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "scale3d(-0.5, 3.75, -1.125) computes Ok");
+  check_eq(out, "scale3d(-0.5000;3.7500;-1.1250)", "scale3d: negative/non-round mix");
+
+  check(compute_transform_list("scale3d(1,2)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "scale3d(1,2): 2 args -- wrong arity, scale3d needs exactly 3, no fallback (unlike scale)");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- `rotateX`/`rotateY`/`rotateZ`/`rotate`/`rotate3d`, per
+//     `PropertyParserTransform.cpp:108-126`. Exercises the zero-rule (a bare `0` is Ok, ANY other
+//     bare/unsuffixed number is Invalid) this item's own task names as "a mais fácil de esquecer" --
+//     see `parse_angle()`'s own header, value_compute.hpp, for the pre-existing gap this item closed
+//     to make this rule work at all (the pre-`ESC-7` `parse_angle()` never accepted unitless zero).
+// PT: `ESC-7` -- `rotateX`/`rotateY`/`rotateZ`/`rotate`/`rotate3d`, per
+//     `PropertyParserTransform.cpp:108-126`. Exercita a regra do zero (um `0` cru é Ok, QUALQUER
+//     outro número cru/sem-sufixo é Invalid) que a própria tarefa deste item nomeia como "a mais
+//     fácil de esquecer" -- ver o próprio cabeçalho do `parse_angle()`, value_compute.hpp, pra
+//     lacuna pré-existente que este item fechou pra esta regra funcionar de jeito nenhum (o próprio
+//     `parse_angle()` pré-`ESC-7` nunca aceitava zero-sem-unidade).
+void test_transform_rotate_family() {
+  std::string out;
+
+  check(compute_transform_list("rotateX(12.5deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateX(12.5deg) computes Ok");
+  check_eq(out, "rotateX(12.5000)", "rotateX: non-round degrees");
+
+  check(compute_transform_list("rotateX(-67.25deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateX(-67.25deg) computes Ok");
+  check_eq(out, "rotateX(-67.2500)", "rotateX: negative, non-round");
+
+  check(compute_transform_list("rotateX(0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateX(0): unitless zero -- zero-rule -- computes Ok");
+  check_eq(out, "rotateX(0.0000)", "rotateX(0) -> 0.0000, unitless zero assumes rad (still prints 0)");
+
+  check(compute_transform_list("rotateX(45DEG)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "ESC-7: rotateX(45DEG) -- unit suffix case-insensitivity fix -- computes Ok");
+  check_eq(out, "rotateX(45.0000)", "ESC-7: '45DEG' == '45deg', case-insensitive unit dispatch");
+
+  // EN: `-1.5708rad` is deliberately NOT `-1.5707963...` (exact -pi/2) -- verified independently
+  //     (numpy.float32, matching this module's own `degrees_from_radians()` float32-then-double
+  //     arithmetic exactly) to land at `-90.0002`, not a suspiciously-round `-90.0000` a naive
+  //     hand-computed literal risks (this module's own `UIX-RCSS-ERRATA-3` lesson: pin a value that
+  //     PROVES the real float32 arithmetic ran, not one that happens to look clean by coincidence).
+  // PT: `-1.5708rad` é deliberadamente NÃO `-1.5707963...` (-pi/2 exato) -- verificado
+  //     independentemente (numpy.float32, casando exatamente com a própria aritmética
+  //     float32-depois-double do `degrees_from_radians()` deste módulo) pra pousar em `-90.0002`,
+  //     não um `-90.0000` suspeitosamente-redondo que um literal calculado à mão arrisca (a própria
+  //     lição da `UIX-RCSS-ERRATA-3` deste módulo: pinar um valor que PROVA que a aritmética float32
+  //     real rodou, não um que calha de parecer limpo por coincidência).
+  check(compute_transform_list("rotateY(-1.5708rad)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "rotateY(-1.5708rad) computes Ok");
+  check_eq(out, "rotateY(-90.0002)",
+           "rotateY: rad->deg conversion, independently verified (numpy.float32), NOT a naive -90.0000");
+
+  check(compute_transform_list("rotateY(48.5deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateY(48.5deg) computes Ok");
+  check_eq(out, "rotateY(48.5000)", "rotateY: plain non-round degrees");
+
+  check(compute_transform_list("rotateZ(200.25deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateZ(200.25deg) computes Ok");
+  check_eq(out, "rotateZ(200.2500)", "rotateZ: > 180deg is still just a number, no wraparound");
+
+  check(compute_transform_list("rotateZ(-15.75deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotateZ(-15.75deg) computes Ok");
+  check_eq(out, "rotateZ(-15.7500)", "rotateZ: negative, non-round");
+
+  check(compute_transform_list("rotate(-77.25deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotate(-77.25deg) computes Ok");
+  check_eq(out, "rotate(-77.2500)", "rotate: 2D-subset function, non-round, unaffected by the 18 new siblings");
+
+  check(compute_transform_list("rotate(200.5deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotate(200.5deg) computes Ok");
+  check_eq(out, "rotate(200.5000)", "rotate: non-round");
+
+  // EN: `rotate(0)` -- this item's own task-given zero-rule worked example, byte-exact.
+  // PT: `rotate(0)` -- o próprio exemplo trabalhado dado-pela-tarefa deste item pra regra do zero,
+  //     byte-exato.
+  check(compute_transform_list("rotate(0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "rotate(0): unitless zero computes Ok -- task's own example");
+  check_eq(out, "rotate(0.0000)", "rotate(0) -> 0.0000 -- task's own explicit worked example");
+
+  check(compute_transform_list("rotate(45)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "rotate(45): unitless NON-zero is Invalid -- task's own explicit worked example");
+
+  check(compute_transform_list("rotate(50%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "rotate(50%): Angle domain (DEG|RAD only) rejects % -- task's own explicit worked example");
+
+  check(compute_transform_list("rotate3d(0.5, -0.5, 0.25, 33.75deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "rotate3d(0.5, -0.5, 0.25, 33.75deg) computes Ok");
+  check_eq(out, "rotate3d(0.5000;-0.5000;0.2500;33.7500)",
+           "rotate3d(x;y;z;ang): 3 numbers then 1 angle, in that exact source order");
+
+  check(compute_transform_list("rotate3d(-1.25, 2.5, -3.75, 1rad)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "rotate3d(-1.25, 2.5, -3.75, 1rad) computes Ok");
+  check_eq(out, "rotate3d(-1.2500;2.5000;-3.7500;57.2958)",
+           "rotate3d: rad angle in the LAST slot, already converted to degrees -- 57.2958 == the "
+           "same independently-verified 1rad value skewY(1rad) below also produces");
+
+  check(compute_transform_list("rotate3d(1,0,0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "rotate3d(1,0,0): 3 args -- wrong arity, rotate3d needs exactly 4 (3 numbers + 1 angle)");
+
+  check(compute_transform_list("rotate3d(1,0,0,45deg,99)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "rotate3d(1,0,0,45deg,99): 5 args -- wrong arity");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- `skewX`/`skewY`/`skew`, per `PropertyParserTransform.cpp:128-138`. Unlike `scale`,
+//     `skew` has NO 1-arg fallback in the pin (only ONE `Scan(..., "skew", angle2, args, 2)` call
+//     exists, `:136` -- no second attempt) -- `skew(<one angle>)` is Invalid here, a genuine
+//     asymmetry with `scale` this item's own task names explicitly and this test locks in.
+// PT: `ESC-7` -- `skewX`/`skewY`/`skew`, per `PropertyParserTransform.cpp:128-138`. Diferente do
+//     `scale`, `skew` NÃO tem fallback de 1-arg no pin (só existe UMA chamada `Scan(..., "skew",
+//     angle2, args, 2)`, `:136` -- nenhuma segunda tentativa) -- `skew(<um ângulo>)` é Invalid aqui,
+//     uma assimetria genuína com o `scale` que a própria tarefa deste item nomeia explicitamente e
+//     este teste tranca.
+void test_transform_skew_family() {
+  std::string out;
+
+  check(compute_transform_list("skewX(15.5deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "skewX(15.5deg) computes Ok");
+  check_eq(out, "skewX(15.5000)", "skewX: non-round degrees");
+
+  check(compute_transform_list("skewX(-8.25deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "skewX(-8.25deg) computes Ok");
+  check_eq(out, "skewX(-8.2500)", "skewX: negative, non-round");
+
+  check(compute_transform_list("skewY(1rad)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "skewY(1rad) computes Ok");
+  check_eq(out, "skewY(57.2958)", "skewY: rad->deg, independently verified (numpy.float32)");
+
+  check(compute_transform_list("skewY(-45.5deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "skewY(-45.5deg) computes Ok");
+  check_eq(out, "skewY(-45.5000)", "skewY: negative, non-round");
+
+  check(compute_transform_list("skew(12.5deg, -7.25deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "skew(12.5deg, -7.25deg): exact 2-arg form computes Ok");
+  check_eq(out, "skew(12.5000;-7.2500)", "skew: 2 distinct non-round angles");
+
+  check(compute_transform_list("skew(-33.75deg, 1rad)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "skew(-33.75deg, 1rad): mixed deg/rad computes Ok");
+  check_eq(out, "skew(-33.7500;57.2958)", "skew: deg then rad, both full-unit-parity angle forms");
+
+  check(compute_transform_list("skew(20deg)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "skew(20deg): 1-arg is Invalid -- NO 1-arg fallback in the pin, unlike scale's own "
+        "args[1]=args[0] duplication");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-7` -- `perspective`/`matrix`/`matrix3d`, per `PropertyParserTransform.cpp:51-61`.
+//     `perspective` is `Length` (NOT `LengthPercent`, unlike `translateX`/`Y`) -- `%` is rejected;
+//     `matrix`/`matrix3d` are pure `Number` x6/x16, copied 1:1 in source order, no render-matrix
+//     semantics (that stays `RMLX-8`'s job, unchanged by this item).
+// PT: `ESC-7` -- `perspective`/`matrix`/`matrix3d`, per `PropertyParserTransform.cpp:51-61`.
+//     `perspective` é `Length` (NÃO `LengthPercent`, diferente do `translateX`/`Y`) -- `%` é
+//     rejeitado; `matrix`/`matrix3d` são `Number` puro x6/x16, copiados 1:1 na ordem da fonte, sem
+//     semântica de matriz de render nenhuma (isso continua trabalho da `RMLX-8`, inalterado por este
+//     item).
+void test_transform_matrix_and_perspective_family() {
+  std::string out;
+
+  check(compute_transform_list("perspective(12.5px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "perspective(12.5px) computes Ok");
+  check_eq(out, "perspective(12.5000px)", "perspective: non-round px");
+
+  check(compute_transform_list("perspective(-3.75dp)", LengthResolveContext{.dp_ratio = 4.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "perspective(-3.75dp) at dp_ratio=4.0 computes Ok");
+  check_eq(out, "perspective(-15.0000px)", "perspective: dp resolves through dp_ratio, negative");
+
+  check(compute_transform_list("perspective(-100px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Ok,
+        "perspective(-100px): the pin does not validate sign here -- negative is Ok");
+  check_eq(out, "perspective(-100.0000px)", "perspective: negative length, task's own explicit example");
+
+  check(compute_transform_list("perspective(0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "perspective(0): unitless zero -- zero-rule -- computes Ok");
+  check_eq(out, "perspective(0.0000px)", "perspective(0) -> 0.0000px");
+
+  check(compute_transform_list("perspective(50%)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "perspective(50%): Length domain (not LengthPercent) rejects % -- task's own explicit example");
+
+  check(compute_transform_list("perspective(10px, 20px)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "perspective(10px, 20px): 2 args -- wrong arity, perspective needs exactly 1");
+
+  check(compute_transform_list("matrix(1.5, -2.25, 0.5, 3.75, -0.25, 4.5)", LengthResolveContext{.dp_ratio = 1.0f},
+                               &out) == ValueComputeStatus::Ok,
+        "matrix(...) 6 distinct non-round numbers computes Ok");
+  check_eq(out, "matrix(1.5000;-2.2500;0.5000;3.7500;-0.2500;4.5000)",
+           "matrix: 6 numbers, copied 1:1 in source order, NOT reordered into row/column semantics "
+           "(that stays RMLX-8's job)");
+
+  check(compute_transform_list("matrix(-3.5, 0.125, 7.25, -1.75, 2.5, -0.5)", LengthResolveContext{.dp_ratio = 1.0f},
+                               &out) == ValueComputeStatus::Ok,
+        "matrix(...) second distinct non-round set computes Ok");
+  check_eq(out, "matrix(-3.5000;0.1250;7.2500;-1.7500;2.5000;-0.5000)", "matrix: order preserved again");
+
+  check(compute_transform_list("matrix(2px, 0, 0, 1, 0, 0)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "matrix(2px, ...): Number domain rejects units on ANY of the 6 slots");
+
+  check(compute_transform_list("matrix(1,2,3,4,5)", LengthResolveContext{.dp_ratio = 1.0f}, &out) ==
+            ValueComputeStatus::Invalid,
+        "matrix(1,2,3,4,5): 5 args -- wrong arity, matrix needs exactly 6");
+
+  // EN: `ESC-7`'s own second matrix3d case -- 16 DISTINCT non-round values (alternating sign),
+  //     proving source-order preservation is not an artifact of the identity matrix's own
+  //     mostly-zero, easy-to-get-right-by-accident shape.
+  // PT: O próprio segundo caso matrix3d da `ESC-7` -- 16 valores DISTINTOS não-redondos (sinal
+  //     alternado), provando que a preservação de ordem da fonte não é um artefato da própria forma
+  //     maioria-zero, fácil-de-acertar-por-acidente, da matriz identidade.
+  check(compute_transform_list(
+            "matrix3d(0.5,-0.5,1.25,-1.25,2.5,-2.5,3.5,-3.5,4.5,-4.5,5.5,-5.5,6.5,-6.5,7.5,-7.5)",
+            LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Ok,
+        "matrix3d(...) 16 distinct non-round, alternating-sign values computes Ok");
+  check_eq(out,
+           "matrix3d(0.5000;-0.5000;1.2500;-1.2500;2.5000;-2.5000;3.5000;-3.5000;4.5000;-4.5000;"
+           "5.5000;-5.5000;6.5000;-6.5000;7.5000;-7.5000)",
+           "matrix3d: all 16 distinct values, byte-exact, source order preserved");
+
+  check(compute_transform_list("matrix3d(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "matrix3d(...) with 15 numbers: wrong arity, matrix3d needs exactly 16");
+
+  check(compute_transform_list("matrix3d(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17)",
+                               LengthResolveContext{.dp_ratio = 1.0f}, &out) == ValueComputeStatus::Invalid,
+        "matrix3d(...) with 17 numbers: wrong arity, matrix3d needs exactly 16");
 }
 
 // ---------------------------------------------------------------------------
@@ -1726,6 +2301,11 @@ int main() {
   test_font_size_em_resolution();
   test_non_finite_input_is_fail_high_at_parse_time();
   test_transform_list();
+  test_transform_translate_family();
+  test_transform_scale_family();
+  test_transform_rotate_family();
+  test_transform_skew_family();
+  test_transform_matrix_and_perspective_family();
   test_decorator_list_malformed_entry_drops_whole_property();
 
   // EN: Scope line, printed always (even at zero), per this task's own DoD -- domains covered by
@@ -1775,7 +2355,14 @@ int main() {
       "PropertyParserColour.cpp, 2 briefing anchors corrected by independent Python oracle + "
       "actually-compiled verification: oklab(1 0 0)=#fefefeff not #ffffffff, "
       "lab(50 40 60/0.5)=Ok not Invalid -- see test_color_parsing_esc6_functional_forms's own "
-      "header)\n");
+      "header) | ESC-7 transform-function family: 21 of 21 (up from 3 pre-ESC-7, full parity with "
+      "the pin's own PropertyParserTransform.cpp -- perspective, matrix, matrix3d, translateX/Y/Z, "
+      "translate, translate3d, scaleX/Y/Z, scale, scale3d, rotateX/Y/Z, rotate, rotate3d, skewX/Y, "
+      "skew; translate/translateX/Y/translate3d's own pre-existing %% gap closed too; scope stays "
+      "parse+compute+serialize, render-matrix application is still RMLX-8's job) | parse_angle(): "
+      "2 pre-existing gaps closed (unitless-zero exception, case-insensitive unit suffix), "
+      "benefiting all 3 pre-existing callers (gradient direction angle, polygon() rotation, "
+      "rotate()'s own 2D subset), not just the 18 new transform functions\n");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "value_compute_sanity: %d assertion(s) FAILED\n", g_failures);

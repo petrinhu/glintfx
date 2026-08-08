@@ -499,10 +499,6 @@ std::vector<std::string_view> split_whitespace(std::string_view s) {
   return out;
 }
 
-bool ends_with(std::string_view s, std::string_view suffix) {
-  return s.size() >= suffix.size() && s.substr(s.size() - suffix.size()) == suffix;
-}
-
 // EN: `ESC-4` -- declarative suffix->unit table mirroring the pin's own `unit_string_map`
 //     (`PropertyParserNumber.cpp:6-24`), restricted to the `Unit::LENGTH` family (`Unit.h:58`) --
 //     see value_compute.hpp's own `parse_length()` doc-comment for the full "why a table, not
@@ -1995,21 +1991,51 @@ ValueComputeStatus parse_percent(std::string_view raw, float* out_percent) {
   return ValueComputeStatus::Ok;
 }
 
+// EN: `ESC-7` -- rewritten to close 2 pre-existing gaps (unitless-zero exception,
+//     case-insensitive unit suffix) by switching to the SAME `find_unit_boundary()`
+//     reverse-scan-then-exact-match mechanics `parse_length()` already uses, rather than patching
+//     the old case-sensitive `ends_with(raw, "deg")`/`ends_with(raw, "rad")` pair -- see this
+//     function's own declaration, value_compute.hpp, for the full rationale and pin citations.
+// PT: `ESC-7` -- reescrita pra fechar 2 lacunas pré-existentes (exceção de zero-sem-unidade, sufixo
+//     de unidade case-insensitive) trocando pra MESMA mecânica de scan-reverso-depois-match-exato
+//     do `find_unit_boundary()` que o `parse_length()` já usa, em vez de remendar o antigo par
+//     case-sensitive `ends_with(raw, "deg")`/`ends_with(raw, "rad")` -- ver a própria declaração
+//     desta função, value_compute.hpp, pro racional completo e citações do pin.
 ValueComputeStatus parse_angle(std::string_view raw, float* out_deg) {
   if (raw.empty() || raw.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;
   }
-  if (ends_with(raw, "deg")) {
+  const std::size_t unit_pos = find_unit_boundary(raw);
+  const std::string_view number_part = raw.substr(0, unit_pos);
+  const std::string_view unit_part = raw.substr(unit_pos);
+
+  if (unit_part.empty()) {
+    // EN: Unitless is only accepted for the literal zero (upstream's own `angle` parser
+    //     zero_unit=Unit::RAD exception, `PropertyParserNumber.cpp:85-94`) -- mirrors
+    //     `parse_length()`'s own identical zero-branch shape immediately above in this file.
+    // PT: Sem unidade só é aceito pro zero literal (a própria exceção zero_unit=Unit::RAD do
+    //     parser `angle` do upstream, `PropertyParserNumber.cpp:85-94`) -- espelha a própria forma
+    //     idêntica de ramo-zero do `parse_length()` logo acima neste arquivo.
     float v = 0.0f;
-    if (!parse_float_token(raw.substr(0, raw.size() - 3), &v)) {
+    if (parse_float_token(number_part, &v) && v == 0.0f) {
+      *out_deg = 0.0f;
+      return ValueComputeStatus::Ok;
+    }
+    return ValueComputeStatus::Invalid;
+  }
+
+  const std::string unit_lower = to_lower(unit_part);
+  if (unit_lower == "deg") {
+    float v = 0.0f;
+    if (!parse_float_token(number_part, &v)) {
       return ValueComputeStatus::Invalid;
     }
     *out_deg = v;
     return ValueComputeStatus::Ok;
   }
-  if (ends_with(raw, "rad")) {
+  if (unit_lower == "rad") {
     float v = 0.0f;
-    if (!parse_float_token(raw.substr(0, raw.size() - 3), &v)) {
+    if (!parse_float_token(number_part, &v)) {
       return ValueComputeStatus::Invalid;
     }
     *out_deg = degrees_from_radians(v);
@@ -2516,54 +2542,409 @@ ValueComputeStatus compute_decorator_list(std::string_view raw_value,
 }
 
 // ===========================================================================
-// EN: Section 9.4 -- transform (2D subset).
-// PT: Seção 9.4 -- transform (subconjunto 2D).
+// EN: `ESC-7` -- Section 9.4 -- transform, all 21 functions. See value_compute.hpp's own header at
+//     `compute_transform_list()`'s own declaration for the full grammar/domain/citation rationale;
+//     this implementation-side header covers only what that one does not: the concrete shapes of
+//     the table-driven engine below.
+// PT: `ESC-7` -- Seção 9.4 -- transform, as 21 funções. Ver o próprio cabeçalho do
+//     value_compute.hpp na própria declaração do `compute_transform_list()` pro racional completo
+//     de gramática/domínio/citação; este cabeçalho do lado da implementação cobre só o que aquele
+//     não cobre: as formas concretas do próprio motor tabelado abaixo.
 // ===========================================================================
 namespace {
 
-ValueComputeStatus compute_translate(std::string_view inner, const LengthResolveContext& ctx,
-                                     std::string* out) {
-  auto pieces = split_top_level(inner, ',');
-  if (pieces.size() != 2) {
+// EN: The 4 argument shapes every one of the pin's own 21 transform functions' arguments reduces
+//     to -- one kind per slot, matching `PropertyParserTransform.cpp:9-10`'s own 4
+//     `PropertyParserNumber` member instances (`number`/`length`/`length_pct`/`angle`) 1:1.
+// PT: As 4 formas de argumento a que todo argumento das próprias 21 funções de transform do pin se
+//     reduz -- um kind por slot, casando 1:1 com as próprias 4 instâncias de membro
+//     `PropertyParserNumber` do `PropertyParserTransform.cpp:9-10` (`number`/`length`/
+//     `length_pct`/`angle`).
+enum class TransformArgKind {
+  Number,
+  Length,
+  LengthPercent,
+  Angle,
+};
+
+// EN: `Number` -- `Unit::NUMBER` only (`PropertyParserTransform.cpp:9`'s own `number(Unit::NUMBER)`
+//     member, no `zero_unit` argument at all -- `PropertyParserNumber.h:14`'s own default,
+//     `Unit::UNKNOWN`). A bare number ALREADY is this domain's native, unsuffixed form -- unlike
+//     `Length`/`LengthPercent`/`Angle` below, there is no unitless-zero SPECIAL CASE to implement
+//     here, because there is no "unit required, except when zero" rule at all: `parse_float_token()`
+//     alone is this kind's own complete domain check (any suffix, including `%`, fails it outright,
+//     the pin's own `Any(unit & units)` check on a `NUMBER`-only mask rejecting everything else).
+// PT: `Number` -- só `Unit::NUMBER` (o próprio membro `number(Unit::NUMBER)` do
+//     `PropertyParserTransform.cpp:9`, sem argumento `zero_unit` nenhum -- o próprio default do
+//     `PropertyParserNumber.h:14`, `Unit::UNKNOWN`). Um número cru JÁ é a própria forma nativa,
+//     sem-sufixo, deste domínio -- diferente do `Length`/`LengthPercent`/`Angle` abaixo, não há CASO
+//     ESPECIAL de zero-sem-unidade nenhum a implementar aqui, porque não há regra nenhuma
+//     "unidade exigida, exceto quando zero": o `parse_float_token()` sozinho já é o próprio check de
+//     domínio completo deste kind (qualquer sufixo, `%` incluso, falha ele de cara, o próprio check
+//     `Any(unit & units)` do pin numa máscara só-`NUMBER` rejeitando tudo mais).
+ValueComputeStatus print_number_arg(std::string_view raw, std::string* out) {
+  float v = 0.0f;
+  if (!parse_float_token(trim(raw), &v)) {
     return ValueComputeStatus::Invalid;
   }
-  float lens[2] = {0.0f, 0.0f};
-  for (int i = 0; i < 2; ++i) {
-    float v = 0.0f;
-    LengthUnit u = LengthUnit::Px;
-    if (parse_length(pieces[static_cast<std::size_t>(i)], &v, &u) != ValueComputeStatus::Ok) {
-      return ValueComputeStatus::Invalid;
-    }
-    lens[i] = resolve_length_px(v, u, ctx);
-  }
-  std::vector<std::string> parts{print_length_px(lens[0]), print_length_px(lens[1])};
-  *out = join(parts, ';');
+  *out = print_number(v);
   return ValueComputeStatus::Ok;
 }
 
-ValueComputeStatus compute_scale(std::string_view inner, std::string* out) {
-  auto pieces = split_top_level(inner, ',');
-  if (pieces.size() != 2) {
+// EN: `Length` -- `Unit::LENGTH`, no `%` -- `perspective`'s own `length1`/`translateZ`'s own
+//     `length1`/`translate3d`'s own third slot (`PropertyParserTransform.cpp:9`'s own
+//     `length(Unit::LENGTH, Unit::PX)` member). Delegates whole to `parse_length()`/
+//     `resolve_length_px()`, this file's own `ESC-4`-widened, already-tested 11-unit-family
+//     functions -- no new parsing logic, only wiring.
+// PT: `Length` -- `Unit::LENGTH`, sem `%` -- o próprio `length1` do `perspective`/o próprio
+//     `length1` do `translateZ`/o próprio terceiro slot do `translate3d` (o próprio membro
+//     `length(Unit::LENGTH, Unit::PX)` do `PropertyParserTransform.cpp:9`). Delega inteiro pro
+//     `parse_length()`/`resolve_length_px()`, as próprias funções de família-de-11-unidades
+//     alargadas-pela-`ESC-4`, já testadas, deste arquivo -- nenhuma lógica de parsing nova, só
+//     conexão.
+ValueComputeStatus print_length_arg(std::string_view raw, const LengthResolveContext& ctx,
+                                    std::string* out) {
+  float v = 0.0f;
+  LengthUnit u = LengthUnit::Px;
+  if (parse_length(trim(raw), &v, &u) != ValueComputeStatus::Ok) {
     return ValueComputeStatus::Invalid;
   }
-  float nums[2] = {0.0f, 0.0f};
-  for (int i = 0; i < 2; ++i) {
-    if (!parse_float_token(pieces[static_cast<std::size_t>(i)], &nums[i])) {
-      return ValueComputeStatus::Invalid;
-    }
-  }
-  std::vector<std::string> parts{print_number(nums[0]), print_number(nums[1])};
-  *out = join(parts, ';');
+  *out = print_length_px(resolve_length_px(v, u, ctx));
   return ValueComputeStatus::Ok;
 }
 
-ValueComputeStatus compute_rotate(std::string_view inner, std::string* out) {
-  std::string_view t = trim(inner);
+// EN: `LengthPercent` -- `Unit::LENGTH_PERCENT` -- `translateX`/`translateY`/`translate`/
+//     `translate3d`'s own first two slots (`PropertyParserTransform.cpp:9`'s own
+//     `length_pct(Unit::LENGTH_PERCENT, Unit::PX)` member). `ESC-7` -- closes the real,
+//     pre-existing `%` gap this item's own task named: pre-`ESC-7`, `compute_translate()`'s own
+//     body called `parse_length()` directly (never `%`-aware, `parse_length()`'s own `LENGTH` table
+//     has no `%` entry by design, see that table's own header) even though the pin's own
+//     `length_pct` always included `Unit::PERCENT` in its own accepted mask -- `%` was always in
+//     scope for these 4 slots, just never wired. Tries `%` FIRST (a raw ending in `%` can never
+//     ALSO be a bare/suffixed length, the two are mutually exclusive by construction -- no length
+//     unit suffix this module recognises ends in the byte `%`), falls to the SAME `Length` path
+//     otherwise.
+// PT: `LengthPercent` -- `Unit::LENGTH_PERCENT` -- os próprios primeiros dois slots do
+//     `translateX`/`translateY`/`translate`/`translate3d` (o próprio membro
+//     `length_pct(Unit::LENGTH_PERCENT, Unit::PX)` do `PropertyParserTransform.cpp:9`). `ESC-7` --
+//     fecha a lacuna real, pré-existente, de `%` que a própria tarefa deste item nomeou: pré-`ESC-7`,
+//     o próprio corpo do `compute_translate()` chamava `parse_length()` direto (nunca consciente de
+//     `%`, a própria tabela `LENGTH` do `parse_length()` não tem entrada `%` nenhuma por desenho, ver
+//     o próprio cabeçalho daquela tabela) mesmo o próprio `length_pct` do pin sempre incluindo
+//     `Unit::PERCENT` na própria máscara aceita dele -- `%` sempre esteve em escopo pra estes 4
+//     slots, só nunca foi conectado. Tenta `%` PRIMEIRO (um cru terminado em `%` nunca TAMBÉM pode
+//     ser um comprimento cru/sufixado, os dois são mutuamente exclusivos por construção -- nenhum
+//     sufixo de unidade de comprimento que este módulo reconhece termina no byte `%`), cai pro MESMO
+//     caminho `Length` senão.
+ValueComputeStatus print_length_percent_arg(std::string_view raw, const LengthResolveContext& ctx,
+                                            std::string* out) {
+  std::string_view t = trim(raw);
+  if (!t.empty() && t.back() == '%') {
+    float pct = 0.0f;
+    if (parse_percent(t, &pct) != ValueComputeStatus::Ok) {
+      return ValueComputeStatus::Invalid;
+    }
+    *out = print_percent(pct);
+    return ValueComputeStatus::Ok;
+  }
+  float v = 0.0f;
+  LengthUnit u = LengthUnit::Px;
+  if (parse_length(t, &v, &u) != ValueComputeStatus::Ok) {
+    return ValueComputeStatus::Invalid;
+  }
+  *out = print_length_px(resolve_length_px(v, u, ctx));
+  return ValueComputeStatus::Ok;
+}
+
+// EN: `Angle` -- `Unit::ANGLE` (`deg`/`rad` only) -- `rotateX/Y/Z`/`rotate`/`skewX/Y`/`skew`/
+//     `rotate3d`'s own last slot (`PropertyParserTransform.cpp:9`'s own
+//     `angle(Unit::ANGLE, Unit::RAD)` member). Delegates whole to `parse_angle()`/
+//     `print_angle_deg()` -- see `parse_angle()`'s own declaration, value_compute.hpp, for the two
+//     pre-existing gaps (unitless-zero exception, case-insensitive unit suffix) `ESC-7` closed
+//     there so this kind's own zero-rule/case-insensitivity requirements are satisfied for free.
+// PT: `Angle` -- `Unit::ANGLE` (só `deg`/`rad`) -- os próprios `rotateX/Y/Z`/`rotate`/`skewX/Y`/
+//     `skew`/o próprio último slot do `rotate3d` (o próprio membro `angle(Unit::ANGLE, Unit::RAD)`
+//     do `PropertyParserTransform.cpp:9`). Delega inteiro pro `parse_angle()`/`print_angle_deg()`
+//     -- ver a própria declaração do `parse_angle()`, value_compute.hpp, pras duas lacunas
+//     pré-existentes (exceção de zero-sem-unidade, sufixo de unidade case-insensitive) que a
+//     `ESC-7` fechou ali, então os próprios requisitos de regra-do-zero/case-insensitivity deste
+//     kind ficam satisfeitos de graça.
+ValueComputeStatus print_angle_arg(std::string_view raw, std::string* out) {
   float deg = 0.0f;
-  if (parse_angle(t, &deg) != ValueComputeStatus::Ok) {
+  if (parse_angle(trim(raw), &deg) != ValueComputeStatus::Ok) {
     return ValueComputeStatus::Invalid;
   }
   *out = print_angle_deg(deg);
+  return ValueComputeStatus::Ok;
+}
+
+ValueComputeStatus print_transform_arg(TransformArgKind kind, std::string_view raw,
+                                       const LengthResolveContext& ctx, std::string* out) {
+  switch (kind) {
+    case TransformArgKind::Number:
+      return print_number_arg(raw, out);
+    case TransformArgKind::Length:
+      return print_length_arg(raw, ctx, out);
+    case TransformArgKind::LengthPercent:
+      return print_length_percent_arg(raw, ctx, out);
+    case TransformArgKind::Angle:
+      return print_angle_arg(raw, out);
+  }
+  return ValueComputeStatus::Invalid; // unreachable -- every enumerator handled above (no
+                                      // `default:` label, on purpose, so a future 5th kind added
+                                      // without updating this switch is a compiler warning, not a
+                                      // silent fallthrough).
+}
+
+// EN: `ESC-7` -- one static entry per pin function (`scale` excepted, see `compute_scale()`'s own
+//     header below), `name` matched byte-exact (case-SENSITIVE, `translatex(...)` !=
+//     `translateX(...)`, mirroring `PropertyParserTransform::Scan()`'s own `memcmp`,
+//     `PropertyParserTransform.cpp:170`), `kinds`/`arg_count` the exact per-slot argument shape
+//     transcribed from that same file's own `Scan(...)` call chain, line cited per row below.
+// PT: `ESC-7` -- uma entrada estática por função do pin (exceto `scale`, ver o próprio cabeçalho do
+//     `compute_scale()` abaixo), `name` casado byte-exato (case-SENSITIVE, `translatex(...)` !=
+//     `translateX(...)`, espelhando o próprio `memcmp` do `PropertyParserTransform::Scan()`,
+//     `PropertyParserTransform.cpp:170`), `kinds`/`arg_count` a própria forma de argumento por-slot
+//     exata transcrita da própria cadeia de chamadas `Scan(...)` daquele mesmo arquivo, linha citada
+//     por linha abaixo.
+struct TransformFunctionSpec {
+  std::string_view name;
+  const TransformArgKind* kinds = nullptr;
+  std::size_t arg_count = 0;
+};
+
+constexpr TransformArgKind kArgsLength1[] = {TransformArgKind::Length};
+constexpr TransformArgKind kArgsLengthPercent1[] = {TransformArgKind::LengthPercent};
+constexpr TransformArgKind kArgsNumber1[] = {TransformArgKind::Number};
+constexpr TransformArgKind kArgsAngle1[] = {TransformArgKind::Angle};
+constexpr TransformArgKind kArgsAngle2[] = {TransformArgKind::Angle, TransformArgKind::Angle};
+constexpr TransformArgKind kArgsLengthPercent2[] = {TransformArgKind::LengthPercent,
+                                                    TransformArgKind::LengthPercent};
+constexpr TransformArgKind kArgsLengthPercent2Length1[] = {
+    TransformArgKind::LengthPercent, TransformArgKind::LengthPercent, TransformArgKind::Length};
+constexpr TransformArgKind kArgsNumber3[] = {TransformArgKind::Number, TransformArgKind::Number,
+                                             TransformArgKind::Number};
+constexpr TransformArgKind kArgsNumber3Angle1[] = {TransformArgKind::Number, TransformArgKind::Number,
+                                                   TransformArgKind::Number, TransformArgKind::Angle};
+constexpr TransformArgKind kArgsNumber6[] = {TransformArgKind::Number, TransformArgKind::Number,
+                                             TransformArgKind::Number, TransformArgKind::Number,
+                                             TransformArgKind::Number, TransformArgKind::Number};
+constexpr TransformArgKind kArgsNumber16[] = {
+    TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number,
+    TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number,
+    TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number,
+    TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number, TransformArgKind::Number};
+
+constexpr TransformFunctionSpec kTransformFunctionTable[] = {
+    {"perspective", kArgsLength1, 1},               // PropertyParserTransform.cpp:51
+    {"matrix", kArgsNumber6, 6},                    // PropertyParserTransform.cpp:55
+    {"matrix3d", kArgsNumber16, 16},                // PropertyParserTransform.cpp:59
+    {"translateX", kArgsLengthPercent1, 1},         // PropertyParserTransform.cpp:63
+    {"translateY", kArgsLengthPercent1, 1},         // PropertyParserTransform.cpp:67
+    {"translateZ", kArgsLength1, 1},                // PropertyParserTransform.cpp:71
+    {"translate", kArgsLengthPercent2, 2},          // PropertyParserTransform.cpp:75
+    {"translate3d", kArgsLengthPercent2Length1, 3}, // PropertyParserTransform.cpp:79
+    {"scaleX", kArgsNumber1, 1},                    // PropertyParserTransform.cpp:83
+    {"scaleY", kArgsNumber1, 1},                    // PropertyParserTransform.cpp:87
+    {"scaleZ", kArgsNumber1, 1},                    // PropertyParserTransform.cpp:91
+    {"scale3d", kArgsNumber3, 3},                   // PropertyParserTransform.cpp:104
+    {"rotateX", kArgsAngle1, 1},                    // PropertyParserTransform.cpp:108
+    {"rotateY", kArgsAngle1, 1},                    // PropertyParserTransform.cpp:112
+    {"rotateZ", kArgsAngle1, 1},                    // PropertyParserTransform.cpp:116
+    {"rotate", kArgsAngle1, 1},                     // PropertyParserTransform.cpp:120
+    {"rotate3d", kArgsNumber3Angle1, 4},            // PropertyParserTransform.cpp:124
+    {"skewX", kArgsAngle1, 1},                      // PropertyParserTransform.cpp:128
+    {"skewY", kArgsAngle1, 1},                      // PropertyParserTransform.cpp:132
+    {"skew", kArgsAngle2, 2},                       // PropertyParserTransform.cpp:136 -- NO 1-arg
+                                                    // fallback in the pin, unlike `scale`.
+};
+
+// EN: `ESC-7` -- `scale`'s own dual arity (`PropertyParserTransform.cpp:95` tries 2 plain numbers
+//     first; `:99` falls back to 1, duplicating `args[1] = args[0]`, `:101`) -- the ONE function
+//     shape `TransformFunctionSpec`'s own single-arity-per-name shape cannot represent, so it is
+//     special-cased here rather than contorting the table (unchanged in shape from this file's own
+//     pre-`ESC-7` `compute_scale()`, now reached through `compute_one_transform_function()`'s own
+//     name check instead of a flat 3-way `if`/`else if` chain). `split_top_level()`'s own comma
+//     split always yields >=1 piece (never 0, per that function's own header) -- `pieces.size()==2`
+//     tries the 2-number reading; `pieces.size()==1` tries the 1-number-duplicated reading;
+//     anything else (0 pieces is impossible; 3+ pieces has a stray comma neither pin alternative
+//     can consume) is `Invalid`. **Proof this 2-branch shape is exactly equivalent to the pin's own
+//     try-2-then-fall-back-to-1 `Scan()` sequence, not merely a plausible simplification:** whenever
+//     `inner` contains >=1 top-level comma (>=2 pieces), the pin's own 1-arg fallback attempt
+//     CANNOT succeed regardless of content -- its own `Scan(..., nargs=1)` parses exactly one
+//     argument then immediately checks for the closing `)` (`PropertyParserTransform.cpp:247-257`),
+//     and finds a `,` there instead whenever a comma was already present, failing unconditionally;
+//     so for ANY >=2-piece input, the pin's own final answer depends ONLY on the 2-arg attempt,
+//     exactly what `pieces.size()==2` alone checks here. Symmetrically, whenever `inner` has ZERO
+//     top-level commas (1 piece), the pin's own 2-arg attempt cannot succeed either (its own `Scan`
+//     looks for a `,` after arg 0 unconditionally, `:232-244`, and finds none) -- so the pin's own
+//     final answer there depends ONLY on the 1-arg attempt, exactly what `pieces.size()==1` alone
+//     checks here.
+// PT: `ESC-7` -- a própria aridade dupla do `scale` (`PropertyParserTransform.cpp:95` tenta 2
+//     números crus primeiro; `:99` cai pra 1, duplicando `args[1] = args[0]`, `:101`) -- a ÚNICA
+//     forma de função que a própria forma aridade-única-por-nome do `TransformFunctionSpec` não
+//     consegue representar, então é tratada como caso especial aqui em vez de contorcer a tabela
+//     (forma inalterada desde o próprio `compute_scale()` pré-`ESC-7` deste arquivo, agora
+//     alcançada pela própria checagem de nome do `compute_one_transform_function()` em vez de uma
+//     cadeia `if`/`else if` plana de 3 vias). O próprio split por vírgula do `split_top_level`
+//     sempre produz >=1 pedaço (nunca 0, per o próprio cabeçalho daquela função) --
+//     `pieces.size()==2` tenta a leitura de 2 números; `pieces.size()==1` tenta a leitura de 1
+//     número duplicado; qualquer outra coisa (0 pedaços é impossível; 3+ pedaços tem uma vírgula
+//     sobrando que nenhuma alternativa do pin consegue consumir) é `Invalid`. **Prova de que esta
+//     forma de 2 ramos é exatamente equivalente à própria sequência tenta-2-depois-cai-pra-1 do
+//     `Scan()` do pin, não só uma simplificação plausível:** sempre que `inner` contém >=1 vírgula
+//     de topo-de-nível (>=2 pedaços), a própria tentativa de fallback 1-arg do pin NÃO CONSEGUE ter
+//     sucesso independente do conteúdo -- o próprio `Scan(..., nargs=1)` dele parseia exatamente um
+//     argumento e depois checa IMEDIATAMENTE o `)` de fechamento
+//     (`PropertyParserTransform.cpp:247-257`), e acha uma `,` ali em vez disso sempre que uma
+//     vírgula já estava presente, falhando incondicionalmente; então pra QUALQUER input de >=2
+//     pedaços, a própria resposta final do pin depende SÓ da tentativa de 2-arg, exatamente o que
+//     `pieces.size()==2` sozinho checa aqui. Simetricamente, sempre que `inner` tem ZERO vírgulas de
+//     topo-de-nível (1 pedaço), a própria tentativa de 2-arg do pin também não consegue ter sucesso
+//     (o próprio `Scan` dele procura uma `,` depois do arg 0 incondicionalmente, `:232-244`, e não
+//     acha nenhuma) -- então a própria resposta final do pin ali depende SÓ da tentativa de 1-arg,
+//     exatamente o que `pieces.size()==1` sozinho checa aqui.
+ValueComputeStatus compute_scale(std::string_view inner, std::string* out) {
+  auto pieces = split_top_level(inner, ',');
+  if (pieces.size() == 2) {
+    float nums[2] = {0.0f, 0.0f};
+    for (int i = 0; i < 2; ++i) {
+      if (!parse_float_token(pieces[static_cast<std::size_t>(i)], &nums[i])) {
+        return ValueComputeStatus::Invalid;
+      }
+    }
+    std::vector<std::string> parts{print_number(nums[0]), print_number(nums[1])};
+    *out = join(parts, ';');
+    return ValueComputeStatus::Ok;
+  }
+  if (pieces.size() == 1) {
+    float v = 0.0f;
+    if (!parse_float_token(pieces[0], &v)) {
+      return ValueComputeStatus::Invalid;
+    }
+    std::vector<std::string> parts{print_number(v), print_number(v)};
+    *out = join(parts, ';');
+    return ValueComputeStatus::Ok;
+  }
+  return ValueComputeStatus::Invalid;
+}
+
+// EN: `ESC-7` -- STRICT top-level function-call scanner, `transform`-only. Unlike
+//     `scan_function_calls()` above (deliberately tolerant, shared with `decorator`'s own
+//     comma-OR-space-separated list -- see that function's own header), this scanner requires
+//     EVERY byte of `s` to be accounted for as either (a) ASCII whitespace between calls, or (b)
+//     part of a `name(args)` call -- a stray comma, an identifier not followed by `(`, or any other
+//     non-whitespace byte anywhere makes the WHOLE scan fail (`false`, `*out` cleared, nothing
+//     partial kept), matching `PropertyParserTransform::ParseValue()`'s own `while(*next)` loop:
+//     the FIRST position that matches no keyword aborts the ENTIRE property
+//     (`PropertyParserTransform.cpp:141-148`, `bytes_read == 0` -> `return false`) -- upstream's
+//     own transform-list separator is ordinary CSS whitespace-adjacency ONLY, never a comma (a
+//     comma there is simply a byte no keyword's own `Scan()` recognises, so the SAME
+//     abort-the-whole-parse path already fires for it, without upstream needing any
+//     comma-specific check of its own). Identifier characters mirror `scan_function_calls()`'s own
+//     charset exactly (`isalnum` -- digits included, needed for `matrix3d`/`translate3d`/
+//     `rotate3d`'s own trailing `3d` -- plus `-`), same reasoning, not re-derived independently.
+// PT: `ESC-7` -- escaneador de chamada de função de topo-de-nível ESTRITO, só-`transform`.
+//     Diferente do `scan_function_calls()` acima (deliberadamente tolerante, compartilhado com a
+//     própria lista separada-por-vírgula-OU-espaço do `decorator` -- ver o próprio cabeçalho
+//     daquela função), este escaneador exige que TODO byte de `s` seja contabilizado como (a)
+//     whitespace ASCII entre chamadas, ou (b) parte de uma chamada `name(args)` -- uma vírgula
+//     solta, um identificador não seguido de `(`, ou qualquer outro byte não-whitespace em
+//     qualquer lugar faz o scan INTEIRO falhar (`false`, `*out` limpo, nada parcial mantido),
+//     casando com o próprio laço `while(*next)` do `PropertyParserTransform::ParseValue()`: a
+//     PRIMEIRA posição que não casa nenhuma keyword derruba a PROPRIEDADE INTEIRA
+//     (`PropertyParserTransform.cpp:141-148`, `bytes_read == 0` -> `return false`) -- o próprio
+//     separador de lista-de-transform do upstream é só adjacência-por-whitespace do CSS comum,
+//     nunca uma vírgula (uma vírgula ali é simplesmente um byte que nenhum `Scan()` de keyword
+//     reconhece, então o MESMO caminho aborta-o-parse-inteiro já dispara pra ela, sem o upstream
+//     precisar de checagem nenhuma específica-de-vírgula própria). Caracteres de identificador
+//     espelham exatamente o próprio charset do `scan_function_calls()` (`isalnum` -- dígitos
+//     inclusos, necessário pro próprio `3d` final do `matrix3d`/`translate3d`/`rotate3d` -- mais
+//     `-`), mesmo raciocínio, não re-derivado independentemente.
+bool scan_transform_function_calls_strict(std::string_view s, std::vector<FunctionCall>* out) {
+  out->clear();
+  std::size_t i = 0;
+  std::size_t n = s.size();
+  while (i < n) {
+    while (i < n && is_ws(s[i])) {
+      ++i;
+    }
+    if (i >= n) {
+      break;
+    }
+    std::size_t name_start = i;
+    while (i < n && (std::isalnum(static_cast<unsigned char>(s[i])) != 0 || s[i] == '-')) {
+      ++i;
+    }
+    if (i == name_start) {
+      return false; // stray byte that is neither whitespace nor an identifier start (a comma
+                    // included) -- hard fail, never silently skipped.
+    }
+    std::size_t name_end = i;
+    while (i < n && is_ws(s[i])) {
+      ++i;
+    }
+    if (i >= n || s[i] != '(') {
+      return false; // identifier not followed by '(' -- malformed, not a function call.
+    }
+    std::size_t paren_start = i + 1;
+    std::size_t j = paren_start;
+    int depth = 1;
+    while (j < n && depth > 0) {
+      if (s[j] == '(') {
+        ++depth;
+      } else if (s[j] == ')') {
+        --depth;
+        if (depth == 0) {
+          break;
+        }
+      }
+      ++j;
+    }
+    if (depth != 0) {
+      return false; // unterminated '(' -- unbalanced parens.
+    }
+    out->push_back(FunctionCall{s.substr(name_start, name_end - name_start),
+                                s.substr(paren_start, j - paren_start)});
+    i = j + 1;
+  }
+  return true;
+}
+
+// EN: The single dispatcher every `FunctionCall` `scan_transform_function_calls_strict()` finds
+//     goes through: `scale` first (its own dual-arity special case), then an exact-name lookup
+//     against `kTransformFunctionTable`, then a per-slot arity check, then one `print_transform_arg`
+//     call per slot.
+// PT: O único despachante por onde todo `FunctionCall` que o `scan_transform_function_calls_strict()`
+//     acha passa: `scale` primeiro (o próprio caso especial de aridade dupla dele), depois um
+//     lookup de nome exato contra a `kTransformFunctionTable`, depois uma checagem de aridade
+//     por-slot, depois uma chamada `print_transform_arg` por slot.
+ValueComputeStatus compute_one_transform_function(std::string_view name, std::string_view inner,
+                                                  const LengthResolveContext& ctx, std::string* out) {
+  if (name == "scale") {
+    return compute_scale(inner, out);
+  }
+  const auto* spec = std::find_if(std::begin(kTransformFunctionTable), std::end(kTransformFunctionTable),
+                                  [&name](const TransformFunctionSpec& entry) { return entry.name == name; });
+  if (spec == std::end(kTransformFunctionTable)) {
+    return ValueComputeStatus::Invalid; // unrecognised function name -- section 11's own fail-high
+                                        // case, same as compute_one_decorator_function()'s own
+                                        // identical final branch.
+  }
+  auto pieces = split_top_level(inner, ',');
+  if (pieces.size() != spec->arg_count) {
+    return ValueComputeStatus::Invalid;
+  }
+  std::vector<std::string> parts;
+  parts.reserve(pieces.size());
+  for (std::size_t i = 0; i < pieces.size(); ++i) {
+    std::string printed;
+    if (print_transform_arg(spec->kinds[i], pieces[i], ctx, &printed) != ValueComputeStatus::Ok) {
+      return ValueComputeStatus::Invalid;
+    }
+    parts.push_back(std::move(printed));
+  }
+  *out = join(parts, ';');
   return ValueComputeStatus::Ok;
 }
 
@@ -2580,28 +2961,23 @@ ValueComputeStatus compute_transform_list(std::string_view raw_value,
   if (trimmed.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;
   }
-  auto calls = scan_function_calls(trimmed);
-  if (calls.empty()) {
-    // EN: Same reasoning as `compute_decorator_list()`'s own identical guard -- non-empty,
-    //     non-`"none"` text with zero scannable function calls is malformed, never a silent
-    //     `"none"`.
-    // PT: Mesmo raciocínio da própria guarda idêntica do `compute_decorator_list()` -- texto
-    //     não-vazio, não-`"none"`, com zero chamadas de função escaneáveis é malformado, nunca um
-    //     `"none"` em silêncio.
+  std::vector<FunctionCall> calls;
+  if (!scan_transform_function_calls_strict(trimmed, &calls) || calls.empty()) {
+    // EN: Covers both this scanner's own hard-fail return (a stray comma, an unrecognised token
+    //     shape, unbalanced parens -- see that function's own header) AND the same "non-empty,
+    //     non-'none' text with zero scannable calls" shape `compute_decorator_list()`'s own
+    //     identical guard already covers for its own scanner.
+    // PT: Cobre tanto o próprio retorno de falha-dura deste escaneador (uma vírgula solta, uma
+    //     forma de token não-reconhecida, parênteses desbalanceados -- ver o próprio cabeçalho
+    //     daquela função) QUANTO a mesma forma "texto não-vazio, não-'none', com zero chamadas
+    //     escaneáveis" que a própria guarda idêntica do `compute_decorator_list()` já cobre pro
+    //     próprio escaneador dele.
     return ValueComputeStatus::Invalid;
   }
   std::vector<std::string> results;
   for (const FunctionCall& call : calls) {
     std::string args;
-    ValueComputeStatus st = ValueComputeStatus::Invalid;
-    if (call.name == "translate") {
-      st = compute_translate(call.inner, ctx, &args);
-    } else if (call.name == "scale") {
-      st = compute_scale(call.inner, &args);
-    } else if (call.name == "rotate") {
-      st = compute_rotate(call.inner, &args);
-    }
-    if (st != ValueComputeStatus::Ok) {
+    if (compute_one_transform_function(call.name, call.inner, ctx, &args) != ValueComputeStatus::Ok) {
       // EN: Section 11's own uniform malformed-entry policy, applied consistently to `transform`
       //     too (this module's own decision, since `transform`'s own scope is explicitly thin and
       //     not verified against a real upstream parser loop the way `decorator`/`box-shadow` are

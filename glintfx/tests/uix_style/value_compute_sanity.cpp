@@ -605,11 +605,31 @@ void test_gradient_alpha_roundtrip_matches_upstream_storage_type() {
 
 // ---------------------------------------------------------------------------
 // EN: docs/uix-rcss.md section 7.1 -- all 4 authorized hex forms normalize to the same 8-digit
-//     canonical form, plus the 3 authorized named colors, plus fail-high for everything else
-//     (section 13's own "requires the líder's sign-off" clause).
+//     canonical form, plus fail-high for a syntax neither the census nor the pinned RmlUi build
+//     accepts (section 13's own "real zero is a real cut" clause, restricted by `ADR-0022`/
+//     `docs/rmlx-subset.md` section 7 to what the pin itself does not have). `ESC-5` widened the
+//     named-color side from 3 to the pin's own full 19-entry `html_colours` table -- this function
+//     keeps its own original 3 individual checks (`white`/`black`/`transparent`, still passing
+//     unmodified) plus INVERTS its own former `'red'` fail-high assertion below (the pin DOES have
+//     `red` -- `PropertyParserColour.cpp:123`) for a red-to-green signal with zero new test
+//     scaffolding; the full 19-entry enumeration (transcribed independently from the pin, not from
+//     this file's own `kNamedColorTable`), case-insensitivity, and the fail-high boundary against
+//     real-but-pin-absent CSS names live in `test_color_parsing_esc5_named_color_parity()`
+//     immediately below, mirroring how `ESC-4` added `test_length_resolution_esc4_full_unit_parity()`
+//     as a sibling rather than folding everything into this one function.
 // PT: Seção 7.1 do docs/uix-rcss.md -- as 4 formas hex autorizadas normalizam pra mesma forma
-//     canônica de 8 dígitos, mais as 3 cores nomeadas autorizadas, mais fail-high pra tudo mais
-//     (a própria cláusula "exige aval do líder" da seção 13).
+//     canônica de 8 dígitos, mais fail-high pra uma sintaxe que nem o censo nem o build fixado do
+//     RmlUi aceitam (a própria cláusula "zero real é corte real" da seção 13, restrita pela
+//     `ADR-0022`/seção 7 do `docs/rmlx-subset.md` ao que o próprio pin não tem). A `ESC-5` alargou o
+//     lado de cor nomeada de 3 pra própria tabela `html_colours` completa de 19 entradas do pin --
+//     esta função mantém os 3 checks individuais originais dela (`white`/`black`/`transparent`,
+//     ainda passando sem mudança) mais INVERTE a própria asserção fail-high anterior de `'red'`
+//     abaixo (o pin TEM `red` -- `PropertyParserColour.cpp:123`) pra um sinal vermelho-pra-verde com
+//     zero andaime de teste novo; a enumeração completa das 19 (transcrita independente do pin, não
+//     da própria `kNamedColorTable` deste arquivo), a case-insensitivity, e a fronteira fail-high
+//     contra nomes CSS reais-porém-ausentes-do-pin moram no
+//     `test_color_parsing_esc5_named_color_parity()` logo abaixo, espelhando como a `ESC-4` somou o
+//     `test_length_resolution_esc4_full_unit_parity()` como irmã em vez de dobrar tudo nesta função.
 void test_color_parsing_all_forms() {
   Rgba8 c{};
   check(parse_color("#f00", &c) == ValueComputeStatus::Ok, "#rgb parses");
@@ -633,12 +653,109 @@ void test_color_parsing_all_forms() {
   check(parse_color("transparent", &c) == ValueComputeStatus::Ok, "'transparent' parses");
   check_eq(print_color(c), "#00000000", "transparent -> #00000000");
 
-  check(parse_color("red", &c) == ValueComputeStatus::Invalid,
-        "'red': fail-high, not authorized by section 13 (only white/black/transparent are)");
+  check(parse_color("red", &c) == ValueComputeStatus::Ok,
+        "'red': ESC-5 -- now authorized, section 13's own set widened to the pin's full 19 "
+        "(was fail-high pre-ESC-5)");
+  check_eq(print_color(c), "#ff0000ff", "red -> #ff0000ff");
   check(parse_color("rgb(255,0,0)", &c) == ValueComputeStatus::Invalid,
-        "rgb(): fail-high, zero-measured functional color form, section 13");
+        "rgb(): fail-high, ESC-6's own scope, unaffected by ESC-5 (not a table key, not '#')");
   check(parse_color("#ff", &c) == ValueComputeStatus::Invalid,
         "2-digit hex: fail-high, not one of the 4 authorized forms");
+}
+
+// ---------------------------------------------------------------------------
+// EN: `ESC-5` -- docs/uix-rcss.md section 7.1's own full named-color set, all 19 of the pin's own
+//     `html_colours` map (`examples/RmlUi/Source/Core/PropertyParserColour.cpp:117-135`), plus the
+//     case-insensitivity the pin's own `ParseColour` applies via `StringUtilities::ToLower(value)`
+//     immediately before its own lookup (`:201`), plus the fail-high boundary against real CSS
+//     names the pin does NOT register. **Every `name`/`want_hex` pair below is transcribed directly
+//     from the pin's own source, by hand, NOT by iterating `value_compute.cpp`'s own
+//     `kNamedColorTable`** -- this is this task's own explicit "independent oracle" requirement: a
+//     bug shared by both tables (a transposed digit, a swapped row) would hide behind agreement if
+//     this test merely re-read the production table instead of re-deriving the same 19 answers on
+//     its own.
+// PT: `ESC-5` -- o próprio conjunto completo de cor nomeada da seção 7.1 do docs/uix-rcss.md, as 19
+//     do próprio mapa `html_colours` do pin (`examples/RmlUi/Source/Core/
+//     PropertyParserColour.cpp:117-135`), mais a case-insensitivity que o próprio `ParseColour` do
+//     pin aplica via `StringUtilities::ToLower(value)` logo antes do próprio lookup (`:201`), mais a
+//     fronteira fail-high contra nomes CSS reais que o pin NÃO registra. **Todo par
+//     `name`/`want_hex` abaixo é transcrito direto da própria fonte do pin, à mão, NÃO iterando a
+//     própria `kNamedColorTable` do value_compute.cpp** -- este é o próprio requisito explícito
+//     "oráculo independente" desta tarefa: um bug compartilhado pelas duas tabelas (um dígito
+//     transposto, uma linha trocada) se esconderia atrás da concordância se este teste só relesse a
+//     tabela de produção em vez de re-derivar as mesmas 19 respostas sozinho.
+void test_color_parsing_esc5_named_color_parity() {
+  struct NamedColorCase {
+    const char* name;
+    const char* want_hex;
+  };
+  // EN: Pin's own `Colourb(r, g, b[, a])` constructor arguments (decimal), converted to the
+  //     canonical 8-digit hex form by hand and cross-checked against `ADR-0022`'s own measured
+  //     table (`docs/adr/0022-paridade-total-com-o-motor-substituido.md`, "Named colours" row) --
+  //     not copied from that table either, both were derived independently from the same pin
+  //     source and happen to agree, which is the point.
+  // PT: Os próprios argumentos de construtor `Colourb(r, g, b[, a])` do pin (decimal), convertidos
+  //     pra forma hex canônica de 8 dígitos à mão e cruzados contra a própria tabela medida da
+  //     `ADR-0022` (`docs/adr/0022-paridade-total-com-o-motor-substituido.md`, linha "Named
+  //     colours") -- também não copiados daquela tabela, as duas foram derivadas independentemente
+  //     da mesma fonte do pin e calham de concordar, que é o ponto.
+  static const NamedColorCase kPinColors[] = {
+      {"black", "#000000ff"},
+      {"silver", "#c0c0c0ff"},
+      {"gray", "#808080ff"},
+      {"grey", "#808080ff"},
+      {"white", "#ffffffff"},
+      {"maroon", "#800000ff"},
+      {"red", "#ff0000ff"},
+      {"orange", "#ffa500ff"},
+      {"purple", "#800080ff"},
+      {"fuchsia", "#ff00ffff"},
+      {"green", "#008000ff"},
+      {"lime", "#00ff00ff"},
+      {"olive", "#808000ff"},
+      {"yellow", "#ffff00ff"},
+      {"navy", "#000080ff"},
+      {"blue", "#0000ffff"},
+      {"teal", "#008080ff"},
+      {"aqua", "#00ffffff"},
+      {"transparent", "#00000000"},
+  };
+  check(sizeof(kPinColors) / sizeof(kPinColors[0]) == 19,
+        "pin's own html_colours table has exactly 19 entries");
+  for (const NamedColorCase& tc : kPinColors) {
+    Rgba8 got{};
+    check(parse_color(tc.name, &got) == ValueComputeStatus::Ok, tc.name);
+    check_eq(print_color(got), tc.want_hex, tc.name);
+  }
+
+  // EN: Case-insensitivity -- mirrors the pin's own `ToLower()` call, `PropertyParserColour.cpp:201`.
+  // PT: Case-insensitivity -- espelha a própria chamada `ToLower()` do pin,
+  //     `PropertyParserColour.cpp:201`.
+  Rgba8 c{};
+  check(parse_color("Red", &c) == ValueComputeStatus::Ok, "'Red' (mixed case) parses");
+  check_eq(print_color(c), "#ff0000ff", "Red -> #ff0000ff");
+  check(parse_color("RED", &c) == ValueComputeStatus::Ok, "'RED' (all caps) parses");
+  check_eq(print_color(c), "#ff0000ff", "RED -> #ff0000ff");
+  check(parse_color("White", &c) == ValueComputeStatus::Ok, "'White' (mixed case) parses");
+  check_eq(print_color(c), "#ffffffff", "White -> #ffffffff");
+  check(parse_color("TRANSPARENT", &c) == ValueComputeStatus::Ok, "'TRANSPARENT' (all caps) parses");
+  check_eq(print_color(c), "#00000000", "TRANSPARENT -> #00000000");
+
+  // EN: Fail-high boundary preserved -- real, extended CSS named colors (X11-derived CSS Color
+  //     Module keywords) the pin's own 19-entry table does NOT register, plus one arbitrary
+  //     non-color identifier. Neither the census nor the pinned RmlUi build accepts these -- the
+  //     one case section 13 still fails high on, per `ADR-0022`'s own unchanged fail-high policy.
+  // PT: Fronteira fail-high preservada -- cores CSS reais, estendidas (keywords do CSS Color
+  //     Module, derivadas do X11) que a própria tabela de 19 do pin NÃO registra, mais um
+  //     identificador não-cor qualquer. Nem o censo nem o build fixado do RmlUi aceitam essas -- o
+  //     único caso em que a seção 13 ainda falha alto, per a própria política fail-high inalterada
+  //     da `ADR-0022`.
+  check(parse_color("rebeccapurple", &c) == ValueComputeStatus::Invalid,
+        "'rebeccapurple': extended CSS name, NOT in the pin's 19-entry table, fail-high");
+  check(parse_color("cornflowerblue", &c) == ValueComputeStatus::Invalid,
+        "'cornflowerblue': extended CSS name, NOT in the pin's 19-entry table, fail-high");
+  check(parse_color("notacolor", &c) == ValueComputeStatus::Invalid,
+        "'notacolor': arbitrary non-color identifier, fail-high");
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,6 +1294,7 @@ int main() {
   test_gradient_stop_auto_spacing_last_stop_unpositioned();
   test_gradient_alpha_roundtrip_matches_upstream_storage_type();
   test_color_parsing_all_forms();
+  test_color_parsing_esc5_named_color_parity();
   test_length_resolution();
   test_length_resolution_esc4_full_unit_parity();
   test_font_size_em_resolution();
@@ -1225,7 +1343,9 @@ int main() {
       "it) | ESC-4 length-unit family: 11 of 11 (px, dp, em, rem, vw, vh, in, cm, mm, pt, pc -- "
       "full parity with the pin's own Unit::LENGTH, up from 2 pre-ESC-4) | x/resolution: 1 "
       "standalone function (parse_resolution), deliberately NOT part of LengthUnit (Unit::X is not "
-      "Unit::LENGTH)\n");
+      "Unit::LENGTH) | ESC-5 named-color family: 19 of 19 (full parity with the pin's own "
+      "html_colours table, up from 3 pre-ESC-5, case-insensitive) | color functional forms: 0 of 8 "
+      "(rgb/rgba/hsl/hsla/lab/lch/oklab/oklch -- ESC-6's own scope, unaffected by this item)\n");
 
   if (g_failures > 0) {
     std::fprintf(stderr, "value_compute_sanity: %d assertion(s) FAILED\n", g_failures);

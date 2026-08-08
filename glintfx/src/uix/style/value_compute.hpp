@@ -52,13 +52,22 @@
 //         contract does not name a field for would be guessing at what byte-exact form a future
 //         reader needs, exactly the failure mode this document's own header warns against --
 //         reported here and in this item's own delivery notes, not silently invented.
-//       - Color parsing honors docs/uix-rcss.md section 13's own authorized set ONLY: the 4 hex
-//         forms (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) plus exactly the 3 named colors this
-//         registry's own initial values and the census's own measured declarations need
-//         (`white`, `black`, `transparent`) -- every other RmlUi named color and every functional
-//         color form (`rgb()`, `hsl()`, ...) is `ValueComputeStatus::Invalid`, per section 13's own
-//         "requires the líder's sign-off" clause, not silently accepted because the parser
-//         happened to be easy to extend that far.
+//       - Color parsing honors docs/uix-rcss.md section 7.1's own canonical set: the 4 hex forms
+//         (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) plus, as of `ESC-5`, ALL 19 named colors the pinned
+//         RmlUi build itself registers (`PropertyParserColourData::html_colours`,
+//         `examples/RmlUi/Source/Core/PropertyParserColour.cpp:117-135`) -- widened from the
+//         original 3 (`white`, `black`, `transparent`, this registry's own initial values and the
+//         census's own only measured declarations) per `ADR-0022`/`docs/rmlx-subset.md` section 7's
+//         own "if the engine being replaced accepts it, ours accepts it" rule, the same
+//         corpus-count-is-not-a-boundary correction `ESC-4` already applied to the `LENGTH` unit
+//         family below. Named-color matching is now also case-insensitive (`"Red"`/`"RED"` both
+//         parse), mirroring the pin's own `StringUtilities::ToLower(value)` immediately before its
+//         own `html_colours.find()` (`:201`) -- pre-`ESC-5` this function was case-sensitive by
+//         omission, never by an explicit decision this document recorded. Every functional color
+//         form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
+//         same pin file, `:178-197`) is still `ValueComputeStatus::Invalid` -- `ESC-6`'s own
+//         declared scope, not silently accepted because the parser happened to be easy to extend
+//         that far.
 //
 //     FAIL-HIGH POLICY (docs/uix-rcss.md section 11, `UIX-RCSS-ERRATA-2`'s own correction to
 //     `Finding C`/`Finding I` applied -- restated for this item's own shape): `Invalid` from ANY
@@ -158,13 +167,23 @@
 //         spec não nomeia um campo seria chutar qual forma byte-exata um futuro leitor precisa,
 //         exatamente o modo de falha que o próprio cabeçalho daquele documento avisa contra --
 //         reportado aqui e nas próprias notas de entrega deste item, não inventado em silêncio.
-//       - Parsing de cor honra SÓ o próprio conjunto autorizado da seção 13 do docs/uix-rcss.md: as
-//         4 formas hex (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) mais exatamente as 3 cores nomeadas
-//         que os próprios valores iniciais deste registro e as próprias declarações medidas do
-//         censo precisam (`white`, `black`, `transparent`) -- toda OUTRA cor nomeada do RmlUi e
-//         toda forma de cor funcional (`rgb()`, `hsl()`, ...) é `ValueComputeStatus::Invalid`, per
-//         a própria cláusula "exige aval do líder" da seção 13, não aceita em silêncio só porque o
-//         parser calhou de ser fácil de estender até ali.
+//       - Parsing de cor honra o próprio conjunto canônico da seção 7.1 do docs/uix-rcss.md: as 4
+//         formas hex (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) mais, a partir da `ESC-5`, TODAS as 19
+//         cores nomeadas que o próprio build fixado do RmlUi registra
+//         (`PropertyParserColourData::html_colours`, `examples/RmlUi/Source/Core/
+//         PropertyParserColour.cpp:117-135`) -- alargado das 3 originais (`white`, `black`,
+//         `transparent`, os próprios valores iniciais deste registro e as únicas declarações
+//         medidas pelo censo) per a própria regra "se o motor que está sendo substituído aceita, o
+//         nosso aceita" da `ADR-0022`/seção 7 do `docs/rmlx-subset.md`, a mesma correção
+//         contagem-de-corpus-não-é-fronteira que a `ESC-4` já aplicou à família de unidade `LENGTH`
+//         abaixo. O casamento de cor nomeada agora também é case-insensitive (`"Red"`/`"RED"` os
+//         dois parseiam), espelhando o próprio `StringUtilities::ToLower(value)` do pin logo antes
+//         do próprio `html_colours.find()` dele (`:201`) -- pré-`ESC-5` esta função era
+//         case-sensitive por omissão, nunca por uma decisão explícita que este documento
+//         registrasse. Toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`,
+//         `lch()`, `oklab()`, `oklch()` -- mesmo arquivo do pin, `:178-197`) continua
+//         `ValueComputeStatus::Invalid` -- escopo próprio declarado da `ESC-6`, não aceito em
+//         silêncio só porque o parser calhou de ser fácil de estender até ali.
 //
 //     POLÍTICA FAIL-HIGH (seção 11 do docs/uix-rcss.md, restatada pra própria forma deste item):
 //     `ValueComputeStatus::Invalid` de qualquer função de valor único (`parse_color`,
@@ -411,13 +430,14 @@ float degrees_from_radians(float radians);
 std::string print_string(std::string_view raw);
 
 // EN: docs/uix-rcss.md section 7.1's own canonical color -- see header "Scope" for the exact
-//     authorized set (4 hex forms, 3 named colors). `raw` must already be whitespace-trimmed by
-//     the caller (same "this module does not re-derive what a lexer already stripped" convention
-//     property_registry.hpp/shorthand.hpp hold themselves to).
+//     authorized set (4 hex forms, 19 named colors as of `ESC-5`, case-insensitive). `raw` must
+//     already be whitespace-trimmed by the caller (same "this module does not re-derive what a
+//     lexer already stripped" convention property_registry.hpp/shorthand.hpp hold themselves to).
 // PT: A própria cor canônica da seção 7.1 do docs/uix-rcss.md -- ver "Escopo" no cabeçalho pro
-//     próprio conjunto autorizado exato (4 formas hex, 3 cores nomeadas). `raw` já precisa vir
-//     whitespace-trimado pelo chamador (mesma convenção "este módulo não re-deriva o que um lexer
-//     já tirou" que property_registry.hpp/shorthand.hpp se prendem).
+//     próprio conjunto autorizado exato (4 formas hex, 19 cores nomeadas desde a `ESC-5`,
+//     case-insensitive). `raw` já precisa vir whitespace-trimado pelo chamador (mesma convenção
+//     "este módulo não re-deriva o que um lexer já tirou" que property_registry.hpp/shorthand.hpp
+//     se prendem).
 struct Rgba8 {
   std::uint8_t r = 0;
   std::uint8_t g = 0;

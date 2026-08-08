@@ -213,10 +213,12 @@
 #include <RmlUi/Core/Types.h>
 #include <RmlUi/Core/Unit.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -724,6 +726,84 @@ std::optional<float> radial_position_percent(const Rml::Property* p) {
   return std::nullopt;
 }
 
+// EN: `ESC-5` -- own, standalone name->color table for THIS file's own independent mini-parser
+//     (`parse_color_token`, below), transcribed directly from the pin's own `html_colours` map
+//     (`examples/RmlUi/Source/Core/PropertyParserColour.cpp:117-135`, verified byte-identical
+//     against the pinned copy the build actually links, `glintfx/build/_deps/rmlui-src/Source/
+//     Core/PropertyParserColour.cpp:117-135`) -- deliberately NOT sharing `value_compute.hpp`'s own
+//     `kNamedColorTable`: this file's own top-of-file header names Side-A/Side-B oracle
+//     independence as the whole reason this dumper exists (`ADR-0020`) -- a shared table would let
+//     a single transposed byte corrupt BOTH sides identically, exactly the blind spot the
+//     two-independent-implementations design exists to catch. Same 19 entries, same order, same
+//     values as `value_compute.cpp`'s own table -- re-derived from the pin a second time, by a
+//     second read of the same source, never copy-pasted from the sibling file.
+// PT: `ESC-5` -- tabela própria, standalone, nome->cor pro mini-parser independente DESTE arquivo
+//     (`parse_color_token`, abaixo), transcrita direto do próprio mapa `html_colours` do pin
+//     (`examples/RmlUi/Source/Core/PropertyParserColour.cpp:117-135`, verificado byte-idêntico
+//     contra a cópia fixada que o build de fato linka, `glintfx/build/_deps/rmlui-src/Source/Core/
+//     PropertyParserColour.cpp:117-135`) -- deliberadamente SEM compartilhar a própria
+//     `kNamedColorTable` do value_compute.hpp: o próprio cabeçalho de topo deste arquivo nomeia
+//     independência de oráculo Lado-A/Lado-B como toda a razão deste dumper existir (`ADR-0020`) --
+//     uma tabela compartilhada deixaria um único byte transposto corromper OS DOIS lados
+//     identicamente, exatamente o ponto cego que o desenho de duas-implementações-independentes
+//     existe pra pegar. Mesmas 19 entradas, mesma ordem, mesmos valores da própria tabela do
+//     value_compute.cpp -- re-derivada do pin uma segunda vez, por uma segunda leitura da mesma
+//     fonte, nunca copiada-e-colada do arquivo irmão.
+struct NamedColorTokenEntry {
+  const char* name;
+  Rml::byte r;
+  Rml::byte g;
+  Rml::byte b;
+  Rml::byte a;
+};
+constexpr NamedColorTokenEntry kNamedColorTokenTable[] = {
+    {"black", 0, 0, 0, 255},
+    {"silver", 192, 192, 192, 255},
+    {"gray", 128, 128, 128, 255},
+    {"grey", 128, 128, 128, 255},
+    {"white", 255, 255, 255, 255},
+    {"maroon", 128, 0, 0, 255},
+    {"red", 255, 0, 0, 255},
+    {"orange", 255, 165, 0, 255},
+    {"purple", 128, 0, 128, 255},
+    {"fuchsia", 255, 0, 255, 255},
+    {"green", 0, 128, 0, 255},
+    {"lime", 0, 255, 0, 255},
+    {"olive", 128, 128, 0, 255},
+    {"yellow", 255, 255, 0, 255},
+    {"navy", 0, 0, 128, 255},
+    {"blue", 0, 0, 255, 255},
+    {"teal", 0, 128, 128, 255},
+    {"aqua", 0, 255, 255, 255},
+    {"transparent", 0, 0, 0, 0},
+};
+
+// EN: `ESC-5` -- own `#`-vs-name dispatch mirroring the pin's own `ParseColour` shape
+//     (`PropertyParserColour.cpp:166-209`): `#` routes to hex (unchanged, below); anything else is
+//     lowercased then looked up in `kNamedColorTokenTable` above, mirroring the pin's own
+//     `StringUtilities::ToLower(value)` immediately before its own `html_colours.find()`
+//     (`:201`). Pre-`ESC-5` this branch only recognized `transparent`/`white`, case-sensitive; now
+//     all 19, case-insensitive -- closes the `polygon()` `<fill>` divergence this task's own plan
+//     names: the real renderer (`decorator_polygon.cpp:463-477`, `RunNamedParser("color", ...)`) has
+//     always accepted all 19 case-insensitively (it IS the pinned `PropertyParserColour`), so
+//     leaving this independent mini-parser at 2 names meant a fixture with e.g.
+//     `polygon(6, orange)` would compute correctly on Side B and get silently DROPPED here on Side
+//     A (`polygon_fill_value`'s own `std::nullopt` fail-high path, below) -- a real divergence, not
+//     a hypothetical one (see `uix_esc5_named_colors.rml`'s own `#d` case, caught red before this
+//     fix landed).
+// PT: `ESC-5` -- próprio despacho `#`-versus-nome espelhando a própria forma do `ParseColour` do pin
+//     (`PropertyParserColour.cpp:166-209`): `#` roteia pro hex (inalterado, abaixo); qualquer outra
+//     coisa é minusculizada depois procurada na `kNamedColorTokenTable` acima, espelhando o próprio
+//     `StringUtilities::ToLower(value)` do pin logo antes da própria chamada `html_colours.find()`
+//     dele (`:201`). Pré-`ESC-5` este ramo só reconhecia `transparent`/`white`, case-sensitive;
+//     agora as 19, case-insensitive -- fecha a divergência do `<fill>` do `polygon()` que o próprio
+//     plano desta tarefa nomeia: o renderer real (`decorator_polygon.cpp:463-477`,
+//     `RunNamedParser("color", ...)`) sempre aceitou as 19 case-insensitive (ELE É o
+//     `PropertyParserColour` fixado), então deixar este mini-parser independente em 2 nomes
+//     significava que uma fixture com ex. `polygon(6, orange)` computava certo no Lado B e era
+//     DERRUBADA em silêncio aqui no Lado A (o próprio caminho fail-high `std::nullopt` do
+//     `polygon_fill_value`, abaixo) -- uma divergência real, não hipotética (ver o próprio caso
+//     `#d` do `uix_esc5_named_colors.rml`, pego vermelho antes deste conserto pousar).
 bool parse_color_token(const std::string& raw, Rml::Colourb& out) {
   auto hexval = [](char c) -> int {
     if (c >= '0' && c <= '9') return c - '0';
@@ -731,15 +811,26 @@ bool parse_color_token(const std::string& raw, Rml::Colourb& out) {
     if (l >= 'a' && l <= 'f') return l - 'a' + 10;
     return -1;
   };
-  if (raw == "transparent") {
-    out = Rml::Colourb(0, 0, 0, 0);
-    return true;
+  if (raw.empty()) return false;
+  if (raw[0] != '#') {
+    std::string lowered = raw;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if`, same reasoning/precedent as this
+    //     repo's own sibling fix in `value_compute.cpp`'s own `parse_color()` (`ESC-5`,
+    //     identically-shaped independent table lookup).
+    // PT: `useStlAlgorithm` (cppcheck) -- `std::find_if`, mesmo racional/precedente do próprio
+    //     conserto irmão no `parse_color()` do value_compute.cpp (`ESC-5`, lookup de tabela
+    //     independente com a mesma forma).
+    const auto* match =
+        std::find_if(std::begin(kNamedColorTokenTable), std::end(kNamedColorTokenTable),
+                     [&lowered](const NamedColorTokenEntry& entry) { return lowered == entry.name; });
+    if (match != std::end(kNamedColorTokenTable)) {
+      out = Rml::Colourb(match->r, match->g, match->b, match->a);
+      return true;
+    }
+    return false;
   }
-  if (raw == "white") {
-    out = Rml::Colourb(255, 255, 255, 255);
-    return true;
-  }
-  if (raw.empty() || raw[0] != '#') return false;
   const std::string hex = raw.substr(1);
   auto digit_pair = [&](std::size_t i) -> int {
     const int hi = hexval(hex[i]);
@@ -778,8 +869,9 @@ bool starts_with(const std::string& s, const char* prefix) {
 }
 
 // EN: `polygon()`'s own `fill` argument -- either a plain color token (this function's own,
-//     independent hex/named-color mini-parser, section 7.1's in-scope grammar only:
-//     `#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`, `transparent`, `white`) or a NESTED
+//     independent hex/named-color mini-parser, section 7.1's in-scope grammar: the 4 hex forms
+//     `#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa` plus, as of `ESC-5`, all 19 of the pin's own named
+//     colors, case-insensitive -- `parse_color_token()`'s own doc-comment above) or a NESTED
 //     `linear-gradient(...)`/`radial-gradient(...)` (`docs/uix-rcss.md` section 9.2's own table:
 //     `fill` "either a <color> ..., or a nested linear-gradient(...)/radial-gradient(...) using
 //     this same grammar recursively"). The nested-gradient case is a DECLARED, BOUNDED gap in

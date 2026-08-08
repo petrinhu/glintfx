@@ -1,0 +1,7 @@
+<rml><head><style>
+#a { color: teal; }
+#b { box-shadow: navy 0dp 0dp 4dp 0dp; }
+#c { decorator: linear-gradient(90deg, lime 0%, fuchsia 100%); }
+#d { decorator: polygon(6, orange); }
+#e { color: Red; }
+</style></head><body><div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div><div id="e"></div></body></rml>

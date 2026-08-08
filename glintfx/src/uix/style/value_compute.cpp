@@ -191,6 +191,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <iterator>
 
 namespace glintfx::uix::style {
 
@@ -836,67 +837,156 @@ int hex_digit(char c) {
   }
   return -1;
 }
+
+// EN: `ESC-5` -- declarative name->color table mirroring the pin's own `html_colours` map
+//     (`PropertyParserColourData::html_colours`, `examples/RmlUi/Source/Core/
+//     PropertyParserColour.cpp:117-135`, verified byte-identical against the actual
+//     FetchContent-pinned copy the build links, `glintfx/build/_deps/rmlui-src/Source/Core/
+//     PropertyParserColour.cpp:117-135`) -- closes `ADR-0022`'s own measured row ("Named colours |
+//     3 (white, black, transparent) | 19 | 16"), `docs/rmlx-subset.md` section 7's own "if the
+//     engine being replaced accepts it, ours accepts it" rule. All 19 entries transcribed directly
+//     from the pin's own `Colourb(r, g, b[, a])` constructor call ARGUMENTS (decimal, not
+//     reinterpreted from a CSS spec's hex table, even though the two agree), IN THE PIN'S OWN
+//     ORDER -- `gray`/`grey` intentionally kept as two separate rows (identical value, two
+//     spellings the pin itself registers as two distinct map keys), not deduplicated, matching the
+//     pin's own map literal exactly rather than a "cleaner" 18-row table this item did not
+//     authorize itself to invent. Lookup is linear (19 entries, `raw.size()` already bounded by
+//     `kMaxRawValueBytes` above this call site) -- no hash table, matching this file's own
+//     `kLengthUnitTable` precedent (`ESC-4`) rather than introducing a second lookup strategy for a
+//     table this small.
+// PT: `ESC-5` -- tabela declarativa nome->cor espelhando o próprio mapa `html_colours` do pin
+//     (`PropertyParserColourData::html_colours`, `examples/RmlUi/Source/Core/
+//     PropertyParserColour.cpp:117-135`, verificado byte-idêntico contra a própria cópia fixada via
+//     FetchContent que o build linka, `glintfx/build/_deps/rmlui-src/Source/Core/
+//     PropertyParserColour.cpp:117-135`) -- fecha a própria linha medida da `ADR-0022` ("Named
+//     colours | 3 (white, black, transparent) | 19 | 16"), a própria regra "se o motor que está
+//     sendo substituído aceita, o nosso aceita" da seção 7 do `docs/rmlx-subset.md`. As 19 entradas
+//     transcritas direto dos próprios ARGUMENTOS de construtor `Colourb(r, g, b[, a])` do pin
+//     (decimal, não reinterpretado de uma tabela hex de spec CSS, mesmo as duas concordando) NA
+//     PRÓPRIA ORDEM DO PIN -- `gray`/`grey` mantidos de propósito como duas linhas separadas (valor
+//     idêntico, duas grafias que o próprio pin registra como duas chaves de mapa distintas), não
+//     deduplicadas, casando exatamente com o próprio map literal do pin em vez de uma tabela de 18
+//     linhas "mais limpa" que este item não se autorizou a inventar. Lookup é linear (19 entradas,
+//     `raw.size()` já delimitado por `kMaxRawValueBytes` acima deste call site) -- sem hash table,
+//     casando com o próprio precedente `kLengthUnitTable` deste arquivo (`ESC-4`) em vez de
+//     introduzir uma segunda estratégia de lookup pra uma tabela deste tamanho.
+struct NamedColorEntry {
+  std::string_view name;
+  Rgba8 value;
+};
+constexpr NamedColorEntry kNamedColorTable[] = {
+    {"black", Rgba8{0, 0, 0, 0xff}},
+    {"silver", Rgba8{192, 192, 192, 0xff}},
+    {"gray", Rgba8{128, 128, 128, 0xff}},
+    {"grey", Rgba8{128, 128, 128, 0xff}},
+    {"white", Rgba8{255, 255, 255, 0xff}},
+    {"maroon", Rgba8{128, 0, 0, 0xff}},
+    {"red", Rgba8{255, 0, 0, 0xff}},
+    {"orange", Rgba8{255, 165, 0, 0xff}},
+    {"purple", Rgba8{128, 0, 128, 0xff}},
+    {"fuchsia", Rgba8{255, 0, 255, 0xff}},
+    {"green", Rgba8{0, 128, 0, 0xff}},
+    {"lime", Rgba8{0, 255, 0, 0xff}},
+    {"olive", Rgba8{128, 128, 0, 0xff}},
+    {"yellow", Rgba8{255, 255, 0, 0xff}},
+    {"navy", Rgba8{0, 0, 128, 0xff}},
+    {"blue", Rgba8{0, 0, 255, 0xff}},
+    {"teal", Rgba8{0, 128, 128, 0xff}},
+    {"aqua", Rgba8{0, 255, 255, 0xff}},
+    {"transparent", Rgba8{0, 0, 0, 0}},
+};
 } // namespace
 
+// EN: `ESC-5` -- mirrors the pin's own `ParseColour` dispatch shape (`examples/RmlUi/Source/Core/
+//     PropertyParserColour.cpp:166-209`, verified byte-identical against the pinned
+//     `glintfx/build/_deps/rmlui-src` copy the build actually links): `#` routes to hex (unchanged
+//     by this item, below), anything else is lowercased (`to_lower()`, this file's own section-2
+//     helper, already shared by `compute_box_shadow`/`parse_gradient_stop` -- not duplicated here)
+//     then looked up in `kNamedColorTable` above, mirroring the pin's own
+//     `StringUtilities::ToLower(value)` immediately before its own `html_colours.find()` call
+//     (`:201`) -- pre-`ESC-5` this function was case-sensitive by omission, never by an explicit
+//     decision; this closes that divergence for the 3 colors that already worked
+//     (`white`/`black`/`transparent`) too, not only the 16 new ones. Functional color forms
+//     (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
+//     `PropertyParserColour.cpp:178-197`) are NOT recognized by this function and therefore fall
+//     through to the table lookup, which correctly fails them `Invalid` (none of those strings is a
+//     table key) -- `ESC-6`'s own declared scope, not silently guessed at here.
+// PT: `ESC-5` -- espelha a própria forma de despacho do `ParseColour` do pin
+//     (`examples/RmlUi/Source/Core/PropertyParserColour.cpp:166-209`, verificado byte-idêntico
+//     contra a própria cópia fixada `glintfx/build/_deps/rmlui-src` que o build de fato linka): `#`
+//     roteia pro hex (inalterado por este item, abaixo), qualquer outra coisa é minusculizada
+//     (`to_lower()`, o próprio helper da seção 2 deste arquivo, já compartilhado por
+//     `compute_box_shadow`/`parse_gradient_stop` -- não duplicado aqui) depois procurada na
+//     `kNamedColorTable` acima, espelhando o próprio `StringUtilities::ToLower(value)` do pin logo
+//     antes da própria chamada `html_colours.find()` dele (`:201`) -- pré-`ESC-5` esta função era
+//     case-sensitive por omissão, nunca por uma decisão explícita; isto fecha essa divergência
+//     também pras 3 cores que já funcionavam (`white`/`black`/`transparent`), não só pras 16 novas.
+//     Formas funcionais de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`,
+//     `oklch()` -- `PropertyParserColour.cpp:178-197`) NÃO são reconhecidas por esta função e
+//     portanto caem pro lookup de tabela, que corretamente as falha `Invalid` (nenhuma dessas
+//     strings é chave de tabela) -- escopo próprio declarado da `ESC-6`, não chutado aqui em
+//     silêncio.
 ValueComputeStatus parse_color(std::string_view raw, Rgba8* out) {
   if (raw.empty() || raw.size() > kMaxRawValueBytes) {
     return ValueComputeStatus::Invalid;
   }
-  if (raw == "white") {
-    *out = Rgba8{0xff, 0xff, 0xff, 0xff};
-    return ValueComputeStatus::Ok;
-  }
-  if (raw == "black") {
-    *out = Rgba8{0, 0, 0, 0xff};
-    return ValueComputeStatus::Ok;
-  }
-  if (raw == "transparent") {
-    *out = Rgba8{0, 0, 0, 0};
-    return ValueComputeStatus::Ok;
-  }
-  if (raw[0] != '#') {
-    return ValueComputeStatus::Invalid;
-  }
-  std::string_view hex = raw.substr(1);
-  if (hex.size() == 3 || hex.size() == 4) {
-    int vals[4] = {0, 0, 0, 0xf};
-    for (std::size_t i = 0; i < hex.size(); ++i) {
-      int v = hex_digit(hex[i]);
-      if (v < 0) {
+  if (raw[0] == '#') {
+    std::string_view hex = raw.substr(1);
+    if (hex.size() == 3 || hex.size() == 4) {
+      int vals[4] = {0, 0, 0, 0xf};
+      for (std::size_t i = 0; i < hex.size(); ++i) {
+        int v = hex_digit(hex[i]);
+        if (v < 0) {
+          return ValueComputeStatus::Invalid;
+        }
+        vals[i] = v;
+      }
+      out->r = static_cast<std::uint8_t>(vals[0] * 16 + vals[0]);
+      out->g = static_cast<std::uint8_t>(vals[1] * 16 + vals[1]);
+      out->b = static_cast<std::uint8_t>(vals[2] * 16 + vals[2]);
+      out->a = hex.size() == 4 ? static_cast<std::uint8_t>(vals[3] * 16 + vals[3])
+                               : static_cast<std::uint8_t>(0xff);
+      return ValueComputeStatus::Ok;
+    }
+    if (hex.size() == 6 || hex.size() == 8) {
+      auto byte_at = [&](std::size_t i) -> int {
+        int hi = hex_digit(hex[i]);
+        int lo = hex_digit(hex[i + 1]);
+        if (hi < 0 || lo < 0) {
+          return -1;
+        }
+        return hi * 16 + lo;
+      };
+      int r = byte_at(0);
+      int g = byte_at(2);
+      int b = byte_at(4);
+      if (r < 0 || g < 0 || b < 0) {
         return ValueComputeStatus::Invalid;
       }
-      vals[i] = v;
-    }
-    out->r = static_cast<std::uint8_t>(vals[0] * 16 + vals[0]);
-    out->g = static_cast<std::uint8_t>(vals[1] * 16 + vals[1]);
-    out->b = static_cast<std::uint8_t>(vals[2] * 16 + vals[2]);
-    out->a = hex.size() == 4 ? static_cast<std::uint8_t>(vals[3] * 16 + vals[3])
-                             : static_cast<std::uint8_t>(0xff);
-    return ValueComputeStatus::Ok;
-  }
-  if (hex.size() == 6 || hex.size() == 8) {
-    auto byte_at = [&](std::size_t i) -> int {
-      int hi = hex_digit(hex[i]);
-      int lo = hex_digit(hex[i + 1]);
-      if (hi < 0 || lo < 0) {
-        return -1;
+      int a = hex.size() == 8 ? byte_at(6) : 0xff;
+      if (a < 0) {
+        return ValueComputeStatus::Invalid;
       }
-      return hi * 16 + lo;
-    };
-    int r = byte_at(0);
-    int g = byte_at(2);
-    int b = byte_at(4);
-    if (r < 0 || g < 0 || b < 0) {
-      return ValueComputeStatus::Invalid;
+      out->r = static_cast<std::uint8_t>(r);
+      out->g = static_cast<std::uint8_t>(g);
+      out->b = static_cast<std::uint8_t>(b);
+      out->a = static_cast<std::uint8_t>(a);
+      return ValueComputeStatus::Ok;
     }
-    int a = hex.size() == 8 ? byte_at(6) : 0xff;
-    if (a < 0) {
-      return ValueComputeStatus::Invalid;
-    }
-    out->r = static_cast<std::uint8_t>(r);
-    out->g = static_cast<std::uint8_t>(g);
-    out->b = static_cast<std::uint8_t>(b);
-    out->a = static_cast<std::uint8_t>(a);
+    return ValueComputeStatus::Invalid;
+  }
+  std::string lowered = to_lower(raw);
+  // EN: `useStlAlgorithm` (cppcheck) -- `std::find_if` instead of a raw hand-rolled loop, same
+  //     fix `gamepad_mapping.cpp`/`shorthand.cpp`/`property_registry.cpp` already apply to their
+  //     own identically-shaped "linear scan a small declarative table" lookups in this repo.
+  // PT: `useStlAlgorithm` (cppcheck) -- `std::find_if` em vez de um laço escrito à mão, o mesmo
+  //     conserto que `gamepad_mapping.cpp`/`shorthand.cpp`/`property_registry.cpp` já aplicam
+  //     pros próprios lookups de "varredura linear de uma tabela declarativa pequena" com a
+  //     mesma forma, neste repo.
+  const auto* match = std::find_if(std::begin(kNamedColorTable), std::end(kNamedColorTable),
+                                   [&lowered](const NamedColorEntry& entry) { return lowered == entry.name; });
+  if (match != std::end(kNamedColorTable)) {
+    *out = match->value;
     return ValueComputeStatus::Ok;
   }
   return ValueComputeStatus::Invalid;

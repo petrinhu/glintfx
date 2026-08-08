@@ -1245,6 +1245,109 @@ do corpus também mostra, sem relação com esta errata.
 
 ---
 
+## 🟣 Errata (`UIX-RCSS-ERRATA-10`, 2026-08-08) / Errata (`UIX-RCSS-ERRATA-10`, 2026-08-08)
+
+**EN:** `ESC-5` closes `docs/rmlx-subset.md` section 7's own full-parity rule (2026-08-07, `ADR-0022`)
+for the named-color axis: this dump format's own engine widens from 3 named colors (`white`, `black`,
+`transparent`) to the pin's own full 19-entry `html_colours` table (adding `silver`, `gray`, `grey`,
+`maroon`, `red`, `orange`, `purple`, `fuchsia`, `green`, `lime`, `olive`, `yellow`, `navy`, `blue`,
+`teal`, `aqua` -- `value_compute.cpp`'s own `kNamedColorTable`, `:876-896`), transcribed from
+`PropertyParserColour.cpp:117-135` (both `examples/RmlUi`'s own study clone and the actual
+FetchContent-pinned copy the build links, verified byte-identical) rather than assumed from a CSS
+spec's own color-keyword table -- section 7.1's own paragraph above states the delivered scope and
+section 13's own bullet records it closed. Recorded here as an errata, not merely a feature landing,
+because it changes THIS document's own previously-stated behaviour for two constructs, both corrected
+in place rather than left stale:
+
+1. **Named-color matching is now case-insensitive** (`"Red"`/`"RED"`/`"TRANSPARENT"` now parse) -- a
+   genuine, measured side effect of transcribing the pin's own `StringUtilities::ToLower(value)` call
+   immediately before its own `html_colours.find()` (`PropertyParserColour.cpp:201`) rather than the
+   pre-`ESC-5` bare `raw == "white"`/`raw == "black"`/`raw == "transparent"` string-equality chain,
+   which was case-sensitive by omission, never by an explicit decision this document recorded -- the
+   same class of undocumented narrowing `UIX-RCSS-ERRATA-9` closed for length-unit suffix
+   recognition.
+2. **The `polygon()` decorator's own `<fill>` argument -- Side A's own independent mini-parser, not
+   Side B -- had a real, measured divergence this errata also closes.** `glintfx/src/rml/
+   rcss_dump.cpp`'s own `parse_color_token()` (the Side-A oracle's own re-parse of the `fill`
+   sub-property, stored UNPARSED as a raw string by `decorator_polygon.cpp`'s own instancer, unlike
+   every other color-typed field this registry reads already-parsed from `Property::Get<Colourb>()`)
+   only recognized `transparent`/`white`, case-sensitive, pre-`ESC-5` -- so a fixture using any of
+   the other 17 names (e.g. `polygon(6, orange)`) computed correctly on Side B and was silently
+   DROPPED on Side A (this file's own `std::nullopt` fail-high path, `polygon_fill_value()`), a
+   genuine, measured divergence, not a hypothetical one (see Verification below). Fixed by giving
+   Side A its OWN, independently-transcribed 19-entry table (`kNamedColorTokenTable`,
+   `rcss_dump.cpp:758-777`) -- deliberately NOT shared with Side B's own `kNamedColorTable`, per
+   `ADR-0020`'s own oracle-independence design (a shared table would let one transposed byte corrupt
+   both sides identically, exactly the blind spot two independent implementations exist to catch).
+
+**Verification, not assertion:** a new corpus fixture,
+`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc5_named_colors.rml`, exercises all 4 of the
+named-color-consuming call sites this dump format has (`color`, `box-shadow`, a gradient stop inside
+`linear-gradient`, and `polygon()`'s own `<fill>`) plus one mixed-case variant (`color: Red`) --
+`RMLX-2`'s own differential oracle reported the polygon case DIVERGENT before this errata's own fix
+landed (`body/3 PROP decorator=none` on Side A vs. `decorator=polygon(6.0000;#ffa500ff;0.0000)` on
+Side B, both the `STATE none` and `STATE hover-all` passes), and byte-identical, zero new
+divergences, after. The other 3 call sites (`color`, `box-shadow`, the gradient stop) were ALREADY
+byte-identical even before this errata's own `rcss_dump.cpp` change, because those three read Side
+A's already-parsed `Rml::Colourb` (the real, pinned `PropertyParserColour` had always accepted all
+19 names, case-insensitively, being the pin itself) rather than re-parsing raw text the way
+`polygon()`'s own `<fill>` must -- confirming Side B's own `value_compute.cpp` change was correct on
+its own before Side A needed to change at all.
+
+**PT:** A `ESC-5` fecha a própria regra de paridade total da seção 7 do `docs/rmlx-subset.md`
+(2026-08-07, `ADR-0022`) pro eixo de cor nomeada: o próprio motor deste formato de dump alarga de 3
+cores nomeadas (`white`, `black`, `transparent`) pra própria tabela `html_colours` completa de 19
+entradas do pin (somando `silver`, `gray`, `grey`, `maroon`, `red`, `orange`, `purple`, `fuchsia`,
+`green`, `lime`, `olive`, `yellow`, `navy`, `blue`, `teal`, `aqua` -- a própria `kNamedColorTable`
+do `value_compute.cpp`, `:876-896`), transcrita do `PropertyParserColour.cpp:117-135` (tanto o
+próprio clone de estudo do `examples/RmlUi` quanto a própria cópia fixada via FetchContent que o
+build linka, verificados byte-idênticos) em vez de suposta de uma tabela de palavra-chave-de-cor de
+spec CSS -- o próprio parágrafo da seção 7.1 acima declara o escopo entregue e o próprio bullet da
+seção 13 registra isso fechado. Registrado aqui como errata, não só um pouso de feature, porque
+muda o próprio comportamento previamente declarado deste documento pra duas construções, as duas
+corrigidas no lugar em vez de deixadas obsoletas:
+
+1. **O casamento de cor nomeada agora é case-insensitive** (`"Red"`/`"RED"`/`"TRANSPARENT"` agora
+   parseiam) -- um efeito colateral genuíno, medido, de transcrever a própria chamada
+   `StringUtilities::ToLower(value)` do pin logo antes da própria chamada `html_colours.find()` dele
+   (`PropertyParserColour.cpp:201`) em vez da cadeia de igualdade-de-string crua pré-`ESC-5`
+   (`raw == "white"`/`raw == "black"`/`raw == "transparent"`), que era case-sensitive por omissão,
+   nunca por uma decisão explícita que este documento registrasse -- a mesma classe de
+   estreitamento-não-documentado que a `UIX-RCSS-ERRATA-9` fechou pro reconhecimento de sufixo de
+   unidade de comprimento.
+2. **O próprio argumento `<fill>` do decorator `polygon()` -- o mini-parser próprio e independente
+   do Lado A, não o Lado B -- tinha uma divergência real, medida, que esta errata também fecha.** O
+   próprio `parse_color_token()` do `glintfx/src/rml/rcss_dump.cpp` (o próprio re-parse do oráculo
+   Lado A pra sub-propriedade `fill`, guardada NÃO-PARSEADA como string crua pelo próprio instancer
+   do `decorator_polygon.cpp`, diferente de todo outro campo tipo-cor que este registro lê já-
+   parseado de `Property::Get<Colourb>()`) só reconhecia `transparent`/`white`, case-sensitive,
+   pré-`ESC-5` -- então uma fixture usando qualquer um dos outros 17 nomes (ex. `polygon(6,
+   orange)`) computava certo no Lado B e era DERRUBADA em silêncio no Lado A (o próprio caminho
+   fail-high `std::nullopt` deste arquivo, `polygon_fill_value()`), uma divergência genuína, medida,
+   não hipotética (ver Verificação abaixo). Consertado dando ao Lado A a própria tabela de 19
+   entradas, transcrita independentemente (`kNamedColorTokenTable`, `rcss_dump.cpp:758-777`) --
+   deliberadamente SEM compartilhar com a própria `kNamedColorTable` do Lado B, per o próprio
+   desenho de independência-de-oráculo da `ADR-0020` (uma tabela compartilhada deixaria um único
+   byte transposto corromper os dois lados identicamente, exatamente o ponto cego que duas
+   implementações independentes existem pra pegar).
+
+**Verificação, não afirmação:** uma fixture de corpus nova,
+`glintfx/src/rml/rcss_dump_test_fixtures/uix_esc5_named_colors.rml`, exercita os 4 call sites
+consumidores-de-cor-nomeada que este formato de dump tem (`color`, `box-shadow`, um stop de
+gradiente dentro de `linear-gradient`, e o próprio `<fill>` do `polygon()`) mais uma variante de
+caixa mista (`color: Red`) -- o próprio oráculo diferencial da `RMLX-2` reportou o caso do polygon
+DIVERGENTE antes do próprio conserto desta errata pousar (`body/3 PROP decorator=none` no Lado A
+vs. `decorator=polygon(6.0000;#ffa500ff;0.0000)` no Lado B, tanto na passada `STATE none` quanto na
+`STATE hover-all`), e byte-idêntico, zero divergências novas, depois. Os outros 3 call sites
+(`color`, `box-shadow`, o stop de gradiente) já estavam byte-idênticos MESMO ANTES da própria
+mudança desta errata no `rcss_dump.cpp`, porque esses três leem o próprio `Rml::Colourb` já-
+parseado do Lado A (o próprio `PropertyParserColour` real, fixado, sempre aceitou as 19, case-
+insensitive, por ser o próprio pin) em vez de re-parsear texto cru do jeito que o `<fill>` do
+`polygon()` precisa -- confirmando que a própria mudança do `value_compute.cpp` do Lado B já
+estava correta sozinha antes do Lado A precisar mudar sequer.
+
+---
+
 ## English
 
 ### 1. Scope of this dump: computed values, not used values
@@ -1956,28 +2059,31 @@ fallthrough `case 5 → case 4`/`case 9 → case 7` duplication), a missing alph
 `ff` (fully opaque, matching upstream's `hex_values[3] = {'f','f'}` pre-fill default), then all four
 channels print as two lowercase hex digits each, in `rgba` order, prefixed by `#`.
 
-**In scope, authorized by `docs/rmlx-subset.md` §7 (2026-08-07) -- because the pinned RmlUi build
-has them, not because the census measured them (§13):** glintfx's own engine implements **3** of
-RmlUi's 19 named colors today -- `white`, `black`, `transparent`
-(`glintfx/src/uix/style/value_compute.cpp:784-793`, verified directly, matching `TODO.md`'s own
-`ESC-5` entry). **Correction on record: an earlier draft of this paragraph named only 2
-(`transparent`, `white`) and listed `black` among the "rest" still to add -- wrong, `black` is
-already implemented; the earlier text conflated "how many the census measured in real use" (2) with
-"how many the engine accepts" (3), which is exactly the corpus-count framing §7 exists to retire.**
-The census's own 2-color measurement explains *why* `transparent`/`white` were the first two built,
-not *why* they -- or `black`, or any of the other 16 -- are in scope; all 19 are, because the pinned
-build accepts all 19. The **remaining 16** of RmlUi's named-color table (`red`, `blue`, ... --
-`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`) and every functional
-color form (`rgb()`, `rgba()`, `hsl()`, `lab()`, `lch()`, `oklab()`, `oklch()` --
-`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:178-195`) are **zero-measured**
-in the census (section 0: *"0 `rgb()`/`rgba()` funcional"*) but are authorized now regardless: the
-pinned RmlUi build accepts every one of them, so the líder's 2026-08-07 order ("if the engine being
-replaced accepts it, ours accepts it") puts all of it in scope, not only units. Zero census usage
-remains real, useful sequencing/risk data (§13) -- it stops being a reason to fail-high. A
-conforming dumper encountering
-any of these must still parse and print them correctly per the same canonical form rules the hex
-forms above already follow; only a color syntax **neither the census nor the pinned RmlUi build**
-accepts would still fail-high (§11) -- there is currently no such case.
+**Delivered, `ESC-5` (2026-08-08), closing what `docs/rmlx-subset.md` §7 (2026-08-07) had only
+authorized -- see `UIX-RCSS-ERRATA-10` below for the verification, not merely the claim:**
+glintfx's own engine implements all **19** of RmlUi's named colors -- `glintfx/src/uix/style/
+value_compute.cpp`'s own `kNamedColorTable` (`:876-896`), transcribed directly from the pin's own
+`html_colours` map (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`,
+the same row `ADR-0022`'s own measured table cites: "Named colours | 3 | 19 | 16"), verified
+directly, closing `TODO.md`'s own `ESC-5` entry. **Correction on record, preserved rather than
+erased (this document's own house rule): an earlier draft of this paragraph named only 2
+(`transparent`, `white`) as implemented and listed `black` among the "rest" still to add -- wrong,
+`black` was already implemented before that draft; a second earlier draft then corrected the count
+to 3 (`white`, `black`, `transparent`) and framed the remaining 16 as merely *authorized, not yet
+coded* -- superseded now by delivery, not by a further recount.** Named-color matching is also now
+case-insensitive (`"Red"`/`"RED"`/`"TRANSPARENT"` all parse) -- the pin's own
+`StringUtilities::ToLower(value)` immediately before its own `html_colours.find()`
+(`PropertyParserColour.cpp:201`), transcribed here for the first time; pre-`ESC-5` this dump
+format's own engine was case-sensitive by omission, never by an explicit decision this document
+recorded, the same class of undocumented-narrowing `UIX-RCSS-ERRATA-9` closed for length-unit
+suffixes. Every functional color form (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`,
+`oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:178-195`) remains **zero-measured** in the census (section 0: *"0
+`rgb()`/`rgba()` funcional"*) and is still unimplemented -- `ESC-6`'s own scope, not this item's. A
+conforming dumper encountering any of the 19 names, in any letter case, must parse and print it
+correctly per the same canonical form rules the hex forms above already follow; only a color syntax
+**neither the census nor the pinned RmlUi build** accepts (a functional form, or an extended CSS
+name outside the pin's own 19, e.g. `rebeccapurple`) still fail-highs (§11).
 
 **Colors are dumped straight-alpha for scalar color-typed properties -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -2563,14 +2669,13 @@ today is the `ms` duration unit (§9.3: *"`ms` is not a recognized duration unit
 all"*) -- not listed as a bullet below because it was never framed as a corpus-count cut here in
 the first place; every bullet below **was**, and that framing is what this rewrite corrects.
 
-- **Color:** glintfx's own engine implements 3 of the 19 named colors RmlUi's pinned build
-  registers (`white`, `black`, `transparent` -- `value_compute.cpp:784-793`); the remaining
-  **16** (`red` through `aqua`, `glintfx/build/_deps/rmlui-src/Source/Core/
-  PropertyParserColour.cpp:117-135`) are owned by `ESC-5`, matching `TODO.md`'s own entry
-  (3 → 19, corrected here 2026-08-07 after §7.1 above briefly and wrongly said 2 → 17 --
-  `black` was already implemented, not "the rest"). Every functional color form (`rgb()`,
-  `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file `:178-193`,
-  conversions `:64-115`) -- owned by `ESC-6`.
+- **Color:** ~~glintfx's own engine implements 3 of the 19 named colors...~~ **delivered by
+  `ESC-5`, 2026-08-08 -- all 19** of the named colors RmlUi's pinned build registers
+  (`value_compute.cpp`'s own `kNamedColorTable`, `:876-896`, transcribed from
+  `glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`), case-insensitive,
+  matching `TODO.md`'s own entry and `UIX-RCSS-ERRATA-10` (§7.1 above). Every functional color form
+  (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, same file
+  `:178-193`, conversions `:64-115`) is still unimplemented -- owned by `ESC-6`.
 - **`transition`, `font-effect`:** both real, registered RmlUi properties
   (`StyleSheetSpecification.cpp:399`, `:405`). **The registry row landed via `ESC-1`** (§6.1's
   table now lists both, `ValueDomain::Composite`, dumped through the same empty-list echo
@@ -3732,29 +3837,33 @@ upstream), um canal alpha ausente tem default `ff` (totalmente opaco, batendo co
 pré-preenchimento default `hex_values[3] = {'f','f'}` do upstream), depois os quatro canais imprimem
 como dois dígitos hex minúsculos cada, em ordem `rgba`, prefixados por `#`.
 
-**No escopo, autorizado pela §7 (2026-08-07) do `docs/rmlx-subset.md` -- porque o build fixado do
-RmlUi as tem, não porque o censo as mediu (seção 13):** o próprio motor da glintfx implementa **3**
-das 19 cores nomeadas do RmlUi hoje -- `white`, `black`, `transparent`
-(`glintfx/src/uix/style/value_compute.cpp:784-793`, verificado direto, batendo com o próprio item
-`ESC-5` do `TODO.md`). **Correção em registro: um rascunho anterior deste parágrafo nomeava só 2**
-(`transparent`, `white`) **e listava `black` entre o "resto" ainda por somar -- errado, `black` já
-está implementado; o texto anterior confundia "quantas o censo mediu em uso real" (2) com "quantas
-o motor aceita" (3), exatamente o enquadramento por contagem de corpus que a §7 existe pra
-aposentar.** A própria medição de 2 cores do censo explica *por que* `transparent`/`white` foram as
-duas primeiras construídas, não *por que* elas -- ou `black`, ou qualquer uma das outras 16 --
-estão no escopo; as 19 estão, porque o build fixado aceita as 19. O **resto das 16** da tabela de
-19 cores nomeadas do RmlUi (`red`, `blue`, ... -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:117-135`) e toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`,
-`lab()`, `lch()`, `oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
-PropertyParserColour.cpp:178-195`) estão com **zero medição** no censo (seção 0: *"0
-`rgb()`/`rgba()` funcional"*) mas estão autorizadas agora de qualquer jeito: o build fixado do
-RmlUi aceita todas elas, então a ordem do líder de 2026-08-07 ("se o motor que está sendo
-substituído aceita, o nosso aceita") põe tudo isso no escopo, não só unidades. Uso zero no censo
-segue sendo dado real e útil de sequenciamento/risco (seção 13) -- deixa de ser motivo pra
-fail-high. Um dumper conforme encontrando qualquer uma dessas ainda tem de parsear e imprimir
-corretamente pelas mesmas regras de forma canônica que as formas hex acima já seguem; só uma
-sintaxe de cor que **nem o censo nem o build fixado do RmlUi** aceita ainda dispararia **fail-high**
-(seção 11) -- hoje não há esse caso.
+**Entregue, `ESC-5` (2026-08-08), fechando o que a §7 (2026-08-07) do `docs/rmlx-subset.md` só tinha
+autorizado -- ver `UIX-RCSS-ERRATA-10` abaixo pra verificação, não só a alegação:** o próprio motor
+da glintfx implementa todas as **19** cores nomeadas do RmlUi -- a própria `kNamedColorTable` do
+`glintfx/src/uix/style/value_compute.cpp` (`:876-896`), transcrita direto do próprio mapa
+`html_colours` do pin (`glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`,
+a mesma linha que a própria tabela medida da `ADR-0022` cita: "Named colours | 3 | 19 | 16"),
+verificado direto, fechando o próprio item `ESC-5` do `TODO.md`. **Correção em registro, mantida em
+vez de apagada (a própria regra da casa deste documento): um rascunho anterior deste parágrafo
+nomeava só 2** (`transparent`, `white`) **como implementadas e listava `black` entre o "resto"
+ainda por somar -- errado, `black` já estava implementado antes daquele rascunho; um segundo
+rascunho anterior corrigiu a contagem pra 3** (`white`, `black`, `transparent`) **e enquadrava as
+outras 16 como meramente *autorizadas, ainda não codificadas* -- superado agora pela entrega, não
+por uma recontagem nova.** O casamento de cor nomeada agora também é case-insensitive
+(`"Red"`/`"RED"`/`"TRANSPARENT"` todas parseiam) -- o próprio `StringUtilities::ToLower(value)` do
+pin logo antes da própria chamada `html_colours.find()` dele (`PropertyParserColour.cpp:201`),
+transcrito aqui pela primeira vez; pré-`ESC-5` o próprio motor deste formato de dump era
+case-sensitive por omissão, nunca por uma decisão explícita que este documento registrasse, a mesma
+classe de estreitamento-não-documentado que a `UIX-RCSS-ERRATA-9` fechou pros sufixos de unidade de
+comprimento. Toda forma funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`,
+`oklab()`, `oklch()` -- `glintfx/build/_deps/rmlui-src/Source/Core/
+PropertyParserColour.cpp:178-195`) segue com **zero medição** no censo (seção 0: *"0
+`rgb()`/`rgba()` funcional"*) e continua não-implementada -- escopo próprio da `ESC-6`, não deste
+item. Um dumper conforme encontrando qualquer uma das 19, em qualquer caixa de letra, tem de
+parsear e imprimir corretamente pelas mesmas regras de forma canônica que as formas hex acima já
+seguem; só uma sintaxe de cor que **nem o censo nem o build fixado do RmlUi** aceita (uma forma
+funcional, ou um nome CSS estendido fora das 19 do pin, ex. `rebeccapurple`) ainda dispara
+**fail-high** (seção 11).
 
 **Cores são dumpadas straight-alpha pra propriedades tipo-cor escalares -- `background-color`,
 `border-*-color`, `color`, `image-tint-color`.** `Style::ComputedValues`/`Property::Get<Colourb>`
@@ -4113,14 +4222,13 @@ RmlUi aceitam. O único exemplo confirmado disso em registro hoje é a unidade d
 listada como bullet abaixo porque nunca foi enquadrada aqui como corte por contagem de corpus; todo
 bullet abaixo **foi**, e é esse enquadramento que esta reescrita corrige.
 
-- **Cor:** o próprio motor da glintfx implementa 3 das 19 cores nomeadas que o build fixado do
-  RmlUi registra (`white`, `black`, `transparent` -- `value_compute.cpp:784-793`); o resto
-  (**16**: `red` até `aqua`, `glintfx/build/_deps/rmlui-src/Source/Core/
-  PropertyParserColour.cpp:117-135`) tem dona `ESC-5`, batendo com o próprio item do `TODO.md`
-  (3 → 19, corrigido aqui em 2026-08-07 depois que a §7.1 acima disse por um tempo, errado, 2 →
-  17 -- `black` já estava implementado, não era "o resto"). Toda forma funcional de cor (`rgb()`,
-  `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`, mesmo arquivo `:178-193`,
-  conversões `:64-115`) -- dona é a `ESC-6`.
+- **Cor:** ~~o próprio motor da glintfx implementa 3 das 19 cores nomeadas...~~ **entregue pela
+  `ESC-5`, 2026-08-08 -- todas as 19** cores nomeadas que o build fixado do RmlUi registra (a
+  própria `kNamedColorTable` do `value_compute.cpp`, `:876-896`, transcrita do
+  `glintfx/build/_deps/rmlui-src/Source/Core/PropertyParserColour.cpp:117-135`), case-insensitive,
+  batendo com o próprio item do `TODO.md` e a `UIX-RCSS-ERRATA-10` (§7.1 acima). Toda forma
+  funcional de cor (`rgb()`, `rgba()`, `hsl()`, `hsla()`, `lab()`, `lch()`, `oklab()`, `oklch()`,
+  mesmo arquivo `:178-193`, conversões `:64-115`) segue não-implementada -- dona é a `ESC-6`.
 - **`transition`, `font-effect`:** as duas são propriedades reais e registradas do RmlUi
   (`StyleSheetSpecification.cpp:399`, `:405`). **A própria linha de registro aterrissou via
   `ESC-1`** (a tabela da §6.1 agora lista as duas, `ValueDomain::Composite`, dumpadas pelo mesmo

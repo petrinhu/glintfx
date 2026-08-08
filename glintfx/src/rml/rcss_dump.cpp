@@ -379,13 +379,14 @@ const Rml::Property* get_prop(Rml::Element* el, const char* name) {
   return nullptr;
 }
 
-// EN: Property-domain dispatch table, section 6.1's own 72-entry registry, reproduced in the
-//     SAME alphabetical order that table states as this dump's own required PROP order (section
-//     6's own sort rule) -- so this array IS the iteration order, no separate sort step needed.
-// PT: Tabela de despacho de domínio-de-propriedade, o próprio registro de 72 entradas da seção
-//     6.1, reproduzido na MESMA ordem alfabética que aquela tabela declara como a própria ordem
-//     PROP exigida por este dump (a própria regra de ordenação da seção 6) -- então este array
-//     JÁ É a ordem de iteração, sem passo de sort separado.
+// EN: Property-domain dispatch table, section 6.1's own 107-entry registry (`ESC-1` raised it
+//     from 72), reproduced in the SAME alphabetical order that table states as this dump's own
+//     required PROP order (section 6's own sort rule) -- so this array IS the iteration order, no
+//     separate sort step needed.
+// PT: Tabela de despacho de domínio-de-propriedade, o próprio registro de 107 entradas da seção
+//     6.1 (a `ESC-1` elevou de 72), reproduzido na MESMA ordem alfabética que aquela tabela
+//     declara como a própria ordem PROP exigida por este dump (a própria regra de ordenação da
+//     seção 6) -- então este array JÁ É a ordem de iteração, sem passo de sort separado.
 enum class Domain {
   Keyword,
   Number,
@@ -395,8 +396,23 @@ enum class Domain {
   Length,            // always resolves to px, no keyword, no percent
   LengthPercentAuto, // KEYWORD (any registered keyword text) | PERCENT | LENGTH
   String,
-  LetterSpacing, // KEYWORD("normal") | LENGTH (no percent)
-  TextOverflow,  // KEYWORD | STRING
+  // EN: `ESC-1`/`ESC-3` -- renamed from the single-property `LetterSpacing`/`TextOverflow` (this
+  //     TU-local enum's own two-domain shape now serves a SECOND property each, section 6.1's own
+  //     `letter-spacing`+`perspective` / `text-overflow`+`nav-down`/`-left`/`-right`/`-up`):
+  //     behavior is byte-identical to the two renamed cases' own prior bodies, see `property_
+  //     value()`'s own comment at the two case labels below for why the `p == nullptr` fallback
+  //     changed from a per-property literal to the domain-`Keyword` case's own `std::string()`.
+  // PT: `ESC-1`/`ESC-3` -- renomeados do `LetterSpacing`/`TextOverflow` de propriedade única (a
+  //     própria forma de dois-domínio deste enum TU-local agora serve uma SEGUNDA propriedade
+  //     cada, `letter-spacing`+`perspective` / `text-overflow`+`nav-down`/`-left`/`-right`/`-up`
+  //     da própria seção 6.1): comportamento byte-idêntico ao próprio corpo anterior dos dois
+  //     cases renomeados, ver o próprio comentário do `property_value()` nos dois rótulos de case
+  //     abaixo pro motivo do fallback `p == nullptr` ter mudado de literal por-propriedade pro
+  //     próprio `std::string()` do case de domínio `Keyword`.
+  KeywordOrLength, // KEYWORD("normal"|"none") | LENGTH (no percent) -- letter-spacing, perspective
+  KeywordOrString, // KEYWORD | STRING -- text-overflow, nav-down/-left/-right/-up
+  KeywordOrColor,  // KEYWORD("auto") | COLOR -- caret-color
+  KeywordOrNumber, // KEYWORD | NUMBER -- clip, font-weight, z-index
   FontSizeSpecial,
   LineHeightSpecial,
   VerticalAlignSpecial,
@@ -405,6 +421,19 @@ enum class Domain {
   FilterListComposite,
   AnimationComposite,
   TransformComposite,
+  // EN: `ESC-1`/`ESC-3` -- section 6.1's own two remaining composite domains, both "(section 9
+  //     grammar: none yet -- empty-list echo only)": section 9 defines NO `<transition-value>`/
+  //     `<font-effect-value>` grammar today, so a genuinely-declared (non-`none`, non-empty) value
+  //     has no spec-conformant text form -- `transition_value()`/`font_effect_value()`'s own
+  //     header comments (below) have the full reasoning and the measured call sites this rests on.
+  // PT: `ESC-1`/`ESC-3` -- os dois domínios compostos restantes da própria seção 6.1, os dois
+  //     "(gramática §9: nenhuma ainda -- só eco de lista-vazia)": a seção 9 não define gramática
+  //     `<transition-value>`/`<font-effect-value>` nenhuma hoje, então um valor genuinamente
+  //     declarado (não-`none`, não-vazio) não tem forma textual spec-conformante -- os próprios
+  //     comentários de cabeçalho do `transition_value()`/`font_effect_value()` (abaixo) têm o
+  //     raciocínio completo e os call sites medidos em que isto se apoia.
+  TransitionComposite, // owner ESC-23
+  FontEffectComposite, // owner ESC-24
 };
 
 struct RegistryEntry {
@@ -412,10 +441,18 @@ struct RegistryEntry {
   Domain domain;
 };
 
-// EN: docs/uix-rcss.md section 6.1's table, verbatim order (72 rows).
-// PT: A tabela da seção 6.1 do docs/uix-rcss.md, ordem verbatim (72 linhas).
+// EN: docs/uix-rcss.md section 6.1's table, verbatim order (107 rows -- `ESC-1` added the 35
+//     rows marked `NEW` below; every other row and every other row's own domain is unchanged from
+//     the prior 72-row table).
+// PT: A tabela da seção 6.1 do docs/uix-rcss.md, ordem verbatim (107 linhas -- a `ESC-1` somou as
+//     35 linhas marcadas `NEW` abaixo; toda outra linha e o próprio domínio de toda outra linha
+//     seguem inalterados da tabela anterior de 72).
 constexpr RegistryEntry kRegistry[] = {
+    {"-rmlui-direction", Domain::Keyword}, // NEW ESC-1
+    {"-rmlui-language", Domain::String},   // NEW ESC-1
+    {"align-content", Domain::Keyword},    // NEW ESC-1
     {"align-items", Domain::Keyword},
+    {"align-self", Domain::Keyword}, // NEW ESC-1
     {"animation", Domain::AnimationComposite},
     {"backdrop-filter", Domain::FilterListComposite},
     {"background-color", Domain::Color},
@@ -434,25 +471,38 @@ constexpr RegistryEntry kRegistry[] = {
     {"bottom", Domain::LengthPercentAuto},
     {"box-shadow", Domain::BoxShadowComposite},
     {"box-sizing", Domain::Keyword},
+    {"caret-color", Domain::KeywordOrColor}, // NEW ESC-1
+    {"clear", Domain::Keyword},              // NEW ESC-1
+    {"clip", Domain::KeywordOrNumber},       // NEW ESC-1
     {"color", Domain::Color},
     {"column-gap", Domain::Length},
     {"cursor", Domain::String},
     {"decorator", Domain::DecoratorListComposite},
     {"display", Domain::Keyword},
+    {"drag", Domain::Keyword},      // NEW ESC-1
+    {"fill-image", Domain::String}, // NEW ESC-1
     {"filter", Domain::FilterListComposite},
     {"flex-basis", Domain::LengthPercentAuto},
+    {"flex-direction", Domain::Keyword}, // NEW ESC-1
     {"flex-grow", Domain::Number},
     {"flex-shrink", Domain::Number},
+    {"flex-wrap", Domain::Keyword}, // NEW ESC-1
+    {"float", Domain::Keyword},     // NEW ESC-1
     {"focus", Domain::Keyword},
+    {"font-effect", Domain::FontEffectComposite}, // NEW ESC-1
     {"font-family", Domain::String},
+    {"font-kerning", Domain::Keyword}, // NEW ESC-1
     {"font-size", Domain::FontSizeSpecial},
+    {"font-style", Domain::Keyword},          // NEW ESC-1
+    {"font-weight", Domain::KeywordOrNumber}, // NEW ESC-1
     {"height", Domain::LengthPercentAuto},
+    {"image-color", Domain::Color}, // NEW ESC-1
     {"image-tint-color", Domain::Color},
     {"image-tint-mode", Domain::Keyword},
     {"image-tint-threshold", Domain::NumberClampThreshold},
     {"justify-content", Domain::Keyword},
     {"left", Domain::LengthPercentAuto},
-    {"letter-spacing", Domain::LetterSpacing},
+    {"letter-spacing", Domain::KeywordOrLength},
     {"line-height", Domain::LineHeightSpecial},
     {"margin-bottom", Domain::LengthPercentAuto},
     {"margin-left", Domain::LengthPercentAuto},
@@ -463,13 +513,22 @@ constexpr RegistryEntry kRegistry[] = {
     {"max-width", Domain::LengthPercentAuto},
     {"min-height", Domain::LengthPercentAuto},
     {"min-width", Domain::LengthPercentAuto},
+    {"nav-down", Domain::KeywordOrString},  // NEW ESC-1
+    {"nav-left", Domain::KeywordOrString},  // NEW ESC-1
+    {"nav-right", Domain::KeywordOrString}, // NEW ESC-1
+    {"nav-up", Domain::KeywordOrString},    // NEW ESC-1
     {"opacity", Domain::NumberClamp01},
     {"overflow-x", Domain::Keyword},
     {"overflow-y", Domain::Keyword},
+    {"overscroll-behavior", Domain::Keyword}, // NEW ESC-1
     {"padding-bottom", Domain::LengthPercentAuto},
     {"padding-left", Domain::LengthPercentAuto},
     {"padding-right", Domain::LengthPercentAuto},
     {"padding-top", Domain::LengthPercentAuto},
+    {"perspective", Domain::KeywordOrLength},            // NEW ESC-1
+    {"perspective-origin-x", Domain::LengthPercentAuto}, // NEW ESC-1
+    {"perspective-origin-y", Domain::LengthPercentAuto}, // NEW ESC-1
+    {"pointer-events", Domain::Keyword},                 // NEW ESC-1
     {"position", Domain::Keyword},
     {"right", Domain::LengthPercentAuto},
     {"ripple-origin-x", Domain::Number},
@@ -478,15 +537,24 @@ constexpr RegistryEntry kRegistry[] = {
     {"ripple-strength", Domain::Number},
     {"ripple-width", Domain::Number},
     {"row-gap", Domain::Length},
+    {"scrollbar-margin", Domain::Length}, // NEW ESC-1
     {"tab-index", Domain::Keyword},
     {"text-align", Domain::Keyword},
-    {"text-overflow", Domain::TextOverflow},
+    {"text-decoration", Domain::Keyword}, // NEW ESC-1
+    {"text-overflow", Domain::KeywordOrString},
     {"text-transform", Domain::Keyword},
     {"top", Domain::LengthPercentAuto},
     {"transform", Domain::TransformComposite},
+    {"transform-origin-x", Domain::LengthPercentAuto}, // NEW ESC-1
+    {"transform-origin-y", Domain::LengthPercentAuto}, // NEW ESC-1
+    {"transform-origin-z", Domain::Length},            // NEW ESC-1
+    {"transition", Domain::TransitionComposite},       // NEW ESC-1
     {"vertical-align", Domain::VerticalAlignSpecial},
+    {"visibility", Domain::Keyword}, // NEW ESC-1
     {"white-space", Domain::Keyword},
     {"width", Domain::LengthPercentAuto},
+    {"word-break", Domain::Keyword},      // NEW ESC-1
+    {"z-index", Domain::KeywordOrNumber}, // NEW ESC-1
 };
 constexpr std::size_t kRegistrySize = sizeof(kRegistry) / sizeof(kRegistry[0]);
 
@@ -1054,6 +1122,69 @@ std::string transform_value(Rml::Element* el) {
   return out.empty() ? "none" : out;
 }
 
+// EN: `transition` -- docs/uix-rcss.md section 6.1's own composite domain, `(section 9 grammar:
+//     none yet -- empty-list echo only, owner ESC-23)`: section 9 has no `<transition-value>`
+//     grammar defined today, so there is no spec-conformant text form for a NON-`none`,
+//     NON-empty `TransitionList` (`none` keyword, OR the registry's own empty-list default,
+//     `Animation.h:29-36`'s own `TransitionList() {}` -- `none=true` either way, confirmed at
+//     `PropertyParserAnimation.cpp:247`/`:220` for the two respective paths). A genuinely
+//     declared transition (the `all` keyword, or one-or-more explicit `<property> <duration>
+//     ...` entries -- `ParseTransition()`'s own `transitions` vector non-empty either way) is a
+//     DECLARED, BOUNDED gap: section 11's fail-high policy applied to the dumper's own missing
+//     grammar, not a silent wrong-value invention -- logs to stderr and echoes `none`, the same
+//     shape `filter_entry_value()`'s own unknown-function branch already uses one section up.
+// PT: `transition` -- o próprio domínio composto da seção 6.1 do docs/uix-rcss.md, `(gramática
+//     §9: nenhuma ainda -- só eco de lista-vazia, dona ESC-23)`: a seção 9 não tem gramática
+//     `<transition-value>` definida hoje, então não existe forma textual spec-conformante pra
+//     uma `TransitionList` NÃO-`none`, NÃO-vazia (a keyword `none`, OU o próprio default de
+//     lista-vazia do registro, o próprio `TransitionList() {}` de `Animation.h:29-36` --
+//     `none=true` nos dois casos, confirmado em `PropertyParserAnimation.cpp:247`/`:220` pros
+//     dois caminhos respectivos). Uma transição genuinamente declarada (a keyword `all`, ou uma-
+//     ou-mais entradas explícitas `<propriedade> <duração> ...` -- o próprio vetor `transitions`
+//     do `ParseTransition()` não-vazio nos dois casos) é uma lacuna DECLARADA, LIMITADA: a
+//     política fail-high da seção 11 aplicada à própria gramática faltante do dumper, não uma
+//     invenção silenciosa de valor errado -- loga em stderr e ecoa `none`, a mesma forma que o
+//     próprio ramo de função-desconhecida do `filter_entry_value()` já usa uma seção acima.
+std::string transition_value(Rml::Element* el) {
+  const Rml::Property* p = get_prop(el, "transition");
+  if (!p || p->unit != Rml::Unit::TRANSITION) return "none";
+  const Rml::TransitionList& list = p->value.GetReference<Rml::TransitionList>();
+  if (list.none || list.transitions.empty()) return "none";
+  std::fprintf(stderr,
+               "rcss_dump: transition value declared but section 9's own composite grammar for "
+               "'transition' does not exist yet (owner ESC-23) -- echoing 'none' (fail-high, section 11)\n");
+  return "none";
+}
+
+// EN: `font-effect` -- docs/uix-rcss.md section 6.1's own composite domain, `(section 9 grammar:
+//     none yet -- empty-list echo only, owner ESC-24)`: mirrors `transition_value()`'s own
+//     reasoning one property up -- no `<font-effect-value>` grammar in section 9 today. The
+//     registry's own empty-string default does not even reach `Unit::FONTEFFECT`:
+//     `PropertyParserFontEffect.cpp:23-28`'s own empty-or-"none" branch sets
+//     `property.unit = Unit::UNKNOWN` (not a null `Property*`, and not `FONTEFFECT` either) --
+//     measured directly at that call site, not assumed from this domain's own name symmetry with
+//     `decorator`/`filter`/`mask-image`. The `p->unit != Rml::Unit::FONTEFFECT` guard below
+//     already covers this measured fact (falls to `"none"`) without needing a special case.
+// PT: `font-effect` -- o próprio domínio composto da seção 6.1 do docs/uix-rcss.md, `(gramática
+//     §9: nenhuma ainda -- só eco de lista-vazia, dona ESC-24)`: espelha o próprio raciocínio do
+//     `transition_value()` uma propriedade acima -- nenhuma gramática `<font-effect-value>` na
+//     seção 9 hoje. O próprio default de string-vazia do registro nem chega a `Unit::FONTEFFECT`:
+//     o próprio ramo vazio-ou-"none" de `PropertyParserFontEffect.cpp:23-28` seta
+//     `property.unit = Unit::UNKNOWN` (não um `Property*` nulo, e também não `FONTEFFECT`) --
+//     medido direto naquele call site, não suposto pela própria simetria de nome deste domínio
+//     com `decorator`/`filter`/`mask-image`. A guarda `p->unit != Rml::Unit::FONTEFFECT` abaixo
+//     já cobre este fato medido (cai pra `"none"`) sem precisar de caso especial.
+std::string font_effect_value(Rml::Element* el) {
+  const Rml::Property* p = get_prop(el, "font-effect");
+  if (!p || p->unit != Rml::Unit::FONTEFFECT) return "none";
+  const Rml::FontEffectsPtr effects = p->Get<Rml::FontEffectsPtr>();
+  if (!effects || effects->list.empty()) return "none";
+  std::fprintf(stderr,
+               "rcss_dump: font-effect value declared but section 9's own composite grammar for "
+               "'font-effect' does not exist yet (owner ESC-24) -- echoing 'none' (fail-high, section 11)\n");
+  return "none";
+}
+
 // EN: `Style::VerticalAlign::Type`'s own keyword names -- `StyleTypes.h`'s own enum order/names,
 //     hand-mapped here because, unlike a plain RCSS `keyword`-domain property,
 //     `vertical-align`'s ALREADY-RESOLVED-percent form (section below, `VerticalAlignSpecial`)
@@ -1130,17 +1261,67 @@ std::string property_value(Rml::Element* el, const RegistryEntry& entry) {
       const Rml::Property* p = get_prop(el, entry.name);
       return dom_dump_escape(p ? p->Get<Rml::String>() : Rml::String());
     }
-    case Domain::LetterSpacing: {
+    // EN: `ESC-3` -- `p == nullptr` fallback is `std::string()` here (not the per-property literal
+    //     `"normal"`/`"clip"` the pre-`ESC-3` `LetterSpacing`/`TextOverflow` cases each hard-coded
+    //     on their own single property): the fallback is unreachable BY CONSTRUCTION -- `get_prop()`
+    //     (above) already falls back to the property's own registered default for every property
+    //     that exists in the pinned RmlUi build, the same "never fewer" guarantee section 3 of
+    //     docs/uix-rcss.md states for every registry entry -- and a single literal would no longer
+    //     be correct once a domain serves TWO properties with two different defaults
+    //     (`letter-spacing`'s own `"normal"` vs. `perspective`'s own `"none"`;
+    //     `text-overflow`'s own `"clip"` vs. `nav-*`'s own `"none"`). Same idiom the plain
+    //     `Domain::Keyword` case (above) already uses.
+    // PT: `ESC-3` -- o fallback de `p == nullptr` é `std::string()` aqui (não o literal
+    //     por-propriedade `"normal"`/`"clip"` que os cases `LetterSpacing`/`TextOverflow`
+    //     pré-`ESC-3` cravavam cada um na própria propriedade única): o fallback é inalcançável
+    //     POR CONSTRUÇÃO -- o `get_prop()` (acima) já cai pro próprio default registrado da
+    //     propriedade pra toda propriedade que existe no build pinado do RmlUi, a mesma garantia
+    //     "nunca menos" que a seção 3 do docs/uix-rcss.md declara pra toda entrada do registro --
+    //     e um literal único deixaria de ser correto assim que um domínio passa a servir DUAS
+    //     propriedades com dois defaults diferentes (o próprio `"normal"` de `letter-spacing`
+    //     contra o próprio `"none"` de `perspective`; o próprio `"clip"` de `text-overflow` contra
+    //     o próprio `"none"` dos `nav-*`). Mesmo idioma que o case `Domain::Keyword` puro (acima)
+    //     já usa.
+    case Domain::KeywordOrLength: {
       const Rml::Property* p = get_prop(el, entry.name);
-      if (!p) return "normal";
+      if (!p) return std::string();
       if (p->unit == Rml::Unit::KEYWORD) return p->ToString();
       return resolve_length_px(el, p->GetNumericValue());
     }
-    case Domain::TextOverflow: {
+    case Domain::KeywordOrString: {
       const Rml::Property* p = get_prop(el, entry.name);
-      if (!p) return "clip";
+      if (!p) return std::string();
       if (p->unit == Rml::Unit::STRING) return dom_dump_escape(p->Get<Rml::String>());
       return p->ToString();
+    }
+    case Domain::KeywordOrColor: {
+      const Rml::Property* p = get_prop(el, entry.name);
+      if (!p) return std::string();
+      if (p->unit == Rml::Unit::KEYWORD) return p->ToString();
+      return color_hex(p->Get<Rml::Colourb>());
+    }
+    // EN: `ESC-1`'s own `font-weight` note (registered `"normal=400, bold=700"`, `StyleSheetSpeci
+    //     fication.cpp:355`) needs no special case here: the KEYWORD branch already reconstructs
+    //     the registered keyword text via `Property::ToString()` (this file's own header comment,
+    //     lines 19-22 -- `PropertyDefinition::GetValue()`'s KEYWORD case reverse-maps the stored
+    //     int through the SAME parser parameter map `AddParser("keyword", "normal=400, bold=700")`
+    //     built, `PropertyDefinition.cpp:97-129`), so `font-weight: normal` (the registry default)
+    //     prints `normal`, never the numeric alias -- no hand-rolled enum-to-string table, same
+    //     discipline the header comment already names.
+    // PT: A própria nota de `font-weight` da `ESC-1` (registrado `"normal=400, bold=700"`,
+    //     `StyleSheetSpecification.cpp:355`) não precisa de caso especial aqui: o ramo KEYWORD já
+    //     reconstrói o texto de keyword registrado via `Property::ToString()` (o próprio comentário
+    //     de cabeçalho deste arquivo, linhas 19-22 -- o caso KEYWORD do
+    //     `PropertyDefinition::GetValue()` reverse-mapeia o int guardado pelo MESMO mapa de
+    //     parâmetro de parser que `AddParser("keyword", "normal=400, bold=700")` constrói,
+    //     `PropertyDefinition.cpp:97-129`), então `font-weight: normal` (o default do registro)
+    //     imprime `normal`, nunca o alias numérico -- nenhuma tabela enum-pra-string à mão, a
+    //     mesma disciplina que o comentário de cabeçalho já nomeia.
+    case Domain::KeywordOrNumber: {
+      const Rml::Property* p = get_prop(el, entry.name);
+      if (!p) return std::string();
+      if (p->unit == Rml::Unit::KEYWORD) return p->ToString();
+      return rcss_quantize(p->Get<float>());
     }
     case Domain::FontSizeSpecial: {
       return resolve_length_px(el, Rml::NumericValue(el->GetComputedValues().font_size(), Rml::Unit::PX));
@@ -1165,6 +1346,10 @@ std::string property_value(Rml::Element* el, const RegistryEntry& entry) {
       return animation_value(el);
     case Domain::TransformComposite:
       return transform_value(el);
+    case Domain::TransitionComposite:
+      return transition_value(el);
+    case Domain::FontEffectComposite:
+      return font_effect_value(el);
   }
   return std::string();
 }

@@ -462,7 +462,7 @@ std::string extract_ua_stylesheet_rcss(const std::string& hpp_source) {
 //     hunk), duplicated rather than shared per this repo's own convention (see that file's own
 //     header comment for the full rationale this harness does not re-derive). Unlike the DOM
 //     oracle, this dump's own line COUNT is expected to be IDENTICAL on both sides for every
-//     structurally-agreeing fixture (both dumps enumerate the SAME fixed 72-entry registry per
+//     structurally-agreeing fixture (both dumps enumerate the SAME fixed 107-entry registry per
 //     node, per docs/uix-rcss.md section 3 -- there is no DOM-style "inserting one node renumbers
 //     every following sibling's own subtree path" effect here), so the unequal-length branch below
 //     firing at all is itself a signal worth reporting distinctly (a structural, not merely
@@ -473,7 +473,7 @@ std::string extract_ua_stylesheet_rcss(const std::string& hpp_source) {
 //     convenção deste repo (ver o próprio comentário de cabeçalho daquele arquivo pro racional
 //     completo, não re-derivado aqui). Diferente do oráculo do DOM, o próprio comprimento de linha
 //     deste dump é esperado IDÊNTICO nos dois lados pra toda fixture estruturalmente concordante
-//     (os dois dumps enumeram o MESMO registro fixo de 72 entradas por nó, pela seção 3 do
+//     (os dois dumps enumeram o MESMO registro fixo de 107 entradas por nó, pela seção 3 do
 //     docs/uix-rcss.md -- não há efeito estilo-DOM "inserir um nó renumera a subárvore inteira de
 //     todo irmão seguinte" aqui), então o próprio ramo de comprimento-diferente abaixo disparar já
 //     é, ele mesmo, um sinal que vale reportar distintamente (um desacordo ESTRUTURAL, não só de
